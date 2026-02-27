@@ -1,0 +1,402 @@
+"use client";
+
+import { useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Card, CardContent } from "@/components/ui/Card";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import type { Room, ItemAnalysis, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils";
+
+interface NewItemClientProps {
+  tenantId: string;
+  rooms: Room[];
+}
+
+type Step = "photo" | "analyzing" | "review" | "saving" | "done";
+
+export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<Step>("photo");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<ItemAnalysis | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
+  const [editedAnalysis, setEditedAnalysis] = useState<Partial<ItemAnalysis>>({});
+  const [error, setError] = useState<string>("");
+
+  const handleFileSelect = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file.");
+      return;
+    }
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setPhotoPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+    setError("");
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file) handleFileSelect(file);
+    },
+    [handleFileSelect]
+  );
+
+  const handleAnalyze = async () => {
+    if (!photoFile) return;
+    setStep("analyzing");
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", photoFile);
+      formData.append("tenantId", tenantId);
+
+      const res = await fetch("/api/analyze", { method: "POST", body: formData });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Analysis failed");
+      }
+      const data = await res.json();
+      setAnalysis(data.analysis);
+      setEditedAnalysis(data.analysis);
+      setStep("review");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Analysis failed");
+      setStep("photo");
+    }
+  };
+
+  const merged = { ...analysis, ...editedAnalysis } as ItemAnalysis;
+
+  const handleSave = async () => {
+    if (!analysis) return;
+    setStep("saving");
+    setError("");
+
+    try {
+      const res = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          roomId: selectedRoomId || undefined,
+          photoUrl: (analysis as ItemAnalysis & { _photoUrl?: string })._photoUrl || "",
+          photoPublicId: (analysis as ItemAnalysis & { _photoPublicId?: string })._photoPublicId || "",
+          ...merged,
+          itemName: merged.item_name,
+          conditionNotes: merged.condition_notes,
+          sizeClass: merged.size_class,
+          itemType: merged.item_type,
+          valueLow: merged.value_low,
+          valueMid: merged.value_mid,
+          valueHigh: merged.value_high,
+          primaryRoute: merged.primary_route,
+          routeReasoning: merged.route_reasoning,
+          consignmentCategory: merged.consignment_category,
+          listingTitleEbay: merged.listing_title_ebay,
+          listingDescriptionEbay: merged.listing_description_ebay,
+          listingFb: merged.listing_fb,
+          listingOfferup: merged.listing_offerup,
+          staffTips: merged.staff_tips,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save item");
+      setStep("done");
+      setTimeout(() => router.push(`/catalog?tenantId=${tenantId}`), 1200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+      setStep("review");
+    }
+  };
+
+  const update = (field: keyof ItemAnalysis, value: string | number) => {
+    setEditedAnalysis((prev) => ({ ...prev, [field]: value }));
+  };
+
+  if (step === "done") {
+    return (
+      <div className="flex flex-col items-center py-20 text-center">
+        <div className="w-16 h-16 bg-forest-100 rounded-full flex items-center justify-center mb-4 text-3xl">✅</div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Item saved!</h2>
+        <p className="text-gray-500">Redirecting to catalog...</p>
+      </div>
+    );
+  }
+
+  if (step === "analyzing") {
+    return (
+      <div className="flex flex-col items-center py-20 text-center">
+        <LoadingSpinner size="lg" className="mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Analyzing item...</h2>
+        <p className="text-gray-500 max-w-xs">
+          Claude AI is examining the photo to identify the item, estimate value, and suggest the best route.
+        </p>
+      </div>
+    );
+  }
+
+  if (step === "saving") {
+    return (
+      <div className="flex flex-col items-center py-20 text-center">
+        <LoadingSpinner size="lg" className="mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Saving to catalog...</h2>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      {/* Photo Step */}
+      {step === "photo" && (
+        <Card>
+          <CardContent>
+            <h2 className="font-semibold text-gray-900 mb-4">Upload Item Photo</h2>
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl cursor-pointer transition-all hover:border-forest-400 hover:bg-forest-50 ${
+                photoPreview ? "border-forest-400" : "border-gray-300"
+              }`}
+            >
+              {photoPreview ? (
+                <div className="relative aspect-video rounded-xl overflow-hidden">
+                  <Image src={photoPreview} alt="Preview" fill className="object-contain" />
+                </div>
+              ) : (
+                <div className="py-16 text-center">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <p className="text-gray-500 font-medium">Tap to take photo or select file</p>
+                  <p className="text-sm text-gray-400 mt-1">JPEG, PNG or HEIC · Up to 10MB</p>
+                </div>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+            />
+
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+            <div className="mt-5 flex gap-3">
+              {photoPreview && (
+                <Button variant="secondary" onClick={() => { setPhotoFile(null); setPhotoPreview(null); }} className="flex-1">
+                  Change Photo
+                </Button>
+              )}
+              <Button
+                onClick={handleAnalyze}
+                disabled={!photoFile}
+                className="flex-1"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Analyze with AI
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Review Step */}
+      {step === "review" && analysis && (
+        <>
+          {/* Summary Card */}
+          <Card>
+            <CardContent>
+              <div className="flex gap-4">
+                {photoPreview && (
+                  <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0">
+                    <Image src={photoPreview} alt="Item" fill className="object-cover" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-gray-900 truncate">{merged.item_name}</h2>
+                  <p className="text-sm text-gray-500">{merged.category} · {merged.condition}</p>
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-lg font-bold text-forest-700">
+                      {merged.value_mid > 0 ? formatCurrency(merged.value_mid) : "—"}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      ({formatCurrency(merged.value_low)} – {formatCurrency(merged.value_high)})
+                    </span>
+                  </div>
+                  <div className="mt-1">
+                    <span className="text-sm font-medium text-forest-700 bg-forest-50 px-2 py-0.5 rounded-full">
+                      → {merged.primary_route}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Editable Fields */}
+          <Card>
+            <CardContent>
+              <h3 className="font-semibold text-gray-900 mb-4">Review & Edit Details</h3>
+              <div className="space-y-4">
+                <Input
+                  label="Item Name"
+                  value={merged.item_name}
+                  onChange={(e) => update("item_name", e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Select
+                    label="Condition"
+                    value={merged.condition}
+                    onChange={(e) => update("condition", e.target.value as ItemCondition)}
+                    options={[
+                      { value: "Excellent", label: "Excellent" },
+                      { value: "Good", label: "Good" },
+                      { value: "Fair", label: "Fair" },
+                      { value: "Poor", label: "Poor" },
+                      { value: "For Parts", label: "For Parts" },
+                    ]}
+                  />
+                  <Select
+                    label="Primary Route"
+                    value={merged.primary_route}
+                    onChange={(e) => update("primary_route", e.target.value as PrimaryRoute)}
+                    options={[
+                      { value: "Online Marketplace", label: "Online Marketplace" },
+                      { value: "Local Consignment", label: "Local Consignment" },
+                      { value: "Donate", label: "Donate" },
+                      { value: "Discard", label: "Discard" },
+                    ]}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Input
+                    label="Value Low ($)"
+                    type="number"
+                    value={merged.value_low}
+                    onChange={(e) => update("value_low", Number(e.target.value))}
+                  />
+                  <Input
+                    label="Value Mid ($)"
+                    type="number"
+                    value={merged.value_mid}
+                    onChange={(e) => update("value_mid", Number(e.target.value))}
+                  />
+                  <Input
+                    label="Value High ($)"
+                    type="number"
+                    value={merged.value_high}
+                    onChange={(e) => update("value_high", Number(e.target.value))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Select
+                    label="Size"
+                    value={merged.size_class}
+                    onChange={(e) => update("size_class", e.target.value as SizeClass)}
+                    options={[
+                      { value: "Small & Shippable", label: "Small & Shippable" },
+                      { value: "Fits in Car-SUV", label: "Fits in Car-SUV" },
+                      { value: "Needs Movers", label: "Needs Movers" },
+                    ]}
+                  />
+                  <Select
+                    label="Fragility"
+                    value={merged.fragility}
+                    onChange={(e) => update("fragility", e.target.value as FragilityLevel)}
+                    options={[
+                      { value: "Not Fragile", label: "Not Fragile" },
+                      { value: "Somewhat Fragile", label: "Somewhat Fragile" },
+                      { value: "Very Fragile", label: "Very Fragile" },
+                    ]}
+                  />
+                </div>
+
+                {rooms.length > 0 && (
+                  <Select
+                    label="Room (optional)"
+                    value={selectedRoomId}
+                    onChange={(e) => setSelectedRoomId(e.target.value)}
+                    options={[
+                      { value: "", label: "— No room selected —" },
+                      ...rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.roomType})` })),
+                    ]}
+                  />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Staff Tips */}
+          {merged.staff_tips && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <div className="flex gap-2">
+                <span className="text-amber-600">💡</span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Staff Tip</p>
+                  <p className="text-sm text-amber-700 mt-0.5">{merged.staff_tips}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Listings Preview */}
+          {merged.listing_title_ebay && (
+            <Card>
+              <CardContent>
+                <h3 className="font-semibold text-gray-900 mb-3">Generated Listings</h3>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">eBay Title</p>
+                    <p className="text-sm text-gray-700">{merged.listing_title_ebay}</p>
+                  </div>
+                  {merged.listing_fb && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Facebook Marketplace</p>
+                      <p className="text-sm text-gray-700">{merged.listing_fb}</p>
+                    </div>
+                  )}
+                  {merged.listing_offerup && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">OfferUp</p>
+                      <p className="text-sm text-gray-700">{merged.listing_offerup}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex gap-3 pb-8">
+            <Button
+              variant="secondary"
+              onClick={() => { setStep("photo"); setAnalysis(null); setEditedAnalysis({}); }}
+              className="flex-1"
+            >
+              Retake Photo
+            </Button>
+            <Button onClick={handleSave} className="flex-1">
+              Save to Catalog
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
