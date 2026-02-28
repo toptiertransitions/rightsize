@@ -21,12 +21,14 @@ export async function uploadImage(
     folder?: string;
     tenantId?: string;
     publicId?: string;
+    mimeType?: string;
   } = {}
 ): Promise<UploadResult> {
   const folder = options.folder || `rightsize/${options.tenantId || "shared"}`;
+  const mime = options.mimeType && options.mimeType.startsWith("image/") ? options.mimeType : "image/jpeg";
 
   const result = await cloudinary.uploader.upload(
-    typeof fileData === "string" ? fileData : `data:image/jpeg;base64,${fileData.toString("base64")}`,
+    typeof fileData === "string" ? fileData : `data:${mime};base64,${fileData.toString("base64")}`,
     {
       folder,
       public_id: options.publicId,

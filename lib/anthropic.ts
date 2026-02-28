@@ -30,13 +30,14 @@ Analyze the photo of this household item and return a JSON object with EXACTLY t
 Return ONLY valid JSON with no markdown, no explanation, no code fences.`;
 
 export async function analyzeItemPhoto(
-  imageData: string | { url: string }
+  imageData: string | { url: string },
+  mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg"
 ): Promise<ItemAnalysis> {
   const imageSource =
     typeof imageData === "string"
       ? {
           type: "base64" as const,
-          media_type: "image/jpeg" as const,
+          media_type: mimeType,
           data: imageData,
         }
       : { type: "url" as const, url: imageData.url };

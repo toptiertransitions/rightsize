@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { analyzeItemPhoto } from "@/lib/anthropic";
 import { uploadImage } from "@/lib/cloudinary";
+import sharp from "sharp";
+
+// Allow up to 60s for Cloudinary upload + Claude analysis
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -23,41 +27,47 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing file or tenantId" }, { status: 400 });
   }
 
-  // Convert file to buffer
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
 
-  // Upload to Cloudinary first (so we have a URL for Claude)
-  let photoUrl = "";
-  let photoPublicId = "";
+  // Resize and convert to JPEG — handles HEIC/HEIF from iOS, oversized mobile photos,
+  // and ensures Claude always receives a supported format at a manageable size.
+  let processedBuffer: Buffer;
   try {
-    const upload = await uploadImage(buffer, { tenantId });
-    photoUrl = upload.secureUrl;
-    photoPublicId = upload.publicId;
-  } catch (err) {
-    console.error("Cloudinary upload failed:", err);
-    // Fall back to base64 analysis
+    processedBuffer = await sharp(rawBuffer)
+      .resize(1200, 1200, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  } catch {
+    // If sharp can't handle the format, fall back to the raw buffer
+    processedBuffer = rawBuffer;
   }
 
-  // Analyze with Claude
-  let analysis;
-  try {
-    if (photoUrl) {
-      analysis = await analyzeItemPhoto({ url: photoUrl });
-    } else {
-      analysis = await analyzeItemPhoto(buffer.toString("base64"));
-    }
-  } catch (err) {
-    console.error("Claude analysis failed:", err);
+  // Run Cloudinary upload and Claude analysis in parallel to save time.
+  // Claude always receives base64 JPEG (more reliable than depending on a Cloudinary URL).
+  const [uploadResult, analysisResult] = await Promise.allSettled([
+    uploadImage(rawBuffer, { tenantId, mimeType: file.type }),
+    analyzeItemPhoto(processedBuffer.toString("base64")),
+  ]);
+
+  if (analysisResult.status === "rejected") {
+    const reason = analysisResult.reason;
+    console.error("Claude analysis failed:", reason);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Analysis failed" },
+      { error: reason instanceof Error ? reason.message : "Analysis failed" },
       { status: 500 }
     );
   }
 
-  // Attach photo info to analysis for the client to use
+  if (uploadResult.status === "rejected") {
+    console.error("Cloudinary upload failed (non-fatal):", uploadResult.reason);
+  }
+
+  const photoUrl = uploadResult.status === "fulfilled" ? uploadResult.value.secureUrl : "";
+  const photoPublicId = uploadResult.status === "fulfilled" ? uploadResult.value.publicId : "";
+
   return NextResponse.json({
     analysis: {
-      ...analysis,
+      ...analysisResult.value,
       _photoUrl: photoUrl,
       _photoPublicId: photoPublicId,
     },
