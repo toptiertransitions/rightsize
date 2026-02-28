@@ -21,6 +21,7 @@ type Step = "photo" | "analyzing" | "review" | "saving" | "done";
 export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("photo");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -160,11 +161,11 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         <Card>
           <CardContent>
             <h2 className="font-semibold text-gray-900 mb-4">Upload Item Photo</h2>
+            {/* Preview or drop zone */}
             <div
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-2xl cursor-pointer transition-all hover:border-forest-400 hover:bg-forest-50 ${
+              className={`border-2 border-dashed rounded-2xl transition-all ${
                 photoPreview ? "border-forest-400" : "border-gray-300"
               }`}
             >
@@ -173,28 +174,61 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                   <Image src={photoPreview} alt="Preview" fill className="object-contain" />
                 </div>
               ) : (
-                <div className="py-16 text-center">
+                <div className="py-12 text-center">
                   <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <p className="text-gray-500 font-medium">Tap to take photo or select file</p>
-                  <p className="text-sm text-gray-400 mt-1">JPEG, PNG or HEIC · Up to 10MB</p>
+                  <p className="text-gray-400 text-sm">Drag & drop or use buttons below</p>
                 </div>
               )}
             </div>
+
+            {/* Hidden inputs */}
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
             />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+            />
+
+            {/* Upload buttons — always visible */}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 h-14 rounded-2xl border-2 border-gray-200 hover:border-forest-400 hover:bg-forest-50 transition-all text-sm font-medium text-gray-700"
+              >
+                <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Take Photo
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 h-14 rounded-2xl border-2 border-gray-200 hover:border-forest-400 hover:bg-forest-50 transition-all text-sm font-medium text-gray-700"
+              >
+                <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Choose from Library
+              </button>
+            </div>
 
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-            <div className="mt-5 flex gap-3">
+            <div className="mt-4 flex gap-3">
               {photoPreview && (
                 <Button variant="secondary" onClick={() => { setPhotoFile(null); setPhotoPreview(null); }} className="flex-1">
                   Change Photo

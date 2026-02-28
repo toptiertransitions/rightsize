@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 
@@ -13,11 +13,14 @@ interface HeaderProps {
 
 export function Header({ tenantName, isImpersonating, onStopImpersonating }: HeaderProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tenantId = searchParams.get("tenantId");
+  const tq = tenantId ? `?tenantId=${tenantId}` : "";
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/rooms", label: "Rooms" },
-    { href: "/catalog", label: "Catalog" },
+    { href: `/rooms${tq}`, base: "/rooms", label: "Rooms" },
+    { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
   ];
 
   return (
@@ -60,11 +63,11 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
-                key={link.href}
+                key={link.label}
                 href={link.href}
                 className={cn(
                   "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  pathname.startsWith(link.href)
+                  pathname.startsWith(link.base ?? link.href)
                     ? "bg-forest-50 text-forest-700"
                     : "text-gray-600 hover:text-forest-700 hover:bg-gray-50"
                 )}
@@ -96,11 +99,11 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
         <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
           {navLinks.map((link) => (
             <Link
-              key={link.href}
+              key={link.label}
               href={link.href}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
-                pathname.startsWith(link.href)
+                pathname.startsWith(link.base ?? link.href)
                   ? "bg-forest-50 text-forest-700"
                   : "text-gray-600 hover:text-forest-700"
               )}
