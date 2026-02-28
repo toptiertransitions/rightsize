@@ -145,6 +145,12 @@ export interface Item {
   status: ItemStatus;
   createdAt: string;
   updatedAt: string;
+  // Consignment sale fields (populated via Circle Hand import)
+  salePrice?: number;
+  consignorPayout?: number;
+  saleDate?: string;
+  circleHandItemId?: string;
+  routingStatus?: string;
 }
 
 // ─── AI Analysis ──────────────────────────────────────────────────────────────

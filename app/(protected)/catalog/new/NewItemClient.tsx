@@ -18,6 +18,33 @@ interface NewItemClientProps {
 
 type Step = "photo" | "analyzing" | "review" | "saving" | "done";
 
+// Separate photo meta from analysis so manual mode can keep the uploaded photo
+interface PhotoMeta {
+  url: string;
+  publicId: string;
+}
+
+const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
+  item_name: "",
+  category: "",
+  condition: "Good",
+  condition_notes: "",
+  size_class: "Fits in Car-SUV",
+  fragility: "Not Fragile",
+  item_type: "Daily Use",
+  value_low: 0,
+  value_mid: 0,
+  value_high: 0,
+  primary_route: "Donate",
+  route_reasoning: "",
+  consignment_category: "",
+  listing_title_ebay: "",
+  listing_description_ebay: "",
+  listing_fb: "",
+  listing_offerup: "",
+  staff_tips: "",
+};
+
 export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,16 +52,15 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const [step, setStep] = useState<Step>("photo");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoMeta, setPhotoMeta] = useState<PhotoMeta | null>(null);
   const [analysis, setAnalysis] = useState<ItemAnalysis | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [editedAnalysis, setEditedAnalysis] = useState<Partial<ItemAnalysis>>({});
+  const [manualMode, setManualMode] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [error, setError] = useState<string>("");
 
   const handleFileSelect = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file.");
-      return;
-    }
+    if (!file.type.startsWith("image/")) { setError("Please select an image file."); return; }
     setPhotoFile(file);
     const reader = new FileReader();
     reader.onload = (e) => setPhotoPreview(e.target?.result as string);
@@ -55,20 +81,24 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
     if (!photoFile) return;
     setStep("analyzing");
     setError("");
-
     try {
       const formData = new FormData();
       formData.append("file", photoFile);
       formData.append("tenantId", tenantId);
-
       const res = await fetch("/api/analyze", { method: "POST", body: formData });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Analysis failed");
       }
       const data = await res.json();
+      // Store photo meta separately so manual override can keep it
+      setPhotoMeta({
+        url: (data.analysis as Record<string, string>)._photoUrl || "",
+        publicId: (data.analysis as Record<string, string>)._photoPublicId || "",
+      });
       setAnalysis(data.analysis);
       setEditedAnalysis(data.analysis);
+      setManualMode(false);
       setStep("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
@@ -76,13 +106,19 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
     }
   };
 
-  const merged = { ...analysis, ...editedAnalysis } as ItemAnalysis;
+  const handleManualOverride = () => {
+    // Clear all AI-provided values, keep uploaded photo
+    setAnalysis(null);
+    setEditedAnalysis({ ...BLANK_ANALYSIS });
+    setManualMode(true);
+  };
+
+  const merged = { ...(analysis ?? {}), ...editedAnalysis } as ItemAnalysis;
 
   const handleSave = async () => {
-    if (!analysis) return;
+    if (!photoMeta) return;
     setStep("saving");
     setError("");
-
     try {
       const res = await fetch("/api/items", {
         method: "POST",
@@ -90,12 +126,14 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         body: JSON.stringify({
           tenantId,
           roomId: selectedRoomId || undefined,
-          photoUrl: (analysis as ItemAnalysis & { _photoUrl?: string })._photoUrl || "",
-          photoPublicId: (analysis as ItemAnalysis & { _photoPublicId?: string })._photoPublicId || "",
-          ...merged,
-          itemName: merged.item_name,
+          photoUrl: photoMeta.url,
+          photoPublicId: photoMeta.publicId,
+          itemName: merged.item_name || "Untitled Item",
+          category: merged.category,
+          condition: merged.condition,
           conditionNotes: merged.condition_notes,
           sizeClass: merged.size_class,
+          fragility: merged.fragility,
           itemType: merged.item_type,
           valueLow: merged.value_low,
           valueMid: merged.value_mid,
@@ -161,7 +199,6 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         <Card>
           <CardContent>
             <h2 className="font-semibold text-gray-900 mb-4">Upload Item Photo</h2>
-            {/* Preview or drop zone */}
             <div
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
@@ -184,41 +221,22 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
               )}
             </div>
 
-            {/* Hidden inputs */}
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
-            />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }} />
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }} />
 
-            {/* Upload buttons — always visible */}
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 h-14 rounded-2xl border-2 border-gray-200 hover:border-forest-400 hover:bg-forest-50 transition-all text-sm font-medium text-gray-700"
-              >
+              <button type="button" onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 h-14 rounded-2xl border-2 border-gray-200 hover:border-forest-400 hover:bg-forest-50 transition-all text-sm font-medium text-gray-700">
                 <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Take Photo
               </button>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 h-14 rounded-2xl border-2 border-gray-200 hover:border-forest-400 hover:bg-forest-50 transition-all text-sm font-medium text-gray-700"
-              >
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 h-14 rounded-2xl border-2 border-gray-200 hover:border-forest-400 hover:bg-forest-50 transition-all text-sm font-medium text-gray-700">
                 <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -234,11 +252,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                   Change Photo
                 </Button>
               )}
-              <Button
-                onClick={handleAnalyze}
-                disabled={!photoFile}
-                className="flex-1"
-              >
+              <Button onClick={handleAnalyze} disabled={!photoFile} className="flex-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
@@ -250,9 +264,9 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
       )}
 
       {/* Review Step */}
-      {step === "review" && analysis && (
+      {step === "review" && (
         <>
-          {/* Summary Card */}
+          {/* Summary / photo */}
           <Card>
             <CardContent>
               <div className="flex gap-4">
@@ -262,40 +276,64 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-gray-900 truncate">{merged.item_name}</h2>
-                  <p className="text-sm text-gray-500">{merged.category} · {merged.condition}</p>
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    <span className="text-lg font-bold text-forest-700">
-                      {merged.value_mid > 0 ? formatCurrency(merged.value_mid) : "—"}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      ({formatCurrency(merged.value_low)} – {formatCurrency(merged.value_high)})
-                    </span>
-                  </div>
-                  <div className="mt-1">
-                    <span className="text-sm font-medium text-forest-700 bg-forest-50 px-2 py-0.5 rounded-full">
-                      → {merged.primary_route}
-                    </span>
-                  </div>
+                  {manualMode ? (
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900">Enter Details Manually</h2>
+                      <p className="text-sm text-gray-400 mt-0.5">Fill in the fields below and save.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900 truncate">{merged.item_name}</h2>
+                      <p className="text-sm text-gray-500">{merged.category} · {merged.condition}</p>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-lg font-bold text-forest-700">
+                          {merged.value_mid > 0 ? formatCurrency(merged.value_mid) : "—"}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          ({formatCurrency(merged.value_low)} – {formatCurrency(merged.value_high)})
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-sm font-medium text-forest-700 bg-forest-50 px-2 py-0.5 rounded-full">
+                          → {merged.primary_route}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Override button — only shown when AI has run */}
+              {!manualMode && (
+                <div className="mt-4 pt-4 border-t border-cream-100">
+                  <button
+                    onClick={handleManualOverride}
+                    className="text-sm text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Override & Input Manually
+                  </button>
+                  <p className="text-xs text-gray-400 mt-1 ml-5.5">
+                    Clears all AI-provided values so you can enter correct details.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Editable Fields */}
           <Card>
             <CardContent>
-              <h3 className="font-semibold text-gray-900 mb-4">Review & Edit Details</h3>
+              <h3 className="font-semibold text-gray-900 mb-4">
+                {manualMode ? "Item Details" : "Review & Edit Details"}
+              </h3>
               <div className="space-y-4">
-                <Input
-                  label="Item Name"
-                  value={merged.item_name}
-                  onChange={(e) => update("item_name", e.target.value)}
-                />
+                <Input label="Item Name" value={merged.item_name ?? ""} onChange={(e) => update("item_name", e.target.value)} />
+                <Input label="Category" value={merged.category ?? ""} onChange={(e) => update("category", e.target.value)} />
                 <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Condition"
-                    value={merged.condition}
+                  <Select label="Condition" value={merged.condition ?? "Good"}
                     onChange={(e) => update("condition", e.target.value as ItemCondition)}
                     options={[
                       { value: "Excellent", label: "Excellent" },
@@ -305,9 +343,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                       { value: "For Parts", label: "For Parts" },
                     ]}
                   />
-                  <Select
-                    label="Primary Route"
-                    value={merged.primary_route}
+                  <Select label="Primary Route" value={merged.primary_route ?? "Donate"}
                     onChange={(e) => update("primary_route", e.target.value as PrimaryRoute)}
                     options={[
                       { value: "Online Marketplace", label: "Online Marketplace" },
@@ -317,30 +353,25 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                     ]}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <Input
-                    label="Value Low ($)"
-                    type="number"
-                    value={merged.value_low}
-                    onChange={(e) => update("value_low", Number(e.target.value))}
-                  />
-                  <Input
-                    label="Value Mid ($)"
-                    type="number"
-                    value={merged.value_mid}
-                    onChange={(e) => update("value_mid", Number(e.target.value))}
-                  />
-                  <Input
-                    label="Value High ($)"
-                    type="number"
-                    value={merged.value_high}
-                    onChange={(e) => update("value_high", Number(e.target.value))}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Condition Notes</label>
+                  <textarea
+                    rows={2}
+                    value={merged.condition_notes ?? ""}
+                    onChange={(e) => update("condition_notes", e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none"
                   />
                 </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Input label="Value Low ($)" type="number" value={merged.value_low ?? 0}
+                    onChange={(e) => update("value_low", Number(e.target.value))} />
+                  <Input label="Value Mid ($)" type="number" value={merged.value_mid ?? 0}
+                    onChange={(e) => update("value_mid", Number(e.target.value))} />
+                  <Input label="Value High ($)" type="number" value={merged.value_high ?? 0}
+                    onChange={(e) => update("value_high", Number(e.target.value))} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Size"
-                    value={merged.size_class}
+                  <Select label="Size" value={merged.size_class ?? "Fits in Car-SUV"}
                     onChange={(e) => update("size_class", e.target.value as SizeClass)}
                     options={[
                       { value: "Small & Shippable", label: "Small & Shippable" },
@@ -348,9 +379,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                       { value: "Needs Movers", label: "Needs Movers" },
                     ]}
                   />
-                  <Select
-                    label="Fragility"
-                    value={merged.fragility}
+                  <Select label="Fragility" value={merged.fragility ?? "Not Fragile"}
                     onChange={(e) => update("fragility", e.target.value as FragilityLevel)}
                     options={[
                       { value: "Not Fragile", label: "Not Fragile" },
@@ -359,70 +388,76 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                     ]}
                   />
                 </div>
-
-                {rooms.length > 0 && (
-                  <Select
-                    label="Room (optional)"
-                    value={selectedRoomId}
-                    onChange={(e) => setSelectedRoomId(e.target.value)}
+                <div className="grid grid-cols-2 gap-3">
+                  <Select label="Item Type" value={merged.item_type ?? "Daily Use"}
+                    onChange={(e) => update("item_type", e.target.value as ItemUseType)}
                     options={[
-                      { value: "", label: "— No room selected —" },
-                      ...rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.roomType})` })),
+                      { value: "Daily Use", label: "Daily Use" },
+                      { value: "Collector Item", label: "Collector Item" },
                     ]}
                   />
-                )}
+                  {rooms.length > 0 && (
+                    <Select label="Room (optional)" value={selectedRoomId}
+                      onChange={(e) => setSelectedRoomId(e.target.value)}
+                      options={[
+                        { value: "", label: "— No room —" },
+                        ...rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.roomType})` })),
+                      ]}
+                    />
+                  )}
+                </div>
+                <Input label="Consignment Category" value={merged.consignment_category ?? ""}
+                  onChange={(e) => update("consignment_category", e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Listings */}
+          <Card>
+            <CardContent>
+              <h3 className="font-semibold text-gray-900 mb-4">Marketplace Listings</h3>
+              <div className="space-y-4">
+                <Input label="eBay Title" value={merged.listing_title_ebay ?? ""}
+                  onChange={(e) => update("listing_title_ebay", e.target.value)} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">eBay Description</label>
+                  <textarea rows={3} value={merged.listing_description_ebay ?? ""}
+                    onChange={(e) => update("listing_description_ebay", e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Facebook Marketplace</label>
+                  <textarea rows={2} value={merged.listing_fb ?? ""}
+                    onChange={(e) => update("listing_fb", e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">OfferUp</label>
+                  <textarea rows={2} value={merged.listing_offerup ?? ""}
+                    onChange={(e) => update("listing_offerup", e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Staff Tips */}
-          {merged.staff_tips && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-              <div className="flex gap-2">
-                <span className="text-amber-600">💡</span>
-                <div>
-                  <p className="text-sm font-semibold text-amber-800">Staff Tip</p>
-                  <p className="text-sm text-amber-700 mt-0.5">{merged.staff_tips}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Listings Preview */}
-          {merged.listing_title_ebay && (
-            <Card>
-              <CardContent>
-                <h3 className="font-semibold text-gray-900 mb-3">Generated Listings</h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">eBay Title</p>
-                    <p className="text-sm text-gray-700">{merged.listing_title_ebay}</p>
-                  </div>
-                  {merged.listing_fb && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Facebook Marketplace</p>
-                      <p className="text-sm text-gray-700">{merged.listing_fb}</p>
-                    </div>
-                  )}
-                  {merged.listing_offerup && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">OfferUp</p>
-                      <p className="text-sm text-gray-700">{merged.listing_offerup}</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardContent>
+              <h3 className="font-semibold text-gray-900 mb-3">Staff Notes</h3>
+              <textarea rows={3} value={merged.staff_tips ?? ""}
+                onChange={(e) => update("staff_tips", e.target.value)}
+                placeholder="Internal notes for TTT staff…"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
+            </CardContent>
+          </Card>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex gap-3 pb-8">
-            <Button
-              variant="secondary"
-              onClick={() => { setStep("photo"); setAnalysis(null); setEditedAnalysis({}); }}
-              className="flex-1"
-            >
+            <Button variant="secondary"
+              onClick={() => { setStep("photo"); setAnalysis(null); setEditedAnalysis({}); setManualMode(false); setPhotoMeta(null); }}
+              className="flex-1">
               Retake Photo
             </Button>
             <Button onClick={handleSave} className="flex-1">

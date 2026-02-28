@@ -380,6 +380,12 @@ export async function updateItem(
     photoUrl: "PhotoUrl",
     photoPublicId: "PhotoPublicId",
     roomId: "RoomId",
+    // consignment sale fields
+    salePrice: "SalePrice",
+    consignorPayout: "ConsignorPayout",
+    saleDate: "SaleDate",
+    circleHandItemId: "CircleHandItemId",
+    routingStatus: "RoutingStatus",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -429,5 +435,19 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     status: (toStr(f["Status"]) || "Pending Review") as ItemStatus,
     createdAt: toStr(f["CreatedAt"]),
     updatedAt: toStr(f["UpdatedAt"]),
+    salePrice: f["SalePrice"] != null ? toNum(f["SalePrice"]) : undefined,
+    consignorPayout: f["ConsignorPayout"] != null ? toNum(f["ConsignorPayout"]) : undefined,
+    saleDate: toStr(f["SaleDate"]) || undefined,
+    circleHandItemId: toStr(f["CircleHandItemId"]) || undefined,
+    routingStatus: toStr(f["RoutingStatus"]) || undefined,
   };
+}
+
+// ─── Admin: All Items (TTT Admin use only) ────────────────────────────────────
+export async function getAllItems(): Promise<Item[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapItem);
 }

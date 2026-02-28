@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, getItemsForTenant, getUserRoleForTenant } from "@/lib/airtable";
+import { createItem, getItemsForTenant, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -71,5 +71,30 @@ export async function POST(req: NextRequest) {
     status: "Pending Review",
   });
 
+  return NextResponse.json({ item });
+}
+
+export async function PATCH(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const { id, tenantId, ...updates } = body;
+  if (!id || !tenantId) {
+    return NextResponse.json({ error: "Missing id or tenantId" }, { status: 400 });
+  }
+
+  const role = await getUserRoleForTenant(userId, tenantId as string);
+  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const item = await updateItem(id as string, updates as never);
   return NextResponse.json({ item });
 }

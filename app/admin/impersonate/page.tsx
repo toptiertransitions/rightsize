@@ -122,7 +122,7 @@ export default async function ImpersonatePage({ searchParams }: PageProps) {
               + Add Item
             </Link>
           </div>
-          <ItemGrid items={items} tenantId={tenantId} canEdit={true} />
+          <ItemGrid items={items} tenantId={tenantId} canEdit={true} rooms={rooms} />
         </section>
 
         {/* Team */}
