@@ -48,15 +48,19 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center">
+          <Link href="/dashboard" className="flex items-center gap-2.5">
             <Image
-              src="https://images.squarespace-cdn.com/content/v1/67814d7e84066d7cd3c503bd/1525ff3f-83e5-47e2-ada1-f36c276254c6/Final+Logo+Top+Tier+-+Long+%282000+x+800+px%29+%282%29.png"
+              src="/ttt-icon.png"
               alt="Top Tier Transitions"
-              width={160}
-              height={64}
-              className="h-10 w-auto object-contain"
+              width={36}
+              height={36}
+              className="w-9 h-9 object-contain"
               priority
             />
+            <div>
+              <div className="font-bold text-forest-700 leading-none text-sm">Rightsize</div>
+              <div className="text-[10px] text-gray-400 leading-none">by Top Tier</div>
+            </div>
           </Link>
 
           {/* Nav */}
