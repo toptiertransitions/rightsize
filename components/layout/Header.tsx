@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
@@ -47,16 +48,15 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-forest-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-            </div>
-            <div>
-              <div className="font-bold text-forest-700 leading-none text-sm">Rightsize</div>
-              <div className="text-[10px] text-gray-400 leading-none">by Top Tier</div>
-            </div>
+          <Link href="/dashboard" className="flex items-center">
+            <Image
+              src="https://images.squarespace-cdn.com/content/v1/67814d7e84066d7cd3c503bd/1525ff3f-83e5-47e2-ada1-f36c276254c6/Final+Logo+Top+Tier+-+Long+%282000+x+800+px%29+%282%29.png"
+              alt="Top Tier Transitions"
+              width={160}
+              height={64}
+              className="h-10 w-auto object-contain"
+              priority
+            />
           </Link>
 
           {/* Nav */}
