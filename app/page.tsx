@@ -19,7 +19,7 @@ export default function HomePage() {
         </div>
         <div className="flex items-center gap-3">
           <Link href="/calculator" className="text-sm text-forest-700 font-medium hover:underline hidden sm:block">
-            Free Calculator
+            Free Rightsizing Calculator
           </Link>
           <Link href="/sign-in">
             <Button variant="ghost" size="sm">Sign in</Button>
@@ -54,7 +54,7 @@ export default function HomePage() {
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              Try Free Calculator
+              Free Rightsizing Calculator
             </Button>
           </Link>
           <Link href="/sign-up">
