@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getRoomsForTenant, getUserRoleForTenant, getTenantById } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { RoomsClient } from "./RoomsClient";
+import { RoomsClient, AddRoomButton } from "./RoomsClient";
 
 interface PageProps {
   searchParams: Promise<{ tenantId?: string }>;
@@ -53,7 +53,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
             </Button>
           </Link>
           {canEdit && (
-            <RoomsClient.AddButton tenantId={tenantId} />
+            <AddRoomButton tenantId={tenantId} />
           )}
         </div>
       </div>

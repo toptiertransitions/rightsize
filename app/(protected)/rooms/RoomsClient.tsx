@@ -101,7 +101,7 @@ function AddRoomModal({ tenantId, onClose, onSaved }: AddRoomModalProps) {
   );
 }
 
-function AddButton({ tenantId }: { tenantId: string }) {
+export function AddRoomButton({ tenantId }: { tenantId: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -140,7 +140,7 @@ export function RoomsClient({ rooms, tenantId, canEdit }: RoomsClientProps) {
           <p className="text-gray-500 text-sm mb-6">
             Add your current home&apos;s rooms to start tracking what needs to be sorted.
           </p>
-          {canEdit && <RoomsClient.AddButton tenantId={tenantId} />}
+          {canEdit && <AddRoomButton tenantId={tenantId} />}
         </CardContent>
       </Card>
     );
@@ -181,6 +181,3 @@ export function RoomsClient({ rooms, tenantId, canEdit }: RoomsClientProps) {
     </div>
   );
 }
-
-// Attach AddButton as static method for use in server component
-RoomsClient.AddButton = AddButton;
