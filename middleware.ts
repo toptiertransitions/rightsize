@@ -13,23 +13,18 @@ const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 export default clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return;
 
-  const { userId } = await auth();
+  // Protect all non-public routes — redirects to sign-in if not authenticated
+  await auth.protect();
 
-  // Protect all non-public routes
-  if (!userId) {
-    const { redirectToSignIn } = await auth();
-    return redirectToSignIn({ returnBackUrl: req.url });
-  }
-
-  // Admin routes — additional check happens server-side in the page
-  // (we can't easily check Airtable roles in middleware)
+  // Admin routes — restrict to TTT admin user IDs
   if (isAdminRoute(req)) {
+    const { userId } = await auth();
     const adminIds = (process.env.TTT_ADMIN_USER_IDS || "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
-    if (adminIds.length > 0 && !adminIds.includes(userId)) {
+    if (userId && adminIds.length > 0 && !adminIds.includes(userId)) {
       const url = new URL("/dashboard", req.url);
       return Response.redirect(url);
     }
