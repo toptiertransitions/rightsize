@@ -1,7 +1,10 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-// Minimal Clerk middleware — route protection handled in individual pages
-export default clerkMiddleware();
+// Passthrough — auth is enforced in page layouts via Clerk's auth() server helper
+export function middleware(req: NextRequest) {
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
