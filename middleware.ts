@@ -8,26 +8,9 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks(.*)",
 ]);
 
-const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isPublicRoute(req)) return;
-
-  // Protect all non-public routes — redirects to sign-in if not authenticated
-  await auth.protect();
-
-  // Admin routes — restrict to TTT admin user IDs
-  if (isAdminRoute(req)) {
-    const { userId } = await auth();
-    const adminIds = (process.env.TTT_ADMIN_USER_IDS || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    if (userId && adminIds.length > 0 && !adminIds.includes(userId)) {
-      const url = new URL("/dashboard", req.url);
-      return Response.redirect(url);
-    }
+export default clerkMiddleware((auth, req) => {
+  if (!isPublicRoute(req)) {
+    auth.protect();
   }
 });
 
