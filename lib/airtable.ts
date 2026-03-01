@@ -494,23 +494,34 @@ export async function deleteTenantCascade(tenantId: string): Promise<void> {
   await base(AIRTABLE_TABLES.TENANTS).destroy(tenantId);
 }
 
-// ─── Plan Entries ─────────────────────────────────────────────────────────────
+// ─── Plan Entries (uses fetch directly — Airtable SDK has PAT write issues) ────
+function planFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PLAN_ENTRIES;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
 export async function getPlanEntriesForTenant(tenantId: string): Promise<PlanEntry[]> {
-  const base = getBase();
-  const records = await base(AIRTABLE_TABLES.PLAN_ENTRIES)
-    .select({
-      filterByFormula: `{TenantID} = "${tenantId}"`,
-      sort: [{ field: "Date", direction: "asc" }],
-    })
-    .all();
-  return records.map(mapPlanEntry);
+  const formula = encodeURIComponent(`{TenantID} = "${tenantId}"`);
+  const res = await planFetch(`?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapPlanEntry);
 }
 
 export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
   try {
-    const base = getBase();
-    const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).find(id);
-    return mapPlanEntry(record);
+    const res = await planFetch(`/${id}`);
+    if (!res.ok) return null;
+    return mapPlanEntry(await res.json());
   } catch {
     return null;
   }
@@ -524,17 +535,22 @@ export async function createPlanEntry(data: {
   roomLabel?: string;
   notes?: string;
 }): Promise<PlanEntry> {
-  const base = getBase();
-  const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).create({
-    TenantID: data.tenantId,
-    Date: data.date,
-    Activity: data.activity,
-    RoomID: data.roomId || "",
-    RoomLabel: data.roomLabel || "",
-    Notes: data.notes || "",
-    CreatedAt: new Date().toISOString(),
+  const res = await planFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantID: data.tenantId,
+        Date: data.date,
+        Activity: data.activity,
+        RoomID: data.roomId || "",
+        RoomLabel: data.roomLabel || "",
+        Notes: data.notes || "",
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
   });
-  return mapPlanEntry(record);
+  if (!res.ok) throw new Error(await res.text());
+  return mapPlanEntry(await res.json());
 }
 
 export async function updatePlanEntry(
@@ -547,23 +563,31 @@ export async function updatePlanEntry(
     notes: string;
   }>
 ): Promise<PlanEntry> {
-  const base = getBase();
-  const fields: Airtable.FieldSet = {};
+  const fields: Record<string, string> = {};
   if (data.date !== undefined) fields["Date"] = data.date;
   if (data.activity !== undefined) fields["Activity"] = data.activity;
   if (data.roomId !== undefined) fields["RoomID"] = data.roomId;
   if (data.roomLabel !== undefined) fields["RoomLabel"] = data.roomLabel;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
-  const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).update(id, fields);
-  return mapPlanEntry(record);
+  const res = await planFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPlanEntry(await res.json());
 }
 
 export async function deletePlanEntry(id: string): Promise<void> {
-  const base = getBase();
-  await base(AIRTABLE_TABLES.PLAN_ENTRIES).destroy(id);
+  const res = await planFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
 }
 
-function mapPlanEntry(record: Airtable.Record<Airtable.FieldSet>): PlanEntry {
+interface AirtableRecord {
+  id: string;
+  fields: Record<string, unknown>;
+}
+
+function mapPlanEntry(record: AirtableRecord): PlanEntry {
   const f = record.fields;
   return {
     id: record.id,
