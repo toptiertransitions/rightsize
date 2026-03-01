@@ -9,7 +9,7 @@ import {
 } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { RoomsClient, AddRoomButton, InviteButton } from "./RoomsClient";
+import { RoomsClient, AddRoomButton } from "./RoomsClient";
 import type { Room, Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -58,12 +58,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
             <Link href={`/catalog?tenantId=${tenantId}`}>
               <Button variant="secondary">View Catalog</Button>
             </Link>
-            {canEdit && (
-              <>
-                <InviteButton tenantId={tenantId} />
-                <AddRoomButton tenantId={tenantId} />
-              </>
-            )}
+            {canEdit && <AddRoomButton tenantId={tenantId} />}
           </div>
         </div>
 
