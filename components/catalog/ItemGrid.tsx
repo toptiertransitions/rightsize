@@ -19,13 +19,14 @@ interface ItemGridProps {
   tenants?: Tenant[];  // provided in all-items mode for project name display
 }
 
-const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray"; label: string }> = {
-  "Pending Review": { variant: "yellow", label: "Pending Review" },
-  "Reviewed":       { variant: "blue",   label: "Reviewed" },
-  "Listed":         { variant: "purple", label: "Listed" },
-  "Sold":           { variant: "green",  label: "Sold" },
-  "Donated":        { variant: "teal",   label: "Donated" },
-  "Discarded":      { variant: "gray",   label: "Discarded" },
+const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray" | "red"; label: string }> = {
+  "Pending Review":    { variant: "yellow", label: "Pending Review" },
+  "Reviewed":          { variant: "blue",   label: "Reviewed" },
+  "Listed":            { variant: "purple", label: "Listed" },
+  "Sold":              { variant: "green",  label: "Sold" },
+  "Donated":           { variant: "teal",   label: "Donated" },
+  "Discarded":         { variant: "gray",   label: "Discarded" },
+  "Rejected / Revisit":{ variant: "red",    label: "Rejected / Revisit" },
 };
 
 const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" }> = {
@@ -149,12 +150,13 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
               <Select label="Status" value={form.status ?? "Pending Review"}
                 onChange={e => set("status", e.target.value as ItemStatus)}
                 options={[
-                  { value: "Pending Review", label: "Pending Review" },
-                  { value: "Reviewed",       label: "Reviewed" },
-                  { value: "Listed",         label: "Listed" },
-                  { value: "Sold",           label: "Sold" },
-                  { value: "Donated",        label: "Donated" },
-                  { value: "Discarded",      label: "Discarded" },
+                  { value: "Pending Review",    label: "Pending Review" },
+                  { value: "Reviewed",          label: "Reviewed" },
+                  { value: "Listed",            label: "Listed" },
+                  { value: "Sold",              label: "Sold" },
+                  { value: "Donated",           label: "Donated" },
+                  { value: "Discarded",         label: "Discarded" },
+                  { value: "Rejected / Revisit",label: "Rejected / Revisit" },
                 ]}
               />
             </div>
@@ -370,6 +372,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
           <option value="Sold">Sold</option>
           <option value="Donated">Donated</option>
           <option value="Discarded">Discarded</option>
+          <option value="Rejected / Revisit">Rejected / Revisit</option>
         </select>
 
         {/* View toggle */}
@@ -475,9 +478,9 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                   {multiTenant && <th className="text-left px-4 py-3 font-semibold text-gray-600">Project</th>}
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Category</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Condition</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
                   <th className="text-right px-4 py-3 font-semibold text-gray-600">Value</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Route</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
                   {canEdit && <th className="w-10 px-3 py-3"></th>}
                 </tr>
               </thead>
@@ -513,10 +516,6 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                       <td className="px-4 py-2.5 text-gray-500">{item.category || "—"}</td>
                       {/* Condition */}
                       <td className="px-4 py-2.5 text-gray-500">{item.condition}</td>
-                      {/* Status */}
-                      <td className="px-4 py-2.5">
-                        <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
-                      </td>
                       {/* Value */}
                       <td className="px-4 py-2.5 text-right font-semibold text-forest-700">
                         {item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
@@ -526,6 +525,10 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                         <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
                           {item.primaryRoute}
                         </Badge>
+                      </td>
+                      {/* Status */}
+                      <td className="px-4 py-2.5">
+                        <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
                       </td>
                       {/* Edit */}
                       {canEdit && (

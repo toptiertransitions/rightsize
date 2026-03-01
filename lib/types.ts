@@ -113,7 +113,8 @@ export type ItemStatus =
   | "Listed"
   | "Sold"
   | "Donated"
-  | "Discarded";
+  | "Discarded"
+  | "Rejected / Revisit";
 
 export interface Item {
   id: string;

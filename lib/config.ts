@@ -46,6 +46,7 @@ export const ITEM_STATUS_COLORS: Record<string, string> = {
   Sold: "bg-green-100 text-green-800",
   Donated: "bg-teal-100 text-teal-800",
   Discarded: "bg-gray-100 text-gray-800",
+  "Rejected / Revisit": "bg-red-100 text-red-800",
 };
 
 export const ROUTE_COLORS: Record<string, string> = {
