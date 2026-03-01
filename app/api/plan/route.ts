@@ -54,15 +54,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const entry = await createPlanEntry({
-    tenantId,
-    date,
-    activity,
-    roomId: body.roomId,
-    roomLabel: body.roomLabel,
-    notes: body.notes,
-  });
-  return NextResponse.json({ entry });
+  try {
+    const entry = await createPlanEntry({
+      tenantId,
+      date,
+      activity,
+      roomId: body.roomId,
+      roomLabel: body.roomLabel,
+      notes: body.notes,
+    });
+    return NextResponse.json({ entry });
+  } catch (e) {
+    console.error("createPlanEntry error:", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {
@@ -94,8 +99,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const entry = await updatePlanEntry(id, fields);
-  return NextResponse.json({ entry });
+  try {
+    const entry = await updatePlanEntry(id, fields);
+    return NextResponse.json({ entry });
+  } catch (e) {
+    console.error("updatePlanEntry error:", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {
@@ -113,6 +123,11 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await deletePlanEntry(id);
-  return NextResponse.json({ ok: true });
+  try {
+    await deletePlanEntry(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("deletePlanEntry error:", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }

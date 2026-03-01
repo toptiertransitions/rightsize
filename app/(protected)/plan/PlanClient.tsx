@@ -98,8 +98,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error ?? "Failed to save");
+        let msg = "Failed to save";
+        try { const d = await res.json(); msg = d.error ?? msg; } catch {}
+        throw new Error(msg);
       }
       onSaved();
     } catch (e) {
@@ -116,8 +117,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
     try {
       const res = await fetch(`/api/plan?id=${entry.id}`, { method: "DELETE" });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error ?? "Failed to delete");
+        let msg = "Failed to delete";
+        try { const d = await res.json(); msg = d.error ?? msg; } catch {}
+        throw new Error(msg);
       }
       onSaved();
     } catch (e) {
