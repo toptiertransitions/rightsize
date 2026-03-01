@@ -215,28 +215,34 @@ export default async function DashboardPage({
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {valid.map(({ membership, tenant }) => (
-          <Link key={tenant!.id} href={`/dashboard?tenantId=${tenant!.id}`} className="block">
-            <Card hover>
+        {valid.map(({ membership, tenant }) => {
+          const cardIsOwner = OWNER_ROLES.includes(membership.role);
+          return (
+            <Card key={tenant!.id}>
               <CardContent>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="w-10 h-10 bg-forest-50 rounded-xl flex items-center justify-center mb-3">
+                <Link href={`/rooms?tenantId=${tenant!.id}`} className="block group">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 bg-forest-50 rounded-xl flex items-center justify-center">
                       <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                       </svg>
                     </div>
-                    <h3 className="font-bold text-gray-900">{tenant!.name}</h3>
-                    <p className="text-sm text-gray-400 mt-0.5 capitalize">{membership.role}</p>
+                    <svg className="w-5 h-5 text-gray-300 group-hover:text-forest-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
-                  <svg className="w-5 h-5 text-gray-300 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
+                  <h3 className="font-bold text-gray-900 group-hover:text-forest-700 transition-colors">{tenant!.name}</h3>
+                  <p className="text-sm text-gray-400 mt-0.5 capitalize">{membership.role}</p>
+                </Link>
+                {cardIsOwner && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <ProjectActions tenantId={tenant!.id} tenantName={tenant!.name} />
+                  </div>
+                )}
               </CardContent>
             </Card>
-          </Link>
-        ))}
+          );
+        })}
 
         <Link href="/onboarding">
           <Card hover className="border-dashed border-gray-300 bg-transparent shadow-none">
