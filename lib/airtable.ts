@@ -499,7 +499,7 @@ export async function getPlanEntriesForTenant(tenantId: string): Promise<PlanEnt
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.PLAN_ENTRIES)
     .select({
-      filterByFormula: `{TenantId} = "${tenantId}"`,
+      filterByFormula: `{TenantID} = "${tenantId}"`,
       sort: [{ field: "Date", direction: "asc" }],
     })
     .all();
@@ -526,7 +526,7 @@ export async function createPlanEntry(data: {
 }): Promise<PlanEntry> {
   const base = getBase();
   const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).create({
-    TenantId: data.tenantId,
+    TenantID: data.tenantId,
     Date: data.date,
     Activity: data.activity,
     RoomId: data.roomId || "",
@@ -568,7 +568,7 @@ function mapPlanEntry(record: Airtable.Record<Airtable.FieldSet>): PlanEntry {
   return {
     id: record.id,
     airtableId: record.id,
-    tenantId: toStr(f["TenantId"]),
+    tenantId: toStr(f["TenantID"]),
     date: toStr(f["Date"]),
     activity: toStr(f["Activity"]) as PlanActivity,
     roomId: toStr(f["RoomId"]) || undefined,
