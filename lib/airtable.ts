@@ -529,7 +529,7 @@ export async function createPlanEntry(data: {
     TenantID: data.tenantId,
     Date: data.date,
     Activity: data.activity,
-    RoomId: data.roomId || "",
+    RoomID: data.roomId || "",
     RoomLabel: data.roomLabel || "",
     Notes: data.notes || "",
     CreatedAt: new Date().toISOString(),
@@ -551,7 +551,7 @@ export async function updatePlanEntry(
   const fields: Airtable.FieldSet = {};
   if (data.date !== undefined) fields["Date"] = data.date;
   if (data.activity !== undefined) fields["Activity"] = data.activity;
-  if (data.roomId !== undefined) fields["RoomId"] = data.roomId;
+  if (data.roomId !== undefined) fields["RoomID"] = data.roomId;
   if (data.roomLabel !== undefined) fields["RoomLabel"] = data.roomLabel;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).update(id, fields);
@@ -571,7 +571,7 @@ function mapPlanEntry(record: Airtable.Record<Airtable.FieldSet>): PlanEntry {
     tenantId: toStr(f["TenantID"]),
     date: toStr(f["Date"]),
     activity: toStr(f["Activity"]) as PlanActivity,
-    roomId: toStr(f["RoomId"]) || undefined,
+    roomId: toStr(f["RoomID"]) || undefined,
     roomLabel: toStr(f["RoomLabel"]) || undefined,
     notes: toStr(f["Notes"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
