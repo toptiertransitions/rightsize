@@ -9,9 +9,15 @@ import { ProjectActions } from "./ProjectActions";
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
 const OWNER_ROLES = ["Owner", "TTTAdmin"];
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tenantId?: string }>;
+}) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+
+  const { tenantId: tenantIdParam } = await searchParams;
 
   const user = await currentUser();
   const memberships = await getMembershipsForUser(userId).catch(() => []);
@@ -45,9 +51,13 @@ export default async function DashboardPage() {
     );
   }
 
-  // ── Single project: show summary directly ────────────────────────────────────
-  if (memberships.length === 1) {
-    const membership = memberships[0];
+  // ── Single project or specific project selected ──────────────────────────────
+  const selectedMembership = tenantIdParam
+    ? memberships.find(m => m.tenantId === tenantIdParam)
+    : memberships.length === 1 ? memberships[0] : null;
+
+  if (selectedMembership) {
+    const membership = selectedMembership;
     const [tenant, items, rooms] = await Promise.all([
       getTenantById(membership.tenantId).catch(() => null),
       getItemsForTenant(membership.tenantId).catch(() => []),
@@ -68,6 +78,16 @@ export default async function DashboardPage() {
 
     return (
       <div>
+        {/* Back link for multi-project users */}
+        {memberships.length > 1 && (
+          <Link href="/dashboard" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            All projects
+          </Link>
+        )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div>
