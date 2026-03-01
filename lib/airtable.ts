@@ -443,6 +443,55 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
   };
 }
 
+// ─── Admin: Membership CRUD ───────────────────────────────────────────────────
+export async function getAllMemberships(): Promise<Membership[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.MEMBERSHIPS)
+    .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapMembership);
+}
+
+export async function deleteMembership(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.MEMBERSHIPS).destroy(id);
+}
+
+export async function updateMembershipRole(id: string, role: UserRole): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.MEMBERSHIPS).update(id, { Role: role });
+}
+
+// ─── Tenant mutations ─────────────────────────────────────────────────────────
+export async function updateTenant(id: string, data: { name: string }): Promise<Tenant> {
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.TENANTS).update(id, { Name: data.name });
+  return mapTenant(record);
+}
+
+export async function deleteTenantCascade(tenantId: string): Promise<void> {
+  const base = getBase();
+
+  // Fetch all related records
+  const [memberships, rooms, items] = await Promise.all([
+    base(AIRTABLE_TABLES.MEMBERSHIPS).select({ filterByFormula: `{TenantId} = "${tenantId}"` }).all(),
+    base(AIRTABLE_TABLES.ROOMS).select({ filterByFormula: `{TenantId} = "${tenantId}"` }).all(),
+    base(AIRTABLE_TABLES.ITEMS).select({ filterByFormula: `{TenantId} = "${tenantId}"` }).all(),
+  ]);
+
+  // Batch delete in groups of 10 (Airtable limit)
+  async function batchDelete(table: string, ids: string[]) {
+    for (let i = 0; i < ids.length; i += 10) {
+      await base(table).destroy(ids.slice(i, i + 10) as [string, ...string[]]);
+    }
+  }
+
+  await batchDelete(AIRTABLE_TABLES.ITEMS, items.map(r => r.id));
+  await batchDelete(AIRTABLE_TABLES.ROOMS, rooms.map(r => r.id));
+  await batchDelete(AIRTABLE_TABLES.MEMBERSHIPS, memberships.map(r => r.id));
+  await base(AIRTABLE_TABLES.TENANTS).destroy(tenantId);
+}
+
 // ─── Admin: All Items (TTT Admin use only) ────────────────────────────────────
 export async function getAllItems(): Promise<Item[]> {
   const base = getBase();

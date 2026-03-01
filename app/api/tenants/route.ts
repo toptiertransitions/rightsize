@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createTenant, createMembership, upsertUser, getTenantBySlug } from "@/lib/airtable";
+import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
@@ -42,4 +42,36 @@ export async function POST(req: NextRequest) {
   await createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" });
 
   return NextResponse.json({ tenant });
+}
+
+export async function PATCH(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { tenantId, name } = await req.json();
+  if (!tenantId || !name?.trim()) return NextResponse.json({ error: "Missing tenantId or name" }, { status: 400 });
+
+  const role = await getUserRoleForTenant(userId, tenantId);
+  if (!role || !["Owner", "TTTStaff", "TTTAdmin"].includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const tenant = await updateTenant(tenantId, { name: name.trim() });
+  return NextResponse.json({ tenant });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { tenantId } = await req.json();
+  if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
+
+  const role = await getUserRoleForTenant(userId, tenantId);
+  if (!role || !["Owner", "TTTAdmin"].includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  await deleteTenantCascade(tenantId);
+  return NextResponse.json({ success: true });
 }

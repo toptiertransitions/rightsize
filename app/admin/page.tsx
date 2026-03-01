@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getTenants } from "@/lib/airtable";
+import { getTenants, getAllMemberships } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { UserButton } from "@clerk/nextjs";
@@ -11,7 +11,15 @@ export default async function AdminPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/dashboard");
 
-  const tenants = await getTenants().catch(() => []);
+  const [tenants, memberships] = await Promise.all([
+    getTenants().catch(() => []),
+    getAllMemberships().catch(() => []),
+  ]);
+
+  const memberCountByTenant = new Map<string, number>();
+  for (const m of memberships) {
+    memberCountByTenant.set(m.tenantId, (memberCountByTenant.get(m.tenantId) ?? 0) + 1);
+  }
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -29,11 +37,18 @@ export default async function AdminPage() {
               <div className="text-[9px] text-gray-400">TTT Admin Console</div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded-full font-medium">
-              🔐 Admin
-            </span>
-            <UserButton afterSignOutUrl="/sign-in" />
+          <div className="flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-1">
+              <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Projects</Link>
+              <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Users</Link>
+              <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
+            </nav>
+            <div className="flex items-center gap-3">
+              <span className="text-xs bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded-full font-medium">
+                🔐 Admin
+              </span>
+              <UserButton afterSignOutUrl="/sign-in" />
+            </div>
           </div>
         </div>
       </header>
@@ -77,11 +92,8 @@ export default async function AdminPage() {
                   <p className="text-xs text-gray-500 mt-0.5 font-mono">{tenant.slug}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xs text-gray-500">
-                      {new Date(tenant.createdAt).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
+                      {memberCountByTenant.get(tenant.id) ?? 0} member{(memberCountByTenant.get(tenant.id) ?? 0) !== 1 ? "s" : ""} ·{" "}
+                      {new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                     </span>
                     <span className="text-xs text-forest-400 group-hover:text-forest-300 font-medium flex items-center gap-1">
                       Enter as Staff
