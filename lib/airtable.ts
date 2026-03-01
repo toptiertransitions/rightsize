@@ -617,7 +617,7 @@ export async function getAllItems(): Promise<Item[]> {
 function vendorFetch(path: string, options?: RequestInit) {
   const token = process.env.AIRTABLE_API_TOKEN!;
   const base = process.env.AIRTABLE_BASE_ID!;
-  const table = encodeURIComponent(AIRTABLE_TABLES.VENDORS);
+  const table = process.env.AIRTABLE_VENDORS_TABLE || "Vendors";
   return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
     ...options,
     headers: {
