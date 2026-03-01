@@ -36,6 +36,7 @@ export const AIRTABLE_TABLES = {
   ROOMS: process.env.AIRTABLE_ROOMS_TABLE || "Rooms",
   ITEMS: process.env.AIRTABLE_ITEMS_TABLE || "Items",
   PLAN_ENTRIES: process.env.AIRTABLE_PLAN_ENTRIES_TABLE || "PlanEntries",
+  VENDORS: process.env.AIRTABLE_VENDORS_TABLE || "Vendors",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

@@ -22,6 +22,8 @@ import type {
   PrimaryRoute,
   ItemStatus,
   RoomType,
+  Vendor,
+  VendorType,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -609,4 +611,144 @@ export async function getAllItems(): Promise<Item[]> {
     .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
     .all();
   return records.map(mapItem);
+}
+
+// ─── Vendors (uses fetch directly — avoids SDK PAT write issues) ──────────────
+function vendorFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = encodeURIComponent(AIRTABLE_TABLES.VENDORS);
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export async function getVendorsForTenant(tenantId: string): Promise<Vendor[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await vendorFetch(
+    `?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapVendor);
+}
+
+export async function getVendorById(id: string): Promise<Vendor | null> {
+  try {
+    const res = await vendorFetch(`/${id}`);
+    if (!res.ok) return null;
+    return mapVendor(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+export async function createVendor(data: {
+  tenantId: string;
+  vendorType: VendorType;
+  vendorName: string;
+  pocName: string;
+  email: string;
+  phone?: string;
+  arrangement?: string;
+  date1Label?: string;
+  date1?: string;
+  date2Label?: string;
+  date2?: string;
+  date3Label?: string;
+  date3?: string;
+}): Promise<Vendor> {
+  const res = await vendorFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId,
+        VendorType: data.vendorType,
+        VendorName: data.vendorName,
+        POCName: data.pocName,
+        Email: data.email,
+        Phone: data.phone || "",
+        Arrangement: data.arrangement || "",
+        Date1Label: data.date1Label || "",
+        Date1: data.date1 || "",
+        Date2Label: data.date2Label || "",
+        Date2: data.date2 || "",
+        Date3Label: data.date3Label || "",
+        Date3: data.date3 || "",
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapVendor(await res.json());
+}
+
+export async function updateVendor(
+  id: string,
+  data: Partial<{
+    vendorType: VendorType;
+    vendorName: string;
+    pocName: string;
+    email: string;
+    phone: string;
+    arrangement: string;
+    date1Label: string;
+    date1: string;
+    date2Label: string;
+    date2: string;
+    date3Label: string;
+    date3: string;
+  }>
+): Promise<Vendor> {
+  const fields: Record<string, string> = {};
+  if (data.vendorType !== undefined) fields["VendorType"] = data.vendorType;
+  if (data.vendorName !== undefined) fields["VendorName"] = data.vendorName;
+  if (data.pocName !== undefined) fields["POCName"] = data.pocName;
+  if (data.email !== undefined) fields["Email"] = data.email;
+  if (data.phone !== undefined) fields["Phone"] = data.phone;
+  if (data.arrangement !== undefined) fields["Arrangement"] = data.arrangement;
+  if (data.date1Label !== undefined) fields["Date1Label"] = data.date1Label;
+  if (data.date1 !== undefined) fields["Date1"] = data.date1;
+  if (data.date2Label !== undefined) fields["Date2Label"] = data.date2Label;
+  if (data.date2 !== undefined) fields["Date2"] = data.date2;
+  if (data.date3Label !== undefined) fields["Date3Label"] = data.date3Label;
+  if (data.date3 !== undefined) fields["Date3"] = data.date3;
+  const res = await vendorFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapVendor(await res.json());
+}
+
+export async function deleteVendor(id: string): Promise<void> {
+  const res = await vendorFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+function mapVendor(record: AirtableRecord): Vendor {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantId"]),
+    vendorType: (toStr(f["VendorType"]) || "Other") as VendorType,
+    vendorName: toStr(f["VendorName"]),
+    pocName: toStr(f["POCName"]),
+    email: toStr(f["Email"]),
+    phone: toStr(f["Phone"]),
+    arrangement: toStr(f["Arrangement"]),
+    date1Label: toStr(f["Date1Label"]),
+    date1: toStr(f["Date1"]),
+    date2Label: toStr(f["Date2Label"]),
+    date2: toStr(f["Date2"]),
+    date3Label: toStr(f["Date3Label"]),
+    date3: toStr(f["Date3"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
 }

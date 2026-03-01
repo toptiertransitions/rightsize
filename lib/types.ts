@@ -214,6 +214,51 @@ export interface PlanEntry {
   createdAt: string;
 }
 
+// ─── Vendors ──────────────────────────────────────────────────────────────────
+export type VendorType =
+  | "Move Manager"
+  | "Mover"
+  | "Future Home/Community"
+  | "Realtor"
+  | "Broker"
+  | "Donation Org"
+  | "Consignment Store"
+  | "Junk Hauler"
+  | "Attorney"
+  | "Other";
+
+export const VENDOR_TYPES: VendorType[] = [
+  "Move Manager",
+  "Mover",
+  "Future Home/Community",
+  "Realtor",
+  "Broker",
+  "Donation Org",
+  "Consignment Store",
+  "Junk Hauler",
+  "Attorney",
+  "Other",
+];
+
+export interface Vendor {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  vendorType: VendorType;
+  vendorName: string;
+  pocName: string;
+  email: string;
+  phone: string;
+  arrangement: string;
+  date1Label: string;
+  date1: string;
+  date2Label: string;
+  date2: string;
+  date3Label: string;
+  date3: string;
+  createdAt: string;
+}
+
 // ─── Calculator ───────────────────────────────────────────────────────────────
 export interface CalculatorRoom {
   id: string;

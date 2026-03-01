@@ -105,6 +105,31 @@ Office/Study, Garage, Basement, Attic, Bathroom, Closet, Storage Room, Sunroom, 
 
 ---
 
+## Table 7: Vendors
+
+| Field Name   | Type             | Notes                                    |
+|--------------|------------------|------------------------------------------|
+| TenantId     | Single line text | Airtable record ID of the tenant         |
+| VendorType   | Single line text | See vendor type list below               |
+| VendorName   | Single line text |                                          |
+| POCName      | Single line text | Main point of contact name               |
+| Email        | Single line text |                                          |
+| Phone        | Single line text |                                          |
+| Arrangement  | Long text        | Notes on the deal / engagement           |
+| Date1Label   | Single line text | e.g. "Move Day"                          |
+| Date1        | Single line text | YYYY-MM-DD                               |
+| Date2Label   | Single line text |                                          |
+| Date2        | Single line text | YYYY-MM-DD                               |
+| Date3Label   | Single line text |                                          |
+| Date3        | Single line text | YYYY-MM-DD                               |
+| CreatedAt    | Single line text | ISO 8601 datetime                        |
+
+**VendorType values:** Move Manager, Mover, Future Home/Community, Realtor, Broker, Donation Org, Consignment Store, Junk Hauler, Attorney, Other
+
+**Date rationale:** 3 labeled date slots per vendor record — covers all real-world cases without requiring a second table.
+
+---
+
 ## Setup Steps
 
 1. Go to [airtable.com](https://airtable.com) → create a new base called **Rightsize**
