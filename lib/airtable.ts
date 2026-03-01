@@ -11,6 +11,8 @@ import type {
   Membership,
   Room,
   Item,
+  PlanEntry,
+  PlanActivity,
   UserRole,
   DensityLevel,
   ItemCondition,
@@ -490,6 +492,90 @@ export async function deleteTenantCascade(tenantId: string): Promise<void> {
   await batchDelete(AIRTABLE_TABLES.ROOMS, rooms.map(r => r.id));
   await batchDelete(AIRTABLE_TABLES.MEMBERSHIPS, memberships.map(r => r.id));
   await base(AIRTABLE_TABLES.TENANTS).destroy(tenantId);
+}
+
+// ─── Plan Entries ─────────────────────────────────────────────────────────────
+export async function getPlanEntriesForTenant(tenantId: string): Promise<PlanEntry[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.PLAN_ENTRIES)
+    .select({
+      filterByFormula: `{TenantId} = "${tenantId}"`,
+      sort: [{ field: "Date", direction: "asc" }],
+    })
+    .all();
+  return records.map(mapPlanEntry);
+}
+
+export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
+  try {
+    const base = getBase();
+    const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).find(id);
+    return mapPlanEntry(record);
+  } catch {
+    return null;
+  }
+}
+
+export async function createPlanEntry(data: {
+  tenantId: string;
+  date: string;
+  activity: PlanActivity;
+  roomId?: string;
+  roomLabel?: string;
+  notes?: string;
+}): Promise<PlanEntry> {
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).create({
+    TenantId: data.tenantId,
+    Date: data.date,
+    Activity: data.activity,
+    RoomId: data.roomId || "",
+    RoomLabel: data.roomLabel || "",
+    Notes: data.notes || "",
+    CreatedAt: new Date().toISOString(),
+  });
+  return mapPlanEntry(record);
+}
+
+export async function updatePlanEntry(
+  id: string,
+  data: Partial<{
+    date: string;
+    activity: PlanActivity;
+    roomId: string;
+    roomLabel: string;
+    notes: string;
+  }>
+): Promise<PlanEntry> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.date !== undefined) fields["Date"] = data.date;
+  if (data.activity !== undefined) fields["Activity"] = data.activity;
+  if (data.roomId !== undefined) fields["RoomId"] = data.roomId;
+  if (data.roomLabel !== undefined) fields["RoomLabel"] = data.roomLabel;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const record = await base(AIRTABLE_TABLES.PLAN_ENTRIES).update(id, fields);
+  return mapPlanEntry(record);
+}
+
+export async function deletePlanEntry(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.PLAN_ENTRIES).destroy(id);
+}
+
+function mapPlanEntry(record: Airtable.Record<Airtable.FieldSet>): PlanEntry {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantId"]),
+    date: toStr(f["Date"]),
+    activity: toStr(f["Activity"]) as PlanActivity,
+    roomId: toStr(f["RoomId"]) || undefined,
+    roomLabel: toStr(f["RoomLabel"]) || undefined,
+    notes: toStr(f["Notes"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
 }
 
 // ─── Admin: All Items (TTT Admin use only) ────────────────────────────────────

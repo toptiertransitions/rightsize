@@ -22,6 +22,7 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
     { href: "/dashboard", label: "Dashboard" },
     { href: `/rooms${tq}`, base: "/rooms", label: "Rooms" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
+    { href: `/plan${tq}`, base: "/plan", label: "Plan" },
   ];
 
   return (

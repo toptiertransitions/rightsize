@@ -175,6 +175,44 @@ export interface ItemAnalysis {
   staff_tips: string;
 }
 
+// ─── Plan / Daily Focus ───────────────────────────────────────────────────────
+export type PlanActivity =
+  | "Sorting"
+  | "Packing"
+  | "Selling / Listing"
+  | "Staging"
+  | "Donating"
+  | "Discarding"
+  | "Photography"
+  | "Moving"
+  | "Estate Sale Prep"
+  | "Other";
+
+export const PLAN_ACTIVITIES: PlanActivity[] = [
+  "Sorting",
+  "Packing",
+  "Selling / Listing",
+  "Staging",
+  "Donating",
+  "Discarding",
+  "Photography",
+  "Moving",
+  "Estate Sale Prep",
+  "Other",
+];
+
+export interface PlanEntry {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  date: string; // YYYY-MM-DD
+  activity: PlanActivity;
+  roomId?: string;
+  roomLabel?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 // ─── Calculator ───────────────────────────────────────────────────────────────
 export interface CalculatorRoom {
   id: string;

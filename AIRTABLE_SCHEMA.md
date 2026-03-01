@@ -87,6 +87,24 @@ Office/Study, Garage, Basement, Attic, Bathroom, Closet, Storage Room, Sunroom, 
 
 ---
 
+## Table 6: PlanEntries
+
+| Field Name  | Type             | Notes                                           |
+|-------------|------------------|-------------------------------------------------|
+| TenantId    | Single line text | Airtable record ID of the tenant                |
+| Date        | Single line text | ISO date YYYY-MM-DD                             |
+| Activity    | Single select    | See activity list below                         |
+| RoomId      | Single line text | Optional — Airtable record ID of a project room |
+| RoomLabel   | Single line text | Optional — custom free-form room name           |
+| Notes       | Long text        | Optional                                        |
+| CreatedAt   | Single line text | ISO 8601 datetime                               |
+
+**Activity options:** Sorting, Packing, Selling / Listing, Staging, Donating, Discarding, Photography, Moving, Estate Sale Prep, Other
+
+**Room logic:** RoomId links to a project room; RoomLabel is free-form text. Both optional. Display: project room name > RoomLabel > blank.
+
+---
+
 ## Setup Steps
 
 1. Go to [airtable.com](https://airtable.com) → create a new base called **Rightsize**
