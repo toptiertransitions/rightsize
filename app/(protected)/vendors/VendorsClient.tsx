@@ -400,15 +400,46 @@ function LocalVendorDirectory({
   vendors: LocalVendor[];
   onSelect?: (v: LocalVendor) => void;
 }) {
+  const [sortCol, setSortCol] = useState<string>("vendorType");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
   if (vendors.length === 0) return null;
 
-  const grouped = new Map<VendorType, LocalVendor[]>();
-  for (const v of vendors) {
-    const arr = grouped.get(v.vendorType) ?? [];
-    arr.push(v);
-    grouped.set(v.vendorType, arr);
-  }
-  const sortedTypes = LOCAL_TYPE_ORDER.filter((t) => grouped.has(t));
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const displayVendors = [...vendors].sort((a, b) => {
+    let av: string | number = "";
+    let bv: string | number = "";
+    switch (sortCol) {
+      case "vendorType":      av = a.vendorType;       bv = b.vendorType;       break;
+      case "vendorName":      av = a.vendorName.toLowerCase(); bv = b.vendorName.toLowerCase(); break;
+      case "location":        av = `${a.city} ${a.state}`.toLowerCase(); bv = `${b.city} ${b.state}`.toLowerCase(); break;
+      case "pocName":         av = a.pocName.toLowerCase(); bv = b.pocName.toLowerCase(); break;
+      case "email":           av = a.email.toLowerCase(); bv = b.email.toLowerCase(); break;
+      case "phone":           av = a.phone;            bv = b.phone;            break;
+      case "itemCategories":  av = a.itemCategories.toLowerCase(); bv = b.itemCategories.toLowerCase(); break;
+      case "consignmentTake": av = a.consignmentTake;  bv = b.consignmentTake;  break;
+      case "zipCodesServed":  av = a.zipCodesServed;   bv = b.zipCodesServed;   break;
+    }
+    if (av < bv) return sortDir === "asc" ? -1 : 1;
+    if (av > bv) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const sortTh = (col: string, label: string, extraClass = "") => (
+    <th
+      onClick={() => handleSort(col)}
+      className={`px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-600 transition-colors ${extraClass}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className="text-[9px]">{sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </span>
+    </th>
+  );
 
   return (
     <div className="mt-10">
@@ -421,20 +452,19 @@ function LocalVendorDirectory({
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">
               {onSelect && <th className="px-3 py-2.5" />}
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Type</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">City, State</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">POC</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Phone</th>
-              <th className="hidden lg:table-cell px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Item Categories</th>
-              <th className="hidden lg:table-cell px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Take</th>
-              <th className="hidden xl:table-cell px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Zips Served</th>
+              {sortTh("vendorType", "Type")}
+              {sortTh("vendorName", "Name")}
+              {sortTh("location", "City, State")}
+              {sortTh("pocName", "POC")}
+              {sortTh("email", "Email")}
+              {sortTh("phone", "Phone")}
+              {sortTh("itemCategories", "Item Categories", "hidden lg:table-cell")}
+              {sortTh("consignmentTake", "Take", "hidden lg:table-cell")}
+              {sortTh("zipCodesServed", "Zips Served", "hidden xl:table-cell")}
             </tr>
           </thead>
           <tbody>
-            {sortedTypes.map((type) =>
-              (grouped.get(type) ?? []).map((v, i) => {
+            {displayVendors.map((v, i) => {
                 const typeColor = TYPE_COLORS[v.vendorType] ?? "bg-gray-100 text-gray-700";
                 return (
                   <tr key={v.id} className={`border-b border-gray-100 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
@@ -483,8 +513,7 @@ function LocalVendorDirectory({
                     </td>
                   </tr>
                 );
-              })
-            )}
+              })}
           </tbody>
         </table>
       </div>

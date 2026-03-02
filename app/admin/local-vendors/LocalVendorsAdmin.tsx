@@ -313,10 +313,49 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
   const [stateFilter, setStateFilter] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<LocalVendor | undefined>(undefined);
+  const [sortCol, setSortCol] = useState<string>("vendorType");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const filtered = stateFilter
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const sortTh = (col: string, label: string) => (
+    <th
+      onClick={() => handleSort(col)}
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-200 transition-colors"
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className="text-[9px]">{sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </span>
+    </th>
+  );
+
+  const stateFiltered = stateFilter
     ? initialVendors.filter((v) => v.state.toUpperCase() === stateFilter.toUpperCase())
     : initialVendors;
+
+  const filtered = [...stateFiltered].sort((a, b) => {
+    let av: string | number = "";
+    let bv: string | number = "";
+    switch (sortCol) {
+      case "vendorType":      av = a.vendorType;       bv = b.vendorType;       break;
+      case "vendorName":      av = a.vendorName.toLowerCase(); bv = b.vendorName.toLowerCase(); break;
+      case "location":        av = `${a.city} ${a.state}`.toLowerCase(); bv = `${b.city} ${b.state}`.toLowerCase(); break;
+      case "pocName":         av = a.pocName.toLowerCase(); bv = b.pocName.toLowerCase(); break;
+      case "email":           av = a.email.toLowerCase(); bv = b.email.toLowerCase(); break;
+      case "phone":           av = a.phone;            bv = b.phone;            break;
+      case "itemCategories":  av = a.itemCategories.toLowerCase(); bv = b.itemCategories.toLowerCase(); break;
+      case "consignmentTake": av = a.consignmentTake;  bv = b.consignmentTake;  break;
+      case "zipCodesServed":  av = a.zipCodesServed;   bv = b.zipCodesServed;   break;
+      case "isActive":        av = a.isActive ? 0 : 1; bv = b.isActive ? 0 : 1; break;
+    }
+    if (av < bv) return sortDir === "asc" ? -1 : 1;
+    if (av > bv) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
 
   const states = Array.from(new Set(initialVendors.map((v) => v.state).filter(Boolean))).sort();
 
@@ -394,16 +433,16 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">City, State</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">POC</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Phone</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Item Categories</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Take</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Zips Served</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Active</th>
+                  {sortTh("vendorType", "Type")}
+                  {sortTh("vendorName", "Name")}
+                  {sortTh("location", "City, State")}
+                  {sortTh("pocName", "POC")}
+                  {sortTh("email", "Email")}
+                  {sortTh("phone", "Phone")}
+                  {sortTh("itemCategories", "Item Categories")}
+                  {sortTh("consignmentTake", "Take")}
+                  {sortTh("zipCodesServed", "Zips Served")}
+                  {sortTh("isActive", "Active")}
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>

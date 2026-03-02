@@ -364,6 +364,46 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
     return result;
   }, [items, search, statusFilter]);
 
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av: string | number = "";
+      let bv: string | number = "";
+      switch (sortCol) {
+        case "itemName":  av = a.itemName.toLowerCase();  bv = b.itemName.toLowerCase();  break;
+        case "project":   av = (tenantMap.get(a.tenantId) ?? "").toLowerCase(); bv = (tenantMap.get(b.tenantId) ?? "").toLowerCase(); break;
+        case "category":  av = a.category.toLowerCase();  bv = b.category.toLowerCase();  break;
+        case "condition": av = a.condition.toLowerCase();  bv = b.condition.toLowerCase();  break;
+        case "value":     av = a.valueMid;                 bv = b.valueMid;                 break;
+        case "route":     av = a.primaryRoute.toLowerCase(); bv = b.primaryRoute.toLowerCase(); break;
+        case "status":    av = a.status.toLowerCase();     bv = b.status.toLowerCase();     break;
+      }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filtered, sortCol, sortDir, tenantMap]);
+
+  const sortTh = (col: string, label: string, extraClass = "", align?: "right") => (
+    <th
+      onClick={() => handleSort(col)}
+      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-3 font-semibold text-gray-600 cursor-pointer select-none hover:bg-cream-100 transition-colors ${extraClass}`}
+    >
+      <span className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end w-full" : ""}`}>
+        {label}
+        <span className="text-[9px] text-gray-400">{sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </span>
+    </th>
+  );
+
   if (items.length === 0) {
     return (
       <div className="text-center py-20">
@@ -527,18 +567,18 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
               <thead>
                 <tr className="border-b border-cream-100 bg-cream-50">
                   <th className="text-left px-4 py-3 font-semibold text-gray-600 w-12"></th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Item</th>
-                  {multiTenant && <th className="text-left px-4 py-3 font-semibold text-gray-600">Project</th>}
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Category</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Condition</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600">Value</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Recommended Route</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
+                  {sortTh("itemName", "Item")}
+                  {multiTenant && sortTh("project", "Project")}
+                  {sortTh("category", "Category")}
+                  {sortTh("condition", "Condition")}
+                  {sortTh("value", "Value", "", "right")}
+                  {sortTh("route", "Recommended Route")}
+                  {sortTh("status", "Status")}
                   {canEdit && <th className="w-10 px-3 py-3"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
-                {filtered.map((item) => {
+                {sorted.map((item) => {
                   const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
                   const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const };
                   return (
