@@ -76,6 +76,9 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   const memberships = await getMembershipsForUser(userId).catch(() => []);
   if (memberships.length === 0) redirect("/home");
 
+  // Single-project users always go to their project catalog (shows Add Item button)
+  if (memberships.length === 1) redirect(`/catalog?tenantId=${memberships[0].tenantId}`);
+
   const tenantIds = memberships.map((m) => m.tenantId);
 
   const [itemArrays, tenantObjects, roomArrays] = await Promise.all([
@@ -89,7 +92,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   );
   const rooms = roomArrays.flat();
   const tenants = tenantObjects.filter(Boolean) as Tenant[];
-  const canEdit = memberships.some((m) => EDIT_ROLES.includes(m.role));
+  const editableMembership = memberships.find((m) => EDIT_ROLES.includes(m.role));
+  const canEdit = !!editableMembership;
 
   return (
     <div>
@@ -105,6 +109,17 @@ export default async function CatalogPage({ searchParams }: PageProps) {
             {items.length} item{items.length !== 1 ? "s" : ""} across {tenants.length} project{tenants.length !== 1 ? "s" : ""}
           </p>
         </div>
+        {canEdit && editableMembership && (
+          <Link href={`/catalog/new?tenantId=${editableMembership.tenantId}`}>
+            <Button>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Add Item
+            </Button>
+          </Link>
+        )}
       </div>
 
       <ItemGrid items={items} canEdit={canEdit} rooms={rooms} tenants={tenants} />
