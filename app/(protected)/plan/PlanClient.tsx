@@ -112,7 +112,8 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
       const res = await fetch("/api/plan/calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planEntryId: entry!.id, action: "send" }),
+        // pass current helpers so they're saved + used even if not yet saved
+        body: JSON.stringify({ planEntryId: entry!.id, action: "send", helpers }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Failed to send invites");

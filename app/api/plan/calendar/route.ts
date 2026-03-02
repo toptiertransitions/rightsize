@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { planEntryId: string; action: "send" | "sync" };
+  let body: { planEntryId: string; action: "send" | "sync"; helpers?: PlanHelper[] };
   try {
     body = await req.json();
   } catch {
@@ -44,8 +44,15 @@ export async function POST(req: NextRequest) {
 
   try {
     if (action === "send") {
-      if (!entry.helpers?.length) {
+      // Use helpers from request body (unsaved modal state) or fall back to Airtable
+      const helpersToInvite = body.helpers?.length ? body.helpers : entry.helpers;
+      if (!helpersToInvite?.length) {
         return NextResponse.json({ error: "No helpers to invite" }, { status: 400 });
+      }
+
+      // Persist helpers to Airtable if they came from the request (may be unsaved)
+      if (body.helpers?.length) {
+        await updatePlanEntry(planEntryId, { helpers: body.helpers });
       }
 
       // Resolve room name for the calendar event summary
@@ -57,7 +64,7 @@ export async function POST(req: NextRequest) {
 
       const eventId = await createOrUpdateCalendarEvent(
         entry,
-        entry.helpers,
+        helpersToInvite,
         roomName,
         entry.googleEventId,
       );
