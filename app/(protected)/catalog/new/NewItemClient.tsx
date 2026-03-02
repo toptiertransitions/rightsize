@@ -35,7 +35,7 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
   value_low: 0,
   value_mid: 0,
   value_high: 0,
-  primary_route: "Donate",
+  primary_route: "Keep",
   route_reasoning: "",
   consignment_category: "",
   listing_title_ebay: "",
@@ -56,6 +56,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const [analysis, setAnalysis] = useState<ItemAnalysis | null>(null);
   const [editedAnalysis, setEditedAnalysis] = useState<Partial<ItemAnalysis>>({});
   const [manualMode, setManualMode] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -113,10 +114,38 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
     setManualMode(true);
   };
 
+  const handleManualEntry = async () => {
+    setError("");
+    setUploading(true);
+    try {
+      if (photoFile) {
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+        const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+        const formData = new FormData();
+        formData.append("file", photoFile);
+        formData.append("upload_preset", uploadPreset!);
+        const res = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          { method: "POST", body: formData }
+        );
+        if (!res.ok) throw new Error("Photo upload failed");
+        const data = await res.json();
+        setPhotoMeta({ url: data.secure_url, publicId: data.public_id });
+      }
+      setAnalysis(null);
+      setEditedAnalysis({ ...BLANK_ANALYSIS });
+      setManualMode(true);
+      setStep("review");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const merged = { ...(analysis ?? {}), ...editedAnalysis } as ItemAnalysis;
 
   const handleSave = async () => {
-    if (!photoMeta) return;
     setStep("saving");
     setError("");
     try {
@@ -126,8 +155,8 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         body: JSON.stringify({
           tenantId,
           roomId: selectedRoomId || undefined,
-          photoUrl: photoMeta.url,
-          photoPublicId: photoMeta.publicId,
+          photoUrl: photoMeta?.url || undefined,
+          photoPublicId: photoMeta?.publicId || undefined,
           itemName: merged.item_name || "Untitled Item",
           category: merged.category,
           condition: merged.condition,
@@ -252,11 +281,14 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                   Change Photo
                 </Button>
               )}
-              <Button onClick={handleAnalyze} disabled={!photoFile} className="flex-1">
+              <Button onClick={handleAnalyze} disabled={!photoFile || uploading} className="flex-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
                 Analyze with AI
+              </Button>
+              <Button variant="secondary" onClick={handleManualEntry} loading={uploading} disabled={!!(photoFile && uploading)} className="flex-1">
+                Enter Manually
               </Button>
             </div>
           </CardContent>
@@ -343,11 +375,14 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                       { value: "For Parts", label: "For Parts" },
                     ]}
                   />
-                  <Select label="Primary Route" value={merged.primary_route ?? "Donate"}
+                  <Select label="Primary Route" value={merged.primary_route ?? "Keep"}
                     onChange={(e) => update("primary_route", e.target.value as PrimaryRoute)}
                     options={[
-                      { value: "Online Marketplace", label: "Online Marketplace" },
+                      { value: "Keep", label: "Keep" },
+                      { value: "Family Keeping", label: "Family Keeping" },
                       { value: "Local Consignment", label: "Local Consignment" },
+                      { value: "FB/Marketplace", label: "FB/Marketplace" },
+                      { value: "Online Marketplace", label: "Online Marketplace" },
                       { value: "Donate", label: "Donate" },
                       { value: "Discard", label: "Discard" },
                     ]}

@@ -51,10 +51,13 @@ export const ITEM_STATUS_COLORS: Record<string, string> = {
 };
 
 export const ROUTE_COLORS: Record<string, string> = {
-  "Online Marketplace": "bg-indigo-100 text-indigo-800",
+  "Keep": "bg-green-100 text-green-800",
+  "Family Keeping": "bg-emerald-100 text-emerald-800",
   "Local Consignment": "bg-orange-100 text-orange-800",
-  Donate: "bg-teal-100 text-teal-800",
-  Discard: "bg-gray-100 text-gray-800",
+  "FB/Marketplace": "bg-blue-100 text-blue-800",
+  "Online Marketplace": "bg-indigo-100 text-indigo-800",
+  "Donate": "bg-teal-100 text-teal-800",
+  "Discard": "bg-gray-100 text-gray-800",
 };
 
 // ─── TTT Admin Check ──────────────────────────────────────────────────────────

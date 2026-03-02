@@ -102,8 +102,11 @@ export type FragilityLevel = "Not Fragile" | "Somewhat Fragile" | "Very Fragile"
 export type ItemUseType = "Daily Use" | "Collector Item";
 
 export type PrimaryRoute =
-  | "Online Marketplace"
+  | "Keep"
+  | "Family Keeping"
   | "Local Consignment"
+  | "FB/Marketplace"
+  | "Online Marketplace"
   | "Donate"
   | "Discard";
 
