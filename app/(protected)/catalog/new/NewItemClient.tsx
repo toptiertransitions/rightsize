@@ -175,7 +175,10 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
           staffTips: merged.staff_tips,
         }),
       });
-      if (!res.ok) throw new Error("Failed to save item");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save item");
+      }
       setStep("done");
       setTimeout(() => router.push(`/catalog?tenantId=${tenantId}`), 1200);
     } catch (e) {
@@ -373,7 +376,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                       { value: "For Parts", label: "For Parts" },
                     ]}
                   />
-                  <Select label="Primary Route" value={merged.primary_route ?? "Keep"}
+                  <Select label="Recommended Route" value={merged.primary_route ?? "Keep"}
                     onChange={(e) => update("primary_route", e.target.value as PrimaryRoute)}
                     options={[
                       { value: "Keep", label: "Keep" },

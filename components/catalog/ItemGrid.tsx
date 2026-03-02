@@ -485,7 +485,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Category</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Condition</th>
                   <th className="text-right px-4 py-3 font-semibold text-gray-600">Value</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Route</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Recommended Route</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
                   {canEdit && <th className="w-10 px-3 py-3"></th>}
                 </tr>

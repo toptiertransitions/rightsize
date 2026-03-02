@@ -45,33 +45,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const item = await createItem({
-    tenantId,
-    itemName: (body.itemName as string) || (body.item_name as string) || "Unknown Item",
-    roomId: body.roomId as string | undefined,
-    photoUrl: body.photoUrl as string | undefined,
-    photoPublicId: body.photoPublicId as string | undefined,
-    category: body.category as string,
-    condition: body.condition as never,
-    conditionNotes: body.conditionNotes as string,
-    sizeClass: body.sizeClass as never,
-    fragility: body.fragility as never,
-    itemType: body.itemType as never,
-    valueLow: Number(body.valueLow) || 0,
-    valueMid: Number(body.valueMid) || 0,
-    valueHigh: Number(body.valueHigh) || 0,
-    primaryRoute: body.primaryRoute as never,
-    routeReasoning: body.routeReasoning as string,
-    consignmentCategory: body.consignmentCategory as string,
-    listingTitleEbay: body.listingTitleEbay as string,
-    listingDescriptionEbay: body.listingDescriptionEbay as string,
-    listingFb: body.listingFb as string,
-    listingOfferup: body.listingOfferup as string,
-    staffTips: body.staffTips as string,
-    status: "Pending Review",
-  });
-
-  return NextResponse.json({ item });
+  try {
+    const item = await createItem({
+      tenantId,
+      itemName: (body.itemName as string) || (body.item_name as string) || "Unknown Item",
+      roomId: body.roomId as string | undefined,
+      photoUrl: body.photoUrl as string | undefined,
+      photoPublicId: body.photoPublicId as string | undefined,
+      category: body.category as string,
+      condition: body.condition as never,
+      conditionNotes: body.conditionNotes as string,
+      sizeClass: body.sizeClass as never,
+      fragility: body.fragility as never,
+      itemType: body.itemType as never,
+      valueLow: Number(body.valueLow) || 0,
+      valueMid: Number(body.valueMid) || 0,
+      valueHigh: Number(body.valueHigh) || 0,
+      primaryRoute: body.primaryRoute as never,
+      routeReasoning: body.routeReasoning as string,
+      consignmentCategory: body.consignmentCategory as string,
+      listingTitleEbay: body.listingTitleEbay as string,
+      listingDescriptionEbay: body.listingDescriptionEbay as string,
+      listingFb: body.listingFb as string,
+      listingOfferup: body.listingOfferup as string,
+      staffTips: body.staffTips as string,
+      status: "Pending Review",
+    });
+    return NextResponse.json({ item });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("createItem failed:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {
