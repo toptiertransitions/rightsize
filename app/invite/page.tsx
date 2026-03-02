@@ -19,10 +19,12 @@ export default async function InvitePage({ searchParams }: PageProps) {
   // Verify token server-side
   let tenantId: string;
   let role: string;
+  let invitedBy: string;
   try {
     const data = verifyInviteToken(token);
     tenantId = data.tenantId;
     role = data.role;
+    invitedBy = data.invitedBy;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid invite link.";
     return <InviteError message={message} />;
@@ -37,6 +39,9 @@ export default async function InvitePage({ searchParams }: PageProps) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const returnUrl = `${appUrl}/invite?token=${token}`;
+
+  // Warn if the person who sent the invite is currently signed in
+  const isInviter = userId === invitedBy;
 
   return (
     <div className="min-h-screen bg-cream-50 flex items-center justify-center p-4">
@@ -56,7 +61,19 @@ export default async function InvitePage({ searchParams }: PageProps) {
           <span className="font-semibold text-forest-700">{role}</span>
         </p>
 
-        {userId ? (
+        {isInviter ? (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+              You&apos;re signed in as the person who sent this invite. Sign out and have the recipient open this link in their own browser.
+            </div>
+            <Link
+              href={`/sign-out?redirect_url=${encodeURIComponent(returnUrl)}`}
+              className="flex items-center justify-center w-full h-11 px-5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition-colors"
+            >
+              Sign out
+            </Link>
+          </div>
+        ) : userId ? (
           <AcceptInviteButton token={token} tenantId={tenantId} />
         ) : (
           <div className="space-y-3">
