@@ -119,18 +119,16 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
     setUploading(true);
     try {
       if (photoFile) {
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-        const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
         const formData = new FormData();
         formData.append("file", photoFile);
-        formData.append("upload_preset", uploadPreset!);
-        const res = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-          { method: "POST", body: formData }
-        );
-        if (!res.ok) throw new Error("Photo upload failed");
+        formData.append("tenantId", tenantId);
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Photo upload failed");
+        }
         const data = await res.json();
-        setPhotoMeta({ url: data.secure_url, publicId: data.public_id });
+        setPhotoMeta({ url: data.photoUrl, publicId: data.photoPublicId });
       }
       setAnalysis(null);
       setEditedAnalysis({ ...BLANK_ANALYSIS });
