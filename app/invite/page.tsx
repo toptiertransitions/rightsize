@@ -108,7 +108,7 @@ function InviteError({ message }: { message: string }) {
         <h1 className="text-xl font-bold text-gray-900 mb-2">Invalid Invite</h1>
         <p className="text-gray-500 text-sm mb-6">{message}</p>
         <Link
-          href="/dashboard"
+          href="/home"
           className="inline-flex items-center justify-center h-11 px-5 bg-forest-600 text-white rounded-xl font-medium text-sm hover:bg-forest-700 transition-colors"
         >
           Go to Dashboard

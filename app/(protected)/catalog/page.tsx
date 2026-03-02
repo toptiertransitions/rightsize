@@ -33,8 +33,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       getRoomsForTenant(tenantId).catch(() => []),
     ]);
 
-    if (!tenant) redirect("/dashboard");
-    if (!role) redirect("/dashboard");
+    if (!tenant) redirect("/home");
+    if (!role) redirect("/home");
 
     const canEdit = EDIT_ROLES.includes(role);
 
@@ -43,7 +43,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-              <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Home</Link>
+              <Link href="/home" className="hover:text-forest-600 transition-colors">Home</Link>
               <span>/</span>
               <Link href={`/rooms?tenantId=${tenantId}`} className="hover:text-forest-600 transition-colors">{tenant.name}</Link>
               <span>/</span>
@@ -74,7 +74,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── All-items mode ───────────────────────────────────────────────────────────
   const memberships = await getMembershipsForUser(userId).catch(() => []);
-  if (memberships.length === 0) redirect("/dashboard");
+  if (memberships.length === 0) redirect("/home");
 
   const tenantIds = memberships.map((m) => m.tenantId);
 
@@ -96,7 +96,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-            <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Home</Link>
+            <Link href="/home" className="hover:text-forest-600 transition-colors">Home</Link>
             <span>/</span>
             <span className="text-gray-700 font-medium">All Items</span>
           </div>

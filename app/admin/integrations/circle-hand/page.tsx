@@ -8,7 +8,7 @@ import { CircleHandClient } from "./CircleHandClient";
 export default async function CircleHandPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
-  if (!isTTTAdmin(userId)) redirect("/dashboard");
+  if (!isTTTAdmin(userId)) redirect("/home");
 
   return (
     <div className="min-h-screen bg-gray-950">

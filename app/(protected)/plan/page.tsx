@@ -84,8 +84,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getPlanEntriesForTenant(tenantId).catch(() => []),
   ]);
 
-  if (!tenant) redirect("/dashboard");
-  if (!role) redirect("/dashboard");
+  if (!tenant) redirect("/home");
+  if (!role) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(role);
 
@@ -94,7 +94,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-            <Link href="/dashboard" className="hover:text-forest-600 transition-colors">
+            <Link href="/home" className="hover:text-forest-600 transition-colors">
               Home
             </Link>
             <span>/</span>

@@ -19,7 +19,7 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
   const tq = tenantId ? `?tenantId=${tenantId}` : "";
 
   const navLinks = [
-    { href: "/dashboard", label: "Home" },
+    { href: "/home", label: "Home" },
     { href: `/rooms${tq}`, base: "/rooms", label: "Rooms" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/plan${tq}`, base: "/plan", label: "Plan" },
@@ -50,7 +50,7 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-2.5">
+          <Link href="/home" className="flex items-center gap-2.5">
             <Image
               src="/ttt-icon.png"
               alt="Top Tier Transitions"

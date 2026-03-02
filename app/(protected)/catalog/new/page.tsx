@@ -13,7 +13,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
   if (!userId) redirect("/sign-in");
 
   const { tenantId } = await searchParams;
-  if (!tenantId) redirect("/dashboard");
+  if (!tenantId) redirect("/home");
 
   const [tenant, role, rooms] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
@@ -21,8 +21,8 @@ export default async function NewItemPage({ searchParams }: PageProps) {
     getRoomsForTenant(tenantId).catch(() => []),
   ]);
 
-  if (!tenant) redirect("/dashboard");
-  if (!role) redirect("/dashboard");
+  if (!tenant) redirect("/home");
+  if (!role) redirect("/home");
 
   const canEdit = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role);
   if (!canEdit) redirect(`/catalog?tenantId=${tenantId}`);
@@ -31,7 +31,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
     <div>
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-          <Link href="/dashboard" className="hover:text-forest-600">Home</Link>
+          <Link href="/home" className="hover:text-forest-600">Home</Link>
           <span>/</span>
           <Link href={`/catalog?tenantId=${tenantId}`} className="hover:text-forest-600">Catalog</Link>
           <span>/</span>

@@ -24,7 +24,7 @@ export type AdminUser = {
 export default async function AdminUsersPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
-  if (!isTTTAdmin(userId)) redirect("/dashboard");
+  if (!isTTTAdmin(userId)) redirect("/home");
 
   const [memberships, tenants, clerkRes] = await Promise.all([
     getAllMemberships().catch(() => []),

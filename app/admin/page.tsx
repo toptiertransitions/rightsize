@@ -9,7 +9,7 @@ import { UserButton } from "@clerk/nextjs";
 export default async function AdminPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
-  if (!isTTTAdmin(userId)) redirect("/dashboard");
+  if (!isTTTAdmin(userId)) redirect("/home");
 
   const [tenants, memberships] = await Promise.all([
     getTenants().catch(() => []),

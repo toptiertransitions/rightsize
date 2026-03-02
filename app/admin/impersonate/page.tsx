@@ -19,7 +19,7 @@ interface PageProps {
 export default async function ImpersonatePage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
-  if (!isTTTAdmin(userId)) redirect("/dashboard");
+  if (!isTTTAdmin(userId)) redirect("/home");
 
   const { tenantId } = await searchParams;
   if (!tenantId) redirect("/admin");

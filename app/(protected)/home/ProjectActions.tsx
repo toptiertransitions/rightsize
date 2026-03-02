@@ -219,7 +219,7 @@ export function ProjectActions({ tenantId, tenantName }: ProjectActionsProps) {
         const d = await res.json();
         throw new Error(d.error || "Failed to delete");
       }
-      router.push("/dashboard");
+      router.push("/home");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error");
       setLoading(false);
