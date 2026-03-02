@@ -299,6 +299,22 @@ export interface LocalVendor {
   createdAt: string;
 }
 
+// ─── Project Files ────────────────────────────────────────────────────────────
+export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image";
+
+export interface ProjectFile {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  fileName: string;
+  fileTag: FileTag;
+  roomLabel?: string;
+  cloudinaryUrl: string;
+  cloudinaryPublicId: string;
+  resourceType: string; // "image" | "raw"
+  createdAt: string;
+}
+
 // ─── Calculator ───────────────────────────────────────────────────────────────
 export interface CalculatorRoom {
   id: string;

@@ -7,6 +7,7 @@ import {
   getRoomsForTenant,
   getPlanEntriesForTenant,
   getMembershipsForUser,
+  getProjectFiles,
 } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
@@ -77,11 +78,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
   }
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
-  const [tenant, role, rooms, entries] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
     getPlanEntriesForTenant(tenantId).catch(() => []),
+    getProjectFiles(tenantId).catch(() => []),
   ]);
 
   if (!tenant) redirect("/home");
@@ -105,7 +107,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <PlanClient entries={entries} rooms={rooms} tenantId={tenantId} canEdit={canEdit} />
+      <PlanClient entries={entries} rooms={rooms} tenantId={tenantId} canEdit={canEdit} projectFiles={projectFiles} />
     </div>
   );
 }

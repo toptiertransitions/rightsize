@@ -26,6 +26,8 @@ import type {
   Vendor,
   VendorType,
   LocalVendor,
+  ProjectFile,
+  FileTag,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -947,4 +949,78 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
   };
+}
+
+// ─── Project Files (uses fetch directly — same pattern as vendorFetch) ─────────
+function fileFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.FILES;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapProjectFile(record: AirtableRecord): ProjectFile {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantID"]),
+    fileName: toStr(f["FileName"]),
+    fileTag: toStr(f["FileTag"]) as FileTag,
+    roomLabel: toStr(f["RoomLabel"]) || undefined,
+    cloudinaryUrl: toStr(f["CloudinaryUrl"]),
+    cloudinaryPublicId: toStr(f["CloudinaryPublicId"]),
+    resourceType: toStr(f["ResourceType"]) || "image",
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getProjectFiles(tenantId: string): Promise<ProjectFile[]> {
+  const formula = encodeURIComponent(`{TenantID} = "${tenantId}"`);
+  const res = await fileFetch(
+    `?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapProjectFile);
+}
+
+export async function createProjectFile(data: {
+  tenantId: string;
+  fileName: string;
+  fileTag: FileTag;
+  roomLabel?: string;
+  cloudinaryUrl: string;
+  cloudinaryPublicId: string;
+  resourceType: string;
+}): Promise<ProjectFile> {
+  const res = await fileFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantID: data.tenantId,
+        FileName: data.fileName,
+        FileTag: data.fileTag,
+        RoomLabel: data.roomLabel || "",
+        CloudinaryUrl: data.cloudinaryUrl,
+        CloudinaryPublicId: data.cloudinaryPublicId,
+        ResourceType: data.resourceType,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapProjectFile(await res.json());
+}
+
+export async function deleteProjectFile(id: string): Promise<void> {
+  const res = await fileFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
 }

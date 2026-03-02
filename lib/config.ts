@@ -38,6 +38,7 @@ export const AIRTABLE_TABLES = {
   PLAN_ENTRIES: process.env.AIRTABLE_PLAN_ENTRIES_TABLE || "PlanEntries",
   VENDORS: process.env.AIRTABLE_VENDORS_TABLE || "Vendors",
   LOCAL_VENDORS: process.env.AIRTABLE_LOCAL_VENDORS_TABLE || "LocalVendors",
+  FILES: process.env.AIRTABLE_FILES_TABLE || "ProjectFiles",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

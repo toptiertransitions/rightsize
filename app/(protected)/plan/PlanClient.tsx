@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES } from "@/lib/types";
-import type { PlanEntry, PlanActivity, PlanHelper, Room } from "@/lib/types";
+import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile } from "@/lib/types";
+import { FloorplansSection } from "./FloorplansSection";
 
 // ─── Activity chip colors ──────────────────────────────────────────────────────
 const ACTIVITY_COLORS: Record<PlanActivity, string> = {
@@ -496,9 +497,10 @@ interface PlanClientProps {
   rooms: Room[];
   tenantId: string;
   canEdit: boolean;
+  projectFiles: ProjectFile[];
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(true);
@@ -775,6 +777,15 @@ export function PlanClient({ entries, rooms, tenantId, canEdit }: PlanClientProp
           </div>
         </div>
       )}
+
+      {/* ── Floorplans & Images ──────────────────────────────────────────────── */}
+      <div className="mt-10">
+        <FloorplansSection
+          tenantId={tenantId}
+          canEdit={canEdit}
+          initialFiles={projectFiles}
+        />
+      </div>
 
       {/* ── Modal ───────────────────────────────────────────────────────────── */}
       {showModal && (
