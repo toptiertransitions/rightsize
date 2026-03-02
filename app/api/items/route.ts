@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, getItemsForTenant, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -102,4 +102,27 @@ export async function PATCH(req: NextRequest) {
 
   const item = await updateItem(id as string, updates as never);
   return NextResponse.json({ item });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  const item = await getItemById(id).catch(() => null);
+  if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const role = await getUserRoleForTenant(userId, item.tenantId);
+  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    await deleteItem(id);
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }

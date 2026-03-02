@@ -409,6 +409,11 @@ export async function updateItem(
   return mapItem(record);
 }
 
+export async function deleteItem(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.ITEMS).destroy(id);
+}
+
 function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
   const f = record.fields;
   return {

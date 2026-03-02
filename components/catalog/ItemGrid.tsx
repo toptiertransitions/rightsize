@@ -74,6 +74,8 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
     roomId: item.roomId ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
 
   // Only show rooms belonging to this item's tenant
@@ -81,6 +83,23 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
 
   const set = <K extends keyof EditableItem>(key: K, value: EditableItem[K]) =>
     setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/items?id=${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to delete");
+      }
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -271,9 +290,37 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-cream-100 flex gap-3">
-          <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
-          <Button onClick={handleSave} loading={saving} className="flex-1">Save Changes</Button>
+        <div className="px-6 py-4 border-t border-cream-100">
+          {confirmDelete ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 flex-1">Delete this item permanently?</span>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-1.5 text-sm font-medium bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? "Deleting…" : "Yes, Delete"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="px-3 py-2 text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors"
+              >
+                Delete
+              </button>
+              <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+              <Button onClick={handleSave} loading={saving} className="flex-1">Save Changes</Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
