@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant } from "@/lib/airtable";
-import { createOrUpdateCalendarEvent, syncCalendarEventRSVPs } from "@/lib/googleCalendar";
+import { createOrUpdateCalendarEvent, syncCalendarEventRSVPs, cancelCalendarEvent } from "@/lib/googleCalendar";
 import type { PlanHelper } from "@/lib/types";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
@@ -10,7 +10,14 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { planEntryId: string; action: "send" | "sync"; helpers?: PlanHelper[]; startTime?: string; endTime?: string };
+  let body: {
+    planEntryId: string;
+    action: "send" | "sync" | "update" | "cancel";
+    helpers?: PlanHelper[];
+    startTime?: string;
+    endTime?: string;
+    notes?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -50,18 +57,20 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No helpers to invite" }, { status: 400 });
       }
 
-      // Persist any unsaved modal state (helpers, times) to Airtable
+      // Persist any unsaved modal state (helpers, times, notes) to Airtable
       const patch: Parameters<typeof updatePlanEntry>[1] = {};
       if (body.helpers?.length) patch.helpers = body.helpers;
       if (body.startTime !== undefined) patch.startTime = body.startTime;
       if (body.endTime !== undefined) patch.endTime = body.endTime;
+      if (body.notes !== undefined) patch.notes = body.notes;
       if (Object.keys(patch).length) await updatePlanEntry(planEntryId, patch);
 
-      // Merge request-body values into entry so the calendar event uses them
+      // Merge request-body values into entry so the calendar event uses current modal state
       const entryForCalendar = {
         ...entry,
         ...(body.startTime !== undefined && { startTime: body.startTime || undefined }),
         ...(body.endTime !== undefined && { endTime: body.endTime || undefined }),
+        ...(body.notes !== undefined && { notes: body.notes }),
       };
 
       // Resolve room name for the calendar event summary
@@ -97,6 +106,25 @@ export async function POST(req: NextRequest) {
 
       const updated = await updatePlanEntry(planEntryId, { helpers: updatedHelpers });
       return NextResponse.json({ entry: updated });
+    }
+
+    // Update: entry already saved to Airtable; just patch the calendar event
+    if (action === "update") {
+      if (!entry.googleEventId) return NextResponse.json({ entry }); // no event yet, no-op
+      let roomName = entry.roomLabel || "";
+      if (!roomName && entry.roomId) {
+        const rooms = await getRoomsForTenant(entry.tenantId).catch(() => []);
+        roomName = rooms.find((r) => r.id === entry.roomId)?.name || "";
+      }
+      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId);
+      return NextResponse.json({ entry });
+    }
+
+    // Cancel: delete the calendar event and notify all attendees
+    if (action === "cancel") {
+      if (!entry.googleEventId) return NextResponse.json({ ok: true }); // no event, no-op
+      await cancelCalendarEvent(entry.googleEventId);
+      return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

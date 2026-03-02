@@ -134,6 +134,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
           helpers,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
+          notes: notes.trim() || undefined,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -172,6 +173,17 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
         try { const d = await res.json(); msg = d.error ?? msg; } catch {}
         throw new Error(msg);
       }
+
+      // Auto-update the calendar event if invites have been sent
+      // (covers date/time changes, helper removals, and notes edits)
+      if (isEdit && googleEventId) {
+        await fetch("/api/plan/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planEntryId: entry!.id, action: "update" }),
+        }).catch(() => {}); // silent — don't block save if calendar update fails
+      }
+
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error saving");
@@ -185,6 +197,14 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
     setLoading(true);
     setError("");
     try {
+      // Cancel Google Calendar event first so attendees receive cancellation emails
+      if (googleEventId) {
+        await fetch("/api/plan/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planEntryId: entry.id, action: "cancel" }),
+        }).catch(() => {}); // don't block delete if cancellation fails
+      }
       const res = await fetch(`/api/plan?id=${entry.id}`, { method: "DELETE" });
       if (!res.ok) {
         let msg = "Failed to delete";

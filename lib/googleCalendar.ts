@@ -91,6 +91,16 @@ export async function createOrUpdateCalendarEvent(
   }
 }
 
+// ─── Cancel a Calendar event (sends cancellation emails to all attendees) ─────
+export async function cancelCalendarEvent(eventId: string): Promise<void> {
+  const calendar = google.calendar({ version: "v3", auth: getAuth() });
+  await calendar.events.delete({
+    calendarId: CALENDAR_ID,
+    eventId,
+    sendUpdates: "all",
+  });
+}
+
 // ─── Sync RSVP statuses from Google Calendar ──────────────────────────────────
 export async function syncCalendarEventRSVPs(
   eventId: string,
