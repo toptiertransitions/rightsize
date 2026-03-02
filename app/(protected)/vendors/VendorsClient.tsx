@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { VENDOR_TYPES } from "@/lib/types";
 import type { Vendor, VendorType, LocalVendor } from "@/lib/types";
@@ -534,6 +534,51 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: Vend
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | undefined>(undefined);
   const [prefill, setPrefill] = useState<VendorPrefill | undefined>(undefined);
+  const [orderedVendors, setOrderedVendors] = useState<Vendor[]>(vendors);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // Sync with server data (preserving saved order, appending new, dropping deleted)
+  useEffect(() => {
+    const saved = localStorage.getItem(`vendor-order-${tenantId}`);
+    const idToVendor = new Map(vendors.map(v => [v.id, v]));
+    if (saved) {
+      try {
+        const ids: string[] = JSON.parse(saved);
+        const ordered = ids.map(id => idToVendor.get(id)).filter((v): v is Vendor => !!v);
+        const orderedSet = new Set(ids);
+        const newVendors = vendors.filter(v => !orderedSet.has(v.id));
+        setOrderedVendors([...ordered, ...newVendors]);
+        return;
+      } catch {}
+    }
+    setOrderedVendors(vendors);
+  }, [vendors, tenantId]);
+
+  const handleDragStart = (id: string) => setDragId(id);
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (dragOverId !== id) setDragOverId(id);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return; }
+    setOrderedVendors(prev => {
+      const fromIdx = prev.findIndex(v => v.id === dragId);
+      const toIdx = prev.findIndex(v => v.id === targetId);
+      const next = [...prev];
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, prev[fromIdx]);
+      localStorage.setItem(`vendor-order-${tenantId}`, JSON.stringify(next.map(v => v.id)));
+      return next;
+    });
+    setDragId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => { setDragId(null); setDragOverId(null); };
 
   const openAdd = () => {
     setPrefill(undefined);
@@ -611,13 +656,22 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: Vend
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {vendors.map((vendor) => (
-            <VendorCard
+          {orderedVendors.map((vendor) => (
+            <div
               key={vendor.id}
-              vendor={vendor}
-              canEdit={canEdit}
-              onEdit={() => openEdit(vendor)}
-            />
+              draggable={canEdit}
+              onDragStart={() => handleDragStart(vendor.id)}
+              onDragOver={(e) => handleDragOver(e, vendor.id)}
+              onDrop={(e) => handleDrop(e, vendor.id)}
+              onDragEnd={handleDragEnd}
+              className={`transition-opacity ${dragId === vendor.id ? "opacity-30" : "opacity-100"} ${dragOverId === vendor.id && dragId !== vendor.id ? "ring-2 ring-forest-400 rounded-2xl" : ""} ${canEdit ? "cursor-grab active:cursor-grabbing" : ""}`}
+            >
+              <VendorCard
+                vendor={vendor}
+                canEdit={canEdit}
+                onEdit={() => openEdit(vendor)}
+              />
+            </div>
           ))}
         </div>
       )}
