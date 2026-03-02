@@ -12,7 +12,7 @@ function getAuth() {
 }
 
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";
-const TIMEZONE = "America/Denver";
+const TIMEZONE = "America/Chicago";
 
 // Add 1 day (for all-day event end dates)
 function nextDay(date: string): string {
