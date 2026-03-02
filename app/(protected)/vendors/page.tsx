@@ -6,6 +6,7 @@ import {
   getUserRoleForTenant,
   getVendorsForTenant,
   getMembershipsForUser,
+  getLocalVendors,
 } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { VendorsClient } from "./VendorsClient";
@@ -80,6 +81,8 @@ export default async function VendorsPage({ searchParams }: PageProps) {
     getVendorsForTenant(tenantId).catch(() => []),
   ]);
 
+  const localVendors = await getLocalVendors(tenant?.state || undefined).catch(() => []);
+
   if (!tenant) redirect("/home");
   if (!role) redirect("/home");
 
@@ -101,7 +104,7 @@ export default async function VendorsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} />
+      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} localVendors={localVendors} />
     </div>
   );
 }

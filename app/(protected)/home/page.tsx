@@ -95,7 +95,14 @@ export default async function DashboardPage({
             <p className="text-gray-500 mt-0.5 capitalize">{membership.role}</p>
           </div>
           {isOwner && (
-            <ProjectActions tenantId={tenant.id} tenantName={tenant.name} />
+            <ProjectActions
+              tenantId={tenant.id}
+              tenantName={tenant.name}
+              tenantAddress={tenant.address}
+              tenantCity={tenant.city}
+              tenantState={tenant.state}
+              tenantZip={tenant.zip}
+            />
           )}
         </div>
 
@@ -236,7 +243,14 @@ export default async function DashboardPage({
                 </Link>
                 {cardIsOwner && (
                   <div className="mt-3 pt-3 border-t border-gray-100">
-                    <ProjectActions tenantId={tenant!.id} tenantName={tenant!.name} />
+                    <ProjectActions
+                    tenantId={tenant!.id}
+                    tenantName={tenant!.name}
+                    tenantAddress={tenant!.address}
+                    tenantCity={tenant!.city}
+                    tenantState={tenant!.state}
+                    tenantZip={tenant!.zip}
+                  />
                   </div>
                 )}
               </CardContent>

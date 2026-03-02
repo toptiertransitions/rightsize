@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { VENDOR_TYPES } from "@/lib/types";
-import type { Vendor, VendorType } from "@/lib/types";
+import type { Vendor, VendorType, LocalVendor } from "@/lib/types";
 
 // ─── Type badge colors ──────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -370,14 +370,112 @@ function VendorCard({
   );
 }
 
+// ─── LocalVendorDirectory ─────────────────────────────────────────────────────
+const LOCAL_TYPE_ORDER: VendorType[] = [
+  "Consignment Store",
+  "Donation Org",
+  "Mover",
+  "Move Manager",
+  "Junk Hauler",
+  "Future Home/Community",
+  "Realtor",
+  "Broker",
+  "Attorney",
+  "Other",
+];
+
+function LocalVendorDirectory({ vendors }: { vendors: LocalVendor[] }) {
+  if (vendors.length === 0) return null;
+
+  // Group by type, then sort groups by LOCAL_TYPE_ORDER
+  const grouped = new Map<VendorType, LocalVendor[]>();
+  for (const v of vendors) {
+    const arr = grouped.get(v.vendorType) ?? [];
+    arr.push(v);
+    grouped.set(v.vendorType, arr);
+  }
+  const sortedTypes = LOCAL_TYPE_ORDER.filter((t) => grouped.has(t));
+
+  return (
+    <div className="mt-10 opacity-60">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-lg font-bold text-gray-900">Local Vendor Directory</h2>
+        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">Managed by TTT</span>
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Type</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">City, State</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">POC</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Phone</th>
+              <th className="hidden lg:table-cell px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Item Categories</th>
+              <th className="hidden lg:table-cell px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Take</th>
+              <th className="hidden xl:table-cell px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Zips Served</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedTypes.map((type) =>
+              (grouped.get(type) ?? []).map((v, i) => {
+                const typeColor = TYPE_COLORS[v.vendorType] ?? "bg-gray-100 text-gray-700";
+                return (
+                  <tr key={v.id} className={`border-b border-gray-100 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
+                        {v.vendorType}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 font-medium text-gray-900">{v.vendorName}</td>
+                    <td className="px-4 py-2.5 text-gray-600">
+                      {[v.city, v.state].filter(Boolean).join(", ")}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500">{v.pocName || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {v.email
+                        ? <a href={`mailto:${v.email}`} className="text-forest-600 hover:underline truncate block max-w-[160px]">{v.email}</a>
+                        : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {v.phone
+                        ? <a href={`tel:${v.phone}`} className="text-gray-600 hover:underline">{v.phone}</a>
+                        : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="hidden lg:table-cell px-4 py-2.5 text-gray-500">
+                      {v.itemCategories
+                        ? <span className="truncate block max-w-[140px]" title={v.itemCategories}>{v.itemCategories}</span>
+                        : "—"}
+                    </td>
+                    <td className="hidden lg:table-cell px-4 py-2.5 text-gray-500">
+                      {v.consignmentTake > 0 ? `${v.consignmentTake}% take` : "—"}
+                    </td>
+                    <td className="hidden xl:table-cell px-4 py-2.5 text-gray-500">
+                      {v.zipCodesServed
+                        ? <span className="truncate block max-w-[120px]" title={v.zipCodesServed}>{v.zipCodesServed}</span>
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── VendorsClient ────────────────────────────────────────────────────────────
 interface VendorsClientProps {
   vendors: Vendor[];
   tenantId: string;
   canEdit: boolean;
+  localVendors: LocalVendor[];
 }
 
-export function VendorsClient({ vendors, tenantId, canEdit }: VendorsClientProps) {
+export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: VendorsClientProps) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | undefined>(undefined);
@@ -453,6 +551,9 @@ export function VendorsClient({ vendors, tenantId, canEdit }: VendorsClientProps
           ))}
         </div>
       )}
+
+      {/* Local Vendor Directory */}
+      <LocalVendorDirectory vendors={localVendors} />
 
       {/* Modal */}
       {showModal && (

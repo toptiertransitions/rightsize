@@ -15,6 +15,10 @@ export interface Tenant {
   plan: "free" | "pro" | "enterprise";
   ownerUserId: string; // Clerk user ID
   createdAt: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -259,6 +263,28 @@ export interface Vendor {
   date2: string;
   date3Label: string;
   date3: string;
+  createdAt: string;
+}
+
+// ─── Local Vendor Directory ───────────────────────────────────────────────────
+export interface LocalVendor {
+  id: string;
+  airtableId: string;
+  vendorType: VendorType;
+  vendorName: string;
+  pocName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  website: string;
+  itemCategories: string;   // comma-separated
+  consignmentTake: number;  // % (0 if N/A)
+  zipCodesServed: string;   // comma-separated
+  notes: string;
+  isActive: boolean;
   createdAt: string;
 }
 

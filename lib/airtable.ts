@@ -24,6 +24,7 @@ import type {
   RoomType,
   Vendor,
   VendorType,
+  LocalVendor,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -100,6 +101,10 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     plan: (toStr(f["Plan"]) || "free") as Tenant["plan"],
     ownerUserId: toStr(f["OwnerUserId"]),
     createdAt: toStr(f["CreatedAt"]),
+    address: toStr(f["Address"]) || undefined,
+    city: toStr(f["City"]) || undefined,
+    state: toStr(f["State"]) || undefined,
+    zip: toStr(f["Zip"]) || undefined,
   };
 }
 
@@ -472,9 +477,17 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 }
 
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
-export async function updateTenant(id: string, data: { name: string }): Promise<Tenant> {
+export async function updateTenant(
+  id: string,
+  data: { name: string; address?: string; city?: string; state?: string; zip?: string }
+): Promise<Tenant> {
   const base = getBase();
-  const record = await base(AIRTABLE_TABLES.TENANTS).update(id, { Name: data.name });
+  const fields: Airtable.FieldSet = { Name: data.name };
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.city !== undefined) fields["City"] = data.city;
+  if (data.state !== undefined) fields["State"] = data.state;
+  if (data.zip !== undefined) fields["Zip"] = data.zip;
+  const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }
 
@@ -754,6 +767,159 @@ function mapVendor(record: AirtableRecord): Vendor {
     date2: toStr(f["Date2"]),
     date3Label: toStr(f["Date3Label"]),
     date3: toStr(f["Date3"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+// ─── Local Vendors (uses fetch directly — same pattern as vendorFetch) ────────
+function localVendorFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = process.env.AIRTABLE_LOCAL_VENDORS_TABLE || "LocalVendors";
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export async function getLocalVendors(state?: string): Promise<LocalVendor[]> {
+  const stateFilter = state ? `AND({IsActive}=TRUE(), {State}="${state}")` : `{IsActive}=TRUE()`;
+  const formula = encodeURIComponent(stateFilter);
+  const res = await localVendorFetch(
+    `?filterByFormula=${formula}&sort[0][field]=VendorType&sort[0][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapLocalVendor);
+}
+
+export async function getLocalVendorById(id: string): Promise<LocalVendor | null> {
+  try {
+    const res = await localVendorFetch(`/${id}`);
+    if (!res.ok) return null;
+    return mapLocalVendor(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+export async function createLocalVendor(data: {
+  vendorType: VendorType;
+  vendorName: string;
+  pocName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  website?: string;
+  itemCategories?: string;
+  consignmentTake?: number;
+  zipCodesServed?: string;
+  notes?: string;
+  isActive?: boolean;
+}): Promise<LocalVendor> {
+  const res = await localVendorFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        VendorType: data.vendorType,
+        VendorName: data.vendorName,
+        POCName: data.pocName || "",
+        Email: data.email || "",
+        Phone: data.phone || "",
+        Address: data.address || "",
+        City: data.city || "",
+        State: data.state || "",
+        Zip: data.zip || "",
+        Website: data.website || "",
+        ItemCategories: data.itemCategories || "",
+        ConsignmentTake: data.consignmentTake ?? 0,
+        ZipCodesServed: data.zipCodesServed || "",
+        Notes: data.notes || "",
+        IsActive: data.isActive ?? true,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapLocalVendor(await res.json());
+}
+
+export async function updateLocalVendor(
+  id: string,
+  data: Partial<{
+    vendorType: VendorType;
+    vendorName: string;
+    pocName: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    website: string;
+    itemCategories: string;
+    consignmentTake: number;
+    zipCodesServed: string;
+    notes: string;
+    isActive: boolean;
+  }>
+): Promise<LocalVendor> {
+  const fields: Record<string, unknown> = {};
+  if (data.vendorType !== undefined) fields["VendorType"] = data.vendorType;
+  if (data.vendorName !== undefined) fields["VendorName"] = data.vendorName;
+  if (data.pocName !== undefined) fields["POCName"] = data.pocName;
+  if (data.email !== undefined) fields["Email"] = data.email;
+  if (data.phone !== undefined) fields["Phone"] = data.phone;
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.city !== undefined) fields["City"] = data.city;
+  if (data.state !== undefined) fields["State"] = data.state;
+  if (data.zip !== undefined) fields["Zip"] = data.zip;
+  if (data.website !== undefined) fields["Website"] = data.website;
+  if (data.itemCategories !== undefined) fields["ItemCategories"] = data.itemCategories;
+  if (data.consignmentTake !== undefined) fields["ConsignmentTake"] = data.consignmentTake;
+  if (data.zipCodesServed !== undefined) fields["ZipCodesServed"] = data.zipCodesServed;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  const res = await localVendorFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapLocalVendor(await res.json());
+}
+
+export async function deleteLocalVendor(id: string): Promise<void> {
+  const res = await localVendorFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+function mapLocalVendor(record: AirtableRecord): LocalVendor {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    vendorType: (toStr(f["VendorType"]) || "Other") as VendorType,
+    vendorName: toStr(f["VendorName"]),
+    pocName: toStr(f["POCName"]),
+    email: toStr(f["Email"]),
+    phone: toStr(f["Phone"]),
+    address: toStr(f["Address"]),
+    city: toStr(f["City"]),
+    state: toStr(f["State"]),
+    zip: toStr(f["Zip"]),
+    website: toStr(f["Website"]),
+    itemCategories: toStr(f["ItemCategories"]),
+    consignmentTake: typeof f["ConsignmentTake"] === "number" ? f["ConsignmentTake"] : 0,
+    zipCodesServed: toStr(f["ZipCodesServed"]),
+    notes: toStr(f["Notes"]),
+    isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
   };
 }
