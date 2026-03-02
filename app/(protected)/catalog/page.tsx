@@ -8,6 +8,7 @@ import {
   getRoomsForTenant,
   getMembershipsForUser,
 } from "@/lib/airtable";
+import { isTTTStaff } from "@/lib/config";
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
 import type { Tenant } from "@/lib/types";
@@ -34,9 +35,10 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     ]);
 
     if (!tenant) redirect("/home");
-    if (!role) redirect("/home");
+    const resolvedRole = role ?? (isTTTStaff(userId!) ? "TTTStaff" as const : null);
+    if (!resolvedRole) redirect("/home");
 
-    const canEdit = EDIT_ROLES.includes(role);
+    const canEdit = EDIT_ROLES.includes(resolvedRole);
 
     return (
       <div>

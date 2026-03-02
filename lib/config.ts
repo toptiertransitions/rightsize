@@ -70,3 +70,13 @@ export function isTTTAdmin(clerkUserId: string): boolean {
   );
   return adminIds.includes(clerkUserId);
 }
+
+// ─── TTT Staff Check ──────────────────────────────────────────────────────────
+// TTT_STAFF_USER_IDS: comma-separated Clerk user IDs for TTT staff
+// TTTAdmin users implicitly get staff access too.
+export function isTTTStaff(clerkUserId: string): boolean {
+  const staffIds = (process.env.TTT_STAFF_USER_IDS || "").split(",").map((s) =>
+    s.trim()
+  ).filter(Boolean);
+  return staffIds.includes(clerkUserId) || isTTTAdmin(clerkUserId);
+}

@@ -1,7 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenantById, getItemsForTenant, getRoomsForTenant } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant } from "@/lib/airtable";
+import { isTTTStaff } from "@/lib/config";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
@@ -20,8 +21,44 @@ export default async function DashboardPage({
   const { tenantId: tenantIdParam } = await searchParams;
 
   const user = await currentUser();
+  const isStaff = isTTTStaff(userId);
   const memberships = await getMembershipsForUser(userId).catch(() => []);
   const firstName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there";
+
+  // ── TTTStaff: show all-tenant picker or single project (no membership required) ──
+  if (isStaff && !tenantIdParam) {
+    const allTenants = await getTenants().catch(() => []);
+    return (
+      <div>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {firstName}</h1>
+          <p className="text-gray-500 mt-1">Select a client project to manage.</p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {allTenants.map((tenant) => (
+            <Link key={tenant.id} href={`/home?tenantId=${tenant.id}`}>
+              <Card hover>
+                <CardContent>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 bg-forest-50 rounded-xl flex items-center justify-center">
+                      <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                      </svg>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                  <h3 className="font-bold text-gray-900">{tenant.name}</h3>
+                  <p className="text-sm text-gray-400 mt-0.5">TTT Staff</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   // ── No projects ──────────────────────────────────────────────────────────────
   if (memberships.length === 0) {
@@ -52,8 +89,11 @@ export default async function DashboardPage({
   }
 
   // ── Single project or specific project selected ──────────────────────────────
+  const staffSyntheticMembership = isStaff && tenantIdParam
+    ? { id: "", airtableId: "", tenantId: tenantIdParam, userId: userId, role: "TTTStaff" as const, createdAt: "" }
+    : null;
   const selectedMembership = tenantIdParam
-    ? memberships.find(m => m.tenantId === tenantIdParam)
+    ? (memberships.find(m => m.tenantId === tenantIdParam) ?? staffSyntheticMembership)
     : memberships.length === 1 ? memberships[0] : null;
 
   if (selectedMembership) {
@@ -79,7 +119,7 @@ export default async function DashboardPage({
     return (
       <div>
         {/* Back link for multi-project users */}
-        {memberships.length > 1 && (
+        {(memberships.length > 1 || isStaff) && (
           <Link href="/home" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

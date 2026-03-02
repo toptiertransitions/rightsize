@@ -7,6 +7,7 @@ import {
   getTenantById,
   getMembershipsForUser,
 } from "@/lib/airtable";
+import { isTTTStaff } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RoomsClient, AddRoomButton } from "./RoomsClient";
@@ -33,9 +34,10 @@ export default async function RoomsPage({ searchParams }: PageProps) {
     ]);
 
     if (!tenant) redirect("/home");
-    if (!role) redirect("/home");
+    const resolvedRole = role ?? (isTTTStaff(userId!) ? "TTTStaff" as const : null);
+    if (!resolvedRole) redirect("/home");
 
-    const canEdit = EDIT_ROLES.includes(role);
+    const canEdit = EDIT_ROLES.includes(resolvedRole);
 
     return (
       <div>

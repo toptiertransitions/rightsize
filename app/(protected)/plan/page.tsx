@@ -9,6 +9,7 @@ import {
   getMembershipsForUser,
   getProjectFiles,
 } from "@/lib/airtable";
+import { isTTTStaff } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
 import type { Tenant } from "@/lib/types";
@@ -29,7 +30,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
   if (!tenantId) {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
 
-    if (memberships.length === 0) redirect("/onboarding");
+    if (memberships.length === 0) {
+      if (isTTTStaff(userId!)) redirect("/home");
+      redirect("/onboarding");
+    }
 
     // Single project → redirect directly
     if (memberships.length === 1) {
@@ -87,9 +91,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
   ]);
 
   if (!tenant) redirect("/home");
-  if (!role) redirect("/home");
+  const resolvedRole = role ?? (isTTTStaff(userId!) ? "TTTStaff" as const : null);
+  if (!resolvedRole) redirect("/home");
 
-  const canEdit = EDIT_ROLES.includes(role);
+  const canEdit = EDIT_ROLES.includes(resolvedRole);
 
   return (
     <div>
