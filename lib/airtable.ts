@@ -350,7 +350,7 @@ export async function createItem(data: Partial<Item> & {
     Status: data.status || "Pending Review",
     CreatedAt: now,
     UpdatedAt: now,
-  });
+  }, { typecast: true });
   return mapItem(record);
 }
 
@@ -405,7 +405,7 @@ export async function updateItem(
     }
   }
 
-  const record = await base(AIRTABLE_TABLES.ITEMS).update(id, fields);
+  const record = await base(AIRTABLE_TABLES.ITEMS).update(id, fields, { typecast: true });
   return mapItem(record);
 }
 
