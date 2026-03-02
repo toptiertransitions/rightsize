@@ -2,6 +2,21 @@
 
 import { useState, useRef } from "react";
 import type { ProjectFile, FileTag } from "@/lib/types";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ─── Tag config ───────────────────────────────────────────────────────────────
 const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
@@ -11,6 +26,17 @@ const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
   "Damage Image": { label: "Damage Image", color: "bg-red-100 text-red-800" },
 };
 const TAG_ORDER: FileTag[] = ["Floorplan", "Room Image", "Layout Image", "Damage Image"];
+
+// ─── Sort helper ──────────────────────────────────────────────────────────────
+function sortFiles(files: ProjectFile[]): ProjectFile[] {
+  return [...files].sort((a, b) => {
+    if (a.sortOrder === undefined && b.sortOrder === undefined)
+      return b.createdAt.localeCompare(a.createdAt);
+    if (a.sortOrder === undefined) return -1; // unsorted → top
+    if (b.sortOrder === undefined) return 1;
+    return a.sortOrder - b.sortOrder;
+  });
+}
 
 // ─── Cloudinary thumbnail transform ──────────────────────────────────────────
 function getThumbnailUrl(cloudinaryUrl: string): string {
@@ -22,6 +48,20 @@ function PdfIcon() {
   return (
     <svg className="w-10 h-10 text-red-400" fill="currentColor" viewBox="0 0 24 24">
       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM8.5 17.5c-.3 0-.5-.2-.5-.5s.2-.5.5-.5.5.2.5.5-.2.5-.5.5zm0-2c-.8 0-1.5.7-1.5 1.5S7.7 18.5 8.5 18.5 10 17.8 10 17s-.7-1.5-1.5-1.5zm3.5-1h-1v3h1v-3zm2 0h-1v3h1v-1.5H15v-1h-1v-.5zm-5 0H7v3h1v-1h1c.6 0 1-.4 1-1s-.4-1-1-1zm0 1H8v-.5h1v.5z"/>
+    </svg>
+  );
+}
+
+// ─── Grip icon ────────────────────────────────────────────────────────────────
+function GripIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+      <circle cx="5.5" cy="4" r="1.2" />
+      <circle cx="10.5" cy="4" r="1.2" />
+      <circle cx="5.5" cy="8" r="1.2" />
+      <circle cx="10.5" cy="8" r="1.2" />
+      <circle cx="5.5" cy="12" r="1.2" />
+      <circle cx="10.5" cy="12" r="1.2" />
     </svg>
   );
 }
@@ -288,7 +328,7 @@ function EditFileModal({ file, onClose, onSaved, onDeleted }: EditFileModalProps
   );
 }
 
-// ─── File card ────────────────────────────────────────────────────────────────
+// ─── File card (sortable) ─────────────────────────────────────────────────────
 interface FileCardProps {
   file: ProjectFile;
   canEdit: boolean;
@@ -297,54 +337,75 @@ interface FileCardProps {
 
 function FileCard({ file, canEdit, onEdit }: FileCardProps) {
   const tagCfg = TAG_CONFIG[file.fileTag] ?? { label: file.fileTag, color: "bg-gray-100 text-gray-700" };
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: file.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
-    <a
-      href={file.cloudinaryUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group relative bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow block"
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative group${isDragging ? " opacity-50" : ""}`}
     >
-      {/* Thumbnail / placeholder */}
-      <div className="w-full h-36 bg-gray-50 flex items-center justify-center overflow-hidden">
-        {file.resourceType === "image" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={getThumbnailUrl(file.cloudinaryUrl)}
-            alt={file.fileName}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <PdfIcon />
-        )}
-      </div>
+      <a
+        href={file.cloudinaryUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+      >
+        {/* Thumbnail / placeholder */}
+        <div className="w-full h-36 bg-gray-50 flex items-center justify-center overflow-hidden">
+          {file.resourceType === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={getThumbnailUrl(file.cloudinaryUrl)}
+              alt={file.fileName}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <PdfIcon />
+          )}
+        </div>
 
-      {/* Info */}
-      <div className="p-3">
-        <p className="text-xs font-medium text-gray-800 truncate" title={file.fileName}>
-          {file.fileName}
-        </p>
-        {file.roomLabel && (
-          <p className="text-xs text-gray-400 truncate mt-0.5">{file.roomLabel}</p>
-        )}
-        <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${tagCfg.color}`}>
-          {tagCfg.label}
-        </span>
-      </div>
+        {/* Info */}
+        <div className="p-3">
+          <p className="text-xs font-medium text-gray-800 truncate" title={file.fileName}>
+            {file.fileName}
+          </p>
+          {file.roomLabel && (
+            <p className="text-xs text-gray-400 truncate mt-0.5">{file.roomLabel}</p>
+          )}
+          <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${tagCfg.color}`}>
+            {tagCfg.label}
+          </span>
+        </div>
 
-      {/* Edit button */}
+        {/* Edit button — top-left */}
+        {canEdit && (
+          <button
+            onClick={e => { e.preventDefault(); onEdit(file); }}
+            className="absolute top-2 left-2 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 text-gray-400 hover:text-gray-700 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Edit file"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6.586-6.586a2 2 0 112.828 2.828L11.828 13.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
+            </svg>
+          </button>
+        )}
+      </a>
+
+      {/* Drag handle — top-right, outside <a> so it doesn't navigate */}
       {canEdit && (
         <button
-          onClick={e => { e.preventDefault(); onEdit(file); }}
-          className="absolute top-2 left-2 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 text-gray-400 hover:text-gray-700 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Edit file"
+          {...attributes}
+          {...listeners}
+          className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 text-gray-400 hover:text-gray-700 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+          title="Drag to reorder"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6.586-6.586a2 2 0 112.828 2.828L11.828 13.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
-          </svg>
+          <GripIcon />
         </button>
       )}
-    </a>
+    </div>
   );
 }
 
@@ -360,6 +421,10 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
   const [showUpload, setShowUpload] = useState(false);
   const [editingFile, setEditingFile] = useState<ProjectFile | null>(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
   const handleUploaded = (newFiles: ProjectFile[]) => {
     setFiles(prev => [...newFiles, ...prev]);
     setShowUpload(false);
@@ -371,6 +436,44 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
 
   const handleDeletedFromEdit = (deleted: ProjectFile) => {
     setFiles(prev => prev.filter(f => f.id !== deleted.id));
+  };
+
+  const handleDragEnd = (event: DragEndEvent, tag: FileTag) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    // Get the current sorted files for this tag
+    const tagFiles = sortFiles(files.filter(f => f.fileTag === tag));
+    const oldIndex = tagFiles.findIndex(f => f.id === active.id);
+    const newIndex = tagFiles.findIndex(f => f.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(tagFiles, oldIndex, newIndex);
+
+    // Assign new sortOrders (1-based)
+    const withOrder = reordered.map((f, i) => ({ ...f, sortOrder: i + 1 }));
+
+    // Optimistic update: replace this tag's files with the reordered set
+    setFiles(prev => {
+      const others = prev.filter(f => f.fileTag !== tag);
+      return [...others, ...withOrder];
+    });
+
+    // Fire-and-forget PATCH for each file in the group
+    for (const f of withOrder) {
+      fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: f.id,
+          tenantId,
+          fileName: f.fileName,
+          fileTag: f.fileTag,
+          roomLabel: f.roomLabel,
+          sortOrder: f.sortOrder,
+        }),
+      }).catch(() => { /* silent */ });
+    }
   };
 
   // Hide section entirely for non-editors when there are no files
@@ -415,6 +518,7 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
             const tagFiles = grouped[tag];
             if (!tagFiles.length) return null;
             const tagCfg = TAG_CONFIG[tag];
+            const sortedTagFiles = sortFiles(tagFiles);
             return (
               <div key={tag}>
                 <div className="flex items-center gap-2 mb-3">
@@ -423,16 +527,27 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
                   </span>
                   <span className="text-xs text-gray-400">{tagFiles.length}</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {tagFiles.map(file => (
-                    <FileCard
-                      key={file.id}
-                      file={file}
-                      canEdit={canEdit}
-                      onEdit={f => setEditingFile(f)}
-                    />
-                  ))}
-                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={e => handleDragEnd(e, tag)}
+                >
+                  <SortableContext
+                    items={sortedTagFiles.map(f => f.id)}
+                    strategy={rectSortingStrategy}
+                  >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {sortedTagFiles.map(file => (
+                        <FileCard
+                          key={file.id}
+                          file={file}
+                          canEdit={canEdit}
+                          onEdit={f => setEditingFile(f)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </div>
             );
           })}

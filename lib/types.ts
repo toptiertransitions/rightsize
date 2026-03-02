@@ -312,6 +312,7 @@ export interface ProjectFile {
   cloudinaryUrl: string;
   cloudinaryPublicId: string;
   resourceType: string; // "image" | "raw"
+  sortOrder?: number;
   createdAt: string;
 }
 

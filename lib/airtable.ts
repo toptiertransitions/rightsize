@@ -978,6 +978,7 @@ function mapProjectFile(record: AirtableRecord): ProjectFile {
     cloudinaryUrl: toStr(f["CloudinaryUrl"]),
     cloudinaryPublicId: toStr(f["CloudinaryPublicId"]),
     resourceType: toStr(f["ResourceType"]) || "image",
+    sortOrder: f["SortOrder"] != null ? toNum(f["SortOrder"]) : undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
 }
@@ -1027,13 +1028,14 @@ export async function deleteProjectFile(id: string): Promise<void> {
 
 export async function updateProjectFile(
   id: string,
-  data: { fileName?: string; fileTag?: FileTag; roomLabel?: string }
+  data: { fileName?: string; fileTag?: FileTag; roomLabel?: string; sortOrder?: number }
 ): Promise<ProjectFile> {
-  const fields: Record<string, string> = {};
+  const fields: Record<string, string | number> = {};
   if (data.fileName !== undefined) fields["FileName"] = data.fileName;
   if (data.fileTag !== undefined) fields["FileTag"] = data.fileTag;
   // Always include RoomLabel so clearing it works
   fields["RoomLabel"] = data.roomLabel ?? "";
+  if (data.sortOrder !== undefined) fields["SortOrder"] = data.sortOrder;
   const res = await fileFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

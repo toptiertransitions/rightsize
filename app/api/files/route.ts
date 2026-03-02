@@ -83,14 +83,14 @@ export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { id?: string; tenantId?: string; fileName?: string; fileTag?: string; roomLabel?: string };
+  let body: { id?: string; tenantId?: string; fileName?: string; fileTag?: string; roomLabel?: string; sortOrder?: number };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, tenantId, fileName, fileTag, roomLabel } = body;
+  const { id, tenantId, fileName, fileTag, roomLabel, sortOrder } = body;
   if (!id || !tenantId) {
     return NextResponse.json({ error: "Missing id or tenantId" }, { status: 400 });
   }
@@ -105,6 +105,7 @@ export async function PATCH(req: NextRequest) {
       fileName,
       fileTag: fileTag as FileTag | undefined,
       roomLabel,
+      sortOrder,
     });
     return NextResponse.json({ file });
   } catch (e) {
