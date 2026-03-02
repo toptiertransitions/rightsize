@@ -104,6 +104,10 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
     setHelperInput("");
   };
 
+  const handleRemoveHelper = (index: number) => {
+    setHelpers(prev => prev.filter((_, xi) => xi !== index));
+  };
+
   // Auto-sync RSVPs when the modal opens for an entry that has invites sent
   useEffect(() => {
     if (!isEdit || !entry?.googleEventId) return;
@@ -161,7 +165,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
         notes: notes.trim(),
         startTime: startTime || undefined,
         endTime: endTime || undefined,
-        helpers: helpers.length ? helpers : undefined,
+        helpers,
       };
       const res = await fetch("/api/plan", {
         method: isEdit ? "PATCH" : "POST",
@@ -353,7 +357,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
                       )}
                       <button
                         type="button"
-                        onClick={() => setHelpers(prev => prev.filter((_, xi) => xi !== i))}
+                        onClick={() => handleRemoveHelper(i)}
                         className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                       >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
