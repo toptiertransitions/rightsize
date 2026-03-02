@@ -572,6 +572,7 @@ export async function createPlanEntry(data: {
         StartTime: data.startTime || "",
         EndTime: data.endTime || "",
         Helpers: data.helpers?.length ? JSON.stringify(data.helpers) : "",
+        GoogleEventId: "",
         CreatedAt: new Date().toISOString(),
       },
     }),
@@ -591,6 +592,7 @@ export async function updatePlanEntry(
     startTime: string;
     endTime: string;
     helpers: PlanHelper[];
+    googleEventId: string;
   }>
 ): Promise<PlanEntry> {
   const fields: Record<string, string> = {};
@@ -602,6 +604,7 @@ export async function updatePlanEntry(
   if (data.startTime !== undefined) fields["StartTime"] = data.startTime;
   if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
   if (data.helpers !== undefined) fields["Helpers"] = data.helpers.length ? JSON.stringify(data.helpers) : "";
+  if (data.googleEventId !== undefined) fields["GoogleEventId"] = data.googleEventId;
   const res = await planFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -639,6 +642,7 @@ function mapPlanEntry(record: AirtableRecord): PlanEntry {
     startTime: toStr(f["StartTime"]) || undefined,
     endTime: toStr(f["EndTime"]) || undefined,
     helpers,
+    googleEventId: toStr(f["GoogleEventId"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
 }

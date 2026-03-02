@@ -212,6 +212,7 @@ export const PLAN_ACTIVITIES: PlanActivity[] = [
 export interface PlanHelper {
   email: string;
   status: "pending" | "accepted" | "declined";
+  comment?: string; // reply comment from the calendar invite
 }
 
 export interface PlanEntry {
@@ -223,9 +224,10 @@ export interface PlanEntry {
   roomId?: string;
   roomLabel?: string;
   notes?: string;
-  startTime?: string;   // "HH:MM" 24-hour
-  endTime?: string;     // "HH:MM" 24-hour
+  startTime?: string;    // "HH:MM" 24-hour
+  endTime?: string;      // "HH:MM" 24-hour
   helpers?: PlanHelper[];
+  googleEventId?: string; // Google Calendar event ID once invites are sent
   createdAt: string;
 }
 

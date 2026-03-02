@@ -87,6 +87,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
   const [endTime, setEndTime] = useState(entry?.endTime ?? "");
   const [helpers, setHelpers] = useState<PlanHelper[]>(entry?.helpers ?? []);
   const [helperInput, setHelperInput] = useState("");
+  const [googleEventId, setGoogleEventId] = useState(entry?.googleEventId ?? "");
+  const [calLoading, setCalLoading] = useState<"send" | "sync" | null>(null);
+  const [calError, setCalError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -99,6 +102,46 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
     if (helpers.find(h => h.email === email)) return;
     setHelpers(prev => [...prev, { email, status: "pending" }]);
     setHelperInput("");
+  };
+
+  const handleSendInvites = async () => {
+    if (!isEdit) return;
+    setCalLoading("send");
+    setCalError("");
+    try {
+      const res = await fetch("/api/plan/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planEntryId: entry!.id, action: "send" }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Failed to send invites");
+      setGoogleEventId(d.entry?.googleEventId || "");
+    } catch (e) {
+      setCalError(e instanceof Error ? e.message : "Failed to send invites");
+    } finally {
+      setCalLoading(null);
+    }
+  };
+
+  const handleSyncRSVPs = async () => {
+    if (!isEdit || !googleEventId) return;
+    setCalLoading("sync");
+    setCalError("");
+    try {
+      const res = await fetch("/api/plan/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planEntryId: entry!.id, action: "sync" }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Failed to sync");
+      if (d.entry?.helpers) setHelpers(d.entry.helpers);
+    } catch (e) {
+      setCalError(e instanceof Error ? e.message : "Failed to sync");
+    } finally {
+      setCalLoading(null);
+    }
   };
 
   const handleSave = async () => {
@@ -266,39 +309,89 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
             {helpers.length > 0 && (
               <div className="space-y-1.5">
                 {helpers.map((h, i) => (
-                  <div key={h.email} className="flex items-center gap-2.5 px-3 py-2 bg-gray-50 rounded-xl">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      h.status === "accepted" ? "bg-green-500" :
-                      h.status === "declined" ? "bg-red-500" : "bg-yellow-400"
-                    }`} title={h.status} />
-                    <span className="text-sm text-gray-700 flex-1 truncate">{h.email}</span>
-                    {isEdit && (
-                      <select
-                        value={h.status}
-                        onChange={e => setHelpers(prev => prev.map((x, xi) =>
-                          xi === i ? { ...x, status: e.target.value as PlanHelper["status"] } : x
-                        ))}
-                        className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                  <div key={h.email} className="bg-gray-50 rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-2.5 px-3 py-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        h.status === "accepted" ? "bg-green-500" :
+                        h.status === "declined" ? "bg-red-500" : "bg-yellow-400"
+                      }`} title={h.status} />
+                      <span className="text-sm text-gray-700 flex-1 truncate">{h.email}</span>
+                      {isEdit && (
+                        <select
+                          value={h.status}
+                          onChange={e => setHelpers(prev => prev.map((x, xi) =>
+                            xi === i ? { ...x, status: e.target.value as PlanHelper["status"] } : x
+                          ))}
+                          className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="declined">Declined</option>
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setHelpers(prev => prev.filter((_, xi) => xi !== i))}
+                        className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                       >
-                        <option value="pending">Pending</option>
-                        <option value="accepted">Accepted</option>
-                        <option value="declined">Declined</option>
-                      </select>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    {h.comment && (
+                      <div className="px-3 pb-2 ml-5">
+                        <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-2">
+                          &ldquo;{h.comment}&rdquo;
+                        </p>
+                      </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setHelpers(prev => prev.filter((_, xi) => xi !== i))}
-                      className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Google Calendar Invites (edit mode + helpers present) */}
+          {isEdit && helpers.length > 0 && (
+            <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h14c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/>
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Google Calendar</p>
+                    {googleEventId
+                      ? <p className="text-xs text-green-600">Invites sent</p>
+                      : <p className="text-xs text-gray-400">No invites sent yet</p>
+                    }
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {googleEventId && (
+                    <button
+                      type="button"
+                      onClick={handleSyncRSVPs}
+                      disabled={!!calLoading}
+                      className="h-9 px-3 text-sm rounded-xl border border-gray-200 text-gray-600 hover:bg-white transition-colors disabled:opacity-50"
+                    >
+                      {calLoading === "sync" ? "Syncing…" : "Sync RSVPs"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSendInvites}
+                    disabled={!!calLoading}
+                    className="h-9 px-3 text-sm rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
+                  >
+                    {calLoading === "send" ? "Sending…" : googleEventId ? "Update Invites" : "Send Invites"}
+                  </button>
+                </div>
+              </div>
+              {calError && <p className="text-xs text-red-600 mt-2">{calError}</p>}
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
