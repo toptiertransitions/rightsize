@@ -29,11 +29,14 @@ const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "gr
   "Rejected / Revisit":{ variant: "red",    label: "Rejected / Revisit" },
 };
 
-const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" }> = {
-  "Online Marketplace": { variant: "blue" },
-  "Local Consignment":  { variant: "orange" },
-  "Donate":             { variant: "teal" },
-  "Discard":            { variant: "gray" },
+const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" | "green" | "purple" | "yellow" | "red" }> = {
+  "Keep":                { variant: "green" },
+  "Family Keeping":      { variant: "green" },
+  "Local Consignment":   { variant: "orange" },
+  "FB/Marketplace":      { variant: "blue" },
+  "Online Marketplace":  { variant: "blue" },
+  "Donate":              { variant: "teal" },
+  "Discard":             { variant: "gray" },
 };
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
@@ -209,13 +212,16 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
           <section className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Route & Value</h3>
             <div className="grid grid-cols-2 gap-3">
-              <Select label="Primary Route" value={form.primaryRoute ?? "Donate"}
+              <Select label="Recommended Route" value={form.primaryRoute ?? "Keep"}
                 onChange={e => set("primaryRoute", e.target.value as PrimaryRoute)}
                 options={[
-                  { value: "Online Marketplace", label: "Online Marketplace" },
-                  { value: "Local Consignment",  label: "Local Consignment" },
-                  { value: "Donate",             label: "Donate" },
-                  { value: "Discard",            label: "Discard" },
+                  { value: "Keep",               label: "Keep" },
+                  { value: "Family Keeping",      label: "Family Keeping" },
+                  { value: "Local Consignment",   label: "Local Consignment" },
+                  { value: "FB/Marketplace",      label: "FB/Marketplace" },
+                  { value: "Online Marketplace",  label: "Online Marketplace" },
+                  { value: "Donate",              label: "Donate" },
+                  { value: "Discard",             label: "Discard" },
                 ]}
               />
               <Input label="Consignment Category" value={form.consignmentCategory ?? ""}
@@ -406,7 +412,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((item) => {
             const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
-            const route = ROUTE_BADGE[item.primaryRoute] || ROUTE_BADGE["Donate"];
+            const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const };
 
             return (
               <div key={item.id}
@@ -487,7 +493,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
               <tbody className="divide-y divide-cream-100">
                 {filtered.map((item) => {
                   const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
-                  const route = ROUTE_BADGE[item.primaryRoute] || ROUTE_BADGE["Donate"];
+                  const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const };
                   return (
                     <tr key={item.id} className="hover:bg-cream-50 transition-colors">
                       {/* Photo thumb */}
