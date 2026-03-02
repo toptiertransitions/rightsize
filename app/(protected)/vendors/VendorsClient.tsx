@@ -33,20 +33,29 @@ function isUpcoming(iso: string): boolean {
 }
 
 // ─── VendorModal ─────────────────────────────────────────────────────────────
+interface VendorPrefill {
+  vendorType?: VendorType;
+  vendorName?: string;
+  pocName?: string;
+  email?: string;
+  phone?: string;
+}
+
 interface ModalProps {
   tenantId: string;
   vendor?: Vendor;
+  prefill?: VendorPrefill;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function VendorModal({ tenantId, vendor, onClose, onSaved }: ModalProps) {
+function VendorModal({ tenantId, vendor, prefill, onClose, onSaved }: ModalProps) {
   const isEdit = !!vendor;
-  const [vendorType, setVendorType] = useState<VendorType>(vendor?.vendorType ?? "Mover");
-  const [vendorName, setVendorName] = useState(vendor?.vendorName ?? "");
-  const [pocName, setPocName] = useState(vendor?.pocName ?? "");
-  const [email, setEmail] = useState(vendor?.email ?? "");
-  const [phone, setPhone] = useState(vendor?.phone ?? "");
+  const [vendorType, setVendorType] = useState<VendorType>(vendor?.vendorType ?? prefill?.vendorType ?? "Mover");
+  const [vendorName, setVendorName] = useState(vendor?.vendorName ?? prefill?.vendorName ?? "");
+  const [pocName, setPocName] = useState(vendor?.pocName ?? prefill?.pocName ?? "");
+  const [email, setEmail] = useState(vendor?.email ?? prefill?.email ?? "");
+  const [phone, setPhone] = useState(vendor?.phone ?? prefill?.phone ?? "");
   const [arrangement, setArrangement] = useState(vendor?.arrangement ?? "");
   const [date1Label, setDate1Label] = useState(vendor?.date1Label ?? "");
   const [date1, setDate1] = useState(vendor?.date1 ?? "");
@@ -384,10 +393,15 @@ const LOCAL_TYPE_ORDER: VendorType[] = [
   "Other",
 ];
 
-function LocalVendorDirectory({ vendors }: { vendors: LocalVendor[] }) {
+function LocalVendorDirectory({
+  vendors,
+  onSelect,
+}: {
+  vendors: LocalVendor[];
+  onSelect?: (v: LocalVendor) => void;
+}) {
   if (vendors.length === 0) return null;
 
-  // Group by type, then sort groups by LOCAL_TYPE_ORDER
   const grouped = new Map<VendorType, LocalVendor[]>();
   for (const v of vendors) {
     const arr = grouped.get(v.vendorType) ?? [];
@@ -397,7 +411,7 @@ function LocalVendorDirectory({ vendors }: { vendors: LocalVendor[] }) {
   const sortedTypes = LOCAL_TYPE_ORDER.filter((t) => grouped.has(t));
 
   return (
-    <div className="mt-10 opacity-60">
+    <div className="mt-10">
       <div className="flex items-center gap-2 mb-4">
         <h2 className="text-lg font-bold text-gray-900">Local Vendor Directory</h2>
         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">Managed by TTT</span>
@@ -406,6 +420,7 @@ function LocalVendorDirectory({ vendors }: { vendors: LocalVendor[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">
+              {onSelect && <th className="px-3 py-2.5" />}
               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Type</th>
               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">City, State</th>
@@ -423,6 +438,16 @@ function LocalVendorDirectory({ vendors }: { vendors: LocalVendor[] }) {
                 const typeColor = TYPE_COLORS[v.vendorType] ?? "bg-gray-100 text-gray-700";
                 return (
                   <tr key={v.id} className={`border-b border-gray-100 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                    {onSelect && (
+                      <td className="px-3 py-2.5">
+                        <button
+                          onClick={() => onSelect(v)}
+                          className="h-7 px-2.5 rounded-lg bg-forest-50 text-forest-700 text-xs font-medium hover:bg-forest-100 transition-colors whitespace-nowrap"
+                        >
+                          Select
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-2.5">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
                         {v.vendorType}
@@ -479,20 +504,36 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: Vend
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | undefined>(undefined);
+  const [prefill, setPrefill] = useState<VendorPrefill | undefined>(undefined);
 
   const openAdd = () => {
+    setPrefill(undefined);
     setEditVendor(undefined);
     setShowModal(true);
   };
 
   const openEdit = (vendor: Vendor) => {
+    setPrefill(undefined);
     setEditVendor(vendor);
+    setShowModal(true);
+  };
+
+  const openFromDirectory = (v: LocalVendor) => {
+    setPrefill({
+      vendorType: v.vendorType,
+      vendorName: v.vendorName,
+      pocName: v.pocName,
+      email: v.email,
+      phone: v.phone,
+    });
+    setEditVendor(undefined);
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
     setEditVendor(undefined);
+    setPrefill(undefined);
   };
 
   const onSaved = () => {
@@ -553,13 +594,17 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: Vend
       )}
 
       {/* Local Vendor Directory */}
-      <LocalVendorDirectory vendors={localVendors} />
+      <LocalVendorDirectory
+        vendors={localVendors}
+        onSelect={canEdit ? openFromDirectory : undefined}
+      />
 
       {/* Modal */}
       {showModal && (
         <VendorModal
           tenantId={tenantId}
           vendor={editVendor}
+          prefill={prefill}
           onClose={closeModal}
           onSaved={onSaved}
         />
