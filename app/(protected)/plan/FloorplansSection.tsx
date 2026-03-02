@@ -149,21 +149,52 @@ function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
   );
 }
 
-// ─── File card ────────────────────────────────────────────────────────────────
-interface FileCardProps {
+// ─── Edit file modal ──────────────────────────────────────────────────────────
+interface EditFileModalProps {
   file: ProjectFile;
-  canEdit: boolean;
-  onDelete: (file: ProjectFile) => void;
+  onClose: () => void;
+  onSaved: (updated: ProjectFile) => void;
+  onDeleted: (file: ProjectFile) => void;
 }
 
-function FileCard({ file, canEdit, onDelete }: FileCardProps) {
+function EditFileModal({ file, onClose, onSaved, onDeleted }: EditFileModalProps) {
+  const [fileName, setFileName] = useState(file.fileName);
+  const [fileTag, setFileTag] = useState<FileTag>(file.fileTag);
+  const [roomLabel, setRoomLabel] = useState(file.roomLabel ?? "");
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const tagCfg = TAG_CONFIG[file.fileTag] ?? { label: file.fileTag, color: "bg-gray-100 text-gray-700" };
+  const [error, setError] = useState("");
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!confirm(`Delete "${file.fileName}"?`)) return;
+  const inputCls = "w-full h-11 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white";
+
+  const handleSave = async () => {
+    if (!fileName.trim()) { setError("File name is required"); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: file.id,
+          tenantId: file.tenantId,
+          fileName: fileName.trim(),
+          fileTag,
+          roomLabel: fileTag === "Room Image" ? roomLabel.trim() : "",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      onSaved(data.file as ProjectFile);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
     setDeleting(true);
+    setError("");
     try {
       const params = new URLSearchParams({
         id: file.id,
@@ -174,16 +205,98 @@ function FileCard({ file, canEdit, onDelete }: FileCardProps) {
       const res = await fetch(`/api/files?${params}`, { method: "DELETE" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        alert(d.error || "Delete failed");
-        setDeleting(false);
-        return;
+        throw new Error(d.error || "Delete failed");
       }
-      onDelete(file);
-    } catch {
-      alert("Delete failed");
+      onDeleted(file);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
       setDeleting(false);
     }
   };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900">Edit File</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">File Name</label>
+            <input
+              type="text"
+              value={fileName}
+              onChange={e => setFileName(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Tag</label>
+            <select value={fileTag} onChange={e => setFileTag(e.target.value as FileTag)} className={inputCls}>
+              {TAG_ORDER.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {fileTag === "Room Image" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Room Label <span className="text-xs text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={roomLabel}
+                onChange={e => setRoomLabel(e.target.value)}
+                placeholder="e.g. Master Bedroom"
+                className={inputCls}
+              />
+            </div>
+          )}
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 flex items-center gap-3 border-t border-gray-100">
+          <button
+            onClick={handleDelete}
+            disabled={deleting || saving}
+            className="h-11 px-4 rounded-xl border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+          <div className="flex-1" />
+          <button onClick={onClose} disabled={saving || deleting}
+            className="h-11 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving || deleting}
+            className="h-11 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors disabled:opacity-50">
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── File card ────────────────────────────────────────────────────────────────
+interface FileCardProps {
+  file: ProjectFile;
+  canEdit: boolean;
+  onEdit: (file: ProjectFile) => void;
+}
+
+function FileCard({ file, canEdit, onEdit }: FileCardProps) {
+  const tagCfg = TAG_CONFIG[file.fileTag] ?? { label: file.fileTag, color: "bg-gray-100 text-gray-700" };
 
   return (
     <a
@@ -219,16 +332,15 @@ function FileCard({ file, canEdit, onDelete }: FileCardProps) {
         </span>
       </div>
 
-      {/* Delete button */}
+      {/* Edit button */}
       {canEdit && (
         <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 text-gray-400 hover:text-red-500 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-          title="Delete file"
+          onClick={e => { e.preventDefault(); onEdit(file); }}
+          className="absolute top-2 left-2 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 text-gray-400 hover:text-gray-700 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Edit file"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6.586-6.586a2 2 0 112.828 2.828L11.828 13.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
           </svg>
         </button>
       )}
@@ -246,13 +358,18 @@ interface FloorplansSectionProps {
 export function FloorplansSection({ tenantId, canEdit, initialFiles }: FloorplansSectionProps) {
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
   const [showUpload, setShowUpload] = useState(false);
+  const [editingFile, setEditingFile] = useState<ProjectFile | null>(null);
 
   const handleUploaded = (newFiles: ProjectFile[]) => {
     setFiles(prev => [...newFiles, ...prev]);
     setShowUpload(false);
   };
 
-  const handleDelete = (deleted: ProjectFile) => {
+  const handleUpdated = (updated: ProjectFile) => {
+    setFiles(prev => prev.map(f => f.id === updated.id ? updated : f));
+  };
+
+  const handleDeletedFromEdit = (deleted: ProjectFile) => {
     setFiles(prev => prev.filter(f => f.id !== deleted.id));
   };
 
@@ -312,7 +429,7 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
                       key={file.id}
                       file={file}
                       canEdit={canEdit}
-                      onDelete={handleDelete}
+                      onEdit={f => setEditingFile(f)}
                     />
                   ))}
                 </div>
@@ -328,6 +445,16 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
           tenantId={tenantId}
           onClose={() => setShowUpload(false)}
           onUploaded={handleUploaded}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editingFile && (
+        <EditFileModal
+          file={editingFile}
+          onClose={() => setEditingFile(null)}
+          onSaved={f => { handleUpdated(f); setEditingFile(null); }}
+          onDeleted={f => { handleDeletedFromEdit(f); setEditingFile(null); }}
         />
       )}
     </section>

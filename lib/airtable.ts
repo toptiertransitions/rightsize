@@ -1024,3 +1024,20 @@ export async function deleteProjectFile(id: string): Promise<void> {
   const res = await fileFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
 }
+
+export async function updateProjectFile(
+  id: string,
+  data: { fileName?: string; fileTag?: FileTag; roomLabel?: string }
+): Promise<ProjectFile> {
+  const fields: Record<string, string> = {};
+  if (data.fileName !== undefined) fields["FileName"] = data.fileName;
+  if (data.fileTag !== undefined) fields["FileTag"] = data.fileTag;
+  // Always include RoomLabel so clearing it works
+  fields["RoomLabel"] = data.roomLabel ?? "";
+  const res = await fileFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapProjectFile(await res.json());
+}

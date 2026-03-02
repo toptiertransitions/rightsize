@@ -5,6 +5,7 @@ import {
   getProjectFiles,
   createProjectFile,
   deleteProjectFile,
+  updateProjectFile,
   getUserRoleForTenant,
 } from "@/lib/airtable";
 import type { FileTag } from "@/lib/types";
@@ -73,6 +74,39 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ file: projectFile });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: { id?: string; tenantId?: string; fileName?: string; fileTag?: string; roomLabel?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const { id, tenantId, fileName, fileTag, roomLabel } = body;
+  if (!id || !tenantId) {
+    return NextResponse.json({ error: "Missing id or tenantId" }, { status: 400 });
+  }
+
+  const role = await getUserRoleForTenant(userId, tenantId);
+  if (!role || !EDIT_ROLES.includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const file = await updateProjectFile(id, {
+      fileName,
+      fileTag: fileTag as FileTag | undefined,
+      roomLabel,
+    });
+    return NextResponse.json({ file });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
