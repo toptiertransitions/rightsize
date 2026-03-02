@@ -87,6 +87,7 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   if (!role) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(role);
+  const isTTT = ["TTTStaff", "TTTAdmin"].includes(role);
 
   return (
     <div>
@@ -104,7 +105,7 @@ export default async function VendorsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} localVendors={localVendors} />
+      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} localVendors={localVendors} isTTT={isTTT} />
     </div>
   );
 }

@@ -396,9 +396,11 @@ const LOCAL_TYPE_ORDER: VendorType[] = [
 function LocalVendorDirectory({
   vendors,
   onSelect,
+  showAdminCols,
 }: {
   vendors: LocalVendor[];
   onSelect?: (v: LocalVendor) => void;
+  showAdminCols?: boolean;
 }) {
   const [sortCol, setSortCol] = useState<string>("vendorType");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -459,8 +461,8 @@ function LocalVendorDirectory({
               {sortTh("email", "Email")}
               {sortTh("phone", "Phone")}
               {sortTh("itemCategories", "Item Categories", "hidden lg:table-cell")}
-              {sortTh("consignmentTake", "Take", "hidden lg:table-cell")}
-              {sortTh("zipCodesServed", "Zips Served", "hidden xl:table-cell")}
+              {showAdminCols && sortTh("consignmentTake", "Take", "hidden lg:table-cell")}
+              {showAdminCols && sortTh("zipCodesServed", "Zips Served", "hidden xl:table-cell")}
             </tr>
           </thead>
           <tbody>
@@ -503,14 +505,18 @@ function LocalVendorDirectory({
                         ? <span className="truncate block max-w-[140px]" title={v.itemCategories}>{v.itemCategories}</span>
                         : "—"}
                     </td>
-                    <td className="hidden lg:table-cell px-4 py-2.5 text-gray-500">
-                      {v.consignmentTake > 0 ? `${v.consignmentTake}% take` : "—"}
-                    </td>
-                    <td className="hidden xl:table-cell px-4 py-2.5 text-gray-500">
-                      {v.zipCodesServed
-                        ? <span className="truncate block max-w-[120px]" title={v.zipCodesServed}>{v.zipCodesServed}</span>
-                        : "—"}
-                    </td>
+                    {showAdminCols && (
+                      <td className="hidden lg:table-cell px-4 py-2.5 text-gray-500">
+                        {v.consignmentTake > 0 ? `${v.consignmentTake}% take` : "—"}
+                      </td>
+                    )}
+                    {showAdminCols && (
+                      <td className="hidden xl:table-cell px-4 py-2.5 text-gray-500">
+                        {v.zipCodesServed
+                          ? <span className="truncate block max-w-[120px]" title={v.zipCodesServed}>{v.zipCodesServed}</span>
+                          : "—"}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -527,9 +533,10 @@ interface VendorsClientProps {
   tenantId: string;
   canEdit: boolean;
   localVendors: LocalVendor[];
+  isTTT?: boolean;
 }
 
-export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: VendorsClientProps) {
+export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT }: VendorsClientProps) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | undefined>(undefined);
@@ -680,6 +687,7 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors }: Vend
       <LocalVendorDirectory
         vendors={localVendors}
         onSelect={canEdit ? openFromDirectory : undefined}
+        showAdminCols={isTTT}
       />
 
       {/* Modal */}
