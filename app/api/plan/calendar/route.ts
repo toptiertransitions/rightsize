@@ -57,7 +57,10 @@ export async function POST(req: NextRequest) {
     ]);
     const projectName = tenant?.name || "";
     const roomName = entry.roomLabel || rooms.find((r) => r.id === entry.roomId)?.name || "";
-    return { projectName, roomName };
+    const location = [tenant?.address, tenant?.city, tenant?.state, tenant?.zip]
+      .filter(Boolean)
+      .join(", ");
+    return { projectName, roomName, location };
   };
 
   try {
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
         ...(body.notes !== undefined && { notes: body.notes }),
       };
 
-      const { projectName, roomName } = await resolveContext();
+      const { projectName, roomName, location } = await resolveContext();
 
       const eventId = await createOrUpdateCalendarEvent(
         entryForCalendar,
@@ -92,6 +95,7 @@ export async function POST(req: NextRequest) {
         roomName,
         entry.googleEventId,
         projectName,
+        location,
       );
 
       const updated = await updatePlanEntry(planEntryId, { googleEventId: eventId });
@@ -118,8 +122,8 @@ export async function POST(req: NextRequest) {
     // Update: entry already saved to Airtable; just patch the calendar event
     if (action === "update") {
       if (!entry.googleEventId) return NextResponse.json({ entry }); // no event yet, no-op
-      const { projectName, roomName } = await resolveContext();
-      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId, projectName);
+      const { projectName, roomName, location } = await resolveContext();
+      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId, projectName, location);
       return NextResponse.json({ entry });
     }
 

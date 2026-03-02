@@ -34,6 +34,7 @@ export async function createOrUpdateCalendarEvent(
   roomName?: string,    // resolved room name for the summary
   existingEventId?: string,
   projectName?: string, // tenant/project name for the invite title
+  location?: string,    // project address shown as event location
 ): Promise<string> {
   const calendar = google.calendar({ version: "v3", auth: getAuth() });
 
@@ -65,7 +66,7 @@ export async function createOrUpdateCalendarEvent(
       }
     : { date: nextDay(entry.date) };
 
-  const requestBody = {
+  const requestBody: Record<string, unknown> = {
     summary,
     description,
     start,
@@ -74,6 +75,7 @@ export async function createOrUpdateCalendarEvent(
     guestCanInviteOthers: false,
     guestCanSeeOtherGuests: true,
   };
+  if (location) requestBody.location = location;
 
   if (existingEventId) {
     const res = await calendar.events.patch({
