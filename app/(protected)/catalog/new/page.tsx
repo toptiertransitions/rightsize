@@ -31,7 +31,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
     <div>
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-          <Link href="/dashboard" className="hover:text-forest-600">Dashboard</Link>
+          <Link href="/dashboard" className="hover:text-forest-600">Home</Link>
           <span>/</span>
           <Link href={`/catalog?tenantId=${tenantId}`} className="hover:text-forest-600">Catalog</Link>
           <span>/</span>

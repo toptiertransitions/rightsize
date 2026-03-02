@@ -19,7 +19,7 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
   const tq = tenantId ? `?tenantId=${tenantId}` : "";
 
   const navLinks = [
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard", label: "Home" },
     { href: `/rooms${tq}`, base: "/rooms", label: "Rooms" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/plan${tq}`, base: "/plan", label: "Plan" },

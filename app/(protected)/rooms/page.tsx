@@ -92,7 +92,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
     <div>
       <div className="mb-8">
         <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-          <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Dashboard</Link>
+          <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Home</Link>
           <span>/</span>
           <span className="text-gray-700 font-medium">All Rooms</span>
         </div>

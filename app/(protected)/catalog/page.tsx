@@ -43,7 +43,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-              <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Dashboard</Link>
+              <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Home</Link>
               <span>/</span>
               <Link href={`/rooms?tenantId=${tenantId}`} className="hover:text-forest-600 transition-colors">{tenant.name}</Link>
               <span>/</span>
@@ -96,7 +96,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-            <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Dashboard</Link>
+            <Link href="/dashboard" className="hover:text-forest-600 transition-colors">Home</Link>
             <span>/</span>
             <span className="text-gray-700 font-medium">All Items</span>
           </div>
