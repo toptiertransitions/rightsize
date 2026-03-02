@@ -108,9 +108,10 @@ export type ItemUseType = "Daily Use" | "Collector Item";
 export type PrimaryRoute =
   | "Keep"
   | "Family Keeping"
-  | "Local Consignment"
+  | "ProFoundFinds Consignment"
   | "FB/Marketplace"
   | "Online Marketplace"
+  | "Other Consignment"
   | "Donate"
   | "Discard";
 

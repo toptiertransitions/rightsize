@@ -17,7 +17,7 @@ Analyze the photo of this household item and return a JSON object with EXACTLY t
   "value_low": number (USD, low estimate for condition/market),
   "value_mid": number (USD, realistic selling price),
   "value_high": number (USD, best-case if patient seller),
-  "primary_route": "One of: Keep | Family Keeping | Local Consignment | FB/Marketplace | Online Marketplace | Donate | Discard",
+  "primary_route": "One of: Keep | Family Keeping | ProFoundFinds Consignment | FB/Marketplace | Online Marketplace | Other Consignment | Donate | Discard",
   "route_reasoning": "1-2 sentences explaining why this route is best",
   "consignment_category": "If consignment-worthy, the best shop category (e.g., 'Antique Furniture', 'Vintage Jewelry'), else empty string",
   "listing_title_ebay": "SEO-optimized eBay title under 80 chars with key details",

@@ -381,9 +381,10 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                     options={[
                       { value: "Keep", label: "Keep" },
                       { value: "Family Keeping", label: "Family Keeping" },
-                      { value: "Local Consignment", label: "Local Consignment" },
+                      { value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" },
                       { value: "FB/Marketplace", label: "FB/Marketplace" },
                       { value: "Online Marketplace", label: "Online Marketplace" },
+                      { value: "Other Consignment", label: "Other Consignment" },
                       { value: "Donate", label: "Donate" },
                       { value: "Discard", label: "Discard" },
                     ]}

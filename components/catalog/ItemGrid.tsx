@@ -29,14 +29,15 @@ const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "gr
   "Rejected / Revisit":{ variant: "red",    label: "Rejected / Revisit" },
 };
 
-const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" | "green" | "purple" | "yellow" | "red" }> = {
-  "Keep":                { variant: "green" },
-  "Family Keeping":      { variant: "green" },
-  "Local Consignment":   { variant: "orange" },
-  "FB/Marketplace":      { variant: "blue" },
-  "Online Marketplace":  { variant: "blue" },
-  "Donate":              { variant: "teal" },
-  "Discard":             { variant: "gray" },
+const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" | "green" | "purple" | "yellow" | "red"; label: string }> = {
+  "Keep":                         { variant: "green",  label: "Keep" },
+  "Family Keeping":               { variant: "green",  label: "Family" },
+  "ProFoundFinds Consignment":    { variant: "orange", label: "ProFoundFinds" },
+  "FB/Marketplace":               { variant: "blue",   label: "FB/Marketplace" },
+  "Online Marketplace":           { variant: "blue",   label: "Online" },
+  "Other Consignment":            { variant: "purple", label: "Other Consign" },
+  "Donate":                       { variant: "teal",   label: "Donate" },
+  "Discard":                      { variant: "gray",   label: "Discard" },
 };
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
@@ -234,13 +235,14 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
               <Select label="Recommended Route" value={form.primaryRoute ?? "Keep"}
                 onChange={e => set("primaryRoute", e.target.value as PrimaryRoute)}
                 options={[
-                  { value: "Keep",               label: "Keep" },
-                  { value: "Family Keeping",      label: "Family Keeping" },
-                  { value: "Local Consignment",   label: "Local Consignment" },
-                  { value: "FB/Marketplace",      label: "FB/Marketplace" },
-                  { value: "Online Marketplace",  label: "Online Marketplace" },
-                  { value: "Donate",              label: "Donate" },
-                  { value: "Discard",             label: "Discard" },
+                  { value: "Keep",                         label: "Keep" },
+                  { value: "Family Keeping",               label: "Family Keeping" },
+                  { value: "ProFoundFinds Consignment",    label: "ProFoundFinds Consignment" },
+                  { value: "FB/Marketplace",               label: "FB/Marketplace" },
+                  { value: "Online Marketplace",           label: "Online Marketplace" },
+                  { value: "Other Consignment",            label: "Other Consignment" },
+                  { value: "Donate",                       label: "Donate" },
+                  { value: "Discard",                      label: "Discard" },
                 ]}
               />
               <Input label="Consignment Category" value={form.consignmentCategory ?? ""}
@@ -466,9 +468,10 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
           <option value="">All Routes</option>
           <option value="Keep">Keep</option>
           <option value="Family Keeping">Family Keeping</option>
-          <option value="Local Consignment">Local Consignment</option>
+          <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>
           <option value="FB/Marketplace">FB/Marketplace</option>
           <option value="Online Marketplace">Online Marketplace</option>
+          <option value="Other Consignment">Other Consignment</option>
           <option value="Donate">Donate</option>
           <option value="Discard">Discard</option>
         </select>
@@ -544,7 +547,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {sorted.map((item) => {
             const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
-            const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const };
+            const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const, label: item.primaryRoute };
 
             return (
               <div key={item.id}
@@ -594,7 +597,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                       {item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
                     </span>
                     <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
-                      {item.primaryRoute.split(" ")[0]}
+                      {route.label}
                     </Badge>
                   </div>
                   <div className="mt-2 text-xs text-gray-500">
@@ -625,7 +628,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
               <tbody className="divide-y divide-cream-100">
                 {sorted.map((item) => {
                   const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
-                  const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const };
+                  const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const, label: item.primaryRoute };
                   return (
                     <tr key={item.id} className="hover:bg-cream-50 transition-colors">
                       {/* Photo thumb */}
