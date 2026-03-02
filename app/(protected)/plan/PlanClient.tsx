@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES } from "@/lib/types";
 import type { PlanEntry, PlanActivity, PlanHelper, Room } from "@/lib/types";
@@ -104,6 +104,21 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
     setHelperInput("");
   };
 
+  // Auto-sync RSVPs when the modal opens for an entry that has invites sent
+  useEffect(() => {
+    if (!isEdit || !entry?.googleEventId) return;
+    setCalLoading("sync");
+    fetch("/api/plan/calendar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
+    })
+      .then(r => r.json())
+      .then(d => { if (d.entry?.helpers) setHelpers(d.entry.helpers); })
+      .catch(() => {})
+      .finally(() => setCalLoading(null));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSendInvites = async () => {
     if (!isEdit) return;
     setCalLoading("send");
@@ -120,26 +135,6 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
       setGoogleEventId(d.entry?.googleEventId || "");
     } catch (e) {
       setCalError(e instanceof Error ? e.message : "Failed to send invites");
-    } finally {
-      setCalLoading(null);
-    }
-  };
-
-  const handleSyncRSVPs = async () => {
-    if (!isEdit || !googleEventId) return;
-    setCalLoading("sync");
-    setCalError("");
-    try {
-      const res = await fetch("/api/plan/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planEntryId: entry!.id, action: "sync" }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || "Failed to sync");
-      if (d.entry?.helpers) setHelpers(d.entry.helpers);
-    } catch (e) {
-      setCalError(e instanceof Error ? e.message : "Failed to sync");
     } finally {
       setCalLoading(null);
     }
@@ -364,22 +359,12 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
                   <div>
                     <p className="text-sm font-medium text-gray-700">Google Calendar</p>
                     {googleEventId
-                      ? <p className="text-xs text-green-600">Invites sent</p>
+                      ? <p className="text-xs text-green-600">{calLoading === "sync" ? "Syncing RSVPs…" : "Invites sent"}</p>
                       : <p className="text-xs text-gray-400">No invites sent yet</p>
                     }
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {googleEventId && (
-                    <button
-                      type="button"
-                      onClick={handleSyncRSVPs}
-                      disabled={!!calLoading}
-                      className="h-9 px-3 text-sm rounded-xl border border-gray-200 text-gray-600 hover:bg-white transition-colors disabled:opacity-50"
-                    >
-                      {calLoading === "sync" ? "Syncing…" : "Sync RSVPs"}
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={handleSendInvites}
@@ -477,7 +462,33 @@ export function PlanClient({ entries, rooms, tenantId, canEdit }: PlanClientProp
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
 
-  const entriesByDate = entries.reduce<Record<string, PlanEntry[]>>((acc, e) => {
+  // Live entries — start from server data, get patched with RSVP syncs
+  const [liveEntries, setLiveEntries] = useState(entries);
+  useEffect(() => { setLiveEntries(entries); }, [entries]);
+
+  // Background-sync RSVPs for any entry with a googleEventId (staggered 400ms apart)
+  useEffect(() => {
+    const toSync = entries.filter(e => e.googleEventId);
+    if (!toSync.length) return;
+    toSync.forEach((entry, i) => {
+      setTimeout(() => {
+        fetch("/api/plan/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
+        })
+          .then(r => r.json())
+          .then(d => {
+            if (d.entry) {
+              setLiveEntries(prev => prev.map(e => e.id === d.entry.id ? d.entry : e));
+            }
+          })
+          .catch(() => {}); // silent — never block the UI
+      }, i * 400);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const entriesByDate = liveEntries.reduce<Record<string, PlanEntry[]>>((acc, e) => {
     if (!acc[e.date]) acc[e.date] = [];
     acc[e.date].push(e);
     return acc;
