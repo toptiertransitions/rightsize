@@ -128,7 +128,13 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // pass current helpers so they're saved + used even if not yet saved
-        body: JSON.stringify({ planEntryId: entry!.id, action: "send", helpers }),
+        body: JSON.stringify({
+          planEntryId: entry!.id,
+          action: "send",
+          helpers,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
+        }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Failed to send invites");

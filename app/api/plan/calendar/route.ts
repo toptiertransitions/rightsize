@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { planEntryId: string; action: "send" | "sync"; helpers?: PlanHelper[] };
+  let body: { planEntryId: string; action: "send" | "sync"; helpers?: PlanHelper[]; startTime?: string; endTime?: string };
   try {
     body = await req.json();
   } catch {
@@ -50,10 +50,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No helpers to invite" }, { status: 400 });
       }
 
-      // Persist helpers to Airtable if they came from the request (may be unsaved)
-      if (body.helpers?.length) {
-        await updatePlanEntry(planEntryId, { helpers: body.helpers });
-      }
+      // Persist any unsaved modal state (helpers, times) to Airtable
+      const patch: Parameters<typeof updatePlanEntry>[1] = {};
+      if (body.helpers?.length) patch.helpers = body.helpers;
+      if (body.startTime !== undefined) patch.startTime = body.startTime;
+      if (body.endTime !== undefined) patch.endTime = body.endTime;
+      if (Object.keys(patch).length) await updatePlanEntry(planEntryId, patch);
+
+      // Merge request-body values into entry so the calendar event uses them
+      const entryForCalendar = {
+        ...entry,
+        ...(body.startTime !== undefined && { startTime: body.startTime || undefined }),
+        ...(body.endTime !== undefined && { endTime: body.endTime || undefined }),
+      };
 
       // Resolve room name for the calendar event summary
       let roomName = entry.roomLabel || "";
@@ -63,7 +72,7 @@ export async function POST(req: NextRequest) {
       }
 
       const eventId = await createOrUpdateCalendarEvent(
-        entry,
+        entryForCalendar,
         helpersToInvite,
         roomName,
         entry.googleEventId,
