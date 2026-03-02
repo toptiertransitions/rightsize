@@ -178,14 +178,29 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
         throw new Error(msg);
       }
 
-      // Auto-update the calendar event if invites have been sent
-      // (covers date/time changes, helper removals, and notes edits)
+      const savedData = await res.json().catch(() => ({}));
+
       if (isEdit && googleEventId) {
+        // Auto-update existing calendar event (covers time/date/notes/helper changes)
         await fetch("/api/plan/calendar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ planEntryId: entry!.id, action: "update" }),
-        }).catch(() => {}); // silent — don't block save if calendar update fails
+        }).catch(() => {});
+      } else if (!isEdit && helpers.length && savedData.entry?.id) {
+        // Auto-send invites when creating a new entry with helpers
+        await fetch("/api/plan/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            planEntryId: savedData.entry.id,
+            action: "send",
+            helpers,
+            startTime: startTime || undefined,
+            endTime: endTime || undefined,
+            notes: notes.trim() || undefined,
+          }),
+        }).catch(() => {});
       }
 
       onSaved();
