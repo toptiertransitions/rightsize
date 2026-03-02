@@ -82,15 +82,24 @@ export async function createTenant(data: {
   slug: string;
   ownerUserId: string;
   plan?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 }): Promise<Tenant> {
   const base = getBase();
-  const record = await base(AIRTABLE_TABLES.TENANTS).create({
+  const fields: Airtable.FieldSet = {
     Name: data.name,
     Slug: data.slug,
     OwnerUserId: data.ownerUserId,
     Plan: data.plan || "free",
     CreatedAt: new Date().toISOString(),
-  });
+  };
+  if (data.address) fields["Address"] = data.address;
+  if (data.city) fields["City"] = data.city;
+  if (data.state) fields["State"] = data.state;
+  if (data.zip) fields["Zip"] = data.zip;
+  const record = await base(AIRTABLE_TABLES.TENANTS).create(fields);
   return mapTenant(record);
 }
 

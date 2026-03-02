@@ -9,14 +9,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { name: string; email?: string; displayName?: string };
+  let body: { name: string; email?: string; displayName?: string; address?: string; city?: string; state?: string; zip?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, email, displayName } = body;
+  const { name, email, displayName, address, city, state, zip } = body;
   if (!name?.trim()) {
     return NextResponse.json({ error: "Project name is required" }, { status: 400 });
   }
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Create tenant
-  const tenant = await createTenant({ name: name.trim(), slug, ownerUserId: userId });
+  const tenant = await createTenant({ name: name.trim(), slug, ownerUserId: userId, address, city, state, zip });
 
   // Create owner membership
   await createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" });
