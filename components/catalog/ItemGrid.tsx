@@ -335,6 +335,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
   const [view, setView] = useState<"grid" | "table">("grid");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [routeFilter, setRouteFilter] = useState("");
 
   const handleSaved = useCallback(() => {
     setEditingItem(null);
@@ -361,8 +362,11 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
     if (statusFilter) {
       result = result.filter(i => i.status === statusFilter);
     }
+    if (routeFilter) {
+      result = result.filter(i => i.primaryRoute === routeFilter);
+    }
     return result;
-  }, [items, search, statusFilter]);
+  }, [items, search, statusFilter, routeFilter]);
 
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -385,6 +389,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
         case "value":     av = a.valueMid;                 bv = b.valueMid;                 break;
         case "route":     av = a.primaryRoute.toLowerCase(); bv = b.primaryRoute.toLowerCase(); break;
         case "status":    av = a.status.toLowerCase();     bv = b.status.toLowerCase();     break;
+        case "createdAt": av = a.createdAt ?? "";           bv = b.createdAt ?? "";           break;
       }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
@@ -437,9 +442,9 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
+      <div className="flex flex-wrap gap-3 mb-5">
         {/* Search */}
-        <div className="flex-1 relative">
+        <div className="relative w-full sm:w-44">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -451,6 +456,22 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
             className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
           />
         </div>
+
+        {/* Route filter */}
+        <select
+          value={routeFilter}
+          onChange={e => setRouteFilter(e.target.value)}
+          className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500"
+        >
+          <option value="">All Routes</option>
+          <option value="Keep">Keep</option>
+          <option value="Family Keeping">Family Keeping</option>
+          <option value="Local Consignment">Local Consignment</option>
+          <option value="FB/Marketplace">FB/Marketplace</option>
+          <option value="Online Marketplace">Online Marketplace</option>
+          <option value="Donate">Donate</option>
+          <option value="Discard">Discard</option>
+        </select>
 
         {/* Status filter */}
         <select
@@ -467,6 +488,30 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
           <option value="Discarded">Discarded</option>
           <option value="Rejected / Revisit">Rejected / Revisit</option>
         </select>
+
+        {/* Sort */}
+        <select
+          value={sortCol ? `${sortCol}:${sortDir}` : ""}
+          onChange={e => {
+            const val = e.target.value;
+            if (!val) { setSortCol(null); setSortDir("asc"); }
+            else {
+              const [col, dir] = val.split(":");
+              setSortCol(col);
+              setSortDir(dir as "asc" | "desc");
+            }
+          }}
+          className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500"
+        >
+          <option value="">Sort: Date Added</option>
+          <option value="itemName:asc">Name A → Z</option>
+          <option value="itemName:desc">Name Z → A</option>
+          <option value="createdAt:desc">Newest First</option>
+          <option value="createdAt:asc">Oldest First</option>
+        </select>
+
+        {/* Spacer */}
+        <div className="flex-1" />
 
         {/* View toggle */}
         <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden h-10">
@@ -497,7 +542,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
 
       {view === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filtered.map((item) => {
+          {sorted.map((item) => {
             const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
             const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const };
 
