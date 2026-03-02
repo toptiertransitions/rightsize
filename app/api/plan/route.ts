@@ -8,7 +8,7 @@ import {
   getPlanEntryById,
   getUserRoleForTenant,
 } from "@/lib/airtable";
-import type { PlanActivity } from "@/lib/types";
+import type { PlanActivity, PlanHelper } from "@/lib/types";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
 
@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
     roomId?: string;
     roomLabel?: string;
     notes?: string;
+    startTime?: string;
+    endTime?: string;
+    helpers?: PlanHelper[];
   };
   try {
     body = await req.json();
@@ -62,6 +65,9 @@ export async function POST(req: NextRequest) {
       roomId: body.roomId,
       roomLabel: body.roomLabel,
       notes: body.notes,
+      startTime: body.startTime,
+      endTime: body.endTime,
+      helpers: body.helpers,
     });
     return NextResponse.json({ entry });
   } catch (e) {
@@ -81,6 +87,9 @@ export async function PATCH(req: NextRequest) {
     roomId?: string;
     roomLabel?: string;
     notes?: string;
+    startTime?: string;
+    endTime?: string;
+    helpers?: PlanHelper[];
   };
   try {
     body = await req.json();
@@ -89,6 +98,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, ...fields } = body;
+  // helpers needs special handling (array → updatePlanEntry accepts it directly)
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const existing = await getPlanEntryById(id);

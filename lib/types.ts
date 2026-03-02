@@ -209,6 +209,11 @@ export const PLAN_ACTIVITIES: PlanActivity[] = [
   "Other",
 ];
 
+export interface PlanHelper {
+  email: string;
+  status: "pending" | "accepted" | "declined";
+}
+
 export interface PlanEntry {
   id: string;
   airtableId: string;
@@ -218,6 +223,9 @@ export interface PlanEntry {
   roomId?: string;
   roomLabel?: string;
   notes?: string;
+  startTime?: string;   // "HH:MM" 24-hour
+  endTime?: string;     // "HH:MM" 24-hour
+  helpers?: PlanHelper[];
   createdAt: string;
 }
 
