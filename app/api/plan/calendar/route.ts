@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant } from "@/lib/airtable";
+import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant, getTenantById } from "@/lib/airtable";
 import { createOrUpdateCalendarEvent, syncCalendarEventRSVPs, cancelCalendarEvent } from "@/lib/googleCalendar";
 import type { PlanHelper } from "@/lib/types";
 
@@ -49,6 +49,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Resolve project name + room name (shared by send and update)
+  const resolveContext = async () => {
+    const [tenant, rooms] = await Promise.all([
+      getTenantById(entry.tenantId).catch(() => null),
+      entry.roomId ? getRoomsForTenant(entry.tenantId).catch(() => []) : Promise.resolve([]),
+    ]);
+    const projectName = tenant?.name || "";
+    const roomName = entry.roomLabel || rooms.find((r) => r.id === entry.roomId)?.name || "";
+    return { projectName, roomName };
+  };
+
   try {
     if (action === "send") {
       // Use helpers from request body (unsaved modal state) or fall back to Airtable
@@ -73,18 +84,14 @@ export async function POST(req: NextRequest) {
         ...(body.notes !== undefined && { notes: body.notes }),
       };
 
-      // Resolve room name for the calendar event summary
-      let roomName = entry.roomLabel || "";
-      if (!roomName && entry.roomId) {
-        const rooms = await getRoomsForTenant(entry.tenantId).catch(() => []);
-        roomName = rooms.find((r) => r.id === entry.roomId)?.name || "";
-      }
+      const { projectName, roomName } = await resolveContext();
 
       const eventId = await createOrUpdateCalendarEvent(
         entryForCalendar,
         helpersToInvite,
         roomName,
         entry.googleEventId,
+        projectName,
       );
 
       const updated = await updatePlanEntry(planEntryId, { googleEventId: eventId });
@@ -111,12 +118,8 @@ export async function POST(req: NextRequest) {
     // Update: entry already saved to Airtable; just patch the calendar event
     if (action === "update") {
       if (!entry.googleEventId) return NextResponse.json({ entry }); // no event yet, no-op
-      let roomName = entry.roomLabel || "";
-      if (!roomName && entry.roomId) {
-        const rooms = await getRoomsForTenant(entry.tenantId).catch(() => []);
-        roomName = rooms.find((r) => r.id === entry.roomId)?.name || "";
-      }
-      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId);
+      const { projectName, roomName } = await resolveContext();
+      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId, projectName);
       return NextResponse.json({ entry });
     }
 

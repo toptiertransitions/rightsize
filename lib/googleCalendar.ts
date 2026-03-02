@@ -31,13 +31,15 @@ function plusOneHour(time: string): string {
 export async function createOrUpdateCalendarEvent(
   entry: PlanEntry,
   helpers: PlanHelper[],
-  roomName?: string, // resolved room name for the summary
+  roomName?: string,    // resolved room name for the summary
   existingEventId?: string,
+  projectName?: string, // tenant/project name for the invite title
 ): Promise<string> {
   const calendar = google.calendar({ version: "v3", auth: getAuth() });
 
   const room = roomName || entry.roomLabel || "";
-  const summary = `Daily Focus: ${entry.activity}${room ? ` — ${room}` : ""}`;
+  const prefix = projectName || "Daily Focus";
+  const summary = `${prefix}: ${entry.activity}${room ? ` — ${room}` : ""}`;
   const description = [
     entry.notes || "",
     "",
