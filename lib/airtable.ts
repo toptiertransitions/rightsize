@@ -1264,7 +1264,7 @@ export async function upsertStaffMember(data: {
   }
   const res = await staffRolesFetch("", {
     method: "POST",
-    body: JSON.stringify({ fields: { ...fields, CreatedAt: new Date().toISOString() } }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapStaffMember(await res.json());

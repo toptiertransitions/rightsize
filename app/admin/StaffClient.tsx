@@ -28,14 +28,17 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Add flow: lookup by email only
   const [lookupEmail, setLookupEmail] = useState("");
   const [looking, setLooking] = useState(false);
   const [lookupError, setLookupError] = useState("");
+  const [looked, setLooked] = useState(false);
 
   async function handleLookup() {
     if (!lookupEmail.trim()) return;
     setLooking(true);
     setLookupError("");
+    setLooked(false);
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
@@ -44,11 +47,12 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Lookup failed");
-      if (!data.users?.length) { setLookupError("No account found with that email."); return; }
+      if (!data.users?.length) { setLookupError("No Clerk account found with that email."); return; }
       const u = data.users[0];
       setClerkUserId(u.id);
       setDisplayName(u.name || "");
       setEmail(lookupEmail.trim());
+      setLooked(true);
     } catch (e) {
       setLookupError(e instanceof Error ? e.message : "Lookup failed");
     } finally {
@@ -58,29 +62,26 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!member && !clerkUserId) { setError("Look up a user by email first."); return; }
     setSaving(true);
     setError("");
     try {
       if (member) {
-        // Update existing
         const res = await fetch("/api/admin/staff", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: member.id, displayName, email, role }),
         });
         if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
-        const data = await res.json();
-        onSaved(data.member);
+        onSaved((await res.json()).member);
       } else {
-        // Create new
         const res = await fetch("/api/admin/staff", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clerkUserId, displayName, email, role }),
         });
         if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
-        const data = await res.json();
-        onSaved(data.member);
+        onSaved((await res.json()).member);
       }
     } catch (err) {
       setError(String(err));
@@ -104,34 +105,60 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Add flow: just email + role */}
           {!member && (
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Look up by email</label>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={lookupEmail}
-                  onChange={e => setLookupEmail(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleLookup())}
-                  placeholder="user@example.com"
-                  className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleLookup}
-                  disabled={looking || !lookupEmail.trim()}
-                  className="px-3 py-2 rounded-lg bg-gray-700 text-white text-sm hover:bg-gray-600 disabled:opacity-50 transition-colors"
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Email</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={lookupEmail}
+                    onChange={e => { setLookupEmail(e.target.value); setLooked(false); setClerkUserId(""); }}
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleLookup())}
+                    placeholder="user@example.com"
+                    className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleLookup}
+                    disabled={looking || !lookupEmail.trim()}
+                    className="px-3 py-2 rounded-lg bg-gray-700 text-white text-sm hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                  >
+                    {looking ? "…" : "Find"}
+                  </button>
+                </div>
+                {lookupError && <p className="text-red-400 text-xs mt-1">{lookupError}</p>}
+                {looked && <p className="text-forest-400 text-xs mt-1">Found: {displayName} ({clerkUserId})</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
+                <select
+                  value={role}
+                  onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager")}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
                 >
-                  {looking ? "…" : "Find"}
+                  <option value="TTTStaff">Staff</option>
+                  <option value="TTTManager">Manager</option>
+                </select>
+              </div>
+
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+
+              <div className="flex gap-3 pt-1">
+                <div className="flex-1" />
+                <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="submit" disabled={saving || !clerkUserId} className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50">
+                  {saving ? "Saving…" : "Add Staff"}
                 </button>
               </div>
-              {lookupError && <p className="text-red-400 text-xs mt-1">{lookupError}</p>}
-              {clerkUserId && (
-                <p className="text-xs text-forest-400 mt-1 font-mono truncate">✓ {clerkUserId}</p>
-              )}
-            </div>
+            </>
           )}
 
+          {/* Edit flow: name, email, role */}
+          {member && (
+            <>
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Display Name</label>
             <input
@@ -172,21 +199,13 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
 
           <div className="flex gap-3 pt-1">
             <div className="flex-1" />
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50"
-            >
-              {saving ? "Saving…" : member ? "Save Changes" : "Add Staff"}
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Cancel</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50">
+              {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>
+            </>
+          )}
         </form>
       </div>
     </div>
