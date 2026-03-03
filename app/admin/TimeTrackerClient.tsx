@@ -355,8 +355,9 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
   const pastWeekGroups = useMemo(() => {
     const map = new Map<string, TimeEntry[]>();
     for (const e of visibleEntries) {
-      if (e.date >= currentWeekStartISO) continue;
+      if (!e.date || e.date >= currentWeekStartISO) continue;
       const d = new Date(e.date + "T12:00:00");
+      if (isNaN(d.getTime())) continue; // skip invalid dates
       const ws = toISODate(getWeekStart(d));
       if (!map.has(ws)) map.set(ws, []);
       map.get(ws)!.push(e);
