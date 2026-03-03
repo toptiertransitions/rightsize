@@ -47,6 +47,7 @@ function formatDuration(minutes: number): string {
 }
 
 function formatTime12(time24: string): string {
+  if (!time24) return "";
   const [h, m] = time24.split(":").map(Number);
   const ampm = h >= 12 ? "PM" : "AM";
   const h12 = h % 12 || 12;
@@ -86,6 +87,46 @@ function exportCSV(entries: TimeEntry[]) {
   a.download = `time-entries-${todayISO()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── Entry Row ────────────────────────────────────────────────────────────────
+function EntryRow({
+  entry, isAdmin, currentUserId, onEdit,
+}: {
+  entry: TimeEntry;
+  isAdmin: boolean;
+  currentUserId: string;
+  onEdit: (e: TimeEntry) => void;
+}) {
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-4 hover:border-gray-600 transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">
+            {new Date(entry.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+          </span>
+          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{entry.focusArea}</span>
+          {isAdmin && <span className="text-xs text-gray-500">{entry.staffName}</span>}
+        </div>
+        <p className="text-sm font-medium text-white mt-0.5 truncate">{entry.projectName}</p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {formatTime12(entry.startTime)} – {formatTime12(entry.endTime)}
+          {" "}<span className="text-forest-400 font-medium">({formatDuration(entry.durationMinutes)})</span>
+          {entry.travelMinutes ? <span className="text-gray-500"> · {entry.travelMinutes}min travel</span> : null}
+          {entry.travelMiles ? <span className="text-gray-500"> · {entry.travelMiles}mi</span> : null}
+        </p>
+        {entry.notes && <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.notes}</p>}
+      </div>
+      {(entry.clerkUserId === currentUserId || isAdmin) && (
+        <button
+          onClick={() => onEdit(entry)}
+          className="text-xs text-gray-400 hover:text-white transition-colors shrink-0 px-2 py-1 rounded hover:bg-gray-700"
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ─── Log Time Modal ───────────────────────────────────────────────────────────
@@ -177,63 +218,37 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              required
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-            />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} required
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
-            <select
-              value={tenantId}
-              onChange={e => setTenantId(e.target.value)}
-              required
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-            >
+            <select value={tenantId} onChange={e => setTenantId(e.target.value)} required
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
               {tenants.length === 0 && <option value="">No projects</option>}
-              {tenants.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
+              {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Focus Area</label>
-            <select
-              value={focusArea}
-              onChange={e => setFocusArea(e.target.value as FocusArea)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-            >
-              {TIME_FOCUS_AREAS.map(a => (
-                <option key={a} value={a}>{a}</option>
-              ))}
+            <select value={focusArea} onChange={e => setFocusArea(e.target.value as FocusArea)}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
+              {TIME_FOCUS_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Start Time</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                required
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-              />
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} required
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">End Time</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                required
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-              />
+              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} required
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
             </div>
           </div>
 
@@ -243,70 +258,50 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Travel Time <span className="text-gray-600">(round trip, optional)</span></label>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Travel Time <span className="text-gray-600">(round trip, optional)</span>
+              </label>
               <div className="relative">
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={travelMinutes}
-                  onChange={e => setTravelMinutes(e.target.value)}
+                <input type="number" min="0" step="1" value={travelMinutes} onChange={e => setTravelMinutes(e.target.value)}
                   placeholder="0"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-12"
-                />
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-12" />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">min</span>
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Travel Miles <span className="text-gray-600">(optional)</span></label>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={travelMiles}
-                onChange={e => setTravelMiles(e.target.value)}
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Travel Miles <span className="text-gray-600">(optional)</span>
+              </label>
+              <input type="number" min="0" step="0.1" value={travelMiles} onChange={e => setTravelMiles(e.target.value)}
                 placeholder="0.0"
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-              />
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Notes <span className="text-gray-600">(optional)</span></label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={2}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 resize-none"
-            />
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Notes <span className="text-gray-600">(optional)</span>
+            </label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 resize-none" />
           </div>
 
           {error && <p className="text-red-400 text-xs">{error}</p>}
 
           <div className="flex gap-3 pt-1">
             {entry && onDeleted && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors"
-              >
+              <button type="button" onClick={handleDelete} disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors">
                 {deleting ? "Deleting…" : "Delete"}
               </button>
             )}
             <div className="flex-1" />
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-            >
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50"
-            >
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50">
               {saving ? "Saving…" : entry ? "Save Changes" : "Log Time"}
             </button>
           </div>
@@ -317,65 +312,79 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUserId, currentUserName }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUserId }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
-  const [weekOffset, setWeekOffset] = useState(0);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
+  const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
 
-  // ── Week bounds ──────────────────────────────────────────────────────────────
-  const today = new Date();
-  const weekStart = useMemo(() => {
-    const base = getWeekStart(today);
-    base.setDate(base.getDate() + weekOffset * 7);
-    return base;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekOffset]);
-  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  // ── Current week bounds (fixed to today's week) ───────────────────────────
+  const currentWeekStart = useMemo(() => getWeekStart(new Date()), []);
+  const currentWeekEnd = useMemo(() => addDays(currentWeekStart, 6), [currentWeekStart]);
+  const currentWeekStartISO = useMemo(() => toISODate(currentWeekStart), [currentWeekStart]);
+  const currentWeekEndISO = useMemo(() => toISODate(currentWeekEnd), [currentWeekEnd]);
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i)), [currentWeekStart]);
 
-  // ── Filtered entries ─────────────────────────────────────────────────────────
+  const weekLabel = useMemo(() => {
+    const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${fmt(currentWeekStart)} – ${fmt(currentWeekEnd)}`;
+  }, [currentWeekStart, currentWeekEnd]);
+
+  // ── Filtered entries ─────────────────────────────────────────────────────
   const visibleEntries = useMemo(() => {
-    let list = entries;
-    if (isAdmin && staffFilter) list = list.filter(e => e.clerkUserId === staffFilter);
-    return list;
+    if (isAdmin && staffFilter) return entries.filter(e => e.clerkUserId === staffFilter);
+    return entries;
   }, [entries, isAdmin, staffFilter]);
 
-  const weekEntries = useMemo(() => {
-    const startStr = toISODate(weekStart);
-    const endStr = toISODate(weekEnd);
-    return visibleEntries.filter(e => e.date >= startStr && e.date <= endStr);
-  }, [visibleEntries, weekStart, weekEnd]);
+  // ── This week ────────────────────────────────────────────────────────────
+  const thisWeekEntries = useMemo(() =>
+    visibleEntries.filter(e => e.date >= currentWeekStartISO && e.date <= currentWeekEndISO),
+    [visibleEntries, currentWeekStartISO, currentWeekEndISO]
+  );
 
-  // ── Per-day totals ────────────────────────────────────────────────────────────
   const dayTotals = useMemo(() => {
     const map = new Map<string, number>();
-    for (const e of weekEntries) {
-      map.set(e.date, (map.get(e.date) ?? 0) + e.durationMinutes);
-    }
+    for (const e of thisWeekEntries) map.set(e.date, (map.get(e.date) ?? 0) + e.durationMinutes);
     return map;
-  }, [weekEntries]);
+  }, [thisWeekEntries]);
 
-  const weekTotal = useMemo(() => weekEntries.reduce((s, e) => s + e.durationMinutes, 0), [weekEntries]);
+  const weekTotal = useMemo(() => thisWeekEntries.reduce((s, e) => s + e.durationMinutes, 0), [thisWeekEntries]);
 
-  // ── Unique staff (admin only) ─────────────────────────────────────────────────
+  // ── Past weeks grouped ────────────────────────────────────────────────────
+  const pastWeekGroups = useMemo(() => {
+    const map = new Map<string, TimeEntry[]>();
+    for (const e of visibleEntries) {
+      if (e.date >= currentWeekStartISO) continue;
+      const d = new Date(e.date + "T12:00:00");
+      const ws = toISODate(getWeekStart(d));
+      if (!map.has(ws)) map.set(ws, []);
+      map.get(ws)!.push(e);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([ws, wEntries]) => {
+        const start = new Date(ws + "T12:00:00");
+        const end = addDays(start, 6);
+        const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return {
+          key: ws,
+          label: `${fmt(start)} – ${fmt(end)}`,
+          totalMins: wEntries.reduce((s, e) => s + e.durationMinutes, 0),
+          entries: [...wEntries].sort((a, b) => b.date.localeCompare(a.date)),
+        };
+      });
+  }, [visibleEntries, currentWeekStartISO]);
+
+  // ── Staff list (admin only) ───────────────────────────────────────────────
   const staffList = useMemo(() => {
     if (!isAdmin) return [];
     const seen = new Map<string, string>();
-    for (const e of entries) {
-      if (!seen.has(e.clerkUserId)) seen.set(e.clerkUserId, e.staffName);
-    }
+    for (const e of entries) if (!seen.has(e.clerkUserId)) seen.set(e.clerkUserId, e.staffName);
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [entries, isAdmin]);
 
-  // ── Week label ────────────────────────────────────────────────────────────────
-  const weekLabel = useMemo(() => {
-    const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    return `${fmt(weekStart)} – ${fmt(weekEnd)}`;
-  }, [weekStart, weekEnd]);
-
-  // ── Modal handlers ────────────────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────
   function openNew() { setEditEntry(undefined); setShowModal(true); }
   function openEdit(entry: TimeEntry) { setEditEntry(entry); setShowModal(true); }
   function closeModal() { setShowModal(false); setEditEntry(undefined); }
@@ -383,11 +392,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
   function handleSaved(saved: TimeEntry) {
     setEntries(prev => {
       const idx = prev.findIndex(e => e.id === saved.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = saved;
-        return next;
-      }
+      if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [saved, ...prev];
     });
     closeModal();
@@ -398,79 +403,54 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
     closeModal();
   }
 
+  function toggleWeek(key: string) {
+    setOpenWeeks(prev => {
+      const s = new Set(prev);
+      if (s.has(key)) s.delete(key); else s.add(key);
+      return s;
+    });
+  }
+
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const todayStr = todayISO();
 
   return (
     <div>
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {/* Week nav */}
-        <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2">
-          <button onClick={() => setWeekOffset(w => w - 1)} className="text-gray-400 hover:text-white transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span className="text-sm text-white font-medium min-w-[140px] text-center">{weekLabel}</span>
-          <button onClick={() => setWeekOffset(w => w + 1)} className="text-gray-400 hover:text-white transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-        {weekOffset !== 0 && (
-          <button onClick={() => setWeekOffset(0)} className="text-xs text-gray-400 hover:text-white transition-colors">
-            This week
-          </button>
-        )}
-
-        {/* Staff filter (admin only) */}
         {isAdmin && staffList.length > 0 && (
-          <select
-            value={staffFilter}
-            onChange={e => setStaffFilter(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-forest-500"
-          >
+          <select value={staffFilter} onChange={e => setStaffFilter(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-forest-500">
             <option value="">All Staff</option>
-            {staffList.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
+            {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
-
         <div className="flex-1" />
-
-        {/* Export CSV (admin only) */}
         {isAdmin && (
-          <button
-            onClick={() => exportCSV(visibleEntries)}
-            className="px-4 py-2 rounded-xl text-sm text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors"
-          >
+          <button onClick={() => exportCSV(visibleEntries)}
+            className="px-4 py-2 rounded-xl text-sm text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors">
             Export CSV
           </button>
         )}
-
-        {/* Log Time */}
-        <button
-          onClick={openNew}
-          className="px-4 py-2 rounded-xl text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors font-medium"
-        >
+        <button onClick={openNew}
+          className="px-4 py-2 rounded-xl text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors font-medium">
           + Log Time
         </button>
       </div>
 
-      {/* Week summary */}
+      {/* This week label + day grid */}
+      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-3">
+        This Week · {weekLabel}
+      </p>
       <div className="grid grid-cols-8 gap-2 mb-6">
         {weekDays.map((day, i) => {
           const iso = toISODate(day);
           const mins = dayTotals.get(iso) ?? 0;
-          const isToday = iso === toISODate(new Date());
+          const isToday = iso === todayStr;
           return (
             <div key={iso} className={`bg-gray-800 border rounded-xl p-3 text-center ${isToday ? "border-forest-500" : "border-gray-700"}`}>
               <p className="text-xs text-gray-400 mb-1">{DAY_LABELS[i]}</p>
-              <p className="text-xs font-medium text-white">
-                {day.toLocaleDateString("en-US", { day: "numeric" })}
-              </p>
+              <p className="text-xs font-medium text-white">{day.toLocaleDateString("en-US", { day: "numeric" })}</p>
               <p className={`text-xs mt-1 font-semibold ${mins > 0 ? "text-forest-400" : "text-gray-600"}`}>
                 {mins > 0 ? formatDuration(mins) : "—"}
               </p>
@@ -486,53 +466,56 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
         </div>
       </div>
 
-      {/* Entry list */}
+      {/* This week entries */}
       <div className="space-y-2">
-        {weekEntries.length === 0 ? (
-          <div className="text-center py-16 text-gray-600">
+        {thisWeekEntries.length === 0 ? (
+          <div className="text-center py-10 text-gray-600">
             <p className="text-sm">No entries this week.</p>
-            <button onClick={openNew} className="mt-3 text-sm text-forest-400 hover:text-forest-300 transition-colors">
+            <button onClick={openNew} className="mt-2 text-sm text-forest-400 hover:text-forest-300 transition-colors">
               + Log time
             </button>
           </div>
         ) : (
-          weekEntries.map(entry => (
-            <div
-              key={entry.id}
-              className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-4 hover:border-gray-600 transition-colors"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-gray-400">
-                    {new Date(entry.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                  </span>
-                  <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{entry.focusArea}</span>
-                  {isAdmin && (
-                    <span className="text-xs text-gray-500">{entry.staffName}</span>
-                  )}
-                </div>
-                <p className="text-sm font-medium text-white mt-0.5 truncate">{entry.projectName}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {formatTime12(entry.startTime)} – {formatTime12(entry.endTime)}
-                  {" "}
-                  <span className="text-forest-400 font-medium">({formatDuration(entry.durationMinutes)})</span>
-                  {entry.travelMinutes ? <span className="text-gray-500"> · {entry.travelMinutes} min travel</span> : null}
-                  {entry.travelMiles ? <span className="text-gray-500"> · {entry.travelMiles} mi</span> : null}
-                </p>
-                {entry.notes && <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.notes}</p>}
-              </div>
-              {(entry.clerkUserId === currentUserId || isAdmin) && (
-                <button
-                  onClick={() => openEdit(entry)}
-                  className="text-xs text-gray-400 hover:text-white transition-colors shrink-0 px-2 py-1 rounded hover:bg-gray-700"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
+          thisWeekEntries.map(entry => (
+            <EntryRow key={entry.id} entry={entry} isAdmin={isAdmin} currentUserId={currentUserId} onEdit={openEdit} />
           ))
         )}
       </div>
+
+      {/* Past weeks accordion */}
+      {pastWeekGroups.length > 0 && (
+        <div className="mt-6 border-t border-gray-800 pt-4 space-y-0.5">
+          {pastWeekGroups.map(({ key, label, totalMins, entries: wEntries }) => {
+            const isOpen = openWeeks.has(key);
+            return (
+              <div key={key}>
+                <button
+                  onClick={() => toggleWeek(key)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-800 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className={`w-3.5 h-3.5 text-gray-600 group-hover:text-gray-400 transition-all duration-150 ${isOpen ? "rotate-90" : ""}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span className="text-sm text-gray-500 group-hover:text-gray-300 transition-colors">{label}</span>
+                  </div>
+                  <span className="text-xs text-gray-600 font-medium group-hover:text-gray-400 transition-colors">
+                    {formatDuration(totalMins)}
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="space-y-2 mt-1 mb-2 pl-5">
+                    {wEntries.map(entry => (
+                      <EntryRow key={entry.id} entry={entry} isAdmin={isAdmin} currentUserId={currentUserId} onEdit={openEdit} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (

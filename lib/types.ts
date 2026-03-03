@@ -20,6 +20,7 @@ export interface Tenant {
   state?: string;
   zip?: string;
   estimatedHours?: number;
+  isArchived?: boolean;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

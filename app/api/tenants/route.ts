@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { tenantId, name, address, city, state, zip, estimatedHours } = await req.json();
+  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived } = await req.json();
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const role = await getUserRoleForTenant(userId, tenantId);
@@ -63,6 +63,7 @@ export async function PATCH(req: NextRequest) {
     state: typeof state === "string" ? state : undefined,
     zip: typeof zip === "string" ? zip : undefined,
     estimatedHours: typeof estimatedHours === "number" ? estimatedHours : undefined,
+    isArchived: typeof isArchived === "boolean" ? isArchived : undefined,
   });
   return NextResponse.json({ tenant });
 }
