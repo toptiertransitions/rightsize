@@ -7,8 +7,8 @@ import {
   getTenantById,
   getRoomsForTenant,
   getMembershipsForUser,
+  getSystemRole,
 } from "@/lib/airtable";
-import { isTTTStaff } from "@/lib/config";
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
 import type { Tenant } from "@/lib/types";
@@ -27,15 +27,16 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ───────────────────────────────────────────────────────
   if (tenantId) {
-    const [tenant, role, items, rooms] = await Promise.all([
+    const [tenant, role, items, rooms, sysRole] = await Promise.all([
       getTenantById(tenantId).catch(() => null),
       getUserRoleForTenant(userId, tenantId).catch(() => null),
       getItemsForTenant(tenantId).catch(() => []),
       getRoomsForTenant(tenantId).catch(() => []),
+      getSystemRole(userId!).catch(() => null),
     ]);
 
     if (!tenant) redirect("/home");
-    const resolvedRole = role ?? (isTTTStaff(userId!) ? "TTTStaff" as const : null);
+    const resolvedRole = role ?? sysRole;
     if (!resolvedRole) redirect("/home");
 
     const canEdit = EDIT_ROLES.includes(resolvedRole);

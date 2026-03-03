@@ -9,8 +9,9 @@ import {
   getMembershipsForUser,
   getProjectFiles,
   getTimeEntries,
+  getSystemRole,
 } from "@/lib/airtable";
-import { isTTTStaff, isTTTAdmin } from "@/lib/config";
+import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
 import type { Tenant } from "@/lib/types";
@@ -32,7 +33,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
 
     if (memberships.length === 0) {
-      if (isTTTStaff(userId!)) redirect("/home");
+      const sysRole = await getSystemRole(userId!).catch(() => null);
+      if (sysRole) redirect("/home");
       redirect("/onboarding");
     }
 
@@ -84,17 +86,18 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
     getPlanEntriesForTenant(tenantId).catch(() => []),
     getProjectFiles(tenantId).catch(() => []),
     getTimeEntries({ tenantId }).catch(() => []),
+    getSystemRole(userId!).catch(() => null),
   ]);
 
   if (!tenant) redirect("/home");
-  const resolvedRole = role ?? (isTTTStaff(userId!) ? "TTTStaff" as const : null);
+  const resolvedRole = role ?? sysRole;
   if (!resolvedRole) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);

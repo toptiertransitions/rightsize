@@ -8,8 +8,8 @@ import {
   getMembershipsForUser,
   getLocalVendors,
   getVendorFilesForTenant,
+  getSystemRole,
 } from "@/lib/airtable";
-import { isTTTStaff } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { VendorsClient } from "./VendorsClient";
 import type { Tenant } from "@/lib/types";
@@ -31,7 +31,8 @@ export default async function VendorsPage({ searchParams }: PageProps) {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
 
     if (memberships.length === 0) {
-      if (isTTTStaff(userId!)) redirect("/home");
+      const sysRole = await getSystemRole(userId!).catch(() => null);
+      if (sysRole) redirect("/home");
       redirect("/onboarding");
     }
 
@@ -80,17 +81,18 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   }
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
-  const [tenant, role, vendors, vendorFiles] = await Promise.all([
+  const [tenant, role, vendors, vendorFiles, sysRole] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getVendorsForTenant(tenantId).catch(() => []),
     getVendorFilesForTenant(tenantId).catch(() => []),
+    getSystemRole(userId!).catch(() => null),
   ]);
 
   const localVendors = await getLocalVendors(tenant?.state || undefined).catch(() => []);
 
   if (!tenant) redirect("/home");
-  const resolvedRole = role ?? (isTTTStaff(userId!) ? "TTTStaff" as const : null);
+  const resolvedRole = role ?? sysRole;
   if (!resolvedRole) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
