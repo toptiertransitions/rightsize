@@ -367,6 +367,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
           <thead>
             <tr className="border-b border-gray-800">
               <th className="text-left px-5 py-3 font-semibold text-gray-400">User</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden sm:table-cell">System Role</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden md:table-cell">Projects</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden lg:table-cell">Joined</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-400">Status</th>
@@ -386,6 +387,21 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
                       <div className="text-xs text-gray-400 truncate">{user.email}</div>
                     </div>
                   </div>
+                </td>
+                <td className="px-5 py-3 hidden sm:table-cell">
+                  {user.systemRole ? (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      user.systemRole === "TTTAdmin"
+                        ? "bg-red-900/50 text-red-300 border border-red-800"
+                        : user.systemRole === "TTTManager"
+                        ? "bg-purple-900/50 text-purple-300 border border-purple-800"
+                        : "bg-gray-700 text-gray-300 border border-gray-600"
+                    }`}>
+                      {user.systemRole === "TTTAdmin" ? "Admin" : user.systemRole === "TTTManager" ? "Manager" : "Staff"}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-600">—</span>
+                  )}
                 </td>
                 <td className="px-5 py-3 hidden md:table-cell">
                   <div className="flex flex-wrap gap-1">
@@ -423,7 +439,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center text-gray-600">No users found.</td>
+                <td colSpan={6} className="px-5 py-12 text-center text-gray-600">No users found.</td>
               </tr>
             )}
           </tbody>

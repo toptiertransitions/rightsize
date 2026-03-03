@@ -2,7 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { isTTTAdmin } from "@/lib/config";
-import { getAllMemberships, getTenants } from "@/lib/airtable";
+import { getAllMemberships, getTenants, getStaffMembers } from "@/lib/airtable";
 import { UserButton } from "@clerk/nextjs";
 import { UsersClient } from "./UsersClient";
 
@@ -13,6 +13,7 @@ export type AdminUser = {
   imageUrl: string;
   createdAt: string;
   banned: boolean;
+  systemRole?: string;
   memberships: Array<{
     membershipId: string;
     tenantId: string;
@@ -26,14 +27,17 @@ export default async function AdminUsersPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [memberships, tenants, clerkRes] = await Promise.all([
+  const [memberships, tenants, staffMembers, clerkRes] = await Promise.all([
     getAllMemberships().catch(() => []),
     getTenants().catch(() => []),
+    getStaffMembers().catch(() => []),
     (async () => {
       const client = await clerkClient();
       return client.users.getUserList({ limit: 100, orderBy: "-created_at" });
     })().catch(() => ({ data: [] as never[] })),
   ]);
+
+  const staffRoleByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.role]));
 
   const tenantMap = new Map(tenants.map(t => [t.id, t.name]));
 
@@ -56,6 +60,7 @@ export default async function AdminUsersPage() {
     imageUrl: u.imageUrl,
     createdAt: new Date(u.createdAt).toISOString(),
     banned: u.banned ?? false,
+    systemRole: isTTTAdmin(u.id) ? "TTTAdmin" : (staffRoleByClerkId.get(u.id) ?? undefined),
     memberships: membershipsByUser.get(u.id) ?? [],
   }));
 
