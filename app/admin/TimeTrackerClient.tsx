@@ -13,6 +13,7 @@ interface Props {
   initialEntries: TimeEntry[];
   tenants: TenantOption[];
   isAdmin: boolean;
+  isManager?: boolean;
   currentUserId: string;
   currentUserName: string;
 }
@@ -91,10 +92,10 @@ function exportCSV(entries: TimeEntry[]) {
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 function EntryRow({
-  entry, isAdmin, currentUserId, onEdit,
+  entry, canViewAll, currentUserId, onEdit,
 }: {
   entry: TimeEntry;
-  isAdmin: boolean;
+  canViewAll: boolean;
   currentUserId: string;
   onEdit: (e: TimeEntry) => void;
 }) {
@@ -106,7 +107,7 @@ function EntryRow({
             {new Date(entry.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </span>
           <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{entry.focusArea}</span>
-          {isAdmin && <span className="text-xs text-gray-500">{entry.staffName}</span>}
+          {canViewAll && <span className="text-xs text-gray-500">{entry.staffName}</span>}
         </div>
         <p className="text-sm font-medium text-white mt-0.5 truncate">{entry.projectName}</p>
         <p className="text-xs text-gray-400 mt-0.5">
@@ -117,7 +118,7 @@ function EntryRow({
         </p>
         {entry.notes && <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.notes}</p>}
       </div>
-      {(entry.clerkUserId === currentUserId || isAdmin) && (
+      {(entry.clerkUserId === currentUserId || canViewAll) && (
         <button
           onClick={() => onEdit(entry)}
           className="text-xs text-gray-400 hover:text-white transition-colors shrink-0 px-2 py-1 rounded hover:bg-gray-700"
@@ -312,12 +313,15 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUserId }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
   const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
+
+  // ── Derived permissions ───────────────────────────────────────────────────
+  const canViewAll = isAdmin || isManager;
 
   // ── Current week bounds (fixed to today's week) ───────────────────────────
   const currentWeekStart = useMemo(() => getWeekStart(new Date()), []);
@@ -333,9 +337,9 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
 
   // ── Filtered entries ─────────────────────────────────────────────────────
   const visibleEntries = useMemo(() => {
-    if (isAdmin && staffFilter) return entries.filter(e => e.clerkUserId === staffFilter);
+    if (canViewAll && staffFilter) return entries.filter(e => e.clerkUserId === staffFilter);
     return entries;
-  }, [entries, isAdmin, staffFilter]);
+  }, [entries, canViewAll, staffFilter]);
 
   // ── This week ────────────────────────────────────────────────────────────
   const thisWeekEntries = useMemo(() =>
@@ -377,13 +381,13 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
       });
   }, [visibleEntries, currentWeekStartISO]);
 
-  // ── Staff list (admin only) ───────────────────────────────────────────────
+  // ── Staff list (admin or manager) ────────────────────────────────────────
   const staffList = useMemo(() => {
-    if (!isAdmin) return [];
+    if (!canViewAll) return [];
     const seen = new Map<string, string>();
     for (const e of entries) if (!seen.has(e.clerkUserId)) seen.set(e.clerkUserId, e.staffName);
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
-  }, [entries, isAdmin]);
+  }, [entries, canViewAll]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function openNew() { setEditEntry(undefined); setShowModal(true); }
@@ -419,7 +423,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
     <div>
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {isAdmin && staffList.length > 0 && (
+        {canViewAll && staffList.length > 0 && (
           <select value={staffFilter} onChange={e => setStaffFilter(e.target.value)}
             className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-forest-500">
             <option value="">All Staff</option>
@@ -427,7 +431,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
           </select>
         )}
         <div className="flex-1" />
-        {isAdmin && (
+        {canViewAll && (
           <button onClick={() => exportCSV(visibleEntries)}
             className="px-4 py-2 rounded-xl text-sm text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors">
             Export CSV
@@ -478,7 +482,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
           </div>
         ) : (
           thisWeekEntries.map(entry => (
-            <EntryRow key={entry.id} entry={entry} isAdmin={isAdmin} currentUserId={currentUserId} onEdit={openEdit} />
+            <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} currentUserId={currentUserId} onEdit={openEdit} />
           ))
         )}
       </div>
@@ -508,7 +512,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
                 {isOpen && (
                   <div className="space-y-2 mt-1 mb-2 pl-5">
                     {wEntries.map(entry => (
-                      <EntryRow key={entry.id} entry={entry} isAdmin={isAdmin} currentUserId={currentUserId} onEdit={openEdit} />
+                      <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} currentUserId={currentUserId} onEdit={openEdit} />
                     ))}
                   </div>
                 )}

@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
   const tenantId = formData.get("tenantId") as string | null;
   const tag = formData.get("tag") as string | null;
   const roomLabel = formData.get("roomLabel") as string | null;
+  const vendorId = formData.get("vendorId") as string | null;
 
   if (!file || !tenantId || !tag) {
     return NextResponse.json({ error: "Missing file, tenantId, or tag" }, { status: 400 });
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
       fileTag: tag as FileTag,
       roomLabel: roomLabel?.trim() || undefined,
+      vendorId: vendorId?.trim() || undefined,
       cloudinaryUrl: uploadResult.secureUrl,
       cloudinaryPublicId: uploadResult.publicId,
       resourceType: uploadResult.resourceType,
@@ -121,13 +123,16 @@ export async function DELETE(req: NextRequest) {
   const publicId = req.nextUrl.searchParams.get("publicId");
   const resourceType = req.nextUrl.searchParams.get("resourceType");
   const tenantId = req.nextUrl.searchParams.get("tenantId");
+  const vendorId = req.nextUrl.searchParams.get("vendorId");
 
   if (!id || !publicId || !resourceType || !tenantId) {
     return NextResponse.json({ error: "Missing required params" }, { status: 400 });
   }
 
   const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !EDIT_ROLES.includes(role)) {
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Vendor file deletes are allowed for any project member; other deletes require edit role
+  if (!vendorId && !EDIT_ROLES.includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

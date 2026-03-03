@@ -6,17 +6,21 @@ import {
   createTimeEntry,
   updateTimeEntry,
   deleteTimeEntry,
+  getSystemRole,
 } from "@/lib/airtable";
-import { isTTTStaff, isTTTAdmin } from "@/lib/config";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import type { FocusArea } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isTTTStaff(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const systemRole = await getSystemRole(userId);
+  if (!systemRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const canViewAll = hasPermission(systemRole, PERMISSIONS.TIME_VIEW_ALL);
   const filters: { clerkUserId?: string } = {};
-  if (!isTTTAdmin(userId)) {
+  if (!canViewAll) {
     filters.clerkUserId = userId;
   } else {
     const staffId = req.nextUrl.searchParams.get("staffId");
@@ -35,7 +39,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isTTTStaff(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const systemRole = await getSystemRole(userId);
+  if (!systemRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const user = await currentUser();
   const staffName = user
@@ -92,7 +98,11 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isTTTStaff(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const systemRole = await getSystemRole(userId);
+  if (!systemRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const canEditAll = hasPermission(systemRole, PERMISSIONS.TIME_EDIT_ALL);
 
   let body: {
     id: string;
@@ -119,7 +129,7 @@ export async function PATCH(req: NextRequest) {
   const existing = await getTimeEntryById(id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (!isTTTAdmin(userId) && existing.clerkUserId !== userId) {
+  if (!canEditAll && existing.clerkUserId !== userId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -135,7 +145,11 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isTTTStaff(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const systemRole = await getSystemRole(userId);
+  if (!systemRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const canEditAll = hasPermission(systemRole, PERMISSIONS.TIME_EDIT_ALL);
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -143,7 +157,7 @@ export async function DELETE(req: NextRequest) {
   const existing = await getTimeEntryById(id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (!isTTTAdmin(userId) && existing.clerkUserId !== userId) {
+  if (!canEditAll && existing.clerkUserId !== userId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

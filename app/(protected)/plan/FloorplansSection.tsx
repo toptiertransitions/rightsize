@@ -24,6 +24,7 @@ const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
   "Room Image":   { label: "Room Image",   color: "bg-green-100 text-green-800" },
   "Layout Image": { label: "Layout Image", color: "bg-violet-100 text-violet-800" },
   "Damage Image": { label: "Damage Image", color: "bg-red-100 text-red-800" },
+  "Vendor File":  { label: "Vendor File",  color: "bg-gray-100 text-gray-700" },
 };
 const TAG_ORDER: FileTag[] = ["Floorplan", "Room Image", "Layout Image", "Damage Image"];
 

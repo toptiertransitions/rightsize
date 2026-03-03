@@ -4,7 +4,7 @@
  */
 
 import Airtable from "airtable";
-import { AIRTABLE_TABLES, isTTTAdmin } from "./config";
+import { AIRTABLE_TABLES, isTTTAdmin, isTTTStaff } from "./config";
 import type {
   Tenant,
   User,
@@ -15,6 +15,8 @@ import type {
   PlanHelper,
   PlanActivity,
   UserRole,
+  SystemRole,
+  StaffMember,
   DensityLevel,
   ItemCondition,
   SizeClass,
@@ -215,6 +217,10 @@ export async function getUserRoleForTenant(
 ): Promise<UserRole | null> {
   // TTTAdmin users have implicit access to all tenants
   if (isTTTAdmin(clerkUserId)) return "TTTAdmin";
+
+  // TTTManager users also have implicit cross-tenant access
+  const sysRole = await getSystemRole(clerkUserId);
+  if (sysRole === "TTTManager") return "TTTManager";
 
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.MEMBERSHIPS)
@@ -994,6 +1000,7 @@ function mapProjectFile(record: AirtableRecord): ProjectFile {
     fileName: toStr(f["FileName"]),
     fileTag: toStr(f["FileTag"]) as FileTag,
     roomLabel: toStr(f["RoomLabel"]) || undefined,
+    vendorId: toStr(f["VendorId"]) || undefined,
     cloudinaryUrl: toStr(f["CloudinaryUrl"]),
     cloudinaryPublicId: toStr(f["CloudinaryPublicId"]),
     resourceType: toStr(f["ResourceType"]) || "image",
@@ -1017,27 +1024,38 @@ export async function createProjectFile(data: {
   fileName: string;
   fileTag: FileTag;
   roomLabel?: string;
+  vendorId?: string;
   cloudinaryUrl: string;
   cloudinaryPublicId: string;
   resourceType: string;
 }): Promise<ProjectFile> {
+  const fields: Record<string, string> = {
+    TenantID: data.tenantId,
+    FileName: data.fileName,
+    FileTag: data.fileTag,
+    RoomLabel: data.roomLabel || "",
+    CloudinaryUrl: data.cloudinaryUrl,
+    CloudinaryPublicId: data.cloudinaryPublicId,
+    ResourceType: data.resourceType,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.vendorId) fields["VendorId"] = data.vendorId;
   const res = await fileFetch("", {
     method: "POST",
-    body: JSON.stringify({
-      fields: {
-        TenantID: data.tenantId,
-        FileName: data.fileName,
-        FileTag: data.fileTag,
-        RoomLabel: data.roomLabel || "",
-        CloudinaryUrl: data.cloudinaryUrl,
-        CloudinaryPublicId: data.cloudinaryPublicId,
-        ResourceType: data.resourceType,
-        CreatedAt: new Date().toISOString(),
-      },
-    }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapProjectFile(await res.json());
+}
+
+export async function getVendorFilesForTenant(tenantId: string): Promise<ProjectFile[]> {
+  const formula = encodeURIComponent(`AND({TenantID}="${tenantId}",{VendorId}!="")`);
+  const res = await fileFetch(
+    `?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapProjectFile);
 }
 
 export async function deleteProjectFile(id: string): Promise<void> {
@@ -1173,4 +1191,126 @@ export async function updateTimeEntry(
 export async function deleteTimeEntry(id: string): Promise<void> {
   const res = await timeFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Staff Roles (uses fetch directly) ───────────────────────────────────────
+function staffRolesFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.STAFF_ROLES;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapStaffMember(record: AirtableRecord): StaffMember {
+  const f = record.fields;
+  return {
+    id: record.id,
+    clerkUserId: toStr(f["ClerkUserId"]),
+    displayName: toStr(f["DisplayName"]),
+    email: toStr(f["Email"]),
+    role: (toStr(f["Role"]) || "TTTStaff") as SystemRole,
+    isActive: f["IsActive"] === true,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getStaffMembers(): Promise<StaffMember[]> {
+  const res = await staffRolesFetch(
+    `?sort[0][field]=DisplayName&sort[0][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapStaffMember);
+}
+
+export async function getStaffMember(clerkUserId: string): Promise<StaffMember | null> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
+  const res = await staffRolesFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapStaffMember(data.records[0] as AirtableRecord);
+}
+
+export async function upsertStaffMember(data: {
+  clerkUserId: string;
+  displayName: string;
+  email: string;
+  role: "TTTStaff" | "TTTManager";
+  isActive?: boolean;
+}): Promise<StaffMember> {
+  const existing = await getStaffMember(data.clerkUserId);
+  const fields = {
+    ClerkUserId: data.clerkUserId,
+    DisplayName: data.displayName,
+    Email: data.email,
+    Role: data.role,
+    IsActive: data.isActive ?? true,
+  };
+  if (existing) {
+    const res = await staffRolesFetch(`/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapStaffMember(await res.json());
+  }
+  const res = await staffRolesFetch("", {
+    method: "POST",
+    body: JSON.stringify({ fields: { ...fields, CreatedAt: new Date().toISOString() } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapStaffMember(await res.json());
+}
+
+export async function updateStaffMember(
+  id: string,
+  data: Partial<{ displayName: string; email: string; role: "TTTStaff" | "TTTManager"; isActive: boolean }>
+): Promise<StaffMember> {
+  const fields: Record<string, unknown> = {};
+  if (data.displayName !== undefined) fields["DisplayName"] = data.displayName;
+  if (data.email !== undefined) fields["Email"] = data.email;
+  if (data.role !== undefined) fields["Role"] = data.role;
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  const res = await staffRolesFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapStaffMember(await res.json());
+}
+
+export async function deleteStaffMember(id: string): Promise<void> {
+  const res = await staffRolesFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── System Role Resolution ───────────────────────────────────────────────────
+// Single source of truth for role lookup.
+// 1. TTT_ADMIN_USER_IDS env var  → TTTAdmin (bootstrap)
+// 2. TTT_STAFF_USER_IDS env var  → TTTStaff (legacy compat, skipped if also admin)
+// 3. StaffRoles table (IsActive) → role from record
+// 4. Otherwise → null
+export async function getSystemRole(clerkUserId: string): Promise<SystemRole | null> {
+  if (isTTTAdmin(clerkUserId)) return "TTTAdmin";
+
+  // Check StaffRoles table first (takes precedence over legacy env var for TTTManager)
+  try {
+    const member = await getStaffMember(clerkUserId);
+    if (member && member.isActive) return member.role;
+  } catch {
+    // Fall through to env var check on Airtable error
+  }
+
+  // Legacy env var fallback for TTTStaff
+  if (isTTTStaff(clerkUserId)) return "TTTStaff";
+
+  return null;
 }

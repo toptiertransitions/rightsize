@@ -7,6 +7,7 @@ import {
   getVendorsForTenant,
   getMembershipsForUser,
   getLocalVendors,
+  getVendorFilesForTenant,
 } from "@/lib/airtable";
 import { isTTTStaff } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -79,10 +80,11 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   }
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
-  const [tenant, role, vendors] = await Promise.all([
+  const [tenant, role, vendors, vendorFiles] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getVendorsForTenant(tenantId).catch(() => []),
+    getVendorFilesForTenant(tenantId).catch(() => []),
   ]);
 
   const localVendors = await getLocalVendors(tenant?.state || undefined).catch(() => []);
@@ -110,7 +112,7 @@ export default async function VendorsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} localVendors={localVendors} isTTT={isTTT} />
+      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} localVendors={localVendors} isTTT={isTTT} initialVendorFiles={vendorFiles} />
     </div>
   );
 }

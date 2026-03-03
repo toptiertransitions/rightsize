@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { VENDOR_TYPES } from "@/lib/types";
-import type { Vendor, VendorType, LocalVendor } from "@/lib/types";
+import type { Vendor, VendorType, LocalVendor, ProjectFile } from "@/lib/types";
+import { VendorFilesSection } from "./VendorFilesSection";
 
 // ─── Type badge colors ──────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -282,10 +283,14 @@ function VendorModal({ tenantId, vendor, prefill, onClose, onSaved }: ModalProps
 function VendorCard({
   vendor,
   canEdit,
+  tenantId,
+  vendorFiles,
   onEdit,
 }: {
   vendor: Vendor;
   canEdit: boolean;
+  tenantId: string;
+  vendorFiles: ProjectFile[];
   onEdit: () => void;
 }) {
   const typeColor = TYPE_COLORS[vendor.vendorType] ?? "bg-gray-100 text-gray-700";
@@ -375,6 +380,13 @@ function VendorCard({
           ))}
         </div>
       )}
+
+      {/* Files */}
+      <VendorFilesSection
+        vendorId={vendor.id}
+        tenantId={tenantId}
+        initialFiles={vendorFiles}
+      />
     </div>
   );
 }
@@ -534,9 +546,10 @@ interface VendorsClientProps {
   canEdit: boolean;
   localVendors: LocalVendor[];
   isTTT?: boolean;
+  initialVendorFiles: ProjectFile[];
 }
 
-export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT }: VendorsClientProps) {
+export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT, initialVendorFiles }: VendorsClientProps) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | undefined>(undefined);
@@ -676,6 +689,8 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT 
               <VendorCard
                 vendor={vendor}
                 canEdit={canEdit}
+                tenantId={tenantId}
+                vendorFiles={initialVendorFiles.filter((f) => f.vendorId === vendor.id)}
                 onEdit={() => openEdit(vendor)}
               />
             </div>

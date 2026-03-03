@@ -4,7 +4,20 @@ export type UserRole =
   | "Collaborator"
   | "Viewer"
   | "TTTStaff"
+  | "TTTManager"
   | "TTTAdmin";
+
+export type SystemRole = "TTTStaff" | "TTTManager" | "TTTAdmin";
+
+export interface StaffMember {
+  id: string;            // Airtable record ID
+  clerkUserId: string;
+  displayName: string;
+  email: string;
+  role: SystemRole;
+  isActive: boolean;
+  createdAt: string;
+}
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
 export interface Tenant {
@@ -302,7 +315,7 @@ export interface LocalVendor {
 }
 
 // ─── Project Files ────────────────────────────────────────────────────────────
-export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image";
+export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File";
 
 export interface ProjectFile {
   id: string;
@@ -311,6 +324,7 @@ export interface ProjectFile {
   fileName: string;
   fileTag: FileTag;
   roomLabel?: string;
+  vendorId?: string;
   cloudinaryUrl: string;
   cloudinaryPublicId: string;
   resourceType: string; // "image" | "raw"

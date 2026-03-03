@@ -1,8 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries } from "@/lib/airtable";
-import { isTTTStaff, isTTTAdmin } from "@/lib/config";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -23,16 +22,21 @@ export default async function DashboardPage({
   const { tenantId: tenantIdParam } = await searchParams;
 
   const user = await currentUser();
-  const isStaff = isTTTStaff(userId);
-  const memberships = await getMembershipsForUser(userId).catch(() => []);
+  const [systemRole, memberships] = await Promise.all([
+    getSystemRole(userId),
+    getMembershipsForUser(userId).catch(() => []),
+  ]);
+  const isStaff = systemRole !== null;
+  const isAdmin = systemRole === "TTTAdmin";
+  const isManager = systemRole === "TTTManager";
   const firstName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there";
 
-  // ── TTTStaff/Admin: time tracker + all-tenant picker ────────────────────────
+  // ── TTTStaff/Manager/Admin: time tracker + all-tenant picker ─────────────────
   if (isStaff && !tenantIdParam) {
-    const isAdmin = isTTTAdmin(userId);
+    const canViewAll = isAdmin || isManager;
     const [allTenants, timeEntries] = await Promise.all([
       getTenants().catch(() => []),
-      getTimeEntries(isAdmin ? undefined : { clerkUserId: userId }).catch(() => []),
+      getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
     ]);
 
     return (
@@ -49,6 +53,7 @@ export default async function DashboardPage({
               initialEntries={timeEntries}
               tenants={allTenants.filter(t => !t.isArchived).map(t => ({ id: t.id, name: t.name }))}
               isAdmin={isAdmin}
+              isManager={isManager}
               currentUserId={userId}
               currentUserName={firstName}
             />
