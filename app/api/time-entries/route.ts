@@ -43,8 +43,10 @@ export async function POST(req: NextRequest) {
   const systemRole = await getSystemRole(userId);
   if (!systemRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const canEditAll = hasPermission(systemRole, PERMISSIONS.TIME_EDIT_ALL);
+
   const user = await currentUser();
-  const staffName = user
+  const authenticatedStaffName = user
     ? (`${user.firstName ?? ""} ${user.lastName ?? ""}`).trim() ||
       user.emailAddresses?.[0]?.emailAddress ||
       "Staff"
@@ -61,6 +63,8 @@ export async function POST(req: NextRequest) {
     travelMiles?: number;
     travelMinutes?: number;
     notes?: string;
+    staffUserId?: string;
+    staffName?: string;
   };
   try {
     body = await req.json();
@@ -73,9 +77,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const entryUserId = (canEditAll && body.staffUserId) ? body.staffUserId : userId;
+  const staffName = (canEditAll && body.staffUserId && body.staffName) ? body.staffName : authenticatedStaffName;
+
   try {
     const entry = await createTimeEntry({
-      clerkUserId: userId,
+      clerkUserId: entryUserId,
       staffName,
       tenantId,
       projectName,

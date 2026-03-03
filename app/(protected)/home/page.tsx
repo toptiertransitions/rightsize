@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -34,10 +34,15 @@ export default async function DashboardPage({
   // ── TTTStaff/Manager/Admin: time tracker + all-tenant picker ─────────────────
   if (isStaff && !tenantIdParam) {
     const canViewAll = isAdmin || isManager;
-    const [allTenants, timeEntries] = await Promise.all([
+    const [allTenants, timeEntries, allStaff] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
+      canViewAll ? getStaffMembers().catch(() => []) : Promise.resolve([]),
     ]);
+
+    const staffMembers = canViewAll
+      ? allStaff.filter(s => s.isActive).map(s => ({ id: s.clerkUserId, name: s.displayName }))
+      : undefined;
 
     return (
       <div>
@@ -56,6 +61,7 @@ export default async function DashboardPage({
               isManager={isManager}
               currentUserId={userId}
               currentUserName={firstName}
+              staffMembers={staffMembers}
             />
           </div>
         </section>

@@ -9,6 +9,11 @@ interface TenantOption {
   name: string;
 }
 
+interface StaffOption {
+  id: string;
+  name: string;
+}
+
 interface Props {
   initialEntries: TimeEntry[];
   tenants: TenantOption[];
@@ -16,6 +21,7 @@ interface Props {
   isManager?: boolean;
   currentUserId: string;
   currentUserName: string;
+  staffMembers?: StaffOption[];
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -137,9 +143,12 @@ interface ModalProps {
   onClose: () => void;
   onSaved: (entry: TimeEntry) => void;
   onDeleted?: (id: string) => void;
+  staffMembers?: StaffOption[];
+  currentUserId: string;
+  currentUserName: string;
 }
 
-function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProps) {
+function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMembers, currentUserId, currentUserName }: ModalProps) {
   const [date, setDate] = useState(entry?.date ?? todayISO());
   const [tenantId, setTenantId] = useState(entry?.tenantId ?? (tenants[0]?.id ?? ""));
   const [focusArea, setFocusArea] = useState<FocusArea>(entry?.focusArea ?? "Sorting");
@@ -148,6 +157,8 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
   const [travelMiles, setTravelMiles] = useState(entry?.travelMiles != null ? String(entry.travelMiles) : "");
   const [travelMinutes, setTravelMinutes] = useState(entry?.travelMinutes != null ? String(entry.travelMinutes) : "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [forUserId, setForUserId] = useState(currentUserId);
+  const [forUserName, setForUserName] = useState(currentUserName);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -174,6 +185,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
         travelMinutes: travelMinutes ? parseInt(travelMinutes) : undefined,
         notes: notes || undefined,
         ...(entry ? { id: entry.id } : {}),
+        ...(!entry && forUserId !== currentUserId ? { staffUserId: forUserId, staffName: forUserName } : {}),
       };
       const res = await fetch("/api/time-entries", {
         method: entry ? "PATCH" : "POST",
@@ -217,6 +229,23 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!entry && staffMembers && staffMembers.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Log for</label>
+              <select value={forUserId} onChange={e => {
+                const s = staffMembers.find(m => m.id === e.target.value);
+                setForUserId(e.target.value);
+                setForUserName(s?.name ?? currentUserName);
+              }}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
+                <option value={currentUserId}>{currentUserName} (me)</option>
+                {staffMembers.filter(m => m.id !== currentUserId).map(m =>
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                )}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} required
@@ -313,7 +342,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
@@ -530,6 +559,9 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
           onClose={closeModal}
           onSaved={handleSaved}
           onDeleted={editEntry ? handleDeleted : undefined}
+          staffMembers={staffMembers}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
         />
       )}
     </div>
