@@ -345,6 +345,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
+  const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
   const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
@@ -473,22 +474,40 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
       </div>
 
       {/* This week label + day grid */}
-      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-3">
-        This Week · {weekLabel}
-      </p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">
+          This Week · {weekLabel}
+        </p>
+        {dateFilter && (
+          <button
+            onClick={() => setDateFilter(null)}
+            className="text-xs text-forest-400 hover:text-forest-300 transition-colors flex items-center gap-1"
+          >
+            {new Date(dateFilter + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            <span className="text-gray-500">· clear ×</span>
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-8 gap-2 mb-6">
         {weekDays.map((day, i) => {
           const iso = toISODate(day);
           const mins = dayTotals.get(iso) ?? 0;
           const isToday = iso === todayStr;
+          const isSelected = dateFilter === iso;
           return (
-            <div key={iso} className={`bg-gray-800 border rounded-xl p-3 text-center ${isToday ? "border-forest-500" : "border-gray-700"}`}>
+            <button
+              key={iso}
+              onClick={() => setDateFilter(prev => prev === iso ? null : iso)}
+              className={`bg-gray-800 border rounded-xl p-3 text-center transition-colors hover:border-forest-400 ${
+                isSelected ? "border-forest-400 ring-1 ring-forest-400" : isToday ? "border-forest-500" : "border-gray-700"
+              }`}
+            >
               <p className="text-xs text-gray-400 mb-1">{DAY_LABELS[i]}</p>
               <p className="text-xs font-medium text-white">{day.toLocaleDateString("en-US", { day: "numeric" })}</p>
               <p className={`text-xs mt-1 font-semibold ${mins > 0 ? "text-forest-400" : "text-gray-600"}`}>
                 {mins > 0 ? formatDuration(mins) : "—"}
               </p>
-            </div>
+            </button>
           );
         })}
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 text-center">
@@ -501,20 +520,29 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
       </div>
 
       {/* This week entries */}
-      <div className="space-y-2">
-        {thisWeekEntries.length === 0 ? (
-          <div className="text-center py-10 text-gray-600">
-            <p className="text-sm">No entries this week.</p>
-            <button onClick={openNew} className="mt-2 text-sm text-forest-400 hover:text-forest-300 transition-colors">
-              + Log time
-            </button>
-          </div>
-        ) : (
-          thisWeekEntries.map(entry => (
-            <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} currentUserId={currentUserId} onEdit={openEdit} />
-          ))
-        )}
-      </div>
+      {(() => {
+        const displayEntries = dateFilter
+          ? thisWeekEntries.filter(e => e.date === dateFilter)
+          : thisWeekEntries;
+        return (
+        <div className="space-y-2">
+          {displayEntries.length === 0 ? (
+            <div className="text-center py-10 text-gray-600">
+              <p className="text-sm">{dateFilter ? "No entries for this day." : "No entries this week."}</p>
+              {!dateFilter && (
+                <button onClick={openNew} className="mt-2 text-sm text-forest-400 hover:text-forest-300 transition-colors">
+                  + Log time
+                </button>
+              )}
+            </div>
+          ) : (
+            displayEntries.map(entry => (
+              <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} currentUserId={currentUserId} onEdit={openEdit} />
+            ))
+          )}
+        </div>
+        );
+      })()}
 
       {/* Past weeks accordion */}
       {pastWeekGroups.length > 0 && (

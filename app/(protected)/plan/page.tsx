@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   getTenantById,
+  getTenants,
   getUserRoleForTenant,
   getRoomsForTenant,
   getPlanEntriesForTenant,
@@ -28,12 +29,46 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   const { tenantId } = await searchParams;
 
-  // ── No tenantId: resolve via memberships ─────────────────────────────────────
+  // ── No tenantId: check for manager/admin first, then fall back to membership logic ──
   if (!tenantId) {
+    const sysRole = await getSystemRole(userId!).catch(() => null);
+    const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+
+    if (isManagerOrAdmin) {
+      // Fetch all active tenants and combine their plan entries
+      const allTenants = await getTenants().catch(() => []);
+      const activeTenants = allTenants.filter(t => !t.isArchived);
+      const allEntries = (
+        await Promise.all(activeTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => [])))
+      ).flat();
+      const tenantOptions = activeTenants.map(t => ({ id: t.id, name: t.name }));
+
+      return (
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
+              <p className="text-gray-500 mt-0.5">All projects — daily focus calendar</p>
+            </div>
+          </div>
+          <PlanClient
+            entries={allEntries}
+            rooms={[]}
+            tenantId=""
+            canEdit={false}
+            projectFiles={[]}
+            timeEntries={[]}
+            isAdmin={sysRole === "TTTAdmin"}
+            tenantOptions={tenantOptions}
+            currentTenantId=""
+          />
+        </div>
+      );
+    }
+
     const memberships = await getMembershipsForUser(userId).catch(() => []);
 
     if (memberships.length === 0) {
-      const sysRole = await getSystemRole(userId!).catch(() => null);
       if (sysRole) redirect("/home");
       redirect("/onboarding");
     }
@@ -86,7 +121,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
@@ -94,6 +129,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getProjectFiles(tenantId).catch(() => []),
     getTimeEntries({ tenantId }).catch(() => []),
     getSystemRole(userId!).catch(() => null),
+    getTenants().catch(() => []),
   ]);
 
   if (!tenant) redirect("/home");
@@ -101,6 +137,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
   if (!resolvedRole) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
+
+  const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const tenantOptions = isManagerOrAdmin
+    ? allTenants.filter(t => !t.isArchived).map(t => ({ id: t.id, name: t.name }))
+    : undefined;
 
   return (
     <div>
@@ -127,6 +168,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
         timeEntries={timeEntries}
         isAdmin={isAdmin}
         estimatedHours={tenant.estimatedHours}
+        tenantOptions={tenantOptions}
+        currentTenantId={tenantId}
       />
     </div>
   );

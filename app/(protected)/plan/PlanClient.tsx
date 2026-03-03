@@ -452,7 +452,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
 }
 
 // ─── ActivityChip ──────────────────────────────────────────────────────────────
-function ActivityChip({ entry, rooms, onClick }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void }) {
+function ActivityChip({ entry, rooms, onClick, projectName }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string }) {
   const room = entry.roomId ? rooms.find(r => r.id === entry.roomId) : null;
   const roomLabel = room?.name ?? entry.roomLabel ?? "";
   const colorClass = ACTIVITY_COLORS[entry.activity] ?? "bg-gray-100 text-gray-700";
@@ -469,6 +469,7 @@ function ActivityChip({ entry, rooms, onClick }: { entry: PlanEntry; rooms: Room
       className={`w-full text-left px-2 py-1 rounded-lg text-xs font-medium leading-snug ${colorClass} ${onClick ? "hover:opacity-80 transition-opacity" : ""}`}
     >
       <div className="truncate">{entry.activity}</div>
+      {projectName && <div className="truncate font-semibold text-[10px] opacity-80">{projectName}</div>}
       {roomLabel && <div className="truncate opacity-70 text-[10px]">{roomLabel}</div>}
       {timeLabel && <div className="truncate opacity-70 text-[10px]">{timeLabel}</div>}
       {entry.helpers && entry.helpers.length > 0 && (
@@ -493,6 +494,11 @@ function ActivityChip({ entry, rooms, onClick }: { entry: PlanEntry; rooms: Room
 }
 
 // ─── PlanClient ────────────────────────────────────────────────────────────────
+interface TenantOption {
+  id: string;
+  name: string;
+}
+
 interface PlanClientProps {
   entries: PlanEntry[];
   rooms: Room[];
@@ -502,9 +508,11 @@ interface PlanClientProps {
   timeEntries: TimeEntry[];
   isAdmin: boolean;
   estimatedHours?: number;
+  tenantOptions?: TenantOption[];  // manager-only: all projects for filter dropdown
+  currentTenantId?: string;        // which project is selected ("" = All)
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(true);
@@ -512,6 +520,16 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+
+  // In "All Projects" mode (tenantOptions present, currentTenantId is ""), disable editing
+  const isAllProjectsMode = tenantOptions != null && currentTenantId === "";
+  const effectiveCanEdit = canEdit && !isAllProjectsMode;
+
+  // Tenant name lookup for "All" mode chips
+  const tenantNameMap: Record<string, string> = {};
+  if (tenantOptions) {
+    for (const t of tenantOptions) tenantNameMap[t.id] = t.name;
+  }
 
   // Live entries — start from server data, get patched with RSVP syncs
   const [liveEntries, setLiveEntries] = useState(entries);
@@ -613,6 +631,20 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
 
   return (
     <>
+      {/* ── Project filter (manager only) ───────────────────────────────────── */}
+      {tenantOptions && tenantOptions.length > 0 && (
+        <div className="mb-3">
+          <select
+            value={currentTenantId ?? ""}
+            onChange={e => router.push(e.target.value ? `/plan?tenantId=${e.target.value}` : "/plan")}
+            className="bg-white border border-gray-200 rounded-xl px-3 h-9 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-400"
+          >
+            <option value="">All Projects</option>
+            {tenantOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      )}
+
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         {/* Navigation */}
@@ -707,13 +739,14 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                         key={entry.id}
                         entry={entry}
                         rooms={rooms}
-                        onClick={canEdit ? () => openEdit(entry) : undefined}
+                        onClick={effectiveCanEdit ? () => openEdit(entry) : undefined}
+                        projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                       />
                     ))}
                   </div>
 
                   {/* Add button */}
-                  {canEdit && (
+                  {effectiveCanEdit && (
                     <div className="px-1.5 pb-2">
                       <button
                         onClick={() => openAdd(iso)}
@@ -757,8 +790,8 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                   key={iso}
                   className={`min-h-[100px] border-b border-gray-100 p-1.5 flex flex-col ${
                     !isCurrentMonth ? "bg-gray-50/30" : ""
-                  } ${canEdit ? "cursor-pointer hover:bg-forest-50/30 transition-colors" : ""}`}
-                  onClick={canEdit ? () => openAdd(iso) : undefined}
+                  } ${effectiveCanEdit ? "cursor-pointer hover:bg-forest-50/30 transition-colors" : ""}`}
+                  onClick={effectiveCanEdit ? () => openAdd(iso) : undefined}
                 >
                   <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
                     isToday ? "bg-forest-600 text-white" : isCurrentMonth ? "text-gray-700" : "text-gray-300"
@@ -767,8 +800,12 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                   </div>
                   <div className="space-y-0.5 flex-1">
                     {dayEntries.slice(0, 2).map(entry => (
-                      <div key={entry.id} onClick={e => { e.stopPropagation(); if (canEdit) openEdit(entry); }}>
-                        <ActivityChip entry={entry} rooms={rooms} />
+                      <div key={entry.id} onClick={e => { e.stopPropagation(); if (effectiveCanEdit) openEdit(entry); }}>
+                        <ActivityChip
+                          entry={entry}
+                          rooms={rooms}
+                          projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
+                        />
                       </div>
                     ))}
                     {overflow > 0 && (
