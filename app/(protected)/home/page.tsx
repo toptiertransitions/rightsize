@@ -1,8 +1,9 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant } from "@/lib/airtable";
-import { isTTTStaff } from "@/lib/config";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries } from "@/lib/airtable";
+import { isTTTStaff, isTTTAdmin } from "@/lib/config";
+import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
@@ -25,16 +26,38 @@ export default async function DashboardPage({
   const memberships = await getMembershipsForUser(userId).catch(() => []);
   const firstName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there";
 
-  // ── TTTStaff: show all-tenant picker or single project (no membership required) ──
+  // ── TTTStaff/Admin: time tracker + all-tenant picker ────────────────────────
   if (isStaff && !tenantIdParam) {
-    const allTenants = await getTenants().catch(() => []);
+    const isAdmin = isTTTAdmin(userId);
+    const [allTenants, timeEntries] = await Promise.all([
+      getTenants().catch(() => []),
+      getTimeEntries(isAdmin ? undefined : { clerkUserId: userId }).catch(() => []),
+    ]);
+
     return (
       <div>
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Welcome back, {firstName}</h1>
-          <p className="text-gray-500 mt-1">Select a client project to manage.</p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        {/* Time Tracker */}
+        <section className="mb-10">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Time Tracking</h2>
+          <div className="bg-gray-950 rounded-2xl p-6">
+            <TimeTrackerClient
+              initialEntries={timeEntries}
+              tenants={allTenants.map(t => ({ id: t.id, name: t.name }))}
+              isAdmin={isAdmin}
+              currentUserId={userId}
+              currentUserName={firstName}
+            />
+          </div>
+        </section>
+
+        {/* Client Projects */}
+        <section>
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Client Projects</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {allTenants.map((tenant) => (
             <Link key={tenant.id} href={`/home?tenantId=${tenant.id}`}>
               <Card hover>
@@ -55,7 +78,8 @@ export default async function DashboardPage({
               </Card>
             </Link>
           ))}
-        </div>
+          </div>
+        </section>
       </div>
     );
   }

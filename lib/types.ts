@@ -316,6 +316,28 @@ export interface ProjectFile {
   createdAt: string;
 }
 
+// ─── Time Tracking ────────────────────────────────────────────────────────────
+export const TIME_FOCUS_AREAS = [
+  "Sorting", "Packing", "Staging", "Coordination", "Admin", "Travel", "Other",
+] as const;
+export type FocusArea = typeof TIME_FOCUS_AREAS[number];
+
+export interface TimeEntry {
+  id: string;           // Airtable record ID
+  clerkUserId: string;
+  staffName: string;
+  tenantId: string;
+  projectName: string;
+  date: string;         // "YYYY-MM-DD"
+  startTime: string;    // "HH:MM" 24h
+  endTime: string;      // "HH:MM" 24h
+  durationMinutes: number;
+  focusArea: FocusArea;
+  travelMiles?: number;
+  notes?: string;
+  createdAt: string;
+}
+
 // ─── Calculator ───────────────────────────────────────────────────────────────
 export interface CalculatorRoom {
   id: string;

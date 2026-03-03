@@ -27,11 +27,12 @@ export default async function CircleHandPage() {
                 <div className="text-[9px] text-gray-400">TTT Admin Console</div>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-gray-500 text-sm">
-              <Link href="/admin" className="hover:text-gray-300 transition-colors">Admin</Link>
-              <span>/</span>
-              <span className="text-gray-300">Circle Hand Import</span>
-            </div>
+            <nav className="hidden md:flex items-center gap-1">
+              <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Projects</Link>
+              <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Users</Link>
+              <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Local Vendors</Link>
+              <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Circle Hand</Link>
+            </nav>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded-full font-medium">

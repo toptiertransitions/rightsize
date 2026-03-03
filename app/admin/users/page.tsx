@@ -80,6 +80,7 @@ export default async function AdminUsersPage() {
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Projects</Link>
               <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Users</Link>
+              <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Local Vendors</Link>
               <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
             </nav>
           </div>

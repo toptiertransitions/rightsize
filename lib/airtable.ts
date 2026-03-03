@@ -28,6 +28,8 @@ import type {
   LocalVendor,
   ProjectFile,
   FileTag,
+  TimeEntry,
+  FocusArea,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -1051,4 +1053,113 @@ export async function updateProjectFile(
   });
   if (!res.ok) throw new Error(await res.text());
   return mapProjectFile(await res.json());
+}
+
+// ─── Time Entries (uses fetch directly) ───────────────────────────────────────
+function timeFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.TIME_ENTRIES;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapTimeEntry(record: AirtableRecord): TimeEntry {
+  const f = record.fields;
+  return {
+    id: record.id,
+    clerkUserId: toStr(f["ClerkUserId"]),
+    staffName: toStr(f["StaffName"]),
+    tenantId: toStr(f["TenantId"]),
+    projectName: toStr(f["ProjectName"]),
+    date: toStr(f["Date"]),
+    startTime: toStr(f["StartTime"]),
+    endTime: toStr(f["EndTime"]),
+    durationMinutes: typeof f["DurationMinutes"] === "number" ? f["DurationMinutes"] : 0,
+    focusArea: (toStr(f["FocusArea"]) || "Other") as FocusArea,
+    travelMiles: f["TravelMiles"] != null ? toNum(f["TravelMiles"]) : undefined,
+    notes: toStr(f["Notes"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getTimeEntries(filters?: { clerkUserId?: string; tenantId?: string }): Promise<TimeEntry[]> {
+  const parts: string[] = [];
+  if (filters?.clerkUserId) parts.push(`{ClerkUserId} = "${filters.clerkUserId}"`);
+  if (filters?.tenantId) parts.push(`{TenantId} = "${filters.tenantId}"`);
+  const filterStr = parts.length === 1 ? parts[0] : parts.length > 1 ? `AND(${parts.join(", ")})` : "";
+  const qs = filterStr
+    ? `?filterByFormula=${encodeURIComponent(filterStr)}&sort[0][field]=Date&sort[0][direction]=desc`
+    : `?sort[0][field]=Date&sort[0][direction]=desc`;
+  const res = await timeFetch(qs);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapTimeEntry);
+}
+
+export async function getTimeEntryById(id: string): Promise<TimeEntry | null> {
+  try {
+    const res = await timeFetch(`/${id}`);
+    if (!res.ok) return null;
+    return mapTimeEntry(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+export async function createTimeEntry(data: Omit<TimeEntry, "id" | "createdAt">): Promise<TimeEntry> {
+  const fields: Record<string, unknown> = {
+    ClerkUserId: data.clerkUserId,
+    StaffName: data.staffName,
+    TenantId: data.tenantId,
+    ProjectName: data.projectName,
+    Date: data.date,
+    StartTime: data.startTime,
+    EndTime: data.endTime,
+    DurationMinutes: data.durationMinutes,
+    FocusArea: data.focusArea,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.travelMiles !== undefined) fields["TravelMiles"] = data.travelMiles;
+  if (data.notes) fields["Notes"] = data.notes;
+  const res = await timeFetch("", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapTimeEntry(await res.json());
+}
+
+export async function updateTimeEntry(
+  id: string,
+  data: Partial<Omit<TimeEntry, "id" | "clerkUserId" | "createdAt">>
+): Promise<TimeEntry> {
+  const fields: Record<string, unknown> = {};
+  if (data.staffName !== undefined) fields["StaffName"] = data.staffName;
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId;
+  if (data.projectName !== undefined) fields["ProjectName"] = data.projectName;
+  if (data.date !== undefined) fields["Date"] = data.date;
+  if (data.startTime !== undefined) fields["StartTime"] = data.startTime;
+  if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
+  if (data.durationMinutes !== undefined) fields["DurationMinutes"] = data.durationMinutes;
+  if (data.focusArea !== undefined) fields["FocusArea"] = data.focusArea;
+  if (data.travelMiles !== undefined) fields["TravelMiles"] = data.travelMiles;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const res = await timeFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapTimeEntry(await res.json());
+}
+
+export async function deleteTimeEntry(id: string): Promise<void> {
+  const res = await timeFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
 }

@@ -5,7 +5,7 @@ import { getTenants, getAllMemberships } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { UserButton } from "@clerk/nextjs";
 
-export default async function AdminPage() {
+export default async function AdminProjectsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
@@ -27,7 +27,7 @@ export default async function AdminPage() {
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-forest-600 rounded-lg flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
             </div>
             <div>
@@ -37,7 +37,8 @@ export default async function AdminPage() {
           </div>
           <div className="flex items-center gap-6">
             <nav className="hidden md:flex items-center gap-1">
-              <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Projects</Link>
+              <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Time</Link>
+              <Link href="/admin/projects" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Projects</Link>
               <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Users</Link>
               <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Local Vendors</Link>
               <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
