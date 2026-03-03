@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     durationMinutes: number;
     focusArea: FocusArea;
     travelMiles?: number;
+    travelMinutes?: number;
     notes?: string;
   };
   try {
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
       durationMinutes,
       focusArea,
       travelMiles: body.travelMiles,
+      travelMinutes: body.travelMinutes,
       notes: body.notes,
     });
     return NextResponse.json({ entry });
@@ -102,6 +104,7 @@ export async function PATCH(req: NextRequest) {
     durationMinutes?: number;
     focusArea?: FocusArea;
     travelMiles?: number;
+    travelMinutes?: number;
     notes?: string;
   };
   try {

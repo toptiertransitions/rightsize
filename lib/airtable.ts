@@ -1084,6 +1084,7 @@ function mapTimeEntry(record: AirtableRecord): TimeEntry {
     durationMinutes: typeof f["DurationMinutes"] === "number" ? f["DurationMinutes"] : 0,
     focusArea: (toStr(f["FocusArea"]) || "Other") as FocusArea,
     travelMiles: f["TravelMiles"] != null ? toNum(f["TravelMiles"]) : undefined,
+    travelMinutes: f["TravelMinutes"] != null ? toNum(f["TravelMinutes"]) : undefined,
     notes: toStr(f["Notes"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
@@ -1127,6 +1128,7 @@ export async function createTimeEntry(data: Omit<TimeEntry, "id" | "createdAt">)
     CreatedAt: new Date().toISOString(),
   };
   if (data.travelMiles !== undefined) fields["TravelMiles"] = data.travelMiles;
+  if (data.travelMinutes !== undefined) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes) fields["Notes"] = data.notes;
   const res = await timeFetch("", {
     method: "POST",
@@ -1150,6 +1152,7 @@ export async function updateTimeEntry(
   if (data.durationMinutes !== undefined) fields["DurationMinutes"] = data.durationMinutes;
   if (data.focusArea !== undefined) fields["FocusArea"] = data.focusArea;
   if (data.travelMiles !== undefined) fields["TravelMiles"] = data.travelMiles;
+  if (data.travelMinutes !== undefined) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   const res = await timeFetch(`/${id}`, {
     method: "PATCH",

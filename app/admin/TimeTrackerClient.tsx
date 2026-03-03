@@ -65,7 +65,7 @@ function todayISO(): string {
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
 function exportCSV(entries: TimeEntry[]) {
-  const header = ["Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time", "Duration (hrs)", "Travel Miles", "Notes"];
+  const header = ["Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time", "Duration (hrs)", "Travel Time (min)", "Travel Miles", "Notes"];
   const rows = entries.map(e => [
     e.date,
     e.staffName,
@@ -74,6 +74,7 @@ function exportCSV(entries: TimeEntry[]) {
     formatTime12(e.startTime),
     formatTime12(e.endTime),
     (e.durationMinutes / 60).toFixed(2),
+    e.travelMinutes != null ? String(e.travelMinutes) : "",
     e.travelMiles != null ? String(e.travelMiles) : "",
     e.notes ?? "",
   ]);
@@ -103,6 +104,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
   const [startTime, setStartTime] = useState(entry?.startTime ?? "09:00");
   const [endTime, setEndTime] = useState(entry?.endTime ?? "17:00");
   const [travelMiles, setTravelMiles] = useState(entry?.travelMiles != null ? String(entry.travelMiles) : "");
+  const [travelMinutes, setTravelMinutes] = useState(entry?.travelMinutes != null ? String(entry.travelMinutes) : "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -127,6 +129,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
         durationMinutes: duration,
         focusArea,
         travelMiles: travelMiles ? parseFloat(travelMiles) : undefined,
+        travelMinutes: travelMinutes ? parseInt(travelMinutes) : undefined,
         notes: notes || undefined,
         ...(entry ? { id: entry.id } : {}),
       };
@@ -238,17 +241,34 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted }: ModalProp
             <p className="text-xs text-forest-400 font-medium">Duration: {formatDuration(duration)}</p>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Travel Miles <span className="text-gray-600">(optional)</span></label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={travelMiles}
-              onChange={e => setTravelMiles(e.target.value)}
-              placeholder="0.0"
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Travel Time <span className="text-gray-600">(round trip, optional)</span></label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={travelMinutes}
+                  onChange={e => setTravelMinutes(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-12"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">min</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Travel Miles <span className="text-gray-600">(optional)</span></label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={travelMiles}
+                onChange={e => setTravelMiles(e.target.value)}
+                placeholder="0.0"
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+              />
+            </div>
           </div>
 
           <div>
@@ -496,6 +516,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, currentUse
                   {formatTime12(entry.startTime)} – {formatTime12(entry.endTime)}
                   {" "}
                   <span className="text-forest-400 font-medium">({formatDuration(entry.durationMinutes)})</span>
+                  {entry.travelMinutes ? <span className="text-gray-500"> · {entry.travelMinutes} min travel</span> : null}
                   {entry.travelMiles ? <span className="text-gray-500"> · {entry.travelMiles} mi</span> : null}
                 </p>
                 {entry.notes && <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.notes}</p>}

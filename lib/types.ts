@@ -334,6 +334,7 @@ export interface TimeEntry {
   durationMinutes: number;
   focusArea: FocusArea;
   travelMiles?: number;
+  travelMinutes?: number;
   notes?: string;
   createdAt: string;
 }
