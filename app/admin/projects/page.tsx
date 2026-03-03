@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getTenants, getAllMemberships } from "@/lib/airtable";
+import { CopyId } from "../CopyId";
 import { isTTTAdmin } from "@/lib/config";
 import { UserButton } from "@clerk/nextjs";
 
@@ -88,7 +89,7 @@ export default async function AdminProjectsPage() {
                   <h3 className="font-bold text-white group-hover:text-forest-400 transition-colors">
                     {tenant.name}
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5 font-mono">{tenant.slug}</p>
+                  <div className="mt-0.5"><CopyId id={tenant.id} /></div>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xs text-gray-500">
                       {memberCountByTenant.get(tenant.id) ?? 0} member{(memberCountByTenant.get(tenant.id) ?? 0) !== 1 ? "s" : ""} ·{" "}
