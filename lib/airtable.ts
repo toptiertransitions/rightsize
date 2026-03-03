@@ -1140,6 +1140,29 @@ export async function getTimeEntryById(id: string): Promise<TimeEntry | null> {
   }
 }
 
+// Optional fields that can be silently dropped if the Airtable table doesn't have them
+const OPTIONAL_TIME_ENTRY_FIELDS = ["TravelMiles", "TravelMinutes", "Notes"];
+
+async function timeEntryWrite(path: string, method: "POST" | "PATCH", fields: Record<string, unknown>): Promise<AirtableRecord> {
+  const current = { ...fields };
+  for (let attempt = 0; attempt <= OPTIONAL_TIME_ENTRY_FIELDS.length; attempt++) {
+    const res = await timeFetch(path, { method, body: JSON.stringify({ fields: current }) });
+    if (res.ok) return res.json();
+    const text = await res.text();
+    let errData: { error?: { type?: string; message?: string } };
+    try { errData = JSON.parse(text); } catch { throw new Error(text); }
+    if (errData?.error?.type === "UNKNOWN_FIELD_NAME") {
+      const match = errData.error.message?.match(/"([^"]+)"/);
+      if (match && OPTIONAL_TIME_ENTRY_FIELDS.includes(match[1])) {
+        delete current[match[1]];
+        continue;
+      }
+    }
+    throw new Error(text);
+  }
+  throw new Error("TimeEntry write failed after stripping optional fields");
+}
+
 export async function createTimeEntry(data: Omit<TimeEntry, "id" | "createdAt">): Promise<TimeEntry> {
   const fields: Record<string, unknown> = {
     ClerkUserId: data.clerkUserId,
@@ -1153,15 +1176,10 @@ export async function createTimeEntry(data: Omit<TimeEntry, "id" | "createdAt">)
     FocusArea: data.focusArea,
     CreatedAt: new Date().toISOString(),
   };
-  if (data.travelMiles !== undefined) fields["TravelMiles"] = data.travelMiles;
-  if (data.travelMinutes !== undefined) fields["TravelMinutes"] = data.travelMinutes;
+  if (data.travelMiles != null && data.travelMiles > 0) fields["TravelMiles"] = data.travelMiles;
+  if (data.travelMinutes != null && data.travelMinutes > 0) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes) fields["Notes"] = data.notes;
-  const res = await timeFetch("", {
-    method: "POST",
-    body: JSON.stringify({ fields }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return mapTimeEntry(await res.json());
+  return mapTimeEntry(await timeEntryWrite("", "POST", fields));
 }
 
 export async function updateTimeEntry(
@@ -1177,15 +1195,10 @@ export async function updateTimeEntry(
   if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
   if (data.durationMinutes !== undefined) fields["DurationMinutes"] = data.durationMinutes;
   if (data.focusArea !== undefined) fields["FocusArea"] = data.focusArea;
-  if (data.travelMiles !== undefined) fields["TravelMiles"] = data.travelMiles;
-  if (data.travelMinutes !== undefined) fields["TravelMinutes"] = data.travelMinutes;
+  if (data.travelMiles != null && data.travelMiles > 0) fields["TravelMiles"] = data.travelMiles;
+  if (data.travelMinutes != null && data.travelMinutes > 0) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
-  const res = await timeFetch(`/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ fields }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return mapTimeEntry(await res.json());
+  return mapTimeEntry(await timeEntryWrite(`/${id}`, "PATCH", fields));
 }
 
 export async function deleteTimeEntry(id: string): Promise<void> {
