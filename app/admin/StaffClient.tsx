@@ -28,6 +28,33 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [lookupEmail, setLookupEmail] = useState("");
+  const [looking, setLooking] = useState(false);
+  const [lookupError, setLookupError] = useState("");
+
+  async function handleLookup() {
+    if (!lookupEmail.trim()) return;
+    setLooking(true);
+    setLookupError("");
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "lookup", email: lookupEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Lookup failed");
+      if (!data.users?.length) { setLookupError("No account found with that email."); return; }
+      const u = data.users[0];
+      setClerkUserId(u.id);
+      setDisplayName(u.name || "");
+      setEmail(lookupEmail.trim());
+    } catch (e) {
+      setLookupError(e instanceof Error ? e.message : "Lookup failed");
+    } finally {
+      setLooking(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,15 +106,29 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {!member && (
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Clerk User ID</label>
-              <input
-                type="text"
-                value={clerkUserId}
-                onChange={e => setClerkUserId(e.target.value)}
-                required
-                placeholder="user_xxxxxxxxxxxxxxxx"
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 font-mono"
-              />
+              <label className="block text-xs font-medium text-gray-400 mb-1">Look up by email</label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={lookupEmail}
+                  onChange={e => setLookupEmail(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleLookup())}
+                  placeholder="user@example.com"
+                  className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleLookup}
+                  disabled={looking || !lookupEmail.trim()}
+                  className="px-3 py-2 rounded-lg bg-gray-700 text-white text-sm hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                >
+                  {looking ? "…" : "Find"}
+                </button>
+              </div>
+              {lookupError && <p className="text-red-400 text-xs mt-1">{lookupError}</p>}
+              {clerkUserId && (
+                <p className="text-xs text-forest-400 mt-1 font-mono truncate">✓ {clerkUserId}</p>
+              )}
             </div>
           )}
 
