@@ -19,6 +19,7 @@ export interface Tenant {
   city?: string;
   state?: string;
   zip?: string;
+  estimatedHours?: number;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

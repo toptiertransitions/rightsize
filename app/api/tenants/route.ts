@@ -48,8 +48,8 @@ export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { tenantId, name, address, city, state, zip } = await req.json();
-  if (!tenantId || !name?.trim()) return NextResponse.json({ error: "Missing tenantId or name" }, { status: 400 });
+  const { tenantId, name, address, city, state, zip, estimatedHours } = await req.json();
+  if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const role = await getUserRoleForTenant(userId, tenantId);
   if (!role || !["Owner", "TTTStaff", "TTTAdmin"].includes(role)) {
@@ -57,11 +57,12 @@ export async function PATCH(req: NextRequest) {
   }
 
   const tenant = await updateTenant(tenantId, {
-    name: name.trim(),
+    name: typeof name === "string" && name.trim() ? name.trim() : undefined,
     address: typeof address === "string" ? address : undefined,
     city: typeof city === "string" ? city : undefined,
     state: typeof state === "string" ? state : undefined,
     zip: typeof zip === "string" ? zip : undefined,
+    estimatedHours: typeof estimatedHours === "number" ? estimatedHours : undefined,
   });
   return NextResponse.json({ tenant });
 }

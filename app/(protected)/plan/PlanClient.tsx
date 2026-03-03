@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES } from "@/lib/types";
-import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile } from "@/lib/types";
+import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
+import { HoursWorkedSection } from "./HoursWorkedSection";
 
 // ─── Activity chip colors ──────────────────────────────────────────────────────
 const ACTIVITY_COLORS: Record<PlanActivity, string> = {
@@ -498,9 +499,12 @@ interface PlanClientProps {
   tenantId: string;
   canEdit: boolean;
   projectFiles: ProjectFile[];
+  timeEntries: TimeEntry[];
+  isAdmin: boolean;
+  estimatedHours?: number;
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(true);
@@ -777,6 +781,14 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles }: 
           </div>
         </div>
       )}
+
+      {/* ── Hours Worked ─────────────────────────────────────────────────────── */}
+      <HoursWorkedSection
+        timeEntries={timeEntries}
+        isAdmin={isAdmin}
+        estimatedHours={estimatedHours}
+        tenantId={tenantId}
+      />
 
       {/* ── Floorplans & Images ──────────────────────────────────────────────── */}
       <div className="mt-10">

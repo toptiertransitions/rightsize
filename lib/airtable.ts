@@ -119,6 +119,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     city: toStr(f["City"]) || undefined,
     state: toStr(f["State"]) || undefined,
     zip: toStr(f["Zip"]) || undefined,
+    estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
   };
 }
 
@@ -493,14 +494,16 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name: string; address?: string; city?: string; state?: string; zip?: string }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number }
 ): Promise<Tenant> {
   const base = getBase();
-  const fields: Airtable.FieldSet = { Name: data.name };
+  const fields: Airtable.FieldSet = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
   if (data.address !== undefined) fields["Address"] = data.address;
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
+  if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }
