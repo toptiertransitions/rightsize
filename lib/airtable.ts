@@ -4,7 +4,7 @@
  */
 
 import Airtable from "airtable";
-import { AIRTABLE_TABLES } from "./config";
+import { AIRTABLE_TABLES, isTTTAdmin } from "./config";
 import type {
   Tenant,
   User,
@@ -212,6 +212,9 @@ export async function getUserRoleForTenant(
   clerkUserId: string,
   tenantId: string
 ): Promise<UserRole | null> {
+  // TTTAdmin users have implicit access to all tenants
+  if (isTTTAdmin(clerkUserId)) return "TTTAdmin";
+
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.MEMBERSHIPS)
     .select({
