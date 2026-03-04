@@ -1,11 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { clerkClient } from "@clerk/nextjs/server";
 import {
   getRoomsForTenant,
   getUserRoleForTenant,
   getTenantById,
   getMembershipsForUser,
+  getMembershipsForTenant,
   getSystemRole,
   getContractSettings,
   getContractTemplates,
@@ -46,13 +48,29 @@ export default async function RoomsPage({ searchParams }: PageProps) {
     const isManager = ["TTTManager", "TTTAdmin"].includes(resolvedRole ?? sysRole ?? "");
 
     // Fetch contract data for managers/admins
-    const [contractSettings, contractTemplates, existingContracts] = isManager
+    const [contractSettings, contractTemplates, existingContracts, tenantMemberships] = isManager
       ? await Promise.all([
           getContractSettings().catch(() => null),
           getContractTemplates(true).catch(() => []),
           getContractsForTenant(tenantId).catch(() => []),
+          getMembershipsForTenant(tenantId).catch(() => []),
         ])
-      : [null, [], []];
+      : [null, [], [], []];
+
+    // Look up Clerk emails for all project members
+    let recipients: { name: string; email: string; role: string }[] = [];
+    if (isManager && tenantMemberships.length > 0) {
+      const clerk = await clerkClient();
+      const results = await Promise.all(
+        tenantMemberships.map(async (m) => {
+          const u = await clerk.users.getUser(m.userId).catch(() => null);
+          const email = u?.emailAddresses?.[0]?.emailAddress ?? "";
+          const name = [u?.firstName, u?.lastName].filter(Boolean).join(" ") || email;
+          return email ? { name, email, role: m.role } : null;
+        })
+      );
+      recipients = results.filter(Boolean) as { name: string; email: string; role: string }[];
+    }
 
     return (
       <div>
@@ -88,6 +106,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
             settings={contractSettings}
             templates={contractTemplates}
             existingContracts={existingContracts}
+            recipients={recipients}
           />
         )}
       </div>

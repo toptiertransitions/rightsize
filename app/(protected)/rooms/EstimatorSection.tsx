@@ -26,6 +26,7 @@ interface EstimatorSectionProps {
   settings: ContractSettings | null;
   templates: ContractTemplate[];
   existingContracts: Contract[];
+  recipients: { name: string; email: string; role: string }[];
 }
 
 export function EstimatorSection({
@@ -34,6 +35,7 @@ export function EstimatorSection({
   settings,
   templates,
   existingContracts,
+  recipients,
 }: EstimatorSectionProps) {
   const router = useRouter();
 
@@ -48,6 +50,12 @@ export function EstimatorSection({
   const [sending, setSending] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Recipient selection for "Send for Signature"
+  const [selectedRecipient, setSelectedRecipient] = useState(recipients[0]?.email ?? "__custom__");
+  const [customEmail, setCustomEmail] = useState("");
+  const useCustom = selectedRecipient === "__custom__";
+  const recipientEmail = useCustom ? customEmail : selectedRecipient;
 
   const calcHours = useCallback(() => {
     const result = runCalculator({
@@ -151,6 +159,7 @@ export function EstimatorSection({
   };
 
   const handleSendForSignature = async () => {
+    if (!recipientEmail.trim()) { setErrorMsg("Enter a recipient email address"); return; }
     setSending(true); setErrorMsg(""); setSuccessMsg("");
     try {
       const res = await fetch("/api/contracts", {
@@ -168,6 +177,8 @@ export function EstimatorSection({
           unpackingRate: uRate,
           totalCost,
           send: true,
+          recipientEmail: recipientEmail.trim(),
+          recipientName: useCustom ? undefined : recipients.find(r => r.email === selectedRecipient)?.name,
         }),
       });
       if (!res.ok) throw new Error("Failed to send");
@@ -292,6 +303,34 @@ export function EstimatorSection({
           rows={12}
           className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-y font-mono"
         />
+      </div>
+
+      {/* Recipient */}
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Send Agreement To</label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select
+            value={selectedRecipient}
+            onChange={(e) => setSelectedRecipient(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-400"
+          >
+            {recipients.map((r) => (
+              <option key={r.email} value={r.email}>
+                {r.name} ({r.role}) — {r.email}
+              </option>
+            ))}
+            <option value="__custom__">Other — enter email…</option>
+          </select>
+          {useCustom && (
+            <input
+              type="email"
+              value={customEmail}
+              onChange={(e) => setCustomEmail(e.target.value)}
+              placeholder="client@example.com"
+              className="h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 flex-1"
+            />
+          )}
+        </div>
       </div>
 
       {/* Actions */}

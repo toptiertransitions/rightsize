@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
     unpackingRate,
     totalCost,
     send,
+    recipientEmail,
+    recipientName,
   } = body;
 
   if (!tenantId || !contractBody) {
@@ -84,27 +86,22 @@ export async function POST(req: NextRequest) {
       sentByClerkId: userId,
     });
 
-    // Look up tenant owner email via Clerk
+    // Send signing email to specified recipient
     try {
       const tenant = await getTenantById(tenantId).catch(() => null);
       if (!tenant) throw new Error("Tenant not found");
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const signingUrl = `${appUrl}/sign/${signToken}`;
 
-      const clerk = await clerkClient();
-      const ownerClerkUser = await clerk.users.getUser(tenant.ownerUserId).catch(() => null);
-      const ownerEmail = ownerClerkUser?.emailAddresses?.[0]?.emailAddress;
-      const clientName =
-        [ownerClerkUser?.firstName, ownerClerkUser?.lastName].filter(Boolean).join(" ") ||
-        ownerEmail ||
-        "Client";
+      const toEmail = recipientEmail as string | undefined;
+      const clientName = (recipientName as string | undefined) || toEmail || "Client";
 
-      if (ownerEmail) {
+      if (toEmail) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
         await resend.emails.send({
           from: `Top Tier Transitions <${fromEmail}>`,
-          to: ownerEmail,
+          to: toEmail,
           subject: `Your service agreement for ${tenant.name} is ready`,
           html: buildContractSentEmail({
             clientName,
