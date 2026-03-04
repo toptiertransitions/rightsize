@@ -25,6 +25,88 @@ const STAGE_COLORS: Record<OpportunityStage, string> = {
   Lost: "bg-gray-100 text-gray-600",
 };
 
+// ─── Activity Edit Modal ──────────────────────────────────────────────────────
+function ActivityEditModal({
+  activity,
+  onSaved,
+  onClose,
+}: {
+  activity: CRMActivity;
+  onSaved: (a: CRMActivity) => void;
+  onClose: () => void;
+}) {
+  const [type, setType] = useState<CRMActivityType>(activity.type);
+  const [note, setNote] = useState(activity.note);
+  const [activityDate, setActivityDate] = useState(
+    activity.activityDate ? activity.activityDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/crm/activities", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: activity.id, type, note, activityDate: new Date(activityDate).toISOString() }),
+      });
+      const data = await res.json();
+      onSaved(data.activity);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <h3 className="font-semibold text-gray-900">Edit Activity</h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as CRMActivityType)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          >
+            {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+          <input
+            type="date"
+            value={activityDate}
+            onChange={(e) => setActivityDate(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Opportunities Tab ────────────────────────────────────────────────────────
 function OpportunitiesTab({
   initialOpportunities,
@@ -234,6 +316,7 @@ function OpportunityPanel({
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
 
   const loadActivities = useCallback(async () => {
     if (!opportunity) return;
@@ -309,6 +392,12 @@ function OpportunityPanel({
       setActivityNote("");
       await loadActivities();
     }
+  }
+
+  async function deleteActivity(id: string) {
+    if (!confirm("Delete this activity?")) return;
+    await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
+    setActivities((prev) => prev.filter((a) => a.id !== id));
   }
 
   async function syncGmail() {
@@ -532,7 +621,7 @@ function OpportunityPanel({
                   <p className="text-xs text-gray-400">No activities yet</p>
                 )}
                 {activities.map((a) => (
-                  <div key={a.id} className="flex gap-3 text-sm">
+                  <div key={a.id} className="flex gap-3 text-sm group">
                     <div className="flex-shrink-0 mt-0.5">
                       <span className={cn(
                         "px-1.5 py-0.5 rounded text-xs font-medium",
@@ -550,6 +639,20 @@ function OpportunityPanel({
                       <p className="text-gray-700 text-xs whitespace-pre-wrap">{a.note}</p>
                       <p className="text-gray-400 text-xs mt-0.5">{a.activityDate ? new Date(a.activityDate).toLocaleDateString() : ""}</p>
                     </div>
+                    <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setEditingActivity(a)}
+                        className="text-xs text-gray-400 hover:text-forest-600 px-1 py-0.5"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteActivity(a.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 px-1 py-0.5"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -557,6 +660,17 @@ function OpportunityPanel({
           )}
         </div>
       </div>
+
+      {editingActivity && (
+        <ActivityEditModal
+          activity={editingActivity}
+          onSaved={(updated) => {
+            setActivities((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+            setEditingActivity(null);
+          }}
+          onClose={() => setEditingActivity(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1147,6 +1261,8 @@ function ActivityLogTab({
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<CRMActivityType | "All">("All");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
 
   useEffect(() => {
     fetch("/api/crm/activities")
@@ -1162,6 +1278,45 @@ function ActivityLogTab({
   }
 
   const filtered = activities.filter((a) => typeFilter === "All" || a.type === typeFilter);
+  const allSelected = filtered.length > 0 && filtered.every((a) => selected.has(a.id));
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((a) => next.delete(a.id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((a) => next.add(a.id));
+        return next;
+      });
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function deleteOne(id: string) {
+    if (!confirm("Delete this activity?")) return;
+    await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+    setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }
+
+  async function deleteSelected() {
+    if (!confirm(`Delete ${selected.size} selected activit${selected.size === 1 ? "y" : "ies"}?`)) return;
+    await Promise.all([...selected].map((id) => fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" })));
+    setActivities((prev) => prev.filter((a) => !selected.has(a.id)));
+    setSelected(new Set());
+  }
 
   return (
     <div>
@@ -1180,7 +1335,15 @@ function ActivityLogTab({
             {t}
           </button>
         ))}
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} activities</span>
+        <span className="text-xs text-gray-400">{filtered.length} activities</span>
+        {selected.size > 0 && (
+          <button
+            onClick={deleteSelected}
+            className="ml-auto text-xs text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
+          >
+            Delete {selected.size} selected
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1192,15 +1355,32 @@ function ActivityLogTab({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="rounded border-gray-300"
+                  />
+                </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Note</th>
+                <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <tr key={a.id} className={cn("border-b border-gray-100 hover:bg-gray-50", selected.has(a.id) && "bg-blue-50")}>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(a.id)}
+                      onChange={() => toggleOne(a.id)}
+                      className="rounded border-gray-300"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                     {a.activityDate ? new Date(a.activityDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                   </td>
@@ -1212,12 +1392,37 @@ function ActivityLogTab({
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-800">{getContactName(a.opportunityId)}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{a.note}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => setEditingActivity(a)}
+                      className="text-xs text-forest-600 hover:text-forest-800 px-2 py-1"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteOne(a.id)}
+                      className="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {editingActivity && (
+        <ActivityEditModal
+          activity={editingActivity}
+          onSaved={(updated) => {
+            setActivities((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+            setEditingActivity(null);
+          }}
+          onClose={() => setEditingActivity(null)}
+        />
+      )}
     </div>
   );
 }
