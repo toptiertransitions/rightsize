@@ -1597,8 +1597,10 @@ function mapContractTemplate(record: AirtableRecord): ContractTemplate {
 
 export async function getContractTemplates(activeOnly = false): Promise<ContractTemplate[]> {
   const table = AIRTABLE_TABLES.CONTRACT_TEMPLATES;
-  const filter = activeOnly ? `?filterByFormula=${encodeURIComponent("IsActive=TRUE()")}` : "";
-  const res = await contractFetch(table, `${filter}&sort[0][field]=Name&sort[0][direction]=asc`);
+  const qs = activeOnly
+    ? `?filterByFormula=${encodeURIComponent("IsActive=TRUE()")}&sort[0][field]=Name&sort[0][direction]=asc`
+    : `?sort[0][field]=Name&sort[0][direction]=asc`;
+  const res = await contractFetch(table, qs);
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapContractTemplate);
