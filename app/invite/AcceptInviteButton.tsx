@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 
 interface Props {
   token: string;
-  tenantId: string;
+  tenantId?: string;
+  vendorId?: string;
 }
 
-export function AcceptInviteButton({ token, tenantId }: Props) {
+export function AcceptInviteButton({ token, tenantId, vendorId }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -25,8 +26,11 @@ export function AcceptInviteButton({ token, tenantId }: Props) {
         setError(data.error ?? "Failed to accept invitation.");
         return;
       }
-      // Redirect to rooms for this tenant
-      router.push(`/rooms?tenantId=${tenantId}`);
+      if (vendorId || data.redirect === "/vendor") {
+        router.push("/vendor");
+      } else {
+        router.push(`/rooms?tenantId=${tenantId}`);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

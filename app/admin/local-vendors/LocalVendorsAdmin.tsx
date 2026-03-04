@@ -315,6 +315,27 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
   const [editVendor, setEditVendor] = useState<LocalVendor | undefined>(undefined);
   const [sortCol, setSortCol] = useState<string>("vendorType");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteMsg, setInviteMsg] = useState<{ vendorId: string; msg: string; ok: boolean } | null>(null);
+
+  const sendPortalInvite = async (vendor: LocalVendor) => {
+    setInvitingId(vendor.id);
+    setInviteMsg(null);
+    try {
+      const res = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendorId: vendor.id }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Failed to send invite");
+      setInviteMsg({ vendorId: vendor.id, msg: "Invite sent!", ok: true });
+    } catch (e) {
+      setInviteMsg({ vendorId: vendor.id, msg: e instanceof Error ? e.message : "Error", ok: false });
+    } finally {
+      setInvitingId(null);
+    }
+  };
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -385,6 +406,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
               <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Projects</Link>
               <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Users</Link>
               <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Local Vendors</Link>
+              <Link href="/admin/routing-rules" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Routing Rules</Link>
               <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
             </nav>
           </div>
@@ -443,6 +465,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                   {sortTh("consignmentTake", "Take")}
                   {sortTh("zipCodesServed", "Zips Served")}
                   {sortTh("isActive", "Active")}
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Portal</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -483,6 +506,30 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block w-2 h-2 rounded-full ${v.isActive ? "bg-green-400" : "bg-gray-600"}`} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {v.clerkUserId ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
+                          <span className="text-xs text-green-400">Active</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => sendPortalInvite(v)}
+                            disabled={invitingId === v.id || !v.email}
+                            title={!v.email ? "Vendor has no email" : "Invite to Vendor Portal"}
+                            className="text-xs text-forest-400 hover:text-white px-2 py-1 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                          >
+                            {invitingId === v.id ? "Sending…" : "Invite to Portal"}
+                          </button>
+                          {inviteMsg?.vendorId === v.id && (
+                            <span className={`text-[10px] ${inviteMsg.ok ? "text-green-400" : "text-red-400"}`}>
+                              {inviteMsg.msg}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <button

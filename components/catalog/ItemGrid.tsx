@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
-import type { Item, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus } from "@/lib/types";
+import type { Item, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor } from "@/lib/types";
 
 interface ItemGridProps {
   items: Item[];
@@ -17,6 +17,8 @@ interface ItemGridProps {
   canEdit: boolean;
   rooms: Room[];
   tenants?: Tenant[];  // provided in all-items mode for project name display
+  localVendors?: LocalVendor[];
+  canAutoRoute?: boolean;
 }
 
 const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray" | "red"; label: string }> = {
@@ -45,13 +47,14 @@ const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray"
 interface EditModalProps {
   item: Item;
   rooms: Room[];
+  localVendors?: LocalVendor[];
   onClose: () => void;
   onSaved: () => void;
 }
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId">>;
 
-function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
+function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -73,6 +76,7 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
     staffTips: item.staffTips,
     status: item.status,
     roomId: item.roomId ?? "",
+    assignedVendorId: item.assignedVendorId ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -226,6 +230,15 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
                 ]}
               />
             )}
+            {localVendors && localVendors.length > 0 && (
+              <Select label="Assigned Vendor" value={form.assignedVendorId ?? ""}
+                onChange={e => set("assignedVendorId", e.target.value || undefined)}
+                options={[
+                  { value: "", label: "— Unassigned —" },
+                  ...localVendors.map(v => ({ value: v.id, label: `${v.vendorName} (${v.vendorType})` })),
+                ]}
+              />
+            )}
           </section>
 
           {/* Route & Value */}
@@ -331,9 +344,11 @@ function EditItemModal({ item, rooms, onClose, onSaved }: EditModalProps) {
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridProps) {
+export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute }: ItemGridProps) {
   const router = useRouter();
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [autoRouting, setAutoRouting] = useState(false);
+  const [autoRouteMsg, setAutoRouteMsg] = useState("");
   const [view, setView] = useState<"grid" | "table">("grid");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -349,6 +364,31 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
     tenants?.forEach(t => map.set(t.id, t.name));
     return map;
   }, [tenants]);
+
+  const vendorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    localVendors?.forEach(v => map.set(v.id, v.vendorName));
+    return map;
+  }, [localVendors]);
+
+  const handleAutoRoute = async () => {
+    setAutoRouting(true);
+    setAutoRouteMsg("");
+    try {
+      const url = tenantId
+        ? `/api/admin/routing-rules/apply?tenantId=${tenantId}`
+        : "/api/admin/routing-rules/apply";
+      const res = await fetch(url, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed");
+      setAutoRouteMsg(`${d.assigned} item${d.assigned !== 1 ? "s" : ""} auto-routed`);
+      router.refresh();
+    } catch (e) {
+      setAutoRouteMsg(e instanceof Error ? e.message : "Error");
+    } finally {
+      setAutoRouting(false);
+    }
+  };
 
   const multiTenant = !!tenants && tenants.length > 1;
 
@@ -438,6 +478,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
         <EditItemModal
           item={editingItem}
           rooms={rooms}
+          localVendors={localVendors}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
         />
@@ -512,6 +553,20 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
           <option value="createdAt:desc">Newest First</option>
           <option value="createdAt:asc">Oldest First</option>
         </select>
+
+        {/* Auto-route button */}
+        {canAutoRoute && (
+          <button
+            onClick={handleAutoRoute}
+            disabled={autoRouting}
+            className="h-10 px-3 rounded-xl border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 transition-colors disabled:opacity-50"
+          >
+            {autoRouting ? "Routing…" : "Auto-Route Unassigned"}
+          </button>
+        )}
+        {autoRouteMsg && (
+          <span className="text-xs text-forest-600 self-center">{autoRouteMsg}</span>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -603,6 +658,18 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                   <div className="mt-2 text-xs text-gray-500">
                     {item.condition} · {item.sizeClass}
                   </div>
+                  {item.assignedVendorId && vendorMap.get(item.assignedVendorId) && (
+                    <div className="mt-1.5">
+                      <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full truncate block">
+                        {vendorMap.get(item.assignedVendorId)}
+                        {item.vendorDecision && item.vendorDecision !== "Pending" && (
+                          <span className={`ml-1 ${item.vendorDecision === "Approved" ? "text-green-600" : item.vendorDecision === "Rejected" ? "text-red-600" : "text-amber-600"}`}>
+                            · {item.vendorDecision}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -622,6 +689,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                   {sortTh("value", "Value", "", "right")}
                   {sortTh("route", "Recommended Route")}
                   {sortTh("status", "Status")}
+                  {localVendors && <th className="text-left px-4 py-3 font-semibold text-gray-600">Vendor</th>}
                   {canEdit && <th className="w-10 px-3 py-3"></th>}
                 </tr>
               </thead>
@@ -671,6 +739,12 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants }: ItemGridP
                       <td className="px-4 py-2.5">
                         <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
                       </td>
+                      {/* Vendor */}
+                      {localVendors && (
+                        <td className="px-4 py-2.5 text-gray-500 text-xs">
+                          {item.assignedVendorId ? (vendorMap.get(item.assignedVendorId) ?? "—") : "—"}
+                        </td>
+                      )}
                       {/* Edit */}
                       {canEdit && (
                         <td className="px-3 py-2.5">

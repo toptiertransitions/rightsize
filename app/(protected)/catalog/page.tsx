@@ -8,6 +8,7 @@ import {
   getRoomsForTenant,
   getMembershipsForUser,
   getSystemRole,
+  getAllLocalVendors,
 } from "@/lib/airtable";
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
@@ -27,12 +28,13 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ───────────────────────────────────────────────────────
   if (tenantId) {
-    const [tenant, role, items, rooms, sysRole] = await Promise.all([
+    const [tenant, role, items, rooms, sysRole, localVendors] = await Promise.all([
       getTenantById(tenantId).catch(() => null),
       getUserRoleForTenant(userId, tenantId).catch(() => null),
       getItemsForTenant(tenantId).catch(() => []),
       getRoomsForTenant(tenantId).catch(() => []),
       getSystemRole(userId!).catch(() => null),
+      getAllLocalVendors().catch(() => []),
     ]);
 
     if (!tenant) redirect("/home");
@@ -70,7 +72,14 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           )}
         </div>
 
-        <ItemGrid items={items} tenantId={tenantId} canEdit={canEdit} rooms={rooms} />
+        <ItemGrid
+          items={items}
+          tenantId={tenantId}
+          canEdit={canEdit}
+          rooms={rooms}
+          localVendors={localVendors}
+          canAutoRoute={resolvedRole ? ["TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole) : false}
+        />
       </div>
     );
   }

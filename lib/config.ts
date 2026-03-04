@@ -41,6 +41,7 @@ export const AIRTABLE_TABLES = {
   FILES: process.env.AIRTABLE_FILES_TABLE || "ProjectFiles",
   TIME_ENTRIES: process.env.TIME_ENTRIES_TABLE_ID || "TimeEntries",
   STAFF_ROLES: process.env.STAFF_ROLES_TABLE_ID || "StaffRoles",
+  ROUTING_RULES: process.env.AIRTABLE_ROUTING_RULES_TABLE || "RoutingRules",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

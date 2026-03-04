@@ -175,6 +175,10 @@ export interface Item {
   saleDate?: string;
   circleHandItemId?: string;
   routingStatus?: string;
+  // Vendor assignment
+  assignedVendorId?: string;
+  vendorDecision?: VendorDecision;
+  vendorNotes?: string;
 }
 
 // ─── AI Analysis ──────────────────────────────────────────────────────────────
@@ -292,6 +296,22 @@ export interface Vendor {
   createdAt: string;
 }
 
+// ─── Vendor Decision ──────────────────────────────────────────────────────────
+export type VendorDecision = "Pending" | "Approved" | "Rejected" | "Hold";
+
+// ─── Routing Rules ────────────────────────────────────────────────────────────
+export interface RoutingRule {
+  id: string;
+  airtableId: string;
+  primaryRoute: PrimaryRoute;
+  vendorType: VendorType;
+  minCondition: "Any" | "Fair or better" | "Good or better" | "Excellent only";
+  matchCategories: string;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 // ─── Local Vendor Directory ───────────────────────────────────────────────────
 export interface LocalVendor {
   id: string;
@@ -312,6 +332,7 @@ export interface LocalVendor {
   notes: string;
   isActive: boolean;
   createdAt: string;
+  clerkUserId?: string;
 }
 
 // ─── Project Files ────────────────────────────────────────────────────────────

@@ -3,11 +3,23 @@ import type { UserRole } from "./types";
 
 export type InviteRole = Extract<UserRole, "Collaborator" | "Viewer">;
 
-interface InvitePayload {
+interface TenantInvitePayload {
   tenantId: string;
   role: InviteRole;
-  invitedBy: string; // Clerk userId of the inviter
-  expiresAt: number; // Unix ms
+  invitedBy: string;
+  expiresAt: number;
+}
+
+interface VendorInvitePayload {
+  vendorId: string;
+  invitedBy: string;
+  expiresAt: number;
+}
+
+type InvitePayload = TenantInvitePayload | VendorInvitePayload;
+
+export function isVendorInvite(payload: InvitePayload): payload is VendorInvitePayload {
+  return "vendorId" in payload;
 }
 
 function getSecret(): string {
@@ -69,8 +81,14 @@ export function verifyInviteToken(token: string): InvitePayload {
     throw new Error("Malformed token payload");
   }
 
-  if (!data.tenantId || !data.role || !data.invitedBy || !data.expiresAt) {
-    throw new Error("Incomplete token payload");
+  if (isVendorInvite(data)) {
+    if (!data.vendorId || !data.invitedBy || !data.expiresAt) {
+      throw new Error("Incomplete vendor token payload");
+    }
+  } else {
+    if (!data.tenantId || !data.role || !data.invitedBy || !data.expiresAt) {
+      throw new Error("Incomplete token payload");
+    }
   }
 
   if (Date.now() > data.expiresAt) {
@@ -78,4 +96,17 @@ export function verifyInviteToken(token: string): InvitePayload {
   }
 
   return data;
+}
+
+export function createVendorInviteToken({
+  vendorId,
+  invitedBy,
+}: {
+  vendorId: string;
+  invitedBy: string;
+}): string {
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  const payload = toBase64Url(JSON.stringify({ vendorId, invitedBy, expiresAt }));
+  const sig = sign(payload);
+  return `${payload}.${sig}`;
 }

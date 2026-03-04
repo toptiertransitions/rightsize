@@ -32,6 +32,8 @@ import type {
   FileTag,
   TimeEntry,
   FocusArea,
+  VendorDecision,
+  RoutingRule,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -420,6 +422,10 @@ export async function updateItem(
     saleDate: "SaleDate",
     circleHandItemId: "CircleHandItemId",
     routingStatus: "RoutingStatus",
+    // vendor assignment
+    assignedVendorId: "AssignedVendorId",
+    vendorDecision: "VendorDecision",
+    vendorNotes: "VendorNotes",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -479,6 +485,9 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     saleDate: toStr(f["SaleDate"]) || undefined,
     circleHandItemId: toStr(f["CircleHandItemId"]) || undefined,
     routingStatus: toStr(f["RoutingStatus"]) || undefined,
+    assignedVendorId: toStr(f["AssignedVendorId"]) || undefined,
+    vendorDecision: (toStr(f["VendorDecision"]) || undefined) as VendorDecision | undefined,
+    vendorNotes: toStr(f["VendorNotes"]) || undefined,
   };
 }
 
@@ -921,6 +930,7 @@ export async function updateLocalVendor(
     zipCodesServed: string;
     notes: string;
     isActive: boolean;
+    clerkUserId: string;
   }>
 ): Promise<LocalVendor> {
   const fields: Record<string, unknown> = {};
@@ -939,6 +949,7 @@ export async function updateLocalVendor(
   if (data.zipCodesServed !== undefined) fields["ZipCodesServed"] = data.zipCodesServed;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  if (data.clerkUserId !== undefined) fields["ClerkUserId"] = data.clerkUserId;
   const res = await localVendorFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -950,6 +961,166 @@ export async function updateLocalVendor(
 export async function deleteLocalVendor(id: string): Promise<void> {
   const res = await localVendorFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+export async function getAllLocalVendors(): Promise<LocalVendor[]> {
+  const res = await localVendorFetch(
+    `?sort[0][field]=VendorType&sort[0][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapLocalVendor);
+}
+
+export async function getLocalVendorByClerkId(clerkUserId: string): Promise<LocalVendor | null> {
+  const encoded = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
+  const res = await localVendorFetch(`?filterByFormula=${encoded}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records || data.records.length === 0) return null;
+  return mapLocalVendor(data.records[0]);
+}
+
+export async function getItemsForVendor(vendorId: string): Promise<Item[]> {
+  const base = getBase();
+  const encoded = `{AssignedVendorId} = "${vendorId}"`;
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({ filterByFormula: encoded, sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapItem);
+}
+
+// ─── Routing Rules ────────────────────────────────────────────────────────────
+function routingRulesFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.ROUTING_RULES;
+  return fetch(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapRoutingRule(record: AirtableRecord): RoutingRule {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    primaryRoute: (toStr(f["PrimaryRoute"]) || "Donate") as RoutingRule["primaryRoute"],
+    vendorType: (toStr(f["VendorType"]) || "Other") as VendorType,
+    minCondition: (toStr(f["MinCondition"]) || "Any") as RoutingRule["minCondition"],
+    matchCategories: toStr(f["MatchCategories"]),
+    priority: typeof f["Priority"] === "number" ? f["Priority"] : 99,
+    isActive: f["IsActive"] === true,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getRoutingRules(): Promise<RoutingRule[]> {
+  const res = await routingRulesFetch(
+    `?sort[0][field]=Priority&sort[0][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapRoutingRule);
+}
+
+export async function createRoutingRule(data: Omit<RoutingRule, "id" | "airtableId" | "createdAt">): Promise<RoutingRule> {
+  const res = await routingRulesFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        PrimaryRoute: data.primaryRoute,
+        VendorType: data.vendorType,
+        MinCondition: data.minCondition,
+        MatchCategories: data.matchCategories,
+        Priority: data.priority,
+        IsActive: data.isActive,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapRoutingRule(await res.json());
+}
+
+export async function updateRoutingRule(id: string, data: Partial<Omit<RoutingRule, "id" | "airtableId" | "createdAt">>): Promise<RoutingRule> {
+  const fields: Record<string, unknown> = {};
+  if (data.primaryRoute !== undefined) fields["PrimaryRoute"] = data.primaryRoute;
+  if (data.vendorType !== undefined) fields["VendorType"] = data.vendorType;
+  if (data.minCondition !== undefined) fields["MinCondition"] = data.minCondition;
+  if (data.matchCategories !== undefined) fields["MatchCategories"] = data.matchCategories;
+  if (data.priority !== undefined) fields["Priority"] = data.priority;
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  const res = await routingRulesFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapRoutingRule(await res.json());
+}
+
+export async function deleteRoutingRule(id: string): Promise<void> {
+  const res = await routingRulesFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Routing Engine ───────────────────────────────────────────────────────────
+const CONDITION_ORDER: Item["condition"][] = ["For Parts", "Poor", "Fair", "Good", "Excellent"];
+
+function conditionMeetsThreshold(
+  condition: Item["condition"],
+  threshold: RoutingRule["minCondition"]
+): boolean {
+  if (threshold === "Any") return true;
+  const idx = CONDITION_ORDER.indexOf(condition);
+  if (threshold === "Fair or better") return idx >= CONDITION_ORDER.indexOf("Fair");
+  if (threshold === "Good or better") return idx >= CONDITION_ORDER.indexOf("Good");
+  if (threshold === "Excellent only") return condition === "Excellent";
+  return true;
+}
+
+export function applyRoutingRules(
+  items: Item[],
+  localVendors: LocalVendor[],
+  rules: RoutingRule[],
+  projectZip: string
+): Array<{ itemId: string; vendorId: string }> {
+  const assignments: Array<{ itemId: string; vendorId: string }> = [];
+  const activeRules = rules.filter(r => r.isActive).sort((a, b) => a.priority - b.priority);
+
+  for (const item of items) {
+    if (item.assignedVendorId) continue; // already assigned
+
+    const matchingRules = activeRules.filter(r => r.primaryRoute === item.primaryRoute);
+
+    let assigned = false;
+    for (const rule of matchingRules) {
+      if (assigned) break;
+
+      const candidates = localVendors.filter(vendor => {
+        if (vendor.vendorType !== rule.vendorType) return false;
+        if (!vendor.isActive) return false;
+        if (vendor.zipCodesServed && !vendor.zipCodesServed.split(",").map(z => z.trim()).includes(projectZip)) return false;
+        if (vendor.itemCategories && !vendor.itemCategories.split(",").map(c => c.trim().toLowerCase()).includes(item.category.toLowerCase())) return false;
+        if (rule.matchCategories && !rule.matchCategories.split(",").map(c => c.trim().toLowerCase()).includes(item.category.toLowerCase())) return false;
+        if (!conditionMeetsThreshold(item.condition, rule.minCondition)) return false;
+        return true;
+      });
+
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => a.consignmentTake - b.consignmentTake);
+        assignments.push({ itemId: item.id, vendorId: candidates[0].id });
+        assigned = true;
+      }
+    }
+  }
+
+  return assignments;
 }
 
 function mapLocalVendor(record: AirtableRecord): LocalVendor {
@@ -973,6 +1144,7 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     notes: toStr(f["Notes"]),
     isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
+    clerkUserId: toStr(f["ClerkUserId"]) || undefined,
   };
 }
 

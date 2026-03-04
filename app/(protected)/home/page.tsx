@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -73,6 +73,12 @@ export default async function DashboardPage({
         </section>
       </div>
     );
+  }
+
+  // ── Vendor-only user ─────────────────────────────────────────────────────────
+  if (!systemRole && memberships.length === 0) {
+    const vendor = await getLocalVendorByClerkId(userId).catch(() => null);
+    if (vendor) redirect("/vendor");
   }
 
   // ── No projects ──────────────────────────────────────────────────────────────

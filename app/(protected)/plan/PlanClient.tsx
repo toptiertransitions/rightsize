@@ -834,6 +834,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
 
       {/* ── Hours Worked ─────────────────────────────────────────────────────── */}
       <HoursWorkedSection
+        key={`hours-${currentTenantId ?? tenantId}`}
         timeEntries={timeEntries}
         isAdmin={isAdmin}
         estimatedHours={estimatedHours}
@@ -844,6 +845,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
       {/* ── Floorplans & Images ──────────────────────────────────────────────── */}
       <div className="mt-10">
         <FloorplansSection
+          key={`floorplans-${currentTenantId ?? tenantId}`}
           tenantId={tenantId}
           canEdit={effectiveCanEdit}
           initialFiles={projectFiles}
