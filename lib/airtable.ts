@@ -5,6 +5,7 @@
 
 import Airtable from "airtable";
 import { AIRTABLE_TABLES, isTTTAdmin, isTTTStaff } from "./config";
+import { getZipCentroid, haversineDistanceMiles } from "./zip-centroids";
 import type {
   Tenant,
   User,
@@ -1092,6 +1093,7 @@ export function applyRoutingRules(
 ): Array<{ itemId: string; vendorId: string }> {
   const assignments: Array<{ itemId: string; vendorId: string }> = [];
   const activeRules = rules.filter(r => r.isActive).sort((a, b) => a.priority - b.priority);
+  const projectCentroid = getZipCentroid(projectZip);
 
   for (const item of items) {
     if (item.assignedVendorId) continue; // already assigned
@@ -1113,7 +1115,18 @@ export function applyRoutingRules(
       });
 
       if (candidates.length > 0) {
-        candidates.sort((a, b) => a.consignmentTake - b.consignmentTake);
+        candidates.sort((a, b) => {
+          const aCentroid = a.zip ? getZipCentroid(a.zip) : null;
+          const bCentroid = b.zip ? getZipCentroid(b.zip) : null;
+          const aDist = projectCentroid && aCentroid
+            ? haversineDistanceMiles(projectCentroid.lat, projectCentroid.lng, aCentroid.lat, aCentroid.lng)
+            : Infinity;
+          const bDist = projectCentroid && bCentroid
+            ? haversineDistanceMiles(projectCentroid.lat, projectCentroid.lng, bCentroid.lat, bCentroid.lng)
+            : Infinity;
+          if (aDist !== bDist) return aDist - bDist;
+          return a.consignmentTake - b.consignmentTake;
+        });
         assignments.push({ itemId: item.id, vendorId: candidates[0].id });
         assigned = true;
       }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { buildVendorAssignmentEmail } from "@/lib/email";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -100,7 +104,38 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Check if vendor assignment changed
+  const newVendorId = updates.assignedVendorId as string | undefined;
+  let vendorChanged = false;
+  if (newVendorId !== undefined) {
+    const existing = await getItemById(id as string).catch(() => null);
+    if (existing && existing.assignedVendorId !== newVendorId) {
+      vendorChanged = true;
+      // Reset decision on reassignment
+      (updates as Record<string, unknown>).vendorDecision = "Pending";
+    }
+  }
+
   const item = await updateItem(id as string, updates as never);
+
+  // Send notification email if vendor was newly assigned
+  if (vendorChanged && newVendorId) {
+    const vendor = await getLocalVendorById(newVendorId).catch(() => null);
+    if (vendor?.email) {
+      const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com"}/vendor`;
+      try {
+        await resend.emails.send({
+          from: "Top Tier Transitions <noreply@toptiertransitions.com>",
+          to: vendor.email,
+          subject: "1 new item waiting for your review",
+          html: buildVendorAssignmentEmail({ vendorName: vendor.vendorName, itemCount: 1, portalUrl }),
+        });
+      } catch (err) {
+        console.error(`Failed to send vendor notification:`, err);
+      }
+    }
+  }
+
   return NextResponse.json({ item });
 }
 

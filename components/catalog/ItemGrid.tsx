@@ -742,7 +742,23 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
                       {/* Vendor */}
                       {localVendors && (
                         <td className="px-4 py-2.5 text-gray-500 text-xs">
-                          {item.assignedVendorId ? (vendorMap.get(item.assignedVendorId) ?? "—") : "—"}
+                          {item.assignedVendorId ? (
+                            <span className="flex items-center gap-1.5 flex-wrap">
+                              <span>{vendorMap.get(item.assignedVendorId) ?? "—"}</span>
+                              {item.vendorDecision === "Approved" && (
+                                <span className="bg-green-100 text-green-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Approved</span>
+                              )}
+                              {item.vendorDecision === "Rejected" && (
+                                <span className="bg-red-100 text-red-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Rejected</span>
+                              )}
+                              {item.vendorDecision === "Hold" && (
+                                <span className="bg-amber-100 text-amber-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Hold</span>
+                              )}
+                              {item.vendorDecision === "Pending" && (
+                                <span className="bg-gray-100 text-gray-500 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Pending</span>
+                              )}
+                            </span>
+                          ) : "—"}
                         </td>
                       )}
                       {/* Edit */}

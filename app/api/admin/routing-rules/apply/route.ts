@@ -9,6 +9,10 @@ import {
   applyRoutingRules,
   updateItem,
 } from "@/lib/airtable";
+import { buildVendorAssignmentEmail } from "@/lib/email";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -33,6 +37,16 @@ export async function POST(req: NextRequest) {
   }
 
   let assigned = 0;
+  // Track new assignments per vendor: vendorId -> count
+  const vendorAssignmentCounts = new Map<string, number>();
+
+  const processAssignments = async (assignments: Array<{ itemId: string; vendorId: string }>) => {
+    for (const { itemId, vendorId } of assignments) {
+      await updateItem(itemId, { assignedVendorId: vendorId, vendorDecision: "Pending" });
+      assigned++;
+      vendorAssignmentCounts.set(vendorId, (vendorAssignmentCounts.get(vendorId) ?? 0) + 1);
+    }
+  };
 
   if (tenantId) {
     // Single-tenant mode
@@ -43,10 +57,7 @@ export async function POST(req: NextRequest) {
     ]);
     const projectZip = tenant?.zip ?? "";
     const assignments = applyRoutingRules(items, vendors, activeRules, projectZip);
-    for (const { itemId, vendorId } of assignments) {
-      await updateItem(itemId, { assignedVendorId: vendorId, vendorDecision: "Pending" });
-      assigned++;
-    }
+    await processAssignments(assignments);
   } else {
     // All active tenants
     const tenants = await getTenants().catch(() => []);
@@ -55,10 +66,24 @@ export async function POST(req: NextRequest) {
       const items = await getItemsForTenant(tenant.id).catch(() => []);
       const projectZip = tenant.zip ?? "";
       const assignments = applyRoutingRules(items, vendors, activeRules, projectZip);
-      for (const { itemId, vendorId } of assignments) {
-        await updateItem(itemId, { assignedVendorId: vendorId, vendorDecision: "Pending" });
-        assigned++;
-      }
+      await processAssignments(assignments);
+    }
+  }
+
+  // Send notification emails to each vendor with new assignments
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com"}/vendor`;
+  for (const [vendorId, itemCount] of vendorAssignmentCounts) {
+    const vendor = vendors.find(v => v.id === vendorId);
+    if (!vendor?.email) continue;
+    try {
+      await resend.emails.send({
+        from: "Top Tier Transitions <noreply@toptiertransitions.com>",
+        to: vendor.email,
+        subject: `${itemCount} new item${itemCount === 1 ? "" : "s"} waiting for your review`,
+        html: buildVendorAssignmentEmail({ vendorName: vendor.vendorName, itemCount, portalUrl }),
+      });
+    } catch (err) {
+      console.error(`Failed to send notification to vendor ${vendorId}:`, err);
     }
   }
 
