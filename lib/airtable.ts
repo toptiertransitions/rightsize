@@ -2134,6 +2134,7 @@ function mapCRMActivity(record: AirtableRecord): CRMActivity {
   return {
     id: record.id,
     opportunityId: toStr(f["OpportunityId"]),
+    clientContactId: toStr(f["ClientContactId"]) || undefined,
     type: (toStr(f["Type"]) || "Note") as CRMActivityType,
     note: toStr(f["Note"]),
     isGmailImported: f["IsGmailImported"] === true,
@@ -2167,7 +2168,8 @@ export async function getAllActivities(): Promise<CRMActivity[]> {
 }
 
 export async function createActivity(data: {
-  opportunityId: string;
+  opportunityId?: string;
+  clientContactId?: string;
   type: CRMActivityType;
   note: string;
   isGmailImported?: boolean;
@@ -2180,7 +2182,8 @@ export async function createActivity(data: {
     method: "POST",
     body: JSON.stringify({
       fields: {
-        OpportunityId: data.opportunityId,
+        OpportunityId: data.opportunityId || "",
+        ClientContactId: data.clientContactId || "",
         Type: data.type,
         Note: data.note,
         IsGmailImported: data.isGmailImported ?? false,
@@ -2194,6 +2197,17 @@ export async function createActivity(data: {
   });
   if (!res.ok) throw new Error(await res.text());
   return mapCRMActivity(await res.json());
+}
+
+export async function getActivitiesForContact(clientContactId: string): Promise<CRMActivity[]> {
+  const formula = encodeURIComponent(`{ClientContactId} = "${clientContactId}"`);
+  const res = await crmFetch(
+    AIRTABLE_TABLES.CRM_ACTIVITIES,
+    `?filterByFormula=${formula}&sort[0][field]=ActivityDate&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapCRMActivity);
 }
 
 export async function updateActivity(

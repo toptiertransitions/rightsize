@@ -675,6 +675,167 @@ function OpportunityPanel({
   );
 }
 
+// ─── Contact Activity Panel ───────────────────────────────────────────────────
+function ContactActivityPanel({
+  contact,
+  onClose,
+}: {
+  contact: ClientContact;
+  onClose: () => void;
+}) {
+  const [activities, setActivities] = useState<CRMActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activityType, setActivityType] = useState<CRMActivityType>("Note");
+  const [activityNote, setActivityNote] = useState("");
+  const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
+  const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/crm/activities?contactId=${contact.id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setActivities(data.activities || []);
+    }
+    setLoading(false);
+  }, [contact.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function logActivity() {
+    if (!activityNote) return;
+    const res = await fetch("/api/crm/activities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientContactId: contact.id,
+        type: activityType,
+        note: activityNote,
+        activityDate: new Date(activityDate).toISOString(),
+      }),
+    });
+    if (res.ok) {
+      setActivityNote("");
+      await load();
+    }
+  }
+
+  async function deleteOne(id: string) {
+    if (!confirm("Delete this activity?")) return;
+    await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md h-full bg-white shadow-2xl overflow-y-auto flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">{contact.name}</h2>
+            {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 flex-1 space-y-5">
+          {/* Log form */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Log Activity</h3>
+            <div className="flex gap-2 mb-2">
+              <select
+                value={activityType}
+                onChange={(e) => setActivityType(e.target.value as CRMActivityType)}
+                className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
+              >
+                {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={activityDate}
+                onChange={(e) => setActivityDate(e.target.value)}
+                className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
+              />
+            </div>
+            <div className="flex gap-2">
+              <textarea
+                value={activityNote}
+                onChange={(e) => setActivityNote(e.target.value)}
+                placeholder="Note…"
+                rows={2}
+                className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 resize-none"
+              />
+              <button
+                onClick={logActivity}
+                disabled={!activityNote}
+                className="text-sm bg-forest-600 text-white rounded-lg px-3 py-2 hover:bg-forest-700 disabled:opacity-50 self-end"
+              >
+                Log
+              </button>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Activity History</h3>
+            {loading ? (
+              <p className="text-xs text-gray-400">Loading…</p>
+            ) : activities.length === 0 ? (
+              <p className="text-xs text-gray-400">No activities yet</p>
+            ) : (
+              <div className="space-y-3">
+                {activities.map((a) => (
+                  <div key={a.id} className="flex gap-3 group">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-xs font-medium",
+                        a.type === "Email" ? "bg-blue-100 text-blue-700" :
+                        a.type === "Call" ? "bg-green-100 text-green-700" :
+                        a.type === "Meeting" ? "bg-purple-100 text-purple-700" :
+                        a.type === "Task" ? "bg-orange-100 text-orange-700" :
+                        "bg-gray-100 text-gray-600"
+                      )}>
+                        {a.type}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{a.note}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {a.activityDate ? new Date(a.activityDate).toLocaleDateString() : ""}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setEditingActivity(a)} className="text-xs text-gray-400 hover:text-forest-600 px-1">Edit</button>
+                      <button onClick={() => deleteOne(a.id)} className="text-xs text-gray-400 hover:text-red-500 px-1">×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {editingActivity && (
+        <ActivityEditModal
+          activity={editingActivity}
+          onSaved={(updated) => {
+            setActivities((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+            setEditingActivity(null);
+          }}
+          onClose={() => setEditingActivity(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Contacts Tab ─────────────────────────────────────────────────────────────
 function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) {
   const [contacts, setContacts] = useState(initialContacts);
@@ -682,6 +843,7 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
   const [editing, setEditing] = useState<ClientContact | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [activityContact, setActivityContact] = useState<ClientContact | null>(null);
 
   function openNew() {
     setEditing(null);
@@ -758,7 +920,13 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
                 <td className="px-4 py-3 text-gray-600">{c.phone || "—"}</td>
                 <td className="px-4 py-3 text-gray-600">{c.source || "—"}</td>
                 <td className="px-4 py-3 text-right space-x-2">
-                  <button onClick={() => openEdit(c)} className="text-forest-600 hover:text-forest-800 text-xs px-2 py-1">Edit</button>
+                  <button
+                    onClick={() => setActivityContact(c)}
+                    className="text-forest-600 hover:text-forest-800 text-xs px-2 py-1"
+                  >
+                    Activities
+                  </button>
+                  <button onClick={() => openEdit(c)} className="text-gray-500 hover:text-gray-800 text-xs px-2 py-1">Edit</button>
                   <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1">Delete</button>
                 </td>
               </tr>
@@ -790,6 +958,13 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
             </div>
           </div>
         </div>
+      )}
+
+      {activityContact && (
+        <ContactActivityPanel
+          contact={activityContact}
+          onClose={() => setActivityContact(null)}
+        />
       )}
     </div>
   );
@@ -1263,18 +1438,49 @@ function ActivityLogTab({
   const [typeFilter, setTypeFilter] = useState<CRMActivityType | "All">("All");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logForm, setLogForm] = useState({ contactId: "", type: "Note" as CRMActivityType, note: "", date: new Date().toISOString().slice(0, 10) });
+  const [logging, setLogging] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
+    setLoading(true);
     fetch("/api/crm/activities")
       .then((r) => r.json())
       .then((d) => setActivities(d.activities || []))
       .finally(() => setLoading(false));
   }, []);
 
-  function getContactName(opportunityId: string) {
-    const opp = opportunities.find((o) => o.id === opportunityId);
+  useEffect(() => { reload(); }, [reload]);
+
+  function getContactName(activity: CRMActivity) {
+    if (activity.clientContactId) {
+      return clientContacts.find((c) => c.id === activity.clientContactId)?.name || "—";
+    }
+    const opp = opportunities.find((o) => o.id === activity.opportunityId);
     if (!opp) return "—";
     return clientContacts.find((c) => c.id === opp.clientContactId)?.name || "—";
+  }
+
+  async function handleLog() {
+    if (!logForm.contactId || !logForm.note) return;
+    setLogging(true);
+    try {
+      await fetch("/api/crm/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientContactId: logForm.contactId,
+          type: logForm.type,
+          note: logForm.note,
+          activityDate: new Date(logForm.date).toISOString(),
+        }),
+      });
+      setLogModalOpen(false);
+      setLogForm({ contactId: "", type: "Note", note: "", date: new Date().toISOString().slice(0, 10) });
+      reload();
+    } finally {
+      setLogging(false);
+    }
   }
 
   const filtered = activities.filter((a) => typeFilter === "All" || a.type === typeFilter);
@@ -1339,11 +1545,17 @@ function ActivityLogTab({
         {selected.size > 0 && (
           <button
             onClick={deleteSelected}
-            className="ml-auto text-xs text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
+            className="text-xs text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
           >
             Delete {selected.size} selected
           </button>
         )}
+        <button
+          onClick={() => setLogModalOpen(true)}
+          className="ml-auto text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700"
+        >
+          + Log Activity
+        </button>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1390,7 +1602,7 @@ function ActivityLogTab({
                       {a.isGmailImported && " ✉"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-800">{getContactName(a.opportunityId)}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800">{getContactName(a)}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{a.note}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
@@ -1422,6 +1634,70 @@ function ActivityLogTab({
           }}
           onClose={() => setEditingActivity(null)}
         />
+      )}
+
+      {logModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setLogModalOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900">Log Activity</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact *</label>
+              <select
+                value={logForm.contactId}
+                onChange={(e) => setLogForm((f) => ({ ...f, contactId: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">— Select contact —</option>
+                {clientContacts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  value={logForm.type}
+                  onChange={(e) => setLogForm((f) => ({ ...f, type: e.target.value as CRMActivityType }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                >
+                  {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={logForm.date}
+                  onChange={(e) => setLogForm((f) => ({ ...f, date: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Note *</label>
+              <textarea
+                value={logForm.note}
+                onChange={(e) => setLogForm((f) => ({ ...f, note: e.target.value }))}
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setLogModalOpen(false)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
+              <button
+                onClick={handleLog}
+                disabled={logging || !logForm.contactId || !logForm.note}
+                className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50"
+              >
+                {logging ? "Saving…" : "Log Activity"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -500,6 +500,7 @@ export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task";
 export interface CRMActivity {
   id: string;
   opportunityId: string;
+  clientContactId?: string;
   type: CRMActivityType;
   note: string;
   isGmailImported: boolean;

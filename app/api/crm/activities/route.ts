@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getActivitiesForOpportunity, getAllActivities, createActivity, updateActivity, deleteActivity } from "@/lib/airtable";
+import { getSystemRole, getActivitiesForOpportunity, getActivitiesForContact, getAllActivities, createActivity, updateActivity, deleteActivity } from "@/lib/airtable";
 
 async function requireManager(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -13,8 +13,11 @@ export async function GET(req: NextRequest) {
   if (!(await requireManager(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const opportunityId = req.nextUrl.searchParams.get("opportunityId");
+  const contactId = req.nextUrl.searchParams.get("contactId");
   const activities = opportunityId
     ? await getActivitiesForOpportunity(opportunityId)
+    : contactId
+    ? await getActivitiesForContact(contactId)
     : await getAllActivities();
   return NextResponse.json({ activities });
 }
