@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -119,10 +119,14 @@ export default async function DashboardPage({
 
   if (selectedMembership) {
     const membership = selectedMembership;
-    const [tenant, items, rooms] = await Promise.all([
+    const isStaffOnly = systemRole === "TTTStaff";
+    const isOwnerOrCollab = membership.role === "Owner" || membership.role === "Collaborator";
+
+    const [tenant, items, rooms, contracts] = await Promise.all([
       getTenantById(membership.tenantId).catch(() => null),
       getItemsForTenant(membership.tenantId).catch(() => []),
       getRoomsForTenant(membership.tenantId).catch(() => []),
+      (isOwnerOrCollab || isStaffOnly) ? getContractsForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
     ]);
 
     if (!tenant) redirect("/onboarding");
@@ -261,6 +265,129 @@ export default async function DashboardPage({
               </Link>
             </CardContent>
           </Card>
+        )}
+
+        {/* Contract section — Owner/Collaborator view */}
+        {isOwnerOrCollab && contracts.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Service Agreement</h2>
+            <div className="space-y-4">
+              {contracts.map((contract) => {
+                const statusColors: Record<string, string> = {
+                  Draft: "bg-yellow-100 text-yellow-800",
+                  Sent: "bg-blue-100 text-blue-800",
+                  Signed: "bg-green-100 text-green-800",
+                };
+                const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const phases = [
+                  { label: "Rightsizing", hours: contract.rightsizingHours, rate: contract.rightsizingRate },
+                  { label: "Packing", hours: contract.packingHours, rate: contract.packingRate },
+                  { label: "Unpacking", hours: contract.unpackingHours, rate: contract.unpackingRate },
+                ];
+                return (
+                  <Card key={contract.id}>
+                    <CardContent className="py-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${statusColors[contract.status] ?? "bg-gray-100 text-gray-700"}`}>
+                          {contract.status}
+                        </span>
+                        <span className="text-xs text-gray-400">{new Date(contract.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <table className="w-full text-sm mb-3">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Phase</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Hours</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Rate</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Cost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {phases.map(({ label, hours, rate }) => (
+                            <tr key={label} className="border-t border-gray-100">
+                              <td className="px-3 py-2 text-gray-700">{label}</td>
+                              <td className="px-3 py-2 text-right text-gray-900">{hours}</td>
+                              <td className="px-3 py-2 text-right text-gray-500">{fmt(rate)}/hr</td>
+                              <td className="px-3 py-2 text-right text-gray-900">{fmt(hours * rate)}</td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-forest-200 bg-forest-50">
+                            <td className="px-3 py-2 font-bold text-forest-700" colSpan={3}>Total</td>
+                            <td className="px-3 py-2 text-right font-bold text-forest-700">{fmt(contract.totalCost)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      {contract.status === "Signed" && contract.contractBody && (
+                        <div className="mb-3">
+                          <div className="max-h-64 overflow-y-auto text-xs text-gray-600 whitespace-pre-wrap leading-relaxed border border-gray-100 rounded-lg p-3 bg-gray-50"
+                            style={{ fontFamily: "Georgia, serif" }}>
+                            {contract.contractBody}
+                          </div>
+                        </div>
+                      )}
+                      {contract.status === "Signed" && (
+                        <div className="border-t border-gray-100 pt-3">
+                          <p className="text-xs text-gray-500 mb-2">Signed by <strong className="text-gray-700">{contract.signedByName}</strong></p>
+                          {contract.signatureMethod === "draw" && contract.signatureData && (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={contract.signatureData} alt="Signature" className="h-16 border border-gray-200 rounded-lg p-1 bg-white" />
+                          )}
+                          {contract.signatureMethod === "type" && contract.signatureData && (
+                            <div style={{ fontFamily: "'Dancing Script', cursive", fontSize: "28px", color: "#1a1a1a" }}>
+                              {contract.signatureData}
+                            </div>
+                          )}
+                          {contract.signedAt && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              {new Date(contract.signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Hours section — TTTStaff only */}
+        {isStaffOnly && contracts.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Estimated Hours</h2>
+            <div className="space-y-3">
+              {contracts.map((contract) => {
+                const phases = [
+                  { label: "Rightsizing", hours: contract.rightsizingHours },
+                  { label: "Packing", hours: contract.packingHours },
+                  { label: "Unpacking", hours: contract.unpackingHours },
+                ];
+                return (
+                  <Card key={contract.id}>
+                    <CardContent className="py-4">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Phase</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Hours</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {phases.map(({ label, hours }) => (
+                            <tr key={label} className="border-t border-gray-100">
+                              <td className="px-3 py-2 text-gray-700">{label}</td>
+                              <td className="px-3 py-2 text-right text-gray-900">{hours}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     );

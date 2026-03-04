@@ -34,6 +34,7 @@ export interface Tenant {
   zip?: string;
   estimatedHours?: number;
   isArchived?: boolean;
+  destinationSqFt?: number;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -392,6 +393,51 @@ export interface CalculatorInput {
 }
 
 export type HelperType = "Solo" | "Family" | "Mixed" | "TTT";
+
+// ─── Contract / Estimator ─────────────────────────────────────────────────────
+export interface ContractSettings {
+  id: string;
+  airtableId: string;
+  rightsizingRate: number;
+  packingRate: number;
+  unpackingRate: number;
+  createdAt: string;
+}
+
+export interface ContractTemplate {
+  id: string;
+  airtableId: string;
+  name: string;
+  body: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type ContractStatus = "Draft" | "Sent" | "Signed";
+
+export interface Contract {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  templateId: string;
+  contractBody: string;
+  rightsizingHours: number;
+  packingHours: number;
+  unpackingHours: number;
+  rightsizingRate: number;
+  packingRate: number;
+  unpackingRate: number;
+  totalCost: number;
+  status: ContractStatus;
+  signatureData?: string;
+  signatureMethod?: "draw" | "type";
+  signedAt?: string;
+  signedByName?: string;
+  signToken: string;
+  sentByClerkId?: string;
+  sentAt?: string;
+  createdAt: string;
+}
 
 export interface CalculatorResult {
   rightsizingHours: number;

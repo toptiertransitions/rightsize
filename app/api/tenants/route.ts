@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant } from "@/lib/airtable";
+import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
@@ -48,11 +48,15 @@ export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived } = await req.json();
+  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt } = await req.json();
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !["Owner", "TTTStaff", "TTTAdmin"].includes(role)) {
+  const [tenantRole, sysRole] = await Promise.all([
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    getSystemRole(userId),
+  ]);
+  const role = tenantRole ?? sysRole;
+  if (!role || !["Owner", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -64,6 +68,7 @@ export async function PATCH(req: NextRequest) {
     zip: typeof zip === "string" ? zip : undefined,
     estimatedHours: typeof estimatedHours === "number" ? estimatedHours : undefined,
     isArchived: typeof isArchived === "boolean" ? isArchived : undefined,
+    destinationSqFt: typeof destinationSqFt === "number" ? destinationSqFt : undefined,
   });
   return NextResponse.json({ tenant });
 }

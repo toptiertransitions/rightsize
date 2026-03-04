@@ -35,6 +35,10 @@ import type {
   FocusArea,
   VendorDecision,
   RoutingRule,
+  ContractSettings,
+  ContractTemplate,
+  Contract,
+  ContractStatus,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -126,6 +130,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     zip: toStr(f["Zip"]) || undefined,
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     isArchived: f["IsArchived"] === true,
+    destinationSqFt: f["DestinationSqFt"] != null ? toNum(f["DestinationSqFt"]) : undefined,
   };
 }
 
@@ -514,7 +519,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; destinationSqFt?: number }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -525,6 +530,7 @@ export async function updateTenant(
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
+  if (data.destinationSqFt !== undefined) fields["DestinationSqFt"] = data.destinationSqFt;
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }
@@ -1511,4 +1517,260 @@ export async function getSystemRole(clerkUserId: string): Promise<SystemRole | n
   if (isTTTStaff(clerkUserId)) return "TTTStaff";
 
   return null;
+}
+
+// ─── Contract Settings ────────────────────────────────────────────────────────
+function contractFetch(table: string, path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  return fetch(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapContractSettings(record: AirtableRecord): ContractSettings {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    rightsizingRate: typeof f["RightsizingRate"] === "number" ? f["RightsizingRate"] : 0,
+    packingRate: typeof f["PackingRate"] === "number" ? f["PackingRate"] : 0,
+    unpackingRate: typeof f["UnpackingRate"] === "number" ? f["UnpackingRate"] : 0,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getContractSettings(): Promise<ContractSettings | null> {
+  const table = AIRTABLE_TABLES.CONTRACT_SETTINGS;
+  const res = await contractFetch(table, "?maxRecords=1");
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapContractSettings(data.records[0] as AirtableRecord);
+}
+
+export async function upsertContractSettings(data: {
+  rightsizingRate: number;
+  packingRate: number;
+  unpackingRate: number;
+}): Promise<ContractSettings> {
+  const table = AIRTABLE_TABLES.CONTRACT_SETTINGS;
+  const existing = await getContractSettings();
+  const fields = {
+    RightsizingRate: data.rightsizingRate,
+    PackingRate: data.packingRate,
+    UnpackingRate: data.unpackingRate,
+  };
+  if (existing) {
+    const res = await contractFetch(table, `/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapContractSettings(await res.json());
+  }
+  const res = await contractFetch(table, "", {
+    method: "POST",
+    body: JSON.stringify({ fields: { ...fields, CreatedAt: new Date().toISOString() } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapContractSettings(await res.json());
+}
+
+// ─── Contract Templates ───────────────────────────────────────────────────────
+function mapContractTemplate(record: AirtableRecord): ContractTemplate {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    name: toStr(f["Name"]),
+    body: toStr(f["Body"]),
+    isActive: f["IsActive"] === true,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getContractTemplates(activeOnly = false): Promise<ContractTemplate[]> {
+  const table = AIRTABLE_TABLES.CONTRACT_TEMPLATES;
+  const filter = activeOnly ? `?filterByFormula=${encodeURIComponent("IsActive=TRUE()")}` : "";
+  const res = await contractFetch(table, `${filter}&sort[0][field]=Name&sort[0][direction]=asc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapContractTemplate);
+}
+
+export async function createContractTemplate(data: {
+  name: string;
+  body: string;
+  isActive: boolean;
+}): Promise<ContractTemplate> {
+  const table = AIRTABLE_TABLES.CONTRACT_TEMPLATES;
+  const res = await contractFetch(table, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Body: data.body,
+        IsActive: data.isActive,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapContractTemplate(await res.json());
+}
+
+export async function updateContractTemplate(
+  id: string,
+  data: Partial<{ name: string; body: string; isActive: boolean }>
+): Promise<ContractTemplate> {
+  const table = AIRTABLE_TABLES.CONTRACT_TEMPLATES;
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.body !== undefined) fields["Body"] = data.body;
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  const res = await contractFetch(table, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapContractTemplate(await res.json());
+}
+
+export async function deleteContractTemplate(id: string): Promise<void> {
+  const table = AIRTABLE_TABLES.CONTRACT_TEMPLATES;
+  const res = await contractFetch(table, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Contracts ────────────────────────────────────────────────────────────────
+function mapContract(record: AirtableRecord): Contract {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantId"]),
+    templateId: toStr(f["TemplateId"]),
+    contractBody: toStr(f["ContractBody"]),
+    rightsizingHours: typeof f["RightsizingHours"] === "number" ? f["RightsizingHours"] : 0,
+    packingHours: typeof f["PackingHours"] === "number" ? f["PackingHours"] : 0,
+    unpackingHours: typeof f["UnpackingHours"] === "number" ? f["UnpackingHours"] : 0,
+    rightsizingRate: typeof f["RightsizingRate"] === "number" ? f["RightsizingRate"] : 0,
+    packingRate: typeof f["PackingRate"] === "number" ? f["PackingRate"] : 0,
+    unpackingRate: typeof f["UnpackingRate"] === "number" ? f["UnpackingRate"] : 0,
+    totalCost: typeof f["TotalCost"] === "number" ? f["TotalCost"] : 0,
+    status: (toStr(f["Status"]) || "Draft") as ContractStatus,
+    signatureData: toStr(f["SignatureData"]) || undefined,
+    signatureMethod: (toStr(f["SignatureMethod"]) || undefined) as "draw" | "type" | undefined,
+    signedAt: toStr(f["SignedAt"]) || undefined,
+    signedByName: toStr(f["SignedByName"]) || undefined,
+    signToken: toStr(f["SignToken"]),
+    sentByClerkId: toStr(f["SentByClerkId"]) || undefined,
+    sentAt: toStr(f["SentAt"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getContractsForTenant(tenantId: string): Promise<Contract[]> {
+  const table = AIRTABLE_TABLES.CONTRACTS;
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await contractFetch(
+    table,
+    `?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapContract);
+}
+
+export async function getContractByToken(signToken: string): Promise<Contract | null> {
+  const table = AIRTABLE_TABLES.CONTRACTS;
+  const formula = encodeURIComponent(`{SignToken} = "${signToken}"`);
+  const res = await contractFetch(table, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapContract(data.records[0] as AirtableRecord);
+}
+
+export async function createContract(data: {
+  tenantId: string;
+  templateId: string;
+  contractBody: string;
+  rightsizingHours: number;
+  packingHours: number;
+  unpackingHours: number;
+  rightsizingRate: number;
+  packingRate: number;
+  unpackingRate: number;
+  totalCost: number;
+  signToken: string;
+}): Promise<Contract> {
+  const table = AIRTABLE_TABLES.CONTRACTS;
+  const res = await contractFetch(table, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId,
+        TemplateId: data.templateId,
+        ContractBody: data.contractBody,
+        RightsizingHours: data.rightsizingHours,
+        PackingHours: data.packingHours,
+        UnpackingHours: data.unpackingHours,
+        RightsizingRate: data.rightsizingRate,
+        PackingRate: data.packingRate,
+        UnpackingRate: data.unpackingRate,
+        TotalCost: data.totalCost,
+        Status: "Draft",
+        SignToken: data.signToken,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapContract(await res.json());
+}
+
+export async function updateContract(
+  id: string,
+  data: Partial<{
+    status: ContractStatus;
+    signatureData: string;
+    signatureMethod: "draw" | "type";
+    signedAt: string;
+    signedByName: string;
+    sentByClerkId: string;
+    sentAt: string;
+    contractBody: string;
+    rightsizingHours: number;
+    packingHours: number;
+    unpackingHours: number;
+    totalCost: number;
+  }>
+): Promise<Contract> {
+  const table = AIRTABLE_TABLES.CONTRACTS;
+  const fields: Record<string, unknown> = {};
+  if (data.status !== undefined) fields["Status"] = data.status;
+  if (data.signatureData !== undefined) fields["SignatureData"] = data.signatureData;
+  if (data.signatureMethod !== undefined) fields["SignatureMethod"] = data.signatureMethod;
+  if (data.signedAt !== undefined) fields["SignedAt"] = data.signedAt;
+  if (data.signedByName !== undefined) fields["SignedByName"] = data.signedByName;
+  if (data.sentByClerkId !== undefined) fields["SentByClerkId"] = data.sentByClerkId;
+  if (data.sentAt !== undefined) fields["SentAt"] = data.sentAt;
+  if (data.contractBody !== undefined) fields["ContractBody"] = data.contractBody;
+  if (data.rightsizingHours !== undefined) fields["RightsizingHours"] = data.rightsizingHours;
+  if (data.packingHours !== undefined) fields["PackingHours"] = data.packingHours;
+  if (data.unpackingHours !== undefined) fields["UnpackingHours"] = data.unpackingHours;
+  if (data.totalCost !== undefined) fields["TotalCost"] = data.totalCost;
+  const res = await contractFetch(table, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapContract(await res.json());
 }

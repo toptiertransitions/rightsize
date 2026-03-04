@@ -7,10 +7,14 @@ import {
   getTenantById,
   getMembershipsForUser,
   getSystemRole,
+  getContractSettings,
+  getContractTemplates,
+  getContractsForTenant,
 } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RoomsClient, AddRoomButton } from "./RoomsClient";
+import { EstimatorSection } from "./EstimatorSection";
 import type { Room, Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -39,6 +43,16 @@ export default async function RoomsPage({ searchParams }: PageProps) {
     if (!resolvedRole) redirect("/home");
 
     const canEdit = EDIT_ROLES.includes(resolvedRole);
+    const isManager = ["TTTManager", "TTTAdmin"].includes(resolvedRole ?? sysRole ?? "");
+
+    // Fetch contract data for managers/admins
+    const [contractSettings, contractTemplates, existingContracts] = isManager
+      ? await Promise.all([
+          getContractSettings().catch(() => null),
+          getContractTemplates(true).catch(() => []),
+          getContractsForTenant(tenantId).catch(() => []),
+        ])
+      : [null, [], []];
 
     return (
       <div>
@@ -66,6 +80,16 @@ export default async function RoomsPage({ searchParams }: PageProps) {
         </div>
 
         <RoomsClient rooms={rooms} tenantId={tenantId} canEdit={canEdit} />
+
+        {isManager && (
+          <EstimatorSection
+            tenant={tenant}
+            rooms={rooms}
+            settings={contractSettings}
+            templates={contractTemplates}
+            existingContracts={existingContracts}
+          />
+        )}
       </div>
     );
   }

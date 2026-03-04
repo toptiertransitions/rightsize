@@ -87,6 +87,7 @@ export default async function AdminUsersPage() {
               <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Users</Link>
               <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Local Vendors</Link>
               <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
+              <Link href="/admin/contract-services" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Contract & Services</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
