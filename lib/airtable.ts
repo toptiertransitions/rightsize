@@ -2156,6 +2156,16 @@ export async function getActivitiesForOpportunity(opportunityId: string): Promis
   return (data.records as AirtableRecord[]).map(mapCRMActivity);
 }
 
+export async function getAllActivities(): Promise<CRMActivity[]> {
+  const res = await crmFetch(
+    AIRTABLE_TABLES.CRM_ACTIVITIES,
+    `?sort[0][field]=ActivityDate&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapCRMActivity);
+}
+
 export async function createActivity(data: {
   opportunityId: string;
   type: CRMActivityType;

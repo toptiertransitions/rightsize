@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact } from "@/lib/types";
 
-type Tab = "opportunities" | "contacts" | "referrals" | "settings";
+type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "activity" | "settings";
 
 interface CRMClientProps {
   opportunities: ClientOpportunity[];
@@ -947,6 +947,281 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
   );
 }
 
+// ─── Dashboard Tab ────────────────────────────────────────────────────────────
+const STAGE_BORDER: Record<OpportunityStage, string> = {
+  Lead: "border-blue-400",
+  Qualifying: "border-amber-400",
+  "Proposal Sent": "border-purple-400",
+  Won: "border-green-500",
+  Lost: "border-gray-300",
+};
+
+const STAGE_HEADER_BG: Record<OpportunityStage, string> = {
+  Lead: "bg-blue-50",
+  Qualifying: "bg-amber-50",
+  "Proposal Sent": "bg-purple-50",
+  Won: "bg-green-50",
+  Lost: "bg-gray-50",
+};
+
+const STAGE_COUNT_COLOR: Record<OpportunityStage, string> = {
+  Lead: "bg-blue-100 text-blue-700",
+  Qualifying: "bg-amber-100 text-amber-700",
+  "Proposal Sent": "bg-purple-100 text-purple-700",
+  Won: "bg-green-100 text-green-700",
+  Lost: "bg-gray-100 text-gray-500",
+};
+
+const COMPANY_TYPE_COLORS: Record<string, string> = {
+  "Senior Living": "bg-teal-100 text-teal-700",
+  "Realtor": "bg-blue-100 text-blue-700",
+  "Broker": "bg-indigo-100 text-indigo-700",
+  "Doctor": "bg-red-100 text-red-700",
+  "Attorney": "bg-amber-100 text-amber-700",
+  "Hospital": "bg-pink-100 text-pink-700",
+  "Financial Advisor": "bg-green-100 text-green-700",
+  "Other": "bg-gray-100 text-gray-600",
+};
+
+function fmt(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toLocaleString()}`;
+}
+
+function DashboardTab({
+  opportunities,
+  clientContacts,
+  companies,
+}: {
+  opportunities: ClientOpportunity[];
+  clientContacts: ClientContact[];
+  companies: ReferralCompany[];
+}) {
+  const activeStages: OpportunityStage[] = ["Lead", "Qualifying", "Proposal Sent"];
+  const pipelineValue = opportunities
+    .filter((o) => activeStages.includes(o.stage))
+    .reduce((s, o) => s + o.estimatedValue, 0);
+  const wonValue = opportunities
+    .filter((o) => o.stage === "Won")
+    .reduce((s, o) => s + o.estimatedValue, 0);
+  const wonCount = opportunities.filter((o) => o.stage === "Won").length;
+  const lostCount = opportunities.filter((o) => o.stage === "Lost").length;
+  const closedCount = wonCount + lostCount;
+  const winRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
+
+  const byStage = STAGES.map((stage) => ({
+    stage,
+    opps: opportunities.filter((o) => o.stage === stage),
+    value: opportunities.filter((o) => o.stage === stage).reduce((s, o) => s + o.estimatedValue, 0),
+  }));
+
+  const typeGroups = companies.reduce<Record<string, number>>((acc, c) => {
+    const t = c.type || "Other";
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {});
+
+  function getContactName(id: string) {
+    return clientContacts.find((c) => c.id === id)?.name || "—";
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Active Pipeline</p>
+          <p className="text-2xl font-bold text-gray-900">{fmt(pipelineValue)}</p>
+          <p className="text-xs text-gray-400 mt-1">{opportunities.filter((o) => activeStages.includes(o.stage)).length} open opportunities</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Won Revenue</p>
+          <p className="text-2xl font-bold text-green-600">{fmt(wonValue)}</p>
+          <p className="text-xs text-gray-400 mt-1">{wonCount} deal{wonCount !== 1 ? "s" : ""} closed</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Opportunities</p>
+          <p className="text-2xl font-bold text-gray-900">{opportunities.length}</p>
+          <p className="text-xs text-gray-400 mt-1">{companies.length} referral partner{companies.length !== 1 ? "s" : ""}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Win Rate</p>
+          <p className={cn("text-2xl font-bold", winRate >= 50 ? "text-green-600" : winRate > 0 ? "text-amber-600" : "text-gray-400")}>
+            {closedCount > 0 ? `${winRate}%` : "—"}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">{wonCount}W / {lostCount}L closed</p>
+        </div>
+      </div>
+
+      {/* Opportunities Pipeline */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Opportunities Pipeline</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {byStage.map(({ stage, opps, value }) => (
+            <div key={stage} className={cn("bg-white rounded-xl border-t-4 border border-gray-200 shadow-sm overflow-hidden", STAGE_BORDER[stage])}>
+              <div className={cn("px-4 py-3", STAGE_HEADER_BG[stage])}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-gray-700">{stage}</span>
+                  <span className={cn("text-xs font-bold px-1.5 py-0.5 rounded-full", STAGE_COUNT_COLOR[stage])}>
+                    {opps.length}
+                  </span>
+                </div>
+                <p className="text-sm font-bold text-gray-900">{value > 0 ? fmt(value) : "—"}</p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {opps.length === 0 && (
+                  <p className="text-xs text-gray-400 px-4 py-3">No opportunities</p>
+                )}
+                {opps.slice(0, 5).map((o) => (
+                  <div key={o.id} className="px-4 py-2.5">
+                    <p className="text-xs font-medium text-gray-800 truncate">{getContactName(o.clientContactId)}</p>
+                    <p className="text-xs text-gray-400">
+                      {o.estimatedValue > 0 ? fmt(o.estimatedValue) : "No value"}
+                      {o.nextStepDate ? ` · ${new Date(o.nextStepDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                    </p>
+                  </div>
+                ))}
+                {opps.length > 5 && (
+                  <p className="text-xs text-gray-400 px-4 py-2">+{opps.length - 5} more</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Referral Partners */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Referral Partner Network</h2>
+        {companies.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
+            No referral partners yet — add them in the Referral Partners tab
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {Object.entries(typeGroups)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => (
+                <div key={type} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COMPANY_TYPE_COLORS[type] || "bg-gray-100 text-gray-600")}>
+                      {type}
+                    </span>
+                    <p className="text-lg font-bold text-gray-900 mt-2">{count}</p>
+                    <p className="text-xs text-gray-400">{count === 1 ? "partner" : "partners"}</p>
+                  </div>
+                </div>
+              ))}
+            {/* Total card */}
+            <div className="bg-forest-50 rounded-xl border border-forest-200 p-4 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-forest-600 uppercase tracking-wide">Total</p>
+                <p className="text-lg font-bold text-forest-800 mt-2">{companies.length}</p>
+                <p className="text-xs text-forest-600">all partners</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Activity Log Tab ─────────────────────────────────────────────────────────
+const ACTIVITY_TYPE_COLORS: Record<string, string> = {
+  Call: "bg-green-100 text-green-700",
+  Email: "bg-blue-100 text-blue-700",
+  Meeting: "bg-purple-100 text-purple-700",
+  Note: "bg-gray-100 text-gray-600",
+  Task: "bg-orange-100 text-orange-700",
+};
+
+function ActivityLogTab({
+  opportunities,
+  clientContacts,
+}: {
+  opportunities: ClientOpportunity[];
+  clientContacts: ClientContact[];
+}) {
+  const [activities, setActivities] = useState<CRMActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState<CRMActivityType | "All">("All");
+
+  useEffect(() => {
+    fetch("/api/crm/activities")
+      .then((r) => r.json())
+      .then((d) => setActivities(d.activities || []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function getContactName(opportunityId: string) {
+    const opp = opportunities.find((o) => o.id === opportunityId);
+    if (!opp) return "—";
+    return clientContacts.find((c) => c.id === opp.clientContactId)?.name || "—";
+  }
+
+  const filtered = activities.filter((a) => typeFilter === "All" || a.type === typeFilter);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {(["All", "Call", "Email", "Meeting", "Note", "Task"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTypeFilter(t)}
+            className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+              typeFilter === t
+                ? "bg-forest-600 text-white border-forest-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-forest-400"
+            )}
+          >
+            {t}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-gray-400">{filtered.length} activities</span>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {loading ? (
+          <p className="text-center py-10 text-sm text-gray-400">Loading…</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-center py-10 text-sm text-gray-400">No activities yet</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a) => (
+                <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                    {a.activityDate ? new Date(a.activityDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", ACTIVITY_TYPE_COLORS[a.type] || "bg-gray-100 text-gray-600")}>
+                      {a.type}
+                      {a.isGmailImported && " ✉"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-800">{getContactName(a.opportunityId)}</td>
+                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{a.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Gmail Settings Tab ───────────────────────────────────────────────────────
 function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: boolean; gmailEmail?: string }) {
   const [connected, setConnected] = useState(gmailConnected);
@@ -1016,13 +1291,15 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
 export function CRMClient({ opportunities, clientContacts, companies, gmailConnected, gmailEmail }: CRMClientProps) {
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as Tab | null) || "opportunities";
+  const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
 
   const tabs: { key: Tab; label: string }[] = [
+    { key: "dashboard", label: "Dashboard" },
     { key: "opportunities", label: "Opportunities" },
     { key: "contacts", label: "Contacts" },
     { key: "referrals", label: "Referral Partners" },
+    { key: "activity", label: "Activity Log" },
     { key: "settings", label: "Settings" },
   ];
 
@@ -1053,6 +1330,9 @@ export function CRMClient({ opportunities, clientContacts, companies, gmailConne
         </nav>
       </div>
 
+      {tab === "dashboard" && (
+        <DashboardTab opportunities={opportunities} clientContacts={clientContacts} companies={companies} />
+      )}
       {tab === "opportunities" && (
         <OpportunitiesTab
           initialOpportunities={opportunities}
@@ -1062,6 +1342,9 @@ export function CRMClient({ opportunities, clientContacts, companies, gmailConne
       )}
       {tab === "contacts" && <ContactsTab initialContacts={clientContacts} />}
       {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} />}
+      {tab === "activity" && (
+        <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} />
+      )}
       {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} />}
     </div>
   );
