@@ -18,7 +18,10 @@ export async function POST(req: NextRequest) {
   }
 
   const accessToken = await getValidAccessToken(userId);
+  console.log("[gmail/sync] query:", query);
+
   const messages = await searchGmailMessages(accessToken, query, 20);
+  console.log("[gmail/sync] messages found:", messages.length);
 
   // Get existing activities to skip already-imported messages
   const existing = await getActivitiesForOpportunity(opportunityId);
@@ -41,9 +44,10 @@ export async function POST(req: NextRequest) {
       });
       imported++;
     } catch (err) {
-      console.error("Failed to import Gmail message:", msg.id, err);
+      console.error("[gmail/sync] Failed to import Gmail message:", msg.id, err);
     }
   }
 
-  return NextResponse.json({ imported });
+  console.log("[gmail/sync] imported:", imported);
+  return NextResponse.json({ imported, messagesFound: messages.length, query });
 }
