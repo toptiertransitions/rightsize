@@ -18,7 +18,9 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
   const tenantId = searchParams.get("tenantId");
   const tq = tenantId ? `?tenantId=${tenantId}` : "";
 
-  const navLinks = [
+  const isVendorPortal = pathname.startsWith("/vendor");
+
+  const navLinks = isVendorPortal ? [] : [
     { href: "/home", label: "Home" },
     { href: `/rooms${tq}`, base: "/rooms", label: "Rooms" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
