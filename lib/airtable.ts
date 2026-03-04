@@ -39,6 +39,15 @@ import type {
   ContractTemplate,
   Contract,
   ContractStatus,
+  ReferralCompany,
+  ReferralContact,
+  ClientContact,
+  ClientOpportunity,
+  OpportunityStage,
+  KeyPerson,
+  CRMActivity,
+  CRMActivityType,
+  GmailToken,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -1775,4 +1784,481 @@ export async function updateContract(
   });
   if (!res.ok) throw new Error(await res.text());
   return mapContract(await res.json());
+}
+
+// ─── CRM helpers ──────────────────────────────────────────────────────────────
+function crmFetch(table: string, path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  return fetch(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+// ─── CRM Referral Companies ───────────────────────────────────────────────────
+function mapReferralCompany(record: AirtableRecord): ReferralCompany {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    type: toStr(f["Type"]),
+    notes: toStr(f["Notes"]),
+    assignedToClerkId: toStr(f["AssignedToClerkId"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getReferralCompanies(): Promise<ReferralCompany[]> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `?sort[0][field]=Name&sort[0][direction]=asc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapReferralCompany);
+}
+
+export async function createReferralCompany(data: {
+  name: string;
+  type?: string;
+  notes?: string;
+  assignedToClerkId?: string;
+}): Promise<ReferralCompany> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Type: data.type || "",
+        Notes: data.notes || "",
+        AssignedToClerkId: data.assignedToClerkId || "",
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapReferralCompany(await res.json());
+}
+
+export async function updateReferralCompany(
+  id: string,
+  data: Partial<{ name: string; type: string; notes: string; assignedToClerkId: string }>
+): Promise<ReferralCompany> {
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.type !== undefined) fields["Type"] = data.type;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapReferralCompany(await res.json());
+}
+
+export async function deleteReferralCompany(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── CRM Referral Contacts ────────────────────────────────────────────────────
+function mapReferralContact(record: AirtableRecord): ReferralContact {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    title: toStr(f["Title"]),
+    email: toStr(f["Email"]),
+    phone: toStr(f["Phone"]),
+    referralCompanyId: toStr(f["ReferralCompanyId"]),
+    notes: toStr(f["Notes"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getReferralContacts(companyId?: string): Promise<ReferralContact[]> {
+  const qs = companyId
+    ? `?filterByFormula=${encodeURIComponent(`{ReferralCompanyId} = "${companyId}"`)}&sort[0][field]=Name&sort[0][direction]=asc`
+    : `?sort[0][field]=Name&sort[0][direction]=asc`;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, qs);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapReferralContact);
+}
+
+export async function createReferralContact(data: {
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  referralCompanyId: string;
+  notes?: string;
+}): Promise<ReferralContact> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Title: data.title || "",
+        Email: data.email || "",
+        Phone: data.phone || "",
+        ReferralCompanyId: data.referralCompanyId,
+        Notes: data.notes || "",
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapReferralContact(await res.json());
+}
+
+export async function updateReferralContact(
+  id: string,
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string }>
+): Promise<ReferralContact> {
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.title !== undefined) fields["Title"] = data.title;
+  if (data.email !== undefined) fields["Email"] = data.email;
+  if (data.phone !== undefined) fields["Phone"] = data.phone;
+  if (data.referralCompanyId !== undefined) fields["ReferralCompanyId"] = data.referralCompanyId;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapReferralContact(await res.json());
+}
+
+export async function deleteReferralContact(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── CRM Client Contacts ──────────────────────────────────────────────────────
+function mapClientContact(record: AirtableRecord): ClientContact {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    email: toStr(f["Email"]),
+    phone: toStr(f["Phone"]),
+    source: toStr(f["Source"]),
+    notes: toStr(f["Notes"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getClientContacts(): Promise<ClientContact[]> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?sort[0][field]=Name&sort[0][direction]=asc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapClientContact);
+}
+
+export async function createClientContact(data: {
+  name: string;
+  email?: string;
+  phone?: string;
+  source?: string;
+  notes?: string;
+}): Promise<ClientContact> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Email: data.email || "",
+        Phone: data.phone || "",
+        Source: data.source || "",
+        Notes: data.notes || "",
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapClientContact(await res.json());
+}
+
+export async function updateClientContact(
+  id: string,
+  data: Partial<{ name: string; email: string; phone: string; source: string; notes: string }>
+): Promise<ClientContact> {
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.email !== undefined) fields["Email"] = data.email;
+  if (data.phone !== undefined) fields["Phone"] = data.phone;
+  if (data.source !== undefined) fields["Source"] = data.source;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapClientContact(await res.json());
+}
+
+export async function deleteClientContact(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── CRM Opportunities ────────────────────────────────────────────────────────
+function mapOpportunity(record: AirtableRecord): ClientOpportunity {
+  const f = record.fields;
+  let keyPeople: KeyPerson[] = [];
+  try {
+    const raw = toStr(f["KeyPeople"]);
+    if (raw) keyPeople = JSON.parse(raw);
+  } catch {
+    keyPeople = [];
+  }
+  return {
+    id: record.id,
+    tenantId: toStr(f["TenantId"]),
+    clientContactId: toStr(f["ClientContactId"]),
+    stage: (toStr(f["Stage"]) || "Lead") as OpportunityStage,
+    keyPeople,
+    notes: toStr(f["Notes"]),
+    nextStepDate: toStr(f["NextStepDate"]) || undefined,
+    nextStepNote: toStr(f["NextStepNote"]) || undefined,
+    estimatedValue: typeof f["EstimatedValue"] === "number" ? f["EstimatedValue"] : 0,
+    wonAt: toStr(f["WonAt"]) || undefined,
+    lostAt: toStr(f["LostAt"]) || undefined,
+    lostReason: toStr(f["LostReason"]) || undefined,
+    assignedToClerkId: toStr(f["AssignedToClerkId"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getOpportunities(filters?: { stage?: string; assignedTo?: string }): Promise<ClientOpportunity[]> {
+  const parts: string[] = [];
+  if (filters?.stage) parts.push(`{Stage} = "${filters.stage}"`);
+  if (filters?.assignedTo) parts.push(`{AssignedToClerkId} = "${filters.assignedTo}"`);
+  const filterStr = parts.length === 1 ? parts[0] : parts.length > 1 ? `AND(${parts.join(", ")})` : "";
+  const qs = filterStr
+    ? `?filterByFormula=${encodeURIComponent(filterStr)}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+    : `?sort[0][field]=CreatedAt&sort[0][direction]=desc`;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, qs);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOpportunity);
+}
+
+export async function getOpportunityById(id: string): Promise<ClientOpportunity | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`);
+  if (!res.ok) return null;
+  return mapOpportunity(await res.json());
+}
+
+export async function createOpportunity(data: {
+  tenantId?: string;
+  clientContactId: string;
+  stage?: OpportunityStage;
+  keyPeople?: KeyPerson[];
+  notes?: string;
+  nextStepDate?: string;
+  nextStepNote?: string;
+  estimatedValue?: number;
+  assignedToClerkId?: string;
+}): Promise<ClientOpportunity> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId || "",
+        ClientContactId: data.clientContactId,
+        Stage: data.stage || "Lead",
+        KeyPeople: data.keyPeople ? JSON.stringify(data.keyPeople) : "[]",
+        Notes: data.notes || "",
+        NextStepDate: data.nextStepDate || "",
+        NextStepNote: data.nextStepNote || "",
+        EstimatedValue: data.estimatedValue ?? 0,
+        AssignedToClerkId: data.assignedToClerkId || "",
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOpportunity(await res.json());
+}
+
+export async function updateOpportunity(
+  id: string,
+  data: Partial<{
+    clientContactId: string;
+    stage: OpportunityStage;
+    keyPeople: KeyPerson[];
+    notes: string;
+    nextStepDate: string;
+    nextStepNote: string;
+    estimatedValue: number;
+    wonAt: string;
+    lostAt: string;
+    lostReason: string;
+    assignedToClerkId: string;
+  }>
+): Promise<ClientOpportunity> {
+  const fields: Record<string, unknown> = {};
+  if (data.clientContactId !== undefined) fields["ClientContactId"] = data.clientContactId;
+  if (data.stage !== undefined) fields["Stage"] = data.stage;
+  if (data.keyPeople !== undefined) fields["KeyPeople"] = JSON.stringify(data.keyPeople);
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.nextStepDate !== undefined) fields["NextStepDate"] = data.nextStepDate;
+  if (data.nextStepNote !== undefined) fields["NextStepNote"] = data.nextStepNote;
+  if (data.estimatedValue !== undefined) fields["EstimatedValue"] = data.estimatedValue;
+  if (data.wonAt !== undefined) fields["WonAt"] = data.wonAt;
+  if (data.lostAt !== undefined) fields["LostAt"] = data.lostAt;
+  if (data.lostReason !== undefined) fields["LostReason"] = data.lostReason;
+  if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOpportunity(await res.json());
+}
+
+export async function deleteOpportunity(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── CRM Activities ───────────────────────────────────────────────────────────
+function mapCRMActivity(record: AirtableRecord): CRMActivity {
+  const f = record.fields;
+  return {
+    id: record.id,
+    opportunityId: toStr(f["OpportunityId"]),
+    type: (toStr(f["Type"]) || "Note") as CRMActivityType,
+    note: toStr(f["Note"]),
+    isGmailImported: f["IsGmailImported"] === true,
+    gmailMessageId: toStr(f["GmailMessageId"]) || undefined,
+    gmailThreadId: toStr(f["GmailThreadId"]) || undefined,
+    activityDate: toStr(f["ActivityDate"]),
+    createdByClerkId: toStr(f["CreatedByClerkId"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getActivitiesForOpportunity(opportunityId: string): Promise<CRMActivity[]> {
+  const formula = encodeURIComponent(`{OpportunityId} = "${opportunityId}"`);
+  const res = await crmFetch(
+    AIRTABLE_TABLES.CRM_ACTIVITIES,
+    `?filterByFormula=${formula}&sort[0][field]=ActivityDate&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapCRMActivity);
+}
+
+export async function createActivity(data: {
+  opportunityId: string;
+  type: CRMActivityType;
+  note: string;
+  isGmailImported?: boolean;
+  gmailMessageId?: string;
+  gmailThreadId?: string;
+  activityDate: string;
+  createdByClerkId: string;
+}): Promise<CRMActivity> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        OpportunityId: data.opportunityId,
+        Type: data.type,
+        Note: data.note,
+        IsGmailImported: data.isGmailImported ?? false,
+        GmailMessageId: data.gmailMessageId || "",
+        GmailThreadId: data.gmailThreadId || "",
+        ActivityDate: data.activityDate,
+        CreatedByClerkId: data.createdByClerkId,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapCRMActivity(await res.json());
+}
+
+export async function updateActivity(
+  id: string,
+  data: Partial<{ type: CRMActivityType; note: string; activityDate: string }>
+): Promise<CRMActivity> {
+  const fields: Record<string, unknown> = {};
+  if (data.type !== undefined) fields["Type"] = data.type;
+  if (data.note !== undefined) fields["Note"] = data.note;
+  if (data.activityDate !== undefined) fields["ActivityDate"] = data.activityDate;
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapCRMActivity(await res.json());
+}
+
+export async function deleteActivity(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Gmail Tokens ─────────────────────────────────────────────────────────────
+function mapGmailToken(record: AirtableRecord): GmailToken {
+  const f = record.fields;
+  return {
+    id: record.id,
+    clerkUserId: toStr(f["ClerkUserId"]),
+    accessToken: toStr(f["AccessToken"]),
+    refreshToken: toStr(f["RefreshToken"]),
+    expiresAt: toStr(f["ExpiresAt"]),
+    email: toStr(f["Email"]),
+  };
+}
+
+export async function getGmailToken(clerkUserId: string): Promise<GmailToken | null> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapGmailToken(data.records[0] as AirtableRecord);
+}
+
+export async function saveGmailToken(
+  clerkUserId: string,
+  data: { accessToken: string; refreshToken: string; expiresAt: string; email: string }
+): Promise<GmailToken> {
+  const existing = await getGmailToken(clerkUserId);
+  const fields = {
+    ClerkUserId: clerkUserId,
+    AccessToken: data.accessToken,
+    RefreshToken: data.refreshToken,
+    ExpiresAt: data.expiresAt,
+    Email: data.email,
+    UpdatedAt: new Date().toISOString(),
+  };
+  if (existing) {
+    const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapGmailToken(await res.json());
+  }
+  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, "", {
+    method: "POST",
+    body: JSON.stringify({ fields: { ...fields, CreatedAt: new Date().toISOString() } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapGmailToken(await res.json());
+}
+
+export async function deleteGmailToken(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
 }

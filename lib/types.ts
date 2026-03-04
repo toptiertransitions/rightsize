@@ -439,6 +439,86 @@ export interface Contract {
   createdAt: string;
 }
 
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+export interface ReferralCompany {
+  id: string;
+  name: string;
+  type: string;
+  notes: string;
+  assignedToClerkId: string;
+  createdAt: string;
+}
+
+export interface ReferralContact {
+  id: string;
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  referralCompanyId: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface ClientContact {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  source: string;
+  notes: string;
+  createdAt: string;
+}
+
+export type OpportunityStage = "Lead" | "Qualifying" | "Proposal Sent" | "Won" | "Lost";
+
+export interface KeyPerson {
+  name: string;
+  relationship: string;
+  referralContactId?: string;
+}
+
+export interface ClientOpportunity {
+  id: string;
+  tenantId: string;
+  clientContactId: string;
+  stage: OpportunityStage;
+  keyPeople: KeyPerson[];
+  notes: string;
+  nextStepDate?: string;
+  nextStepNote?: string;
+  estimatedValue: number;
+  wonAt?: string;
+  lostAt?: string;
+  lostReason?: string;
+  assignedToClerkId: string;
+  createdAt: string;
+}
+
+export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task";
+
+export interface CRMActivity {
+  id: string;
+  opportunityId: string;
+  type: CRMActivityType;
+  note: string;
+  isGmailImported: boolean;
+  gmailMessageId?: string;
+  gmailThreadId?: string;
+  activityDate: string;
+  createdByClerkId: string;
+  createdAt: string;
+}
+
+export interface GmailToken {
+  id: string;
+  clerkUserId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  email: string;
+}
+
 export interface CalculatorResult {
   rightsizingHours: number;
   packingHours: number;

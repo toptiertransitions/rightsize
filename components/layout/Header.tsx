@@ -10,9 +10,10 @@ interface HeaderProps {
   tenantName?: string;
   isImpersonating?: boolean;
   onStopImpersonating?: () => void;
+  isManager?: boolean;
 }
 
-export function Header({ tenantName, isImpersonating, onStopImpersonating }: HeaderProps) {
+export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager }: HeaderProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tenantId = searchParams.get("tenantId");
@@ -26,6 +27,7 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating }: Hea
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/plan${tq}`, base: "/plan", label: "Plan" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
+    ...(isManager ? [{ href: "/crm", base: "/crm", label: "CRM" }] : []),
   ];
 
   return (

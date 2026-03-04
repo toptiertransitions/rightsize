@@ -45,6 +45,12 @@ export const AIRTABLE_TABLES = {
   CONTRACT_SETTINGS: process.env.AIRTABLE_CONTRACT_SETTINGS_TABLE || "ContractSettings",
   CONTRACT_TEMPLATES: process.env.AIRTABLE_CONTRACT_TEMPLATES_TABLE || "ContractTemplates",
   CONTRACTS: process.env.AIRTABLE_CONTRACTS_TABLE || "Contracts",
+  CRM_COMPANIES: process.env.AIRTABLE_CRM_COMPANIES_TABLE || "CRMReferralCompanies",
+  CRM_CONTACTS: process.env.AIRTABLE_CRM_CONTACTS_TABLE || "CRMReferralContacts",
+  CRM_CLIENT_CONTACTS: process.env.AIRTABLE_CRM_CLIENT_CONTACTS_TABLE || "CRMClientContacts",
+  CRM_OPPORTUNITIES: process.env.AIRTABLE_CRM_OPPORTUNITIES_TABLE || "CRMOpportunities",
+  CRM_ACTIVITIES: process.env.AIRTABLE_CRM_ACTIVITIES_TABLE || "CRMActivities",
+  GMAIL_TOKENS: process.env.AIRTABLE_GMAIL_TOKENS_TABLE || "GmailTokens",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

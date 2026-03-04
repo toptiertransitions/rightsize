@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   "/invite(.*)",
   "/sign(.*)",
   "/api/webhooks(.*)",
+  "/api/crm/gmail/callback(.*)",
 ]);
 
 export default clerkMiddleware((auth, req) => {
