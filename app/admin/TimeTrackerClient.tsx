@@ -499,11 +499,19 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
               key={iso}
               onClick={() => setDateFilter(prev => prev === iso ? null : iso)}
               className={`bg-gray-800 border rounded-xl p-3 text-center transition-colors hover:border-forest-400 ${
-                isSelected ? "border-forest-400 ring-1 ring-forest-400" : isToday ? "border-forest-500" : "border-gray-700"
+                isSelected ? "border-forest-400 ring-1 ring-forest-400" : "border-gray-700"
               }`}
             >
-              <p className="text-xs text-gray-400 mb-1">{DAY_LABELS[i]}</p>
-              <p className="text-xs font-medium text-white">{day.toLocaleDateString("en-US", { day: "numeric" })}</p>
+              <p className={`text-xs mb-1 ${isToday ? "text-forest-400 font-semibold" : "text-gray-400"}`}>{DAY_LABELS[i]}</p>
+              <div className="flex items-center justify-center">
+                {isToday ? (
+                  <span className="w-6 h-6 rounded-full bg-forest-500 flex items-center justify-center text-xs font-bold text-white">
+                    {day.toLocaleDateString("en-US", { day: "numeric" })}
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-white">{day.toLocaleDateString("en-US", { day: "numeric" })}</span>
+                )}
+              </div>
               <p className={`text-xs mt-1 font-semibold ${mins > 0 ? "text-forest-400" : "text-gray-600"}`}>
                 {mins > 0 ? formatDuration(mins) : "—"}
               </p>
