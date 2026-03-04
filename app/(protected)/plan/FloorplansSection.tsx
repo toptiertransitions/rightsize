@@ -334,9 +334,10 @@ interface FileCardProps {
   file: ProjectFile;
   canEdit: boolean;
   onEdit: (file: ProjectFile) => void;
+  projectName?: string;
 }
 
-function FileCard({ file, canEdit, onEdit }: FileCardProps) {
+function FileCard({ file, canEdit, onEdit, projectName }: FileCardProps) {
   const tagCfg = TAG_CONFIG[file.fileTag] ?? { label: file.fileTag, color: "bg-gray-100 text-gray-700" };
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: file.id });
@@ -379,6 +380,9 @@ function FileCard({ file, canEdit, onEdit }: FileCardProps) {
           <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${tagCfg.color}`}>
             {tagCfg.label}
           </span>
+          {projectName && (
+            <p className="text-[10px] text-gray-400 truncate mt-1 font-medium">{projectName}</p>
+          )}
         </div>
 
         {/* Edit button — top-left */}
@@ -415,9 +419,10 @@ interface FloorplansSectionProps {
   tenantId: string;
   canEdit: boolean;
   initialFiles: ProjectFile[];
+  projectNames?: Record<string, string>; // tenantId → project name, shown in "All" modes
 }
 
-export function FloorplansSection({ tenantId, canEdit, initialFiles }: FloorplansSectionProps) {
+export function FloorplansSection({ tenantId, canEdit, initialFiles, projectNames }: FloorplansSectionProps) {
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
   const [showUpload, setShowUpload] = useState(false);
   const [editingFile, setEditingFile] = useState<ProjectFile | null>(null);
@@ -544,6 +549,7 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles }: Floorplan
                           file={file}
                           canEdit={canEdit}
                           onEdit={f => setEditingFile(f)}
+                          projectName={projectNames?.[file.tenantId]}
                         />
                       ))}
                     </div>

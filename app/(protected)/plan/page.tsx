@@ -18,7 +18,7 @@ import { PlanClient } from "./PlanClient";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
-  searchParams: Promise<{ tenantId?: string }>;
+  searchParams: Promise<{ tenantId?: string; view?: string }>;
 }
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
@@ -27,7 +27,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { tenantId } = await searchParams;
+  const { tenantId, view } = await searchParams;
 
   // ── No tenantId: check for manager/admin first, then fall back to membership logic ──
   if (!tenantId) {
@@ -35,20 +35,27 @@ export default async function PlanPage({ searchParams }: PageProps) {
     const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
 
     if (isManagerOrAdmin) {
-      // Fetch all active tenants and combine their plan entries
       const allTenants = await getTenants().catch(() => []);
-      const activeTenants = allTenants.filter(t => !t.isArchived);
-      const allEntries = (
-        await Promise.all(activeTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => [])))
-      ).flat();
-      const tenantOptions = activeTenants.map(t => ({ id: t.id, name: t.name }));
+      const showArchived = view === "archived";
+      const selectedTenants = showArchived
+        ? allTenants.filter(t => t.isArchived)
+        : allTenants.filter(t => !t.isArchived);
+      const currentTenantId = showArchived ? "__all_archived__" : "__all_active__";
+      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+
+      // Fetch plan entries, time entries, and project files for all tenants in selected group
+      const [allEntries, allTimeEntries, allProjectFiles] = await Promise.all([
+        Promise.all(selectedTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))).then(r => r.flat()),
+        Promise.all(selectedTenants.map(t => getTimeEntries({ tenantId: t.id }).catch(() => []))).then(r => r.flat()),
+        Promise.all(selectedTenants.map(t => getProjectFiles(t.id).catch(() => []))).then(r => r.flat()),
+      ]);
 
       return (
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
-              <p className="text-gray-500 mt-0.5">All projects — daily focus calendar</p>
+              <p className="text-gray-500 mt-0.5">{showArchived ? "Archived projects" : "All active projects"} — daily focus calendar</p>
             </div>
           </div>
           <PlanClient
@@ -56,11 +63,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
             rooms={[]}
             tenantId=""
             canEdit={false}
-            projectFiles={[]}
-            timeEntries={[]}
+            projectFiles={allProjectFiles}
+            timeEntries={allTimeEntries}
             isAdmin={sysRole === "TTTAdmin"}
             tenantOptions={tenantOptions}
-            currentTenantId=""
+            currentTenantId={currentTenantId}
           />
         </div>
       );
@@ -140,7 +147,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const tenantOptions = isManagerOrAdmin
-    ? allTenants.filter(t => !t.isArchived).map(t => ({ id: t.id, name: t.name }))
+    ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }))
     : undefined;
 
   return (

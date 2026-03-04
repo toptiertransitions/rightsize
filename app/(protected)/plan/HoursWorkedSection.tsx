@@ -181,9 +181,11 @@ interface Props {
   isAdmin: boolean;
   estimatedHours?: number;
   tenantId: string;
+  canEditEstimate?: boolean; // defaults to isAdmin; pass false in "All Projects" modes
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initialEstimatedHours, tenantId }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initialEstimatedHours, tenantId, canEditEstimate }: Props) {
+  const showEstimateEdit = canEditEstimate ?? isAdmin;
   const [entries, setEntries] = useState(timeEntries);
   const [showLog, setShowLog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
@@ -256,7 +258,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
         {/* Estimated */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">Estimated</div>
-          {isAdmin && editingEst ? (
+          {showEstimateEdit && editingEst ? (
             <div className="flex items-center gap-1 mt-1">
               <input type="number" min="0" value={estInput} onChange={e => setEstInput(e.target.value)}
                 className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-sm" />
@@ -272,7 +274,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
               <span className="text-xl font-bold text-gray-900">
                 {estimatedHours > 0 ? `${estimatedHours}h` : "—"}
               </span>
-              {isAdmin && (
+              {showEstimateEdit && (
                 <button onClick={() => { setEstInput(String(estimatedHours || "")); setEditingEst(true); }}
                   className="text-[11px] text-gray-400 hover:text-forest-600 mb-0.5 ml-1">
                   edit

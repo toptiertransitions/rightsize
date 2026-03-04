@@ -497,6 +497,7 @@ function ActivityChip({ entry, rooms, onClick, projectName }: { entry: PlanEntry
 interface TenantOption {
   id: string;
   name: string;
+  isArchived?: boolean;
 }
 
 interface PlanClientProps {
@@ -521,8 +522,8 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
 
-  // In "All Projects" mode (tenantOptions present, currentTenantId is ""), disable editing
-  const isAllProjectsMode = tenantOptions != null && currentTenantId === "";
+  // In "All Projects" mode (currentTenantId is one of the sentinel values), disable editing
+  const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__";
   const effectiveCanEdit = canEdit && !isAllProjectsMode;
 
   // Tenant name lookup for "All" mode chips
@@ -530,6 +531,9 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   if (tenantOptions) {
     for (const t of tenantOptions) tenantNameMap[t.id] = t.name;
   }
+
+  // Project name map for FloorplansSection in "All" mode
+  const projectNamesMap: Record<string, string> = tenantNameMap;
 
   // Live entries — start from server data, get patched with RSVP syncs
   const [liveEntries, setLiveEntries] = useState(entries);
@@ -635,12 +639,21 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
       {tenantOptions && tenantOptions.length > 0 && (
         <div className="mb-3">
           <select
-            value={currentTenantId ?? ""}
-            onChange={e => router.push(e.target.value ? `/plan?tenantId=${e.target.value}` : "/plan")}
+            value={currentTenantId ?? "__all_active__"}
+            onChange={e => {
+              const v = e.target.value;
+              if (v === "__all_active__") router.push("/plan");
+              else if (v === "__all_archived__") router.push("/plan?view=archived");
+              else router.push(`/plan?tenantId=${v}`);
+            }}
             className="bg-white border border-gray-200 rounded-xl px-3 h-9 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-400"
           >
-            <option value="">All Projects</option>
-            {tenantOptions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="__all_active__">All Active Projects</option>
+            <option value="__all_archived__">All Archived Projects</option>
+            <option disabled>──────────────────</option>
+            {tenantOptions.filter(t => !t.isArchived).map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
           </select>
         </div>
       )}
@@ -825,14 +838,16 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
         isAdmin={isAdmin}
         estimatedHours={estimatedHours}
         tenantId={tenantId}
+        canEditEstimate={!isAllProjectsMode}
       />
 
       {/* ── Floorplans & Images ──────────────────────────────────────────────── */}
       <div className="mt-10">
         <FloorplansSection
           tenantId={tenantId}
-          canEdit={canEdit}
+          canEdit={effectiveCanEdit}
           initialFiles={projectFiles}
+          projectNames={isAllProjectsMode ? projectNamesMap : undefined}
         />
       </div>
 
