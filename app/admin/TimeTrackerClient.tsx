@@ -72,7 +72,7 @@ function todayISO(): string {
 }
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
-function exportCSV(entries: TimeEntry[]) {
+function exportCSV(entries: TimeEntry[], from: string, to: string) {
   const header = ["Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time", "Duration (hrs)", "Travel Time (min)", "Travel Miles", "Notes"];
   const rows = entries.map(e => [
     e.date,
@@ -91,9 +91,119 @@ function exportCSV(entries: TimeEntry[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `time-entries-${todayISO()}.csv`;
+  a.download = `time-entries-${from}-to-${to}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── Export Modal ─────────────────────────────────────────────────────────────
+function ExportModal({ entries, onClose, weekStart }: {
+  entries: TimeEntry[];
+  onClose: () => void;
+  weekStart: Date;
+}) {
+  const thisWeekFrom = toISODate(weekStart);
+  const thisWeekTo   = toISODate(addDays(weekStart, 6));
+  const lastWeekFrom = toISODate(addDays(weekStart, -7));
+  const lastWeekTo   = toISODate(addDays(weekStart, -1));
+  const twoWeeksFrom = toISODate(addDays(weekStart, -14));
+  const twoWeeksTo   = toISODate(addDays(weekStart, -1));
+
+  const [fromDate, setFromDate] = useState(twoWeeksFrom);
+  const [toDate,   setToDate]   = useState(twoWeeksTo);
+
+  const presets = [
+    { label: "This Week",    from: thisWeekFrom, to: thisWeekTo },
+    { label: "Last Week",    from: lastWeekFrom, to: lastWeekTo },
+    { label: "Last 2 Weeks", from: twoWeeksFrom, to: twoWeeksTo },
+  ];
+
+  const filtered = entries.filter(e => e.date >= fromDate && e.date <= toDate);
+  const isPreset = (p: typeof presets[0]) => fromDate === p.from && toDate === p.to;
+
+  function doExport() {
+    exportCSV(filtered, fromDate, toDate);
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-bold text-white">Export Time Entries</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Quick presets */}
+        <div className="flex gap-2 mb-5 flex-wrap">
+          {presets.map(p => (
+            <button
+              key={p.label}
+              onClick={() => { setFromDate(p.from); setToDate(p.to); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                isPreset(p)
+                  ? "bg-forest-600 text-white"
+                  : "bg-gray-800 border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Date range inputs */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">To</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={e => setToDate(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+            />
+          </div>
+        </div>
+
+        {/* Entry count */}
+        <p className="text-xs text-gray-500 mb-5">
+          {filtered.length === 0
+            ? "No entries in this range"
+            : `${filtered.length} ${filtered.length === 1 ? "entry" : "entries"} · ${(filtered.reduce((s, e) => s + e.durationMinutes, 0) / 60).toFixed(1)} hrs total`
+          }
+        </p>
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors border border-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={doExport}
+            disabled={filtered.length === 0}
+            className="flex-1 py-2.5 rounded-xl text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-40 font-medium"
+          >
+            Export CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
@@ -347,6 +457,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
   const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
 
@@ -462,7 +573,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
         )}
         <div className="flex-1" />
         {canViewAll && (
-          <button onClick={() => exportCSV(visibleEntries)}
+          <button onClick={() => setShowExportModal(true)}
             className="px-4 py-2 rounded-xl text-sm text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors">
             Export CSV
           </button>
@@ -587,7 +698,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
         </div>
       )}
 
-      {/* Modal */}
+      {/* Log Time Modal */}
       {showModal && (
         <LogTimeModal
           entry={editEntry}
@@ -598,6 +709,15 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
           staffMembers={staffMembers}
           currentUserId={currentUserId}
           currentUserName={currentUserName}
+        />
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportModal
+          entries={visibleEntries}
+          onClose={() => setShowExportModal(false)}
+          weekStart={currentWeekStart}
         />
       )}
     </div>
