@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { clerkClient } from "@clerk/nextjs/server";
 import {
+  getSystemRole,
   getUserRoleForTenant,
   getTenantById,
   getInvoicesForTenant,
@@ -23,10 +24,18 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   const { tenantId } = await searchParams;
   if (!tenantId) redirect("/home");
 
-  const role = await getUserRoleForTenant(userId, tenantId).catch(() => null);
-  if (!role) redirect("/home");
+  const [sysRole, tenantRole] = await Promise.all([
+    getSystemRole(userId).catch(() => null),
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+  ]);
 
-  const isManager = role === "TTTManager" || role === "TTTAdmin";
+  const isTTTStaff = sysRole === "TTTAdmin" || sysRole === "TTTManager" || sysRole === "TTTStaff";
+
+  // Allow TTT staff (who may not have a membership row in every project) or tenant members
+  if (!isTTTStaff && !tenantRole) redirect("/home");
+
+  const isManager = sysRole === "TTTAdmin" || sysRole === "TTTManager" ||
+    tenantRole === "TTTAdmin" || tenantRole === "TTTManager";
 
   const [tenant, invoices, services, invoiceSettings, allContracts, timeEntries] =
     await Promise.all([
