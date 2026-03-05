@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: [
+    "@react-pdf/renderer",
+    "@react-pdf/layout",
+    "@react-pdf/render",
+    "@react-pdf/font",
+    "@react-pdf/textkit",
+    "fontkit",
+    "linebreak",
+  ],
   async redirects() {
     return [
       { source: "/dashboard", destination: "/home", permanent: true },
