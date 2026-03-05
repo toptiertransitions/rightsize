@@ -61,11 +61,12 @@ function getFocusColor(area: string, serviceList: string[]): string {
 }
 
 function fmtMins(mins: number): string {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
+  const h = Math.round((mins / 60) * 10) / 10;
+  return `${h}h`;
+}
+
+function fmtHours(h: number): string {
+  return `${Math.round(h * 10) / 10}h`;
 }
 
 function fmtDate(dateStr: string): string {
@@ -380,7 +381,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
           ) : (
             <div className="flex items-end gap-1">
               <span className="text-xl font-bold text-gray-900">
-                {estimatedHours > 0 ? `${estimatedHours}h` : "—"}
+                {estimatedHours > 0 ? fmtHours(estimatedHours) : "—"}
               </span>
               {showEstimateEdit && (
                 <button onClick={() => { setEstInput(String(estimatedHours || "")); setEditingEst(true); }}
@@ -410,7 +411,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
                   {contractServiceHours.map((sh) => (
                     <div key={sh.serviceName} className="flex justify-between items-center">
                       <span className="text-[11px] text-gray-500 truncate pr-1">{sh.serviceName}</span>
-                      <span className="text-[11px] font-semibold text-gray-700 shrink-0">{sh.hours}h</span>
+                      <span className="text-[11px] font-semibold text-gray-700 shrink-0">{fmtHours(sh.hours)}</span>
                     </div>
                   ))}
                 </div>
