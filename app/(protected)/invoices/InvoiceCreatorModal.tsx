@@ -53,7 +53,9 @@ export function InvoiceCreatorModal({
   const [depositPercent, setDepositPercent] = useState(40);
   const [depositAmount, setDepositAmount] = useState("");
   const [selectedContractId, setSelectedContractId] = useState(contracts[0]?.id ?? "");
-  const [depositServiceId, setDepositServiceId] = useState(services[0]?.id ?? "");
+  const [depositServiceId, setDepositServiceId] = useState(
+    (services.find((s) => s.name.toLowerCase() === "services") ?? services[0])?.id ?? ""
+  );
 
   // Full invoice state
   const [fullSource, setFullSource] = useState<FullSource>("contract");
@@ -116,8 +118,9 @@ export function InvoiceCreatorModal({
       setSelectedContractId(contracts[0].id);
       setFullContractId(contracts[0].id);
     }
-    if (services[0]?.id) {
-      setDepositServiceId(services[0].id);
+    if (services.length > 0) {
+      const servicesEntry = services.find((s) => s.name.toLowerCase() === "services") ?? services[0];
+      setDepositServiceId(servicesEntry.id);
       setSpecificServiceId(services[0].id);
     }
     setSentToEmail(ownerEmail);
