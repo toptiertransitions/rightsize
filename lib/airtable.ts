@@ -1445,7 +1445,7 @@ const OPTIONAL_TIME_ENTRY_FIELDS = ["TravelMiles", "TravelMinutes", "Notes"];
 async function timeEntryWrite(path: string, method: "POST" | "PATCH", fields: Record<string, unknown>): Promise<AirtableRecord> {
   const current = { ...fields };
   for (let attempt = 0; attempt <= OPTIONAL_TIME_ENTRY_FIELDS.length; attempt++) {
-    const res = await timeFetch(path, { method, body: JSON.stringify({ fields: current }) });
+    const res = await timeFetch(path, { method, body: JSON.stringify({ fields: current, typecast: true }) });
     if (res.ok) return res.json();
     const text = await res.text();
     let errData: { error?: { type?: string; message?: string } };
