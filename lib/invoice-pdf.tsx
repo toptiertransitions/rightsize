@@ -160,9 +160,10 @@ interface InvoicePDFProps {
   invoice: Invoice;
   tenantName: string;
   settings: InvoiceSettings;
+  payUrl?: string;
 }
 
-export function InvoicePDF({ invoice, tenantName, settings }: InvoicePDFProps) {
+export function InvoicePDF({ invoice, tenantName, settings, payUrl }: InvoicePDFProps) {
   const dateStr = new Date(invoice.createdAt).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -246,11 +247,11 @@ export function InvoicePDF({ invoice, tenantName, settings }: InvoicePDFProps) {
           </View>
         </View>
 
-        {/* Payment Link */}
-        {settings.paymentLinkUrl ? (
+        {/* Pay Now */}
+        {payUrl ? (
           <View style={styles.paymentSection}>
-            <Text style={styles.paymentLabel}>Pay Online</Text>
-            <Text style={styles.paymentLink}>{settings.paymentLinkUrl}</Text>
+            <Text style={styles.paymentLabel}>Pay Now</Text>
+            <Text style={styles.paymentLink}>{payUrl}</Text>
           </View>
         ) : null}
 
@@ -265,7 +266,7 @@ export function InvoicePDF({ invoice, tenantName, settings }: InvoicePDFProps) {
   );
 }
 
-export async function renderInvoicePDF(props: InvoicePDFProps): Promise<Buffer> {
+export async function renderInvoicePDF(props: InvoicePDFProps & { payUrl?: string }): Promise<Buffer> {
   const { renderToBuffer } = await import("@react-pdf/renderer");
   return renderToBuffer(<InvoicePDF {...props} />) as Promise<Buffer>;
 }

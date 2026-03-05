@@ -111,36 +111,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Send email if requested
-  let emailSent = false;
-  if (sendEmail && sentToEmail) {
-    try {
-      const settings = await getInvoiceSettings().catch(() => null);
-      const html = buildInvoiceEmail({
-        invoiceNumber,
-        tenantName: tenantName || "Client",
-        type,
-        amount,
-        serviceName: serviceName || "Services",
-        paymentLinkUrl: settings?.paymentLinkUrl || "",
-        companyName: settings?.companyName || "Top Tier Transitions",
-        logoUrl: settings?.logoUrl,
-      });
-      const emailOpts: Parameters<typeof resend.emails.send>[0] = {
-        from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
-        to: sentToEmail,
-        subject: `Invoice ${invoiceNumber} — ${type} Invoice`,
-        html,
-      };
-      if (ccEmail) emailOpts.cc = ccEmail;
-      await resend.emails.send(emailOpts);
-      emailSent = true;
-    } catch (e) {
-      console.error("Invoice email send failed:", e);
-    }
-  }
-
-  const invoice = await createInvoice({
+  // Create invoice first so we have the ID for the payment URL
+  let invoice = await createInvoice({
     tenantId,
     type,
     invoiceNumber,
@@ -155,9 +127,39 @@ export async function POST(req: NextRequest) {
     qboDocNumber,
     sentToEmail,
     ccEmail,
-    emailSent,
+    emailSent: false,
     createdByClerkId: userId,
   });
+
+  // Send email with a link back to the platform payment page
+  if (sendEmail && sentToEmail) {
+    try {
+      const settings = await getInvoiceSettings().catch(() => null);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const payUrl = `${appUrl}/pay/${invoice.id}`;
+      const html = buildInvoiceEmail({
+        invoiceNumber,
+        tenantName: tenantName || "Client",
+        type,
+        amount,
+        serviceName: serviceName || "Services",
+        payUrl,
+        companyName: settings?.companyName || "Top Tier Transitions",
+        logoUrl: settings?.logoUrl,
+      });
+      const emailOpts: Parameters<typeof resend.emails.send>[0] = {
+        from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
+        to: sentToEmail,
+        subject: `Invoice ${invoiceNumber} — ${type} Invoice`,
+        html,
+      };
+      if (ccEmail) emailOpts.cc = ccEmail;
+      await resend.emails.send(emailOpts);
+      invoice = await updateInvoice(invoice.id, { emailSent: true });
+    } catch (e) {
+      console.error("Invoice email send failed:", e);
+    }
+  }
 
   return NextResponse.json({ invoice });
 }

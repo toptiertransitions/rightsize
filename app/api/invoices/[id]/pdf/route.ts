@@ -48,10 +48,14 @@ export async function GET(
     updatedAt: "",
   };
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const payUrl = `${appUrl}/pay/${id}`;
+
   const pdfBuffer = await renderInvoicePDF({
     invoice,
     tenantName: tenant?.name || "Client",
     settings: settings ?? defaultSettings,
+    payUrl,
   });
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

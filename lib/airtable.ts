@@ -2761,6 +2761,7 @@ export async function updateInvoice(
     notes: string;
     qboInvoiceId: string;
     qboDocNumber: string;
+    emailSent: boolean;
   }>
 ): Promise<Invoice> {
   const fields: Record<string, unknown> = {};
@@ -2770,6 +2771,7 @@ export async function updateInvoice(
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.qboInvoiceId !== undefined) fields["QBOInvoiceId"] = data.qboInvoiceId;
   if (data.qboDocNumber !== undefined) fields["QBODocNumber"] = data.qboDocNumber;
+  if (data.emailSent !== undefined) fields["EmailSent"] = data.emailSent;
   const res = await invoicesFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
