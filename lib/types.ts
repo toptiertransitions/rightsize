@@ -133,7 +133,7 @@ export type PrimaryRoute =
 
 export type ItemStatus =
   | "Pending Review"
-  | "Reviewed"
+  | "Approved"
   | "Listed"
   | "Sold"
   | "Donated"
@@ -180,6 +180,10 @@ export interface Item {
   assignedVendorId?: string;
   vendorDecision?: VendorDecision;
   vendorNotes?: string;
+  payoutPaidAmount?: number;
+  vendorPriceApproved?: boolean;
+  vendorExpectedPrice?: number;
+  vendorRespondedAt?: string;
 }
 
 // ─── AI Analysis ──────────────────────────────────────────────────────────────
@@ -205,29 +209,19 @@ export interface ItemAnalysis {
 }
 
 // ─── Plan / Daily Focus ───────────────────────────────────────────────────────
-export type PlanActivity =
-  | "Sorting"
-  | "Packing"
-  | "Selling / Listing"
-  | "Staging"
-  | "Donating"
-  | "Discarding"
-  | "Photography"
-  | "Moving"
-  | "Estate Sale Prep"
-  | "Other";
+export type PlanActivity = string;
 
-export const PLAN_ACTIVITIES: PlanActivity[] = [
-  "Sorting",
-  "Packing",
-  "Selling / Listing",
-  "Staging",
-  "Donating",
-  "Discarding",
-  "Photography",
-  "Moving",
-  "Estate Sale Prep",
-  "Other",
+export const PLAN_ACTIVITIES: string[] = [
+  "Coordinating",
+  "Rightsizing",
+  "Packing to Move",
+  "Packing for Donation/Dispersal",
+  "Managing Moving Day",
+  "Unpacking",
+  "Setting Up Your Space",
+  "Donating/Dispersal",
+  "Cleaning",
+  "Other Service",
 ];
 
 export interface PlanHelper {
@@ -307,11 +301,38 @@ export interface RoutingRule {
   primaryRoute: PrimaryRoute;
   vendorType: VendorType;
   minCondition: "Any" | "Fair or better" | "Good or better" | "Excellent only";
-  matchCategories: string;
+  matchCategories: string;   // comma-sep item categories, blank = any
+  matchSizeClasses: string;  // comma-sep SizeClass values, blank = any
+  matchFragility: string;    // comma-sep FragilityLevel values, blank = any
+  minValueMid: number;       // 0 = no minimum target value
+  maxValueMid: number;       // 0 = no maximum target value
   priority: number;
   isActive: boolean;
   createdAt: string;
 }
+
+// ─── Item Categories ──────────────────────────────────────────────────────────
+export const ITEM_CATEGORIES: string[] = [
+  "Furniture",
+  "Electronics",
+  "Appliances",
+  "Clothing & Accessories",
+  "Books & Media",
+  "Art & Collectibles",
+  "Jewelry",
+  "Sporting Goods",
+  "Tools & Hardware",
+  "Kitchen & Dining",
+  "Bedroom",
+  "Bathroom",
+  "Office",
+  "Toys & Games",
+  "Musical Instruments",
+  "Outdoor & Garden",
+  "Holiday & Seasonal",
+  "Antiques",
+  "Other",
+];
 
 // ─── Local Vendor Directory ───────────────────────────────────────────────────
 export interface LocalVendor {
@@ -334,10 +355,11 @@ export interface LocalVendor {
   isActive: boolean;
   createdAt: string;
   clerkUserId?: string;
+  prefCategories: Array<{ category: string; minPrice: number; maxPrice: number }>;
 }
 
 // ─── Project Files ────────────────────────────────────────────────────────────
-export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File";
+export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File" | "Payment Proof";
 
 export interface ProjectFile {
   id: string;
@@ -355,10 +377,19 @@ export interface ProjectFile {
 }
 
 // ─── Time Tracking ────────────────────────────────────────────────────────────
-export const TIME_FOCUS_AREAS = [
-  "Sorting", "Packing", "Staging", "Coordination", "Admin", "Travel", "Other",
-] as const;
-export type FocusArea = typeof TIME_FOCUS_AREAS[number];
+export const TIME_FOCUS_AREAS: string[] = [
+  "Coordinating",
+  "Rightsizing",
+  "Packing to Move",
+  "Packing for Donation/Dispersal",
+  "Managing Moving Day",
+  "Unpacking",
+  "Setting Up Your Space",
+  "Donating/Dispersal",
+  "Cleaning",
+  "Other Service",
+];
+export type FocusArea = string;
 
 export interface TimeEntry {
   id: string;           // Airtable record ID
@@ -401,6 +432,12 @@ export interface ContractSettings {
   rightsizingRate: number;
   packingRate: number;
   unpackingRate: number;
+  // Estimator logic (hrs per 100 SF)
+  rightsizingLow: number;
+  rightsizingAvg: number;
+  rightsizingHigh: number;
+  packingPerHundred: number;
+  unpackingPerHundred: number;
   createdAt: string;
 }
 
@@ -411,6 +448,13 @@ export interface ContractTemplate {
   body: string;
   isActive: boolean;
   createdAt: string;
+}
+
+export interface ContractLineItem {
+  serviceId: string;
+  serviceName: string;
+  hours: number;
+  rate: number; // $/hr snapshotted at contract creation
 }
 
 export type ContractStatus = "Draft" | "Sent" | "Signed";
@@ -437,13 +481,21 @@ export interface Contract {
   sentByClerkId?: string;
   sentAt?: string;
   createdAt: string;
+  lineItems?: ContractLineItem[];
 }
 
 // ─── CRM ──────────────────────────────────────────────────────────────────────
+export type ReferralPriority = "High" | "Medium" | "Low" | "";
+
 export interface ReferralCompany {
   id: string;
   name: string;
   type: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  priority: ReferralPriority;
   notes: string;
   assignedToClerkId: string;
   createdAt: string;
@@ -518,6 +570,32 @@ export interface GmailToken {
   refreshToken: string;
   expiresAt: string;
   email: string;
+}
+
+// ─── Services ─────────────────────────────────────────────────────────────────
+export interface Service {
+  id: string;
+  airtableId: string;
+  name: string;
+  description: string;
+  hourlyRate: number;
+  estimatorLow: number;
+  estimatorAvg: number;
+  estimatorHigh: number;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  qboItemId?: string;
+}
+
+// ─── QuickBooks Online ─────────────────────────────────────────────────────────
+export interface QBOTokenRecord {
+  id: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  realmId: string;
+  companyName: string;
 }
 
 export interface CalculatorResult {

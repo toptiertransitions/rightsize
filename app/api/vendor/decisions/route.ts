@@ -7,14 +7,14 @@ export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { itemId: string; decision: VendorDecision; notes?: string };
+  let body: { itemId: string; decision: VendorDecision; notes?: string; vendorExpectedPrice?: number; vendorPriceNote?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { itemId, decision, notes } = body;
+  const { itemId, decision, notes, vendorExpectedPrice, vendorPriceNote } = body;
   if (!itemId || !decision) {
     return NextResponse.json({ error: "Missing itemId or decision" }, { status: 400 });
   }
@@ -27,12 +27,18 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Vendor not found" }, { status: 403 });
   }
 
-  // Update the item — security: only update vendorDecision/vendorNotes
+  // Update the item — security: only update vendorDecision/vendorNotes and price fields
   // The API trusts that the item belongs to this vendor (verified by the query in the portal)
-  const updated = await updateItem(itemId, {
+  const updateData: Parameters<typeof updateItem>[1] = {
     vendorDecision: decision,
-    vendorNotes: notes ?? undefined,
-  });
+    vendorNotes: (vendorPriceNote ?? notes) || undefined,
+    vendorPriceApproved: decision === "Approved" ? true : undefined,
+    vendorRespondedAt: new Date().toISOString(),
+  };
+  if (vendorExpectedPrice !== undefined) {
+    updateData.vendorExpectedPrice = vendorExpectedPrice;
+  }
+  const updated = await updateItem(itemId, updateData);
 
   // Verify the item is actually assigned to this vendor
   if (updated.assignedVendorId !== vendor.id) {

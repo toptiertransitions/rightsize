@@ -39,6 +39,7 @@ import type {
   ContractTemplate,
   Contract,
   ContractStatus,
+  ContractLineItem,
   ReferralCompany,
   ReferralContact,
   ClientContact,
@@ -48,6 +49,8 @@ import type {
   CRMActivity,
   CRMActivityType,
   GmailToken,
+  Service,
+  QBOTokenRecord,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -441,6 +444,10 @@ export async function updateItem(
     assignedVendorId: "AssignedVendorId",
     vendorDecision: "VendorDecision",
     vendorNotes: "VendorNotes",
+    payoutPaidAmount: "PayoutPaidAmount",
+    vendorPriceApproved: "VendorPriceApproved",
+    vendorExpectedPrice: "VendorExpectedPrice",
+    vendorRespondedAt: "VendorRespondedAt",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -503,6 +510,10 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     assignedVendorId: toStr(f["AssignedVendorId"]) || undefined,
     vendorDecision: (toStr(f["VendorDecision"]) || undefined) as VendorDecision | undefined,
     vendorNotes: toStr(f["VendorNotes"]) || undefined,
+    payoutPaidAmount: f["PayoutPaidAmount"] != null ? toNum(f["PayoutPaidAmount"]) : undefined,
+    vendorPriceApproved: f["VendorPriceApproved"] === true ? true : undefined,
+    vendorExpectedPrice: f["VendorExpectedPrice"] != null ? toNum(f["VendorExpectedPrice"]) : undefined,
+    vendorRespondedAt: toStr(f["VendorRespondedAt"]) || undefined,
   };
 }
 
@@ -947,6 +958,7 @@ export async function updateLocalVendor(
     notes: string;
     isActive: boolean;
     clerkUserId: string;
+    prefCategories: Array<{ category: string; minPrice: number; maxPrice: number }>;
   }>
 ): Promise<LocalVendor> {
   const fields: Record<string, unknown> = {};
@@ -966,6 +978,14 @@ export async function updateLocalVendor(
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
   if (data.clerkUserId !== undefined) fields["ClerkUserId"] = data.clerkUserId;
+  if (data.prefCategories !== undefined) {
+    for (let i = 1; i <= 5; i++) {
+      const slot = data.prefCategories[i - 1];
+      fields[`PrefCategory${i}`] = slot?.category ?? "";
+      fields[`PrefMinPrice${i}`] = slot?.minPrice ?? 0;
+      fields[`PrefMaxPrice${i}`] = slot?.maxPrice ?? 0;
+    }
+  }
   const res = await localVendorFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -1030,6 +1050,10 @@ function mapRoutingRule(record: AirtableRecord): RoutingRule {
     vendorType: (toStr(f["VendorType"]) || "Other") as VendorType,
     minCondition: (toStr(f["MinCondition"]) || "Any") as RoutingRule["minCondition"],
     matchCategories: toStr(f["MatchCategories"]),
+    matchSizeClasses: toStr(f["MatchSizeClasses"]),
+    matchFragility: toStr(f["MatchFragility"]),
+    minValueMid: typeof f["MinValueMid"] === "number" ? f["MinValueMid"] : 0,
+    maxValueMid: typeof f["MaxValueMid"] === "number" ? f["MaxValueMid"] : 0,
     priority: typeof f["Priority"] === "number" ? f["Priority"] : 99,
     isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
@@ -1054,6 +1078,10 @@ export async function createRoutingRule(data: Omit<RoutingRule, "id" | "airtable
         VendorType: data.vendorType,
         MinCondition: data.minCondition,
         MatchCategories: data.matchCategories,
+        MatchSizeClasses: data.matchSizeClasses || "",
+        MatchFragility: data.matchFragility || "",
+        MinValueMid: data.minValueMid || 0,
+        MaxValueMid: data.maxValueMid || 0,
         Priority: data.priority,
         IsActive: data.isActive,
         CreatedAt: new Date().toISOString(),
@@ -1070,6 +1098,10 @@ export async function updateRoutingRule(id: string, data: Partial<Omit<RoutingRu
   if (data.vendorType !== undefined) fields["VendorType"] = data.vendorType;
   if (data.minCondition !== undefined) fields["MinCondition"] = data.minCondition;
   if (data.matchCategories !== undefined) fields["MatchCategories"] = data.matchCategories;
+  if (data.matchSizeClasses !== undefined) fields["MatchSizeClasses"] = data.matchSizeClasses;
+  if (data.matchFragility !== undefined) fields["MatchFragility"] = data.matchFragility;
+  if (data.minValueMid !== undefined) fields["MinValueMid"] = data.minValueMid;
+  if (data.maxValueMid !== undefined) fields["MaxValueMid"] = data.maxValueMid;
   if (data.priority !== undefined) fields["Priority"] = data.priority;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
   const res = await routingRulesFetch(`/${id}`, {
@@ -1105,46 +1137,95 @@ export function applyRoutingRules(
   localVendors: LocalVendor[],
   rules: RoutingRule[],
   projectZip: string
-): Array<{ itemId: string; vendorId: string }> {
-  const assignments: Array<{ itemId: string; vendorId: string }> = [];
+): Array<{ itemId: string; vendorId?: string; primaryRoute: PrimaryRoute }> {
+  const assignments: Array<{ itemId: string; vendorId?: string; primaryRoute: PrimaryRoute }> = [];
   const activeRules = rules.filter(r => r.isActive).sort((a, b) => a.priority - b.priority);
   const projectCentroid = getZipCentroid(projectZip);
 
   for (const item of items) {
-    if (item.assignedVendorId) continue; // already assigned
+    if (item.assignedVendorId) continue; // already vendor-assigned
+    if (!["Pending Review", "Approved"].includes(item.status)) continue;
 
-    const matchingRules = activeRules.filter(r => r.primaryRoute === item.primaryRoute);
+    // Hard constraint: large items can never go to Online Marketplace
+    const isLarge = item.sizeClass === "Fits in Car-SUV" || item.sizeClass === "Needs Movers";
 
-    let assigned = false;
-    for (const rule of matchingRules) {
-      if (assigned) break;
+    // Hard constraint: condition worse than Good → override to Donate/Discard
+    const CONDITION_ORDER_LOCAL: Item["condition"][] = ["For Parts", "Poor", "Fair", "Good", "Excellent"];
+    const condIdx = CONDITION_ORDER_LOCAL.indexOf(item.condition);
+    if (condIdx >= 0 && condIdx < CONDITION_ORDER_LOCAL.indexOf("Good")) {
+      const forcedRoute: PrimaryRoute = (item.valueMid ?? 0) >= 100 ? "Donate" : "Discard";
+      assignments.push({ itemId: item.id, primaryRoute: forcedRoute });
+      continue;
+    }
 
+    for (const rule of activeRules) {
+      // Hard constraint: skip Online Marketplace recommendations for large items
+      if (isLarge && rule.primaryRoute === "Online Marketplace") continue;
+
+      // Size filter
+      if (rule.matchSizeClasses) {
+        const sizes = rule.matchSizeClasses.split(",").map(s => s.trim()).filter(Boolean);
+        if (sizes.length > 0 && !sizes.includes(item.sizeClass)) continue;
+      }
+      // Fragility filter
+      if (rule.matchFragility) {
+        const frags = rule.matchFragility.split(",").map(f => f.trim()).filter(Boolean);
+        if (frags.length > 0 && !frags.includes(item.fragility)) continue;
+      }
+      // Value range filter
+      const value = item.valueMid ?? 0;
+      if (rule.minValueMid > 0 && value < rule.minValueMid) continue;
+      if (rule.maxValueMid > 0 && value > rule.maxValueMid) continue;
+      // Condition filter
+      if (!conditionMeetsThreshold(item.condition, rule.minCondition)) continue;
+      // Category filter
+      if (rule.matchCategories) {
+        const cats = rule.matchCategories.split(",").map(c => c.trim().toLowerCase()).filter(Boolean);
+        if (cats.length > 0 && !cats.includes(item.category.toLowerCase())) continue;
+      }
+
+      // Rule matches — find the best local vendor for this route
       const candidates = localVendors.filter(vendor => {
         if (vendor.vendorType !== rule.vendorType) return false;
         if (!vendor.isActive) return false;
-        if (vendor.zipCodesServed && !vendor.zipCodesServed.split(",").map(z => z.trim()).includes(projectZip)) return false;
-        if (vendor.itemCategories && !vendor.itemCategories.split(",").map(c => c.trim().toLowerCase()).includes(item.category.toLowerCase())) return false;
-        if (rule.matchCategories && !rule.matchCategories.split(",").map(c => c.trim().toLowerCase()).includes(item.category.toLowerCase())) return false;
-        if (!conditionMeetsThreshold(item.condition, rule.minCondition)) return false;
+        if (vendor.zipCodesServed && projectZip &&
+          !vendor.zipCodesServed.split(",").map(z => z.trim()).includes(projectZip)) return false;
+        if (vendor.itemCategories &&
+          !vendor.itemCategories.split(",").map(c => c.trim().toLowerCase()).includes(item.category.toLowerCase())) return false;
+        // Vendor preference filter: if vendor has prefs, item must match at least one slot
+        if (vendor.prefCategories.length > 0) {
+          const itemCatLower = item.category.toLowerCase();
+          const itemValue = item.valueMid ?? 0;
+          const matchesPref = vendor.prefCategories.some(pref => {
+            if (pref.category.toLowerCase() !== itemCatLower) return false;
+            if (pref.minPrice > 0 && itemValue < pref.minPrice) return false;
+            if (pref.maxPrice > 0 && itemValue > pref.maxPrice) return false;
+            return true;
+          });
+          if (!matchesPref) return false;
+        }
         return true;
       });
 
-      if (candidates.length > 0) {
-        candidates.sort((a, b) => {
-          const aCentroid = a.zip ? getZipCentroid(a.zip) : null;
-          const bCentroid = b.zip ? getZipCentroid(b.zip) : null;
-          const aDist = projectCentroid && aCentroid
-            ? haversineDistanceMiles(projectCentroid.lat, projectCentroid.lng, aCentroid.lat, aCentroid.lng)
-            : Infinity;
-          const bDist = projectCentroid && bCentroid
-            ? haversineDistanceMiles(projectCentroid.lat, projectCentroid.lng, bCentroid.lat, bCentroid.lng)
-            : Infinity;
-          if (aDist !== bDist) return aDist - bDist;
-          return a.consignmentTake - b.consignmentTake;
-        });
-        assignments.push({ itemId: item.id, vendorId: candidates[0].id });
-        assigned = true;
-      }
+      candidates.sort((a, b) => {
+        const aCentroid = a.zip ? getZipCentroid(a.zip) : null;
+        const bCentroid = b.zip ? getZipCentroid(b.zip) : null;
+        const aDist = projectCentroid && aCentroid
+          ? haversineDistanceMiles(projectCentroid.lat, projectCentroid.lng, aCentroid.lat, aCentroid.lng)
+          : Infinity;
+        const bDist = projectCentroid && bCentroid
+          ? haversineDistanceMiles(projectCentroid.lat, projectCentroid.lng, bCentroid.lat, bCentroid.lng)
+          : Infinity;
+        if (aDist !== bDist) return aDist - bDist;
+        return a.consignmentTake - b.consignmentTake;
+      });
+
+      assignments.push({
+        itemId: item.id,
+        primaryRoute: rule.primaryRoute,
+        vendorId: candidates[0]?.id,
+      });
+      break; // first matching rule wins
     }
   }
 
@@ -1173,6 +1254,20 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
     clerkUserId: toStr(f["ClerkUserId"]) || undefined,
+    prefCategories: (() => {
+      const slots = [];
+      for (let i = 1; i <= 5; i++) {
+        const cat = toStr(f[`PrefCategory${i}`]);
+        if (cat) {
+          slots.push({
+            category: cat,
+            minPrice: typeof f[`PrefMinPrice${i}`] === "number" ? (f[`PrefMinPrice${i}`] as number) : 0,
+            maxPrice: typeof f[`PrefMaxPrice${i}`] === "number" ? (f[`PrefMaxPrice${i}`] as number) : 0,
+          });
+        }
+      }
+      return slots;
+    })(),
   };
 }
 
@@ -1406,6 +1501,111 @@ export async function deleteTimeEntry(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+// ─── Services ─────────────────────────────────────────────────────────────────
+function servicesFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.SERVICES;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapService(record: AirtableRecord): Service {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    name: toStr(f["Name"]),
+    description: toStr(f["Description"]),
+    hourlyRate: toNum(f["HourlyRate"]),
+    estimatorLow: toNum(f["EstimatorLow"]),
+    estimatorAvg: toNum(f["EstimatorAvg"]),
+    estimatorHigh: toNum(f["EstimatorHigh"]),
+    sortOrder: toNum(f["SortOrder"]),
+    isActive: f["IsActive"] === true,
+    createdAt: toStr(f["CreatedAt"]),
+    qboItemId: toStr(f["QBOItemId"]) || undefined,
+  };
+}
+
+export async function getServices(): Promise<Service[]> {
+  const res = await servicesFetch(`?sort[0][field]=SortOrder&sort[0][direction]=asc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapService).filter(s => s.isActive);
+}
+
+export async function getAllServices(): Promise<Service[]> {
+  const res = await servicesFetch(`?sort[0][field]=SortOrder&sort[0][direction]=asc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapService);
+}
+
+export async function createService(data: {
+  name: string;
+  description: string;
+  hourlyRate: number;
+  sortOrder: number;
+  isActive: boolean;
+}): Promise<Service> {
+  const res = await servicesFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Description: data.description,
+        HourlyRate: data.hourlyRate,
+        SortOrder: data.sortOrder,
+        IsActive: data.isActive,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapService(await res.json());
+}
+
+export async function updateService(id: string, data: {
+  name?: string;
+  description?: string;
+  hourlyRate?: number;
+  estimatorLow?: number;
+  estimatorAvg?: number;
+  estimatorHigh?: number;
+  sortOrder?: number;
+  isActive?: boolean;
+  qboItemId?: string;
+}): Promise<Service> {
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.description !== undefined) fields["Description"] = data.description;
+  if (data.hourlyRate !== undefined) fields["HourlyRate"] = data.hourlyRate;
+  if (data.estimatorLow !== undefined) fields["EstimatorLow"] = data.estimatorLow;
+  if (data.estimatorAvg !== undefined) fields["EstimatorAvg"] = data.estimatorAvg;
+  if (data.estimatorHigh !== undefined) fields["EstimatorHigh"] = data.estimatorHigh;
+  if (data.sortOrder !== undefined) fields["SortOrder"] = data.sortOrder;
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  if (data.qboItemId !== undefined) fields["QBOItemId"] = data.qboItemId;
+  const res = await servicesFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapService(await res.json());
+}
+
+export async function deleteService(id: string): Promise<void> {
+  const res = await servicesFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 // ─── Staff Roles (uses fetch directly) ───────────────────────────────────────
 function staffRolesFetch(path: string, options?: RequestInit) {
   const token = process.env.AIRTABLE_API_TOKEN!;
@@ -1544,12 +1744,19 @@ function contractFetch(table: string, path: string, options?: RequestInit) {
 
 function mapContractSettings(record: AirtableRecord): ContractSettings {
   const f = record.fields;
+  const n = (key: string, fallback: number) =>
+    typeof f[key] === "number" && (f[key] as number) > 0 ? (f[key] as number) : fallback;
   return {
     id: record.id,
     airtableId: record.id,
-    rightsizingRate: typeof f["RightsizingRate"] === "number" ? f["RightsizingRate"] : 0,
-    packingRate: typeof f["PackingRate"] === "number" ? f["PackingRate"] : 0,
-    unpackingRate: typeof f["UnpackingRate"] === "number" ? f["UnpackingRate"] : 0,
+    rightsizingRate: n("RightsizingRate", 0),
+    packingRate: n("PackingRate", 0),
+    unpackingRate: n("UnpackingRate", 0),
+    rightsizingLow: n("RightsizingLow", 0.5),
+    rightsizingAvg: n("RightsizingAvg", 1.0),
+    rightsizingHigh: n("RightsizingHigh", 2.0),
+    packingPerHundred: n("PackingPerHundred", 1.0),
+    unpackingPerHundred: n("UnpackingPerHundred", 1.0),
     createdAt: toStr(f["CreatedAt"]),
   };
 }
@@ -1564,17 +1771,26 @@ export async function getContractSettings(): Promise<ContractSettings | null> {
 }
 
 export async function upsertContractSettings(data: {
-  rightsizingRate: number;
-  packingRate: number;
-  unpackingRate: number;
+  rightsizingRate?: number;
+  packingRate?: number;
+  unpackingRate?: number;
+  rightsizingLow?: number;
+  rightsizingAvg?: number;
+  rightsizingHigh?: number;
+  packingPerHundred?: number;
+  unpackingPerHundred?: number;
 }): Promise<ContractSettings> {
   const table = AIRTABLE_TABLES.CONTRACT_SETTINGS;
   const existing = await getContractSettings();
-  const fields = {
-    RightsizingRate: data.rightsizingRate,
-    PackingRate: data.packingRate,
-    UnpackingRate: data.unpackingRate,
-  };
+  const fields: Record<string, unknown> = {};
+  if (data.rightsizingRate !== undefined) fields["RightsizingRate"] = data.rightsizingRate;
+  if (data.packingRate !== undefined) fields["PackingRate"] = data.packingRate;
+  if (data.unpackingRate !== undefined) fields["UnpackingRate"] = data.unpackingRate;
+  if (data.rightsizingLow !== undefined) fields["RightsizingLow"] = data.rightsizingLow;
+  if (data.rightsizingAvg !== undefined) fields["RightsizingAvg"] = data.rightsizingAvg;
+  if (data.rightsizingHigh !== undefined) fields["RightsizingHigh"] = data.rightsizingHigh;
+  if (data.packingPerHundred !== undefined) fields["PackingPerHundred"] = data.packingPerHundred;
+  if (data.unpackingPerHundred !== undefined) fields["UnpackingPerHundred"] = data.unpackingPerHundred;
   if (existing) {
     const res = await contractFetch(table, `/${existing.id}`, {
       method: "PATCH",
@@ -1662,6 +1878,11 @@ export async function deleteContractTemplate(id: string): Promise<void> {
 // ─── Contracts ────────────────────────────────────────────────────────────────
 function mapContract(record: AirtableRecord): Contract {
   const f = record.fields;
+  let lineItems: ContractLineItem[] | undefined;
+  const rawLineItems = toStr(f["ServiceLineItems"]);
+  if (rawLineItems) {
+    try { lineItems = JSON.parse(rawLineItems); } catch { /* ignore */ }
+  }
   return {
     id: record.id,
     airtableId: record.id,
@@ -1684,6 +1905,7 @@ function mapContract(record: AirtableRecord): Contract {
     sentByClerkId: toStr(f["SentByClerkId"]) || undefined,
     sentAt: toStr(f["SentAt"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
+    lineItems,
   };
 }
 
@@ -1721,27 +1943,30 @@ export async function createContract(data: {
   unpackingRate: number;
   totalCost: number;
   signToken: string;
+  lineItems?: ContractLineItem[];
 }): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
+  const fields: Record<string, unknown> = {
+    TenantId: data.tenantId,
+    TemplateId: data.templateId,
+    ContractBody: data.contractBody,
+    RightsizingHours: data.rightsizingHours,
+    PackingHours: data.packingHours,
+    UnpackingHours: data.unpackingHours,
+    RightsizingRate: data.rightsizingRate,
+    PackingRate: data.packingRate,
+    UnpackingRate: data.unpackingRate,
+    TotalCost: data.totalCost,
+    Status: "Draft",
+    SignToken: data.signToken,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.lineItems) {
+    fields["ServiceLineItems"] = JSON.stringify(data.lineItems);
+  }
   const res = await contractFetch(table, "", {
     method: "POST",
-    body: JSON.stringify({
-      fields: {
-        TenantId: data.tenantId,
-        TemplateId: data.templateId,
-        ContractBody: data.contractBody,
-        RightsizingHours: data.rightsizingHours,
-        PackingHours: data.packingHours,
-        UnpackingHours: data.unpackingHours,
-        RightsizingRate: data.rightsizingRate,
-        PackingRate: data.packingRate,
-        UnpackingRate: data.unpackingRate,
-        TotalCost: data.totalCost,
-        Status: "Draft",
-        SignToken: data.signToken,
-        CreatedAt: new Date().toISOString(),
-      },
-    }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapContract(await res.json());
@@ -1762,6 +1987,7 @@ export async function updateContract(
     packingHours: number;
     unpackingHours: number;
     totalCost: number;
+    lineItems: ContractLineItem[];
   }>
 ): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
@@ -1778,6 +2004,7 @@ export async function updateContract(
   if (data.packingHours !== undefined) fields["PackingHours"] = data.packingHours;
   if (data.unpackingHours !== undefined) fields["UnpackingHours"] = data.unpackingHours;
   if (data.totalCost !== undefined) fields["TotalCost"] = data.totalCost;
+  if (data.lineItems !== undefined) fields["ServiceLineItems"] = JSON.stringify(data.lineItems);
   const res = await contractFetch(table, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -1803,10 +2030,16 @@ function crmFetch(table: string, path: string, options?: RequestInit) {
 // ─── CRM Referral Companies ───────────────────────────────────────────────────
 function mapReferralCompany(record: AirtableRecord): ReferralCompany {
   const f = record.fields;
+  const rawPriority = toStr(f["Priority"]);
   return {
     id: record.id,
     name: toStr(f["Name"]),
     type: toStr(f["Type"]),
+    address: toStr(f["Address"]),
+    city: toStr(f["City"]),
+    state: toStr(f["State"]),
+    zip: toStr(f["Zip"]),
+    priority: (rawPriority === "High" || rawPriority === "Medium" || rawPriority === "Low" ? rawPriority : "") as import("./types").ReferralPriority,
     notes: toStr(f["Notes"]),
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
@@ -1823,6 +2056,11 @@ export async function getReferralCompanies(): Promise<ReferralCompany[]> {
 export async function createReferralCompany(data: {
   name: string;
   type?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  priority?: string;
   notes?: string;
   assignedToClerkId?: string;
 }): Promise<ReferralCompany> {
@@ -1832,6 +2070,11 @@ export async function createReferralCompany(data: {
       fields: {
         Name: data.name,
         Type: data.type || "",
+        Address: data.address || "",
+        City: data.city || "",
+        State: data.state || "",
+        Zip: data.zip || "",
+        Priority: data.priority || "",
         Notes: data.notes || "",
         AssignedToClerkId: data.assignedToClerkId || "",
         CreatedAt: new Date().toISOString(),
@@ -1844,11 +2087,16 @@ export async function createReferralCompany(data: {
 
 export async function updateReferralCompany(
   id: string,
-  data: Partial<{ name: string; type: string; notes: string; assignedToClerkId: string }>
+  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; assignedToClerkId: string }>
 ): Promise<ReferralCompany> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
   if (data.type !== undefined) fields["Type"] = data.type;
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.city !== undefined) fields["City"] = data.city;
+  if (data.state !== undefined) fields["State"] = data.state;
+  if (data.zip !== undefined) fields["Zip"] = data.zip;
+  if (data.priority !== undefined) fields["Priority"] = data.priority;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, {
@@ -2284,5 +2532,80 @@ export async function saveGmailToken(
 
 export async function deleteGmailToken(id: string): Promise<void> {
   const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Contract by ID ───────────────────────────────────────────────────────────
+export async function getContractById(id: string): Promise<Contract | null> {
+  try {
+    const table = AIRTABLE_TABLES.CONTRACTS;
+    const res = await contractFetch(table, `/${id}`);
+    if (!res.ok) return null;
+    return mapContract(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+// ─── QBO Tokens ───────────────────────────────────────────────────────────────
+const QBO_SYSTEM_KEY = "__qbo__";
+
+function mapQBOToken(record: AirtableRecord): QBOTokenRecord {
+  const f = record.fields;
+  return {
+    id: record.id,
+    accessToken: toStr(f["AccessToken"]),
+    refreshToken: toStr(f["RefreshToken"]),
+    expiresAt: toStr(f["ExpiresAt"]),
+    realmId: toStr(f["RealmId"]),
+    companyName: toStr(f["CompanyName"]),
+  };
+}
+
+export async function getQBOToken(): Promise<QBOTokenRecord | null> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${QBO_SYSTEM_KEY}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.QBO_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapQBOToken(data.records[0] as AirtableRecord);
+}
+
+export async function saveQBOToken(data: {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  realmId: string;
+  companyName: string;
+}): Promise<QBOTokenRecord> {
+  const existing = await getQBOToken();
+  const fields = {
+    ClerkUserId: QBO_SYSTEM_KEY,
+    AccessToken: data.accessToken,
+    RefreshToken: data.refreshToken,
+    ExpiresAt: data.expiresAt,
+    RealmId: data.realmId,
+    CompanyName: data.companyName,
+  };
+  if (existing) {
+    const res = await crmFetch(AIRTABLE_TABLES.QBO_TOKENS, `/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapQBOToken(await res.json());
+  }
+  const res = await crmFetch(AIRTABLE_TABLES.QBO_TOKENS, "", {
+    method: "POST",
+    body: JSON.stringify({ fields: { ...fields, CreatedAt: new Date().toISOString() } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapQBOToken(await res.json());
+}
+
+export async function deleteQBOToken(): Promise<void> {
+  const existing = await getQBOToken();
+  if (!existing) return;
+  const res = await crmFetch(AIRTABLE_TABLES.QBO_TOKENS, `/${existing.id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
 }

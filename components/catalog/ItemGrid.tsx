@@ -23,7 +23,7 @@ interface ItemGridProps {
 
 const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray" | "red"; label: string }> = {
   "Pending Review":    { variant: "yellow", label: "Pending Review" },
-  "Reviewed":          { variant: "blue",   label: "Reviewed" },
+  "Approved":          { variant: "blue",   label: "Approved" },
   "Listed":            { variant: "purple", label: "Listed" },
   "Sold":              { variant: "green",  label: "Sold" },
   "Donated":           { variant: "teal",   label: "Donated" },
@@ -49,12 +49,13 @@ interface EditModalProps {
   rooms: Room[];
   localVendors?: LocalVendor[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (item: Item) => void;
+  onDeleted?: () => void;
 }
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId">>;
 
-function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModalProps) {
+export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onDeleted }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -98,7 +99,7 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Failed to delete");
       }
-      onSaved();
+      if (onDeleted) onDeleted(); else onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
       setDeleting(false);
@@ -121,7 +122,8 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
-      onSaved();
+      const { item: savedItem } = await res.json();
+      onSaved(savedItem);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -175,10 +177,17 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
                 ]}
               />
               <Select label="Status" value={form.status ?? "Pending Review"}
-                onChange={e => set("status", e.target.value as ItemStatus)}
+                onChange={e => {
+                  const newStatus = e.target.value as ItemStatus;
+                  set("status", newStatus);
+                  // Auto-fill Target Value = Sale Price when marking Sold
+                  if (newStatus === "Sold" && item.salePrice && item.salePrice > 0) {
+                    set("valueMid", item.salePrice);
+                  }
+                }}
                 options={[
                   { value: "Pending Review",    label: "Pending Review" },
-                  { value: "Reviewed",          label: "Reviewed" },
+                  { value: "Approved",          label: "Approved" },
                   { value: "Listed",            label: "Listed" },
                   { value: "Sold",              label: "Sold" },
                   { value: "Donated",           label: "Donated" },
@@ -196,7 +205,7 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
           {/* Physical */}
           <section className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Physical Details</h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <Select label="Size" value={form.sizeClass ?? "Fits in Car-SUV"}
                 onChange={e => set("sizeClass", e.target.value as SizeClass)}
                 options={[
@@ -213,13 +222,6 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
                   { value: "Very Fragile",      label: "Very Fragile" },
                 ]}
               />
-              <Select label="Item Type" value={form.itemType ?? "Daily Use"}
-                onChange={e => set("itemType", e.target.value as ItemUseType)}
-                options={[
-                  { value: "Daily Use",      label: "Daily Use" },
-                  { value: "Collector Item", label: "Collector Item" },
-                ]}
-              />
             </div>
             {itemRooms.length > 0 && (
               <Select label="Room" value={form.roomId ?? ""}
@@ -230,15 +232,6 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
                 ]}
               />
             )}
-            {localVendors && localVendors.length > 0 && (
-              <Select label="Assigned Vendor" value={form.assignedVendorId ?? ""}
-                onChange={e => set("assignedVendorId", e.target.value || undefined)}
-                options={[
-                  { value: "", label: "— Unassigned —" },
-                  ...localVendors.map(v => ({ value: v.id, label: `${v.vendorName} (${v.vendorType})` })),
-                ]}
-              />
-            )}
           </section>
 
           {/* Route & Value */}
@@ -246,7 +239,20 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Route & Value</h3>
             <div className="grid grid-cols-2 gap-3">
               <Select label="Recommended Route" value={form.primaryRoute ?? "Keep"}
-                onChange={e => set("primaryRoute", e.target.value as PrimaryRoute)}
+                onChange={e => {
+                  const newRoute = e.target.value as PrimaryRoute;
+                  const vendorTypeForRoute: Partial<Record<string, string>> = {
+                    "Other Consignment": "Consignment Store",
+                    "Donate": "Donation Org",
+                  };
+                  const newRequiredType = vendorTypeForRoute[newRoute];
+                  const currentVendor = localVendors?.find(v => v.id === form.assignedVendorId);
+                  // Clear vendor if it doesn't match the new route's required type
+                  if (!newRequiredType || currentVendor?.vendorType !== newRequiredType) {
+                    set("assignedVendorId", undefined);
+                  }
+                  set("primaryRoute", newRoute);
+                }}
                 options={[
                   { value: "Keep",                         label: "Keep" },
                   { value: "Family Keeping",               label: "Family Keeping" },
@@ -268,11 +274,32 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
             <div className="grid grid-cols-3 gap-3">
               <Input label="Value Low ($)" type="number" value={form.valueLow ?? 0}
                 onChange={e => set("valueLow", Number(e.target.value))} />
-              <Input label="Value Mid ($)" type="number" value={form.valueMid ?? 0}
+              <Input label="Target Value ($)" type="number" value={form.valueMid ?? 0}
                 onChange={e => set("valueMid", Number(e.target.value))} />
               <Input label="Value High ($)" type="number" value={form.valueHigh ?? 0}
                 onChange={e => set("valueHigh", Number(e.target.value))} />
             </div>
+            {(() => {
+              const vendorTypeForRoute: Partial<Record<string, string>> = {
+                "Other Consignment": "Consignment Store",
+                "ProFoundFinds Consignment": "Consignment Store",
+                "Donate": "Donation Org",
+                "Discard": "Junk Hauler",
+              };
+              const requiredType = vendorTypeForRoute[form.primaryRoute ?? ""];
+              const filteredVendors = requiredType
+                ? (localVendors ?? []).filter(v => v.vendorType === requiredType)
+                : [];
+              return requiredType && filteredVendors.length > 0 ? (
+                <Select label="Assigned Vendor" value={form.assignedVendorId ?? ""}
+                  onChange={e => set("assignedVendorId", e.target.value || undefined)}
+                  options={[
+                    { value: "", label: "— Unassigned —" },
+                    ...filteredVendors.map(v => ({ value: v.id, label: v.vendorName })),
+                  ]}
+                />
+              ) : null;
+            })()}
           </section>
 
           {/* Listings */}
@@ -344,8 +371,9 @@ function EditItemModal({ item, rooms, localVendors, onClose, onSaved }: EditModa
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute }: ItemGridProps) {
   const router = useRouter();
+  const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [autoRouting, setAutoRouting] = useState(false);
   const [autoRouteMsg, setAutoRouteMsg] = useState("");
@@ -353,11 +381,18 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [routeFilter, setRouteFilter] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
-  const handleSaved = useCallback(() => {
+  const handleSaved = useCallback((savedItem: Item) => {
+    setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i));
     setEditingItem(null);
-    router.refresh();
-  }, [router]);
+  }, []);
+
+  const handleDeleted = useCallback(() => {
+    setItems(prev => prev.filter(i => i.id !== editingItem?.id));
+    setEditingItem(null);
+  }, [editingItem]);
 
   const tenantMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -370,6 +405,24 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
     localVendors?.forEach(v => map.set(v.id, v.vendorName));
     return map;
   }, [localVendors]);
+
+  const handleBulkApprove = async () => {
+    if (selected.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await Promise.all([...selected].map(id =>
+        fetch("/api/items", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, tenantId: items.find(i => i.id === id)?.tenantId, status: "Approved" }),
+        })
+      ));
+      setItems(prev => prev.map(i => selected.has(i.id) ? { ...i, status: "Approved" as const } : i));
+      setSelected(new Set());
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const handleAutoRoute = async () => {
     setAutoRouting(true);
@@ -481,6 +534,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
           localVendors={localVendors}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
 
@@ -525,7 +579,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
         >
           <option value="">All Statuses</option>
           <option value="Pending Review">Pending Review</option>
-          <option value="Reviewed">Reviewed</option>
+          <option value="Approved">Approved</option>
           <option value="Listed">Listed</option>
           <option value="Sold">Sold</option>
           <option value="Donated">Donated</option>
@@ -649,7 +703,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
                   <p className="text-xs text-gray-400 mt-0.5 truncate">{item.category}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-forest-700">
-                      {item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
+                      {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
                     </span>
                     <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
                       {route.label}
@@ -668,6 +722,14 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
                           </span>
                         )}
                       </span>
+                      {item.vendorDecision === "Approved" && item.vendorExpectedPrice !== undefined && (
+                        <span className="text-[10px] text-green-700 font-medium mt-0.5 block">
+                          Vendor: {formatCurrency(item.vendorExpectedPrice)}
+                          {item.valueMid > 0 && item.vendorExpectedPrice !== item.valueMid && (
+                            <span className="text-gray-400 ml-1">(TTT: {formatCurrency(item.valueMid)})</span>
+                          )}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -676,16 +738,46 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
           })}
         </div>
       ) : (
+        <>
+        {/* Bulk action bar */}
+        {selected.size > 0 && (
+          <div className="mb-3 flex items-center gap-3 px-4 py-2.5 bg-forest-50 border border-forest-200 rounded-xl">
+            <span className="text-sm font-medium text-forest-800">{selected.size} item{selected.size !== 1 ? "s" : ""} selected</span>
+            <button
+              onClick={handleBulkApprove}
+              disabled={bulkLoading}
+              className="h-8 px-3 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+            >
+              {bulkLoading ? "Approving…" : "Approve Recommended Route"}
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="h-8 px-3 rounded-lg border border-forest-300 text-forest-700 text-sm hover:bg-forest-100 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl border border-cream-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-cream-100 bg-cream-50">
+                  <th className="px-4 py-3 w-10">
+                    <input type="checkbox"
+                      checked={sorted.length > 0 && sorted.every(i => selected.has(i.id))}
+                      onChange={e => {
+                        if (e.target.checked) setSelected(new Set(sorted.map(i => i.id)));
+                        else setSelected(new Set());
+                      }}
+                      className="rounded border-gray-300 text-forest-600 focus:ring-forest-500"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600 w-12"></th>
                   {sortTh("itemName", "Item")}
                   {multiTenant && sortTh("project", "Project")}
                   {sortTh("category", "Category")}
-                  {sortTh("condition", "Condition")}
                   {sortTh("value", "Value", "", "right")}
                   {sortTh("route", "Recommended Route")}
                   {sortTh("status", "Status")}
@@ -698,7 +790,22 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
                   const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
                   const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const, label: item.primaryRoute };
                   return (
-                    <tr key={item.id} className="hover:bg-cream-50 transition-colors">
+                    <tr key={item.id} className={`hover:bg-cream-50 transition-colors ${selected.has(item.id) ? "bg-forest-50" : ""}`}>
+                      {/* Checkbox */}
+                      <td className="px-4 py-2.5">
+                        <input type="checkbox"
+                          checked={selected.has(item.id)}
+                          onChange={e => {
+                            setSelected(prev => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(item.id);
+                              else next.delete(item.id);
+                              return next;
+                            });
+                          }}
+                          className="rounded border-gray-300 text-forest-600 focus:ring-forest-500"
+                        />
+                      </td>
                       {/* Photo thumb */}
                       <td className="px-4 py-2.5">
                         <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
@@ -723,11 +830,9 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
                       )}
                       {/* Category */}
                       <td className="px-4 py-2.5 text-gray-500">{item.category || "—"}</td>
-                      {/* Condition */}
-                      <td className="px-4 py-2.5 text-gray-500">{item.condition}</td>
                       {/* Value */}
                       <td className="px-4 py-2.5 text-right font-semibold text-forest-700">
-                        {item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
+                        {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
                       </td>
                       {/* Route */}
                       <td className="px-4 py-2.5">
@@ -743,19 +848,29 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
                       {localVendors && (
                         <td className="px-4 py-2.5 text-gray-500 text-xs">
                           {item.assignedVendorId ? (
-                            <span className="flex items-center gap-1.5 flex-wrap">
-                              <span>{vendorMap.get(item.assignedVendorId) ?? "—"}</span>
-                              {item.vendorDecision === "Approved" && (
-                                <span className="bg-green-100 text-green-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Approved</span>
-                              )}
-                              {item.vendorDecision === "Rejected" && (
-                                <span className="bg-red-100 text-red-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Rejected</span>
-                              )}
-                              {item.vendorDecision === "Hold" && (
-                                <span className="bg-amber-100 text-amber-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Hold</span>
-                              )}
-                              {item.vendorDecision === "Pending" && (
-                                <span className="bg-gray-100 text-gray-500 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Pending</span>
+                            <span className="flex flex-col gap-0.5">
+                              <span className="flex items-center gap-1.5 flex-wrap">
+                                <span>{vendorMap.get(item.assignedVendorId) ?? "—"}</span>
+                                {item.vendorDecision === "Approved" && (
+                                  <span className="bg-green-100 text-green-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Approved</span>
+                                )}
+                                {item.vendorDecision === "Rejected" && (
+                                  <span className="bg-red-100 text-red-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Rejected</span>
+                                )}
+                                {item.vendorDecision === "Hold" && (
+                                  <span className="bg-amber-100 text-amber-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Hold</span>
+                                )}
+                                {item.vendorDecision === "Pending" && (
+                                  <span className="bg-gray-100 text-gray-500 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Pending</span>
+                                )}
+                              </span>
+                              {item.vendorDecision === "Approved" && item.vendorExpectedPrice !== undefined && (
+                                <span className="text-green-700 font-medium">
+                                  Vendor: {formatCurrency(item.vendorExpectedPrice)}
+                                  {item.valueMid > 0 && item.vendorExpectedPrice !== item.valueMid && (
+                                    <span className="text-gray-400 ml-1">(TTT: {formatCurrency(item.valueMid)})</span>
+                                  )}
+                                </span>
                               )}
                             </span>
                           ) : "—"}
@@ -782,6 +897,7 @@ export function ItemGrid({ items, tenantId, canEdit, rooms, tenants, localVendor
             </table>
           </div>
         </div>
+        </>
       )}
     </>
   );
