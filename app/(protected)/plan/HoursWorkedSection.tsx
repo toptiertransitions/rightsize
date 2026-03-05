@@ -258,23 +258,39 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
   // Accordion open states (manager-only per-service breakdowns)
   const [estOpen, setEstOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [schedOpen, setSchedOpen] = useState(false);
   const [remOpen, setRemOpen] = useState(false);
 
   const totalMins = entries.reduce((s, e) => s + e.durationMinutes, 0);
 
   // Scheduled = TTT Staff helper shifts on plan calendar with no logged time yet
+  // Build per-service map so we can show breakdown and subtract per-service from Remaining
   const loggedDateKeys = new Set(entries.map(e => `${e.tenantId}:${e.date}`));
-  const scheduledMins = (planEntries ?? []).reduce((sum, pe) => {
-    // Skip if hours already logged for this project+date
-    if (loggedDateKeys.has(`${pe.tenantId}:${pe.date}`)) return sum;
-    if (!pe.startTime || !pe.endTime || !pe.helpers?.length) return sum;
+  const scheduledByServiceMap = new Map<string, number>();
+  for (const pe of (planEntries ?? [])) {
+    if (loggedDateKeys.has(`${pe.tenantId}:${pe.date}`)) continue;
+    if (!pe.startTime || !pe.endTime) continue;
     const [sh, sm] = pe.startTime.split(":").map(Number);
     const [eh, em] = pe.endTime.split(":").map(Number);
     const shiftMins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
-    if (shiftMins === 0) return sum;
-    const helperCount = pe.helpers.filter(h => h.status !== "declined").length;
-    return sum + helperCount * shiftMins;
-  }, 0);
+    if (shiftMins === 0) continue;
+    const helperCount = (pe.helpers ?? []).filter(h => h.status !== "declined").length;
+    if (helperCount === 0) continue;
+    const key = (pe.activity as string) || "Other";
+    scheduledByServiceMap.set(key, (scheduledByServiceMap.get(key) ?? 0) + helperCount * shiftMins);
+  }
+  const scheduledMins = Array.from(scheduledByServiceMap.values()).reduce((s, m) => s + m, 0);
+  const scheduledBreakdown = Array.from(scheduledByServiceMap.entries())
+    .filter(([, mins]) => mins > 0)
+    .map(([area, mins]) => ({ area, mins }))
+    .sort((a, b) => {
+      const ai = serviceList.indexOf(a.area);
+      const bi = serviceList.indexOf(b.area);
+      if (ai >= 0 && bi >= 0) return ai - bi;
+      if (ai >= 0) return -1;
+      if (bi >= 0) return 1;
+      return a.area.localeCompare(b.area);
+    });
 
   const estimatedTotalMins = Math.round(estimatedHours * 60);
   const remainingMins = estimatedHours > 0
@@ -303,13 +319,17 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
     });
 
   // Per-service remaining breakdown (manager accordion on Remaining card)
-  // Matches contract service names to logged focusArea by name (case-insensitive)
+  // Matches contract service names to logged focusArea and scheduled activity by name (case-insensitive)
   const remainingByService = contractServiceHours.map((sh) => {
+    const nameLower = sh.serviceName.toLowerCase();
     const loggedMins = Array.from(focusBreakdownMap.entries())
-      .filter(([area]) => area.toLowerCase() === sh.serviceName.toLowerCase())
+      .filter(([area]) => area.toLowerCase() === nameLower)
       .reduce((s, [, mins]) => s + mins, 0);
-    const remainingMins = Math.max(0, Math.round(sh.hours * 60) - loggedMins);
-    return { serviceName: sh.serviceName, estimatedHours: sh.hours, loggedMins, remainingMins };
+    const scheduledForService = Array.from(scheduledByServiceMap.entries())
+      .filter(([area]) => area.toLowerCase() === nameLower)
+      .reduce((s, [, mins]) => s + mins, 0);
+    const remainingMins = Math.max(0, Math.round(sh.hours * 60) - loggedMins - scheduledForService);
+    return { serviceName: sh.serviceName, estimatedHours: sh.hours, loggedMins, scheduledForService, remainingMins };
   });
 
   async function saveEstimate() {
@@ -455,10 +475,30 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="text-xs text-amber-600 mb-1">Scheduled</div>
           <div className="text-xl font-bold text-amber-700">{scheduledMins > 0 ? fmtMins(scheduledMins) : "—"}</div>
-          {isManager && scheduledMins > 0 && (
-            <p className="text-[10px] text-amber-500 mt-2 leading-tight">
-              Shift-based · no service split
-            </p>
+          {/* Manager accordion */}
+          {isManager && scheduledBreakdown.length > 0 && (
+            <>
+              <button
+                onClick={() => setSchedOpen(p => !p)}
+                className="flex items-center gap-0.5 text-[10px] text-amber-500 hover:text-amber-700 mt-2"
+              >
+                <ChevronIcon open={schedOpen} />
+                <span>By service</span>
+              </button>
+              {schedOpen && (
+                <div className="mt-2 pt-2 border-t border-amber-200 space-y-1.5">
+                  {scheduledBreakdown.map(({ area, mins }) => (
+                    <div key={area} className="flex justify-between items-center gap-1">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: getFocusColor(area, serviceList) }} />
+                        <span className="text-[11px] text-amber-700 truncate">{area}</span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-amber-700 shrink-0">{fmtMins(mins)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -486,19 +526,19 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
               </button>
               {remOpen && (
                 <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
-                  {remainingByService.map(({ serviceName, remainingMins: rm }) => (
+                  {remainingByService.map(({ serviceName, remainingMins: rm, scheduledForService: sf }) => (
                     <div key={serviceName} className="flex justify-between items-center">
                       <span className="text-[11px] text-gray-500 truncate pr-1">{serviceName}</span>
-                      <span className={`text-[11px] font-semibold shrink-0 ${rm === 0 ? "text-emerald-600" : "text-gray-700"}`}>
-                        {rm === 0 ? "Done" : fmtMins(rm)}
-                      </span>
+                      <div className="text-right shrink-0">
+                        <span className={`text-[11px] font-semibold ${rm === 0 ? "text-emerald-600" : "text-gray-700"}`}>
+                          {rm === 0 ? "Done" : fmtMins(rm)}
+                        </span>
+                        {sf > 0 && rm > 0 && (
+                          <span className="text-[10px] text-amber-500 block">{fmtMins(sf)} sched.</span>
+                        )}
+                      </div>
                     </div>
                   ))}
-                  {scheduledMins > 0 && (
-                    <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100">
-                      Excludes scheduled shifts
-                    </p>
-                  )}
                 </div>
               )}
             </>
