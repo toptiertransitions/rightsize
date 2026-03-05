@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole } from "@/lib/airtable";
+import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole, getTenants } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
+
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  const isTTT = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+  if (!isTTT) return NextResponse.json({ tenants: [] });
+
+  const all = await getTenants().catch(() => []);
+  const tenants = all
+    .filter((t) => !t.isArchived)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return NextResponse.json({ tenants });
+}
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();

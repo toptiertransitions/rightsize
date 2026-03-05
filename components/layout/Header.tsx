@@ -6,16 +6,21 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
+import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
+
+const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting"];
 
 interface HeaderProps {
   tenantName?: string;
   isImpersonating?: boolean;
   onStopImpersonating?: () => void;
   isManager?: boolean;
+  isStaff?: boolean;
 }
 
-export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager }: HeaderProps) {
+export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager, isStaff }: HeaderProps) {
   const pathname = usePathname();
+  const showSwitcher = isStaff && SWITCHER_PAGES.some((p) => pathname.startsWith(p));
   const searchParams = useSearchParams();
   const urlTenantId = searchParams.get("tenantId");
 
@@ -108,11 +113,13 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating, isMan
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {tenantName && (
+            {showSwitcher ? (
+              <ProjectSwitcher currentTenantId={tenantId} />
+            ) : tenantName ? (
               <span className="hidden sm:block text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border">
                 {tenantName}
               </span>
-            )}
+            ) : null}
             <UserButton
               afterSignOutUrl="/sign-in"
               appearance={{
