@@ -66,20 +66,27 @@ export async function POST(req: NextRequest) {
   }
 
   const signToken = crypto.randomUUID();
-  let contract = await createContract({
-    tenantId,
-    templateId: templateId ?? "",
-    contractBody,
-    rightsizingHours: rightsizingHours ?? 0,
-    packingHours: packingHours ?? 0,
-    unpackingHours: unpackingHours ?? 0,
-    rightsizingRate: rightsizingRate ?? 0,
-    packingRate: packingRate ?? 0,
-    unpackingRate: unpackingRate ?? 0,
-    totalCost: totalCost ?? 0,
-    signToken,
-    lineItems: lineItems ?? undefined,
-  });
+  let contract;
+  try {
+    contract = await createContract({
+      tenantId,
+      templateId: templateId ?? "",
+      contractBody,
+      rightsizingHours: rightsizingHours ?? 0,
+      packingHours: packingHours ?? 0,
+      unpackingHours: unpackingHours ?? 0,
+      rightsizingRate: rightsizingRate ?? 0,
+      packingRate: packingRate ?? 0,
+      unpackingRate: unpackingRate ?? 0,
+      totalCost: totalCost ?? 0,
+      signToken,
+      lineItems: Array.isArray(lineItems) && lineItems.length > 0 ? lineItems : undefined,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed to create contract";
+    console.error("createContract error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 
   if (send) {
     const sentAt = new Date().toISOString();
