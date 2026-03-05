@@ -25,9 +25,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { tenantId, name, roomType, squareFeet, density } = body;
-  if (!tenantId || !name || !roomType || !squareFeet) {
+  if (!tenantId || !roomType || !squareFeet) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+  const resolvedName = (typeof name === "string" && name.trim()) ? name.trim() : roomType;
 
   // Verify the user has edit access (tenant role or system staff)
   const [tenantRole, sysRole] = await Promise.all([
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const room = await createRoom({ tenantId, name, roomType, squareFeet, density });
+  const room = await createRoom({ tenantId, name: resolvedName, roomType, squareFeet, density });
   return NextResponse.json({ room });
 }
 

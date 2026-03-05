@@ -28,13 +28,25 @@ interface RoomFormProps {
 function RoomFormFields({ name, setName, roomType, setRoomType, squareFeet, setSquareFeet, density, setDensity, error }: RoomFormProps) {
   return (
     <div className="px-6 py-5 space-y-4">
-      <Input label="Room Name" placeholder="e.g. Master Bedroom" value={name} onChange={(e) => setName(e.target.value)} />
       <Select
         label="Room Type"
         value={roomType}
         onChange={(e) => setRoomType(e.target.value as RoomType)}
         options={ROOM_TYPES.map((t) => ({ value: t, label: t }))}
       />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Room Name <span className="text-gray-400 font-normal">(optional)</span>
+        </label>
+        <input
+          type="text"
+          placeholder={`e.g. ${roomType}`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400"
+        />
+        <p className="text-xs text-gray-400 mt-1">Leave blank to use the room type as the name.</p>
+      </div>
       <Input label="Square Feet" type="number" min="1" value={squareFeet} onChange={(e) => setSquareFeet(e.target.value)} />
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">Density</label>
@@ -76,14 +88,13 @@ function AddRoomModal({ tenantId, onClose, onSaved }: AddRoomModalProps) {
   const [error, setError] = useState("");
 
   const handleSave = async () => {
-    if (!name.trim()) { setError("Room name is required"); return; }
     if (!Number(squareFeet) || Number(squareFeet) <= 0) { setError("Enter valid square footage"); return; }
     setLoading(true); setError("");
     try {
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, name, roomType, squareFeet: Number(squareFeet), density }),
+        body: JSON.stringify({ tenantId, name: name.trim() || roomType, roomType, squareFeet: Number(squareFeet), density }),
       });
       if (!res.ok) throw new Error("Failed to save room");
       onSaved();
@@ -135,14 +146,13 @@ function EditRoomModal({ room, tenantId, onClose, onSaved }: EditRoomModalProps)
   const [error, setError] = useState("");
 
   const handleSave = async () => {
-    if (!name.trim()) { setError("Room name is required"); return; }
     if (!Number(squareFeet) || Number(squareFeet) <= 0) { setError("Enter valid square footage"); return; }
     setLoading(true); setError("");
     try {
       const res = await fetch("/api/rooms", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: room.id, tenantId, name, roomType, squareFeet: Number(squareFeet), density }),
+        body: JSON.stringify({ id: room.id, tenantId, name: name.trim() || roomType, roomType, squareFeet: Number(squareFeet), density }),
       });
       if (!res.ok) throw new Error("Failed to save");
       onSaved();
