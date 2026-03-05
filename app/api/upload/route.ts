@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file") as File | null;
   const tenantId = formData.get("tenantId") as string | null;
 
-  if (!file || !tenantId) {
-    return NextResponse.json({ error: "Missing file or tenantId" }, { status: 400 });
+  if (!file) {
+    return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
 
   const rawBuffer = Buffer.from(await file.arrayBuffer());
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await uploadImage(processedBuffer, { tenantId, mimeType: "image/jpeg" });
+    const result = await uploadImage(processedBuffer, { tenantId: tenantId ?? "admin", mimeType: "image/jpeg" });
     return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

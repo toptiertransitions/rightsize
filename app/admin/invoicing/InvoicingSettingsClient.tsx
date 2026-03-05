@@ -27,7 +27,7 @@ export function InvoicingSettingsClient({ initialSettings }: Props) {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
-      setSettings((prev) => ({ ...prev, logoUrl: data.url, logoPublicId: data.publicId }));
+      setSettings((prev) => ({ ...prev, logoUrl: data.photoUrl, logoPublicId: data.photoPublicId }));
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Upload failed");
     } finally {
