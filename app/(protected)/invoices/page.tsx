@@ -34,12 +34,17 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
       getInvoicesForTenant(tenantId).catch(() => []),
       getServices().catch(() => []),
       getInvoiceSettings().catch(() => null),
-      isManager ? getContractsForTenant(tenantId).catch(() => []) : Promise.resolve([]),
+      getContractsForTenant(tenantId).catch(() => []),
       isManager ? getTimeEntries({ tenantId }).catch(() => []) : Promise.resolve([]),
     ]);
 
   if (!tenant) redirect("/home");
 
+  // agreements: Sent (pending signature) + Signed — visible to all project members
+  const agreements = allContracts.filter(
+    (c) => c.status === "Sent" || c.status === "Signed"
+  );
+  // contracts: Signed only — used by manager invoice creation modal
   const contracts = allContracts.filter((c) => c.status === "Signed");
 
   // Get owner email
@@ -66,6 +71,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
       services={services}
       invoiceSettings={invoiceSettings}
       contracts={contracts}
+      agreements={agreements}
       timeEntries={timeEntries}
       ownerEmail={ownerEmail}
       currentUserEmail={currentUserEmail}

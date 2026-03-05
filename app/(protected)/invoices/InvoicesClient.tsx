@@ -11,6 +11,7 @@ interface Props {
   services: Service[];
   invoiceSettings: InvoiceSettings | null;
   contracts: Contract[];
+  agreements: Contract[];
   timeEntries: TimeEntry[];
   ownerEmail: string;
   currentUserEmail: string;
@@ -220,6 +221,137 @@ function InvoiceCard({
   );
 }
 
+// ─── Agreement Card ───────────────────────────────────────────────────────────
+function AgreementCard({ contract }: { contract: Contract }) {
+  const [expanded, setExpanded] = useState(false);
+  const isSigned = contract.status === "Signed";
+  const isPending = contract.status === "Sent";
+
+  const date = new Date(contract.createdAt).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+  const signedDate = contract.signedAt
+    ? new Date(contract.signedAt).toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+      })
+    : null;
+
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <div className={`bg-white border rounded-2xl shadow-sm overflow-hidden ${isSigned ? "border-green-200" : "border-amber-200"}`}>
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              {isSigned ? (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                  ★ Signed Agreement
+                </span>
+              ) : (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  Pending Your Signature
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">{date}</p>
+            {contract.lineItems && contract.lineItems.length > 0 && (
+              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                {contract.lineItems.map((li) => li.serviceName).join(" · ")}
+              </p>
+            )}
+            {signedDate && contract.signedByName && (
+              <p className="text-xs text-green-600 mt-1">
+                Signed by {contract.signedByName} on {signedDate}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <p className="text-xl font-bold text-gray-900">{fmt(contract.totalCost)}</p>
+            <div className="flex items-center gap-2">
+              {isSigned && (
+                <a
+                  href={`/api/contracts/${contract.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-forest-600 hover:text-forest-800 border border-forest-200 rounded-lg px-3 py-1.5 hover:bg-forest-50 transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                  Download PDF
+                </a>
+              )}
+              {isPending && (
+                <a
+                  href={`/sign/${contract.signToken}`}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                >
+                  Sign Agreement
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setExpanded((p) => !p)}
+          className="mt-4 text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1 transition-colors"
+        >
+          <svg
+            className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+          {expanded ? "Hide agreement" : "View full agreement"}
+        </button>
+      </div>
+
+      {/* Expanded agreement body */}
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-5">
+          {/* Signature block (if signed) */}
+          {isSigned && (contract.signatureData || contract.signedByName) && (
+            <div className="mb-5 p-4 bg-green-50 border border-green-100 rounded-xl">
+              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Client Signature</p>
+              {contract.signatureMethod === "draw" && contract.signatureData?.startsWith("data:image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={contract.signatureData}
+                  alt="Client signature"
+                  className="max-h-16 max-w-xs object-contain mb-2"
+                />
+              ) : contract.signatureData ? (
+                <p
+                  className="text-3xl text-gray-900 mb-2"
+                  style={{ fontFamily: "'Dancing Script', cursive" }}
+                >
+                  {contract.signatureData}
+                </p>
+              ) : null}
+              <div className="border-t border-green-200 pt-2 mt-1">
+                {contract.signedByName && (
+                  <p className="text-sm font-semibold text-gray-800">{contract.signedByName}</p>
+                )}
+                {signedDate && (
+                  <p className="text-xs text-gray-500">Signed on {signedDate}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Contract body HTML */}
+          <div
+            className="prose prose-sm max-w-none text-gray-700 [&_h1]:text-base [&_h1]:font-bold [&_h2]:text-sm [&_h2]:font-bold [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:pl-5 [&_li]:mb-1 [&_p]:mb-3"
+            dangerouslySetInnerHTML={{ __html: contract.contractBody || "<p>No agreement text.</p>" }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InvoicesClient({
   tenant,
   initialInvoices,
@@ -227,6 +359,7 @@ export function InvoicesClient({
   services,
   invoiceSettings,
   contracts,
+  agreements,
   timeEntries,
   ownerEmail,
   currentUserEmail,
@@ -267,6 +400,23 @@ export function InvoicesClient({
           </button>
         )}
       </div>
+
+      {/* ── Agreements section ── */}
+      {agreements.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-base font-semibold text-gray-900 mb-1">Agreements</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            {agreements.some((c) => c.status === "Sent")
+              ? "You have an agreement awaiting your signature."
+              : "Your signed service agreement is available below."}
+          </p>
+          <div className="space-y-4">
+            {agreements.map((c) => (
+              <AgreementCard key={c.id} contract={c} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Invoice list */}
       {invoices.length === 0 ? (
