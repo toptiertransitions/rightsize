@@ -12,6 +12,7 @@ import {
   getContractSettings,
   getContractTemplates,
   getContractsForTenant,
+  getServices,
 } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -48,14 +49,15 @@ export default async function RoomsPage({ searchParams }: PageProps) {
     const isManager = ["TTTManager", "TTTAdmin"].includes(resolvedRole ?? sysRole ?? "");
 
     // Fetch contract data for managers/admins
-    const [contractSettings, contractTemplates, existingContracts, tenantMemberships] = isManager
+    const [contractSettings, contractTemplates, existingContracts, tenantMemberships, services] = isManager
       ? await Promise.all([
           getContractSettings().catch(() => null),
           getContractTemplates(true).catch(() => []),
           getContractsForTenant(tenantId).catch(() => []),
           getMembershipsForTenant(tenantId).catch(() => []),
+          getServices().catch(() => []),
         ])
-      : [null, [], [], []];
+      : [null, [], [], [], []];
 
     // Look up Clerk emails for all project members
     let recipients: { name: string; email: string; role: string }[] = [];
@@ -105,8 +107,8 @@ export default async function RoomsPage({ searchParams }: PageProps) {
             rooms={rooms}
             settings={contractSettings}
             templates={contractTemplates}
-            existingContracts={existingContracts}
             recipients={recipients}
+            services={services}
           />
         )}
       </div>

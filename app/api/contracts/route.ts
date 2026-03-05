@@ -4,6 +4,7 @@ import {
   getContractsForTenant,
   createContract,
   updateContract,
+  deleteContract,
   getSystemRole,
   getUserRoleForTenant,
   getTenantById,
@@ -54,13 +55,14 @@ export async function POST(req: NextRequest) {
     packingRate,
     unpackingRate,
     totalCost,
+    lineItems,
     send,
     recipientEmail,
     recipientName,
   } = body;
 
-  if (!tenantId || !contractBody) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  if (!tenantId) {
+    return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
   }
 
   const signToken = crypto.randomUUID();
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
     unpackingRate: unpackingRate ?? 0,
     totalCost: totalCost ?? 0,
     signToken,
+    lineItems: lineItems ?? undefined,
   });
 
   if (send) {
@@ -99,6 +102,9 @@ export async function POST(req: NextRequest) {
       if (toEmail) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
+        const emailLineItems: { serviceName: string; hours: number }[] = Array.isArray(lineItems)
+          ? lineItems.map((li: { serviceName: string; hours: number }) => ({ serviceName: li.serviceName, hours: li.hours }))
+          : [];
         await resend.emails.send({
           from: `Top Tier Transitions <${fromEmail}>`,
           to: toEmail,
@@ -108,9 +114,7 @@ export async function POST(req: NextRequest) {
             projectName: tenant.name,
             signingUrl,
             totalCost: totalCost ?? 0,
-            rightsizingHours: rightsizingHours ?? 0,
-            packingHours: packingHours ?? 0,
-            unpackingHours: unpackingHours ?? 0,
+            lineItems: emailLineItems,
           }),
         });
       }
@@ -136,4 +140,20 @@ export async function PATCH(req: NextRequest) {
 
   const contract = await updateContract(id, data);
   return NextResponse.json({ contract });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const sysRole = await getSystemRole(userId);
+  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  await deleteContract(id);
+  return NextResponse.json({ ok: true });
 }

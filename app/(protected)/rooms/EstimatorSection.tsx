@@ -109,9 +109,11 @@ interface EstimatorSectionProps {
   rooms: Room[];
   settings: ContractSettings | null;
   templates: ContractTemplate[];
-  existingContracts: Contract[];
   recipients: { name: string; email: string; role: string }[];
   services: Service[];
+  editingContract?: Contract | null;
+  onSaved?: (contract: Contract) => void;
+  onCancelEdit?: () => void;
 }
 
 export function EstimatorSection({
@@ -119,9 +121,11 @@ export function EstimatorSection({
   rooms,
   settings,
   templates,
-  existingContracts,
   recipients,
   services,
+  editingContract,
+  onSaved,
+  onCancelEdit,
 }: EstimatorSectionProps) {
   const router = useRouter();
 
@@ -142,8 +146,35 @@ export function EstimatorSection({
   const useCustom = selectedRecipient === "__custom__";
   const recipientEmail = useCustom ? customEmail : selectedRecipient;
 
+  // When editingContract changes, load its line items into rows
+  useEffect(() => {
+    if (!editingContract) {
+      // Reset to fresh calculation when cancelling edit
+      setRows([]);
+      setContractBody("");
+      return;
+    }
+    const lineItems = editingContract.lineItems;
+    if (lineItems?.length) {
+      setRows(
+        lineItems.map((li) => ({
+          serviceId: li.serviceId,
+          serviceName: li.serviceName,
+          rate: li.rate,
+          calculatedHours: li.hours,
+          hours: li.hours,
+          included: true,
+          overridden: true,
+        }))
+      );
+    }
+    setContractBody(editingContract.contractBody ?? "");
+    if (editingContract.templateId) setSelectedTemplateId(editingContract.templateId);
+  }, [editingContract]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Init on mount + recalc non-overridden rows when rooms, services, destinationSqFt, or touchMultiplier change
   useEffect(() => {
+    if (editingContract) return; // don't override when editing
     setRows((prev) => {
       if (prev.length === 0) {
         // Initial population
@@ -246,7 +277,7 @@ export function EstimatorSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplateId, templates, rows]);
 
-  const buildPostBody = (send: boolean, email?: string, name?: string) => ({
+  const sharedFields = {
     tenantId: tenant.id,
     templateId: selectedTemplateId,
     contractBody,
@@ -258,29 +289,46 @@ export function EstimatorSection({
     unpackingRate: 0,
     totalCost,
     lineItems: includedLineItems,
-    send,
-    recipientEmail: email,
-    recipientName: name,
-  });
+  };
+
+  const saveDestSqFt = () =>
+    fetch("/api/tenants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId: tenant.id, destinationSqFt }),
+    });
 
   const handleSaveDraft = async () => {
     setSaving(true); setErrorMsg(""); setSuccessMsg("");
     try {
-      const res = await fetch("/api/contracts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPostBody(false)),
-      });
-      if (!res.ok) throw new Error("Failed to save draft");
-
-      await fetch("/api/tenants", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: tenant.id, destinationSqFt }),
-      });
-
-      setSuccessMsg("Draft saved.");
-      router.refresh();
+      let res: Response;
+      if (editingContract) {
+        // Update existing
+        res = await fetch("/api/contracts", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingContract.id, ...sharedFields }),
+        });
+      } else {
+        // Create new
+        res = await fetch("/api/contracts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...sharedFields, send: false }),
+        });
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to save");
+      }
+      const data = await res.json();
+      await saveDestSqFt();
+      setSuccessMsg("Quote saved.");
+      onSaved?.(data.contract);
+      if (!editingContract) {
+        setRows([]);
+        setContractBody("");
+      }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Error saving");
     } finally {
@@ -295,20 +343,25 @@ export function EstimatorSection({
       const recipientName = useCustom
         ? undefined
         : recipients.find((r) => r.email === selectedRecipient)?.name;
+      // Always creates a new contract when sending for signature
       const res = await fetch("/api/contracts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPostBody(true, recipientEmail.trim(), recipientName)),
+        body: JSON.stringify({
+          ...sharedFields,
+          send: true,
+          recipientEmail: recipientEmail.trim(),
+          recipientName,
+        }),
       });
-      if (!res.ok) throw new Error("Failed to send");
-
-      await fetch("/api/tenants", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: tenant.id, destinationSqFt }),
-      });
-
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to send");
+      }
+      const data = await res.json();
+      await saveDestSqFt();
       setSuccessMsg("Agreement sent for signature!");
+      onSaved?.(data.contract);
       router.refresh();
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Error sending");
@@ -317,28 +370,47 @@ export function EstimatorSection({
     }
   };
 
-  return (
-    <div className="mt-10 border-t border-gray-200 pt-8">
-      <h2 className="text-xl font-bold text-gray-900 mb-6">Service Estimator</h2>
+  const handleMarkSigned = async () => {
+    if (!editingContract) return;
+    setSaving(true); setErrorMsg(""); setSuccessMsg("");
+    try {
+      const res = await fetch("/api/contracts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingContract.id, status: "Signed" }),
+      });
+      if (!res.ok) throw new Error("Failed to mark as signed");
+      const data = await res.json();
+      setSuccessMsg("Marked as Signed — this is now the primary quote.");
+      onSaved?.(data.contract);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      {/* Existing contracts summary */}
-      {existingContracts.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Agreements</h3>
-          <div className="flex flex-col gap-2">
-            {existingContracts.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 flex-wrap">
-                <span className={`text-xs font-medium px-3 py-1 rounded-full ${STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-700"}`}>
-                  {c.status} — {formatCost(c.totalCost)} · {new Date(c.createdAt).toLocaleDateString()}
-                </span>
-                {c.status === "Signed" && (c.lineItems?.length ?? 0) > 0 && (
-                  <QBOInvoiceButton contractId={c.id} customerName={tenant.name} />
-                )}
-              </div>
-            ))}
+  return (
+    <div className="mt-6 border-t border-gray-200 pt-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-900">
+          {editingContract ? "Edit Quote" : "New Quote"}
+        </h2>
+        {editingContract && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">
+              {formatCost(editingContract.totalCost)} · {new Date(editingContract.createdAt).toLocaleDateString()}
+            </span>
+            <button
+              onClick={onCancelEdit}
+              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Destination SF */}
       <div className="mb-6">
@@ -526,8 +598,19 @@ export function EstimatorSection({
           disabled={saving || sending}
           className="h-10 px-5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Save Draft"}
+          {saving ? "Saving…" : editingContract ? "Save Changes" : "Save Draft"}
         </button>
+
+        {editingContract && editingContract.status !== "Signed" && (
+          <button
+            onClick={handleMarkSigned}
+            disabled={saving || sending}
+            className="h-10 px-5 rounded-xl border border-green-300 bg-green-50 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+          >
+            Mark as Signed ★
+          </button>
+        )}
+
         <button
           onClick={handleSendForSignature}
           disabled={saving || sending || !contractBody.trim()}
@@ -535,11 +618,22 @@ export function EstimatorSection({
         >
           {sending ? "Sending…" : "Send for Signature"}
         </button>
+
+        {onCancelEdit && (
+          <button
+            onClick={onCancelEdit}
+            disabled={saving || sending}
+            className="h-10 px-4 rounded-xl text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+        )}
+
         {successMsg && <span className="text-sm text-green-600 font-medium">{successMsg}</span>}
         {errorMsg && <span className="text-sm text-red-600">{errorMsg}</span>}
       </div>
 
-      {/* Create Invoice shortcut */}
+      {/* Invoice link */}
       <div className="mt-4 pt-4 border-t border-gray-200">
         <a
           href={`/invoices?tenantId=${tenant.id}`}
@@ -548,7 +642,7 @@ export function EstimatorSection({
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          Create Invoice
+          Go to Invoices
         </a>
       </div>
     </div>

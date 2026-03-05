@@ -2539,6 +2539,12 @@ export async function deleteGmailToken(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export async function deleteContract(id: string): Promise<void> {
+  const table = AIRTABLE_TABLES.CONTRACTS;
+  const res = await contractFetch(table, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 // ─── Contract by ID ───────────────────────────────────────────────────────────
 export async function getContractById(id: string): Promise<Contract | null> {
   try {
