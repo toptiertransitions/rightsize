@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
-import { VENDOR_TYPES } from "@/lib/types";
+import { AdminHeader } from "../components/AdminHeader";
+import { VENDOR_TYPES, ITEM_CATEGORIES } from "@/lib/types";
 import type { LocalVendor, VendorType } from "@/lib/types";
 
 // ─── Type badge colors ────────────────────────────────────────────────────────
@@ -45,6 +44,15 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   const [zipCodesServed, setZipCodesServed] = useState(vendor?.zipCodesServed ?? "");
   const [notes, setNotes] = useState(vendor?.notes ?? "");
   const [isActive, setIsActive] = useState(vendor?.isActive ?? true);
+  const [prefSlots, setPrefSlots] = useState<Array<{ category: string; minPrice: string; maxPrice: string }>>(() => {
+    const slots = (vendor?.prefCategories ?? []).map(p => ({
+      category: p.category,
+      minPrice: p.minPrice > 0 ? String(p.minPrice) : "",
+      maxPrice: p.maxPrice > 0 ? String(p.maxPrice) : "",
+    }));
+    while (slots.length < 5) slots.push({ category: "", minPrice: "", maxPrice: "" });
+    return slots;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -54,24 +62,23 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
     setLoading(true);
     setError("");
     try {
-      const payload = isEdit
-        ? {
-            id: vendor.id,
-            vendorType, vendorName: vendorName.trim(), pocName: pocName.trim(),
-            email: email.trim(), phone: phone.trim(), address: address.trim(),
-            city: city.trim(), state: state.trim().toUpperCase(), zip: zip.trim(),
-            website: website.trim(), itemCategories: itemCategories.trim(),
-            consignmentTake: Number(consignmentTake) || 0,
-            zipCodesServed: zipCodesServed.trim(), notes: notes.trim(), isActive,
-          }
-        : {
-            vendorType, vendorName: vendorName.trim(), pocName: pocName.trim(),
-            email: email.trim(), phone: phone.trim(), address: address.trim(),
-            city: city.trim(), state: state.trim().toUpperCase(), zip: zip.trim(),
-            website: website.trim(), itemCategories: itemCategories.trim(),
-            consignmentTake: Number(consignmentTake) || 0,
-            zipCodesServed: zipCodesServed.trim(), notes: notes.trim(), isActive,
-          };
+      const prefCategories = prefSlots
+        .filter(s => s.category.trim())
+        .map(s => ({
+          category: s.category,
+          minPrice: s.minPrice ? parseFloat(s.minPrice) || 0 : 0,
+          maxPrice: s.maxPrice ? parseFloat(s.maxPrice) || 0 : 0,
+        }));
+      const base = {
+        vendorType, vendorName: vendorName.trim(), pocName: pocName.trim(),
+        email: email.trim(), phone: phone.trim(), address: address.trim(),
+        city: city.trim(), state: state.trim().toUpperCase(), zip: zip.trim(),
+        website: website.trim(), itemCategories: itemCategories.trim(),
+        consignmentTake: Number(consignmentTake) || 0,
+        zipCodesServed: zipCodesServed.trim(), notes: notes.trim(), isActive,
+        prefCategories,
+      };
+      const payload = isEdit ? { id: vendor.id, ...base } : base;
       const res = await fetch("/api/local-vendors", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -251,6 +258,40 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
               className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
           </div>
 
+          {/* Item Category Preferences */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Item Category Preferences</label>
+            <p className="text-xs text-gray-500 mb-2">Vendor will only receive items matching these slots. Leave blank to accept any.</p>
+            <div className="space-y-2">
+              {prefSlots.map((slot, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <select
+                    value={slot.category}
+                    onChange={e => { const next = [...prefSlots]; next[i] = { ...next[i], category: e.target.value }; setPrefSlots(next); }}
+                    className="flex-1 h-9 px-2 rounded-lg border border-gray-600 text-xs bg-gray-800 text-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                  >
+                    <option value="">— Any —</option>
+                    {ITEM_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  {slot.category && (
+                    <>
+                      <input
+                        type="number" min="0" placeholder="Min $" value={slot.minPrice}
+                        onChange={e => { const next = [...prefSlots]; next[i] = { ...next[i], minPrice: e.target.value }; setPrefSlots(next); }}
+                        className="w-20 h-9 px-2 rounded-lg border border-gray-600 text-xs bg-gray-800 text-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                      />
+                      <input
+                        type="number" min="0" placeholder="Max $" value={slot.maxPrice}
+                        onChange={e => { const next = [...prefSlots]; next[i] = { ...next[i], maxPrice: e.target.value }; setPrefSlots(next); }}
+                        className="w-20 h-9 px-2 rounded-lg border border-gray-600 text-xs bg-gray-800 text-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                      />
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Internal Notes</label>
@@ -387,38 +428,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
 
   return (
     <div className="min-h-screen bg-gray-950">
-      {/* Admin Header */}
-      <header className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-forest-600 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
-              <div>
-                <div className="font-bold text-white text-sm">Rightsize</div>
-                <div className="text-[9px] text-gray-400">TTT Admin Console</div>
-              </div>
-            </div>
-            <nav className="hidden md:flex items-center gap-1">
-              <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Projects</Link>
-              <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Users</Link>
-              <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Local Vendors</Link>
-              <Link href="/admin/routing-rules" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Routing Rules</Link>
-              <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
-              <Link href="/admin/contract-services" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Contract & Services</Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded-full font-medium">
-              🔐 Admin
-            </span>
-            <UserButton afterSignOutUrl="/sign-in" />
-          </div>
-        </div>
-      </header>
+      <AdminHeader active="local-vendors" />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
@@ -452,8 +462,8 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
             <p>No vendors{stateFilter ? ` in ${stateFilter}` : ""} yet.</p>
           </div>
         ) : (
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-x-auto">
+            <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700">
                   {sortTh("vendorType", "Type")}
@@ -466,15 +476,16 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                   {sortTh("consignmentTake", "Take")}
                   {sortTh("zipCodesServed", "Zips Served")}
                   {sortTh("isActive", "Active")}
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Preferences</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Portal</th>
-                  <th className="px-4 py-3"></th>
+                  <th className="sticky right-0 bg-gray-900 px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider border-l border-gray-700"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((v, i) => (
                   <tr
                     key={v.id}
-                    className={`border-b border-gray-800 ${i % 2 === 0 ? "" : "bg-gray-800/20"}`}
+                    className={`border-b border-gray-800 group ${i % 2 === 0 ? "" : "bg-gray-800/20"}`}
                   >
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${TYPE_COLORS[v.vendorType]}`}>
@@ -508,6 +519,24 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                     <td className="px-4 py-3">
                       <span className={`inline-block w-2 h-2 rounded-full ${v.isActive ? "bg-green-400" : "bg-gray-600"}`} />
                     </td>
+                    <td className="px-4 py-3 text-gray-400">
+                      {v.prefCategories.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {v.prefCategories.map((p, i) => (
+                            <span key={i} className="text-xs whitespace-nowrap">
+                              {p.category}
+                              {(p.minPrice > 0 || p.maxPrice > 0) && (
+                                <span className="text-gray-500 ml-1">
+                                  {p.minPrice > 0 ? `$${p.minPrice}` : ""}
+                                  {p.minPrice > 0 && p.maxPrice > 0 ? "–" : ""}
+                                  {p.maxPrice > 0 ? `$${p.maxPrice}` : "+"}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      ) : <span className="text-gray-600">Any</span>}
+                    </td>
                     <td className="px-4 py-3">
                       {v.clerkUserId ? (
                         <div className="flex items-center gap-1.5">
@@ -532,10 +561,10 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className={`sticky right-0 px-4 py-3 border-l border-gray-700 ${i % 2 === 0 ? "bg-gray-900" : "bg-[#171f2e]"}`}>
                       <button
                         onClick={() => openEdit(v)}
-                        className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded-lg hover:bg-gray-700 transition-colors"
+                        className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded-lg hover:bg-gray-700 transition-colors whitespace-nowrap"
                       >
                         Edit
                       </button>
