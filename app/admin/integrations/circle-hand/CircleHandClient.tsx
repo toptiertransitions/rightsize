@@ -3,6 +3,22 @@
 import { useState, useRef, useCallback } from "react";
 import type { Item } from "@/lib/types";
 
+// ─── CSV Template ──────────────────────────────────────────────────────────────
+
+const TEMPLATE_HEADERS = ["email", "item_name", "sale_price", "consignor_payout", "sale_date", "circle_hand_id"];
+const TEMPLATE_EXAMPLE = ["owner@example.com", "Vintage Oak Dresser", "450.00", "180.00", "2024-01-15", "CH-12345"];
+
+function downloadTemplate() {
+  const rows = [TEMPLATE_HEADERS.join(","), TEMPLATE_EXAMPLE.join(",")];
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "circle_hand_import_template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── CSV Utilities ─────────────────────────────────────────────────────────────
 
 function parseCSVLine(line: string): string[] {
@@ -29,7 +45,7 @@ function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const nonEmpty = lines.filter(l => l.trim());
   if (nonEmpty.length < 2) return [];
-  const headers = parseCSVLine(nonEmpty[0]).map(h => h.trim().toLowerCase());
+  const headers = parseCSVLine(nonEmpty[0]).map(h => h.trim().toLowerCase().replace(/\s+/g, "_"));
   return nonEmpty.slice(1).map(line => {
     const values = parseCSVLine(line);
     const row: Record<string, string> = {};
@@ -42,105 +58,9 @@ function parseNum(s: string): number {
   return parseFloat(s.replace(/[$,"\s]/g, "")) || 0;
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function isoDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toISOString().split("T")[0];
-}
-
 function fmtCurrency(n: number): string {
   if (n <= 0) return "—";
   return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-const PAYOUT_LABELS: Record<string, string> = {
-  ZELLE: "Zelle",
-  CHEQUE: "Cheque",
-  CHECK: "Cheque",
-  STORE_CREDIT: "Store Credit",
-  CASH: "Cash",
-};
-
-// ─── Client Map ────────────────────────────────────────────────────────────────
-// Clients CSV: clientId, firstName, lastName, payoutPreferences
-
-interface ClientInfo {
-  name: string;
-  payoutMethod: string; // human-readable
-}
-
-function buildClientMap(text: string): Map<string, ClientInfo> {
-  const rows = parseCSV(text);
-  const map = new Map<string, ClientInfo>();
-  for (const row of rows) {
-    const id = row["clientid"];
-    if (!id) continue;
-    const first = (row["firstname"] ?? "").trim();
-    const last = (row["lastname"] ?? "").trim();
-    const name = [first, last].filter(Boolean).join(" ") || `Client ${id}`;
-    const rawPref = (row["payoutpreferences"] ?? "").toUpperCase();
-    const payoutMethod = PAYOUT_LABELS[rawPref] ?? rawPref ?? "";
-    map.set(id, { name, payoutMethod });
-  }
-  return map;
-}
-
-// ─── Items CSV Parsing ─────────────────────────────────────────────────────────
-// Key columns: title · barcodeNumeric · dateSold · retailPrice · discountAmount
-//              discountAbsorbedBy · splitForCustomer · compensationType · client
-// Filter: compensationType === CONSIGNMENT  AND  dateSold non-empty
-
-interface CHItem {
-  id: string;           // barcodeNumeric
-  title: string;
-  salePrice: number;    // retailPrice
-  payout: number;       // salePrice × splitForCustomer%
-  splitPct: number;
-  saleDate: string;     // YYYY-MM-DD
-  saleDateDisplay: string;
-  consignorName: string;
-  payoutMethod: string;
-  clientId: string;
-}
-
-function parseItemsCSV(text: string, clientMap: Map<string, ClientInfo>): CHItem[] {
-  const rows = parseCSV(text);
-  return rows
-    .filter(row =>
-      row["compensationtype"]?.toUpperCase() === "CONSIGNMENT" && !!row["datesold"]
-    )
-    .map(row => {
-      const salePrice = parseNum(row["retailprice"]);
-      const discountAmount = parseNum(row["discountamount"]);
-      const discountAbsorber = (row["discountabsorbedby"] ?? "").toUpperCase();
-      // If store absorbs discount, consignor earns % of full retail
-      const netForPayout = discountAbsorber === "STORE" ? salePrice : salePrice - discountAmount;
-      const splitPct = parseNum(row["splitforcustomer"]);
-      const payout = splitPct > 0 ? Math.round((netForPayout * splitPct) / 100 * 100) / 100 : 0;
-      const clientId = row["client"] ?? "";
-      const client = clientMap.get(clientId);
-      return {
-        id: row["barcodenumeric"] || row["sku"] || "",
-        title: row["title"] ?? "",
-        salePrice,
-        payout,
-        splitPct,
-        saleDate: isoDate(row["datesold"]),
-        saleDateDisplay: fmtDate(row["datesold"]),
-        consignorName: client?.name ?? (clientId ? `Client ${clientId}` : "Unknown"),
-        payoutMethod: client?.payoutMethod ?? "",
-        clientId,
-      };
-    })
-    .filter(item => item.title);
 }
 
 // ─── Fuzzy Matching ────────────────────────────────────────────────────────────
@@ -153,7 +73,6 @@ function diceCoefficient(a: string, b: string): number {
   if (!ca && !cb) return 1;
   if (!ca || !cb) return 0;
   if (ca === cb) return 1;
-
   const bigrams = (s: string) => {
     const m = new Map<string, number>();
     for (let i = 0; i < s.length - 1; i++) {
@@ -162,15 +81,11 @@ function diceCoefficient(a: string, b: string): number {
     }
     return m;
   };
-
   const ba = bigrams(ca);
   const bb = bigrams(cb);
   if (!ba.size || !bb.size) return 0;
-
   let intersection = 0;
-  for (const [bg, count] of ba) {
-    intersection += Math.min(count, bb.get(bg) ?? 0);
-  }
+  for (const [bg, count] of ba) intersection += Math.min(count, bb.get(bg) ?? 0);
   return (2 * intersection) / (ba.size + bb.size);
 }
 
@@ -187,13 +102,24 @@ function scoreToLevel(pct: number): ConfidenceLevel {
 
 type Step = "upload" | "preview" | "done";
 
+interface ParsedRow {
+  email: string;
+  itemNameCH: string;
+  salePrice: number;
+  consignorPayout: number;
+  saleDate: string;
+  circleHandId: string;
+}
+
 interface MatchedRow {
-  chItem: CHItem;
+  parsed: ParsedRow;
+  tenantId: string | null;   // null = email not found
   matchedItem: Item | null;
   confidence: number;
   confidenceLevel: ConfidenceLevel;
   include: boolean;
   overrideItemId: string;
+  emailError?: string;
 }
 
 interface ImportSummary {
@@ -219,76 +145,11 @@ function ConfidenceBadge({ level, pct }: { level: ConfidenceLevel; pct: number }
   );
 }
 
-function FileDropArea({
-  label,
-  hint,
-  file,
-  onFile,
-  required,
-}: {
-  label: string;
-  hint: string;
-  file: File | null;
-  onFile: (f: File | null) => void;
-  required?: boolean;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-300 mb-1.5">
-        {label}
-        {required && <span className="text-red-400 ml-1">*</span>}
-      </label>
-      <div
-        className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${
-          file
-            ? "border-forest-600 bg-forest-900/20"
-            : "border-gray-700 hover:border-gray-500 bg-gray-900/40"
-        }`}
-        onClick={() => inputRef.current?.click()}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".csv"
-          className="sr-only"
-          onChange={e => { onFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
-        />
-        {file ? (
-          <div>
-            <svg className="w-5 h-5 text-forest-500 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="text-forest-400 font-medium text-sm truncate max-w-[160px] mx-auto">{file.name}</div>
-            <div className="text-gray-600 text-xs mt-0.5">{(file.size / 1024).toFixed(1)} KB</div>
-            <button
-              type="button"
-              className="text-xs text-gray-600 hover:text-red-400 mt-1.5 transition-colors"
-              onClick={e => { e.stopPropagation(); onFile(null); }}
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <div>
-            <svg className="w-6 h-6 text-gray-600 mx-auto mb-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <div className="text-sm text-gray-400">{hint}</div>
-            <div className="text-xs text-gray-600 mt-0.5">Click to select .csv</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function CircleHandClient() {
   const [step, setStep] = useState<Step>("upload");
-  const [clientsFile, setClientsFile] = useState<File | null>(null);
-  const [itemsFile, setItemsFile] = useState<File | null>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
   const [processError, setProcessError] = useState("");
   const [rows, setRows] = useState<MatchedRow[]>([]);
@@ -296,38 +157,79 @@ export function CircleHandClient() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const handleProcess = useCallback(async () => {
-    if (!itemsFile) { setProcessError("Items CSV is required."); return; }
+    if (!csvFile) { setProcessError("Please select a CSV file."); return; }
     setProcessing(true);
     setProcessError("");
     try {
+      const text = await csvFile.text();
+      const csvRows = parseCSV(text);
+      if (!csvRows.length) throw new Error("No data rows found in CSV.");
+
+      // Validate required columns
+      const first = csvRows[0];
+      if (!("email" in first)) throw new Error('CSV is missing required "email" column. Please use the template.');
+      if (!("item_name" in first)) throw new Error('CSV is missing required "item_name" column. Please use the template.');
+
       const res = await fetch("/api/admin/circle-hand");
       if (!res.ok) throw new Error("Failed to load Rightsize items.");
-      const { items } = await res.json() as { items: Item[] };
+      const { items, tenantOwnerEmails } = await res.json() as {
+        items: Item[];
+        tenantOwnerEmails: Record<string, string>;
+      };
       setRsItems(items);
 
-      let clientMap = new Map<string, ClientInfo>();
-      if (clientsFile) {
-        clientMap = buildClientMap(await clientsFile.text());
+      // Build reverse map: email (lowercase) → tenantId
+      const emailToTenantId = new Map<string, string>();
+      for (const [tenantId, email] of Object.entries(tenantOwnerEmails)) {
+        if (email) emailToTenantId.set(email.toLowerCase(), tenantId);
       }
 
-      const chItems = parseItemsCSV(await itemsFile.text(), clientMap);
-      if (!chItems.length) {
-        throw new Error("No sold consignment items found in the Items CSV.");
+      // Build tenantId → items map
+      const itemsByTenant = new Map<string, Item[]>();
+      for (const item of items) {
+        const list = itemsByTenant.get(item.tenantId) ?? [];
+        list.push(item);
+        itemsByTenant.set(item.tenantId, list);
       }
 
-      const matched: MatchedRow[] = chItems.map(chItem => {
+      const parsed: ParsedRow[] = csvRows.map(row => ({
+        email: (row["email"] || "").toLowerCase().trim(),
+        itemNameCH: row["item_name"] || row["itemname"] || row["title"] || "",
+        salePrice: parseNum(row["sale_price"] || row["saleprice"] || row["price"] || ""),
+        consignorPayout: parseNum(row["consignor_payout"] || row["consignorpayout"] || row["payout"] || ""),
+        saleDate: row["sale_date"] || row["saledate"] || row["date"] || "",
+        circleHandId: row["circle_hand_id"] || row["circlehandid"] || row["id"] || "",
+      })).filter(r => r.email || r.itemNameCH);
+
+      if (!parsed.length) throw new Error("No valid rows found. Check that email and item_name columns are populated.");
+
+      const matched: MatchedRow[] = parsed.map(p => {
+        if (!p.email) {
+          return { parsed: p, tenantId: null, matchedItem: null, confidence: 0, confidenceLevel: "none", include: false, overrideItemId: "", emailError: "Email is required" };
+        }
+
+        const tenantId = emailToTenantId.get(p.email) ?? null;
+        if (!tenantId) {
+          return { parsed: p, tenantId: null, matchedItem: null, confidence: 0, confidenceLevel: "none", include: false, overrideItemId: "", emailError: `No project owner found for ${p.email}` };
+        }
+
+        // Fuzzy match within this tenant's items only
+        const tenantItems = itemsByTenant.get(tenantId) ?? [];
         let bestScore = 0;
         let bestItem: Item | null = null;
-        for (const rsItem of items) {
-          const score = diceCoefficient(chItem.title, rsItem.itemName);
-          if (score > bestScore) { bestScore = score; bestItem = rsItem; }
+        for (const item of tenantItems) {
+          const score = diceCoefficient(p.itemNameCH, item.itemName);
+          if (score > bestScore) { bestScore = score; bestItem = item; }
         }
+
         const pct = Math.round(bestScore * 100);
         const level = scoreToLevel(pct);
         return {
-          chItem,
+          parsed: p,
+          tenantId,
           matchedItem: bestItem,
           confidence: pct,
           confidenceLevel: level,
@@ -343,7 +245,7 @@ export function CircleHandClient() {
     } finally {
       setProcessing(false);
     }
-  }, [itemsFile, clientsFile]);
+  }, [csvFile]);
 
   const toggleInclude = useCallback((idx: number) =>
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, include: !r.include } : r)), []);
@@ -354,10 +256,10 @@ export function CircleHandClient() {
     )), []);
 
   const selectAll = useCallback((checked: boolean) =>
-    setRows(prev => prev.map(r => ({ ...r, include: checked }))), []);
+    setRows(prev => prev.map(r => ({ ...r, include: r.emailError ? false : checked }))), []);
 
   const handleImport = useCallback(async () => {
-    const toProcess = rows.filter(r => r.include);
+    const toProcess = rows.filter(r => r.include && !r.emailError);
     if (!toProcess.length) return;
     setImporting(true);
     setImportError("");
@@ -368,11 +270,11 @@ export function CircleHandClient() {
           : r.matchedItem;
         return {
           rightsizeItemId: effectiveItem?.id ?? "",
-          salePrice: r.chItem.salePrice,
-          consignorPayout: r.chItem.payout,
-          saleDate: r.chItem.saleDate,
-          circleHandItemId: r.chItem.id,
-          chDescription: r.chItem.title,
+          salePrice: r.parsed.salePrice,
+          consignorPayout: r.parsed.consignorPayout,
+          saleDate: r.parsed.saleDate,
+          circleHandItemId: r.parsed.circleHandId,
+          chDescription: r.parsed.itemNameCH,
         };
       });
       const res = await fetch("/api/admin/circle-hand", {
@@ -392,8 +294,7 @@ export function CircleHandClient() {
 
   const handleReset = () => {
     setStep("upload");
-    setClientsFile(null);
-    setItemsFile(null);
+    setCsvFile(null);
     setRows([]);
     setRsItems([]);
     setSummary(null);
@@ -406,24 +307,76 @@ export function CircleHandClient() {
     return (
       <div className="max-w-xl">
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <FileDropArea
-              label="Clients CSV"
-              hint="Adds consignor names & payout methods"
-              file={clientsFile}
-              onFile={setClientsFile}
-            />
-            <FileDropArea
-              label="Items CSV"
-              hint="Sold consignment items from Circle Hand"
-              file={itemsFile}
-              onFile={setItemsFile}
-              required
-            />
+
+          {/* Template download */}
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl px-4 py-3 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-gray-200 mb-0.5">CSV Template</div>
+              <div className="text-xs text-gray-500 leading-relaxed">
+                Required: <span className="text-gray-300">email</span>, <span className="text-gray-300">item_name</span>, <span className="text-gray-300">sale_price</span>, <span className="text-gray-300">sale_date</span>
+                <br />Optional: <span className="text-gray-400">consignor_payout</span>, <span className="text-gray-400">circle_hand_id</span>
+              </div>
+              <div className="text-xs text-gray-600 mt-1.5">
+                <span className="text-amber-500 font-medium">email</span> must match the project owner&apos;s account email.
+              </div>
+            </div>
+            <button
+              onClick={downloadTemplate}
+              className="flex-shrink-0 h-8 px-3 border border-gray-600 text-gray-300 text-xs rounded-lg hover:border-gray-400 hover:text-white transition-colors whitespace-nowrap"
+            >
+              Download Template
+            </button>
+          </div>
+
+          {/* File picker */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Upload CSV <span className="text-red-400">*</span>
+            </label>
+            <div
+              className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${
+                csvFile
+                  ? "border-forest-600 bg-forest-900/20"
+                  : "border-gray-700 hover:border-gray-500 bg-gray-900/40"
+              }`}
+              onClick={() => fileRef.current?.click()}
+            >
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv"
+                className="sr-only"
+                onChange={e => { setCsvFile(e.target.files?.[0] ?? null); e.target.value = ""; setProcessError(""); }}
+              />
+              {csvFile ? (
+                <div>
+                  <svg className="w-5 h-5 text-forest-500 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-forest-400 font-medium text-sm truncate max-w-[200px] mx-auto">{csvFile.name}</div>
+                  <div className="text-gray-600 text-xs mt-0.5">{(csvFile.size / 1024).toFixed(1)} KB</div>
+                  <button
+                    type="button"
+                    className="text-xs text-gray-600 hover:text-red-400 mt-1.5 transition-colors"
+                    onClick={e => { e.stopPropagation(); setCsvFile(null); }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <svg className="w-6 h-6 text-gray-600 mx-auto mb-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div className="text-sm text-gray-400">Click to select your CSV</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Use the template above for the correct format</div>
+                </div>
+              )}
+            </div>
           </div>
 
           <p className="text-xs text-gray-600 leading-relaxed">
-            Only sold consignment items are imported. Items already recorded in Rightsize with a sale price are automatically skipped.
+            Items already recorded with a sale price in Rightsize are automatically skipped.
           </p>
 
           {processError && (
@@ -434,7 +387,7 @@ export function CircleHandClient() {
 
           <button
             onClick={handleProcess}
-            disabled={!itemsFile || processing}
+            disabled={!csvFile || processing}
             className="h-11 px-6 bg-forest-600 hover:bg-forest-700 text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {processing && (
@@ -480,7 +433,7 @@ export function CircleHandClient() {
 
           {summary.skipped > 0 && (
             <p className="text-xs text-yellow-700 mb-4">
-              {summary.skipped} item{summary.skipped !== 1 ? "s" : ""} skipped — sale price was already recorded.
+              {summary.skipped} item{summary.skipped !== 1 ? "s" : ""} skipped — sale price already recorded.
             </p>
           )}
 
@@ -510,57 +463,28 @@ export function CircleHandClient() {
 
   // ─── PREVIEW ───────────────────────────────────────────────────────────────
 
-  // Build per-consignor summary for the panel
-  const consignorMap = new Map<string, { items: number; totalPayout: number; payoutMethod: string }>();
-  for (const r of rows) {
-    const key = r.chItem.consignorName;
-    const existing = consignorMap.get(key) ?? { items: 0, totalPayout: 0, payoutMethod: r.chItem.payoutMethod };
-    consignorMap.set(key, {
-      items: existing.items + 1,
-      totalPayout: existing.totalPayout + r.chItem.payout,
-      payoutMethod: existing.payoutMethod,
-    });
-  }
-
-  const selectedRows = rows.filter(r => r.include);
+  const selectedRows = rows.filter(r => r.include && !r.emailError);
   const selectedCount = selectedRows.length;
-  const allChecked = rows.length > 0 && rows.every(r => r.include);
+  const allChecked = rows.filter(r => !r.emailError).length > 0 && rows.filter(r => !r.emailError).every(r => r.include);
   const someChecked = selectedCount > 0 && !allChecked;
-  const needsReview = rows.filter(r => r.confidenceLevel === "medium").length;
-  const needsFix = rows.filter(r => r.confidenceLevel === "low" || r.confidenceLevel === "none").length;
+  const emailErrors = rows.filter(r => r.emailError).length;
+  const needsReview = rows.filter(r => !r.emailError && r.confidenceLevel === "medium").length;
+  const needsFix = rows.filter(r => !r.emailError && (r.confidenceLevel === "low" || r.confidenceLevel === "none")).length;
+
+  // For override dropdown: group by tenantId so we only show items from the same project
   const sortedRsItems = [...rsItems].sort((a, b) => a.itemName.localeCompare(b.itemName));
 
   return (
     <div className="space-y-5">
 
-      {/* ── Consignors panel ────────────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
-          Consignors in this import
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          {[...consignorMap.entries()].map(([name, info]) => (
-            <div
-              key={name}
-              className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 min-w-[160px]"
-            >
-              <div className="text-sm font-semibold text-white">{name}</div>
-              <div className="text-xs text-gray-400 mt-0.5">
-                {info.items} item{info.items !== 1 ? "s" : ""}
-                <span className="mx-1 text-gray-700">·</span>
-                {fmtCurrency(info.totalPayout)} payout
-              </div>
-              {info.payoutMethod && (
-                <div className="text-[11px] text-forest-500 mt-1">{info.payoutMethod}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Match quality bar ───────────────────────────────────────────────── */}
+      {/* ── Summary bar ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-gray-500 text-xs">{rows.length} items</span>
+        <span className="text-gray-500 text-xs">{rows.length} row{rows.length !== 1 ? "s" : ""}</span>
+        {emailErrors > 0 && (
+          <span className="text-xs bg-red-900/60 text-red-400 border border-red-800 px-2 py-0.5 rounded-full">
+            {emailErrors} email not found
+          </span>
+        )}
         {needsReview > 0 && (
           <span className="text-xs bg-yellow-900/60 text-yellow-400 border border-yellow-800 px-2 py-0.5 rounded-full">
             {needsReview} to review
@@ -595,8 +519,8 @@ export function CircleHandClient() {
                       className="rounded border-gray-600 accent-forest-600"
                     />
                   </th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Item</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Consignor</th>
+                  <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Email / Owner</th>
+                  <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">CH Item</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Rightsize Match</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide text-right">Sale / Payout</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Fix</th>
@@ -608,13 +532,19 @@ export function CircleHandClient() {
                     ? rsItems.find(i => i.id === row.overrideItemId)
                     : row.matchedItem;
 
-                  const needsOverride = row.confidenceLevel === "low" || row.confidenceLevel === "none";
+                  const needsOverride = !row.emailError && (row.confidenceLevel === "low" || row.confidenceLevel === "none");
+                  // For override: only show items from same tenant
+                  const tenantItems = row.tenantId
+                    ? sortedRsItems.filter(i => i.tenantId === row.tenantId)
+                    : sortedRsItems;
 
                   return (
                     <tr
                       key={idx}
                       className={`transition-opacity ${
-                        !row.include ? "opacity-40" : row.confidenceLevel === "medium" ? "bg-yellow-950/30" : ""
+                        row.emailError ? "opacity-50 bg-red-950/20" :
+                        !row.include ? "opacity-40" :
+                        row.confidenceLevel === "medium" ? "bg-yellow-950/30" : ""
                       }`}
                     >
                       {/* Include */}
@@ -622,53 +552,64 @@ export function CircleHandClient() {
                         <input
                           type="checkbox"
                           checked={row.include}
+                          disabled={!!row.emailError}
                           onChange={() => toggleInclude(idx)}
-                          className="rounded border-gray-600 accent-forest-600"
+                          className="rounded border-gray-600 accent-forest-600 disabled:opacity-30"
                         />
                       </td>
 
-                      {/* Item */}
+                      {/* Email */}
                       <td className="px-4 py-3">
-                        <div className="max-w-[220px]">
-                          <div className="text-gray-200 text-sm font-medium leading-snug line-clamp-2">
-                            {row.chItem.title}
-                          </div>
-                          <div className="text-gray-600 text-xs mt-0.5">{row.chItem.saleDateDisplay}</div>
-                        </div>
+                        <div className="text-gray-300 text-xs whitespace-nowrap">{row.parsed.email || "—"}</div>
+                        {row.emailError ? (
+                          <div className="text-red-400 text-[10px] mt-0.5">{row.emailError}</div>
+                        ) : (
+                          <div className="text-gray-600 text-[10px] mt-0.5">matched</div>
+                        )}
                       </td>
 
-                      {/* Consignor */}
+                      {/* CH Item */}
                       <td className="px-4 py-3">
-                        <div className="text-gray-300 text-sm whitespace-nowrap">{row.chItem.consignorName}</div>
-                        {row.chItem.payoutMethod && (
-                          <div className="text-gray-600 text-xs mt-0.5">{row.chItem.payoutMethod}</div>
-                        )}
+                        <div className="max-w-[200px]">
+                          <div className="text-gray-200 text-sm font-medium leading-snug line-clamp-2">
+                            {row.parsed.itemNameCH || "—"}
+                          </div>
+                          <div className="text-gray-600 text-xs mt-0.5">{row.parsed.saleDate}</div>
+                        </div>
                       </td>
 
                       {/* Match */}
                       <td className="px-4 py-3">
                         <div className="max-w-[200px] space-y-1">
-                          <div className={`text-sm leading-snug line-clamp-2 ${
-                            row.overrideItemId ? "text-forest-400 font-medium" :
-                            row.confidenceLevel === "high" ? "text-gray-200" :
-                            row.confidenceLevel === "medium" ? "text-yellow-300" :
-                            "text-gray-600"
-                          }`}>
-                            {effectiveItem?.itemName ?? "—"}
-                          </div>
-                          <ConfidenceBadge level={row.confidenceLevel} pct={row.confidence} />
+                          {row.emailError ? (
+                            <span className="text-gray-600 text-sm">—</span>
+                          ) : (
+                            <>
+                              <div className={`text-sm leading-snug line-clamp-2 ${
+                                row.overrideItemId ? "text-forest-400 font-medium" :
+                                row.confidenceLevel === "high" ? "text-gray-200" :
+                                row.confidenceLevel === "medium" ? "text-yellow-300" :
+                                "text-gray-600"
+                              }`}>
+                                {effectiveItem?.itemName ?? "—"}
+                              </div>
+                              <ConfidenceBadge level={row.confidenceLevel} pct={row.confidence} />
+                            </>
+                          )}
                         </div>
                       </td>
 
                       {/* Sale / Payout */}
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <div className="text-gray-200 text-sm tabular-nums">{fmtCurrency(row.chItem.salePrice)}</div>
-                        <div className="text-gray-500 text-xs tabular-nums mt-0.5">
-                          {fmtCurrency(row.chItem.payout)} payout
-                        </div>
+                        <div className="text-gray-200 text-sm tabular-nums">{fmtCurrency(row.parsed.salePrice)}</div>
+                        {row.parsed.consignorPayout > 0 && (
+                          <div className="text-gray-500 text-xs tabular-nums mt-0.5">
+                            {fmtCurrency(row.parsed.consignorPayout)} payout
+                          </div>
+                        )}
                       </td>
 
-                      {/* Fix — override dropdown, only for low/none */}
+                      {/* Fix */}
                       <td className="px-4 py-3">
                         {needsOverride ? (
                           <select
@@ -677,7 +618,7 @@ export function CircleHandClient() {
                             className="h-8 text-xs rounded-lg border border-gray-700 bg-gray-800 text-gray-300 px-2 w-[180px] focus:outline-none focus:border-forest-600"
                           >
                             <option value="">— pick item —</option>
-                            {sortedRsItems.map(item => (
+                            {tenantItems.map(item => (
                               <option key={item.id} value={item.id}>
                                 {item.itemName.length > 46 ? item.itemName.slice(0, 43) + "…" : item.itemName}
                               </option>
@@ -703,12 +644,16 @@ export function CircleHandClient() {
               <>
                 <span className="mx-2 text-gray-700">·</span>
                 <span className="text-gray-400">
-                  {fmtCurrency(selectedRows.reduce((s, r) => s + r.chItem.salePrice, 0))} sold
+                  {fmtCurrency(selectedRows.reduce((s, r) => s + r.parsed.salePrice, 0))} sold
                 </span>
-                <span className="mx-1 text-gray-700">→</span>
-                <span className="text-forest-500">
-                  {fmtCurrency(selectedRows.reduce((s, r) => s + r.chItem.payout, 0))} payout
-                </span>
+                {selectedRows.some(r => r.parsed.consignorPayout > 0) && (
+                  <>
+                    <span className="mx-1 text-gray-700">→</span>
+                    <span className="text-forest-500">
+                      {fmtCurrency(selectedRows.reduce((s, r) => s + r.parsed.consignorPayout, 0))} payout
+                    </span>
+                  </>
+                )}
               </>
             )}
           </div>

@@ -7,6 +7,7 @@ import {
   deleteProjectFile,
   updateProjectFile,
   getUserRoleForTenant,
+  getSystemRole,
 } from "@/lib/airtable";
 import type { FileTag } from "@/lib/types";
 
@@ -124,15 +125,25 @@ export async function DELETE(req: NextRequest) {
   const resourceType = req.nextUrl.searchParams.get("resourceType");
   const tenantId = req.nextUrl.searchParams.get("tenantId");
   const vendorId = req.nextUrl.searchParams.get("vendorId");
+  const tag = req.nextUrl.searchParams.get("tag");
 
   if (!id || !publicId || !resourceType || !tenantId) {
     return NextResponse.json({ error: "Missing required params" }, { status: 400 });
   }
 
-  const role = await getUserRoleForTenant(userId, tenantId);
+  const [role, sysRole] = await Promise.all([
+    getUserRoleForTenant(userId, tenantId),
+    getSystemRole(userId),
+  ]);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Vendor file deletes are allowed for any project member; other deletes require edit role
-  if (!vendorId && !EDIT_ROLES.includes(role)) {
+
+  // Payment Proof files: only TTTManager or TTTAdmin can delete
+  if (tag === "Payment Proof") {
+    if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin") {
+      return NextResponse.json({ error: "Forbidden — TTT Manager required" }, { status: 403 });
+    }
+  } else if (!vendorId && !EDIT_ROLES.includes(role)) {
+    // Vendor file deletes are allowed for any project member; other deletes require edit role
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

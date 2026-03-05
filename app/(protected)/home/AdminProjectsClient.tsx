@@ -48,7 +48,7 @@ export function AdminProjectsClient({ initialTenants }: Props) {
         {activeTenants.map(tenant => (
           <Card key={tenant.id}>
             <CardContent>
-              <Link href={`/home?tenantId=${tenant.id}`} className="block">
+              <Link href={`/catalog?tenantId=${tenant.id}`} className="block">
                 <div className="flex items-start justify-between mb-3">
                   <div className="w-10 h-10 bg-forest-50 rounded-xl flex items-center justify-center">
                     <HouseIcon className="w-5 h-5 text-forest-600" />
@@ -58,7 +58,7 @@ export function AdminProjectsClient({ initialTenants }: Props) {
                   </svg>
                 </div>
                 <h3 className="font-bold text-gray-900">{tenant.name}</h3>
-                <p className="text-sm text-gray-400 mt-0.5">TTT Staff</p>
+                <p className="text-sm text-gray-400 mt-0.5">View catalog</p>
               </Link>
               <div className="border-t border-gray-100 mt-3 pt-2">
                 <button
@@ -108,7 +108,7 @@ export function AdminProjectsClient({ initialTenants }: Props) {
               {archivedTenants.map(tenant => (
                 <Card key={tenant.id} className="opacity-70">
                   <CardContent>
-                    <Link href={`/home?tenantId=${tenant.id}`} className="block">
+                    <Link href={`/catalog?tenantId=${tenant.id}`} className="block">
                       <div className="flex items-start justify-between mb-3">
                         <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
                           <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

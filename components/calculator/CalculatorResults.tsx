@@ -13,7 +13,7 @@ interface CalculatorResultsProps {
 
 const DENSITY_LABELS: Record<DensityLevel, { label: string; color: string }> = {
   Low: { label: "Low", color: "text-blue-600" },
-  Medium: { label: "Medium", color: "text-forest-600" },
+  Medium: { label: "Average", color: "text-forest-600" },
   High: { label: "High", color: "text-orange-600" },
 };
 
@@ -124,7 +124,7 @@ export function CalculatorResults({ result }: CalculatorResultsProps) {
 
       {/* Methodology note */}
       <div className="bg-cream-100 border border-cream-200 rounded-2xl p-4 text-sm text-gray-600">
-        <strong className="text-gray-800">How we estimate:</strong> Rightsizing = 1 hr per 100 SF at Medium density (0.5× Low, 2× High). Packing and unpacking = 1 hr per 100 SF of destination space. Weeks = total hours ÷ helper capacity.
+        <strong className="text-gray-800">How we estimate:</strong> Rightsizing = 1 hr per 100 SF at Average density (0.5× Low, 2× High). Packing and unpacking = 1 hr per 100 SF of destination space. Weeks = total hours ÷ helper capacity.
       </div>
 
       {/* CTA */}

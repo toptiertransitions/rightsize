@@ -40,11 +40,16 @@ export async function POST(req: NextRequest) {
   // Track new assignments per vendor: vendorId -> count
   const vendorAssignmentCounts = new Map<string, number>();
 
-  const processAssignments = async (assignments: Array<{ itemId: string; vendorId: string }>) => {
-    for (const { itemId, vendorId } of assignments) {
-      await updateItem(itemId, { assignedVendorId: vendorId, vendorDecision: "Pending" });
+  const processAssignments = async (assignments: Array<{ itemId: string; vendorId?: string; primaryRoute: string }>) => {
+    for (const { itemId, vendorId, primaryRoute } of assignments) {
+      const updates: Record<string, unknown> = { primaryRoute };
+      if (vendorId) {
+        updates.assignedVendorId = vendorId;
+        updates.vendorDecision = "Pending";
+        vendorAssignmentCounts.set(vendorId, (vendorAssignmentCounts.get(vendorId) ?? 0) + 1);
+      }
+      await updateItem(itemId, updates as never);
       assigned++;
-      vendorAssignmentCounts.set(vendorId, (vendorAssignmentCounts.get(vendorId) ?? 0) + 1);
     }
   };
 

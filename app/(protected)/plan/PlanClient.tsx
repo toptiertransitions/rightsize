@@ -8,7 +8,21 @@ import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
 
 // ─── Activity chip colors ──────────────────────────────────────────────────────
-const ACTIVITY_COLORS: Record<PlanActivity, string> = {
+const ACTIVITY_COLOR_PALETTE = [
+  "bg-teal-100 text-teal-800",
+  "bg-forest-100 text-forest-800",
+  "bg-indigo-100 text-indigo-800",
+  "bg-purple-100 text-purple-800",
+  "bg-orange-100 text-orange-800",
+  "bg-amber-100 text-amber-800",
+  "bg-blue-100 text-blue-800",
+  "bg-emerald-100 text-emerald-800",
+  "bg-cyan-100 text-cyan-800",
+  "bg-gray-100 text-gray-700",
+];
+
+// Fallback static map for old activity names
+const LEGACY_ACTIVITY_COLORS: Record<string, string> = {
   "Sorting": "bg-blue-100 text-blue-800",
   "Packing": "bg-indigo-100 text-indigo-800",
   "Selling / Listing": "bg-emerald-100 text-emerald-800",
@@ -20,6 +34,13 @@ const ACTIVITY_COLORS: Record<PlanActivity, string> = {
   "Estate Sale Prep": "bg-teal-100 text-teal-800",
   "Other": "bg-gray-100 text-gray-700",
 };
+
+function getActivityColor(activity: string, serviceList: string[]): string {
+  if (LEGACY_ACTIVITY_COLORS[activity]) return LEGACY_ACTIVITY_COLORS[activity];
+  const idx = serviceList.indexOf(activity);
+  if (idx >= 0) return ACTIVITY_COLOR_PALETTE[idx % ACTIVITY_COLOR_PALETTE.length];
+  return "bg-gray-100 text-gray-700";
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toISO(d: Date): string {
@@ -77,11 +98,13 @@ interface ModalProps {
   defaultDate?: string;
   onClose: () => void;
   onSaved: () => void;
+  services?: string[];
 }
 
-function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }: ModalProps) {
+function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services }: ModalProps) {
+  const activityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));
-  const [activity, setActivity] = useState<PlanActivity>(entry?.activity ?? "Sorting");
+  const [activity, setActivity] = useState<PlanActivity>(entry?.activity ?? (services?.[0] ?? "Coordinating"));
   const [roomId, setRoomId] = useState(entry?.roomId ?? "");
   const [customRoom, setCustomRoom] = useState(entry?.roomLabel ?? "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
@@ -269,7 +292,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Activity</label>
             <select value={activity} onChange={e => setActivity(e.target.value as PlanActivity)} className={inputCls}>
-              {PLAN_ACTIVITIES.map(a => <option key={a} value={a}>{a}</option>)}
+              {activityOptions.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
 
@@ -452,10 +475,10 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved }
 }
 
 // ─── ActivityChip ──────────────────────────────────────────────────────────────
-function ActivityChip({ entry, rooms, onClick, projectName }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string }) {
+function ActivityChip({ entry, rooms, onClick, projectName, serviceList }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[] }) {
   const room = entry.roomId ? rooms.find(r => r.id === entry.roomId) : null;
   const roomLabel = room?.name ?? entry.roomLabel ?? "";
-  const colorClass = ACTIVITY_COLORS[entry.activity] ?? "bg-gray-100 text-gray-700";
+  const colorClass = getActivityColor(entry.activity, serviceList ?? []);
 
   const timeLabel = entry.startTime
     ? entry.endTime
@@ -511,12 +534,13 @@ interface PlanClientProps {
   estimatedHours?: number;
   tenantOptions?: TenantOption[];  // manager-only: all projects for filter dropdown
   currentTenantId?: string;        // which project is selected ("" = All)
+  services?: string[];             // dynamic service names from Airtable
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"week" | "month">("week");
-  const [showWeekends, setShowWeekends] = useState(true);
+  const [showWeekends, setShowWeekends] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
@@ -754,6 +778,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                         rooms={rooms}
                         onClick={effectiveCanEdit ? () => openEdit(entry) : undefined}
                         projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
+                        serviceList={services}
                       />
                     ))}
                   </div>
@@ -818,6 +843,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                           entry={entry}
                           rooms={rooms}
                           projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
+                          serviceList={services}
                         />
                       </div>
                     ))}
@@ -840,6 +866,8 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
         estimatedHours={estimatedHours}
         tenantId={tenantId}
         canEditEstimate={!isAllProjectsMode}
+        planEntries={liveEntries}
+        services={services}
       />
 
       {/* ── Floorplans & Images ──────────────────────────────────────────────── */}
@@ -862,6 +890,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           defaultDate={selectedDate}
           onClose={closeModal}
           onSaved={onSaved}
+          services={services}
         />
       )}
     </>

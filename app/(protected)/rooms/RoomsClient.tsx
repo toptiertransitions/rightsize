@@ -50,7 +50,7 @@ function RoomFormFields({ name, setName, roomType, setRoomType, squareFeet, setS
                   : "border-gray-300 text-gray-500 hover:border-gray-400"
               }`}
             >
-              {d}
+              {d === "Medium" ? "Average" : d}
             </button>
           ))}
         </div>
@@ -236,7 +236,7 @@ export function AddRoomButton({ tenantId }: { tenantId: string }) {
 // ─── Rooms grid ────────────────────────────────────────────────────────────────
 const DENSITY_BADGE: Record<DensityLevel, { variant: "blue" | "green" | "orange"; label: string }> = {
   Low: { variant: "blue", label: "Low" },
-  Medium: { variant: "green", label: "Medium" },
+  Medium: { variant: "green", label: "Average" },
   High: { variant: "orange", label: "High" },
 };
 

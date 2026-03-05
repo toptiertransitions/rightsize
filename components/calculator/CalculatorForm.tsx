@@ -31,6 +31,12 @@ const DENSITY_DESCRIPTIONS: Record<DensityLevel, string> = {
   High: "Full — packed closets, lots of items to sort",
 };
 
+const DENSITY_DISPLAY: Record<DensityLevel, string> = {
+  Low: "Low",
+  Medium: "Average",
+  High: "High",
+};
+
 const HELPER_OPTIONS: Array<{ value: HelperType; label: string; desc: string }> = [
   { value: "Solo", label: "Solo", desc: "Working alone (10 hrs/wk)" },
   { value: "Family", label: "Family", desc: "You + family members (20 hrs/wk)" },
@@ -189,7 +195,7 @@ export function CalculatorForm() {
                                 : "border-gray-300 text-gray-500 hover:border-gray-400"
                             }`}
                           >
-                            {d}
+                            {DENSITY_DISPLAY[d]}
                           </button>
                         ))}
                       </div>

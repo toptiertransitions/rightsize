@@ -1,17 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { isTTTAdmin } from "@/lib/config";
-import { getAllItems, updateItem, getItemById } from "@/lib/airtable";
+import { getAllItems, updateItem, getItemById, getTenants, getAllMemberships } from "@/lib/airtable";
 
-// GET /api/admin/circle-hand — return all items for matching
+// GET /api/admin/circle-hand — return all items + tenantId→ownerEmail map
 export async function GET() {
   const { userId } = await auth();
   if (!userId || !isTTTAdmin(userId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const items = await getAllItems();
-  return NextResponse.json({ items });
+  const [items, tenants, memberships, client] = await Promise.all([
+    getAllItems(),
+    getTenants(),
+    getAllMemberships(),
+    clerkClient(),
+  ]);
+
+  // Collect unique Clerk user IDs that are owners (from both tenant record and Owner memberships)
+  const ownerClerkIds = new Set<string>();
+  for (const t of tenants) {
+    if (t.ownerUserId) ownerClerkIds.add(t.ownerUserId);
+  }
+  for (const m of memberships) {
+    if (m.role === "Owner" && m.userId) ownerClerkIds.add(m.userId);
+  }
+
+  // Fetch each owner user individually — avoids getUserList pagination/ordering issues
+  const emailById = new Map<string, string>();
+  await Promise.all([...ownerClerkIds].map(async (clerkId) => {
+    try {
+      const user = await client.users.getUser(clerkId);
+      const email = user.emailAddresses[0]?.emailAddress;
+      if (email) emailById.set(clerkId, email);
+    } catch {
+      // User not found in Clerk — skip
+    }
+  }));
+
+  const tenantOwnerEmails: Record<string, string> = {};
+
+  // Primary: tenant.ownerUserId
+  for (const t of tenants) {
+    const email = emailById.get(t.ownerUserId);
+    if (email) tenantOwnerEmails[t.id] = email;
+  }
+
+  // Fallback: Owner-role memberships (covers ownerUserId mismatches)
+  for (const m of memberships) {
+    if (m.role === "Owner" && !tenantOwnerEmails[m.tenantId]) {
+      const email = emailById.get(m.userId);
+      if (email) tenantOwnerEmails[m.tenantId] = email;
+    }
+  }
+
+  return NextResponse.json({
+    items,
+    tenantOwnerEmails,
+    _debug: {
+      tenantCount: tenants.map(t => ({ id: t.id, ownerUserId: t.ownerUserId })),
+      ownerClerkIds: [...ownerClerkIds],
+      emailByIdEntries: [...emailById.entries()].map(([k, v]) => ({ clerkId: k, email: v })),
+      ownerMemberships: memberships.filter(m => m.role === "Owner").map(m => ({ userId: m.userId, tenantId: m.tenantId, role: m.role })),
+    },
+  });
 }
 
 // POST /api/admin/circle-hand — process matched import rows

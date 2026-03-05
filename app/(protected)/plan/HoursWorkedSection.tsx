@@ -1,10 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import type { TimeEntry, FocusArea } from "@/lib/types";
+import type { TimeEntry, PlanEntry } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
 
-const FOCUS_COLORS: Record<FocusArea, string> = {
+const FOCUS_COLOR_PALETTE = [
+  "#14b8a6", // teal  - Coordinating
+  "#16a34a", // green - Rightsizing
+  "#6366f1", // indigo - Packing to Move
+  "#a855f7", // purple - Packing for Donation/Dispersal
+  "#f97316", // orange - Managing Moving Day
+  "#f59e0b", // amber - Unpacking
+  "#3b82f6", // blue  - Setting Up Your Space
+  "#10b981", // emerald - Donating/Dispersal
+  "#06b6d4", // cyan  - Cleaning
+  "#78716c", // stone - Other Service
+];
+
+const LEGACY_FOCUS_COLORS: Record<string, string> = {
   Sorting:      "#3b82f6",
   Packing:      "#6366f1",
   Staging:      "#a855f7",
@@ -13,6 +26,13 @@ const FOCUS_COLORS: Record<FocusArea, string> = {
   Travel:       "#f97316",
   Other:        "#78716c",
 };
+
+function getFocusColor(area: string, serviceList: string[]): string {
+  if (LEGACY_FOCUS_COLORS[area]) return LEGACY_FOCUS_COLORS[area];
+  const idx = serviceList.indexOf(area);
+  if (idx >= 0) return FOCUS_COLOR_PALETTE[idx % FOCUS_COLOR_PALETTE.length];
+  return "#78716c";
+}
 
 function fmtMins(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -115,7 +135,7 @@ function EditEntryModal({ entry, onClose, onSaved }: EditModalProps) {
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Focus Area</label>
-            <select value={focusArea} onChange={e => setFocusArea(e.target.value as typeof focusArea)}
+            <select value={focusArea} onChange={e => setFocusArea(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
               {TIME_FOCUS_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
@@ -182,9 +202,12 @@ interface Props {
   estimatedHours?: number;
   tenantId: string;
   canEditEstimate?: boolean; // defaults to isAdmin; pass false in "All Projects" modes
+  planEntries?: PlanEntry[];
+  services?: string[];
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initialEstimatedHours, tenantId, canEditEstimate }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initialEstimatedHours, tenantId, canEditEstimate, planEntries, services }: Props) {
+  const serviceList = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
   const showEstimateEdit = canEditEstimate ?? isAdmin;
   const [entries, setEntries] = useState(timeEntries);
   const [showLog, setShowLog] = useState(false);
@@ -195,14 +218,46 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
   const [estSaving, setEstSaving] = useState(false);
 
   const totalMins = entries.reduce((s, e) => s + e.durationMinutes, 0);
-  const remainingMins = estimatedHours > 0
-    ? Math.max(0, Math.round(estimatedHours * 60) - totalMins)
-    : 0;
-  const pct = estimatedHours > 0 ? Math.min(100, (totalMins / (estimatedHours * 60)) * 100) : 0;
 
-  const focusBreakdown = TIME_FOCUS_AREAS
-    .map(area => ({ area, mins: entries.filter(e => e.focusArea === area).reduce((s, e) => s + e.durationMinutes, 0) }))
-    .filter(f => f.mins > 0);
+  // Scheduled = TTT Staff helper shifts on plan calendar with no logged time yet
+  const loggedDateKeys = new Set(entries.map(e => `${e.tenantId}:${e.date}`));
+  const scheduledMins = (planEntries ?? []).reduce((sum, pe) => {
+    // Skip if hours already logged for this project+date
+    if (loggedDateKeys.has(`${pe.tenantId}:${pe.date}`)) return sum;
+    if (!pe.startTime || !pe.endTime || !pe.helpers?.length) return sum;
+    const [sh, sm] = pe.startTime.split(":").map(Number);
+    const [eh, em] = pe.endTime.split(":").map(Number);
+    const shiftMins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+    if (shiftMins === 0) return sum;
+    const helperCount = pe.helpers.filter(h => h.status !== "declined").length;
+    return sum + helperCount * shiftMins;
+  }, 0);
+
+  const estimatedTotalMins = Math.round(estimatedHours * 60);
+  const remainingMins = estimatedHours > 0
+    ? Math.max(0, estimatedTotalMins - totalMins - scheduledMins)
+    : 0;
+  const pctLogged = estimatedHours > 0 ? Math.min(100, (totalMins / estimatedTotalMins) * 100) : 0;
+  const pctScheduled = estimatedHours > 0
+    ? Math.min(100 - pctLogged, (scheduledMins / estimatedTotalMins) * 100)
+    : 0;
+
+  const focusBreakdownMap = new Map<string, number>();
+  for (const e of entries) {
+    focusBreakdownMap.set(e.focusArea, (focusBreakdownMap.get(e.focusArea) ?? 0) + e.durationMinutes);
+  }
+  // Sort by service list order, then alphabetically for unknowns
+  const focusBreakdown = Array.from(focusBreakdownMap.entries())
+    .filter(([, mins]) => mins > 0)
+    .map(([area, mins]) => ({ area, mins }))
+    .sort((a, b) => {
+      const ai = serviceList.indexOf(a.area);
+      const bi = serviceList.indexOf(b.area);
+      if (ai >= 0 && bi >= 0) return ai - bi;
+      if (ai >= 0) return -1;
+      if (bi >= 0) return 1;
+      return a.area.localeCompare(b.area);
+    });
 
   async function saveEstimate() {
     const h = parseFloat(estInput);
@@ -254,7 +309,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {/* Estimated */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">Estimated</div>
@@ -290,9 +345,15 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
           <div className="text-xl font-bold text-gray-900">{totalMins > 0 ? fmtMins(totalMins) : "—"}</div>
         </div>
 
-        {/* Remaining */}
+        {/* Scheduled */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="text-xs text-amber-600 mb-1">Scheduled</div>
+          <div className="text-xl font-bold text-amber-700">{scheduledMins > 0 ? fmtMins(scheduledMins) : "—"}</div>
+        </div>
+
+        {/* Remaining to Schedule */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Remaining</div>
+          <div className="text-xs text-gray-500 mb-1">Remaining to Schedule</div>
           <div className={`text-xl font-bold ${
             estimatedHours > 0
               ? remainingMins > 0 ? "text-gray-900" : "text-emerald-600"
@@ -306,12 +367,13 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
       </div>
 
       {/* Progress bar */}
-      {estimatedHours > 0 && totalMins > 0 && (
+      {estimatedHours > 0 && (totalMins > 0 || scheduledMins > 0) && (
         <div className="mb-4">
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-forest-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex">
+            <div className="h-full bg-forest-500 transition-all" style={{ width: `${pctLogged}%` }} />
+            <div className="h-full bg-amber-400 transition-all" style={{ width: `${pctScheduled}%` }} />
           </div>
-          <div className="text-xs text-gray-400 mt-1">{Math.round(pct)}% complete</div>
+          <div className="text-xs text-gray-400 mt-1">{Math.round(pctLogged + pctScheduled)}% covered (logged + scheduled)</div>
         </div>
       )}
 
@@ -322,7 +384,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
           <div className="flex h-3 rounded-full overflow-hidden">
             {focusBreakdown.map(({ area, mins }) => (
               <div key={area}
-                style={{ width: `${(mins / totalMins) * 100}%`, backgroundColor: FOCUS_COLORS[area] }}
+                style={{ width: `${(mins / totalMins) * 100}%`, backgroundColor: getFocusColor(area, serviceList) }}
                 title={`${area}: ${fmtMins(mins)}`}
               />
             ))}
@@ -330,7 +392,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
             {focusBreakdown.map(({ area, mins }) => (
               <div key={area} className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: FOCUS_COLORS[area] }} />
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getFocusColor(area, serviceList) }} />
                 <span className="text-xs text-gray-600">{area}</span>
                 <span className="text-xs text-gray-400">{fmtMins(mins)}</span>
               </div>
@@ -358,7 +420,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
                   className="flex items-start justify-between py-2.5 px-3 bg-white border border-gray-100 rounded-lg">
                   <div className="flex items-start gap-2.5 min-w-0">
                     <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
-                      style={{ backgroundColor: FOCUS_COLORS[e.focusArea] }} />
+                      style={{ backgroundColor: getFocusColor(e.focusArea, serviceList) }} />
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-gray-900">
                         {fmtDate(e.date)} · {e.focusArea} · {fmtMins(e.durationMinutes)}

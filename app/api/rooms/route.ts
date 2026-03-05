@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createRoom, updateRoom, deleteRoom, getUserRoleForTenant, getSystemRole } from "@/lib/airtable";
+
 import type { DensityLevel, RoomType } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -28,9 +29,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Verify the user has edit access
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
+  // Verify the user has edit access (tenant role or system staff)
+  const [tenantRole, sysRole] = await Promise.all([
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    getSystemRole(userId).catch(() => null),
+  ]);
+  const canEdit =
+    (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(tenantRole)) ||
+    sysRole === "TTTManager" ||
+    sysRole === "TTTAdmin";
+  if (!canEdit) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

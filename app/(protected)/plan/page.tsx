@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,6 +11,7 @@ import {
   getProjectFiles,
   getTimeEntries,
   getSystemRole,
+  getServices,
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -43,12 +44,15 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const currentTenantId = showArchived ? "__all_archived__" : "__all_active__";
       const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
 
-      // Fetch plan entries, time entries, and project files for all tenants in selected group
-      const [allEntries, allTimeEntries, allProjectFiles] = await Promise.all([
+      // Fetch plan entries, time entries, project files, and services for all tenants in selected group
+      const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
         Promise.all(selectedTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))).then(r => r.flat()),
         Promise.all(selectedTenants.map(t => getTimeEntries({ tenantId: t.id }).catch(() => []))).then(r => r.flat()),
         Promise.all(selectedTenants.map(t => getProjectFiles(t.id).catch(() => []))).then(r => r.flat()),
+        getServices().catch(() => []),
       ]);
+
+      const serviceNames = serviceList.map(s => s.name);
 
       return (
         <div>
@@ -68,6 +72,53 @@ export default async function PlanPage({ searchParams }: PageProps) {
             isAdmin={sysRole === "TTTAdmin"}
             tenantOptions={tenantOptions}
             currentTenantId={currentTenantId}
+            services={serviceNames}
+          />
+        </div>
+      );
+    }
+
+    // ── TTT Staff: show their helper shifts across all projects ──────────────
+    if (sysRole === "TTTStaff") {
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId!);
+      const userEmail = clerkUser.emailAddresses.find(
+        e => e.id === clerkUser.primaryEmailAddressId
+      )?.emailAddress;
+
+      const [allTenants, serviceList] = await Promise.all([
+        getTenants().catch(() => []),
+        getServices().catch(() => []),
+      ]);
+      const activeTenants = allTenants.filter(t => !t.isArchived);
+      const allEntries = await Promise.all(
+        activeTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))
+      ).then(r => r.flat());
+
+      const staffEntries = userEmail
+        ? allEntries.filter(entry => entry.helpers?.some(h => h.email === userEmail))
+        : [];
+
+      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+      const serviceNames = serviceList.map(s => s.name);
+
+      return (
+        <div>
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
+            <p className="text-gray-500 mt-0.5">Your scheduled daily focus shifts across all active projects</p>
+          </div>
+          <PlanClient
+            entries={staffEntries}
+            rooms={[]}
+            tenantId=""
+            canEdit={false}
+            projectFiles={[]}
+            timeEntries={[]}
+            isAdmin={false}
+            tenantOptions={tenantOptions}
+            currentTenantId="__all_active__"
+            services={serviceNames}
           />
         </div>
       );
@@ -128,7 +179,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
@@ -137,6 +188,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getTimeEntries({ tenantId }).catch(() => []),
     getSystemRole(userId!).catch(() => null),
     getTenants().catch(() => []),
+    getServices().catch(() => []),
   ]);
 
   if (!tenant) redirect("/home");
@@ -149,6 +201,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
   const tenantOptions = isManagerOrAdmin
     ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }))
     : undefined;
+  const serviceNames = serviceList.map(s => s.name);
 
   return (
     <div>
@@ -177,6 +230,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         estimatedHours={tenant.estimatedHours}
         tenantOptions={tenantOptions}
         currentTenantId={tenantId}
+        services={serviceNames}
       />
     </div>
   );

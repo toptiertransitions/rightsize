@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
     vendorType: body.vendorType as VendorType,
     minCondition: body.minCondition as RoutingRule["minCondition"],
     matchCategories: body.matchCategories ?? "",
+    matchSizeClasses: body.matchSizeClasses ?? "",
+    matchFragility: body.matchFragility ?? "",
+    minValueMid: Number(body.minValueMid) || 0,
+    maxValueMid: Number(body.maxValueMid) || 0,
     priority: Number(body.priority) || 10,
     isActive: body.isActive ?? true,
   });
@@ -49,6 +53,10 @@ export async function PATCH(req: NextRequest) {
     vendorType: data.vendorType as VendorType,
     minCondition: data.minCondition as RoutingRule["minCondition"],
     matchCategories: data.matchCategories,
+    matchSizeClasses: data.matchSizeClasses,
+    matchFragility: data.matchFragility,
+    minValueMid: data.minValueMid !== undefined ? Number(data.minValueMid) : undefined,
+    maxValueMid: data.maxValueMid !== undefined ? Number(data.maxValueMid) : undefined,
     priority: data.priority !== undefined ? Number(data.priority) : undefined,
     isActive: data.isActive,
   });

@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getRoomsForTenant, getUserRoleForTenant, getTenantById } from "@/lib/airtable";
+import { getRoomsForTenant, getUserRoleForTenant, getTenantById, getSystemRole } from "@/lib/airtable";
 import { NewItemClient } from "./NewItemClient";
 
 interface PageProps {
@@ -15,16 +15,18 @@ export default async function NewItemPage({ searchParams }: PageProps) {
   const { tenantId } = await searchParams;
   if (!tenantId) redirect("/home");
 
-  const [tenant, role, rooms] = await Promise.all([
+  const [tenant, role, rooms, sysRole] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
+    getSystemRole(userId).catch(() => null),
   ]);
 
   if (!tenant) redirect("/home");
-  if (!role) redirect("/home");
+  const resolvedRole = role ?? sysRole;
+  if (!resolvedRole) redirect("/home");
 
-  const canEdit = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role);
+  const canEdit = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(resolvedRole);
   if (!canEdit) redirect(`/catalog?tenantId=${tenantId}`);
 
   return (

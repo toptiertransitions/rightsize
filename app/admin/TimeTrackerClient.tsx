@@ -22,6 +22,7 @@ interface Props {
   currentUserId: string;
   currentUserName: string;
   staffMembers?: StaffOption[];
+  services?: string[];
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -256,12 +257,14 @@ interface ModalProps {
   staffMembers?: StaffOption[];
   currentUserId: string;
   currentUserName: string;
+  services?: string[];
 }
 
-function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMembers, currentUserId, currentUserName }: ModalProps) {
+function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMembers, currentUserId, currentUserName, services }: ModalProps) {
+  const focusAreaOptions = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
   const [date, setDate] = useState(entry?.date ?? todayISO());
   const [tenantId, setTenantId] = useState(entry?.tenantId ?? (tenants[0]?.id ?? ""));
-  const [focusArea, setFocusArea] = useState<FocusArea>(entry?.focusArea ?? "Sorting");
+  const [focusArea, setFocusArea] = useState<FocusArea>(entry?.focusArea ?? (focusAreaOptions[0] ?? "Coordinating"));
   const [startTime, setStartTime] = useState(entry?.startTime ?? "09:00");
   const [endTime, setEndTime] = useState(entry?.endTime ?? "17:00");
   const [travelMiles, setTravelMiles] = useState(entry?.travelMiles != null ? String(entry.travelMiles) : "");
@@ -300,8 +303,14 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
       const res = await fetch("/api/time-entries", {
         method: entry ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(body),
       });
+      if (res.status === 401) {
+        // Session expired — reload to re-authenticate via Clerk
+        window.location.href = "/sign-in";
+        return;
+      }
       if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
       const data = await res.json();
       onSaved(data.entry);
@@ -317,7 +326,8 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
     if (!confirm("Delete this time entry?")) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/time-entries?id=${entry.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/time-entries?id=${entry.id}`, { method: "DELETE", credentials: "same-origin" });
+      if (res.status === 401) { window.location.href = "/sign-in"; return; }
       if (!res.ok) throw new Error((await res.json()).error ?? "Delete failed");
       onDeleted(entry.id);
     } catch (err) {
@@ -327,9 +337,11 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-6">
-        <div className="flex items-center justify-between mb-5">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+      <div className="bg-gray-900 border border-gray-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md flex flex-col max-h-[92dvh]">
+
+        {/* Header — sticky */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 flex-shrink-0">
           <h2 className="text-lg font-bold text-white">{entry ? "Edit Time Entry" : "Log Time"}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -338,97 +350,101 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!entry && staffMembers && staffMembers.length > 0 && (
+        {/* Scrollable body */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+
+            {!entry && staffMembers && staffMembers.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Log for</label>
+                <select value={forUserId} onChange={e => {
+                  const s = staffMembers.find(m => m.id === e.target.value);
+                  setForUserId(e.target.value);
+                  setForUserName(s?.name ?? currentUserName);
+                }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
+                  <option value={currentUserId}>{currentUserName} (me)</option>
+                  {staffMembers.filter(m => m.id !== currentUserId).map(m =>
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  )}
+                </select>
+              </div>
+            )}
+
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Log for</label>
-              <select value={forUserId} onChange={e => {
-                const s = staffMembers.find(m => m.id === e.target.value);
-                setForUserId(e.target.value);
-                setForUserName(s?.name ?? currentUserName);
-              }}
+              <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} required
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
+              <select value={tenantId} onChange={e => setTenantId(e.target.value)} required
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
-                <option value={currentUserId}>{currentUserName} (me)</option>
-                {staffMembers.filter(m => m.id !== currentUserId).map(m =>
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                )}
+                {tenants.length === 0 && <option value="">No projects</option>}
+                {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
-          )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} required
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
-            <select value={tenantId} onChange={e => setTenantId(e.target.value)} required
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
-              {tenants.length === 0 && <option value="">No projects</option>}
-              {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Focus Area</label>
-            <select value={focusArea} onChange={e => setFocusArea(e.target.value as FocusArea)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
-              {TIME_FOCUS_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Start Time</label>
-              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} required
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+              <label className="block text-xs font-medium text-gray-400 mb-1">Focus Area</label>
+              <select value={focusArea} onChange={e => setFocusArea(e.target.value as FocusArea)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
+                {focusAreaOptions.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">End Time</label>
-              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} required
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
-            </div>
-          </div>
 
-          {duration > 0 && (
-            <p className="text-xs text-forest-400 font-medium">Duration: {formatDuration(duration)}</p>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Travel Time <span className="text-gray-600">(round trip, optional)</span>
-              </label>
-              <div className="relative">
-                <input type="number" min="0" step="1" value={travelMinutes} onChange={e => setTravelMinutes(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-12" />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">min</span>
+            {/* Start / End — each full width on mobile, side-by-side on sm+ */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
+                <label className="block text-xs font-medium text-gray-400 mb-1">Start</label>
+                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} required
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+              </div>
+              <div className="min-w-0">
+                <label className="block text-xs font-medium text-gray-400 mb-1">End</label>
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} required
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Travel Miles <span className="text-gray-600">(optional)</span>
-              </label>
-              <input type="number" min="0" step="0.1" value={travelMiles} onChange={e => setTravelMiles(e.target.value)}
-                placeholder="0.0"
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+
+            {duration > 0 && (
+              <p className="text-xs text-forest-400 font-medium -mt-1">Duration: {formatDuration(duration)}</p>
+            )}
+
+            {/* Travel — stacked on mobile, side-by-side on sm+ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Travel Time <span className="text-gray-600">(min, round trip)</span></label>
+                <div className="relative">
+                  <input type="number" min="0" step="1" value={travelMinutes} onChange={e => setTravelMinutes(e.target.value)}
+                    placeholder="0"
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-10" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">min</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Travel Miles <span className="text-gray-600">(round trip)</span></label>
+                <div className="relative">
+                  <input type="number" min="0" step="0.1" value={travelMiles} onChange={e => setTravelMiles(e.target.value)}
+                    placeholder="0.0"
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-8" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">mi</span>
+                </div>
+              </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Notes <span className="text-gray-600">(optional)</span></label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 resize-none" />
+            </div>
+
+            {error && <p className="text-red-400 text-xs">{error}</p>}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Notes <span className="text-gray-600">(optional)</span>
-            </label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 resize-none" />
-          </div>
-
-          {error && <p className="text-red-400 text-xs">{error}</p>}
-
-          <div className="flex gap-3 pt-1">
+          {/* Footer — sticky at bottom */}
+          <div className="px-6 py-4 border-t border-gray-800 flex gap-3 flex-shrink-0">
             {entry && onDeleted && (
               <button type="button" onClick={handleDelete} disabled={deleting}
                 className="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors">
@@ -452,7 +468,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
@@ -460,6 +476,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
   const [showExportModal, setShowExportModal] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
   const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
+  const [showWeekends, setShowWeekends] = useState(false);
 
   // ── Derived permissions ───────────────────────────────────────────────────
   const canViewAll = isAdmin || isManager;
@@ -559,6 +576,8 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
 
   const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const todayStr = todayISO();
+  const displayDays = showWeekends ? weekDays : weekDays.slice(0, 5);
+  const displayLabels = showWeekends ? DAY_LABELS : DAY_LABELS.slice(0, 5);
 
   return (
     <div>
@@ -572,6 +591,12 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
           </select>
         )}
         <div className="flex-1" />
+        <button
+          onClick={() => setShowWeekends(v => !v)}
+          className="px-3 py-2 rounded-xl text-xs text-gray-400 hover:text-white bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors"
+        >
+          {showWeekends ? "5-day" : "7-day"}
+        </button>
         {canViewAll && (
           <button onClick={() => setShowExportModal(true)}
             className="px-4 py-2 rounded-xl text-sm text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors">
@@ -599,8 +624,8 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
           </button>
         )}
       </div>
-      <div className="grid grid-cols-8 gap-2 mb-6">
-        {weekDays.map((day, i) => {
+      <div className={`grid ${showWeekends ? "grid-cols-8" : "grid-cols-6"} gap-2 mb-6`}>
+        {displayDays.map((day, i) => {
           const iso = toISODate(day);
           const mins = dayTotals.get(iso) ?? 0;
           const isToday = iso === todayStr;
@@ -613,7 +638,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
                 isSelected ? "border-forest-400 ring-1 ring-forest-400" : "border-gray-700"
               }`}
             >
-              <p className={`text-xs mb-1 ${isToday ? "text-forest-400 font-semibold" : "text-gray-400"}`}>{DAY_LABELS[i]}</p>
+              <p className={`text-xs mb-1 ${isToday ? "text-forest-400 font-semibold" : "text-gray-400"}`}>{displayLabels[i]}</p>
               <div className="flex items-center justify-center">
                 {isToday ? (
                   <span className="w-6 h-6 rounded-full bg-forest-500 flex items-center justify-center text-xs font-bold text-white">
@@ -709,6 +734,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
           staffMembers={staffMembers}
           currentUserId={currentUserId}
           currentUserName={currentUserName}
+          services={services}
         />
       )}
 

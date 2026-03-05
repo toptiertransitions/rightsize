@@ -15,11 +15,7 @@ export async function PATCH(req: NextRequest) {
   const sysRole = await getSystemRole(userId);
   if (sysRole !== "TTTAdmin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { rightsizingRate, packingRate, unpackingRate } = await req.json();
-  if (typeof rightsizingRate !== "number" || typeof packingRate !== "number" || typeof unpackingRate !== "number") {
-    return NextResponse.json({ error: "Invalid rates" }, { status: 400 });
-  }
-
-  const settings = await upsertContractSettings({ rightsizingRate, packingRate, unpackingRate });
+  const body = await req.json();
+  const settings = await upsertContractSettings(body);
   return NextResponse.json({ settings });
 }

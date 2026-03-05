@@ -9,6 +9,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign(.*)",
   "/api/webhooks(.*)",
   "/api/crm/gmail/callback(.*)",
+  "/api/qbo/callback(.*)",
 ]);
 
 export default clerkMiddleware((auth, req) => {

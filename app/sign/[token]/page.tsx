@@ -17,7 +17,9 @@ export default async function SignPage({ params }: PageProps) {
 
   const tenant = await getTenantById(contract.tenantId).catch(() => null);
 
-  const phases = [
+  const useLineItems = (contract.lineItems?.length ?? 0) > 0;
+
+  const legacyPhases = [
     { label: "Rightsizing", hours: contract.rightsizingHours, rate: contract.rightsizingRate },
     { label: "Packing", hours: contract.packingHours, rate: contract.packingRate },
     { label: "Unpacking", hours: contract.unpackingHours, rate: contract.unpackingRate },
@@ -40,30 +42,57 @@ export default async function SignPage({ params }: PageProps) {
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-base font-semibold text-gray-900">Estimated Services</h2>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Phase</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hours</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {phases.map(({ label, hours, rate }) => (
-                <tr key={label} className="border-t border-gray-100">
-                  <td className="px-6 py-3 text-gray-700">{label}</td>
-                  <td className="px-6 py-3 text-right text-gray-900">{hours}</td>
-                  <td className="px-6 py-3 text-right text-gray-500">{formatCost(rate)}/hr</td>
-                  <td className="px-6 py-3 text-right text-gray-900">{formatCost(hours * rate)}</td>
+          {useLineItems ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Service</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hours</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
                 </tr>
-              ))}
-              <tr className="border-t-2 border-forest-200 bg-forest-50">
-                <td className="px-6 py-4 font-bold text-forest-700" colSpan={3}>Total</td>
-                <td className="px-6 py-4 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
-              </tr>
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {contract.lineItems!.map((item) => (
+                  <tr key={item.serviceId} className="border-t border-gray-100">
+                    <td className="px-6 py-3 text-gray-700">{item.serviceName}</td>
+                    <td className="px-6 py-3 text-right text-gray-900">{item.hours}</td>
+                    <td className="px-6 py-3 text-right text-gray-500">{formatCost(item.rate)}/hr</td>
+                    <td className="px-6 py-3 text-right text-gray-900">{formatCost(item.hours * item.rate)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-forest-200 bg-forest-50">
+                  <td className="px-6 py-4 font-bold text-forest-700" colSpan={3}>Total</td>
+                  <td className="px-6 py-4 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
+                </tr>
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Phase</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hours</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {legacyPhases.map(({ label, hours, rate }) => (
+                  <tr key={label} className="border-t border-gray-100">
+                    <td className="px-6 py-3 text-gray-700">{label}</td>
+                    <td className="px-6 py-3 text-right text-gray-900">{hours}</td>
+                    <td className="px-6 py-3 text-right text-gray-500">{formatCost(rate)}/hr</td>
+                    <td className="px-6 py-3 text-right text-gray-900">{formatCost(hours * rate)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-forest-200 bg-forest-50">
+                  <td className="px-6 py-4 font-bold text-forest-700" colSpan={3}>Total</td>
+                  <td className="px-6 py-4 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Contract body */}

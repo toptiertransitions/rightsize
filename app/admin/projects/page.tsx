@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getTenants, getAllMemberships } from "@/lib/airtable";
 import { CopyId } from "../CopyId";
 import { isTTTAdmin } from "@/lib/config";
-import { UserButton } from "@clerk/nextjs";
+import { AdminHeader } from "../components/AdminHeader";
 
 export default async function AdminProjectsPage() {
   const { userId } = await auth();
@@ -23,36 +23,7 @@ export default async function AdminProjectsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <header className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-forest-600 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-            </div>
-            <div>
-              <div className="font-bold text-white text-sm">Rightsize</div>
-              <div className="text-[9px] text-gray-400">TTT Admin Console</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <nav className="hidden md:flex items-center gap-1">
-              <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Time</Link>
-              <Link href="/admin/projects" className="px-3 py-1.5 rounded-lg text-sm bg-gray-800 text-white font-medium">Projects</Link>
-              <Link href="/admin/users" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Users</Link>
-              <Link href="/admin/local-vendors" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Local Vendors</Link>
-              <Link href="/admin/integrations/circle-hand" className="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">Circle Hand</Link>
-            </nav>
-            <div className="flex items-center gap-3">
-              <span className="text-xs bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded-full font-medium">
-                🔐 Admin
-              </span>
-              <UserButton afterSignOutUrl="/sign-in" />
-            </div>
-          </div>
-        </div>
-      </header>
+      <AdminHeader active="projects" />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8">

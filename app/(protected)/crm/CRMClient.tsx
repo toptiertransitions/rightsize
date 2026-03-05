@@ -1,9 +1,42 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact } from "@/lib/types";
+import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, StaffMember, ReferralPriority } from "@/lib/types";
+
+// ─── CSV Helpers ─────────────────────────────────────────────────────────────
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let inQuote = false;
+  let current = "";
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i + 1] === '"') { current += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (ch === "," && !inQuote) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, ""));
+  return lines.slice(1).map(line => {
+    const vals = parseCSVLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = vals[i] ?? ""; });
+    return row;
+  }).filter(row => Object.values(row).some(v => v.trim()));
+}
 
 type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "activity" | "settings";
 
@@ -11,6 +44,8 @@ interface CRMClientProps {
   opportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
   companies: ReferralCompany[];
+  referralContacts: ReferralContact[];
+  staffMembers: StaffMember[];
   gmailConnected: boolean;
   gmailEmail?: string;
 }
@@ -844,6 +879,54 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [saving, setSaving] = useState(false);
   const [activityContact, setActivityContact] = useState<ClientContact | null>(null);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
+  const [csvResult, setCsvResult] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rows = parseCSV(ev.target?.result as string);
+      setCsvPreview(rows);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  async function confirmCsvImport() {
+    if (!csvPreview) return;
+    setCsvImporting(true);
+    let imported = 0;
+    let errors = 0;
+    for (const row of csvPreview) {
+      const name = row["name"] || row["contactname"] || row["fullname"] || "";
+      if (!name) continue;
+      try {
+        const res = await fetch("/api/crm/client-contacts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            email: row["email"] || row["emailaddress"] || "",
+            phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
+            source: row["source"] || "",
+            notes: row["notes"] || row["note"] || "",
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setContacts(prev => [data.contact, ...prev]);
+          imported++;
+        } else { errors++; }
+      } catch { errors++; }
+    }
+    setCsvImporting(false);
+    setCsvPreview(null);
+    setCsvResult(`Imported ${imported} contact${imported !== 1 ? "s" : ""}${errors ? `, ${errors} failed` : ""}.`);
+  }
 
   function openNew() {
     setEditing(null);
@@ -892,11 +975,68 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
 
   return (
     <div>
-      <div className="flex justify-end mb-4">
-        <button onClick={openNew} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
-          + Add Contact
-        </button>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {csvResult && (
+            <span className="text-sm text-green-600">{csvResult}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+          <button
+            onClick={() => { setCsvResult(null); csvInputRef.current?.click(); }}
+            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50"
+          >
+            Import CSV
+          </button>
+          <button onClick={openNew} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
+            + Add Contact
+          </button>
+        </div>
       </div>
+
+      {csvPreview && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-sm font-medium text-blue-800 mb-2">
+            Preview: {csvPreview.length} row{csvPreview.length !== 1 ? "s" : ""} to import
+          </p>
+          <div className="overflow-x-auto max-h-40 overflow-y-auto">
+            <table className="text-xs w-full">
+              <thead><tr className="text-blue-600">
+                <th className="text-left pr-4 pb-1">Name</th>
+                <th className="text-left pr-4 pb-1">Email</th>
+                <th className="text-left pr-4 pb-1">Phone</th>
+                <th className="text-left pr-4 pb-1">Source</th>
+              </tr></thead>
+              <tbody>
+                {csvPreview.slice(0, 5).map((row, i) => (
+                  <tr key={i} className="text-blue-900">
+                    <td className="pr-4 py-0.5">{row["name"] || row["contactname"] || "—"}</td>
+                    <td className="pr-4 py-0.5">{row["email"] || "—"}</td>
+                    <td className="pr-4 py-0.5">{row["phone"] || "—"}</td>
+                    <td className="pr-4 py-0.5">{row["source"] || "—"}</td>
+                  </tr>
+                ))}
+                {csvPreview.length > 5 && (
+                  <tr><td colSpan={4} className="text-blue-500 pt-1">…and {csvPreview.length - 5} more</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={confirmCsvImport}
+              disabled={csvImporting}
+              className="text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50"
+            >
+              {csvImporting ? "Importing…" : `Import ${csvPreview.length} contacts`}
+            </button>
+            <button onClick={() => setCsvPreview(null)} className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
@@ -971,17 +1111,117 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
 }
 
 // ─── Referral Partners Tab ────────────────────────────────────────────────────
-function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralCompany[] }) {
+const PRIORITY_COLORS: Record<string, string> = {
+  High: "bg-red-100 text-red-700",
+  Medium: "bg-amber-100 text-amber-700",
+  Low: "bg-gray-100 text-gray-600",
+};
+
+function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompanies: ReferralCompany[]; staffMembers: StaffMember[] }) {
   const [companies, setCompanies] = useState(initialCompanies);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
   const [companyModal, setCompanyModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<ReferralCompany | null>(null);
-  const [companyForm, setCompanyForm] = useState({ name: "", type: "", notes: "" });
+  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", assignedToClerkId: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [csvType, setCsvType] = useState<"companies" | "contacts" | null>(null);
+  const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvResult, setCsvResult] = useState<string | null>(null);
+  const csvCompanyRef = useRef<HTMLInputElement>(null);
+  const csvContactRef = useRef<HTMLInputElement>(null);
+  // Search / filter / sort
+  const [search, setSearch] = useState("");
+  const [filterPriority, setFilterPriority] = useState<"" | ReferralPriority>("");
+  const [filterType, setFilterType] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "priority">("name");
+
+  function handleCsvFile(type: "companies" | "contacts", e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setCsvType(type);
+      setCsvPreview(parseCSV(ev.target?.result as string));
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  async function confirmCsvImport() {
+    if (!csvPreview || !csvType) return;
+    setCsvImporting(true);
+    let imported = 0;
+    let errors = 0;
+
+    if (csvType === "companies") {
+      for (const row of csvPreview) {
+        const name = row["name"] || row["company"] || row["companyname"] || "";
+        if (!name) continue;
+        try {
+          const res = await fetch("/api/crm/companies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              type: row["type"] || "",
+              address: row["address"] || "",
+              city: row["city"] || "",
+              state: row["state"] || "",
+              zip: row["zip"] || row["zipcode"] || "",
+              notes: row["notes"] || "",
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setCompanies(prev => [...prev, data.company]);
+            imported++;
+          } else { errors++; }
+        } catch { errors++; }
+      }
+    } else {
+      // contacts: match company by name from existing companies state
+      const companyMap = new Map(companies.map(c => [c.name.toLowerCase(), c.id]));
+      for (const row of csvPreview) {
+        const name = row["name"] || row["contactname"] || row["fullname"] || "";
+        if (!name) continue;
+        const companyName = (row["company"] || row["companyname"] || "").toLowerCase();
+        const referralCompanyId = companyMap.get(companyName) || "";
+        try {
+          const res = await fetch("/api/crm/contacts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              title: row["title"] || row["jobtitle"] || "",
+              email: row["email"] || row["emailaddress"] || "",
+              phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
+              notes: row["notes"] || "",
+              referralCompanyId,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (referralCompanyId) {
+              setContacts(prev => ({
+                ...prev,
+                [referralCompanyId]: [...(prev[referralCompanyId] || []), data.contact],
+              }));
+            }
+            imported++;
+          } else { errors++; }
+        } catch { errors++; }
+      }
+    }
+    setCsvImporting(false);
+    setCsvPreview(null);
+    setCsvType(null);
+    setCsvResult(`Imported ${imported} ${csvType === "companies" ? "compan" : "contact"}${imported !== 1 ? (csvType === "companies" ? "ies" : "s") : (csvType === "companies" ? "y" : "")}${errors ? `, ${errors} failed` : ""}.`);
+  }
 
   const COMPANY_TYPES = ["Senior Living", "Realtor", "Broker", "Doctor", "Attorney", "Hospital", "Financial Advisor", "Other"];
 
@@ -1005,13 +1245,13 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
 
   function openNewCompany() {
     setEditingCompany(null);
-    setCompanyForm({ name: "", type: "", notes: "" });
+    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", assignedToClerkId: "" });
     setCompanyModal(true);
   }
 
   function openEditCompany(c: ReferralCompany) {
     setEditingCompany(c);
-    setCompanyForm({ name: c.name, type: c.type, notes: c.notes });
+    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, assignedToClerkId: c.assignedToClerkId || "" });
     setCompanyModal(true);
   }
 
@@ -1019,11 +1259,22 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
     if (!companyForm.name) return;
     setSaving(true);
     try {
+      const payload = {
+        name: companyForm.name,
+        type: companyForm.type,
+        address: companyForm.address,
+        city: companyForm.city,
+        state: companyForm.state,
+        zip: companyForm.zip,
+        priority: companyForm.priority,
+        notes: companyForm.notes,
+        assignedToClerkId: companyForm.assignedToClerkId,
+      };
       if (editingCompany) {
         const res = await fetch("/api/crm/companies", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingCompany.id, ...companyForm }),
+          body: JSON.stringify({ id: editingCompany.id, ...payload }),
         });
         const data = await res.json();
         setCompanies((prev) => prev.map((c) => (c.id === editingCompany.id ? data.company : c)));
@@ -1031,7 +1282,7 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
         const res = await fetch("/api/crm/companies", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(companyForm),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         setCompanies((prev) => [...prev, data.company]);
@@ -1102,34 +1353,172 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
     }));
   }
 
+  // Compute unique types for filter dropdown
+  const allTypes = Array.from(new Set(companies.map(c => c.type).filter(Boolean))).sort();
+
+  // Apply search / filter / sort
+  const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
+  const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2, "": 3 };
+  const filtered = companies
+    .filter(c => {
+      if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.type.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterPriority && c.priority !== filterPriority) return false;
+      if (filterType && c.type !== filterType) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "priority") return (PRIORITY_ORDER[a.priority || ""] ?? 3) - (PRIORITY_ORDER[b.priority || ""] ?? 3);
+      return a.name.localeCompare(b.name);
+    });
+
   return (
     <div>
-      <div className="flex justify-end mb-4">
-        <button onClick={openNewCompany} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
-          + Add Company
-        </button>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search companies…"
+            className="h-8 border border-gray-300 rounded-lg px-3 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-forest-500"
+          />
+          {/* Priority filter chips */}
+          {(["", "High", "Medium", "Low"] as const).map(p => (
+            <button
+              key={p || "all"}
+              onClick={() => setFilterPriority(p)}
+              className={cn(
+                "h-7 px-2.5 text-xs rounded-full border transition-colors",
+                filterPriority === p
+                  ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
+                  : "border-gray-300 text-gray-500 hover:border-gray-400"
+              )}
+            >
+              {p || "All Priority"}
+            </button>
+          ))}
+          {allTypes.length > 0 && (
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+              className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
+            >
+              <option value="">All Types</option>
+              {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as "name" | "priority")}
+            className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
+          >
+            <option value="name">Sort: Name A–Z</option>
+            <option value="priority">Sort: Priority</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <input ref={csvCompanyRef} type="file" accept=".csv" className="hidden" onChange={(e) => handleCsvFile("companies", e)} />
+          <input ref={csvContactRef} type="file" accept=".csv" className="hidden" onChange={(e) => handleCsvFile("contacts", e)} />
+          <button
+            onClick={() => { setCsvResult(null); csvCompanyRef.current?.click(); }}
+            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50"
+          >
+            Import Companies CSV
+          </button>
+          <button
+            onClick={() => { setCsvResult(null); csvContactRef.current?.click(); }}
+            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50"
+          >
+            Import Contacts CSV
+          </button>
+          <button onClick={openNewCompany} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
+            + Add Company
+          </button>
+        </div>
       </div>
 
+      {csvResult && <p className="text-sm text-green-600 mb-3">{csvResult}</p>}
+
+      {csvPreview && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-sm font-medium text-blue-800 mb-2">
+            Preview: {csvPreview.length} {csvType === "companies" ? "compan" : "contact"}{csvPreview.length !== 1 ? (csvType === "companies" ? "ies" : "s") : (csvType === "companies" ? "y" : "")} to import
+            {csvType === "contacts" && <span className="text-blue-600 font-normal"> — Company column matched to existing companies by name</span>}
+          </p>
+          <div className="overflow-x-auto max-h-40 overflow-y-auto">
+            <table className="text-xs w-full">
+              <thead><tr className="text-blue-600">
+                {csvType === "companies" ? (
+                  <><th className="text-left pr-4 pb-1">Name</th><th className="text-left pr-4 pb-1">Type</th><th className="text-left pr-4 pb-1">City</th><th className="text-left pb-1">State</th></>
+                ) : (
+                  <><th className="text-left pr-4 pb-1">Name</th><th className="text-left pr-4 pb-1">Title</th><th className="text-left pr-4 pb-1">Email</th><th className="text-left pb-1">Company</th></>
+                )}
+              </tr></thead>
+              <tbody>
+                {csvPreview.slice(0, 5).map((row, i) => (
+                  <tr key={i} className="text-blue-900">
+                    {csvType === "companies" ? (
+                      <><td className="pr-4 py-0.5">{row["name"] || row["company"] || "—"}</td><td className="pr-4 py-0.5">{row["type"] || "—"}</td><td className="pr-4 py-0.5">{row["city"] || "—"}</td><td>{row["state"] || "—"}</td></>
+                    ) : (
+                      <><td className="pr-4 py-0.5">{row["name"] || row["contactname"] || "—"}</td><td className="pr-4 py-0.5">{row["title"] || "—"}</td><td className="pr-4 py-0.5">{row["email"] || "—"}</td><td>{row["company"] || row["companyname"] || "—"}</td></>
+                    )}
+                  </tr>
+                ))}
+                {csvPreview.length > 5 && (
+                  <tr><td colSpan={4} className="text-blue-500 pt-1">…and {csvPreview.length - 5} more</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={confirmCsvImport}
+              disabled={csvImporting}
+              className="text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50"
+            >
+              {csvImporting ? "Importing…" : `Import ${csvPreview.length} ${csvType === "companies" ? (csvPreview.length !== 1 ? "companies" : "company") : (csvPreview.length !== 1 ? "contacts" : "contact")}`}
+            </button>
+            <button onClick={() => { setCsvPreview(null); setCsvType(null); }} className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {companies.length === 0 && (
-          <p className="text-center text-gray-400 py-10">No referral companies yet</p>
+        {filtered.length === 0 && (
+          <p className="text-center text-gray-400 py-10">{companies.length === 0 ? "No referral companies yet" : "No companies match your filters"}</p>
         )}
-        {companies.map((company) => (
+        {filtered.map((company) => (
           <div key={company.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div
               className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
               onClick={() => toggleExpand(company.id)}
             >
-              <div className="flex items-center gap-3">
-                <span className="text-gray-400 text-sm">{expanded === company.id ? "▾" : "▸"}</span>
-                <div>
-                  <span className="font-medium text-gray-900">{company.name}</span>
-                  {company.type && (
-                    <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{company.type}</span>
-                  )}
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-gray-400 text-sm flex-shrink-0">{expanded === company.id ? "▾" : "▸"}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-gray-900">{company.name}</span>
+                    {company.type && (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{company.type}</span>
+                    )}
+                    {company.priority && (
+                      <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", PRIORITY_COLORS[company.priority])}>{company.priority}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 mt-0.5 text-xs text-gray-500">
+                    {(company.city || company.state) && (
+                      <span>{[company.city, company.state].filter(Boolean).join(", ")}</span>
+                    )}
+                    {company.assignedToClerkId && staffById.get(company.assignedToClerkId) && (
+                      <span>Owner: {staffById.get(company.assignedToClerkId)}</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => openEditCompany(company)} className="text-xs text-forest-600 hover:text-forest-800 px-2 py-1">Edit</button>
                 <button onClick={() => deleteCompany(company.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1">Delete</button>
               </div>
@@ -1137,6 +1526,9 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
 
             {expanded === company.id && (
               <div className="border-t border-gray-100 px-4 py-3">
+                {company.notes && (
+                  <p className="text-xs text-gray-500 mb-3 italic">{company.notes}</p>
+                )}
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Contacts</span>
                   <button onClick={() => openAddContact(company.id)} className="text-xs text-forest-600 hover:text-forest-800">+ Add Contact</button>
@@ -1180,18 +1572,54 @@ function ReferralPartnersTab({ initialCompanies }: { initialCompanies: ReferralC
       {companyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setCompanyModal(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900">{editingCompany ? "Edit Company" : "Add Company"}</h3>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
               <input type="text" value={companyForm.name} onChange={(e) => setCompanyForm((f) => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select value={companyForm.type} onChange={(e) => setCompanyForm((f) => ({ ...f, type: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="">— Select type —</option>
+                  {COMPANY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                <select value={companyForm.priority} onChange={(e) => setCompanyForm((f) => ({ ...f, priority: e.target.value as ReferralPriority | "" }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="">— None —</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+            </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select value={companyForm.type} onChange={(e) => setCompanyForm((f) => ({ ...f, type: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                <option value="">— Select type —</option>
-                {COMPANY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
+              <select value={companyForm.assignedToClerkId} onChange={(e) => setCompanyForm((f) => ({ ...f, assignedToClerkId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">— Unassigned —</option>
+                {staffMembers.map(s => <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <input type="text" value={companyForm.address} onChange={(e) => setCompanyForm((f) => ({ ...f, address: e.target.value }))} placeholder="Street address" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <input type="text" value={companyForm.city} onChange={(e) => setCompanyForm((f) => ({ ...f, city: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <input type="text" value={companyForm.state} onChange={(e) => setCompanyForm((f) => ({ ...f, state: e.target.value }))} maxLength={2} placeholder="IL" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zip</label>
+                <input type="text" value={companyForm.zip} onChange={(e) => setCompanyForm((f) => ({ ...f, zip: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
@@ -1417,6 +1845,76 @@ function DashboardTab({
   );
 }
 
+// ─── Contact Search ───────────────────────────────────────────────────────────
+function ContactSearch({
+  clientContacts,
+  referralContacts,
+  selectedId,
+  onSelect,
+}: {
+  clientContacts: ClientContact[];
+  referralContacts: ReferralContact[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const allContacts = [
+    ...clientContacts.map((c) => ({ id: c.id, name: c.name, label: "Client" })),
+    ...referralContacts.map((c) => ({ id: c.id, name: c.name, label: "Referral" })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  const selectedName = allContacts.find((c) => c.id === selectedId)?.name ?? "";
+  const [inputValue, setInputValue] = useState(selectedName);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setInputValue(selectedName);
+  }, [selectedName]);
+
+  const filtered = inputValue
+    ? allContacts.filter((c) => c.name.toLowerCase().includes(inputValue.toLowerCase()))
+    : allContacts;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => {
+          setInputValue(e.target.value);
+          if (!e.target.value) onSelect("");
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder="Search contacts…"
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-1">
+          {filtered.slice(0, 20).map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(c.id);
+                  setInputValue(c.name);
+                  setOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+              >
+                <span>{c.name}</span>
+                <span className="text-xs text-gray-400 ml-2">{c.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Activity Log Tab ─────────────────────────────────────────────────────────
 const ACTIVITY_TYPE_COLORS: Record<string, string> = {
   Call: "bg-green-100 text-green-700",
@@ -1429,9 +1927,13 @@ const ACTIVITY_TYPE_COLORS: Record<string, string> = {
 function ActivityLogTab({
   opportunities,
   clientContacts,
+  referralContacts,
+  gmailConnected,
 }: {
   opportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
+  referralContacts: ReferralContact[];
+  gmailConnected: boolean;
 }) {
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1441,6 +1943,8 @@ function ActivityLogTab({
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [logForm, setLogForm] = useState({ contactId: "", type: "Note" as CRMActivityType, note: "", date: new Date().toISOString().slice(0, 10) });
   const [logging, setLogging] = useState(false);
+  const [syncingGmail, setSyncingGmail] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -1454,7 +1958,10 @@ function ActivityLogTab({
 
   function getContactName(activity: CRMActivity) {
     if (activity.clientContactId) {
-      return clientContacts.find((c) => c.id === activity.clientContactId)?.name || "—";
+      const client = clientContacts.find((c) => c.id === activity.clientContactId);
+      if (client) return client.name;
+      const referral = referralContacts.find((c) => c.id === activity.clientContactId);
+      if (referral) return referral.name;
     }
     const opp = opportunities.find((o) => o.id === activity.opportunityId);
     if (!opp) return "—";
@@ -1480,6 +1987,25 @@ function ActivityLogTab({
       reload();
     } finally {
       setLogging(false);
+    }
+  }
+
+  async function handleSyncAll() {
+    setSyncingGmail(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/crm/gmail/sync-all", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncResult(`Error: ${data.error || "Sync failed"}`);
+      } else {
+        setSyncResult(`Imported ${data.imported} new email${data.imported !== 1 ? "s" : ""} across ${data.contactsSearched} contact${data.contactsSearched !== 1 ? "s" : ""}`);
+        reload();
+      }
+    } catch {
+      setSyncResult("Sync failed — check your Gmail connection");
+    } finally {
+      setSyncingGmail(false);
     }
   }
 
@@ -1550,13 +2076,33 @@ function ActivityLogTab({
             Delete {selected.size} selected
           </button>
         )}
-        <button
-          onClick={() => setLogModalOpen(true)}
-          className="ml-auto text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700"
-        >
-          + Log Activity
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {gmailConnected && (
+            <button
+              onClick={handleSyncAll}
+              disabled={syncingGmail}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+              </svg>
+              {syncingGmail ? "Syncing…" : "Sync Gmail"}
+            </button>
+          )}
+          <button
+            onClick={() => setLogModalOpen(true)}
+            className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700"
+          >
+            + Log Activity
+          </button>
+        </div>
       </div>
+      {syncResult && (
+        <div className="mb-4 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-center justify-between">
+          <span>{syncResult}</span>
+          <button onClick={() => setSyncResult(null)} className="ml-4 text-blue-400 hover:text-blue-600 text-xs">✕</button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
@@ -1643,16 +2189,12 @@ function ActivityLogTab({
             <h3 className="font-semibold text-gray-900">Log Activity</h3>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Contact *</label>
-              <select
-                value={logForm.contactId}
-                onChange={(e) => setLogForm((f) => ({ ...f, contactId: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="">— Select contact —</option>
-                {clientContacts.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <ContactSearch
+                clientContacts={clientContacts}
+                referralContacts={referralContacts}
+                selectedId={logForm.contactId}
+                onSelect={(id) => setLogForm((f) => ({ ...f, contactId: id }))}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1770,7 +2312,7 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
 }
 
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
-export function CRMClient({ opportunities, clientContacts, companies, gmailConnected, gmailEmail }: CRMClientProps) {
+export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail }: CRMClientProps) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -1822,9 +2364,9 @@ export function CRMClient({ opportunities, clientContacts, companies, gmailConne
         />
       )}
       {tab === "contacts" && <ContactsTab initialContacts={clientContacts} />}
-      {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} />}
+      {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} staffMembers={staffMembers} />}
       {tab === "activity" && (
-        <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} />
+        <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} gmailConnected={gmailConnected} />
       )}
       {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} />}
     </div>

@@ -104,37 +104,42 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Check if vendor assignment changed
+  // Fetch existing item if needed for vendor change check or Sold backfill
   const newVendorId = updates.assignedVendorId as string | undefined;
+  const needsExisting = newVendorId !== undefined || updates.status === "Sold";
+  const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
+
   let vendorChanged = false;
-  if (newVendorId !== undefined) {
-    const existing = await getItemById(id as string).catch(() => null);
-    if (existing && existing.assignedVendorId !== newVendorId) {
-      vendorChanged = true;
-      // Reset decision on reassignment
-      (updates as Record<string, unknown>).vendorDecision = "Pending";
-    }
+  if (newVendorId !== undefined && existing && existing.assignedVendorId !== newVendorId) {
+    vendorChanged = true;
+    // Reset decision on reassignment
+    (updates as Record<string, unknown>).vendorDecision = "Pending";
+  }
+
+  // When marking Sold, backfill Target Value = Sale Price (if not already set)
+  if (updates.status === "Sold" && existing?.salePrice && existing.salePrice > 0 && !(updates as Record<string, unknown>).valueMid) {
+    (updates as Record<string, unknown>).valueMid = existing.salePrice;
   }
 
   const item = await updateItem(id as string, updates as never);
 
-  // Send notification email if vendor was newly assigned
-  if (vendorChanged && newVendorId) {
-    const vendor = await getLocalVendorById(newVendorId).catch(() => null);
-    if (vendor?.email) {
-      const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com"}/vendor`;
-      try {
-        await resend.emails.send({
-          from: "Top Tier Transitions <noreply@toptiertransitions.com>",
-          to: vendor.email,
-          subject: "1 new item waiting for your review",
-          html: buildVendorAssignmentEmail({ vendorName: vendor.vendorName, itemCount: 1, portalUrl }),
-        });
-      } catch (err) {
-        console.error(`Failed to send vendor notification:`, err);
-      }
-    }
-  }
+  // Vendor assignment email — currently suppressed
+  // if (vendorChanged && newVendorId) {
+  //   const vendor = await getLocalVendorById(newVendorId).catch(() => null);
+  //   if (vendor?.email) {
+  //     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com"}/vendor`;
+  //     try {
+  //       await resend.emails.send({
+  //         from: "Top Tier Transitions <noreply@toptiertransitions.com>",
+  //         to: vendor.email,
+  //         subject: "1 new item waiting for your review",
+  //         html: buildVendorAssignmentEmail({ vendorName: vendor.vendorName, itemCount: 1, portalUrl }),
+  //       });
+  //     } catch (err) {
+  //       console.error(`Failed to send vendor notification:`, err);
+  //     }
+  //   }
+  // }
 
   return NextResponse.json({ item });
 }

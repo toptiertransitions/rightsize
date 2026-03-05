@@ -402,7 +402,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                 <div className="grid grid-cols-3 gap-3">
                   <Input label="Value Low ($)" type="number" value={merged.value_low ?? 0}
                     onChange={(e) => update("value_low", Number(e.target.value))} />
-                  <Input label="Value Mid ($)" type="number" value={merged.value_mid ?? 0}
+                  <Input label="Target Value ($)" type="number" value={merged.value_mid ?? 0}
                     onChange={(e) => update("value_mid", Number(e.target.value))} />
                   <Input label="Value High ($)" type="number" value={merged.value_high ?? 0}
                     onChange={(e) => update("value_high", Number(e.target.value))} />
@@ -425,24 +425,15 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                     ]}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Select label="Item Type" value={merged.item_type ?? "Daily Use"}
-                    onChange={(e) => update("item_type", e.target.value as ItemUseType)}
+                {rooms.length > 0 && (
+                  <Select label="Room (optional)" value={selectedRoomId}
+                    onChange={(e) => setSelectedRoomId(e.target.value)}
                     options={[
-                      { value: "Daily Use", label: "Daily Use" },
-                      { value: "Collector Item", label: "Collector Item" },
+                      { value: "", label: "— No room —" },
+                      ...rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.roomType})` })),
                     ]}
                   />
-                  {rooms.length > 0 && (
-                    <Select label="Room (optional)" value={selectedRoomId}
-                      onChange={(e) => setSelectedRoomId(e.target.value)}
-                      options={[
-                        { value: "", label: "— No room —" },
-                        ...rooms.map((r) => ({ value: r.id, label: `${r.name} (${r.roomType})` })),
-                      ]}
-                    />
-                  )}
-                </div>
+                )}
                 <Input label="Consignment Category" value={merged.consignment_category ?? ""}
                   onChange={(e) => update("consignment_category", e.target.value)} />
               </div>
