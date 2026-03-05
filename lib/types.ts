@@ -457,7 +457,7 @@ export interface ContractLineItem {
   rate: number; // $/hr snapshotted at contract creation
 }
 
-export type ContractStatus = "Draft" | "Sent" | "Signed";
+export type ContractStatus = "Draft" | "Sent" | "Signed" | "Archived";
 
 export interface Contract {
   id: string;

@@ -142,8 +142,20 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id, ...data } = await req.json();
+  const { id, action, tenantId: actionTenantId, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  // setPrimary: archive all currently-Signed contracts for this tenant, then sign this one
+  if (action === "setPrimary" && actionTenantId) {
+    const all = await getContractsForTenant(actionTenantId);
+    await Promise.all(
+      all
+        .filter((c) => c.status === "Signed" && c.id !== id)
+        .map((c) => updateContract(c.id, { status: "Archived" }))
+    );
+    const contract = await updateContract(id, { status: "Signed" });
+    return NextResponse.json({ contract });
+  }
 
   const contract = await updateContract(id, data);
   return NextResponse.json({ contract });

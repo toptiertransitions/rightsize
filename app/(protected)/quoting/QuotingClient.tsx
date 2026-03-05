@@ -19,9 +19,10 @@ interface Props {
 type Mode = "rooms" | "quick";
 
 const STATUS_STYLES: Record<string, { pill: string; label: string }> = {
-  Draft:  { pill: "bg-yellow-100 text-yellow-700", label: "Draft" },
-  Sent:   { pill: "bg-blue-100 text-blue-700",   label: "Sent" },
-  Signed: { pill: "bg-green-100 text-green-700",  label: "Signed" },
+  Draft:    { pill: "bg-yellow-100 text-yellow-700", label: "Draft" },
+  Sent:     { pill: "bg-blue-100 text-blue-700",     label: "Sent" },
+  Signed:   { pill: "bg-green-100 text-green-700",   label: "Signed" },
+  Archived: { pill: "bg-gray-100 text-gray-400",     label: "Archived" },
 };
 
 function fmt(n: number) {
@@ -44,36 +45,59 @@ function makeSyntheticRoom(density: DensityLevel, sqFt: number, index: number): 
 // ─── Quote Card ───────────────────────────────────────────────────────────────
 function QuoteCard({
   contract,
+  tenantId,
   isEditing,
   onEdit,
   onDelete,
-  onSign,
+  onSetPrimary,
+  onArchive,
 }: {
   contract: Contract;
+  tenantId: string;
   isEditing: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onSign: () => void;
+  onSetPrimary: () => void;
+  onArchive: () => void;
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [signing, setSigning] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [working, setWorking] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const isArchived = contract.status === "Archived";
+  const isSigned = contract.status === "Signed";
   const style = STATUS_STYLES[contract.status] ?? STATUS_STYLES.Draft;
   const date = new Date(contract.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const lineItems = contract.lineItems ?? [];
 
-  async function handleSign() {
-    setSigning(true);
+  async function handleSetPrimary() {
+    setWorking(true);
     try {
       const res = await fetch("/api/contracts", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: contract.id, status: "Signed" }),
+        body: JSON.stringify({ id: contract.id, tenantId, action: "setPrimary" }),
       });
       if (!res.ok) throw new Error("Failed");
-      onSign();
+      onSetPrimary();
     } catch { /* ignore */ }
-    finally { setSigning(false); }
+    finally { setWorking(false); }
+  }
+
+  async function handleArchive() {
+    setWorking(true);
+    try {
+      const res = await fetch("/api/contracts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: contract.id, status: "Archived" }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      onArchive();
+      setArchiveConfirm(false);
+    } catch { /* ignore */ }
+    finally { setWorking(false); }
   }
 
   async function handleDelete() {
@@ -90,16 +114,17 @@ function QuoteCard({
     <div className={cn(
       "rounded-2xl border bg-white shadow-sm overflow-hidden transition-all",
       isEditing ? "border-forest-400 ring-2 ring-forest-200" : "border-gray-200",
-      contract.status === "Signed" ? "border-green-300" : ""
+      isSigned ? "border-green-300" : "",
+      isArchived ? "opacity-60" : ""
     )}>
-      <div className="px-5 py-4">
+      <div className={cn("px-5 py-4", isArchived && "bg-gray-50/60")}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.pill}`}>
                 {style.label}
               </span>
-              {contract.status === "Signed" && (
+              {isSigned && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
                   ★ Primary Quote
                 </span>
@@ -112,14 +137,16 @@ function QuoteCard({
             </div>
             <p className="text-xs text-gray-400">{date}</p>
             {lineItems.length > 0 && (
-              <p className="text-xs text-gray-500 mt-1 truncate">
+              <p className={cn("text-xs mt-1 truncate", isArchived ? "text-gray-400" : "text-gray-500")}>
                 {lineItems.map(li => li.serviceName).join(" · ")}
               </p>
             )}
           </div>
           <div className="text-right shrink-0">
-            <p className="text-lg font-bold text-gray-900">{fmt(contract.totalCost)}</p>
-            {contract.signedAt && (
+            <p className={cn("text-lg font-bold", isArchived ? "text-gray-400" : "text-gray-900")}>
+              {fmt(contract.totalCost)}
+            </p>
+            {contract.signedAt && isSigned && (
               <p className="text-xs text-green-600">
                 Signed {new Date(contract.signedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </p>
@@ -129,6 +156,7 @@ function QuoteCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {/* Edit — always available */}
           {!isEditing && (
             <button
               onClick={onEdit}
@@ -137,19 +165,37 @@ function QuoteCard({
               Edit
             </button>
           )}
-          {contract.status !== "Signed" && (
+
+          {/* Set as Primary — Draft, Sent, Archived */}
+          {!isSigned && (
             <button
-              onClick={handleSign}
-              disabled={signing}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50"
+              onClick={handleSetPrimary}
+              disabled={working}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50 flex items-center gap-1"
             >
-              {signing ? "Signing…" : "Mark as Signed"}
+              <span>★</span>
+              <span>{working ? "Saving…" : isArchived ? "Restore as Primary" : "Set as Primary"}</span>
             </button>
           )}
-          {contract.status !== "Signed" && (
+
+          {/* Unsign & Archive — Signed only */}
+          {isSigned && (
+            <button
+              onClick={() => setArchiveConfirm(true)}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-colors ml-auto"
+            >
+              Unsign & Archive
+            </button>
+          )}
+
+          {/* Delete — Draft, Sent, Archived only */}
+          {!isSigned && (
             <button
               onClick={() => setDeleteConfirm(true)}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors ml-auto"
+              className={cn(
+                "text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors",
+                !isArchived && "ml-auto"
+              )}
             >
               Delete
             </button>
@@ -157,10 +203,33 @@ function QuoteCard({
         </div>
       </div>
 
+      {/* Unsign & Archive confirm */}
+      {archiveConfirm && (
+        <div className="border-t border-amber-100 bg-amber-50 px-5 py-3">
+          <p className="text-sm text-amber-800 font-medium mb-0.5">Unsign and archive this quote?</p>
+          <p className="text-xs text-amber-600 mb-3">It will remain visible and editable but will no longer be the primary quote.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleArchive}
+              disabled={working}
+              className="text-sm font-medium px-4 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {working ? "Archiving…" : "Unsign & Archive"}
+            </button>
+            <button
+              onClick={() => setArchiveConfirm(false)}
+              className="text-sm font-medium px-4 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Delete confirm */}
       {deleteConfirm && (
         <div className="border-t border-red-100 bg-red-50 px-5 py-3">
-          <p className="text-sm text-red-700 mb-2">Delete this quote? Cannot be undone.</p>
+          <p className="text-sm text-red-700 mb-2">Delete this quote? This cannot be undone.</p>
           <div className="flex gap-2">
             <button
               onClick={handleDelete}
@@ -215,10 +284,22 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
     setQuotes((prev) => prev.filter((q) => q.id !== id));
   }
 
-  function handleSigned(id: string) {
-    // Mark one as Signed, clear Signed from others (UI only — API already updated it)
+  function handleSetPrimary(id: string) {
+    // Mark selected as Signed, archive all others that were Signed (UI mirrors API action)
     setQuotes((prev) =>
-      prev.map((q) => q.id === id ? { ...q, status: "Signed" as const } : q)
+      prev.map((q) =>
+        q.id === id
+          ? { ...q, status: "Signed" as const }
+          : q.status === "Signed"
+          ? { ...q, status: "Archived" as const }
+          : q
+      )
+    );
+  }
+
+  function handleArchived(id: string) {
+    setQuotes((prev) =>
+      prev.map((q) => q.id === id ? { ...q, status: "Archived" as const } : q)
     );
   }
 
@@ -277,10 +358,12 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
               <QuoteCard
                 key={q.id}
                 contract={q}
+                tenantId={tenant.id}
                 isEditing={editingContract?.id === q.id}
                 onEdit={() => handleEdit(q)}
                 onDelete={() => handleDeleted(q.id)}
-                onSign={() => handleSigned(q.id)}
+                onSetPrimary={() => handleSetPrimary(q.id)}
+                onArchive={() => handleArchived(q.id)}
               />
             ))}
           </div>
