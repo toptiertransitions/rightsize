@@ -288,7 +288,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
     try {
       const body = {
         tenantId,
-        projectName: selectedProject?.name ?? "",
+        projectName: selectedProject?.name ?? entry?.projectName ?? "",
         date,
         startTime,
         endTime,
@@ -351,7 +351,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
         </div>
 
         {/* Scrollable body */}
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
 
             {!entry && staffMembers && staffMembers.length > 0 && (
@@ -373,13 +373,13 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} required
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
-              <select value={tenantId} onChange={e => setTenantId(e.target.value)} required
+              <select value={tenantId} onChange={e => setTenantId(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
                 {tenants.length === 0 && <option value="">No projects</option>}
                 {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -398,12 +398,12 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
             <div className="grid grid-cols-2 gap-3">
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">Start</label>
-                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} required
+                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
               </div>
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">End</label>
-                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} required
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
               </div>
             </div>
@@ -439,27 +439,28 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 resize-none" />
             </div>
-
-            {error && <p className="text-red-400 text-xs">{error}</p>}
           </div>
 
           {/* Footer — sticky at bottom */}
-          <div className="px-6 py-4 border-t border-gray-800 flex gap-3 flex-shrink-0">
-            {entry && onDeleted && (
-              <button type="button" onClick={handleDelete} disabled={deleting}
-                className="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors">
-                {deleting ? "Deleting…" : "Delete"}
+          <div className="px-6 py-4 border-t border-gray-800 flex flex-col gap-2 flex-shrink-0">
+            {error && <p className="text-red-400 text-xs">{error}</p>}
+            <div className="flex gap-3">
+              {entry && onDeleted && (
+                <button type="button" onClick={handleDelete} disabled={deleting}
+                  className="px-4 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors">
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              )}
+              <div className="flex-1" />
+              <button type="button" onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
+                Cancel
               </button>
-            )}
-            <div className="flex-1" />
-            <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50">
-              {saving ? "Saving…" : entry ? "Save Changes" : "Log Time"}
-            </button>
+              <button type="submit" disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-50">
+                {saving ? "Saving…" : entry ? "Save Changes" : "Log Time"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
