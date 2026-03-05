@@ -349,14 +349,23 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
 
   function exportCSV() {
     const rows = [
-      ["Date", "Staff", "Project", "Focus Area", "Start", "End", "Duration (min)", "Travel Miles", "Travel Time (min)", "Notes"],
-      ...entries.map(e => [
-        e.date, e.staffName, e.projectName, e.focusArea,
-        e.startTime, e.endTime, String(e.durationMinutes),
-        e.travelMiles != null ? String(e.travelMiles) : "",
-        e.travelMinutes != null ? String(e.travelMinutes) : "",
-        e.notes ?? "",
-      ]),
+      ["Date", "Staff", "Project", "Focus Area", "Start", "End", "Duration (min)", "Travel Miles", "Paid Travel Miles", "Travel Time (min)", "Paid Travel Time (min)", "Payable Minutes", "Notes", "Mileage Reimbursement Amount"],
+      ...entries.map(e => {
+        const paidTravelMins = e.travelMinutes != null ? Math.max(0, e.travelMinutes - 30) : 0;
+        const payableMins = e.durationMinutes + paidTravelMins;
+        const paidTravelMilesVal = e.travelMiles != null ? Math.max(0, e.travelMiles - 20) : null;
+        return [
+          e.date, e.staffName, e.projectName, e.focusArea,
+          e.startTime, e.endTime, String(e.durationMinutes),
+          e.travelMiles != null ? String(e.travelMiles) : "",
+          paidTravelMilesVal != null ? String(paidTravelMilesVal) : "",
+          e.travelMinutes != null ? String(e.travelMinutes) : "",
+          e.travelMinutes != null ? String(paidTravelMins) : "",
+          String(payableMins),
+          e.notes ?? "",
+          paidTravelMilesVal != null ? (paidTravelMilesVal * 0.725).toFixed(2) : "",
+        ];
+      }),
     ];
     const csv = rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
