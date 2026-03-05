@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 
@@ -16,18 +17,36 @@ interface HeaderProps {
 export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager }: HeaderProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const tenantId = searchParams.get("tenantId");
+  const urlTenantId = searchParams.get("tenantId");
+
+  // Persist the last known tenantId so nav links survive navigating to pages
+  // that don't carry ?tenantId= (e.g. /crm, /home).
+  const [storedTenantId, setStoredTenantId] = useState<string | null>(null);
+  useEffect(() => {
+    if (urlTenantId) {
+      try { localStorage.setItem("rz_tenantId", urlTenantId); } catch {}
+      setStoredTenantId(urlTenantId);
+    } else {
+      try { setStoredTenantId(localStorage.getItem("rz_tenantId")); } catch {}
+    }
+  }, [urlTenantId]);
+
+  const tenantId = urlTenantId ?? storedTenantId;
   const tq = tenantId ? `?tenantId=${tenantId}` : "";
 
-  const isVendorPortal = pathname.startsWith("/vendor");
+  const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
   const navLinks = isVendorPortal ? [] : [
     { href: "/home", label: "Home" },
-    { href: `/rooms${tq}`, base: "/rooms", label: "Rooms" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/plan${tq}`, base: "/plan", label: "Plan" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
-    ...(isManager ? [{ href: "/crm", base: "/crm", label: "CRM" }] : []),
+    { href: `/sales${tq}`, base: "/sales", label: "Sales" },
+    ...(tenantId ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    ...(isManager ? [
+      { href: `/quoting${tq}`, base: "/quoting", label: "Quoting" },
+      { href: "/crm", base: "/crm", label: "CRM" },
+    ] : []),
   ];
 
   return (

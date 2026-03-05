@@ -598,6 +598,56 @@ export interface QBOTokenRecord {
   companyName: string;
 }
 
+// ─── Invoicing ────────────────────────────────────────────────────────────────
+export type InvoiceType = "Deposit" | "Full";
+export type InvoiceDepositType = "PercentOfEstimate" | "SpecificAmount";
+export type InvoiceStatus = "Unpaid" | "PartiallyPaid" | "Paid";
+
+export interface InvoiceLineItem {
+  serviceId: string;
+  serviceName: string;
+  hours: number;
+  rate: number;
+}
+
+export interface Invoice {
+  id: string;
+  tenantId: string;
+  type: InvoiceType;
+  invoiceNumber: string;
+  serviceId: string;
+  serviceName: string;
+  depositType?: InvoiceDepositType;
+  depositPercent?: number;
+  amount: number;
+  contractId?: string;
+  lineItems?: InvoiceLineItem[];
+  qboInvoiceId?: string;
+  qboDocNumber?: string;
+  status: InvoiceStatus;
+  paidAmount?: number;
+  paidAt?: string;
+  sentToEmail?: string;
+  ccEmail?: string;
+  emailSent?: boolean;
+  notes?: string;
+  createdAt: string;
+  createdByClerkId: string;
+}
+
+export interface InvoiceSettings {
+  id?: string;
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  paymentLinkUrl: string;
+  invoiceFooter: string;
+  logoUrl: string;
+  logoPublicId: string;
+  updatedAt: string;
+}
+
 export interface CalculatorResult {
   rightsizingHours: number;
   packingHours: number;

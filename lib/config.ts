@@ -3,7 +3,7 @@ import type { DensityLevel, HelperType } from "./types";
 // ─── Calculator Configuration ─────────────────────────────────────────────────
 // All multipliers live here — change once, affects everything.
 export const CALCULATOR_CONFIG = {
-  // Base rate: hours per 100 SF at Medium density
+  // Base rate: hours per 100 SF at Average density
   rightsizingRatePerHundredSqFt: 1.0,
 
   // Density multipliers applied to the base rightsizing rate
@@ -51,12 +51,16 @@ export const AIRTABLE_TABLES = {
   CRM_OPPORTUNITIES: process.env.AIRTABLE_CRM_OPPORTUNITIES_TABLE || "CRMOpportunities",
   CRM_ACTIVITIES: process.env.AIRTABLE_CRM_ACTIVITIES_TABLE || "CRMActivities",
   GMAIL_TOKENS: process.env.AIRTABLE_GMAIL_TOKENS_TABLE || "GmailTokens",
+  SERVICES: process.env.AIRTABLE_SERVICES_TABLE || "Services",
+  QBO_TOKENS: process.env.QBO_TOKENS_TABLE_ID || "QBOTokens",
+  INVOICES: process.env.AIRTABLE_INVOICES_TABLE || "Invoices",
+  INVOICE_SETTINGS: process.env.AIRTABLE_INVOICE_SETTINGS_TABLE || "InvoiceSettings",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
 export const ITEM_STATUS_COLORS: Record<string, string> = {
   "Pending Review": "bg-yellow-100 text-yellow-800",
-  Reviewed: "bg-blue-100 text-blue-800",
+  Approved: "bg-blue-100 text-blue-800",
   Listed: "bg-purple-100 text-purple-800",
   Sold: "bg-green-100 text-green-800",
   Donated: "bg-teal-100 text-teal-800",

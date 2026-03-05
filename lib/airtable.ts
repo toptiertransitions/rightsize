@@ -51,6 +51,10 @@ import type {
   GmailToken,
   Service,
   QBOTokenRecord,
+  Invoice,
+  InvoiceSettings,
+  InvoiceStatus,
+  InvoiceLineItem,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -2608,4 +2612,220 @@ export async function deleteQBOToken(): Promise<void> {
   if (!existing) return;
   const res = await crmFetch(AIRTABLE_TABLES.QBO_TOKENS, `/${existing.id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+function invoicesFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.INVOICES;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function invoiceSettingsFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.INVOICE_SETTINGS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapInvoice(record: AirtableRecord): Invoice {
+  const f = record.fields;
+  let lineItems: InvoiceLineItem[] | undefined;
+  const rawLineItems = toStr(f["LineItemsJson"]);
+  if (rawLineItems) {
+    try { lineItems = JSON.parse(rawLineItems); } catch { /* ignore */ }
+  }
+  return {
+    id: record.id,
+    tenantId: toStr(f["TenantId"]),
+    type: (toStr(f["Type"]) || "Deposit") as Invoice["type"],
+    invoiceNumber: toStr(f["InvoiceNumber"]),
+    serviceId: toStr(f["ServiceId"]),
+    serviceName: toStr(f["ServiceName"]),
+    depositType: (toStr(f["DepositType"]) || undefined) as Invoice["depositType"],
+    depositPercent: typeof f["DepositPercent"] === "number" ? f["DepositPercent"] as number : undefined,
+    amount: typeof f["Amount"] === "number" ? f["Amount"] as number : 0,
+    contractId: toStr(f["ContractId"]) || undefined,
+    lineItems,
+    qboInvoiceId: toStr(f["QBOInvoiceId"]) || undefined,
+    qboDocNumber: toStr(f["QBODocNumber"]) || undefined,
+    status: (toStr(f["Status"]) || "Unpaid") as InvoiceStatus,
+    paidAmount: typeof f["PaidAmount"] === "number" ? f["PaidAmount"] as number : undefined,
+    paidAt: toStr(f["PaidAt"]) || undefined,
+    sentToEmail: toStr(f["SentToEmail"]) || undefined,
+    ccEmail: toStr(f["CcEmail"]) || undefined,
+    emailSent: f["EmailSent"] === true,
+    notes: toStr(f["Notes"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+    createdByClerkId: toStr(f["CreatedByClerkId"]),
+  };
+}
+
+export async function getInvoicesForTenant(tenantId: string): Promise<Invoice[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await invoicesFetch(
+    `?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapInvoice);
+}
+
+export async function getInvoiceById(id: string): Promise<Invoice | null> {
+  const res = await invoicesFetch(`/${id}`);
+  if (!res.ok) return null;
+  return mapInvoice(await res.json() as AirtableRecord);
+}
+
+export async function getAllInvoiceCount(): Promise<number> {
+  const res = await invoicesFetch(`?fields[]=InvoiceNumber`);
+  if (!res.ok) return 0;
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).length;
+}
+
+export async function createInvoice(data: {
+  tenantId: string;
+  type: Invoice["type"];
+  invoiceNumber: string;
+  serviceId: string;
+  serviceName: string;
+  depositType?: Invoice["depositType"];
+  depositPercent?: number;
+  amount: number;
+  contractId?: string;
+  lineItems?: InvoiceLineItem[];
+  qboInvoiceId?: string;
+  qboDocNumber?: string;
+  sentToEmail?: string;
+  ccEmail?: string;
+  emailSent?: boolean;
+  createdByClerkId: string;
+}): Promise<Invoice> {
+  const fields: Record<string, unknown> = {
+    TenantId: data.tenantId,
+    Type: data.type,
+    InvoiceNumber: data.invoiceNumber,
+    ServiceId: data.serviceId,
+    ServiceName: data.serviceName,
+    Amount: data.amount,
+    Status: "Unpaid",
+    CreatedByClerkId: data.createdByClerkId,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.depositType) fields["DepositType"] = data.depositType;
+  if (data.depositPercent !== undefined) fields["DepositPercent"] = data.depositPercent;
+  if (data.contractId) fields["ContractId"] = data.contractId;
+  if (data.lineItems) fields["LineItemsJson"] = JSON.stringify(data.lineItems);
+  if (data.qboInvoiceId) fields["QBOInvoiceId"] = data.qboInvoiceId;
+  if (data.qboDocNumber) fields["QBODocNumber"] = data.qboDocNumber;
+  if (data.sentToEmail) fields["SentToEmail"] = data.sentToEmail;
+  if (data.ccEmail) fields["CcEmail"] = data.ccEmail;
+  if (data.emailSent !== undefined) fields["EmailSent"] = data.emailSent;
+
+  const res = await invoicesFetch("", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapInvoice(await res.json() as AirtableRecord);
+}
+
+export async function updateInvoice(
+  id: string,
+  data: Partial<{
+    status: InvoiceStatus;
+    paidAmount: number;
+    paidAt: string;
+    notes: string;
+    qboInvoiceId: string;
+    qboDocNumber: string;
+  }>
+): Promise<Invoice> {
+  const fields: Record<string, unknown> = {};
+  if (data.status !== undefined) fields["Status"] = data.status;
+  if (data.paidAmount !== undefined) fields["PaidAmount"] = data.paidAmount;
+  if (data.paidAt !== undefined) fields["PaidAt"] = data.paidAt;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.qboInvoiceId !== undefined) fields["QBOInvoiceId"] = data.qboInvoiceId;
+  if (data.qboDocNumber !== undefined) fields["QBODocNumber"] = data.qboDocNumber;
+  const res = await invoicesFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapInvoice(await res.json() as AirtableRecord);
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  const res = await invoicesFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Invoice Settings ─────────────────────────────────────────────────────────
+function mapInvoiceSettings(record: AirtableRecord): InvoiceSettings {
+  const f = record.fields;
+  return {
+    id: record.id,
+    companyName: toStr(f["CompanyName"]),
+    companyAddress: toStr(f["CompanyAddress"]),
+    companyPhone: toStr(f["CompanyPhone"]),
+    companyEmail: toStr(f["CompanyEmail"]),
+    paymentLinkUrl: toStr(f["PaymentLinkUrl"]),
+    invoiceFooter: toStr(f["InvoiceFooter"]),
+    logoUrl: toStr(f["LogoUrl"]),
+    logoPublicId: toStr(f["LogoPublicId"]),
+    updatedAt: toStr(f["UpdatedAt"]),
+  };
+}
+
+export async function getInvoiceSettings(): Promise<InvoiceSettings | null> {
+  const res = await invoiceSettingsFetch("?maxRecords=1");
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapInvoiceSettings(data.records[0] as AirtableRecord);
+}
+
+export async function upsertInvoiceSettings(data: Partial<Omit<InvoiceSettings, "id">>): Promise<InvoiceSettings> {
+  const existing = await getInvoiceSettings();
+  const fields: Record<string, unknown> = { UpdatedAt: new Date().toISOString() };
+  if (data.companyName !== undefined) fields["CompanyName"] = data.companyName;
+  if (data.companyAddress !== undefined) fields["CompanyAddress"] = data.companyAddress;
+  if (data.companyPhone !== undefined) fields["CompanyPhone"] = data.companyPhone;
+  if (data.companyEmail !== undefined) fields["CompanyEmail"] = data.companyEmail;
+  if (data.paymentLinkUrl !== undefined) fields["PaymentLinkUrl"] = data.paymentLinkUrl;
+  if (data.invoiceFooter !== undefined) fields["InvoiceFooter"] = data.invoiceFooter;
+  if (data.logoUrl !== undefined) fields["LogoUrl"] = data.logoUrl;
+  if (data.logoPublicId !== undefined) fields["LogoPublicId"] = data.logoPublicId;
+
+  if (existing?.id) {
+    const res = await invoiceSettingsFetch(`/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapInvoiceSettings(await res.json() as AirtableRecord);
+  }
+  const res = await invoiceSettingsFetch("", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapInvoiceSettings(await res.json() as AirtableRecord);
 }
