@@ -1407,7 +1407,7 @@ function mapTimeEntry(record: AirtableRecord): TimeEntry {
     startTime: toStr(f["StartTime"]),
     endTime: toStr(f["EndTime"]),
     durationMinutes: typeof f["DurationMinutes"] === "number" ? f["DurationMinutes"] : 0,
-    focusArea: (toStr(f["FocusArea"]) || "Other") as FocusArea,
+    focusArea: (toStr(f["FocusArea"]).replace(/^"+|"+$/g, "").trim() || "Other") as FocusArea,
     travelMiles: f["TravelMiles"] != null ? toNum(f["TravelMiles"]) : undefined,
     travelMinutes: f["TravelMinutes"] != null ? toNum(f["TravelMinutes"]) : undefined,
     notes: toStr(f["Notes"]) || undefined,
@@ -1493,7 +1493,7 @@ export async function updateTimeEntry(
   if (data.startTime !== undefined) fields["StartTime"] = data.startTime;
   if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
   if (data.durationMinutes !== undefined) fields["DurationMinutes"] = data.durationMinutes;
-  if (data.focusArea !== undefined) fields["FocusArea"] = data.focusArea;
+  if (data.focusArea !== undefined) fields["FocusArea"] = String(data.focusArea).replace(/^"+|"+$/g, "").trim();
   if (data.travelMiles != null && data.travelMiles > 0) fields["TravelMiles"] = data.travelMiles;
   if (data.travelMinutes != null && data.travelMinutes > 0) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
@@ -1525,7 +1525,7 @@ function mapService(record: AirtableRecord): Service {
   return {
     id: record.id,
     airtableId: record.id,
-    name: toStr(f["Name"]),
+    name: toStr(f["Name"]).replace(/^"+|"+$/g, "").trim(),
     description: toStr(f["Description"]),
     hourlyRate: toNum(f["HourlyRate"]),
     estimatorLow: toNum(f["EstimatorLow"]),
