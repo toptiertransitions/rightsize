@@ -1,8 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import type { TimeEntry, PlanEntry } from "@/lib/types";
+import type { TimeEntry, PlanEntry, Contract } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
+
+// ─── Contract hours helpers ───────────────────────────────────────────────────
+interface ServiceHours { serviceName: string; hours: number }
+
+function getContractServiceHours(contract: Contract): ServiceHours[] {
+  if (contract.lineItems && contract.lineItems.length > 0) {
+    return contract.lineItems.map((li) => ({ serviceName: li.serviceName, hours: li.hours }));
+  }
+  const legacy: ServiceHours[] = [];
+  if (contract.rightsizingHours > 0) legacy.push({ serviceName: "Rightsizing", hours: contract.rightsizingHours });
+  if (contract.packingHours > 0)     legacy.push({ serviceName: "Packing",      hours: contract.packingHours });
+  if (contract.unpackingHours > 0)   legacy.push({ serviceName: "Unpacking",    hours: contract.unpackingHours });
+  return legacy;
+}
+
+function getContractTotalHours(contract: Contract): number {
+  return getContractServiceHours(contract).reduce((s, li) => s + li.hours, 0);
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
 
 const FOCUS_COLOR_PALETTE = [
   "#14b8a6", // teal  - Coordinating
@@ -199,23 +225,39 @@ function EditEntryModal({ entry, onClose, onSaved }: EditModalProps) {
 interface Props {
   timeEntries: TimeEntry[];
   isAdmin: boolean;
+  isManager?: boolean;
   estimatedHours?: number;
   tenantId: string;
   canEditEstimate?: boolean; // defaults to isAdmin; pass false in "All Projects" modes
   planEntries?: PlanEntry[];
   services?: string[];
+  primaryContract?: Contract | null;
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initialEstimatedHours, tenantId, canEditEstimate, planEntries, services }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, tenantId, canEditEstimate, planEntries, services, primaryContract }: Props) {
   const serviceList = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
-  const showEstimateEdit = canEditEstimate ?? isAdmin;
+
+  // Derive estimated hours from signed primary contract if available
+  const contractServiceHours = primaryContract ? getContractServiceHours(primaryContract) : [];
+  const contractTotalHours = primaryContract ? getContractTotalHours(primaryContract) : 0;
+  const isLockedByContract = contractTotalHours > 0;
+
+  const showEstimateEdit = !isLockedByContract && (canEditEstimate ?? isAdmin);
+
   const [entries, setEntries] = useState(timeEntries);
   const [showLog, setShowLog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
-  const [estimatedHours, setEstimatedHours] = useState(initialEstimatedHours ?? 0);
+  const [estimatedHours, setEstimatedHours] = useState(
+    isLockedByContract ? contractTotalHours : (initialEstimatedHours ?? 0)
+  );
   const [editingEst, setEditingEst] = useState(false);
   const [estInput, setEstInput] = useState(String(initialEstimatedHours ?? ""));
   const [estSaving, setEstSaving] = useState(false);
+
+  // Accordion open states (manager-only per-service breakdowns)
+  const [estOpen, setEstOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [remOpen, setRemOpen] = useState(false);
 
   const totalMins = entries.reduce((s, e) => s + e.durationMinutes, 0);
 
@@ -258,6 +300,16 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
       if (bi >= 0) return 1;
       return a.area.localeCompare(b.area);
     });
+
+  // Per-service remaining breakdown (manager accordion on Remaining card)
+  // Matches contract service names to logged focusArea by name (case-insensitive)
+  const remainingByService = contractServiceHours.map((sh) => {
+    const loggedMins = Array.from(focusBreakdownMap.entries())
+      .filter(([area]) => area.toLowerCase() === sh.serviceName.toLowerCase())
+      .reduce((s, [, mins]) => s + mins, 0);
+    const remainingMins = Math.max(0, Math.round(sh.hours * 60) - loggedMins);
+    return { serviceName: sh.serviceName, estimatedHours: sh.hours, loggedMins, remainingMins };
+  });
 
   async function saveEstimate() {
     const h = parseFloat(estInput);
@@ -310,7 +362,8 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        {/* Estimated */}
+
+        {/* ── Estimated ── */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">Estimated</div>
           {showEstimateEdit && editingEst ? (
@@ -337,21 +390,78 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
               )}
             </div>
           )}
+          {isLockedByContract && (
+            <p className="text-[10px] text-gray-400 mt-1 leading-tight">
+              Locked by signed quote
+            </p>
+          )}
+          {/* Manager accordion */}
+          {isManager && contractServiceHours.length > 0 && (
+            <>
+              <button
+                onClick={() => setEstOpen(p => !p)}
+                className="flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-gray-600 mt-2"
+              >
+                <ChevronIcon open={estOpen} />
+                <span>By service</span>
+              </button>
+              {estOpen && (
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+                  {contractServiceHours.map((sh) => (
+                    <div key={sh.serviceName} className="flex justify-between items-center">
+                      <span className="text-[11px] text-gray-500 truncate pr-1">{sh.serviceName}</span>
+                      <span className="text-[11px] font-semibold text-gray-700 shrink-0">{sh.hours}h</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Logged */}
+        {/* ── Logged ── */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">Logged</div>
           <div className="text-xl font-bold text-gray-900">{totalMins > 0 ? fmtMins(totalMins) : "—"}</div>
+          {/* Manager accordion */}
+          {isManager && focusBreakdown.length > 0 && (
+            <>
+              <button
+                onClick={() => setLogOpen(p => !p)}
+                className="flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-gray-600 mt-2"
+              >
+                <ChevronIcon open={logOpen} />
+                <span>By service</span>
+              </button>
+              {logOpen && (
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+                  {focusBreakdown.map(({ area, mins }) => (
+                    <div key={area} className="flex justify-between items-center gap-1">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: getFocusColor(area, serviceList) }} />
+                        <span className="text-[11px] text-gray-500 truncate">{area}</span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-gray-700 shrink-0">{fmtMins(mins)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Scheduled */}
+        {/* ── Scheduled ── */}
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="text-xs text-amber-600 mb-1">Scheduled</div>
           <div className="text-xl font-bold text-amber-700">{scheduledMins > 0 ? fmtMins(scheduledMins) : "—"}</div>
+          {isManager && scheduledMins > 0 && (
+            <p className="text-[10px] text-amber-500 mt-2 leading-tight">
+              Shift-based · no service split
+            </p>
+          )}
         </div>
 
-        {/* Remaining to Schedule */}
+        {/* ── Remaining to Schedule ── */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">Remaining to Schedule</div>
           <div className={`text-xl font-bold ${
@@ -363,7 +473,37 @@ export function HoursWorkedSection({ timeEntries, isAdmin, estimatedHours: initi
               ? remainingMins > 0 ? fmtMins(remainingMins) : "Done"
               : "—"}
           </div>
+          {/* Manager accordion */}
+          {isManager && remainingByService.length > 0 && (
+            <>
+              <button
+                onClick={() => setRemOpen(p => !p)}
+                className="flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-gray-600 mt-2"
+              >
+                <ChevronIcon open={remOpen} />
+                <span>By service</span>
+              </button>
+              {remOpen && (
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
+                  {remainingByService.map(({ serviceName, remainingMins: rm }) => (
+                    <div key={serviceName} className="flex justify-between items-center">
+                      <span className="text-[11px] text-gray-500 truncate pr-1">{serviceName}</span>
+                      <span className={`text-[11px] font-semibold shrink-0 ${rm === 0 ? "text-emerald-600" : "text-gray-700"}`}>
+                        {rm === 0 ? "Done" : fmtMins(rm)}
+                      </span>
+                    </div>
+                  ))}
+                  {scheduledMins > 0 && (
+                    <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100">
+                      Excludes scheduled shifts
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
+
       </div>
 
       {/* Progress bar */}

@@ -12,6 +12,7 @@ import {
   getTimeEntries,
   getSystemRole,
   getServices,
+  getContractsForTenant,
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -179,7 +180,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
@@ -189,7 +190,13 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getSystemRole(userId!).catch(() => null),
     getTenants().catch(() => []),
     getServices().catch(() => []),
+    getContractsForTenant(tenantId).catch(() => []),
   ]);
+
+  // The current primary quote is the most-recently-signed Signed contract
+  const primaryContract = contracts
+    .filter((c) => c.status === "Signed")
+    .sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt))[0] ?? null;
 
   if (!tenant) redirect("/home");
   const resolvedRole = role ?? sysRole;
@@ -231,6 +238,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
         tenantOptions={tenantOptions}
         currentTenantId={tenantId}
         services={serviceNames}
+        primaryContract={primaryContract}
+        isManager={isManagerOrAdmin}
       />
     </div>
   );

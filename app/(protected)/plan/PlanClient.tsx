@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES } from "@/lib/types";
-import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry } from "@/lib/types";
+import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry, Contract } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
 
@@ -524,6 +524,8 @@ interface TenantOption {
 }
 
 interface PlanClientProps {
+  primaryContract?: Contract | null;
+  isManager?: boolean;
   entries: PlanEntry[];
   rooms: Room[];
   tenantId: string;
@@ -537,7 +539,7 @@ interface PlanClientProps {
   services?: string[];             // dynamic service names from Airtable
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services, primaryContract, isManager }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -868,6 +870,8 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
         canEditEstimate={!isAllProjectsMode}
         planEntries={liveEntries}
         services={services}
+        primaryContract={primaryContract}
+        isManager={isManager}
       />
 
       {/* ── Floorplans & Images ──────────────────────────────────────────────── */}
