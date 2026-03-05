@@ -263,12 +263,10 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
 
   const totalMins = entries.reduce((s, e) => s + e.durationMinutes, 0);
 
-  // Scheduled = TTT Staff helper shifts on plan calendar with no logged time yet
+  // Scheduled = TTT Staff helper shifts on plan calendar
   // Build per-service map so we can show breakdown and subtract per-service from Remaining
-  const loggedDateKeys = new Set(entries.map(e => `${e.tenantId}:${e.date}`));
   const scheduledByServiceMap = new Map<string, number>();
   for (const pe of (planEntries ?? [])) {
-    if (loggedDateKeys.has(`${pe.tenantId}:${pe.date}`)) continue;
     if (!pe.startTime || !pe.endTime) continue;
     const [sh, sm] = pe.startTime.split(":").map(Number);
     const [eh, em] = pe.endTime.split(":").map(Number);
