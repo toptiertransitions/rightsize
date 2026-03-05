@@ -66,6 +66,7 @@ export default async function QuotingPage({ searchParams }: PageProps) {
 
   return (
     <QuotingClient
+      key={tenantId}
       tenant={tenant}
       rooms={rooms}
       settings={contractSettings}

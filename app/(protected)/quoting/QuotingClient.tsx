@@ -248,6 +248,45 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         <h1 className="text-2xl font-bold text-gray-900">Quoting</h1>
       </div>
 
+      {/* ─── Saved Quotes ──────────────────────────────────────────────────── */}
+      {quotes.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Saved Quotes</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {quotes.filter(q => q.status === "Signed").length > 0
+                  ? "★ Signed quote is the primary quote used for invoicing"
+                  : "Mark a quote as Signed to use it for invoicing"}
+              </p>
+            </div>
+            {hasRooms && (
+              <button
+                onClick={handleNewQuote}
+                className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl bg-forest-600 text-white hover:bg-forest-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Quote
+              </button>
+            )}
+          </div>
+          <div className="space-y-3">
+            {quotes.map((q) => (
+              <QuoteCard
+                key={q.id}
+                contract={q}
+                isEditing={editingContract?.id === q.id}
+                onEdit={() => handleEdit(q)}
+                onDelete={() => handleDeleted(q.id)}
+                onSign={() => handleSigned(q.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Mode tabs */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit mb-8">
         {([
@@ -344,45 +383,6 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">SF</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ─── Saved Quotes ──────────────────────────────────────────────────── */}
-      {quotes.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Saved Quotes</h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {quotes.filter(q => q.status === "Signed").length > 0
-                  ? "★ Signed quote is the primary quote used for invoicing"
-                  : "Mark a quote as Signed to use it for invoicing"}
-              </p>
-            </div>
-            {hasRooms && (
-              <button
-                onClick={handleNewQuote}
-                className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl bg-forest-600 text-white hover:bg-forest-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                New Quote
-              </button>
-            )}
-          </div>
-          <div className="space-y-3">
-            {quotes.map((q) => (
-              <QuoteCard
-                key={q.id}
-                contract={q}
-                isEditing={editingContract?.id === q.id}
-                onEdit={() => handleEdit(q)}
-                onDelete={() => handleDeleted(q.id)}
-                onSign={() => handleSigned(q.id)}
-              />
             ))}
           </div>
         </div>
