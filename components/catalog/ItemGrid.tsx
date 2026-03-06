@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
 import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor } from "@/lib/types";
+import { VendorFileModal } from "./VendorFileModal";
 
 interface ItemGridProps {
   items: Item[];
@@ -540,6 +541,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [routeFilter, setRouteFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [vendorFileOpen, setVendorFileOpen] = useState(false);
 
   const handleSaved = useCallback((savedItem: Item) => {
     setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i));
@@ -694,6 +696,20 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           onDeleted={handleDeleted}
         />
       )}
+
+      <VendorFileModal
+        isOpen={vendorFileOpen}
+        onClose={() => setVendorFileOpen(false)}
+        selectedItems={items.filter((i) => selected.has(i.id))}
+        localVendors={localVendors ?? []}
+        tenantId={tenantId}
+        onSent={(updatedItems) => {
+          setItems((prev) =>
+            prev.map((i) => updatedItems.find((u) => u.id === i.id) ?? i)
+          );
+          setSelected(new Set());
+        }}
+      />
 
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 mb-5">
@@ -907,6 +923,18 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
             >
               {bulkLoading ? "Approving…" : "Approve Recommended Route"}
             </button>
+            {localVendors && localVendors.length > 0 && (
+              <button
+                onClick={() => setVendorFileOpen(true)}
+                disabled={bulkLoading}
+                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Vendor File
+              </button>
+            )}
             <button
               onClick={() => setSelected(new Set())}
               className="h-8 px-3 rounded-lg border border-forest-300 text-forest-700 text-sm hover:bg-forest-100 transition-colors"

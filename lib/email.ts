@@ -236,6 +236,93 @@ export function buildInvoiceEmail({
 </html>`;
 }
 
+export function buildVendorFileEmail({
+  vendorName,
+  itemCount,
+  portalUrl,
+  companyName = "Top Tier Transitions",
+  items,
+}: {
+  vendorName: string;
+  itemCount: number;
+  portalUrl: string;
+  companyName?: string;
+  items: Array<{ itemName: string; valueMid: number; category: string }>;
+}): string {
+  const itemWord = itemCount === 1 ? "item" : "items";
+  const itemRows = items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding:7px 0;border-bottom:1px solid #F3F4F6;font-size:14px;color:#374151;">${item.itemName}</td>
+        <td style="padding:7px 0;border-bottom:1px solid #F3F4F6;font-size:13px;color:#6B7280;text-align:right;">
+          ${item.category || ""}${item.valueMid > 0 ? ` &middot; $${item.valueMid.toLocaleString()}` : ""}
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vendor Item File</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">${companyName}</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Vendor Item Report</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${vendorName},</p>
+              <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+                Please find attached a PDF report with <strong>${itemCount} ${itemWord}</strong> we'd like you to review.
+                You can also review and respond to items directly in your portal.
+              </p>
+              <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+                <thead>
+                  <tr>
+                    <th style="text-align:left;font-size:11px;font-weight:600;color:#9CA3AF;padding-bottom:6px;border-bottom:2px solid #F3F4F6;letter-spacing:0.5px;">ITEM</th>
+                    <th style="text-align:right;font-size:11px;font-weight:600;color:#9CA3AF;padding-bottom:6px;border-bottom:2px solid #F3F4F6;letter-spacing:0.5px;">DETAILS</th>
+                  </tr>
+                </thead>
+                <tbody>${itemRows}</tbody>
+              </table>
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background-color:#2E6B4F;border-radius:8px;padding:12px 24px;">
+                    <a href="${portalUrl}" style="color:#F5F0E8;font-size:15px;font-weight:bold;text-decoration:none;">
+                      Review Items in Portal &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:28px 0 0;font-size:13px;color:#9ca3af;line-height:1.5;">
+                The full item report with photos is attached as a PDF. If you have questions, reply to this email.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">${companyName} &mdash; Vendor Item Report</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildVendorAssignmentEmail({
   vendorName,
   itemCount,
