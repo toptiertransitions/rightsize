@@ -57,7 +57,8 @@ export function ProjectSwitcher({ currentTenantId }: { currentTenantId: string |
   function select(id: string) {
     setOpen(false);
     setSearch("");
-    router.push(`${pathname}?tenantId=${id}`);
+    // Use full navigation so the server component re-fetches fresh data
+    window.location.href = `${pathname}?tenantId=${id}`;
   }
 
   if (!loading && tenants.length === 0) return null;

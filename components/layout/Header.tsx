@@ -43,8 +43,8 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating, isMan
 
   const navLinks = isVendorPortal ? [] : [
     { href: "/home", label: "Home" },
-    { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/plan${tq}`, base: "/plan", label: "Plan" },
+    { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     ...(tenantId ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
