@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card, CardContent } from "@/components/ui/Card";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import type { Room, ItemAnalysis, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute } from "@/lib/types";
+import type { Room, ItemAnalysis, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemPhoto } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
 interface NewItemClientProps {
@@ -18,11 +18,8 @@ interface NewItemClientProps {
 
 type Step = "photo" | "analyzing" | "review" | "saving" | "done";
 
-// Separate photo meta from analysis so manual mode can keep the uploaded photo
-interface PhotoMeta {
-  url: string;
-  publicId: string;
-}
+// Re-export for local convenience
+type PhotoMeta = ItemPhoto;
 
 const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
   item_name: "",
@@ -49,10 +46,15 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const addMorePhotosRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("photo");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoMeta, setPhotoMeta] = useState<PhotoMeta | null>(null);
+  // photos[0] = primary (used for AI analysis); photos[1..] = additional
+  const [photos, setPhotos] = useState<PhotoMeta[]>([]);
+  const [photoDragIdx, setPhotoDragIdx] = useState<number | null>(null);
+  const [photoDropIdx, setPhotoDropIdx] = useState<number | null>(null);
+  const [uploadingMore, setUploadingMore] = useState(false);
   const [analysis, setAnalysis] = useState<ItemAnalysis | null>(null);
   const [editedAnalysis, setEditedAnalysis] = useState<Partial<ItemAnalysis>>({});
   const [manualMode, setManualMode] = useState(false);
@@ -92,11 +94,12 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         throw new Error(data.error || "Analysis failed");
       }
       const data = await res.json();
-      // Store photo meta separately so manual override can keep it
-      setPhotoMeta({
+      // Store primary photo; additional photos can be added in review step
+      const primary: PhotoMeta = {
         url: (data.analysis as Record<string, string>)._photoUrl || "",
         publicId: (data.analysis as Record<string, string>)._photoPublicId || "",
-      });
+      };
+      setPhotos(prev => prev.length ? [primary, ...prev.slice(1)] : [primary]);
       setAnalysis(data.analysis);
       setEditedAnalysis(data.analysis);
       setManualMode(false);
@@ -128,7 +131,8 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
           throw new Error(data.error || "Photo upload failed");
         }
         const data = await res.json();
-        setPhotoMeta({ url: data.photoUrl, publicId: data.photoPublicId });
+        const primary: PhotoMeta = { url: data.photoUrl, publicId: data.photoPublicId };
+        setPhotos(prev => prev.length ? [primary, ...prev.slice(1)] : [primary]);
       }
       setAnalysis(null);
       setEditedAnalysis({ ...BLANK_ANALYSIS });
@@ -138,6 +142,33 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleAddMorePhotos = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const remaining = 10 - photos.length;
+    if (remaining <= 0) return;
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploadingMore(true);
+    setError("");
+    try {
+      const uploaded: PhotoMeta[] = [];
+      for (const file of toUpload) {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("tenantId", tenantId);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        uploaded.push({ url: data.photoUrl, publicId: data.photoPublicId });
+      }
+      setPhotos(prev => [...prev, ...uploaded]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingMore(false);
+      if (addMorePhotosRef.current) addMorePhotosRef.current.value = "";
     }
   };
 
@@ -153,8 +184,9 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         body: JSON.stringify({
           tenantId,
           roomId: selectedRoomId || undefined,
-          photoUrl: photoMeta?.url || undefined,
-          photoPublicId: photoMeta?.publicId || undefined,
+          photos: photos.length ? photos : undefined,
+          photoUrl: photos[0]?.url || undefined,
+          photoPublicId: photos[0]?.publicId || undefined,
           itemName: merged.item_name || "Untitled Item",
           category: merged.category,
           condition: merged.condition,
@@ -303,9 +335,10 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
           <Card>
             <CardContent>
               <div className="flex gap-4">
-                {photoPreview && (
+                {/* Show primary photo from Cloudinary if uploaded, else local preview */}
+                {(photos[0]?.url || photoPreview) && (
                   <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0">
-                    <Image src={photoPreview} alt="Item" fill className="object-cover" />
+                    <Image src={photos[0]?.url || photoPreview!} alt="Item" fill className="object-cover" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -352,6 +385,127 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                     Clears all AI-provided values so you can enter correct details.
                   </p>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Additional Photos */}
+          <Card>
+            <CardContent>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900 text-sm">
+                  Photos
+                  {photos.length > 0 && <span className="ml-1 text-gray-400 font-normal">{photos.length}/10</span>}
+                </h3>
+                {photos.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => addMorePhotosRef.current?.click()}
+                    disabled={uploadingMore}
+                    className="text-xs text-forest-600 hover:text-forest-700 font-medium disabled:opacity-50"
+                  >
+                    {uploadingMore ? "Uploading…" : "+ Add Photo"}
+                  </button>
+                )}
+              </div>
+              <input
+                ref={addMorePhotosRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => handleAddMorePhotos(e.target.files)}
+              />
+              {photos.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => addMorePhotosRef.current?.click()}
+                  disabled={uploadingMore}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-forest-300 hover:bg-forest-50 transition-colors text-gray-400 hover:text-forest-600 text-sm disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Add photos (optional, up to 10)
+                </button>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {photos.map((photo, i) => (
+                      <div
+                        key={photo.url}
+                        draggable
+                        onDragStart={() => setPhotoDragIdx(i)}
+                        onDragOver={e => { e.preventDefault(); setPhotoDropIdx(i); }}
+                        onDragLeave={() => setPhotoDropIdx(null)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          if (photoDragIdx === null || photoDragIdx === i) return;
+                          const arr = [...photos];
+                          const [moved] = arr.splice(photoDragIdx, 1);
+                          arr.splice(i, 0, moved);
+                          setPhotos(arr);
+                          setPhotoDragIdx(null);
+                          setPhotoDropIdx(null);
+                        }}
+                        onDragEnd={() => { setPhotoDragIdx(null); setPhotoDropIdx(null); }}
+                        className={`relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 cursor-grab active:cursor-grabbing border-2 transition-all ${
+                          photoDropIdx === i ? "border-forest-400 scale-105" : i === 0 ? "border-forest-300" : "border-transparent"
+                        }`}
+                      >
+                        <Image src={photo.url} alt={`Photo ${i + 1}`} fill className="object-cover" />
+                        {/* Primary star */}
+                        <button
+                          type="button"
+                          title={i === 0 ? "Primary photo" : "Set as primary"}
+                          onClick={() => {
+                            if (i === 0) return;
+                            const arr = [...photos];
+                            const [moved] = arr.splice(i, 1);
+                            arr.unshift(moved);
+                            setPhotos(arr);
+                          }}
+                          className="absolute top-0.5 left-0.5 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-black/60 transition-colors"
+                        >
+                          <svg className={`w-3 h-3 ${i === 0 ? "text-yellow-300 fill-yellow-300" : "text-white"}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                          </svg>
+                        </button>
+                        {/* Remove */}
+                        <button
+                          type="button"
+                          title="Remove photo"
+                          onClick={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-red-500 transition-colors text-white"
+                        >
+                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    {photos.length < 10 && (
+                      <button
+                        type="button"
+                        onClick={() => addMorePhotosRef.current?.click()}
+                        disabled={uploadingMore}
+                        className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-forest-300 hover:bg-forest-50 flex items-center justify-center text-gray-400 hover:text-forest-500 transition-colors disabled:opacity-50 flex-shrink-0"
+                      >
+                        {uploadingMore ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">Drag to reorder · ★ = primary photo used for AI analysis</p>
+                </>
               )}
             </CardContent>
           </Card>
@@ -484,7 +638,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
 
           <div className="flex gap-3 pb-8">
             <Button variant="secondary"
-              onClick={() => { setStep("photo"); setAnalysis(null); setEditedAnalysis({}); setManualMode(false); setPhotoMeta(null); }}
+              onClick={() => { setStep("photo"); setAnalysis(null); setEditedAnalysis({}); setManualMode(false); setPhotos([]); }}
               className="flex-1">
               Retake Photo
             </Button>

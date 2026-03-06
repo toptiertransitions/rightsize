@@ -140,12 +140,18 @@ export type ItemStatus =
   | "Discarded"
   | "Rejected / Revisit";
 
+export interface ItemPhoto {
+  url: string;
+  publicId: string;
+}
+
 export interface Item {
   id: string;
   airtableId: string;
   tenantId: string;
   roomId?: string;
-  photoUrl?: string;
+  photos?: ItemPhoto[];       // Ordered; index 0 = primary photo
+  photoUrl?: string;          // Derived from photos[0].url for backward compat
   photoPublicId?: string;
   // AI-analyzed fields
   itemName: string;

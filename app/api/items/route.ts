@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       tenantId,
       itemName: (body.itemName as string) || (body.item_name as string) || "Unknown Item",
       roomId: body.roomId as string | undefined,
+      photos: body.photos as never,
       photoUrl: body.photoUrl as string | undefined,
       photoPublicId: body.photoPublicId as string | undefined,
       category: body.category as string,

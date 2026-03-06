@@ -12,6 +12,7 @@ import type {
   Membership,
   Room,
   Item,
+  ItemPhoto,
   PlanEntry,
   PlanHelper,
   PlanActivity,
@@ -378,11 +379,18 @@ export async function createItem(data: Partial<Item> & {
 }): Promise<Item> {
   const base = getBase();
   const now = new Date().toISOString();
+  // Normalise photos — prefer explicit array, fall back to legacy single-photo fields
+  const photosToStore: ItemPhoto[] = data.photos?.length
+    ? data.photos
+    : data.photoUrl
+    ? [{ url: data.photoUrl, publicId: data.photoPublicId ?? "" }]
+    : [];
   const record = await base(AIRTABLE_TABLES.ITEMS).create({
     TenantId: data.tenantId,
     RoomId: data.roomId || "",
-    PhotoUrl: data.photoUrl || "",
-    PhotoPublicId: data.photoPublicId || "",
+    PhotoUrl: photosToStore[0]?.url || "",
+    PhotoPublicId: photosToStore[0]?.publicId || "",
+    PhotosJson: photosToStore.length ? JSON.stringify(photosToStore) : "",
     ItemName: data.itemName,
     Category: data.category || "",
     Condition: data.condition || "Good",
@@ -415,7 +423,15 @@ export async function updateItem(
   const base = getBase();
   const fields: Airtable.FieldSet = { UpdatedAt: new Date().toISOString() };
 
+  // Handle photos specially — writes all three related Airtable fields
+  if (data.photos !== undefined) {
+    fields["PhotosJson"] = data.photos.length ? JSON.stringify(data.photos) : "";
+    fields["PhotoUrl"] = data.photos[0]?.url ?? "";
+    fields["PhotoPublicId"] = data.photos[0]?.publicId ?? "";
+  }
+
   const fieldMap: Record<keyof Item, string> = {
+    photos: "",    // handled above; empty string = skip in loop
     itemName: "ItemName",
     category: "Category",
     condition: "Condition",
@@ -478,13 +494,23 @@ export async function deleteItem(id: string): Promise<void> {
 
 function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
   const f = record.fields;
+  // Parse photos from PhotosJson; fall back to single photo for backward compat
+  let photos: ItemPhoto[] | undefined;
+  const photosJson = toStr(f["PhotosJson"]);
+  if (photosJson) {
+    try { photos = JSON.parse(photosJson); } catch { /* ignore */ }
+  }
+  if (!photos?.length && toStr(f["PhotoUrl"])) {
+    photos = [{ url: toStr(f["PhotoUrl"]), publicId: toStr(f["PhotoPublicId"]) }];
+  }
   return {
     id: record.id,
     airtableId: record.id,
     tenantId: toStr(f["TenantId"]),
     roomId: toStr(f["RoomId"]) || undefined,
-    photoUrl: toStr(f["PhotoUrl"]) || undefined,
-    photoPublicId: toStr(f["PhotoPublicId"]) || undefined,
+    photos: photos?.length ? photos : undefined,
+    photoUrl: photos?.[0]?.url || undefined,
+    photoPublicId: photos?.[0]?.publicId || undefined,
     itemName: toStr(f["ItemName"]),
     category: toStr(f["Category"]),
     condition: (toStr(f["Condition"]) || "Good") as ItemCondition,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
-import type { Item, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor } from "@/lib/types";
+import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor } from "@/lib/types";
 
 interface ItemGridProps {
   items: Item[];
@@ -53,7 +53,7 @@ interface EditModalProps {
   onDeleted?: () => void;
 }
 
-type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId">>;
+type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
 export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onDeleted }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
@@ -84,6 +84,19 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
 
+  // Photo management
+  const [photos, setPhotos] = useState<ItemPhoto[]>(
+    item.photos?.length
+      ? item.photos
+      : item.photoUrl
+      ? [{ url: item.photoUrl, publicId: item.photoPublicId ?? "" }]
+      : []
+  );
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [photoDragIdx, setPhotoDragIdx] = useState<number | null>(null);
+  const [photoDropIdx, setPhotoDropIdx] = useState<number | null>(null);
+  const addPhotoRef = useRef<HTMLInputElement>(null);
+
   // Only show rooms belonging to this item's tenant
   const itemRooms = rooms.filter(r => r.tenantId === item.tenantId);
 
@@ -107,6 +120,33 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
     }
   };
 
+  const handleAddPhotos = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const remaining = 10 - photos.length;
+    if (remaining <= 0) { setError("Maximum 10 photos reached."); return; }
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploadingPhotos(true);
+    setError("");
+    try {
+      const uploaded: ItemPhoto[] = [];
+      for (const file of toUpload) {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("tenantId", item.tenantId);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        uploaded.push({ url: data.photoUrl, publicId: data.photoPublicId });
+      }
+      setPhotos(prev => [...prev, ...uploaded]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingPhotos(false);
+      if (addPhotoRef.current) addPhotoRef.current.value = "";
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
@@ -117,6 +157,7 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
         body: JSON.stringify({
           id: item.id,
           tenantId: item.tenantId,
+          photos,
           ...form,
           roomId: form.roomId || undefined,
         }),
@@ -159,6 +200,122 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
 
         {/* Body */}
         <div className="px-6 py-5 space-y-6 overflow-y-auto max-h-[calc(100vh-200px)]">
+
+          {/* Photos */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Photos</h3>
+              {photos.length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => addPhotoRef.current?.click()}
+                  disabled={uploadingPhotos}
+                  className="text-xs text-forest-600 hover:text-forest-700 font-medium disabled:opacity-50"
+                >
+                  {uploadingPhotos ? "Uploading…" : "+ Add Photo"}
+                </button>
+              )}
+            </div>
+            <input
+              ref={addPhotoRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={e => handleAddPhotos(e.target.files)}
+            />
+            {photos.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => addPhotoRef.current?.click()}
+                disabled={uploadingPhotos}
+                className="w-full flex flex-col items-center gap-1 py-6 rounded-xl border-2 border-dashed border-gray-200 hover:border-forest-300 hover:bg-forest-50 transition-colors text-gray-400 hover:text-forest-600 disabled:opacity-50"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-xs font-medium">Add photos (optional)</span>
+              </button>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {photos.map((photo, i) => (
+                  <div
+                    key={photo.url}
+                    draggable
+                    onDragStart={() => setPhotoDragIdx(i)}
+                    onDragOver={e => { e.preventDefault(); setPhotoDropIdx(i); }}
+                    onDragLeave={() => setPhotoDropIdx(null)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      if (photoDragIdx === null || photoDragIdx === i) return;
+                      const arr = [...photos];
+                      const [moved] = arr.splice(photoDragIdx, 1);
+                      arr.splice(i, 0, moved);
+                      setPhotos(arr);
+                      setPhotoDragIdx(null);
+                      setPhotoDropIdx(null);
+                    }}
+                    onDragEnd={() => { setPhotoDragIdx(null); setPhotoDropIdx(null); }}
+                    className={`relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 cursor-grab active:cursor-grabbing border-2 transition-all ${
+                      photoDropIdx === i ? "border-forest-400 scale-105" : i === 0 ? "border-forest-300" : "border-transparent"
+                    }`}
+                  >
+                    <Image src={photo.url} alt={`Photo ${i + 1}`} fill className="object-cover" />
+                    {/* Primary star */}
+                    <button
+                      type="button"
+                      title={i === 0 ? "Primary photo" : "Set as primary"}
+                      onClick={() => {
+                        if (i === 0) return;
+                        const arr = [...photos];
+                        const [moved] = arr.splice(i, 1);
+                        arr.unshift(moved);
+                        setPhotos(arr);
+                      }}
+                      className="absolute top-0.5 left-0.5 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-black/60 transition-colors"
+                    >
+                      <svg className={`w-3 h-3 ${i === 0 ? "text-yellow-300 fill-yellow-300" : "text-white"}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      </svg>
+                    </button>
+                    {/* Remove */}
+                    <button
+                      type="button"
+                      title="Remove photo"
+                      onClick={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-red-500 transition-colors text-white"
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {photos.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => addPhotoRef.current?.click()}
+                    disabled={uploadingPhotos}
+                    className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-forest-300 hover:bg-forest-50 flex items-center justify-center text-gray-400 hover:text-forest-500 transition-colors disabled:opacity-50 flex-shrink-0"
+                  >
+                    {uploadingPhotos ? (
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+            {photos.length > 0 && (
+              <p className="text-xs text-gray-400">Drag to reorder · ★ = primary · {photos.length}/10</p>
+            )}
+          </section>
 
           {/* Basic Info */}
           <section className="space-y-4">
