@@ -8,6 +8,12 @@ const GRAY_900 = "#111827";
 const GRAY_600 = "#6B7280";
 const GRAY_400 = "#9CA3AF";
 const GRAY_100 = "#F3F4F6";
+const PHOTO_BG = "#F3F4F6";
+
+// A4 content width = 595 - 40*2 = 515pt
+// 3 photos per row with 6pt gaps between: (515 - 12) / 3 ≈ 167.67 → 167
+const PHOTO_GAP = 6;
+const PHOTO_SIZE = 167;
 
 const styles = StyleSheet.create({
   page: {
@@ -42,10 +48,13 @@ const styles = StyleSheet.create({
     borderBottomColor: GRAY_100,
   },
   itemNumber: { fontSize: 9, color: GRAY_400, marginBottom: 8 },
-  primaryPhoto: { width: "100%", height: 210, objectFit: "cover", borderRadius: 6, marginBottom: 6 },
-  additionalRow: { flexDirection: "row", marginBottom: 8 },
-  additionalPhoto: { height: 76, objectFit: "cover", borderRadius: 4, flex: 1 },
-  additionalPhotoMid: { height: 76, objectFit: "cover", borderRadius: 4, flex: 1, marginHorizontal: 5 },
+  photoRow: { flexDirection: "row", marginBottom: PHOTO_GAP },
+  photoSlot: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    backgroundColor: PHOTO_BG,
+  },
+  photo: { width: PHOTO_SIZE, height: PHOTO_SIZE, objectFit: "contain" },
   valuePill: {
     backgroundColor: LIGHT_GREEN,
     paddingHorizontal: 8,
@@ -53,8 +62,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignSelf: "flex-start",
     marginBottom: 6,
+    marginTop: 10,
   },
-  valueText: { fontSize: 12, fontFamily: "Helvetica-Bold", color: GREEN },
+  valueText: { fontSize: 11, fontFamily: "Helvetica-Bold", color: GREEN },
   itemName: { fontSize: 14, fontFamily: "Helvetica-Bold", color: GRAY_900, marginBottom: 8 },
   metaRow: { flexDirection: "row", marginBottom: 8 },
   metaBlock: { marginRight: 24 },
@@ -87,6 +97,13 @@ function bestDescription(item: Item): string {
   );
 }
 
+// Split an array into chunks of size n
+function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
 export interface VendorFilePDFProps {
   items: Item[];
   vendor: LocalVendor;
@@ -97,7 +114,7 @@ export interface VendorFilePDFProps {
 export const VendorFilePDF = ({ items, vendor, settings, preparedDate }: VendorFilePDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
-      {/* Header — shown on first page only (not fixed) */}
+      {/* Header */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           {settings?.logoUrl ? <Image src={settings.logoUrl} style={styles.logo} /> : null}
@@ -120,43 +137,38 @@ export const VendorFilePDF = ({ items, vendor, settings, preparedDate }: VendorF
           : item.photoUrl
           ? [{ url: item.photoUrl, publicId: "" }]
           : [];
-        const [primary, ...rest] = allPhotos;
-        const additional = rest.slice(0, 3);
+        const photoChunks = chunk(allPhotos, 3);
         const desc = bestDescription(item);
 
         return (
           <View key={item.id} style={styles.itemCard} wrap={false}>
             <Text style={styles.itemNumber}>Item {idx + 1} of {items.length}</Text>
 
-            {/* Photos */}
-            {primary ? (
-              <View>
-                <Image src={primary.url} style={styles.primaryPhoto} />
-                {additional.length > 0 && (
-                  <View style={styles.additionalRow}>
-                    {additional.map((p, pi) => (
-                      <Image
-                        key={pi}
-                        src={p.url}
-                        style={pi === 1 ? styles.additionalPhotoMid : styles.additionalPhoto}
-                      />
-                    ))}
+            {/* Photos — 3-across square slots, full image shown (objectFit: contain) */}
+            {photoChunks.map((row, rowIdx) => (
+              <View key={rowIdx} style={styles.photoRow}>
+                {row.map((p, pi) => (
+                  <View
+                    key={pi}
+                    style={[styles.photoSlot, pi > 0 ? { marginLeft: PHOTO_GAP } : {}]}
+                  >
+                    <Image src={p.url} style={styles.photo} />
                   </View>
-                )}
+                ))}
               </View>
-            ) : null}
+            ))}
 
-            {/* Expected value pill */}
+            {/* Target value */}
             {item.valueMid > 0 && (
               <View style={styles.valuePill}>
-                <Text style={styles.valueText}>${item.valueMid.toLocaleString()}</Text>
+                <Text style={styles.valueText}>Target Value: ${item.valueMid.toLocaleString()}</Text>
               </View>
             )}
 
             {/* Title */}
             <Text style={styles.itemName}>{item.itemName}</Text>
 
-            {/* Metadata */}
+            {/* Metadata — category + condition only */}
             <View style={styles.metaRow}>
               {item.category ? (
                 <View style={styles.metaBlock}>
@@ -168,14 +180,6 @@ export const VendorFilePDF = ({ items, vendor, settings, preparedDate }: VendorF
                 <Text style={styles.metaLabel}>CONDITION</Text>
                 <Text style={styles.metaValue}>{item.condition}</Text>
               </View>
-              {item.valueLow > 0 && item.valueHigh > 0 ? (
-                <View style={styles.metaBlock}>
-                  <Text style={styles.metaLabel}>VALUE RANGE</Text>
-                  <Text style={styles.metaValue}>
-                    ${item.valueLow.toLocaleString()} – ${item.valueHigh.toLocaleString()}
-                  </Text>
-                </View>
-              ) : null}
             </View>
 
             {/* Description */}
