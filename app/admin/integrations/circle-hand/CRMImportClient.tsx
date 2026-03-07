@@ -29,7 +29,7 @@ function parseCSVLine(line: string): string[] {
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[\s_\-]/g, ""));
+  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[\s_\-\/]/g, ""));
   return lines.slice(1).map(line => {
     const vals = parseCSVLine(line);
     const row: Record<string, string> = {};
@@ -38,58 +38,111 @@ function parseCSV(text: string): Record<string, string>[] {
   }).filter(row => Object.values(row).some(v => v.trim()));
 }
 
+function downloadCSV(filename: string, headers: string[], example: string[]) {
+  const csv = [headers, example].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Config per import type ───────────────────────────────────────────────────
 
 const CONFIGS: Record<ImportType, {
   label: string;
+  filename: string;
   description: string;
   columns: string[];
-  sampleRow: string;
+  templateHeaders: string[];
+  templateExample: string[];
   apiPath: string;
   buildPayload: (row: Record<string, string>, extra?: Record<string, string>) => Record<string, string>;
 }> = {
   "client-contacts": {
     label: "Client Contacts",
-    description: "Import client contacts. Required: Name. Optional: Email, Phone, Source, Notes.",
-    columns: ["Name", "Email", "Phone", "Source", "Notes"],
-    sampleRow: "Jane Smith,jane@example.com,555-0100,Referral,VIP client",
+    filename: "client-contacts-template.csv",
+    description: "Import client contacts. Required: Client Name.",
+    columns: ["Client Name", "Email", "Phone", "Source", "Owner", "Notes"],
+    templateHeaders: ["Client Name", "Email", "Phone", "Source", "Owner", "Notes"],
+    templateExample: [
+      "Jane Smith",
+      "jane@example.com",
+      "555-0100",
+      "Referral Partner",
+      "Matt Kamhi",
+      "VIP client referred by Sunrise",
+    ],
     apiPath: "/api/crm/client-contacts",
     buildPayload: (row) => ({
-      name: row["name"] || row["contactname"] || row["fullname"] || "",
+      name: row["clientname"] || row["name"] || row["contactname"] || row["fullname"] || "",
       email: row["email"] || row["emailaddress"] || "",
       phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
       source: row["source"] || "",
-      notes: row["notes"] || row["note"] || "",
+      notes: [row["notes"] || row["note"] || "", row["owner"] ? `Owner: ${row["owner"]}` : ""].filter(Boolean).join(" | "),
     }),
   },
   "companies": {
     label: "Referral Companies",
-    description: "Import referral partner companies. Required: Name. Optional: Type, Address, City, State, Zip, Notes.",
-    columns: ["Name", "Type", "Address", "City", "State", "Zip", "Notes"],
-    sampleRow: "Sunrise Senior Living,Senior Living,123 Main St,Springfield,IL,62701,Main referral partner",
+    filename: "referral-companies-template.csv",
+    description: "Import referral partner companies. Required: Company Name.",
+    columns: ["Company Name", "Type", "Address", "City", "State", "Zip", "Priority", "Owner", "Notes"],
+    templateHeaders: ["Company Name", "Type", "Address", "City", "State", "Zip", "Priority", "Owner", "Notes"],
+    templateExample: [
+      "Sunrise Senior Living",
+      "Senior Living",
+      "123 Main St",
+      "Springfield",
+      "IL",
+      "62701",
+      "High",
+      "Matt Kamhi",
+      "Primary referral partner",
+    ],
     apiPath: "/api/crm/companies",
     buildPayload: (row) => ({
-      name: row["name"] || row["company"] || row["companyname"] || "",
+      name: row["companyname"] || row["name"] || row["company"] || "",
       type: row["type"] || row["companytype"] || "",
       address: row["address"] || "",
       city: row["city"] || "",
       state: row["state"] || "",
       zip: row["zip"] || row["zipcode"] || row["postalcode"] || "",
-      notes: row["notes"] || "",
+      priority: row["priority"] || "",
+      notes: [row["notes"] || "", row["owner"] ? `Owner: ${row["owner"]}` : ""].filter(Boolean).join(" | "),
     }),
   },
   "referral-contacts": {
     label: "Referral Contacts",
-    description: "Import contacts within referral companies. Required: Name. Optional: Title, Email, Phone, Company (matched by name), Notes.",
-    columns: ["Name", "Title", "Email", "Phone", "Company", "Notes"],
-    sampleRow: "Bob Jones,Director of Care,bob@sunrise.com,555-0200,Sunrise Senior Living,Key contact",
+    filename: "referral-contacts-template.csv",
+    description: "Import referral partner contacts. Required: Name.",
+    columns: ["Name", "Title", "Email", "Phone", "Company", "Date Introduced", "Interests", "Coffee Order", "Orgs/Groups", "Owner", "Notes"],
+    templateHeaders: ["Name", "Title", "Email", "Phone", "Company", "Date Introduced", "Interests", "Coffee Order", "Orgs/Groups", "Owner", "Notes"],
+    templateExample: [
+      "Bob Jones",
+      "Director of Care",
+      "bob@sunrise.com",
+      "555-0200",
+      "Sunrise Senior Living",
+      "2024-03-15",
+      "Golf, cooking",
+      "Oat milk latte",
+      "NASMM, local chamber",
+      "Matt Kamhi",
+      "Key decision maker",
+    ],
     apiPath: "/api/crm/contacts",
     buildPayload: (row, companyMap) => ({
       name: row["name"] || row["contactname"] || row["fullname"] || "",
       title: row["title"] || row["jobtitle"] || "",
       email: row["email"] || row["emailaddress"] || "",
       phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
-      notes: row["notes"] || "",
+      notes: [row["notes"] || row["note"] || "", row["owner"] ? `Owner: ${row["owner"]}` : ""].filter(Boolean).join(" | "),
+      dateIntroduced: row["dateintroduced"] || row["introduced"] || "",
+      interests: row["interests"] || row["interest"] || "",
+      coffeeOrder: row["coffeeorder"] || row["coffee"] || row["coffeeorder"] || "",
+      orgsGroups: row["orgsgroups"] || row["orgs"] || row["groups"] || row["orgsgroups"] || "",
       referralCompanyId: companyMap?.[
         (row["company"] || row["companyname"] || "").toLowerCase()
       ] ?? "",
@@ -138,8 +191,7 @@ function ImportPanel({ type }: { type: ImportType }) {
     let errors = 0;
     for (const row of rows) {
       const payload = cfg.buildPayload(row, companyMap);
-      const nameKey = Object.keys(payload).find(k => k === "name");
-      if (!nameKey || !payload["name"]) continue;
+      if (!payload["name"]) continue;
       try {
         const res = await fetch(cfg.apiPath, {
           method: "POST",
@@ -156,16 +208,14 @@ function ImportPanel({ type }: { type: ImportType }) {
   }
 
   const previewRows = rows?.slice(0, 4) ?? [];
-  const previewCols = cfg.columns.slice(0, 4);
+  // Show first 5 columns in the preview table
+  const previewCols = cfg.columns.slice(0, 5);
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
       <div>
         <div className="font-semibold text-white">{cfg.label}</div>
         <div className="text-xs text-gray-500 mt-0.5">{cfg.description}</div>
-        <div className="mt-2 text-[11px] text-gray-600 font-mono">
-          Columns: {cfg.columns.join(", ")} &nbsp;·&nbsp; Example row: <span className="text-gray-500">{cfg.sampleRow}</span>
-        </div>
       </div>
 
       {result && (
@@ -191,7 +241,7 @@ function ImportPanel({ type }: { type: ImportType }) {
                     <tr key={i} className="text-gray-400">
                       {previewCols.map(c => (
                         <td key={c} className="pr-4 py-0.5 truncate max-w-[140px]">
-                          {payload[c.toLowerCase()] || "—"}
+                          {payload[c.toLowerCase().replace(/[\s_\-\/]/g, "")] || "—"}
                         </td>
                       ))}
                     </tr>
@@ -225,15 +275,24 @@ function ImportPanel({ type }: { type: ImportType }) {
       )}
 
       {!rows && !importing && (
-        <>
+        <div className="flex gap-2">
+          <button
+            onClick={() => downloadCSV(cfg.filename, cfg.templateHeaders, cfg.templateExample)}
+            className="h-9 px-3 flex items-center gap-1.5 border border-gray-700 text-sm text-gray-400 rounded-lg hover:border-gray-500 hover:text-white transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Template
+          </button>
           <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
           <button
             onClick={() => { setResult(null); fileRef.current?.click(); }}
             className="h-9 px-4 border border-gray-700 text-sm text-gray-300 rounded-lg hover:border-gray-500 hover:text-white transition-colors"
           >
-            Choose CSV file…
+            Choose CSV…
           </button>
-        </>
+        </div>
       )}
     </div>
   );
