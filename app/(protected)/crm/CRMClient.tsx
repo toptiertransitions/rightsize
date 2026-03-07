@@ -146,12 +146,14 @@ function ActivityEditModal({
 function OpportunitiesTab({
   initialOpportunities,
   clientContacts,
+  staffMembers,
   gmailConnected,
   pendingContactId,
   clearPending,
 }: {
   initialOpportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
+  staffMembers: StaffMember[];
   gmailConnected: boolean;
   pendingContactId?: string | null;
   clearPending?: () => void;
@@ -159,6 +161,7 @@ function OpportunitiesTab({
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">("All");
   const [sort, setSort] = useState<"newest" | "value" | "nextstep">("newest");
+  const [filterOwner, setFilterOwner] = useState("");
   const [panelOpp, setPanelOpp] = useState<ClientOpportunity | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelInitialContactId, setPanelInitialContactId] = useState<string | undefined>(undefined);
@@ -172,7 +175,11 @@ function OpportunitiesTab({
     }
   }, [pendingContactId]);
 
-  const filtered = opportunities.filter((o) => stageFilter === "All" || o.stage === stageFilter);
+  const filtered = opportunities.filter((o) => {
+    if (stageFilter !== "All" && o.stage !== stageFilter) return false;
+    if (filterOwner && o.assignedToClerkId !== filterOwner) return false;
+    return true;
+  });
 
   const sorted = [...filtered].sort((a, b) => {
     if (sort === "value") return b.estimatedValue - a.estimatedValue;
@@ -261,6 +268,18 @@ function OpportunitiesTab({
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {staffMembers.length > 0 && (
+            <select
+              value={filterOwner}
+              onChange={e => setFilterOwner(e.target.value)}
+              className="h-8 border border-gray-300 rounded-lg px-2 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-forest-500"
+            >
+              <option value="">All Owners</option>
+              {staffMembers.map(s => (
+                <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+              ))}
+            </select>
+          )}
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as typeof sort)}
@@ -1097,24 +1116,10 @@ function ContactsTab({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          {csvResult && (
-            <span className="text-sm text-green-600">{csvResult}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
-          <button
-            onClick={() => { setCsvResult(null); csvInputRef.current?.click(); }}
-            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50"
-          >
-            Import CSV
-          </button>
-          <button onClick={openNew} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
-            + Add Contact
-          </button>
-        </div>
+      <div className="flex items-center justify-end mb-4">
+        <button onClick={openNew} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
+          + Add Contact
+        </button>
       </div>
 
       {csvPreview && (
@@ -1365,12 +1370,11 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
-  const csvCompanyRef = useRef<HTMLInputElement>(null);
-  const csvContactRef = useRef<HTMLInputElement>(null);
   // Search / filter / sort
   const [search, setSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState<"" | ReferralPriority>("");
   const [filterType, setFilterType] = useState("");
+  const [filterOwner, setFilterOwner] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "priority">("name");
 
   function handleCsvFile(type: "companies" | "contacts", e: React.ChangeEvent<HTMLInputElement>) {
@@ -1597,6 +1601,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
       if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.type.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterPriority && c.priority !== filterPriority) return false;
       if (filterType && c.type !== filterType) return false;
+      if (filterOwner && c.assignedToClerkId !== filterOwner) return false;
       return true;
     })
     .sort((a, b) => {
@@ -1641,6 +1646,18 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
               {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
+          {staffMembers.length > 0 && (
+            <select
+              value={filterOwner}
+              onChange={e => setFilterOwner(e.target.value)}
+              className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
+            >
+              <option value="">All Owners</option>
+              {staffMembers.map(s => (
+                <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+              ))}
+            </select>
+          )}
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as "name" | "priority")}
@@ -1651,20 +1668,6 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <input ref={csvCompanyRef} type="file" accept=".csv" className="hidden" onChange={(e) => handleCsvFile("companies", e)} />
-          <input ref={csvContactRef} type="file" accept=".csv" className="hidden" onChange={(e) => handleCsvFile("contacts", e)} />
-          <button
-            onClick={() => { setCsvResult(null); csvCompanyRef.current?.click(); }}
-            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50"
-          >
-            Import Companies CSV
-          </button>
-          <button
-            onClick={() => { setCsvResult(null); csvContactRef.current?.click(); }}
-            className="text-sm border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50"
-          >
-            Import Contacts CSV
-          </button>
           <button onClick={openNewCompany} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
             + Add Company
           </button>
@@ -2638,6 +2641,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         <OpportunitiesTab
           initialOpportunities={opportunities}
           clientContacts={clientContacts}
+          staffMembers={staffMembers}
           gmailConnected={gmailConnected}
           pendingContactId={pendingContactId}
           clearPending={() => setPendingContactId(null)}
