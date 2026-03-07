@@ -5,6 +5,7 @@ import {
   getItemsForTenant,
   getUserRoleForTenant,
   getTenantById,
+  getTenants,
   getRoomsForTenant,
   getMembershipsForUser,
   getSystemRole,
@@ -25,6 +26,56 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   if (!userId) redirect("/sign-in");
 
   const { tenantId } = await searchParams;
+
+  // ── All-projects sentinel mode (TTT staff only) ───────────────────────────────
+  const SENTINEL_VIEWS = ["__all_active__", "__all_archived__", "__all_time__"];
+  if (tenantId && SENTINEL_VIEWS.includes(tenantId)) {
+    const sysRole = await getSystemRole(userId!).catch(() => null);
+    if (!["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")) redirect("/home");
+
+    const allTenants = await getTenants().catch(() => []);
+    const selectedTenants =
+      tenantId === "__all_active__" ? allTenants.filter((t) => !t.isArchived) :
+      tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :
+      allTenants;
+
+    const [itemArrays, roomArrays, localVendors] = await Promise.all([
+      Promise.all(selectedTenants.map((t) => getItemsForTenant(t.id).catch(() => []))),
+      Promise.all(selectedTenants.map((t) => getRoomsForTenant(t.id).catch(() => []))),
+      getAllLocalVendors().catch(() => []),
+    ]);
+
+    const items = itemArrays.flat().sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const rooms = roomArrays.flat();
+    const canAutoRoute = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+    const viewLabel =
+      tenantId === "__all_active__" ? "All Active Projects" :
+      tenantId === "__all_archived__" ? "All Archived Projects" :
+      "All-Time Projects";
+
+    return (
+      <div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
+            <p className="text-gray-500 mt-0.5">
+              {items.length} item{items.length !== 1 ? "s" : ""} across {selectedTenants.length} project{selectedTenants.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
+        <ItemGrid
+          items={items}
+          canEdit={false}
+          rooms={rooms}
+          tenants={selectedTenants}
+          localVendors={localVendors}
+          canAutoRoute={canAutoRoute}
+        />
+      </div>
+    );
+  }
 
   // ── Single-tenant mode ───────────────────────────────────────────────────────
   if (tenantId) {
@@ -47,13 +98,6 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
-            <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-              <Link href="/home" className="hover:text-forest-600 transition-colors">Home</Link>
-              <span>/</span>
-              <Link href={`/rooms?tenantId=${tenantId}`} className="hover:text-forest-600 transition-colors">{tenant.name}</Link>
-              <span>/</span>
-              <span className="text-gray-700 font-medium">Catalog</span>
-            </div>
             <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
             <p className="text-gray-500 mt-0.5">
               {items.length} item{items.length !== 1 ? "s" : ""} cataloged
@@ -111,11 +155,6 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-            <Link href="/home" className="hover:text-forest-600 transition-colors">Home</Link>
-            <span>/</span>
-            <span className="text-gray-700 font-medium">All Items</span>
-          </div>
           <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
           <p className="text-gray-500 mt-0.5">
             {items.length} item{items.length !== 1 ? "s" : ""} across {tenants.length} project{tenants.length !== 1 ? "s" : ""}

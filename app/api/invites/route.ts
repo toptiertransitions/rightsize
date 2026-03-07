@@ -3,6 +3,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getUserRoleForTenant, getTenantById, getLocalVendorById, getSystemRole } from "@/lib/airtable";
 import { createInviteToken, createVendorInviteToken } from "@/lib/invites";
 import type { InviteRole } from "@/lib/invites";
+import { buildClientWelcomeEmail } from "@/lib/email";
 import { Resend } from "resend";
 
 export async function POST(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { tenantId?: string; role?: InviteRole; email?: string; vendorId?: string };
+  let body: { tenantId?: string; role?: InviteRole; email?: string; vendorId?: string; type?: string };
   try {
     body = await req.json();
   } catch {
@@ -61,18 +62,28 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Tenant invite branch ──────────────────────────────────────────────────
-  const { tenantId, role, email } = body;
+  const { tenantId, role, email, type } = body;
+  const isClientInvite = type === "client";
+
   if (!tenantId || !role) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
-  if (!["Collaborator", "Viewer"].includes(role)) {
+  if (!["Collaborator", "Viewer", "Owner"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
+  if (role === "Owner" && !isClientInvite) {
+    return NextResponse.json({ error: "Owner role is only valid for client invites" }, { status: 400 });
+  }
 
-  // Only Owners and Collaborators (+ TTT staff) may generate invites
-  const userRole = await getUserRoleForTenant(userId, tenantId);
-  if (!userRole || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(userRole)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Client invites: any TTT system role can send; regular invites require project membership
+  const sysRole = await getSystemRole(userId);
+  if (isClientInvite) {
+    if (!sysRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } else {
+    const userRole = await getUserRoleForTenant(userId, tenantId);
+    if (!userRole || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(userRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const token = createInviteToken({ tenantId, role, invitedBy: userId });
@@ -93,10 +104,14 @@ export async function POST(req: NextRequest) {
 
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { error: sendError } = await resend.emails.send({
-      from: `Rightsize by Top Tier <${fromEmail}>`,
+      from: `Top Tier Transitions <${fromEmail}>`,
       to: email,
-      subject: `${inviterName} invited you to ${projectName} on Rightsize`,
-      html: buildInviteEmail({ inviterName, projectName, role, inviteUrl }),
+      subject: isClientInvite
+        ? `Your ${projectName} project is ready on Rightsize`
+        : `${inviterName} invited you to ${projectName} on Rightsize`,
+      html: isClientInvite
+        ? buildClientWelcomeEmail({ projectName, inviteUrl })
+        : buildInviteEmail({ inviterName, projectName, role, inviteUrl }),
     });
 
     if (sendError) {

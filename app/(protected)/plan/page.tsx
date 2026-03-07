@@ -17,6 +17,7 @@ import {
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
+import { AddClientUserButton } from "@/components/AddClientUserButton";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -30,6 +31,57 @@ export default async function PlanPage({ searchParams }: PageProps) {
   if (!userId) redirect("/sign-in");
 
   const { tenantId, view } = await searchParams;
+
+  // ── Sentinel tenantId mode (all/archived/all-time for managers) ────────────────
+  if (tenantId === "__all_active__" || tenantId === "__all_archived__" || tenantId === "__all_time__") {
+    const sysRole = await getSystemRole(userId!).catch(() => null);
+    const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+    if (!isManagerOrAdmin) redirect("/home");
+
+    const allTenants = await getTenants().catch(() => []);
+    const selectedTenants =
+      tenantId === "__all_active__" ? allTenants.filter((t) => !t.isArchived) :
+      tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :
+      allTenants;
+
+    const tenantOptions = allTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+
+    const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
+      Promise.all(selectedTenants.map((t) => getPlanEntriesForTenant(t.id).catch(() => []))).then((r) => r.flat()),
+      Promise.all(selectedTenants.map((t) => getTimeEntries({ tenantId: t.id }).catch(() => []))).then((r) => r.flat()),
+      Promise.all(selectedTenants.map((t) => getProjectFiles(t.id).catch(() => []))).then((r) => r.flat()),
+      getServices().catch(() => []),
+    ]);
+
+    const serviceNames = serviceList.map((s) => s.name);
+    const viewLabel =
+      tenantId === "__all_active__" ? "All active projects" :
+      tenantId === "__all_archived__" ? "Archived projects" :
+      "All-time projects";
+
+    return (
+      <div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
+            <p className="text-gray-500 mt-0.5">{viewLabel} — daily focus calendar</p>
+          </div>
+        </div>
+        <PlanClient
+          entries={allEntries}
+          rooms={[]}
+          tenantId=""
+          canEdit={false}
+          projectFiles={allProjectFiles}
+          timeEntries={allTimeEntries}
+          isAdmin={sysRole === "TTTAdmin"}
+          tenantOptions={tenantOptions}
+          currentTenantId={tenantId}
+          services={serviceNames}
+        />
+      </div>
+    );
+  }
 
   // ── No tenantId: check for manager/admin first, then fall back to membership logic ──
   if (!tenantId) {
@@ -210,20 +262,18 @@ export default async function PlanPage({ searchParams }: PageProps) {
     : undefined;
   const serviceNames = serviceList.map(s => s.name);
 
+  const isTTTStaffOrAbove = sysRole !== null;
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
-            <Link href="/home" className="hover:text-forest-600 transition-colors">
-              Home
-            </Link>
-            <span>/</span>
-            <span className="text-gray-700 font-medium">{tenant.name}</span>
-          </div>
           <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
           <p className="text-gray-500 mt-0.5">Schedule daily focus areas for your project</p>
         </div>
+        {isTTTStaffOrAbove && tenant && (
+          <AddClientUserButton tenantId={tenantId} projectName={tenant.name} />
+        )}
       </div>
 
       <PlanClient

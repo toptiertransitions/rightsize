@@ -10,16 +10,26 @@ type AdminTab =
   | "routing-rules"
   | "bulk-upload"
   | "contract-services"
-  | "invoicing";
+  | "invoicing"
+  | "expenses"
+  | "drips"
+  | "pfinventory"
+  | "fb"
+  | "ebay";
 
 const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
-  { tab: "projects", label: "Projects", href: "/admin" },
+  { tab: "projects", label: "Home", href: "/admin" },
   { tab: "users", label: "Users", href: "/admin/users" },
-  { tab: "local-vendors", label: "Local Vendors", href: "/admin/local-vendors" },
-  { tab: "routing-rules", label: "Routing Rules", href: "/admin/routing-rules" },
-  { tab: "bulk-upload", label: "Bulk Upload", href: "/admin/integrations/circle-hand" },
-  { tab: "contract-services", label: "Contract & Services", href: "/admin/contract-services" },
+  { tab: "local-vendors", label: "Vendors", href: "/admin/local-vendors" },
+  { tab: "routing-rules", label: "Routing", href: "/admin/routing-rules" },
+  { tab: "bulk-upload", label: "CSVs", href: "/admin/integrations/circle-hand" },
+  { tab: "contract-services", label: "Contracts", href: "/admin/contract-services" },
   { tab: "invoicing", label: "Invoicing", href: "/admin/invoicing" },
+  { tab: "expenses", label: "Expenses", href: "/admin/expenses" },
+  { tab: "drips", label: "Drips", href: "/admin/drips" },
+  { tab: "pfinventory", label: "PF Inventory", href: "/admin/pfinventory" },
+  { tab: "fb", label: "FB", href: "/admin/fb" },
+  { tab: "ebay", label: "eBay", href: "/admin/ebay" },
 ];
 
 interface AdminHeaderProps {
@@ -62,7 +72,7 @@ export function AdminHeader({ active }: AdminHeaderProps) {
           <span className="text-xs bg-red-900/50 text-red-400 border border-red-800 px-3 py-1 rounded-full font-medium">
             Admin
           </span>
-          <UserButton afterSignOutUrl="/sign-in" />
+          <UserButton  />
         </div>
       </div>
     </header>

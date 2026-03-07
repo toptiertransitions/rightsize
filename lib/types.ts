@@ -5,9 +5,10 @@ export type UserRole =
   | "Viewer"
   | "TTTStaff"
   | "TTTManager"
+  | "TTTSales"
   | "TTTAdmin";
 
-export type SystemRole = "TTTStaff" | "TTTManager" | "TTTAdmin";
+export type SystemRole = "TTTStaff" | "TTTManager" | "TTTSales" | "TTTAdmin";
 
 export interface StaffMember {
   id: string;            // Airtable record ID
@@ -190,6 +191,28 @@ export interface Item {
   vendorPriceApproved?: boolean;
   vendorExpectedPrice?: number;
   vendorRespondedAt?: string;
+  // PF Inventory fields
+  barcodeNumber?: string;
+  quantity?: number;
+  clientSharePercent?: number;
+  deliveryDate?: string;
+  // Staff seller fields (FB/eBay pages)
+  staffSellerId?: string;
+  staffSellerName?: string;
+  staffCommissionPercent?: number;
+  staffTimeMinutes?: number;
+}
+
+// ─── Sold Item Row (for Time Tracking CSV export) ─────────────────────────────
+export interface SoldItemRow {
+  saleDate: string;          // YYYY-MM-DD
+  staffSellerName?: string;
+  tenantName: string;
+  itemName: string;
+  valueMid: number;
+  staffCommissionPercent?: number;
+  staffTimeMinutes?: number;
+  channel: "FB" | "eBay";
 }
 
 // ─── AI Analysis ──────────────────────────────────────────────────────────────
@@ -486,6 +509,8 @@ export interface Contract {
   signToken: string;
   sentByClerkId?: string;
   sentAt?: string;
+  recipientEmail?: string;
+  autoSendDeposit?: boolean;
   createdAt: string;
   lineItems?: ContractLineItem[];
 }
@@ -515,6 +540,10 @@ export interface ReferralContact {
   phone: string;
   referralCompanyId: string;
   notes: string;
+  dateIntroduced?: string;
+  interests?: string;
+  coffeeOrder?: string;
+  orgsGroups?: string;
   createdAt: string;
 }
 
@@ -524,15 +553,18 @@ export interface ClientContact {
   email: string;
   phone: string;
   source: string;
+  referralPartnerId?: string;
+  clientReferralId?: string;
   notes: string;
   createdAt: string;
 }
 
-export type OpportunityStage = "Lead" | "Qualifying" | "Proposal Sent" | "Won" | "Lost";
+export type OpportunityStage = "Lead" | "Qualifying" | "Proposing" | "Won" | "Lost";
 
 export interface KeyPerson {
   name: string;
   relationship: string;
+  email?: string;
   referralContactId?: string;
 }
 
@@ -654,6 +686,59 @@ export interface InvoiceSettings {
   updatedAt: string;
 }
 
+// ─── Drip Campaigns ───────────────────────────────────────────────────────────
+export type DripAudience = "Referral Partners" | "Client Contacts" | "Both";
+export type DripContactType = "referral" | "client";
+export type EnrollmentStatus = "Active" | "Paused" | "Completed" | "Unsubscribed";
+
+export interface DripStep {
+  dayOffset: number;
+  subject: string;
+  previewText: string;
+  bodyHtml: string;
+}
+
+export interface DripCampaign {
+  id: string;
+  name: string;
+  description: string;
+  audience: DripAudience;
+  tags: string[];
+  steps: DripStep[];
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface DripEnrollment {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  contactType: DripContactType;
+  contactId: string;
+  contactEmail: string;
+  contactName: string;
+  company: string;
+  enrolledAt: string;
+  currentStep: number;
+  lastSentAt?: string;
+  status: EnrollmentStatus;
+  enrolledByClerkId: string;
+}
+
+export interface DripSettings {
+  id?: string;
+  senderName: string;
+  senderEmail: string;
+  logoUrl: string;
+  logoPublicId: string;
+  primaryColor: string;
+  companyName: string;
+  companyTagline: string;
+  companyAddress: string;
+  signatureHtml: string;
+  updatedAt: string;
+}
+
 export interface CalculatorResult {
   rightsizingHours: number;
   packingHours: number;
@@ -668,4 +753,41 @@ export interface CalculatorResult {
     density: DensityLevel;
     hours: number;
   }>;
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+export type ExpenseCategory =
+  | "Meals & Entertainment"
+  | "Travel & Transportation"
+  | "Office Supplies"
+  | "Technology & Software"
+  | "Marketing & Advertising"
+  | "Professional Services"
+  | "Utilities"
+  | "Other";
+
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "Meals & Entertainment",
+  "Travel & Transportation",
+  "Office Supplies",
+  "Technology & Software",
+  "Marketing & Advertising",
+  "Professional Services",
+  "Utilities",
+  "Other",
+];
+
+export interface Expense {
+  id: string;
+  clerkUserId: string;
+  staffName: string;
+  date: string;               // YYYY-MM-DD extracted from receipt
+  vendor: string;             // Vendor/merchant name from receipt
+  total: number;              // Total amount from receipt
+  category: ExpenseCategory;  // AI-suggested category
+  description: string;        // Brief AI description
+  receiptUrl?: string;        // Cloudinary URL
+  receiptPublicId?: string;   // Cloudinary public ID
+  notes?: string;             // User notes
+  createdAt: string;          // ISO timestamp when logged
 }

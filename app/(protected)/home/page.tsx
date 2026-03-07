@@ -1,12 +1,14 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getItemsByPrimaryRoute, getInvoicesForTenant } from "@/lib/airtable";
+import type { SoldItemRow } from "@/lib/types";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
 import { AdminProjectsClient } from "./AdminProjectsClient";
+import { AddClientUserButton } from "@/components/AddClientUserButton";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
 const OWNER_ROLES = ["Owner", "TTTAdmin"];
@@ -29,17 +31,57 @@ export default async function DashboardPage({
   const isStaff = systemRole !== null;
   const isAdmin = systemRole === "TTTAdmin";
   const isManager = systemRole === "TTTManager";
+  const isSales = systemRole === "TTTSales";
   const firstName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there";
+
+  // ── TTTSales users land on CRM ────────────────────────────────────────────────
+  if (isSales) redirect("/crm");
 
   // ── TTTStaff/Manager/Admin: time tracker + all-tenant picker ─────────────────
   if (isStaff && !tenantIdParam) {
     const canViewAll = isAdmin || isManager;
-    const [allTenants, timeEntries, allStaff, serviceList] = await Promise.all([
+    const [allTenants, timeEntries, allStaff, serviceList, fbItems, ebayItems] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
       canViewAll ? getStaffMembers().catch(() => []) : Promise.resolve([]),
       getServices().catch(() => []),
+      canViewAll ? getItemsByPrimaryRoute("FB/Marketplace").catch(() => []) : Promise.resolve([]),
+      canViewAll ? getItemsByPrimaryRoute("Online Marketplace").catch(() => []) : Promise.resolve([]),
     ]);
+
+    // Build sold items for CSV export
+    const tenantNameMap = new Map(allTenants.map(t => [t.id, t.name]));
+    const soldItems: SoldItemRow[] = [];
+    if (canViewAll) {
+      for (const item of fbItems) {
+        if (item.status === "Sold" && item.saleDate) {
+          soldItems.push({
+            saleDate: item.saleDate.slice(0, 10),
+            staffSellerName: item.staffSellerName,
+            tenantName: tenantNameMap.get(item.tenantId) ?? "",
+            itemName: item.itemName,
+            valueMid: item.valueMid,
+            staffCommissionPercent: item.staffCommissionPercent,
+            staffTimeMinutes: item.staffTimeMinutes,
+            channel: "FB",
+          });
+        }
+      }
+      for (const item of ebayItems) {
+        if (item.status === "Sold" && item.saleDate) {
+          soldItems.push({
+            saleDate: item.saleDate.slice(0, 10),
+            staffSellerName: item.staffSellerName,
+            tenantName: tenantNameMap.get(item.tenantId) ?? "",
+            itemName: item.itemName,
+            valueMid: item.valueMid,
+            staffCommissionPercent: item.staffCommissionPercent,
+            staffTimeMinutes: item.staffTimeMinutes,
+            channel: "eBay",
+          });
+        }
+      }
+    }
     const serviceNames = serviceList.map(s => s.name);
 
     const staffMembers = canViewAll
@@ -65,6 +107,7 @@ export default async function DashboardPage({
               currentUserName={firstName}
               staffMembers={staffMembers}
               services={serviceNames}
+              soldItems={soldItems}
             />
           </div>
         </section>
@@ -125,11 +168,12 @@ export default async function DashboardPage({
     const isStaffOnly = systemRole === "TTTStaff";
     const isOwnerOrCollab = membership.role === "Owner" || membership.role === "Collaborator";
 
-    const [tenant, items, rooms, contracts] = await Promise.all([
+    const [tenant, items, rooms, contracts, invoices] = await Promise.all([
       getTenantById(membership.tenantId).catch(() => null),
       getItemsForTenant(membership.tenantId).catch(() => []),
       getRoomsForTenant(membership.tenantId).catch(() => []),
       (isOwnerOrCollab || isStaffOnly) ? getContractsForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
+      isOwnerOrCollab ? getInvoicesForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
     ]);
 
     if (!tenant) redirect("/onboarding");
@@ -143,6 +187,27 @@ export default async function DashboardPage({
     }, {} as Record<string, number>);
 
     const recentItems = items.slice(0, 4);
+
+    // Invoice balance due (sum of unpaid/partially-paid amounts)
+    const invoiceAmountDue = invoices
+      .filter((inv) => inv.status !== "Paid")
+      .reduce((sum, inv) => sum + Math.max(0, inv.amount - (inv.paidAmount ?? 0)), 0);
+
+    // Consignment running total — sold items routed to marketplace channels
+    const CONSIGNMENT_ROUTES = ["FB/Marketplace", "Online Marketplace", "ProFoundFinds Consignment", "Other Consignment"];
+    const soldConsignment = items.filter(
+      (i) => CONSIGNMENT_ROUTES.includes(i.primaryRoute) && i.status === "Sold"
+    );
+    const consignmentPayout = soldConsignment.reduce(
+      (sum, i) => sum + (i.consignorPayout ?? i.salePrice ?? i.valueMid),
+      0
+    );
+    const pendingConsignment = items.filter(
+      (i) => CONSIGNMENT_ROUTES.includes(i.primaryRoute) && i.status !== "Sold" && i.status !== "Discarded" && i.status !== "Donated"
+    ).length;
+
+    const fmtCurrency = (n: number) =>
+      `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return (
       <div>
@@ -162,16 +227,21 @@ export default async function DashboardPage({
             <h1 className="text-2xl font-bold text-gray-900">{tenant.name}</h1>
             <p className="text-gray-500 mt-0.5 capitalize">{membership.role}</p>
           </div>
-          {isOwner && (
-            <ProjectActions
-              tenantId={tenant.id}
-              tenantName={tenant.name}
-              tenantAddress={tenant.address}
-              tenantCity={tenant.city}
-              tenantState={tenant.state}
-              tenantZip={tenant.zip}
-            />
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {isStaff && (
+              <AddClientUserButton tenantId={tenant.id} projectName={tenant.name} />
+            )}
+            {isOwner && (
+              <ProjectActions
+                tenantId={tenant.id}
+                tenantName={tenant.name}
+                tenantAddress={tenant.address}
+                tenantCity={tenant.city}
+                tenantState={tenant.state}
+                tenantZip={tenant.zip}
+              />
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -209,6 +279,37 @@ export default async function DashboardPage({
             </Card>
           </Link>
         </div>
+
+        {/* Financial snapshot — invoice balance + consignment */}
+        {isOwnerOrCollab && (invoiceAmountDue > 0 || consignmentPayout > 0 || pendingConsignment > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            {invoiceAmountDue > 0 && (
+              <Link href={`/invoices?tenantId=${tenant.id}`}>
+                <Card hover>
+                  <CardContent className="py-5">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Balance Due</p>
+                    <p className="text-2xl font-bold text-amber-600">{fmtCurrency(invoiceAmountDue)}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {invoices.filter((i) => i.status !== "Paid").length} unpaid invoice{invoices.filter((i) => i.status !== "Paid").length !== 1 ? "s" : ""}
+                    </p>
+                    <p className="text-xs text-amber-600 mt-2 font-medium">View invoices →</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            )}
+            {(consignmentPayout > 0 || pendingConsignment > 0) && (
+              <Card>
+                <CardContent className="py-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Consignment</p>
+                  <p className="text-2xl font-bold text-forest-700">{fmtCurrency(consignmentPayout)}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {soldConsignment.length} sold · {pendingConsignment} pending
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* Status breakdown */}
         {items.length > 0 && (

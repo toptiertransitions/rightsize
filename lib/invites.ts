@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type { UserRole } from "./types";
 
-export type InviteRole = Extract<UserRole, "Collaborator" | "Viewer">;
+export type InviteRole = Extract<UserRole, "Collaborator" | "Viewer" | "Owner">;
 
 interface TenantInvitePayload {
   tenantId: string;

@@ -56,6 +56,8 @@ import type {
   InvoiceSettings,
   InvoiceStatus,
   InvoiceLineItem,
+  Expense,
+  ExpenseCategory,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -468,6 +470,16 @@ export async function updateItem(
     vendorPriceApproved: "VendorPriceApproved",
     vendorExpectedPrice: "VendorExpectedPrice",
     vendorRespondedAt: "VendorRespondedAt",
+    // PF Inventory fields
+    barcodeNumber: "BarcodeNumber",
+    quantity: "Quantity",
+    clientSharePercent: "ClientSharePercent",
+    deliveryDate: "DeliveryDate",
+    // Staff seller fields
+    staffSellerId: "StaffSellerId",
+    staffSellerName: "StaffSellerName",
+    staffCommissionPercent: "StaffCommissionPercent",
+    staffTimeMinutes: "StaffTimeMinutes",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -544,6 +556,14 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     vendorPriceApproved: f["VendorPriceApproved"] === true ? true : undefined,
     vendorExpectedPrice: f["VendorExpectedPrice"] != null ? toNum(f["VendorExpectedPrice"]) : undefined,
     vendorRespondedAt: toStr(f["VendorRespondedAt"]) || undefined,
+    barcodeNumber: toStr(f["BarcodeNumber"]) || undefined,
+    quantity: f["Quantity"] != null ? toNum(f["Quantity"]) : undefined,
+    clientSharePercent: f["ClientSharePercent"] != null ? toNum(f["ClientSharePercent"]) : undefined,
+    deliveryDate: toStr(f["DeliveryDate"]) || undefined,
+    staffSellerId: toStr(f["StaffSellerId"]) || undefined,
+    staffSellerName: toStr(f["StaffSellerName"]) || undefined,
+    staffCommissionPercent: f["StaffCommissionPercent"] != null ? toNum(f["StaffCommissionPercent"]) : undefined,
+    staffTimeMinutes: f["StaffTimeMinutes"] != null ? toNum(f["StaffTimeMinutes"]) : undefined,
   };
 }
 
@@ -745,6 +765,17 @@ export async function getAllItems(): Promise<Item[]> {
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapItem);
+}
+
+export async function getItemsByPrimaryRoute(route: string): Promise<Item[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `{PrimaryRoute} = "${route}"`,
+      sort: [{ field: "CreatedAt", direction: "desc" }],
+    })
     .all();
   return records.map(mapItem);
 }
@@ -1934,6 +1965,8 @@ function mapContract(record: AirtableRecord): Contract {
     signToken: toStr(f["SignToken"]),
     sentByClerkId: toStr(f["SentByClerkId"]) || undefined,
     sentAt: toStr(f["SentAt"]) || undefined,
+    recipientEmail: toStr(f["RecipientEmail"]) || undefined,
+    autoSendDeposit: f["AutoSendDeposit"] === true,
     createdAt: toStr(f["CreatedAt"]),
     lineItems,
   };
@@ -1974,6 +2007,8 @@ export async function createContract(data: {
   totalCost: number;
   signToken: string;
   lineItems?: ContractLineItem[];
+  recipientEmail?: string;
+  autoSendDeposit?: boolean;
 }): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const fields: Record<string, unknown> = {
@@ -1994,6 +2029,8 @@ export async function createContract(data: {
   if (data.lineItems) {
     fields["ServiceLineItems"] = JSON.stringify(data.lineItems);
   }
+  if (data.recipientEmail) fields["RecipientEmail"] = data.recipientEmail;
+  if (data.autoSendDeposit) fields["AutoSendDeposit"] = true;
   const res = await contractFetch(table, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -2153,6 +2190,10 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     phone: toStr(f["Phone"]),
     referralCompanyId: toStr(f["ReferralCompanyId"]),
     notes: toStr(f["Notes"]),
+    dateIntroduced: toStr(f["DateIntroduced"]) || undefined,
+    interests: toStr(f["Interests"]) || undefined,
+    coffeeOrder: toStr(f["CoffeeOrder"]) || undefined,
+    orgsGroups: toStr(f["OrgsGroups"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
 }
@@ -2174,6 +2215,10 @@ export async function createReferralContact(data: {
   phone?: string;
   referralCompanyId: string;
   notes?: string;
+  dateIntroduced?: string;
+  interests?: string;
+  coffeeOrder?: string;
+  orgsGroups?: string;
 }): Promise<ReferralContact> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, "", {
     method: "POST",
@@ -2185,6 +2230,10 @@ export async function createReferralContact(data: {
         Phone: data.phone || "",
         ReferralCompanyId: data.referralCompanyId,
         Notes: data.notes || "",
+        DateIntroduced: data.dateIntroduced || "",
+        Interests: data.interests || "",
+        CoffeeOrder: data.coffeeOrder || "",
+        OrgsGroups: data.orgsGroups || "",
         CreatedAt: new Date().toISOString(),
       },
     }),
@@ -2195,7 +2244,7 @@ export async function createReferralContact(data: {
 
 export async function updateReferralContact(
   id: string,
-  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string }>
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string }>
 ): Promise<ReferralContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2204,6 +2253,10 @@ export async function updateReferralContact(
   if (data.phone !== undefined) fields["Phone"] = data.phone;
   if (data.referralCompanyId !== undefined) fields["ReferralCompanyId"] = data.referralCompanyId;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.dateIntroduced !== undefined) fields["DateIntroduced"] = data.dateIntroduced;
+  if (data.interests !== undefined) fields["Interests"] = data.interests;
+  if (data.coffeeOrder !== undefined) fields["CoffeeOrder"] = data.coffeeOrder;
+  if (data.orgsGroups !== undefined) fields["OrgsGroups"] = data.orgsGroups;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -2226,6 +2279,8 @@ function mapClientContact(record: AirtableRecord): ClientContact {
     email: toStr(f["Email"]),
     phone: toStr(f["Phone"]),
     source: toStr(f["Source"]),
+    referralPartnerId: toStr(f["ReferralPartnerId"]) || undefined,
+    clientReferralId: toStr(f["ClientReferralId"]) || undefined,
     notes: toStr(f["Notes"]),
     createdAt: toStr(f["CreatedAt"]),
   };
@@ -2243,6 +2298,8 @@ export async function createClientContact(data: {
   email?: string;
   phone?: string;
   source?: string;
+  referralPartnerId?: string;
+  clientReferralId?: string;
   notes?: string;
 }): Promise<ClientContact> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, "", {
@@ -2253,6 +2310,8 @@ export async function createClientContact(data: {
         Email: data.email || "",
         Phone: data.phone || "",
         Source: data.source || "",
+        ReferralPartnerId: data.referralPartnerId || "",
+        ClientReferralId: data.clientReferralId || "",
         Notes: data.notes || "",
         CreatedAt: new Date().toISOString(),
       },
@@ -2264,13 +2323,15 @@ export async function createClientContact(data: {
 
 export async function updateClientContact(
   id: string,
-  data: Partial<{ name: string; email: string; phone: string; source: string; notes: string }>
+  data: Partial<{ name: string; email: string; phone: string; source: string; referralPartnerId: string; clientReferralId: string; notes: string }>
 ): Promise<ClientContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
   if (data.email !== undefined) fields["Email"] = data.email;
   if (data.phone !== undefined) fields["Phone"] = data.phone;
   if (data.source !== undefined) fields["Source"] = data.source;
+  if (data.referralPartnerId !== undefined) fields["ReferralPartnerId"] = data.referralPartnerId;
+  if (data.clientReferralId !== undefined) fields["ClientReferralId"] = data.clientReferralId;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `/${id}`, {
     method: "PATCH",
@@ -2331,6 +2392,14 @@ export async function getOpportunityById(id: string): Promise<ClientOpportunity 
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`);
   if (!res.ok) return null;
   return mapOpportunity(await res.json());
+}
+
+export async function getOpportunitiesForTenant(tenantId: string): Promise<ClientOpportunity[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOpportunity);
 }
 
 export async function createOpportunity(data: {
@@ -2862,4 +2931,317 @@ export async function upsertInvoiceSettings(data: Partial<Omit<InvoiceSettings, 
   });
   if (!res.ok) throw new Error(await res.text());
   return mapInvoiceSettings(await res.json() as AirtableRecord);
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+function expensesFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.EXPENSES;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapExpense(record: AirtableRecord): Expense {
+  const f = record.fields;
+  return {
+    id: record.id,
+    clerkUserId: toStr(f["ClerkUserId"]),
+    staffName: toStr(f["StaffName"]),
+    date: toStr(f["Date"]),
+    vendor: toStr(f["Vendor"]),
+    total: typeof f["Total"] === "number" ? f["Total"] : 0,
+    category: (toStr(f["Category"]) || "Other") as ExpenseCategory,
+    description: toStr(f["Description"]),
+    receiptUrl: toStr(f["ReceiptUrl"]) || undefined,
+    receiptPublicId: toStr(f["ReceiptPublicId"]) || undefined,
+    notes: toStr(f["Notes"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getExpenses(): Promise<Expense[]> {
+  const res = await expensesFetch(
+    `?sort[0][field]=Date&sort[0][direction]=desc&sort[1][field]=CreatedAt&sort[1][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapExpense);
+}
+
+export async function getExpensesForUser(clerkUserId: string): Promise<Expense[]> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
+  const res = await expensesFetch(
+    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapExpense);
+}
+
+export async function createExpense(data: {
+  clerkUserId: string;
+  staffName: string;
+  date: string;
+  vendor: string;
+  total: number;
+  category: ExpenseCategory;
+  description: string;
+  receiptUrl?: string;
+  receiptPublicId?: string;
+  notes?: string;
+}): Promise<Expense> {
+  const fields: Record<string, unknown> = {
+    ClerkUserId: data.clerkUserId,
+    StaffName: data.staffName,
+    Date: data.date,
+    Vendor: data.vendor,
+    Total: data.total,
+    Category: data.category,
+    Description: data.description,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.receiptUrl) fields["ReceiptUrl"] = data.receiptUrl;
+  if (data.receiptPublicId) fields["ReceiptPublicId"] = data.receiptPublicId;
+  if (data.notes) fields["Notes"] = data.notes;
+  const res = await expensesFetch("", { method: "POST", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapExpense(await res.json() as AirtableRecord);
+}
+
+export async function updateExpense(
+  id: string,
+  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes">>
+): Promise<Expense> {
+  const fields: Record<string, unknown> = {};
+  if (data.date !== undefined) fields["Date"] = data.date;
+  if (data.vendor !== undefined) fields["Vendor"] = data.vendor;
+  if (data.total !== undefined) fields["Total"] = data.total;
+  if (data.category !== undefined) fields["Category"] = data.category;
+  if (data.description !== undefined) fields["Description"] = data.description;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapExpense(await res.json() as AirtableRecord);
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  const res = await expensesFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Drip Campaigns ───────────────────────────────────────────────────────────
+function dripCampaignsFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.DRIP_CAMPAIGNS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options?.headers ?? {}) },
+  });
+}
+
+function dripEnrollmentsFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.DRIP_ENROLLMENTS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options?.headers ?? {}) },
+  });
+}
+
+function dripSettingsFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.DRIP_SETTINGS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options?.headers ?? {}) },
+  });
+}
+
+function mapDripCampaign(record: AirtableRecord): import("./types").DripCampaign {
+  const f = record.fields;
+  let steps: import("./types").DripStep[] = [];
+  try { steps = JSON.parse(toStr(f["StepsJson"]) || "[]"); } catch {}
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    description: toStr(f["Description"]),
+    audience: (toStr(f["Audience"]) || "Both") as import("./types").DripAudience,
+    tags: toStr(f["Tags"]) ? toStr(f["Tags"]).split(",").map(t => t.trim()).filter(Boolean) : [],
+    steps,
+    isActive: f["IsActive"] === true,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+function mapDripEnrollment(record: AirtableRecord): import("./types").DripEnrollment {
+  const f = record.fields;
+  return {
+    id: record.id,
+    campaignId: toStr(f["CampaignId"]),
+    campaignName: toStr(f["CampaignName"]),
+    contactType: (toStr(f["ContactType"]) || "referral") as import("./types").DripContactType,
+    contactId: toStr(f["ContactId"]),
+    contactEmail: toStr(f["ContactEmail"]),
+    contactName: toStr(f["ContactName"]),
+    company: toStr(f["Company"]),
+    enrolledAt: toStr(f["EnrolledAt"]),
+    currentStep: typeof f["CurrentStep"] === "number" ? f["CurrentStep"] : 0,
+    lastSentAt: toStr(f["LastSentAt"]) || undefined,
+    status: (toStr(f["Status"]) || "Active") as import("./types").EnrollmentStatus,
+    enrolledByClerkId: toStr(f["EnrolledByClerkId"]),
+  };
+}
+
+function mapDripSettings(record: AirtableRecord): import("./types").DripSettings {
+  const f = record.fields;
+  return {
+    id: record.id,
+    senderName: toStr(f["SenderName"]),
+    senderEmail: toStr(f["SenderEmail"]),
+    logoUrl: toStr(f["LogoUrl"]),
+    logoPublicId: toStr(f["LogoPublicId"]),
+    primaryColor: toStr(f["PrimaryColor"]) || "#2E6B4F",
+    companyName: toStr(f["CompanyName"]),
+    companyTagline: toStr(f["CompanyTagline"]),
+    companyAddress: toStr(f["CompanyAddress"]),
+    signatureHtml: toStr(f["SignatureHtml"]),
+    updatedAt: toStr(f["UpdatedAt"]),
+  };
+}
+
+// Campaigns
+export async function getDripCampaigns(): Promise<import("./types").DripCampaign[]> {
+  const res = await dripCampaignsFetch(`?sort[0][field]=CreatedAt&sort[0][direction]=desc`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapDripCampaign);
+}
+
+export async function getDripCampaignById(id: string): Promise<import("./types").DripCampaign | null> {
+  const res = await dripCampaignsFetch(`/${id}`);
+  if (!res.ok) return null;
+  return mapDripCampaign(await res.json() as AirtableRecord);
+}
+
+export async function createDripCampaign(data: Omit<import("./types").DripCampaign, "id" | "createdAt">): Promise<import("./types").DripCampaign> {
+  const fields: Record<string, unknown> = {
+    Name: data.name,
+    Description: data.description,
+    Audience: data.audience,
+    Tags: data.tags.join(", "),
+    StepsJson: JSON.stringify(data.steps),
+    IsActive: data.isActive,
+    CreatedAt: new Date().toISOString(),
+  };
+  const res = await dripCampaignsFetch("", { method: "POST", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDripCampaign(await res.json() as AirtableRecord);
+}
+
+export async function updateDripCampaign(id: string, data: Partial<Omit<import("./types").DripCampaign, "id" | "createdAt">>): Promise<import("./types").DripCampaign> {
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.description !== undefined) fields["Description"] = data.description;
+  if (data.audience !== undefined) fields["Audience"] = data.audience;
+  if (data.tags !== undefined) fields["Tags"] = data.tags.join(", ");
+  if (data.steps !== undefined) fields["StepsJson"] = JSON.stringify(data.steps);
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  const res = await dripCampaignsFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDripCampaign(await res.json() as AirtableRecord);
+}
+
+export async function deleteDripCampaign(id: string): Promise<void> {
+  const res = await dripCampaignsFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// Enrollments
+export async function getDripEnrollments(filters?: { campaignId?: string; status?: string }): Promise<import("./types").DripEnrollment[]> {
+  const parts: string[] = [];
+  if (filters?.campaignId) parts.push(`{CampaignId} = "${filters.campaignId}"`);
+  if (filters?.status) parts.push(`{Status} = "${filters.status}"`);
+  const formula = parts.length > 0 ? encodeURIComponent(parts.length === 1 ? parts[0] : `AND(${parts.join(",")})`) : "";
+  const query = formula ? `?filterByFormula=${formula}&sort[0][field]=EnrolledAt&sort[0][direction]=desc` : `?sort[0][field]=EnrolledAt&sort[0][direction]=desc`;
+  const res = await dripEnrollmentsFetch(query);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapDripEnrollment);
+}
+
+export async function createDripEnrollment(data: Omit<import("./types").DripEnrollment, "id">): Promise<import("./types").DripEnrollment> {
+  const fields: Record<string, unknown> = {
+    CampaignId: data.campaignId,
+    CampaignName: data.campaignName,
+    ContactType: data.contactType,
+    ContactId: data.contactId,
+    ContactEmail: data.contactEmail,
+    ContactName: data.contactName,
+    Company: data.company,
+    EnrolledAt: data.enrolledAt,
+    CurrentStep: data.currentStep,
+    Status: data.status,
+    EnrolledByClerkId: data.enrolledByClerkId,
+  };
+  if (data.lastSentAt) fields["LastSentAt"] = data.lastSentAt;
+  const res = await dripEnrollmentsFetch("", { method: "POST", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDripEnrollment(await res.json() as AirtableRecord);
+}
+
+export async function updateDripEnrollment(id: string, data: Partial<Pick<import("./types").DripEnrollment, "currentStep" | "lastSentAt" | "status">>): Promise<import("./types").DripEnrollment> {
+  const fields: Record<string, unknown> = {};
+  if (data.currentStep !== undefined) fields["CurrentStep"] = data.currentStep;
+  if (data.lastSentAt !== undefined) fields["LastSentAt"] = data.lastSentAt;
+  if (data.status !== undefined) fields["Status"] = data.status;
+  const res = await dripEnrollmentsFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDripEnrollment(await res.json() as AirtableRecord);
+}
+
+export async function deleteDripEnrollment(id: string): Promise<void> {
+  const res = await dripEnrollmentsFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// Drip Settings
+export async function getDripSettings(): Promise<import("./types").DripSettings | null> {
+  const res = await dripSettingsFetch(`?maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapDripSettings(data.records[0] as AirtableRecord);
+}
+
+export async function upsertDripSettings(data: Partial<Omit<import("./types").DripSettings, "id" | "updatedAt">>): Promise<import("./types").DripSettings> {
+  const fields: Record<string, unknown> = { UpdatedAt: new Date().toISOString() };
+  if (data.senderName !== undefined) fields["SenderName"] = data.senderName;
+  if (data.senderEmail !== undefined) fields["SenderEmail"] = data.senderEmail;
+  if (data.logoUrl !== undefined) fields["LogoUrl"] = data.logoUrl;
+  if (data.logoPublicId !== undefined) fields["LogoPublicId"] = data.logoPublicId;
+  if (data.primaryColor !== undefined) fields["PrimaryColor"] = data.primaryColor;
+  if (data.companyName !== undefined) fields["CompanyName"] = data.companyName;
+  if (data.companyTagline !== undefined) fields["CompanyTagline"] = data.companyTagline;
+  if (data.companyAddress !== undefined) fields["CompanyAddress"] = data.companyAddress;
+  if (data.signatureHtml !== undefined) fields["SignatureHtml"] = data.signatureHtml;
+  // check if record exists
+  const existing = await getDripSettings();
+  if (existing?.id) {
+    const res = await dripSettingsFetch(`/${existing.id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+    if (!res.ok) throw new Error(await res.text());
+    return mapDripSettings(await res.json() as AirtableRecord);
+  }
+  const res = await dripSettingsFetch("", { method: "POST", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDripSettings(await res.json() as AirtableRecord);
 }

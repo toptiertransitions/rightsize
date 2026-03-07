@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, getTenantById } from "@/lib/airtable";
-import { buildContractSignedEmail } from "@/lib/email";
+import { getContractByToken, updateContract, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, updateOpportunity } from "@/lib/airtable";
+import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
+import { renderContractPDF } from "@/lib/contract-pdf";
 import { Resend } from "resend";
 
 export async function POST(req: NextRequest) {
@@ -23,6 +24,92 @@ export async function POST(req: NextRequest) {
     signedAt,
     signedByName: signerName.trim(),
   });
+
+  // Auto-create a 40% deposit invoice
+  let createdInvoice: Awaited<ReturnType<typeof createInvoice>> | null = null;
+  try {
+    const invoiceCount = await getAllInvoiceCount().catch(() => 0);
+    const depositPct = 40;
+    const depositAmount = Math.round(contract.totalCost * depositPct / 100 * 100) / 100;
+    const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(4, "0")}`;
+    const primaryService = contract.lineItems?.[0];
+    createdInvoice = await createInvoice({
+      tenantId: contract.tenantId,
+      type: "Deposit",
+      invoiceNumber,
+      serviceId: primaryService?.serviceId ?? "",
+      serviceName: primaryService?.serviceName ?? "Services",
+      depositType: "PercentOfEstimate",
+      depositPercent: depositPct,
+      amount: depositAmount,
+      contractId: contract.id,
+      lineItems: contract.lineItems,
+      createdByClerkId: contract.sentByClerkId ?? "system",
+    });
+  } catch (e) {
+    console.error("Failed to auto-create deposit invoice:", e);
+  }
+
+  // If autoSendDeposit: email the deposit invoice to the signer with signed contract PDF attached
+  if (contract.autoSendDeposit && createdInvoice && contract.recipientEmail) {
+    try {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
+      const tenant = await getTenantById(contract.tenantId).catch(() => null);
+      const invoiceSettings = await getInvoiceSettings().catch(() => null);
+
+      // Generate signed contract PDF for attachment
+      const pdfBuffer = await renderContractPDF({
+        contract: { ...contract, status: "Signed", signedAt, signedByName: signerName.trim() },
+        tenantName: tenant?.name ?? "Client",
+        settings: invoiceSettings,
+      }).catch(() => null);
+
+      const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+      const payUrl = `${appUrl}/pay/${createdInvoice.id}`;
+
+      const html = buildInvoiceEmail({
+        invoiceNumber: createdInvoice.invoiceNumber,
+        tenantName: tenant?.name ?? "Client",
+        type: "Deposit",
+        amount: createdInvoice.amount,
+        serviceName: createdInvoice.serviceName,
+        payUrl,
+        companyName: invoiceSettings?.companyName || "Top Tier Transitions",
+        logoUrl: invoiceSettings?.logoUrl,
+      });
+
+      const emailPayload: Parameters<typeof resend.emails.send>[0] = {
+        from: `Top Tier Transitions <${fromEmail}>`,
+        to: contract.recipientEmail,
+        subject: `${fmt(createdInvoice.amount)} Deposit Invoice — ${tenant?.name ?? "Your Project"}`,
+        html,
+      };
+
+      if (pdfBuffer) {
+        emailPayload.attachments = [{
+          filename: `agreement-${contract.id.slice(0, 8)}.pdf`,
+          content: Buffer.from(pdfBuffer).toString("base64"),
+        }];
+      }
+
+      await resend.emails.send(emailPayload);
+    } catch (e) {
+      console.error("Failed to auto-send deposit invoice:", e);
+    }
+  }
+
+  // Auto-advance opportunity to Won
+  try {
+    const opps = await getOpportunitiesForTenant(contract.tenantId).catch(() => []);
+    const proposing = opps.filter((o) => o.stage === "Proposing");
+    await Promise.all(
+      proposing.map((o) =>
+        updateOpportunity(o.id, { stage: "Won", wonAt: new Date().toISOString() }).catch(() => null)
+      )
+    );
+  } catch { /* non-fatal */ }
 
   // Notify manager
   if (contract.sentByClerkId) {

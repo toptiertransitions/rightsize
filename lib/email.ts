@@ -236,6 +236,90 @@ export function buildInvoiceEmail({
 </html>`;
 }
 
+export function buildClientWelcomeEmail({
+  projectName,
+  inviteUrl,
+}: {
+  projectName: string;
+  inviteUrl: string;
+}): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Project Is Ready — Rightsize by Top Tier</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+            <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Rightsize</p>
+            <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">by Top Tier Transitions</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Your project is ready.</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#4B5563;line-height:1.6;">
+              The Top Tier Transitions team has set up your <strong>${projectName}</strong> project.
+              Here&rsquo;s what you&rsquo;ll find inside:
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;">
+                  <p style="margin:0;font-size:14px;color:#111827;font-weight:600;">Plan</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">Your daily move schedule and project timeline at a glance</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;">
+                  <p style="margin:0;font-size:14px;color:#111827;font-weight:600;">Catalog</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">Browse every item being managed &mdash; photos, values, and destination</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;">
+                  <p style="margin:0;font-size:14px;color:#111827;font-weight:600;">Vendors</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">See which local vendors and specialists are working your project</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;">
+                  <p style="margin:0;font-size:14px;color:#111827;font-weight:600;">Sales &amp; Consignment</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">Track items headed to marketplace and watch your proceeds grow</p>
+                </td>
+              </tr>
+            </table>
+            <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+              <tr>
+                <td style="background-color:#2E6B4F;border-radius:10px;">
+                  <a href="${inviteUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
+                    Access Your Project &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Or copy this link into your browser:</p>
+            <p style="margin:0;font-size:12px;color:#6B7280;word-break:break-all;">${inviteUrl}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">
+              This invite expires in 7 days. &mdash; Top Tier Transitions &middot; Rightsize Client Portal
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildVendorFileEmail({
   vendorName,
   itemCount,
@@ -390,6 +474,93 @@ export function buildVendorAssignmentEmail({
         </table>
       </td>
     </tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ─── Drip Campaign Email Builder ───────────────────────────────────────────────
+export function substituteVars(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+}
+
+export function buildDripEmail({
+  settings,
+  bodyHtml,
+  subject,
+  unsubscribeUrl,
+  vars,
+}: {
+  settings: {
+    senderName: string;
+    companyName: string;
+    companyTagline: string;
+    companyAddress: string;
+    primaryColor: string;
+    logoUrl: string;
+    signatureHtml: string;
+  };
+  bodyHtml: string;
+  subject: string;
+  unsubscribeUrl: string;
+  vars: Record<string, string>;
+}): string {
+  const color = settings.primaryColor || "#2E6B4F";
+  const resolvedBody = substituteVars(bodyHtml, vars);
+  // Convert plain-text newlines to HTML paragraphs if no block tags present
+  const hasBlockTags = /<(p|div|h[1-6]|ul|ol|table)\b/i.test(resolvedBody);
+  const formattedBody = hasBlockTags
+    ? resolvedBody
+    : resolvedBody
+        .split(/\n\n+/)
+        .map(para => `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7;">${para.replace(/\n/g, "<br/>")}</p>`)
+        .join("");
+
+  const logoBlock = settings.logoUrl
+    ? `<img src="${settings.logoUrl}" alt="${settings.companyName}" style="max-height:48px;max-width:180px;object-fit:contain;display:block;margin-bottom:12px;" />`
+    : "";
+
+  const sigBlock = settings.signatureHtml
+    ? `<div style="margin-top:32px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;line-height:1.6;">${substituteVars(settings.signatureHtml, vars)}</div>`
+    : `<div style="margin-top:32px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;">
+        <strong style="color:#374151;">${vars.sender_name || settings.senderName}</strong><br/>
+        ${settings.companyName}${settings.companyTagline ? `<br/><em>${settings.companyTagline}</em>` : ""}
+       </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:${color};padding:24px 32px;border-radius:12px 12px 0 0;">
+            ${logoBlock}
+            <p style="margin:0;color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:-0.3px;">${settings.companyName}</p>
+            ${settings.companyTagline ? `<p style="margin:4px 0 0;color:rgba(255,255,255,0.75);font-size:12px;">${settings.companyTagline}</p>` : ""}
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            ${formattedBody}
+            ${sigBlock}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 0;text-align:center;">
+            <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.5;">
+              ${settings.companyName}${settings.companyAddress ? ` · ${settings.companyAddress}` : ""}<br/>
+              <a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
   </table>
 </body>
 </html>`;

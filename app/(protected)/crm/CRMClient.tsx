@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, StaffMember, ReferralPriority } from "@/lib/types";
 
@@ -50,12 +50,12 @@ interface CRMClientProps {
   gmailEmail?: string;
 }
 
-const STAGES: OpportunityStage[] = ["Lead", "Qualifying", "Proposal Sent", "Won", "Lost"];
+const STAGES: OpportunityStage[] = ["Lead", "Qualifying", "Proposing", "Won", "Lost"];
 
 const STAGE_COLORS: Record<OpportunityStage, string> = {
   Lead: "bg-blue-100 text-blue-700",
   Qualifying: "bg-yellow-100 text-yellow-700",
-  "Proposal Sent": "bg-purple-100 text-purple-700",
+  Proposing: "bg-purple-100 text-purple-700",
   Won: "bg-green-100 text-green-700",
   Lost: "bg-gray-100 text-gray-600",
 };
@@ -147,16 +147,30 @@ function OpportunitiesTab({
   initialOpportunities,
   clientContacts,
   gmailConnected,
+  pendingContactId,
+  clearPending,
 }: {
   initialOpportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
   gmailConnected: boolean;
+  pendingContactId?: string | null;
+  clearPending?: () => void;
 }) {
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">("All");
   const [sort, setSort] = useState<"newest" | "value" | "nextstep">("newest");
   const [panelOpp, setPanelOpp] = useState<ClientOpportunity | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelInitialContactId, setPanelInitialContactId] = useState<string | undefined>(undefined);
+
+  // Auto-open panel when routed from Contacts tab
+  useEffect(() => {
+    if (pendingContactId) {
+      setPanelOpp(null);
+      setPanelInitialContactId(pendingContactId);
+      setPanelOpen(true);
+    }
+  }, [pendingContactId]);
 
   const filtered = opportunities.filter((o) => stageFilter === "All" || o.stage === stageFilter);
 
@@ -198,11 +212,13 @@ function OpportunitiesTab({
 
   function openNew() {
     setPanelOpp(null);
+    setPanelInitialContactId(undefined);
     setPanelOpen(true);
   }
 
   function openEdit(opp: ClientOpportunity) {
     setPanelOpp(opp);
+    setPanelInitialContactId(undefined);
     setPanelOpen(true);
   }
 
@@ -314,7 +330,8 @@ function OpportunitiesTab({
           clientContacts={clientContacts}
           gmailConnected={gmailConnected}
           onSaved={handleSaved}
-          onClose={() => setPanelOpen(false)}
+          onClose={() => { setPanelOpen(false); clearPending?.(); }}
+          initialContactId={panelInitialContactId}
         />
       )}
     </div>
@@ -328,14 +345,17 @@ function OpportunityPanel({
   gmailConnected,
   onSaved,
   onClose,
+  initialContactId,
 }: {
   opportunity: ClientOpportunity | null;
   clientContacts: ClientContact[];
   gmailConnected: boolean;
   onSaved: (opp: ClientOpportunity) => void;
   onClose: () => void;
+  initialContactId?: string;
 }) {
-  const [clientContactId, setClientContactId] = useState(opportunity?.clientContactId || "");
+  const router = useRouter();
+  const [clientContactId, setClientContactId] = useState(opportunity?.clientContactId || initialContactId || "");
   const [stage, setStage] = useState<OpportunityStage>(opportunity?.stage || "Lead");
   const [estimatedValue, setEstimatedValue] = useState(String(opportunity?.estimatedValue || ""));
   const [notes, setNotes] = useState(opportunity?.notes || "");
@@ -345,6 +365,7 @@ function OpportunityPanel({
   const [keyPeople, setKeyPeople] = useState<KeyPerson[]>(opportunity?.keyPeople || []);
   const [newPersonName, setNewPersonName] = useState("");
   const [newPersonRelationship, setNewPersonRelationship] = useState("");
+  const [newPersonEmail, setNewPersonEmail] = useState("");
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [activityType, setActivityType] = useState<CRMActivityType>("Note");
   const [activityNote, setActivityNote] = useState("");
@@ -352,6 +373,8 @@ function OpportunityPanel({
   const [saving, setSaving] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [convertedProject, setConvertedProject] = useState<{ id: string; name: string } | null>(null);
 
   const loadActivities = useCallback(async () => {
     if (!opportunity) return;
@@ -406,9 +429,13 @@ function OpportunityPanel({
 
   function addKeyPerson() {
     if (!newPersonName) return;
-    setKeyPeople((prev) => [...prev, { name: newPersonName, relationship: newPersonRelationship }]);
+    setKeyPeople((prev) => [
+      ...prev,
+      { name: newPersonName, relationship: newPersonRelationship, email: newPersonEmail || undefined },
+    ]);
     setNewPersonName("");
     setNewPersonRelationship("");
+    setNewPersonEmail("");
   }
 
   async function logActivity() {
@@ -454,6 +481,53 @@ function OpportunityPanel({
       await loadActivities();
     } finally {
       setSyncingGmail(false);
+    }
+  }
+
+  async function handleConvert() {
+    const contact = clientContacts.find((c) => c.id === clientContactId);
+    if (!contact) return;
+    setConverting(true);
+    try {
+      // Save the opportunity first (same payload as handleSave)
+      if (opportunity) {
+        const oppPayload = {
+          clientContactId,
+          stage,
+          estimatedValue: parseFloat(estimatedValue) || 0,
+          notes,
+          nextStepDate,
+          nextStepNote,
+          lostReason: stage === "Lost" ? lostReason : "",
+          keyPeople,
+          wonAt: opportunity.wonAt,
+          lostAt: opportunity.lostAt,
+        };
+        const oppRes = await fetch("/api/crm/opportunities", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: opportunity.id, ...oppPayload }),
+        });
+        if (oppRes.ok) {
+          const oppData = await oppRes.json();
+          onSaved(oppData.opportunity);
+        }
+      }
+      // Create the project
+      const res = await fetch("/api/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: contact.name, email: contact.email, displayName: contact.name }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setConvertedProject({ id: data.tenant.id, name: data.tenant.name });
+      // Navigate to Quoting page for the new project
+      router.push(`/quoting?tenantId=${data.tenant.id}`);
+    } catch {
+      alert("Failed to create project. Please try again.");
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -526,27 +600,35 @@ function OpportunityPanel({
               {keyPeople.map((p, i) => (
                 <span key={i} className="flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full">
                   {p.name} · {p.relationship}
+                  {p.email && <span className="text-gray-400 ml-0.5">· {p.email}</span>}
                   <button onClick={() => setKeyPeople((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 ml-1">×</button>
                 </span>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 gap-2 mb-2">
               <input
                 value={newPersonName}
                 onChange={(e) => setNewPersonName(e.target.value)}
                 placeholder="Name"
-                className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
               />
               <input
                 value={newPersonRelationship}
                 onChange={(e) => setNewPersonRelationship(e.target.value)}
                 placeholder="Relationship"
-                className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
               />
-              <button onClick={addKeyPerson} className="text-sm bg-gray-100 hover:bg-gray-200 rounded-lg px-2 py-1.5">
-                Add
-              </button>
+              <input
+                type="email"
+                value={newPersonEmail}
+                onChange={(e) => setNewPersonEmail(e.target.value)}
+                placeholder="Email (optional)"
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+              />
             </div>
+            <button onClick={addKeyPerson} className="text-sm bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5">
+              Add Person
+            </button>
           </div>
 
           {/* Notes */}
@@ -602,6 +684,27 @@ function OpportunityPanel({
           >
             {saving ? "Saving…" : opportunity ? "Update Opportunity" : "Create Opportunity"}
           </button>
+
+          {/* Convert to Project — available in Proposing stage */}
+          {stage === "Proposing" && (
+            convertedProject ? (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                Project created: <strong>{convertedProject.name}</strong>
+                {" · "}
+                <a href={`/quoting?tenantId=${convertedProject.id}`} className="underline font-medium">
+                  Open Quoting
+                </a>
+              </div>
+            ) : (
+              <button
+                onClick={handleConvert}
+                disabled={converting || !clientContactId}
+                className="w-full border border-purple-400 bg-purple-50 text-purple-700 rounded-lg py-2 text-sm font-medium hover:bg-purple-100 disabled:opacity-50 transition-colors"
+              >
+                {converting ? "Saving & creating project…" : "Convert to Project and Update Opp →"}
+              </button>
+            )
+          )}
 
           {/* Activities */}
           {opportunity && (
@@ -872,11 +975,23 @@ function ContactActivityPanel({
 }
 
 // ─── Contacts Tab ─────────────────────────────────────────────────────────────
-function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) {
+function ContactsTab({
+  initialContacts,
+  referralContacts,
+  allClientContacts,
+  onCreateOpportunity,
+}: {
+  initialContacts: ClientContact[];
+  referralContacts: ReferralContact[];
+  allClientContacts: ClientContact[];
+  onCreateOpportunity: (contactId: string) => void;
+}) {
   const [contacts, setContacts] = useState(initialContacts);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ClientContact | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "" });
+  const [rpQuery, setRpQuery] = useState("");
+  const [crQuery, setCrQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [activityContact, setActivityContact] = useState<ClientContact | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
@@ -930,13 +1045,20 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
 
   function openNew() {
     setEditing(null);
-    setForm({ name: "", email: "", phone: "", source: "", notes: "" });
+    setForm({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "" });
+    setRpQuery("");
+    setCrQuery("");
     setModalOpen(true);
   }
 
   function openEdit(c: ClientContact) {
     setEditing(c);
-    setForm({ name: c.name, email: c.email, phone: c.phone, source: c.source, notes: c.notes });
+    setForm({ name: c.name, email: c.email, phone: c.phone, source: c.source, referralPartnerId: c.referralPartnerId || "", clientReferralId: c.clientReferralId || "", notes: c.notes });
+    // Pre-fill combobox queries from existing IDs
+    const rp = referralContacts.find((r) => r.id === c.referralPartnerId);
+    setRpQuery(rp ? rp.name : "");
+    const cr = allClientContacts.find((r) => r.id === c.clientReferralId);
+    setCrQuery(cr ? cr.name : "");
     setModalOpen(true);
   }
 
@@ -1061,6 +1183,13 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
                 <td className="px-4 py-3 text-gray-600">{c.source || "—"}</td>
                 <td className="px-4 py-3 text-right space-x-2">
                   <button
+                    onClick={() => onCreateOpportunity(c.id)}
+                    className="text-xs bg-forest-600 text-white rounded px-2 py-1 hover:bg-forest-700"
+                    title="Create opportunity for this contact"
+                  >
+                    + Opp
+                  </button>
+                  <button
                     onClick={() => setActivityContact(c)}
                     className="text-forest-600 hover:text-forest-800 text-xs px-2 py-1"
                   >
@@ -1078,18 +1207,122 @@ function ContactsTab({ initialContacts }: { initialContacts: ClientContact[] }) 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setModalOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900">{editing ? "Edit Contact" : "Add Contact"}</h3>
-            {(["name", "email", "phone", "source", "notes"] as const).map((field) => (
-              <div key={field}>
-                <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">{field}{field === "name" && " *"}</label>
-                {field === "notes" ? (
-                  <textarea value={form[field]} onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                ) : (
-                  <input type="text" value={form[field]} onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="text" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input type="text" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            {/* Source */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+              <select
+                value={form.source}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, source: e.target.value, referralPartnerId: "", clientReferralId: "" }));
+                  setRpQuery("");
+                  setCrQuery("");
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">— Select Source —</option>
+                <option value="Referral Partner">Referral Partner</option>
+                <option value="Client Referral">Client Referral</option>
+                <option value="NASMM">NASMM</option>
+                <option value="Web Lead">Web Lead</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {/* Referral Partner combobox */}
+            {form.source === "Referral Partner" && (
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Referred By (Referral Partner)</label>
+                <input
+                  type="text"
+                  value={rpQuery}
+                  onChange={(e) => { setRpQuery(e.target.value); setForm((f) => ({ ...f, referralPartnerId: "" })); }}
+                  placeholder="Search referral partners…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  autoComplete="off"
+                />
+                {rpQuery && !form.referralPartnerId && (
+                  <ul className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-44 overflow-auto w-full">
+                    {referralContacts.filter((c) => c.name.toLowerCase().includes(rpQuery.toLowerCase())).slice(0, 8).map((c) => (
+                      <li
+                        key={c.id}
+                        className="px-3 py-2 text-sm hover:bg-forest-50 cursor-pointer"
+                        onMouseDown={(e) => { e.preventDefault(); setRpQuery(c.name); setForm((f) => ({ ...f, referralPartnerId: c.id })); }}
+                      >
+                        {c.name}
+                      </li>
+                    ))}
+                    {referralContacts.filter((c) => c.name.toLowerCase().includes(rpQuery.toLowerCase())).length === 0 && (
+                      <li className="px-3 py-2 text-sm text-gray-400">No matches</li>
+                    )}
+                  </ul>
+                )}
+                {form.referralPartnerId && (
+                  <p className="text-xs text-forest-600 mt-1">Linked: {rpQuery}</p>
                 )}
               </div>
-            ))}
+            )}
+
+            {/* Client Referral combobox */}
+            {form.source === "Client Referral" && (
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Referred By (Client)</label>
+                <input
+                  type="text"
+                  value={crQuery}
+                  onChange={(e) => { setCrQuery(e.target.value); setForm((f) => ({ ...f, clientReferralId: "" })); }}
+                  placeholder="Search client contacts…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  autoComplete="off"
+                />
+                {crQuery && !form.clientReferralId && (
+                  <ul className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-44 overflow-auto w-full">
+                    {allClientContacts.filter((c) => c.name.toLowerCase().includes(crQuery.toLowerCase()) && c.id !== editing?.id).slice(0, 8).map((c) => (
+                      <li
+                        key={c.id}
+                        className="px-3 py-2 text-sm hover:bg-forest-50 cursor-pointer"
+                        onMouseDown={(e) => { e.preventDefault(); setCrQuery(c.name); setForm((f) => ({ ...f, clientReferralId: c.id })); }}
+                      >
+                        {c.name}
+                      </li>
+                    ))}
+                    {allClientContacts.filter((c) => c.name.toLowerCase().includes(crQuery.toLowerCase()) && c.id !== editing?.id).length === 0 && (
+                      <li className="px-3 py-2 text-sm text-gray-400">No matches</li>
+                    )}
+                  </ul>
+                )}
+                {form.clientReferralId && (
+                  <p className="text-xs text-forest-600 mt-1">Linked: {crQuery}</p>
+                )}
+              </div>
+            )}
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setModalOpen(false)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
               <button onClick={handleSave} disabled={saving || !form.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
@@ -1126,7 +1359,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
   const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", assignedToClerkId: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
-  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "" });
+  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
   const [saving, setSaving] = useState(false);
   const [csvType, setCsvType] = useState<"companies" | "contacts" | null>(null);
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
@@ -1301,13 +1534,13 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
 
   function openAddContact(companyId: string) {
     setEditingContact(null);
-    setContactForm({ name: "", title: "", email: "", phone: "", notes: "" });
+    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
     setContactModal(companyId);
   }
 
   function openEditContact(contact: ReferralContact) {
     setEditingContact(contact);
-    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes });
+    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "" });
     setContactModal(contact.referralCompanyId);
   }
 
@@ -1639,18 +1872,57 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
       {contactModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setContactModal(null)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900">{editingContact ? "Edit Contact" : "Add Contact"}</h3>
-            {(["name", "title", "email", "phone", "notes"] as const).map((field) => (
-              <div key={field}>
-                <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">{field}{field === "name" && " *"}</label>
-                {field === "notes" ? (
-                  <textarea value={contactForm[field]} onChange={(e) => setContactForm((f) => ({ ...f, [field]: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                ) : (
-                  <input type="text" value={contactForm[field]} onChange={(e) => setContactForm((f) => ({ ...f, [field]: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                )}
+
+            {/* Core fields */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <input type="text" value={contactForm.name} onChange={(e) => setContactForm((f) => ({ ...f, name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <input type="text" value={contactForm.title} onChange={(e) => setContactForm((f) => ({ ...f, title: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="text" value={contactForm.email} onChange={(e) => setContactForm((f) => ({ ...f, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
-            ))}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input type="text" value={contactForm.phone} onChange={(e) => setContactForm((f) => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            {/* Relationship fields */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Relationship Details</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Introduced</label>
+                  <input type="date" value={contactForm.dateIntroduced} onChange={(e) => setContactForm((f) => ({ ...f, dateIntroduced: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Coffee Order</label>
+                  <input type="text" value={contactForm.coffeeOrder} onChange={(e) => setContactForm((f) => ({ ...f, coffeeOrder: e.target.value }))} placeholder="e.g. Oat milk latte, no sugar" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Interests</label>
+                  <textarea value={contactForm.interests} onChange={(e) => setContactForm((f) => ({ ...f, interests: e.target.value }))} rows={2} placeholder="e.g. Golf, travel, family…" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Orgs / Groups</label>
+                  <textarea value={contactForm.orgsGroups} onChange={(e) => setContactForm((f) => ({ ...f, orgsGroups: e.target.value }))} rows={2} placeholder="e.g. Rotary Club, NASMM, Chamber of Commerce…" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <textarea value={contactForm.notes} onChange={(e) => setContactForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setContactModal(null)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
               <button onClick={saveContact} disabled={saving || !contactForm.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
@@ -1668,7 +1940,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
 const STAGE_BORDER: Record<OpportunityStage, string> = {
   Lead: "border-blue-400",
   Qualifying: "border-amber-400",
-  "Proposal Sent": "border-purple-400",
+  "Proposing": "border-purple-400",
   Won: "border-green-500",
   Lost: "border-gray-300",
 };
@@ -1676,7 +1948,7 @@ const STAGE_BORDER: Record<OpportunityStage, string> = {
 const STAGE_HEADER_BG: Record<OpportunityStage, string> = {
   Lead: "bg-blue-50",
   Qualifying: "bg-amber-50",
-  "Proposal Sent": "bg-purple-50",
+  "Proposing": "bg-purple-50",
   Won: "bg-green-50",
   Lost: "bg-gray-50",
 };
@@ -1684,7 +1956,7 @@ const STAGE_HEADER_BG: Record<OpportunityStage, string> = {
 const STAGE_COUNT_COLOR: Record<OpportunityStage, string> = {
   Lead: "bg-blue-100 text-blue-700",
   Qualifying: "bg-amber-100 text-amber-700",
-  "Proposal Sent": "bg-purple-100 text-purple-700",
+  "Proposing": "bg-purple-100 text-purple-700",
   Won: "bg-green-100 text-green-700",
   Lost: "bg-gray-100 text-gray-500",
 };
@@ -1715,7 +1987,7 @@ function DashboardTab({
   clientContacts: ClientContact[];
   companies: ReferralCompany[];
 }) {
-  const activeStages: OpportunityStage[] = ["Lead", "Qualifying", "Proposal Sent"];
+  const activeStages: OpportunityStage[] = ["Lead", "Qualifying", "Proposing"];
   const pipelineValue = opportunities
     .filter((o) => activeStages.includes(o.stage))
     .reduce((s, o) => s + o.estimatedValue, 0);
@@ -2316,6 +2588,12 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [pendingContactId, setPendingContactId] = useState<string | null>(null);
+
+  function handleCreateOpportunity(contactId: string) {
+    setPendingContactId(contactId);
+    setTab("opportunities");
+  }
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
@@ -2361,9 +2639,11 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           initialOpportunities={opportunities}
           clientContacts={clientContacts}
           gmailConnected={gmailConnected}
+          pendingContactId={pendingContactId}
+          clearPending={() => setPendingContactId(null)}
         />
       )}
-      {tab === "contacts" && <ContactsTab initialContacts={clientContacts} />}
+      {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} onCreateOpportunity={handleCreateOpportunity} />}
       {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} staffMembers={staffMembers} />}
       {tab === "activity" && (
         <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} gmailConnected={gmailConnected} />
