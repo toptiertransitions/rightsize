@@ -412,6 +412,10 @@ export async function createItem(data: Partial<Item> & {
     ListingOfferup: data.listingOfferup || "",
     StaffTips: data.staffTips || "",
     Status: data.status || "Pending Review",
+    BarcodeNumber: data.barcodeNumber || "",
+    Quantity: data.quantity ?? 0,
+    ClientSharePercent: data.clientSharePercent ?? 0,
+    DeliveryDate: data.deliveryDate || "",
     CreatedAt: now,
     UpdatedAt: now,
   }, { typecast: true });
