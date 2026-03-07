@@ -2118,10 +2118,17 @@ function mapReferralCompany(record: AirtableRecord): ReferralCompany {
 }
 
 export async function getReferralCompanies(): Promise<ReferralCompany[]> {
-  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `?sort[0][field]=Name&sort[0][direction]=asc`);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapReferralCompany);
+  const all: ReferralCompany[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=Name&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapReferralCompany));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function findReferralCompanyByName(name: string): Promise<ReferralCompany | null> {

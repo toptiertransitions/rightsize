@@ -1370,12 +1370,14 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
-  // Search / filter / sort
+  // Search / filter / sort / pagination
   const [search, setSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState<"" | ReferralPriority>("");
   const [filterType, setFilterType] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "priority">("name");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 25;
 
   function handleCsvFile(type: "companies" | "contacts", e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1609,6 +1611,14 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
       return a.name.localeCompare(b.name);
     });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  function handleFilterChange<T>(setter: (v: T) => void) {
+    return (v: T) => { setter(v); setPage(1); };
+  }
+
   return (
     <div>
       {/* Toolbar */}
@@ -1617,7 +1627,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search companies…"
             className="h-8 border border-gray-300 rounded-lg px-3 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-forest-500"
           />
@@ -1625,7 +1635,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           {(["", "High", "Medium", "Low"] as const).map(p => (
             <button
               key={p || "all"}
-              onClick={() => setFilterPriority(p)}
+              onClick={() => handleFilterChange(setFilterPriority)(p)}
               className={cn(
                 "h-7 px-2.5 text-xs rounded-full border transition-colors",
                 filterPriority === p
@@ -1639,7 +1649,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           {allTypes.length > 0 && (
             <select
               value={filterType}
-              onChange={e => setFilterType(e.target.value)}
+              onChange={e => handleFilterChange(setFilterType)(e.target.value)}
               className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
             >
               <option value="">All Types</option>
@@ -1649,7 +1659,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           {staffMembers.length > 0 && (
             <select
               value={filterOwner}
-              onChange={e => setFilterOwner(e.target.value)}
+              onChange={e => handleFilterChange(setFilterOwner)(e.target.value)}
               className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
             >
               <option value="">All Owners</option>
@@ -1660,7 +1670,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           )}
           <select
             value={sortBy}
-            onChange={e => setSortBy(e.target.value as "name" | "priority")}
+            onChange={e => { setSortBy(e.target.value as "name" | "priority"); setPage(1); }}
             className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
           >
             <option value="name">Sort: Name A–Z</option>
@@ -1726,7 +1736,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
         {filtered.length === 0 && (
           <p className="text-center text-gray-400 py-10">{companies.length === 0 ? "No referral companies yet" : "No companies match your filters"}</p>
         )}
-        {filtered.map((company) => (
+        {paginated.map((company) => (
           <div key={company.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div
               className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
@@ -1803,6 +1813,56 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           </div>
         ))}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+          <p className="text-sm text-gray-500">
+            Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className="h-8 px-3 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === "…" ? (
+                  <span key={`ellipsis-${i}`} className="px-1 text-gray-400 text-sm">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p as number)}
+                    className={cn(
+                      "h-8 w-8 text-sm rounded-lg border transition-colors",
+                      safePage === p
+                        ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
+                        : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                    )}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className="h-8 px-3 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Company Modal */}
       {companyModal && (
