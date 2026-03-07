@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority } from "@/lib/types";
@@ -2411,16 +2411,21 @@ function ActivityLogTab({
   opportunities,
   clientContacts,
   referralContacts,
+  staffMembers,
   gmailConnected,
 }: {
   opportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
   referralContacts: ReferralContact[];
+  staffMembers: StaffMember[];
   gmailConnected: boolean;
 }) {
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<CRMActivityType | "All">("All");
+  const [staffFilter, setStaffFilter] = useState<string>("All");
+  const [sortCol, setSortCol] = useState<"date" | "name" | "type" | "client">("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
   const [logModalOpen, setLogModalOpen] = useState(false);
@@ -2428,6 +2433,12 @@ function ActivityLogTab({
   const [logging, setLogging] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const staffById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const s of staffMembers) m[s.clerkUserId] = s.displayName;
+    return m;
+  }, [staffMembers]);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -2492,7 +2503,47 @@ function ActivityLogTab({
     }
   }
 
-  const filtered = activities.filter((a) => typeFilter === "All" || a.type === typeFilter);
+  function handleSort(col: "date" | "name" | "type" | "client") {
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortCol(col); setSortDir("asc"); }
+  }
+
+  function SortIcon({ col }: { col: "date" | "name" | "type" | "client" }) {
+    if (sortCol !== col) return <span className="ml-1 opacity-30">↕</span>;
+    return <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+  }
+
+  const filtered = useMemo(() => {
+    let list = activities.filter((a) => {
+      if (typeFilter !== "All" && a.type !== typeFilter) return false;
+      if (staffFilter !== "All" && a.createdByClerkId !== staffFilter) return false;
+      return true;
+    });
+
+    list = [...list].sort((a, b) => {
+      let av = "";
+      let bv = "";
+      if (sortCol === "date") {
+        av = a.activityDate || a.createdAt || "";
+        bv = b.activityDate || b.createdAt || "";
+      } else if (sortCol === "name") {
+        av = staffById[a.createdByClerkId] || "";
+        bv = staffById[b.createdByClerkId] || "";
+      } else if (sortCol === "type") {
+        av = a.type;
+        bv = b.type;
+      } else if (sortCol === "client") {
+        av = getContactName(a);
+        bv = getContactName(b);
+      }
+      const cmp = av.localeCompare(bv);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activities, typeFilter, staffFilter, sortCol, sortDir, staffById, clientContacts, referralContacts, opportunities]);
+
   const allSelected = filtered.length > 0 && filtered.every((a) => selected.has(a.id));
 
   function toggleAll() {
@@ -2535,7 +2586,7 @@ function ActivityLogTab({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         {(["All", "Call", "Email", "Meeting", "Note", "Task"] as const).map((t) => (
           <button
             key={t}
@@ -2548,6 +2599,21 @@ function ActivityLogTab({
             )}
           >
             {t}
+          </button>
+        ))}
+        <div className="w-px h-4 bg-gray-200 mx-1" />
+        {[{ id: "All", label: "All" }, ...staffMembers.map((s) => ({ id: s.clerkUserId, label: s.displayName }))].map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setStaffFilter(s.id)}
+            className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+              staffFilter === s.id
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"
+            )}
+          >
+            {s.label}
           </button>
         ))}
         <span className="text-xs text-gray-400">{filtered.length} activities</span>
@@ -2604,9 +2670,26 @@ function ActivityLogTab({
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <button onClick={() => handleSort("date")} className="flex items-center hover:text-gray-900">
+                    Date<SortIcon col="date" />
+                  </button>
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <button onClick={() => handleSort("name")} className="flex items-center hover:text-gray-900">
+                    Name<SortIcon col="name" />
+                  </button>
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <button onClick={() => handleSort("type")} className="flex items-center hover:text-gray-900">
+                    Type<SortIcon col="type" />
+                  </button>
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <button onClick={() => handleSort("client")} className="flex items-center hover:text-gray-900">
+                    Client<SortIcon col="client" />
+                  </button>
+                </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Note</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -2624,6 +2707,9 @@ function ActivityLogTab({
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                     {a.activityDate ? new Date(a.activityDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                    {staffById[a.createdByClerkId] || "—"}
                   </td>
                   <td className="px-4 py-3">
                     <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", ACTIVITY_TYPE_COLORS[a.type] || "bg-gray-100 text-gray-600")}>
@@ -2858,7 +2944,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} onCreateOpportunity={handleCreateOpportunity} />}
       {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} initialReferralContacts={referralContacts} staffMembers={staffMembers} />}
       {tab === "activity" && (
-        <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} gmailConnected={gmailConnected} />
+        <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
       )}
       {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} />}
     </div>
