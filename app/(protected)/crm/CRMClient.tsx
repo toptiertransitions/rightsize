@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, StaffMember, ReferralPriority } from "@/lib/types";
+import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority } from "@/lib/types";
 
 // ─── CSV Helpers ─────────────────────────────────────────────────────────────
 function parseCSVLine(line: string): string[] {
@@ -58,6 +58,17 @@ const STAGE_COLORS: Record<OpportunityStage, string> = {
   Proposing: "bg-purple-100 text-purple-700",
   Won: "bg-green-100 text-green-700",
   Lost: "bg-gray-100 text-gray-600",
+};
+
+const REFERRAL_STAGES: ReferralContactStage[] = ["Identified", "Met", "Agreed to Refer", "Shared Leads", "Active Referral", "Inactive Referral"];
+
+const REF_STAGE_COLORS: Record<ReferralContactStage, string> = {
+  "Identified":       "bg-gray-100 text-gray-600",
+  "Met":              "bg-blue-100 text-blue-700",
+  "Agreed to Refer":  "bg-purple-100 text-purple-700",
+  "Shared Leads":     "bg-amber-100 text-amber-700",
+  "Active Referral":  "bg-green-100 text-green-700",
+  "Inactive Referral":"bg-red-100 text-red-600",
 };
 
 // ─── Activity Edit Modal ──────────────────────────────────────────────────────
@@ -1355,7 +1366,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   Low: "bg-gray-100 text-gray-600",
 };
 
-function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompanies: ReferralCompany[]; staffMembers: StaffMember[] }) {
+function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffMembers }: { initialCompanies: ReferralCompany[]; initialReferralContacts: ReferralContact[]; staffMembers: StaffMember[] }) {
   const [companies, setCompanies] = useState(initialCompanies);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
@@ -1364,7 +1375,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
   const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", assignedToClerkId: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
-  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
+  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
   const [saving, setSaving] = useState(false);
   const [csvType, setCsvType] = useState<"companies" | "contacts" | null>(null);
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
@@ -1375,9 +1386,19 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
   const [filterPriority, setFilterPriority] = useState<"" | ReferralPriority>("");
   const [filterType, setFilterType] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
+  const [filterActiveOnly, setFilterActiveOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "priority">("name");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;
+
+  // Determine which companies have at least one "Active Referral" contact
+  // Uses lazily-loaded local contacts state when available, otherwise falls back to server data
+  function isActiveReferralCompany(companyId: string): boolean {
+    if (contacts[companyId]) {
+      return contacts[companyId].some(c => c.stage === "Active Referral");
+    }
+    return initialReferralContacts.some(c => c.referralCompanyId === companyId && c.stage === "Active Referral");
+  }
 
   function handleCsvFile(type: "companies" | "contacts", e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1540,13 +1561,13 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
 
   function openAddContact(companyId: string) {
     setEditingContact(null);
-    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
+    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
     setContactModal(companyId);
   }
 
   function openEditContact(contact: ReferralContact) {
     setEditingContact(contact);
-    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "" });
+    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, stage: contact.stage || "Identified", dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "" });
     setContactModal(contact.referralCompanyId);
   }
 
@@ -1604,6 +1625,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
       if (filterPriority && c.priority !== filterPriority) return false;
       if (filterType && c.type !== filterType) return false;
       if (filterOwner && c.assignedToClerkId !== filterOwner) return false;
+      if (filterActiveOnly && !isActiveReferralCompany(c.id)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -1646,6 +1668,17 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
               {p || "All Priority"}
             </button>
           ))}
+          <button
+            onClick={() => { setFilterActiveOnly(v => !v); setPage(1); }}
+            className={cn(
+              "h-7 px-2.5 text-xs rounded-full border transition-colors",
+              filterActiveOnly
+                ? "border-green-600 bg-green-50 text-green-700 font-medium"
+                : "border-gray-300 text-gray-500 hover:border-gray-400"
+            )}
+          >
+            Active Partners
+          </button>
           {allTypes.length > 0 && (
             <select
               value={filterType}
@@ -1753,6 +1786,9 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
                     {company.priority && (
                       <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", PRIORITY_COLORS[company.priority])}>{company.priority}</span>
                     )}
+                    {isActiveReferralCompany(company.id) && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Active Partner</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 mt-0.5 text-xs text-gray-500">
                     {(company.city || company.state) && (
@@ -1786,6 +1822,7 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
                     <thead>
                       <tr className="text-left text-xs text-gray-500">
                         <th className="pb-1 font-medium">Name</th>
+                        <th className="pb-1 font-medium">Stage</th>
                         <th className="pb-1 font-medium">Title</th>
                         <th className="pb-1 font-medium">Email</th>
                         <th className="pb-1 font-medium">Phone</th>
@@ -1796,6 +1833,11 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
                       {(contacts[company.id] || []).map((c) => (
                         <tr key={c.id} className="border-t border-gray-100">
                           <td className="py-1.5 font-medium text-gray-800">{c.name}</td>
+                          <td className="py-1.5">
+                            <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", REF_STAGE_COLORS[c.stage || "Identified"])}>
+                              {c.stage || "Identified"}
+                            </span>
+                          </td>
                           <td className="py-1.5 text-gray-600">{c.title || "—"}</td>
                           <td className="py-1.5 text-gray-600">{c.email || "—"}</td>
                           <td className="py-1.5 text-gray-600">{c.phone || "—"}</td>
@@ -1938,6 +1980,28 @@ function ReferralPartnersTab({ initialCompanies, staffMembers }: { initialCompan
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900">{editingContact ? "Edit Contact" : "Add Contact"}</h3>
 
+            {/* Stage */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Stage</label>
+              <div className="flex flex-wrap gap-1.5">
+                {REFERRAL_STAGES.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setContactForm(f => ({ ...f, stage: s }))}
+                    className={cn(
+                      "text-xs px-3 py-1.5 rounded-full border font-medium transition-colors",
+                      contactForm.stage === s
+                        ? cn(REF_STAGE_COLORS[s], "border-transparent shadow-sm")
+                        : "border-gray-200 text-gray-500 hover:border-gray-400 bg-white"
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Core fields */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
@@ -2045,34 +2109,53 @@ function DashboardTab({
   opportunities,
   clientContacts,
   companies,
+  referralContacts,
+  staffMembers,
 }: {
   opportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
   companies: ReferralCompany[];
+  referralContacts: ReferralContact[];
+  staffMembers: StaffMember[];
 }) {
+  const [ownerFilter, setOwnerFilter] = useState("");
+
+  // Apply owner filter
+  const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
+  const filteredOpps = ownerFilter ? opportunities.filter(o => o.assignedToClerkId === ownerFilter) : opportunities;
+  const filteredCompanies = ownerFilter ? companies.filter(c => c.assignedToClerkId === ownerFilter) : companies;
+  const filteredCompanyIds = new Set(filteredCompanies.map(c => c.id));
+  const filteredRefContacts = referralContacts.filter(c => filteredCompanyIds.has(c.referralCompanyId));
+
   const activeStages: OpportunityStage[] = ["Lead", "Qualifying", "Proposing"];
-  const pipelineValue = opportunities
-    .filter((o) => activeStages.includes(o.stage))
-    .reduce((s, o) => s + o.estimatedValue, 0);
-  const wonValue = opportunities
-    .filter((o) => o.stage === "Won")
-    .reduce((s, o) => s + o.estimatedValue, 0);
-  const wonCount = opportunities.filter((o) => o.stage === "Won").length;
-  const lostCount = opportunities.filter((o) => o.stage === "Lost").length;
+  const pipelineValue = filteredOpps.filter((o) => activeStages.includes(o.stage)).reduce((s, o) => s + o.estimatedValue, 0);
+  const wonValue = filteredOpps.filter((o) => o.stage === "Won").reduce((s, o) => s + o.estimatedValue, 0);
+  const wonCount = filteredOpps.filter((o) => o.stage === "Won").length;
+  const lostCount = filteredOpps.filter((o) => o.stage === "Lost").length;
   const closedCount = wonCount + lostCount;
   const winRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
 
   const byStage = STAGES.map((stage) => ({
     stage,
-    opps: opportunities.filter((o) => o.stage === stage),
-    value: opportunities.filter((o) => o.stage === stage).reduce((s, o) => s + o.estimatedValue, 0),
+    opps: filteredOpps.filter((o) => o.stage === stage),
+    value: filteredOpps.filter((o) => o.stage === stage).reduce((s, o) => s + o.estimatedValue, 0),
   }));
 
-  const typeGroups = companies.reduce<Record<string, number>>((acc, c) => {
+  const typeGroups = filteredCompanies.reduce<Record<string, number>>((acc, c) => {
     const t = c.type || "Other";
     acc[t] = (acc[t] || 0) + 1;
     return acc;
   }, {});
+
+  // Referral Partner Pipeline funnel
+  const refFunnel = REFERRAL_STAGES.map(stage => ({
+    stage,
+    count: filteredRefContacts.filter(c => (c.stage || "Identified") === stage).length,
+  }));
+  const maxRefCount = Math.max(1, ...refFunnel.map(f => f.count));
+  const activePartnerCount = filteredCompanies.filter(c =>
+    referralContacts.some(rc => rc.referralCompanyId === c.id && rc.stage === "Active Referral")
+  ).length;
 
   function getContactName(id: string) {
     return clientContacts.find((c) => c.id === id)?.name || "—";
@@ -2080,12 +2163,40 @@ function DashboardTab({
 
   return (
     <div className="space-y-8">
+      {/* Owner filter */}
+      {staffMembers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mr-1">View:</span>
+          <button
+            onClick={() => setOwnerFilter("")}
+            className={cn(
+              "h-7 px-3 text-xs rounded-full border transition-colors",
+              ownerFilter === "" ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-300 text-gray-500 hover:border-gray-400"
+            )}
+          >
+            All
+          </button>
+          {staffMembers.map(s => (
+            <button
+              key={s.clerkUserId}
+              onClick={() => setOwnerFilter(o => o === s.clerkUserId ? "" : s.clerkUserId)}
+              className={cn(
+                "h-7 px-3 text-xs rounded-full border transition-colors",
+                ownerFilter === s.clerkUserId ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-300 text-gray-500 hover:border-gray-400"
+              )}
+            >
+              {s.displayName}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Active Pipeline</p>
           <p className="text-2xl font-bold text-gray-900">{fmt(pipelineValue)}</p>
-          <p className="text-xs text-gray-400 mt-1">{opportunities.filter((o) => activeStages.includes(o.stage)).length} open opportunities</p>
+          <p className="text-xs text-gray-400 mt-1">{filteredOpps.filter((o) => activeStages.includes(o.stage)).length} open opportunities</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Won Revenue</p>
@@ -2093,9 +2204,9 @@ function DashboardTab({
           <p className="text-xs text-gray-400 mt-1">{wonCount} deal{wonCount !== 1 ? "s" : ""} closed</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Opportunities</p>
-          <p className="text-2xl font-bold text-gray-900">{opportunities.length}</p>
-          <p className="text-xs text-gray-400 mt-1">{companies.length} referral partner{companies.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Active Referral Partners</p>
+          <p className="text-2xl font-bold text-green-600">{activePartnerCount}</p>
+          <p className="text-xs text-gray-400 mt-1">of {filteredCompanies.length} total partners</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Win Rate</p>
@@ -2143,10 +2254,48 @@ function DashboardTab({
         </div>
       </div>
 
-      {/* Referral Partners */}
+      {/* Referral Partner Pipeline */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Referral Partner Pipeline</h2>
+        {filteredRefContacts.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
+            No referral contacts yet — add them in the Referral Partners tab
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {refFunnel.map(({ stage, count }) => (
+              <div key={stage} className="flex items-center gap-4 px-5 py-3">
+                <div className="w-36 flex-shrink-0">
+                  <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", REF_STAGE_COLORS[stage])}>
+                    {stage}
+                  </span>
+                </div>
+                <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full transition-all", {
+                      "bg-gray-400":    stage === "Identified",
+                      "bg-blue-400":    stage === "Met",
+                      "bg-purple-400":  stage === "Agreed to Refer",
+                      "bg-amber-400":   stage === "Shared Leads",
+                      "bg-green-500":   stage === "Active Referral",
+                      "bg-red-300":     stage === "Inactive Referral",
+                    })}
+                    style={{ width: `${(count / maxRefCount) * 100}%` }}
+                  />
+                </div>
+                <div className="w-12 text-right">
+                  <span className="text-sm font-semibold text-gray-800">{count}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Referral Partner Network */}
       <div>
         <h2 className="text-base font-semibold text-gray-900 mb-4">Referral Partner Network</h2>
-        {companies.length === 0 ? (
+        {filteredCompanies.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
             No referral partners yet — add them in the Referral Partners tab
           </div>
@@ -2165,11 +2314,10 @@ function DashboardTab({
                   </div>
                 </div>
               ))}
-            {/* Total card */}
             <div className="bg-forest-50 rounded-xl border border-forest-200 p-4 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium text-forest-600 uppercase tracking-wide">Total</p>
-                <p className="text-lg font-bold text-forest-800 mt-2">{companies.length}</p>
+                <p className="text-lg font-bold text-forest-800 mt-2">{filteredCompanies.length}</p>
                 <p className="text-xs text-forest-600">all partners</p>
               </div>
             </div>
@@ -2695,7 +2843,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       </div>
 
       {tab === "dashboard" && (
-        <DashboardTab opportunities={opportunities} clientContacts={clientContacts} companies={companies} />
+        <DashboardTab opportunities={opportunities} clientContacts={clientContacts} companies={companies} referralContacts={referralContacts} staffMembers={staffMembers} />
       )}
       {tab === "opportunities" && (
         <OpportunitiesTab
@@ -2708,7 +2856,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         />
       )}
       {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} onCreateOpportunity={handleCreateOpportunity} />}
-      {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} staffMembers={staffMembers} />}
+      {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} initialReferralContacts={referralContacts} staffMembers={staffMembers} />}
       {tab === "activity" && (
         <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} gmailConnected={gmailConnected} />
       )}

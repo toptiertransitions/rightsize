@@ -43,6 +43,7 @@ import type {
   ContractLineItem,
   ReferralCompany,
   ReferralContact,
+  ReferralContactStage,
   ClientContact,
   ClientOpportunity,
   OpportunityStage,
@@ -2209,6 +2210,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     phone: toStr(f["Phone"]),
     referralCompanyId: toStr(f["ReferralCompanyId"]),
     notes: toStr(f["Notes"]),
+    stage: (toStr(f["Stage"]) || "Identified") as ReferralContactStage,
     dateIntroduced: toStr(f["DateIntroduced"]) || undefined,
     interests: toStr(f["Interests"]) || undefined,
     coffeeOrder: toStr(f["CoffeeOrder"]) || undefined,
@@ -2249,6 +2251,7 @@ export async function createReferralContact(data: {
   phone?: string;
   referralCompanyId: string;
   notes?: string;
+  stage?: string;
   dateIntroduced?: string;
   interests?: string;
   coffeeOrder?: string;
@@ -2264,6 +2267,7 @@ export async function createReferralContact(data: {
         Phone: data.phone || "",
         ReferralCompanyId: data.referralCompanyId,
         Notes: data.notes || "",
+        Stage: data.stage || "Identified",
         DateIntroduced: data.dateIntroduced || "",
         Interests: data.interests || "",
         CoffeeOrder: data.coffeeOrder || "",
@@ -2278,7 +2282,7 @@ export async function createReferralContact(data: {
 
 export async function updateReferralContact(
   id: string,
-  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string }>
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string }>
 ): Promise<ReferralContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2287,6 +2291,7 @@ export async function updateReferralContact(
   if (data.phone !== undefined) fields["Phone"] = data.phone;
   if (data.referralCompanyId !== undefined) fields["ReferralCompanyId"] = data.referralCompanyId;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.stage !== undefined) fields["Stage"] = data.stage || null;
   if (data.dateIntroduced !== undefined) fields["DateIntroduced"] = data.dateIntroduced;
   if (data.interests !== undefined) fields["Interests"] = data.interests;
   if (data.coffeeOrder !== undefined) fields["CoffeeOrder"] = data.coffeeOrder;

@@ -532,6 +532,14 @@ export interface ReferralCompany {
   createdAt: string;
 }
 
+export type ReferralContactStage =
+  | "Identified"
+  | "Met"
+  | "Agreed to Refer"
+  | "Shared Leads"
+  | "Active Referral"
+  | "Inactive Referral";
+
 export interface ReferralContact {
   id: string;
   name: string;
@@ -540,6 +548,7 @@ export interface ReferralContact {
   phone: string;
   referralCompanyId: string;
   notes: string;
+  stage: ReferralContactStage;
   dateIntroduced?: string;
   interests?: string;
   coffeeOrder?: string;
