@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { calculateServiceHours } from "@/lib/calculator";
-import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, Service } from "@/lib/types";
+import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, Service, InvoiceSettings, TimeEntry } from "@/lib/types";
+import { InvoiceCreatorModal } from "@/app/(protected)/invoices/InvoiceCreatorModal";
 
 // Services whose SqFt input is the destination square footage
 const DESTINATION_SQFT_SERVICES = ["Unpacking", "Setting Up Your Space", "Managing Moving Day"];
@@ -114,6 +115,12 @@ interface EstimatorSectionProps {
   editingContract?: Contract | null;
   onSaved?: (contract: Contract) => void;
   onCancelEdit?: () => void;
+  // Optional invoice creation props (provided by quoting page, not rooms page)
+  invoiceSettings?: InvoiceSettings | null;
+  signedContracts?: Contract[];
+  timeEntries?: TimeEntry[];
+  ownerEmail?: string;
+  currentUserEmail?: string;
 }
 
 export function EstimatorSection({
@@ -126,8 +133,14 @@ export function EstimatorSection({
   editingContract,
   onSaved,
   onCancelEdit,
+  invoiceSettings,
+  signedContracts,
+  timeEntries,
+  ownerEmail,
+  currentUserEmail,
 }: EstimatorSectionProps) {
   const router = useRouter();
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
   const [destinationSqFt, setDestinationSqFt] = useState(tenant.destinationSqFt ?? 0);
   const [touchLevel, setTouchLevel] = useState<TouchLevel>("average");
@@ -145,6 +158,9 @@ export function EstimatorSection({
   const [customEmail, setCustomEmail] = useState("");
   const useCustom = selectedRecipient === "__custom__";
   const recipientEmail = useCustom ? customEmail : selectedRecipient;
+
+  // Auto-send deposit invoice toggle
+  const [autoSendDeposit, setAutoSendDeposit] = useState(false);
 
   // When editingContract changes, load its line items into rows
   useEffect(() => {
@@ -352,6 +368,7 @@ export function EstimatorSection({
           send: true,
           recipientEmail: recipientEmail.trim(),
           recipientName,
+          autoSendDeposit,
         }),
       });
       if (!res.ok) {
@@ -591,6 +608,35 @@ export function EstimatorSection({
         </div>
       </div>
 
+      {/* Auto-send deposit toggle */}
+      <div className="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoSendDeposit}
+            onClick={() => setAutoSendDeposit((v) => !v)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mt-0.5 ${
+              autoSendDeposit ? "bg-forest-600" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                autoSendDeposit ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <div>
+            <p className="text-sm font-medium text-gray-800">Auto-send 40% deposit invoice on signing</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {autoSendDeposit
+                ? "Once signed, the client will immediately receive a deposit invoice email with the signed agreement attached as a PDF."
+                : "A 40% deposit invoice will be created automatically when signed. You can review and send it manually from the Invoices page."}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Actions */}
       <div className="flex items-center gap-3 flex-wrap">
         <button
@@ -633,18 +679,42 @@ export function EstimatorSection({
         {errorMsg && <span className="text-sm text-red-600">{errorMsg}</span>}
       </div>
 
-      {/* Invoice link */}
-      <div className="mt-4 pt-4 border-t border-gray-200">
+      {/* Invoice section */}
+      <div className="mt-4 pt-4 border-t border-gray-200 flex items-center gap-3 flex-wrap">
+        {signedContracts !== undefined ? (
+          <button
+            onClick={() => setInvoiceModalOpen(true)}
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-forest-300 bg-forest-50 text-sm font-medium text-forest-700 hover:bg-forest-100 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Create Invoice
+          </button>
+        ) : null}
         <a
           href={`/invoices?tenantId=${tenant.id}`}
-          className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-forest-300 bg-forest-50 text-sm font-medium text-forest-700 hover:bg-forest-100 transition-colors"
+          className="inline-flex items-center gap-2 h-10 px-5 rounded-xl text-sm font-medium text-gray-500 hover:text-forest-700 transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Go to Invoices
+          View All Invoices →
         </a>
       </div>
+
+      {/* Invoice creator modal */}
+      {signedContracts !== undefined && (
+        <InvoiceCreatorModal
+          isOpen={invoiceModalOpen}
+          onClose={() => setInvoiceModalOpen(false)}
+          onCreated={() => setInvoiceModalOpen(false)}
+          tenant={tenant}
+          services={services}
+          contracts={signedContracts}
+          timeEntries={timeEntries ?? []}
+          ownerEmail={ownerEmail ?? ""}
+          currentUserEmail={currentUserEmail ?? ""}
+          invoiceSettings={invoiceSettings ?? null}
+        />
+      )}
     </div>
   );
 }

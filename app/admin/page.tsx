@@ -1,9 +1,12 @@
+export const dynamic = "force-dynamic";
+
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getTenants, getAllMemberships, getStaffMembers, getSystemRole } from "@/lib/airtable";
 import { CopyId } from "./CopyId";
 import { StaffClient } from "./StaffClient";
+import { RoleBreakdown } from "./RoleBreakdown";
 import { AdminHeader } from "./components/AdminHeader";
 
 export default async function AdminPage() {
@@ -87,6 +90,7 @@ export default async function AdminPage() {
         <section className="mt-10">
           <h2 className="text-base font-semibold text-white mb-4">Staff Management</h2>
           <StaffClient initialStaff={staffMembers} />
+          <RoleBreakdown />
         </section>
       </main>
     </div>

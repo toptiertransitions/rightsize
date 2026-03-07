@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { TimeEntry, FocusArea } from "@/lib/types";
+import type { TimeEntry, FocusArea, SoldItemRow } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
 
 interface TenantOption {
@@ -23,6 +23,7 @@ interface Props {
   currentUserName: string;
   staffMembers?: StaffOption[];
   services?: string[];
+  soldItems?: SoldItemRow[];
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -73,21 +74,51 @@ function todayISO(): string {
 }
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
-function exportCSV(entries: TimeEntry[], from: string, to: string) {
-  const header = ["Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time", "Duration (hrs)", "Travel Time (min)", "Travel Miles", "Notes"];
-  const rows = entries.map(e => [
-    e.date,
-    e.staffName,
-    e.projectName,
-    e.focusArea,
-    formatTime12(e.startTime),
-    formatTime12(e.endTime),
-    (e.durationMinutes / 60).toFixed(2),
-    e.travelMinutes != null ? String(e.travelMinutes) : "",
-    e.travelMiles != null ? String(e.travelMiles) : "",
-    e.notes ?? "",
-  ]);
-  const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string, to: string) {
+  const header = ["Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time", "Duration (hrs)", "Travel Time (min)", "Travel Miles", "Notes", "Commission ($)"];
+
+  const entryRows = entries
+    .filter(e => e.date >= from && e.date <= to)
+    .map(e => [
+      e.date,
+      e.staffName,
+      e.projectName,
+      e.focusArea,
+      formatTime12(e.startTime),
+      formatTime12(e.endTime),
+      (e.durationMinutes / 60).toFixed(2),
+      e.travelMinutes != null ? String(e.travelMinutes) : "",
+      e.travelMiles != null ? String(e.travelMiles) : "",
+      e.notes ?? "",
+      "",
+    ]);
+
+  const saleRows = soldItems
+    .filter(i => i.saleDate >= from && i.saleDate <= to)
+    .map(i => {
+      const timeMinutes = i.staffTimeMinutes ?? ((i.valueMid ?? 0) > 100 ? 20 : 10);
+      const commission = i.staffCommissionPercent != null && i.valueMid
+        ? ((i.staffCommissionPercent / 100) * i.valueMid).toFixed(2)
+        : "";
+      const focusArea = i.channel === "FB" ? "FB Marketplace Sales" : "eBay Sales";
+      return [
+        i.saleDate,
+        i.staffSellerName ?? "",
+        i.tenantName,
+        focusArea,
+        "",
+        "",
+        (timeMinutes / 60).toFixed(2),
+        "",
+        "",
+        i.itemName,
+        commission,
+      ];
+    });
+
+  const allRows = [...entryRows, ...saleRows].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+  const csv = [header, ...allRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -98,8 +129,9 @@ function exportCSV(entries: TimeEntry[], from: string, to: string) {
 }
 
 // ─── Export Modal ─────────────────────────────────────────────────────────────
-function ExportModal({ entries, onClose, weekStart }: {
+function ExportModal({ entries, soldItems = [], onClose, weekStart }: {
   entries: TimeEntry[];
+  soldItems?: SoldItemRow[];
   onClose: () => void;
   weekStart: Date;
 }) {
@@ -120,10 +152,12 @@ function ExportModal({ entries, onClose, weekStart }: {
   ];
 
   const filtered = entries.filter(e => e.date >= fromDate && e.date <= toDate);
+  const filteredSales = soldItems.filter(i => i.saleDate >= fromDate && i.saleDate <= toDate);
   const isPreset = (p: typeof presets[0]) => fromDate === p.from && toDate === p.to;
+  const totalRows = filtered.length + filteredSales.length;
 
   function doExport() {
-    exportCSV(filtered, fromDate, toDate);
+    exportCSV(entries, soldItems, fromDate, toDate);
     onClose();
   }
 
@@ -179,12 +213,18 @@ function ExportModal({ entries, onClose, weekStart }: {
         </div>
 
         {/* Entry count */}
-        <p className="text-xs text-gray-500 mb-5">
-          {filtered.length === 0
+        <p className="text-xs text-gray-500 mb-1">
+          {filtered.length === 0 && filteredSales.length === 0
             ? "No entries in this range"
-            : `${filtered.length} ${filtered.length === 1 ? "entry" : "entries"} · ${(filtered.reduce((s, e) => s + e.durationMinutes, 0) / 60).toFixed(1)} hrs total`
+            : `${filtered.length} time ${filtered.length === 1 ? "entry" : "entries"} · ${(filtered.reduce((s, e) => s + e.durationMinutes, 0) / 60).toFixed(1)} hrs`
           }
         </p>
+        {filteredSales.length > 0 && (
+          <p className="text-xs text-gray-500 mb-4">
+            {filteredSales.length} sold {filteredSales.length === 1 ? "item" : "items"} (FB/eBay)
+          </p>
+        )}
+        {filteredSales.length === 0 && <div className="mb-4" />}
 
         {/* Actions */}
         <div className="flex gap-3">
@@ -196,7 +236,7 @@ function ExportModal({ entries, onClose, weekStart }: {
           </button>
           <button
             onClick={doExport}
-            disabled={filtered.length === 0}
+            disabled={totalRows === 0}
             className="flex-1 py-2.5 rounded-xl text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors disabled:opacity-40 font-medium"
           >
             Export CSV
@@ -469,7 +509,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services, soldItems = [] }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
@@ -743,6 +783,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
       {showExportModal && (
         <ExportModal
           entries={visibleEntries}
+          soldItems={soldItems}
           onClose={() => setShowExportModal(false)}
           weekStart={currentWeekStart}
         />

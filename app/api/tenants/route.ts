@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole, getTenants } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -11,10 +11,11 @@ export async function GET() {
   const isTTT = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
   if (!isTTT) return NextResponse.json({ tenants: [] });
 
+  const includeArchived = req.nextUrl.searchParams.get("includeArchived") === "true";
   const all = await getTenants().catch(() => []);
-  const tenants = all
-    .filter((t) => !t.isArchived)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const tenants = includeArchived
+    ? all.sort((a, b) => a.name.localeCompare(b.name))
+    : all.filter((t) => !t.isArchived).sort((a, b) => a.name.localeCompare(b.name));
   return NextResponse.json({ tenants });
 }
 

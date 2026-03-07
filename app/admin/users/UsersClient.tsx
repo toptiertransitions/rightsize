@@ -7,11 +7,12 @@ import type { AdminUser } from "./page";
 const PROJECT_ROLES = ["Owner", "Collaborator", "Viewer", "Vendor"] as const;
 
 // System-level roles (stored in Airtable StaffMembers table)
-const SYSTEM_ROLES = ["TTTStaff", "TTTManager"] as const;
+const SYSTEM_ROLES = ["TTTStaff", "TTTManager", "TTTSales"] as const;
 
 const SYSTEM_ROLE_LABELS: Record<string, string> = {
   TTTAdmin: "TTT Admin",
   TTTManager: "TTT Manager",
+  TTTSales: "TTT Sales",
   TTTStaff: "TTT Staff",
 };
 
@@ -43,6 +44,8 @@ function userTypeBadges(user: AdminUser) {
         ? "bg-red-900/50 text-red-300 border border-red-800"
         : user.systemRole === "TTTManager"
         ? "bg-purple-900/50 text-purple-300 border border-purple-800"
+        : user.systemRole === "TTTSales"
+        ? "bg-blue-900/50 text-blue-300 border border-blue-800"
         : "bg-gray-700 text-gray-300 border border-gray-600";
     return [<span key="sys" className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>];
   }
@@ -68,6 +71,8 @@ function systemRoleBadge(role: string | undefined) {
       ? "bg-red-900/50 text-red-300 border border-red-800"
       : role === "TTTManager"
       ? "bg-purple-900/50 text-purple-300 border border-purple-800"
+      : role === "TTTSales"
+      ? "bg-blue-900/50 text-blue-300 border border-blue-800"
       : "bg-gray-700 text-gray-300 border border-gray-600";
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>;
 }
@@ -411,7 +416,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"TTTStaff" | "TTTManager">("TTTStaff");
+  const [role, setRole] = useState<"TTTStaff" | "TTTManager" | "TTTSales">("TTTStaff");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -466,7 +471,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
             <div className="flex gap-2">
-              {(["TTTStaff", "TTTManager"] as const).map(r => (
+              {(["TTTStaff", "TTTManager", "TTTSales"] as const).map(r => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
@@ -645,7 +650,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
   }
 
   const isStaffOrAdmin = (u: AdminUser) =>
-    u.systemRole === "TTTAdmin" || u.systemRole === "TTTManager" || u.systemRole === "TTTStaff";
+    u.systemRole === "TTTAdmin" || u.systemRole === "TTTManager" || u.systemRole === "TTTStaff" || u.systemRole === "TTTSales";
 
   return (
     <>

@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     send,
     recipientEmail,
     recipientName,
+    autoSendDeposit,
   } = body;
 
   if (!tenantId) {
@@ -81,6 +82,8 @@ export async function POST(req: NextRequest) {
       totalCost: totalCost ?? 0,
       signToken,
       lineItems: Array.isArray(lineItems) && lineItems.length > 0 ? lineItems : undefined,
+      recipientEmail: recipientEmail ?? undefined,
+      autoSendDeposit: autoSendDeposit ?? false,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to create contract";

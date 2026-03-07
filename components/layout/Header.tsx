@@ -8,7 +8,8 @@ import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 
-const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting"];
+const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan"];
+const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
 
 interface HeaderProps {
   tenantName?: string;
@@ -16,42 +17,62 @@ interface HeaderProps {
   onStopImpersonating?: () => void;
   isManager?: boolean;
   isStaff?: boolean;
+  isAdmin?: boolean;
+  isSales?: boolean;
 }
 
-export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager, isStaff }: HeaderProps) {
+export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager, isStaff, isAdmin, isSales }: HeaderProps) {
   const pathname = usePathname();
   const showSwitcher = isStaff && SWITCHER_PAGES.some((p) => pathname.startsWith(p));
+  const allowAllProjects = ALL_PROJECTS_PAGES.some((p) => pathname.startsWith(p));
   const searchParams = useSearchParams();
   const urlTenantId = searchParams.get("tenantId");
 
-  // Persist the last known tenantId so nav links survive navigating to pages
-  // that don't carry ?tenantId= (e.g. /crm, /home).
-  const [storedTenantId, setStoredTenantId] = useState<string | null>(null);
+  // Persist the last known real tenantId (never sentinels) so nav links survive
+  // navigating to pages that don't carry ?tenantId= (e.g. /crm, /home).
+  const [persistedTenantId, setPersistedTenantId] = useState<string | null>(null);
   useEffect(() => {
-    if (urlTenantId) {
+    if (urlTenantId && !urlTenantId.startsWith("__all_")) {
       try { localStorage.setItem("rz_tenantId", urlTenantId); } catch {}
-      setStoredTenantId(urlTenantId);
-    } else {
-      try { setStoredTenantId(localStorage.getItem("rz_tenantId")); } catch {}
+      setPersistedTenantId(urlTenantId);
+    } else if (!urlTenantId) {
+      try { setPersistedTenantId(localStorage.getItem("rz_tenantId")); } catch {}
     }
+    // Sentinels (__all_*) are NOT stored so they don't leak to other pages
   }, [urlTenantId]);
 
-  const tenantId = urlTenantId ?? storedTenantId;
-  const tq = tenantId ? `?tenantId=${tenantId}` : "";
+  const tenantId = urlTenantId ?? persistedTenantId;
+  // For nav links, always use the real (non-sentinel) tenantId
+  const isSentinel = urlTenantId?.startsWith("__all_") ?? false;
+  const navTenantId = isSentinel ? persistedTenantId : tenantId;
+  const tq = navTenantId ? `?tenantId=${navTenantId}` : "";
 
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
-  const navLinks = isVendorPortal ? [] : [
+  // Sales users only see CRM + Drips + Expenses
+  const salesOnlyLinks = [
+    { href: "/crm", base: "/crm", label: "CRM" },
+    { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
+    { href: "/expenses", base: "/expenses", label: "Expenses" },
+  ];
+
+  const navLinks = isVendorPortal ? [] : isSales ? salesOnlyLinks : [
     { href: "/home", label: "Home" },
     { href: `/plan${tq}`, base: "/plan", label: "Plan" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
-    ...(tenantId ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    // Quoting — TTTAdmin only
+    ...(isAdmin ? [{ href: `/quoting${tq}`, base: "/quoting", label: "Quoting" }] : []),
+    // Invoices — hide from pure TTTStaff, visible to clients and Manager/Admin
+    ...(navTenantId && (!isStaff || isManager) ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    // CRM + Drips — Manager and Admin
     ...(isManager ? [
-      { href: `/quoting${tq}`, base: "/quoting", label: "Quoting" },
       { href: "/crm", base: "/crm", label: "CRM" },
+      { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
     ] : []),
+    // Expenses always last — Manager and Admin
+    ...(isManager ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
   ];
 
   return (
@@ -114,14 +135,14 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating, isMan
           {/* Right side */}
           <div className="flex items-center gap-3">
             {showSwitcher ? (
-              <ProjectSwitcher currentTenantId={tenantId} />
+              <ProjectSwitcher currentTenantId={tenantId} allowAllProjects={allowAllProjects} />
             ) : tenantName ? (
               <span className="hidden sm:block text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border">
                 {tenantName}
               </span>
             ) : null}
             <UserButton
-              afterSignOutUrl="/sign-in"
+              
               appearance={{
                 elements: {
                   avatarBox: "w-9 h-9",

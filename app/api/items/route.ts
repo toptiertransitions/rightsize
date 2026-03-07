@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getSystemRole, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { Resend } from "resend";
 
@@ -96,18 +96,25 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, tenantId, ...updates } = body;
-  if (!id || !tenantId) {
-    return NextResponse.json({ error: "Missing id or tenantId" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  const role = await getUserRoleForTenant(userId, tenantId as string);
-  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // TTTAdmin can update any item without needing tenant membership
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  const isAdmin = sysRole === "TTTAdmin" || sysRole === "TTTManager";
+
+  if (!isAdmin) {
+    if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
+    const role = await getUserRoleForTenant(userId, tenantId as string);
+    if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
-  // Fetch existing item if needed for vendor change check or Sold backfill
+  // Fetch existing item if needed for vendor change check, Sold backfill, or Sold reversal
   const newVendorId = updates.assignedVendorId as string | undefined;
-  const needsExisting = newVendorId !== undefined || updates.status === "Sold";
+  const needsExisting = newVendorId !== undefined || updates.status !== undefined;
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
 
   let vendorChanged = false;
@@ -117,9 +124,24 @@ export async function PATCH(req: NextRequest) {
     (updates as Record<string, unknown>).vendorDecision = "Pending";
   }
 
-  // When marking Sold, backfill Target Value = Sale Price (if not already set)
-  if (updates.status === "Sold" && existing?.salePrice && existing.salePrice > 0 && !(updates as Record<string, unknown>).valueMid) {
-    (updates as Record<string, unknown>).valueMid = existing.salePrice;
+  // When marking Sold: set saleDate, set salePrice = valueMid (Price for Label) if not provided
+  if (updates.status === "Sold") {
+    if (!(updates as Record<string, unknown>).saleDate) {
+      (updates as Record<string, unknown>).saleDate = new Date().toISOString();
+    }
+    if (!(updates as Record<string, unknown>).salePrice) {
+      const price = (updates as Record<string, unknown>).valueMid ?? existing?.valueMid;
+      if (price) (updates as Record<string, unknown>).salePrice = price;
+    }
+  }
+  // When reverting from Sold → clear sale fields
+  if (updates.status && updates.status !== "Sold" && existing?.status === "Sold") {
+    if (!(updates as Record<string, unknown>).salePrice) {
+      (updates as Record<string, unknown>).salePrice = 0;
+    }
+    if (!(updates as Record<string, unknown>).saleDate) {
+      (updates as Record<string, unknown>).saleDate = "";
+    }
   }
 
   const item = await updateItem(id as string, updates as never);

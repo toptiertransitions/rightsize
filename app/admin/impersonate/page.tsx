@@ -63,7 +63,7 @@ export default async function ImpersonatePage({ searchParams }: PageProps) {
             <h1 className="text-xl font-bold text-gray-900">{tenant.name}</h1>
             <p className="text-sm text-gray-400 font-mono select-all">{tenant.id}</p>
           </div>
-          <UserButton afterSignOutUrl="/sign-in" />
+          <UserButton  />
         </div>
       </header>
 

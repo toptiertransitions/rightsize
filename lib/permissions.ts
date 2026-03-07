@@ -21,6 +21,10 @@ export const ROLE_PERMISSIONS: Record<SystemRole, Permission[]> = {
     "time:edit:self",
     "projects:write",
   ],
+  TTTSales: [
+    "time:view:self",
+    "time:edit:self",
+  ],
   TTTManager: [
     "time:view:self",
     "time:edit:self",

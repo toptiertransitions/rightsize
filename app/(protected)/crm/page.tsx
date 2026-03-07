@@ -8,7 +8,7 @@ export default async function CRMPage() {
   if (!userId) redirect("/sign-in");
 
   const sysRole = await getSystemRole(userId);
-  if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin") {
+  if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin" && sysRole !== "TTTSales") {
     redirect("/home");
   }
 

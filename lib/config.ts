@@ -55,6 +55,10 @@ export const AIRTABLE_TABLES = {
   QBO_TOKENS: process.env.QBO_TOKENS_TABLE_ID || "QBOTokens",
   INVOICES: process.env.AIRTABLE_INVOICES_TABLE || "Invoices",
   INVOICE_SETTINGS: process.env.AIRTABLE_INVOICE_SETTINGS_TABLE || "InvoiceSettings",
+  EXPENSES: process.env.AIRTABLE_EXPENSES_TABLE || "Expenses",
+  DRIP_CAMPAIGNS: process.env.AIRTABLE_DRIP_CAMPAIGNS_TABLE || "DripCampaigns",
+  DRIP_ENROLLMENTS: process.env.AIRTABLE_DRIP_ENROLLMENTS_TABLE || "DripEnrollments",
+  DRIP_SETTINGS: process.env.AIRTABLE_DRIP_SETTINGS_TABLE || "DripSettings",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

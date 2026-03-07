@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { EstimatorSection } from "@/app/(protected)/rooms/EstimatorSection";
 import { AddRoomButton } from "@/app/(protected)/rooms/RoomsClient";
-import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service } from "@/lib/types";
+import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus } from "@/lib/types";
 
 interface Props {
   tenant: Tenant;
@@ -14,6 +14,190 @@ interface Props {
   existingContracts: Contract[];
   recipients: { name: string; email: string; role: string }[];
   services: Service[];
+  invoiceSettings?: InvoiceSettings | null;
+  signedContracts?: Contract[];
+  timeEntries?: TimeEntry[];
+  ownerEmail?: string;
+  currentUserEmail?: string;
+  invoices?: Invoice[];
+}
+
+// ─── Deposit Invoice Panel ────────────────────────────────────────────────────
+const STATUS_PILL: Record<InvoiceStatus, string> = {
+  Unpaid: "bg-red-100 text-red-700",
+  PartiallyPaid: "bg-amber-100 text-amber-700",
+  Paid: "bg-green-100 text-green-700",
+};
+
+function DepositInvoicePanel({
+  invoice: initial,
+  recipients,
+}: {
+  invoice: Invoice;
+  recipients: { name: string; email: string; role: string }[];
+}) {
+  const [invoice, setInvoice] = useState(initial);
+  const [expanded, setExpanded] = useState(false);
+  const [editEmail, setEditEmail] = useState(invoice.sentToEmail || "");
+  const [selectedRecipient, setSelectedRecipient] = useState(
+    recipients.find((r) => r.email === invoice.sentToEmail)?.email || "__custom__"
+  );
+  const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const useCustomEmail = selectedRecipient === "__custom__";
+  const toEmail = useCustomEmail ? editEmail : selectedRecipient;
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  async function sendInvoice() {
+    if (!toEmail) return;
+    setSending(true); setMsg("");
+    try {
+      const res = await fetch("/api/invoices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: invoice.id, sentToEmail: toEmail, emailSent: true }),
+      });
+      // Also trigger sending via the invoices send endpoint
+      const sendRes = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...invoice,
+          sendEmail: true,
+          sentToEmail: toEmail,
+          tenantName: "",
+          customerName: "",
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setInvoice(updated.invoice ?? invoice);
+        setMsg("Invoice sent!");
+        setExpanded(false);
+      } else {
+        setMsg("Failed to send");
+      }
+      void sendRes;
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function deleteInvoice() {
+    setDeleting(true);
+    await fetch(`/api/invoices?id=${invoice.id}`, { method: "DELETE" });
+    setDeleting(false);
+    setDeleteConfirm(false);
+    setInvoice({ ...invoice, status: "Paid" }); // visually hide
+  }
+
+  if (invoice.status === "Paid" && invoice.emailSent) return null;
+
+  return (
+    <div className="mt-2 border border-amber-200 rounded-xl bg-amber-50 overflow-hidden">
+      <div className="px-4 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-amber-700">Deposit Invoice</span>
+              <span className="text-xs text-amber-600 font-mono">{invoice.invoiceNumber}</span>
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_PILL[invoice.status]}`}>
+                {invoice.status}
+              </span>
+            </div>
+            <div className="text-sm font-bold text-gray-900 mt-0.5">{fmt(invoice.amount)}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={`/api/invoices/${invoice.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-amber-700 hover:text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg transition-colors"
+          >
+            PDF
+          </a>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-lg transition-colors font-medium"
+          >
+            {expanded ? "Close" : "Send / Edit"}
+          </button>
+          <button
+            onClick={() => setDeleteConfirm(true)}
+            className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-amber-200 bg-white px-4 py-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Send invoice to</label>
+            <div className="flex gap-2">
+              <select
+                value={selectedRecipient}
+                onChange={(e) => setSelectedRecipient(e.target.value)}
+                className="flex-1 h-9 px-3 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                {recipients.map((r) => (
+                  <option key={r.email} value={r.email}>
+                    {r.name} — {r.email}
+                  </option>
+                ))}
+                <option value="__custom__">Other — enter email…</option>
+              </select>
+              {useCustomEmail && (
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="payer@example.com"
+                  className="flex-1 h-9 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={sendInvoice}
+              disabled={sending || !toEmail}
+              className="text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white px-5 py-2 rounded-xl font-semibold transition-colors"
+            >
+              {sending ? "Sending…" : `Send Invoice to ${toEmail || "…"}`}
+            </button>
+            {msg && <span className={`text-xs ${msg.includes("sent") ? "text-green-600" : "text-red-500"}`}>{msg}</span>}
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm && (
+        <div className="border-t border-red-100 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-700 mb-2">Cancel and delete this deposit invoice?</p>
+          <div className="flex gap-2">
+            <button
+              onClick={deleteInvoice}
+              disabled={deleting}
+              className="text-sm bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-lg font-medium disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Yes, delete it"}
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(false)}
+              className="text-sm border border-gray-200 bg-white text-gray-600 px-4 py-1.5 rounded-lg"
+            >
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Mode = "rooms" | "quick";
@@ -266,13 +450,88 @@ function QuoteCard({
   );
 }
 
+// ─── Hours Comparison ─────────────────────────────────────────────────────────
+function HoursComparison({ signedContracts, timeEntries }: { signedContracts: Contract[]; timeEntries: TimeEntry[] }) {
+  const signed = signedContracts[0];
+  if (!signed?.lineItems?.length) return null;
+
+  const loggedByService = new Map<string, number>();
+  for (const entry of timeEntries) {
+    const key = entry.focusArea.toLowerCase();
+    loggedByService.set(key, (loggedByService.get(key) ?? 0) + entry.durationMinutes / 60);
+  }
+
+  const rows = signed.lineItems.map((item) => {
+    const logged = Math.round((loggedByService.get(item.serviceName.toLowerCase()) ?? 0) * 10) / 10;
+    const overBudget = logged > item.hours;
+    return {
+      serviceName: item.serviceName,
+      estimated: item.hours,
+      logged,
+      overBudget,
+      diff: Math.round(Math.abs(item.hours - logged) * 10) / 10,
+    };
+  });
+
+  const totalEst = Math.round(rows.reduce((s, r) => s + r.estimated, 0) * 10) / 10;
+  const totalLogged = Math.round(rows.reduce((s, r) => s + r.logged, 0) * 10) / 10;
+  const totalOver = totalLogged > totalEst;
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-base font-semibold text-gray-900 mb-3">Hours Tracker</h2>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase">
+              <th className="text-left px-4 py-2.5">Service</th>
+              <th className="text-right px-4 py-2.5">Contracted</th>
+              <th className="text-right px-4 py-2.5">Logged</th>
+              <th className="text-right px-4 py-2.5">Remaining</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.serviceName} className="border-b border-gray-100 last:border-0">
+                <td className="px-4 py-3 text-gray-900">{row.serviceName}</td>
+                <td className="px-4 py-3 text-right text-gray-600 tabular-nums">{row.estimated}h</td>
+                <td className={cn("px-4 py-3 text-right tabular-nums font-medium", row.overBudget ? "text-red-600" : "text-gray-900")}>
+                  {row.logged}h
+                </td>
+                <td className={cn("px-4 py-3 text-right tabular-nums text-xs", row.overBudget ? "text-red-500" : "text-gray-400")}>
+                  {row.overBudget ? `+${row.diff}h over` : `${row.diff}h left`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
+              <td className="px-4 py-3 text-gray-900">Total</td>
+              <td className="px-4 py-3 text-right tabular-nums text-gray-700">{totalEst}h</td>
+              <td className={cn("px-4 py-3 text-right tabular-nums", totalOver ? "text-red-600" : "text-forest-600")}>
+                {totalLogged}h
+              </td>
+              <td className={cn("px-4 py-3 text-right tabular-nums text-xs", totalOver ? "text-red-500" : "text-gray-400")}>
+                {totalOver
+                  ? `+${Math.round((totalLogged - totalEst) * 10) / 10}h over budget`
+                  : `${Math.round((totalEst - totalLogged) * 10) / 10}h remaining`}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Client ──────────────────────────────────────────────────────────────
-export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services }: Props) {
+export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices }: Props) {
   const [mode, setMode] = useState<Mode>("rooms");
   const [highSqFt, setHighSqFt] = useState(0);
   const [avgSqFt, setAvgSqFt] = useState(0);
   const [lowSqFt, setLowSqFt] = useState(0);
   const [quotes, setQuotes] = useState<Contract[]>(existingContracts);
+  const [invoices] = useState<Invoice[]>(initialInvoices ?? []);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [showEstimator, setShowEstimator] = useState(existingContracts.length === 0);
 
@@ -369,20 +628,34 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
             )}
           </div>
           <div className="space-y-3">
-            {quotes.map((q) => (
-              <QuoteCard
-                key={q.id}
-                contract={q}
-                tenantId={tenant.id}
-                isEditing={editingContract?.id === q.id}
-                onEdit={() => handleEdit(q)}
-                onDelete={() => handleDeleted(q.id)}
-                onSetPrimary={() => handleSetPrimary(q.id)}
-                onArchive={() => handleArchived(q.id)}
-              />
-            ))}
+            {quotes.map((q) => {
+              const depositInvoice = invoices.find(
+                (inv) => inv.contractId === q.id && inv.type === "Deposit" && inv.status !== "Paid"
+              );
+              return (
+                <div key={q.id}>
+                  <QuoteCard
+                    contract={q}
+                    tenantId={tenant.id}
+                    isEditing={editingContract?.id === q.id}
+                    onEdit={() => handleEdit(q)}
+                    onDelete={() => handleDeleted(q.id)}
+                    onSetPrimary={() => handleSetPrimary(q.id)}
+                    onArchive={() => handleArchived(q.id)}
+                  />
+                  {depositInvoice && q.status === "Signed" && !depositInvoice.emailSent && (
+                    <DepositInvoicePanel invoice={depositInvoice} recipients={recipients} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
+
+      {/* Hours Tracker — shown when there is a signed contract and time has been logged */}
+      {signedContracts && signedContracts.length > 0 && timeEntries && timeEntries.length > 0 && (
+        <HoursComparison signedContracts={signedContracts} timeEntries={timeEntries} />
       )}
 
       {/* Mode tabs */}
@@ -511,6 +784,11 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                 editingContract={editingContract}
                 onSaved={handleSaved}
                 onCancelEdit={handleCancelEdit}
+                invoiceSettings={invoiceSettings}
+                signedContracts={signedContracts}
+                timeEntries={timeEntries}
+                ownerEmail={ownerEmail}
+                currentUserEmail={currentUserEmail}
               />
             </div>
           )}

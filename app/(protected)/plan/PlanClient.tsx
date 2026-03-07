@@ -549,7 +549,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
 
   // In "All Projects" mode (currentTenantId is one of the sentinel values), disable editing
-  const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__";
+  const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__" || currentTenantId === "__all_time__";
   const effectiveCanEdit = canEdit && !isAllProjectsMode;
 
   // Tenant name lookup for "All" mode chips
@@ -661,29 +661,6 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
 
   return (
     <>
-      {/* ── Project filter (manager only) ───────────────────────────────────── */}
-      {tenantOptions && tenantOptions.length > 0 && (
-        <div className="mb-3">
-          <select
-            value={currentTenantId ?? "__all_active__"}
-            onChange={e => {
-              const v = e.target.value;
-              if (v === "__all_active__") router.push("/plan");
-              else if (v === "__all_archived__") router.push("/plan?view=archived");
-              else router.push(`/plan?tenantId=${v}`);
-            }}
-            className="bg-white border border-gray-200 rounded-xl px-3 h-9 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-400"
-          >
-            <option value="__all_active__">All Active Projects</option>
-            <option value="__all_archived__">All Archived Projects</option>
-            <option disabled>──────────────────</option>
-            {tenantOptions.filter(t => !t.isArchived).map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         {/* Navigation */}
