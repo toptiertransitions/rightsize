@@ -59,6 +59,7 @@ export const AIRTABLE_TABLES = {
   DRIP_CAMPAIGNS: process.env.AIRTABLE_DRIP_CAMPAIGNS_TABLE || "DripCampaigns",
   DRIP_ENROLLMENTS: process.env.AIRTABLE_DRIP_ENROLLMENTS_TABLE || "DripEnrollments",
   DRIP_SETTINGS: process.env.AIRTABLE_DRIP_SETTINGS_TABLE || "DripSettings",
+  ITEM_SALE_EVENTS: process.env.AIRTABLE_ITEM_SALE_EVENTS_TABLE || "ItemSaleEvents",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

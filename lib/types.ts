@@ -194,8 +194,13 @@ export interface Item {
   // PF Inventory fields
   barcodeNumber?: string;
   quantity?: number;
+  quantitySold?: number;
   clientSharePercent?: number;
   deliveryDate?: string;
+  // Square integration fields
+  squareCatalogItemId?: string;
+  squareCatalogVariationId?: string;
+  squareSyncedAt?: string;
   // Staff seller fields (FB/eBay pages)
   staffSellerId?: string;
   staffSellerName?: string;
@@ -213,6 +218,25 @@ export interface SoldItemRow {
   staffCommissionPercent?: number;
   staffTimeMinutes?: number;
   channel: "FB" | "eBay";
+}
+
+// ─── Item Sale Event (one per Square transaction line) ────────────────────────
+export interface ItemSaleEvent {
+  id: string;
+  itemId: string;
+  tenantId: string;
+  itemName: string;
+  quantitySold: number;
+  unitPrice: number;
+  totalAmount: number;
+  clientPayout: number;
+  squarePaymentId: string;
+  squareOrderId?: string;
+  saleDate: string;
+  payoutPaid: boolean;
+  payoutPaidAt?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 // ─── AI Analysis ──────────────────────────────────────────────────────────────

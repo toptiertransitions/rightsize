@@ -59,6 +59,7 @@ import type {
   InvoiceLineItem,
   Expense,
   ExpenseCategory,
+  ItemSaleEvent,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -478,8 +479,13 @@ export async function updateItem(
     // PF Inventory fields
     barcodeNumber: "BarcodeNumber",
     quantity: "Quantity",
+    quantitySold: "QuantitySold",
     clientSharePercent: "ClientSharePercent",
     deliveryDate: "DeliveryDate",
+    // Square integration fields
+    squareCatalogItemId: "SquareCatalogItemId",
+    squareCatalogVariationId: "SquareCatalogVariationId",
+    squareSyncedAt: "SquareSyncedAt",
     // Staff seller fields
     staffSellerId: "StaffSellerId",
     staffSellerName: "StaffSellerName",
@@ -563,8 +569,12 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     vendorRespondedAt: toStr(f["VendorRespondedAt"]) || undefined,
     barcodeNumber: toStr(f["BarcodeNumber"]) || undefined,
     quantity: f["Quantity"] != null ? toNum(f["Quantity"]) : undefined,
+    quantitySold: f["QuantitySold"] != null ? toNum(f["QuantitySold"]) : undefined,
     clientSharePercent: f["ClientSharePercent"] != null ? toNum(f["ClientSharePercent"]) : undefined,
     deliveryDate: toStr(f["DeliveryDate"]) || undefined,
+    squareCatalogItemId: toStr(f["SquareCatalogItemId"]) || undefined,
+    squareCatalogVariationId: toStr(f["SquareCatalogVariationId"]) || undefined,
+    squareSyncedAt: toStr(f["SquareSyncedAt"]) || undefined,
     staffSellerId: toStr(f["StaffSellerId"]) || undefined,
     staffSellerName: toStr(f["StaffSellerName"]) || undefined,
     staffCommissionPercent: f["StaffCommissionPercent"] != null ? toNum(f["StaffCommissionPercent"]) : undefined,
@@ -3298,4 +3308,131 @@ export async function upsertDripSettings(data: Partial<Omit<import("./types").Dr
   const res = await dripSettingsFetch("", { method: "POST", body: JSON.stringify({ fields }) });
   if (!res.ok) throw new Error(await res.text());
   return mapDripSettings(await res.json() as AirtableRecord);
+}
+
+// ─── Item Sale Events ─────────────────────────────────────────────────────────
+
+function saleEventsFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.ITEM_SALE_EVENTS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapItemSaleEvent(record: AirtableRecord): ItemSaleEvent {
+  const f = record.fields as Record<string, unknown>;
+  return {
+    id: record.id,
+    itemId: toStr(f["ItemId"]),
+    tenantId: toStr(f["TenantId"]),
+    itemName: toStr(f["ItemName"]),
+    quantitySold: toNum(f["QuantitySold"] ?? 0),
+    unitPrice: toNum(f["UnitPrice"] ?? 0),
+    totalAmount: toNum(f["TotalAmount"] ?? 0),
+    clientPayout: toNum(f["ClientPayout"] ?? 0),
+    squarePaymentId: toStr(f["SquarePaymentId"]),
+    squareOrderId: toStr(f["SquareOrderId"]) || undefined,
+    saleDate: toStr(f["SaleDate"]),
+    payoutPaid: f["PayoutPaid"] === true,
+    payoutPaidAt: toStr(f["PayoutPaidAt"]) || undefined,
+    notes: toStr(f["Notes"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getItemSaleEvents(itemId?: string): Promise<ItemSaleEvent[]> {
+  const formula = itemId
+    ? `?filterByFormula=${encodeURIComponent(`{ItemId} = "${itemId}"`)}&sort[0][field]=SaleDate&sort[0][direction]=desc`
+    : `?sort[0][field]=SaleDate&sort[0][direction]=desc`;
+  const res = await saleEventsFetch(formula);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapItemSaleEvent);
+}
+
+export async function getSaleEventBySquarePaymentId(paymentId: string): Promise<ItemSaleEvent | null> {
+  const formula = encodeURIComponent(`{SquarePaymentId} = "${paymentId}"`);
+  const res = await saleEventsFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapItemSaleEvent(data.records[0] as AirtableRecord);
+}
+
+export async function createItemSaleEvent(data: Omit<ItemSaleEvent, "id" | "createdAt">): Promise<ItemSaleEvent> {
+  const fields: Record<string, unknown> = {
+    ItemId: data.itemId,
+    TenantId: data.tenantId,
+    ItemName: data.itemName,
+    QuantitySold: data.quantitySold,
+    UnitPrice: data.unitPrice,
+    TotalAmount: data.totalAmount,
+    ClientPayout: data.clientPayout,
+    SquarePaymentId: data.squarePaymentId,
+    SquareOrderId: data.squareOrderId || "",
+    SaleDate: data.saleDate,
+    PayoutPaid: data.payoutPaid ?? false,
+    Notes: data.notes || "",
+    CreatedAt: new Date().toISOString(),
+  };
+  const res = await saleEventsFetch("", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapItemSaleEvent(await res.json() as AirtableRecord);
+}
+
+export async function updateItemSaleEvent(id: string, data: Partial<Pick<ItemSaleEvent, "payoutPaid" | "payoutPaidAt" | "notes">>): Promise<ItemSaleEvent> {
+  const fields: Record<string, unknown> = {};
+  if (data.payoutPaid !== undefined) fields["PayoutPaid"] = data.payoutPaid;
+  if (data.payoutPaidAt !== undefined) fields["PayoutPaidAt"] = data.payoutPaidAt;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const res = await saleEventsFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapItemSaleEvent(await res.json() as AirtableRecord);
+}
+
+/** Called by the webhook handler: decrement quantity, flip status when qty hits 0. */
+export async function applySquareSaleToItem(opts: {
+  itemId: string;
+  quantitySold: number;
+  currentQuantity: number;
+  currentQuantitySold: number;
+}): Promise<Item> {
+  const newQty = Math.max(0, opts.currentQuantity - opts.quantitySold);
+  const newQtySold = opts.currentQuantitySold + opts.quantitySold;
+  const newStatus = newQty === 0 ? "Sold" : undefined;
+  const fields: Airtable.FieldSet = {
+    Quantity: newQty,
+    QuantitySold: newQtySold,
+    UpdatedAt: new Date().toISOString(),
+  };
+  if (newStatus) {
+    fields["Status"] = newStatus;
+    fields["SaleDate"] = new Date().toISOString();
+  }
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.ITEMS).update(opts.itemId, fields, { typecast: true });
+  return mapItem(record);
+}
+
+/** Look up a PF item by its Square catalog variation ID. */
+export async function getItemBySquareVariationId(variationId: string): Promise<Item | null> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({ filterByFormula: `{SquareCatalogVariationId} = "${variationId}"`, maxRecords: 1 })
+    .all();
+  if (!records.length) return null;
+  return mapItem(records[0]);
 }
