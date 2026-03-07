@@ -286,7 +286,7 @@ function OpportunitiesTab({
               className="h-8 border border-gray-300 rounded-lg px-2 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-forest-500"
             >
               <option value="">All Owners</option>
-              {staffMembers.map(s => (
+              {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
                 <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
               ))}
             </select>
@@ -1696,7 +1696,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
               className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
             >
               <option value="">All Owners</option>
-              {staffMembers.map(s => (
+              {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
                 <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
               ))}
             </select>
@@ -2176,7 +2176,7 @@ function DashboardTab({
           >
             All
           </button>
-          {staffMembers.map(s => (
+          {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
             <button
               key={s.clerkUserId}
               onClick={() => setOwnerFilter(o => o === s.clerkUserId ? "" : s.clerkUserId)}
@@ -2602,7 +2602,7 @@ function ActivityLogTab({
           </button>
         ))}
         <div className="w-px h-4 bg-gray-200 mx-1" />
-        {[{ id: "All", label: "All" }, ...staffMembers.map((s) => ({ id: s.clerkUserId, label: s.displayName }))].map((s) => (
+        {[{ id: "All", label: "All" }, ...staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map((s) => ({ id: s.clerkUserId, label: s.displayName }))].map((s) => (
           <button
             key={s.id}
             onClick={() => setStaffFilter(s.id)}
