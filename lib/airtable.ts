@@ -2218,13 +2218,20 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
 }
 
 export async function getReferralContacts(companyId?: string): Promise<ReferralContact[]> {
-  const qs = companyId
+  const baseFilter = companyId
     ? `?filterByFormula=${encodeURIComponent(`{ReferralCompanyId} = "${companyId}"`)}&sort[0][field]=Name&sort[0][direction]=asc`
     : `?sort[0][field]=Name&sort[0][direction]=asc`;
-  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, qs);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapReferralContact);
+  const all: ReferralContact[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `${baseFilter}${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapReferralContact));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function findReferralContactByName(name: string): Promise<ReferralContact | null> {
@@ -2314,10 +2321,17 @@ function mapClientContact(record: AirtableRecord): ClientContact {
 }
 
 export async function getClientContacts(): Promise<ClientContact[]> {
-  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?sort[0][field]=Name&sort[0][direction]=asc`);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapClientContact);
+  const all: ClientContact[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=Name&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapClientContact));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function findClientContactByName(name: string): Promise<ClientContact | null> {
