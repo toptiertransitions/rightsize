@@ -2124,6 +2124,14 @@ export async function getReferralCompanies(): Promise<ReferralCompany[]> {
   return (data.records as AirtableRecord[]).map(mapReferralCompany);
 }
 
+export async function findReferralCompanyByName(name: string): Promise<ReferralCompany | null> {
+  const formula = encodeURIComponent(`LOWER({Name}) = LOWER("${name.replace(/"/g, '\\"')}")`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length > 0 ? mapReferralCompany(data.records[0]) : null;
+}
+
 export async function createReferralCompany(data: {
   name: string;
   type?: string;
@@ -2167,7 +2175,7 @@ export async function updateReferralCompany(
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
-  if (data.priority !== undefined) fields["Priority"] = data.priority;
+  if (data.priority !== undefined) fields["Priority"] = data.priority || null;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, {
@@ -2210,6 +2218,14 @@ export async function getReferralContacts(companyId?: string): Promise<ReferralC
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapReferralContact);
+}
+
+export async function findReferralContactByName(name: string): Promise<ReferralContact | null> {
+  const formula = encodeURIComponent(`LOWER({Name}) = LOWER("${name.replace(/"/g, '\\"')}")`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length > 0 ? mapReferralContact(data.records[0]) : null;
 }
 
 export async function createReferralContact(data: {
@@ -2295,6 +2311,14 @@ export async function getClientContacts(): Promise<ClientContact[]> {
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapClientContact);
+}
+
+export async function findClientContactByName(name: string): Promise<ClientContact | null> {
+  const formula = encodeURIComponent(`LOWER({Name}) = LOWER("${name.replace(/"/g, '\\"')}")`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length > 0 ? mapClientContact(data.records[0]) : null;
 }
 
 export async function createClientContact(data: {

@@ -205,7 +205,7 @@ function ImportPanel({ type, staffMap }: { type: ImportType; staffMap: Record<st
       }
 
       try {
-        const res = await fetch(cfg.apiPath, {
+        const res = await fetch(`${cfg.apiPath}?upsert=true`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

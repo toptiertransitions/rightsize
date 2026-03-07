@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getReferralContacts, createReferralContact, updateReferralContact, deleteReferralContact } from "@/lib/airtable";
+import { getSystemRole, getReferralContacts, createReferralContact, updateReferralContact, deleteReferralContact, findReferralContactByName } from "@/lib/airtable";
 
 async function requireManager(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -23,6 +23,14 @@ export async function POST(req: NextRequest) {
   if (!(await requireManager(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
+  const upsert = req.nextUrl.searchParams.get("upsert") === "true";
+  if (upsert && body.name) {
+    const existing = await findReferralContactByName(body.name);
+    if (existing) {
+      const contact = await updateReferralContact(existing.id, body);
+      return NextResponse.json({ contact });
+    }
+  }
   const contact = await createReferralContact(body);
   return NextResponse.json({ contact });
 }
