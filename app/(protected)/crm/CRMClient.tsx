@@ -848,7 +848,7 @@ function ContactActivityPanel({
   contact,
   onClose,
 }: {
-  contact: ClientContact;
+  contact: { id: string; name: string; email?: string };
   onClose: () => void;
 }) {
   const [activities, setActivities] = useState<CRMActivity[]>([]);
@@ -1378,6 +1378,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
   const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "" });
   const [companySearch, setCompanySearch] = useState("");
   const [companySearchOpen, setCompanySearchOpen] = useState(false);
+  const [activityContact, setActivityContact] = useState<{ id: string; name: string; email?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [csvType, setCsvType] = useState<"companies" | "contacts" | null>(null);
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
@@ -1858,9 +1859,17 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
                           <td className="py-1.5 text-gray-600">{c.title || "—"}</td>
                           <td className="py-1.5 text-gray-600">{c.email || "—"}</td>
                           <td className="py-1.5 text-gray-600">{c.phone || "—"}</td>
-                          <td className="py-1.5 text-right space-x-2">
-                            <button onClick={() => openEditContact(c)} className="text-xs text-forest-600 hover:text-forest-800">Edit</button>
-                            <button onClick={() => deleteContact(company.id, c.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
+                          <td className="py-1.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setActivityContact({ id: c.id, name: c.name, email: c.email || undefined })}
+                                className="text-xs px-2 py-0.5 rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors"
+                              >
+                                Log
+                              </button>
+                              <button onClick={() => openEditContact(c)} className="text-xs text-forest-600 hover:text-forest-800 px-1">Edit</button>
+                              <button onClick={() => deleteContact(company.id, c.id)} className="text-xs text-red-500 hover:text-red-700 px-1">Delete</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -2123,6 +2132,13 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
             </div>
           </div>
         </div>
+      )}
+
+      {activityContact && (
+        <ContactActivityPanel
+          contact={activityContact}
+          onClose={() => setActivityContact(null)}
+        />
       )}
     </div>
   );
@@ -2527,6 +2543,16 @@ function ActivityLogTab({
     return clientContacts.find((c) => c.id === opp.clientContactId)?.name || "—";
   }
 
+  function getContactType(activity: CRMActivity): "Client" | "Referral" | null {
+    if (activity.clientContactId) {
+      if (clientContacts.some((c) => c.id === activity.clientContactId)) return "Client";
+      if (referralContacts.some((c) => c.id === activity.clientContactId)) return "Referral";
+    }
+    const opp = opportunities.find((o) => o.id === activity.opportunityId);
+    if (opp) return "Client";
+    return null;
+  }
+
   async function handleLog() {
     if (!logForm.contactId || !logForm.note) return;
     setLogging(true);
@@ -2752,9 +2778,10 @@ function ActivityLogTab({
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">
                   <button onClick={() => handleSort("client")} className="flex items-center hover:text-gray-900">
-                    Client<SortIcon col="client" />
+                    Name<SortIcon col="client" />
                   </button>
                 </th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Contact Type</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Note</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -2783,6 +2810,20 @@ function ActivityLogTab({
                     </span>
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-800">{getContactName(a)}</td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const t = getContactType(a);
+                      if (!t) return <span className="text-gray-400">—</span>;
+                      return (
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-xs font-medium",
+                          t === "Client" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+                        )}>
+                          {t}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{a.note}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
