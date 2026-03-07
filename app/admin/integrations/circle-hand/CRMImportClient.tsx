@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 type ImportType = "client-contacts" | "companies" | "referral-contacts";
 
@@ -59,29 +59,30 @@ const CONFIGS: Record<ImportType, {
   templateHeaders: string[];
   templateExample: string[];
   apiPath: string;
+  supportsOwner: boolean;
   buildPayload: (row: Record<string, string>, extra?: Record<string, string>) => Record<string, string>;
 }> = {
   "client-contacts": {
     label: "Client Contacts",
     filename: "client-contacts-template.csv",
     description: "Import client contacts. Required: Client Name.",
-    columns: ["Client Name", "Email", "Phone", "Source", "Owner", "Notes"],
-    templateHeaders: ["Client Name", "Email", "Phone", "Source", "Owner", "Notes"],
+    columns: ["Client Name", "Email", "Phone", "Source", "Notes"],
+    templateHeaders: ["Client Name", "Email", "Phone", "Source", "Notes"],
     templateExample: [
       "Jane Smith",
       "jane@example.com",
       "555-0100",
       "Referral Partner",
-      "Matt Kamhi",
       "VIP client referred by Sunrise",
     ],
     apiPath: "/api/crm/client-contacts",
+    supportsOwner: false,
     buildPayload: (row) => ({
       name: row["clientname"] || row["name"] || row["contactname"] || row["fullname"] || "",
       email: row["email"] || row["emailaddress"] || "",
       phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
       source: row["source"] || "",
-      notes: [row["notes"] || row["note"] || "", row["owner"] ? `Owner: ${row["owner"]}` : ""].filter(Boolean).join(" | "),
+      notes: row["notes"] || row["note"] || "",
     }),
   },
   "companies": {
@@ -102,6 +103,7 @@ const CONFIGS: Record<ImportType, {
       "Primary referral partner",
     ],
     apiPath: "/api/crm/companies",
+    supportsOwner: true,
     buildPayload: (row) => ({
       name: row["companyname"] || row["name"] || row["company"] || "",
       type: row["type"] || row["companytype"] || "",
@@ -110,7 +112,7 @@ const CONFIGS: Record<ImportType, {
       state: row["state"] || "",
       zip: row["zip"] || row["zipcode"] || row["postalcode"] || "",
       priority: row["priority"] || "",
-      notes: [row["notes"] || "", row["owner"] ? `Owner: ${row["owner"]}` : ""].filter(Boolean).join(" | "),
+      notes: row["notes"] || "",
     }),
   },
   "referral-contacts": {
@@ -133,16 +135,17 @@ const CONFIGS: Record<ImportType, {
       "Key decision maker",
     ],
     apiPath: "/api/crm/contacts",
+    supportsOwner: true,
     buildPayload: (row, companyMap) => ({
       name: row["name"] || row["contactname"] || row["fullname"] || "",
       title: row["title"] || row["jobtitle"] || "",
       email: row["email"] || row["emailaddress"] || "",
       phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
-      notes: [row["notes"] || row["note"] || "", row["owner"] ? `Owner: ${row["owner"]}` : ""].filter(Boolean).join(" | "),
+      notes: row["notes"] || row["note"] || "",
       dateIntroduced: row["dateintroduced"] || row["introduced"] || "",
       interests: row["interests"] || row["interest"] || "",
-      coffeeOrder: row["coffeeorder"] || row["coffee"] || row["coffeeorder"] || "",
-      orgsGroups: row["orgsgroups"] || row["orgs"] || row["groups"] || row["orgsgroups"] || "",
+      coffeeOrder: row["coffeeorder"] || row["coffee"] || "",
+      orgsGroups: row["orgsgroups"] || row["orgs"] || row["groups"] || "",
       referralCompanyId: companyMap?.[
         (row["company"] || row["companyname"] || "").toLowerCase()
       ] ?? "",
@@ -152,7 +155,7 @@ const CONFIGS: Record<ImportType, {
 
 // ─── Single import panel ──────────────────────────────────────────────────────
 
-function ImportPanel({ type }: { type: ImportType }) {
+function ImportPanel({ type, staffMap }: { type: ImportType; staffMap: Record<string, string> }) {
   const cfg = CONFIGS[type];
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<Record<string, string>[] | null>(null);
@@ -192,6 +195,15 @@ function ImportPanel({ type }: { type: ImportType }) {
     for (const row of rows) {
       const payload = cfg.buildPayload(row, companyMap);
       if (!payload["name"]) continue;
+
+      // Resolve Owner column → assignedToClerkId (for types that have an owner field)
+      if (cfg.supportsOwner) {
+        const ownerName = (row["owner"] || "").trim().toLowerCase();
+        if (ownerName && staffMap[ownerName]) {
+          payload.assignedToClerkId = staffMap[ownerName];
+        }
+      }
+
       try {
         const res = await fetch(cfg.apiPath, {
           method: "POST",
@@ -301,11 +313,26 @@ function ImportPanel({ type }: { type: ImportType }) {
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export function CRMImportClient() {
+  const [staffMap, setStaffMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch("/api/admin/staff")
+      .then(r => r.ok ? r.json() : { staff: [] })
+      .then(data => {
+        const map: Record<string, string> = {};
+        for (const s of (data.staff ?? [])) {
+          map[(s.displayName as string).toLowerCase()] = s.clerkUserId as string;
+        }
+        setStaffMap(map);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="grid md:grid-cols-3 gap-4">
-      <ImportPanel type="client-contacts" />
-      <ImportPanel type="companies" />
-      <ImportPanel type="referral-contacts" />
+      <ImportPanel type="client-contacts" staffMap={staffMap} />
+      <ImportPanel type="companies" staffMap={staffMap} />
+      <ImportPanel type="referral-contacts" staffMap={staffMap} />
     </div>
   );
 }

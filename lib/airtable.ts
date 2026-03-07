@@ -2145,7 +2145,7 @@ export async function createReferralCompany(data: {
         City: data.city || "",
         State: data.state || "",
         Zip: data.zip || "",
-        Priority: data.priority || "",
+        ...(data.priority ? { Priority: data.priority } : {}),
         Notes: data.notes || "",
         AssignedToClerkId: data.assignedToClerkId || "",
         CreatedAt: new Date().toISOString(),
