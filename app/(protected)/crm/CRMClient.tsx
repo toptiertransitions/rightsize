@@ -1637,9 +1637,25 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
   // Apply search / filter / sort
   const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
   const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2, "": 3 };
+
+  // Build set of company IDs that have a contact whose name matches the search
+  const searchLower = search.toLowerCase();
+  const contactMatchIds = useMemo(() => {
+    if (!search) return new Set<string>();
+    return new Set(
+      initialReferralContacts
+        .filter(rc => rc.name.toLowerCase().includes(searchLower))
+        .map(rc => rc.referralCompanyId)
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, initialReferralContacts]);
+
   const filtered = companies
     .filter(c => {
-      if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.type.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search) {
+        const companyMatch = c.name.toLowerCase().includes(searchLower) || c.type.toLowerCase().includes(searchLower);
+        if (!companyMatch && !contactMatchIds.has(c.id)) return false;
+      }
       if (filterPriority && c.priority !== filterPriority) return false;
       if (filterType && c.type !== filterType) return false;
       if (filterOwner && c.assignedToClerkId !== filterOwner) return false;
@@ -1668,8 +1684,8 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
             type="text"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search companies…"
-            className="h-8 border border-gray-300 rounded-lg px-3 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-forest-500"
+            placeholder="Search companies or contacts…"
+            className="h-8 border border-gray-300 rounded-lg px-3 text-sm w-56 focus:outline-none focus:ring-1 focus:ring-forest-500"
           />
           {/* Priority filter chips */}
           {(["", "High", "Medium", "Low"] as const).map(p => (
@@ -1824,7 +1840,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
               </div>
             </div>
 
-            {expanded === company.id && (
+            {(expanded === company.id || (!!search && contactMatchIds.has(company.id))) && (
               <div className="border-t border-gray-100 px-4 py-3">
                 {company.notes && (
                   <p className="text-xs text-gray-500 mb-3 italic">{company.notes}</p>
@@ -1833,22 +1849,24 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Contacts</span>
                   <button onClick={() => openAddContact(company.id)} className="text-xs text-forest-600 hover:text-forest-800">+ Add Contact</button>
                 </div>
-                {(contacts[company.id] || []).length === 0 ? (
-                  <p className="text-xs text-gray-400">No contacts</p>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-gray-500">
-                        <th className="pb-1 font-medium">Name</th>
-                        <th className="pb-1 font-medium">Stage</th>
-                        <th className="pb-1 font-medium">Title</th>
-                        <th className="pb-1 font-medium">Email</th>
-                        <th className="pb-1 font-medium">Phone</th>
-                        <th className="pb-1"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(contacts[company.id] || []).map((c) => (
+                {(() => {
+                  const displayContacts = contacts[company.id] ?? initialReferralContacts.filter(rc => rc.referralCompanyId === company.id);
+                  return displayContacts.length === 0 ? (
+                    <p className="text-xs text-gray-400">No contacts</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500">
+                          <th className="pb-1 font-medium">Name</th>
+                          <th className="pb-1 font-medium">Stage</th>
+                          <th className="pb-1 font-medium">Title</th>
+                          <th className="pb-1 font-medium">Email</th>
+                          <th className="pb-1 font-medium">Phone</th>
+                          <th className="pb-1"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                      {displayContacts.map((c) => (
                         <tr key={c.id} className="border-t border-gray-100">
                           <td className="py-1.5 font-medium text-gray-800">{c.name}</td>
                           <td className="py-1.5">
@@ -1873,9 +1891,10 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
                           </td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                )}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
             )}
           </div>
