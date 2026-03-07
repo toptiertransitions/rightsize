@@ -1375,7 +1375,9 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
   const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", assignedToClerkId: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
-  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
+  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "" });
+  const [companySearch, setCompanySearch] = useState("");
+  const [companySearchOpen, setCompanySearchOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [csvType, setCsvType] = useState<"companies" | "contacts" | null>(null);
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
@@ -1561,13 +1563,16 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
 
   function openAddContact(companyId: string) {
     setEditingContact(null);
-    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "" });
+    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "" });
     setContactModal(companyId);
   }
 
   function openEditContact(contact: ReferralContact) {
     setEditingContact(contact);
-    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, stage: contact.stage || "Identified", dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "" });
+    const currentCompany = companies.find(c => c.id === contact.referralCompanyId);
+    setCompanySearch(currentCompany?.name || "");
+    setCompanySearchOpen(false);
+    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, stage: contact.stage || "Identified", dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "", referralCompanyId: contact.referralCompanyId });
     setContactModal(contact.referralCompanyId);
   }
 
@@ -1582,10 +1587,22 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
           body: JSON.stringify({ id: editingContact.id, ...contactForm }),
         });
         const data = await res.json();
-        setContacts((prev) => ({
-          ...prev,
-          [contactModal]: (prev[contactModal] || []).map((c) => (c.id === editingContact.id ? data.contact : c)),
-        }));
+        const oldCompanyId = editingContact.referralCompanyId;
+        const newCompanyId = contactForm.referralCompanyId || oldCompanyId;
+        if (newCompanyId !== oldCompanyId) {
+          // Move contact from old company bucket to new one
+          setContacts((prev) => {
+            const next = { ...prev };
+            next[oldCompanyId] = (next[oldCompanyId] || []).filter(c => c.id !== editingContact.id);
+            next[newCompanyId] = [...(next[newCompanyId] || []), data.contact];
+            return next;
+          });
+        } else {
+          setContacts((prev) => ({
+            ...prev,
+            [contactModal]: (prev[contactModal] || []).map((c) => (c.id === editingContact.id ? data.contact : c)),
+          }));
+        }
       } else {
         const res = await fetch("/api/crm/contacts", {
           method: "POST",
@@ -2001,6 +2018,54 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
                 ))}
               </div>
             </div>
+
+            {/* Company (edit only) */}
+            {editingContact && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={companySearch}
+                    onChange={(e) => { setCompanySearch(e.target.value); setCompanySearchOpen(true); }}
+                    onFocus={() => setCompanySearchOpen(true)}
+                    onBlur={() => setTimeout(() => setCompanySearchOpen(false), 150)}
+                    placeholder="Search companies…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm pr-8"
+                  />
+                  {companySearch && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); setCompanySearch(""); setContactForm(f => ({ ...f, referralCompanyId: "" })); setCompanySearchOpen(false); }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                    >✕</button>
+                  )}
+                  {companySearchOpen && (
+                    <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto text-sm">
+                      {companies
+                        .filter(c => !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase()))
+                        .slice(0, 20)
+                        .map(c => (
+                          <li
+                            key={c.id}
+                            onMouseDown={(e) => { e.preventDefault(); setContactForm(f => ({ ...f, referralCompanyId: c.id })); setCompanySearch(c.name); setCompanySearchOpen(false); }}
+                            className={cn(
+                              "px-3 py-2 cursor-pointer hover:bg-forest-50",
+                              contactForm.referralCompanyId === c.id && "bg-forest-50 font-medium text-forest-700"
+                            )}
+                          >
+                            {c.name}
+                          </li>
+                        ))
+                      }
+                      {companies.filter(c => !companySearch || c.name.toLowerCase().includes(companySearch.toLowerCase())).length === 0 && (
+                        <li className="px-3 py-2 text-gray-400">No companies found</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Core fields */}
             <div>
