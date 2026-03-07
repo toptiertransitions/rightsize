@@ -889,8 +889,13 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       {route.label}
                     </Badge>
                   </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {item.condition} · {item.sizeClass}
+                  <div className="mt-2 text-xs text-gray-500 flex items-center gap-1.5">
+                    <span>{item.condition} · {item.sizeClass}</span>
+                    {(item.quantity ?? 0) > 1 && (
+                      <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        Qty {item.quantity}
+                      </span>
+                    )}
                   </div>
                   {item.assignedVendorId && vendorMap.get(item.assignedVendorId) && (
                     <div className="mt-1.5">
@@ -1032,6 +1037,9 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                             <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">
                               PF
                             </span>
+                          )}
+                          {(item.quantity ?? 0) > 1 && (
+                            <span className="text-[10px] font-medium text-gray-400">×{item.quantity}</span>
                           )}
                         </div>
                       </td>

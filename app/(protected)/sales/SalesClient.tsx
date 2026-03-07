@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor } from "@/lib/types";
+import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 
 // ─── Calc payout from local vendor take rate ──────────────────────────────────
@@ -293,6 +293,283 @@ function ItemCard({
   );
 }
 
+// ─── PF Sale Events Timeline ──────────────────────────────────────────────────
+
+function PFItemCard({
+  item,
+  canEditPayout,
+  canEdit,
+  onEdit,
+}: {
+  item: Item;
+  canEditPayout: boolean;
+  canEdit: boolean;
+  onEdit: (item: Item) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [events, setEvents] = useState<ItemSaleEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const qty = item.quantity ?? 0;
+  const qtySold = item.quantitySold ?? 0;
+  const qtyTotal = qty + qtySold;
+  const isSold = item.status === "Sold";
+
+  async function loadEvents() {
+    if (loaded) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/item-sale-events?itemId=${item.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data.events ?? []);
+        setLoaded(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function togglePayout(event: ItemSaleEvent) {
+    setTogglingId(event.id);
+    try {
+      const res = await fetch("/api/item-sale-events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: event.id, payoutPaid: !event.payoutPaid }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(prev => prev.map(e => e.id === event.id ? data.event : e));
+      }
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  function handleToggle() {
+    if (!expanded) loadEvents();
+    setExpanded(v => !v);
+  }
+
+  const totalOwed = events.reduce((s, e) => s + (e.payoutPaid ? 0 : e.clientPayout), 0);
+  const totalPaidEvents = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
+
+  return (
+    <div className={cn(
+      "bg-white rounded-xl border overflow-hidden",
+      isSold ? "border-green-200" : "border-gray-200"
+    )}>
+      {/* Header row */}
+      <div className="flex items-center gap-3 p-3">
+        {/* Thumbnail */}
+        <div className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
+          {item.photoUrl ? (
+            <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="48px" />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-300">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={cn(
+              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+              STATUS_COLORS[item.status]
+            )}>
+              {item.status}
+            </span>
+            {item.barcodeNumber && (
+              <span className="text-[10px] text-gray-400">#{item.barcodeNumber}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Qty progress */}
+        <div className="text-right flex-shrink-0">
+          <div className="text-sm font-semibold text-gray-900">
+            {qtySold}/{qtyTotal} sold
+          </div>
+          {item.clientSharePercent != null && (
+            <div className="text-[10px] text-gray-400">{item.clientSharePercent}% share</div>
+          )}
+        </div>
+
+        {/* Edit + expand */}
+        <div className="flex items-center gap-1">
+          {canEdit && (
+            <button
+              onClick={() => onEdit(item)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              title="Edit item"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={handleToggle}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            title={expanded ? "Hide sales" : "Show sales"}
+          >
+            <svg
+              className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {qtyTotal > 0 && (
+        <div className="px-3 pb-2">
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={cn("h-full rounded-full transition-all", isSold ? "bg-green-400" : "bg-purple-400")}
+              style={{ width: `${Math.min(100, (qtySold / qtyTotal) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Sale events accordion */}
+      {expanded && (
+        <div className="border-t border-gray-100">
+          {loading ? (
+            <div className="px-4 py-5 text-center text-xs text-gray-400">Loading sale events…</div>
+          ) : events.length === 0 ? (
+            <div className="px-4 py-5 text-center text-xs text-gray-400">No Square sales recorded yet</div>
+          ) : (
+            <>
+              {/* Event rows */}
+              <div className="divide-y divide-gray-50">
+                {events.map(evt => (
+                  <div key={evt.id} className="px-4 py-2.5 flex items-center gap-3">
+                    {/* Date */}
+                    <div className="text-[11px] text-gray-400 w-20 flex-shrink-0">
+                      {new Date(evt.saleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+
+                    {/* Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-700">
+                        <span className="font-medium">{evt.quantitySold} unit{evt.quantitySold !== 1 ? "s" : ""}</span>
+                        {" @ "}
+                        <span>{fmtCurrency(evt.unitPrice)}</span>
+                        {" = "}
+                        <span className="font-medium">{fmtCurrency(evt.totalAmount)}</span>
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        Client payout: <span className="font-medium text-green-700">{fmtCurrency(evt.clientPayout)}</span>
+                        {evt.payoutPaidAt && (
+                          <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Payout toggle */}
+                    {canEditPayout ? (
+                      <button
+                        onClick={() => togglePayout(evt)}
+                        disabled={togglingId === evt.id}
+                        className={cn(
+                          "text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
+                          evt.payoutPaid
+                            ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                            : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
+                          togglingId === evt.id && "opacity-50 cursor-wait"
+                        )}
+                      >
+                        {togglingId === evt.id ? "…" : evt.payoutPaid ? "Paid" : "Unpaid"}
+                      </button>
+                    ) : (
+                      <span className={cn(
+                        "text-[10px] font-semibold px-2 py-1 rounded-full border",
+                        evt.payoutPaid
+                          ? "bg-green-50 border-green-200 text-green-700"
+                          : "bg-amber-50 border-amber-200 text-amber-700"
+                      )}>
+                        {evt.payoutPaid ? "Paid" : "Unpaid"}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Totals footer */}
+              <div className="px-4 py-2.5 bg-gray-50 flex gap-6 text-xs">
+                <div>
+                  <span className="text-gray-400">Total owed: </span>
+                  <span className="font-semibold text-amber-700">{fmtCurrency(totalOwed)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Total paid: </span>
+                  <span className="font-semibold text-green-700">{fmtCurrency(totalPaidEvents)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PFSalesSection({
+  items,
+  canEditPayout,
+  canEdit,
+  onEdit,
+}: {
+  items: Item[];
+  canEditPayout: boolean;
+  canEdit: boolean;
+  onEdit: (item: Item) => void;
+}) {
+  if (items.length === 0) return null;
+
+  const totalQty = items.reduce((s, i) => s + ((i.quantity ?? 0) + (i.quantitySold ?? 0)), 0);
+  const totalSold = items.reduce((s, i) => s + (i.quantitySold ?? 0), 0);
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-base font-semibold text-gray-900">ProFoundFinds Consignment</h2>
+        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+          {items.length} items
+        </span>
+        {totalQty > 0 && (
+          <span className="text-xs text-gray-400">
+            {totalSold}/{totalQty} units sold
+          </span>
+        )}
+      </div>
+      <div className="space-y-2">
+        {items.map(item => (
+          <PFItemCard
+            key={item.id}
+            item={item}
+            canEditPayout={canEditPayout}
+            canEdit={canEdit}
+            onEdit={onEdit}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Section ──────────────────────────────────────────────────────────────────
 
 function SectionGrid({
@@ -549,14 +826,10 @@ export function SalesClient({
 
       {/* Sections */}
       <div className="space-y-10">
-        <SectionGrid
-          title="ProFoundFinds Consignment"
+        <PFSalesSection
           items={profound}
           canEditPayout={canEditPayout}
           canEdit={canEdit}
-          calcPayouts={calcPayouts}
-          onPayoutSaved={handlePayoutSaved}
-          onSalePriceSaved={handleSalePriceSaved}
           onEdit={setEditingItem}
         />
         <SectionGrid
