@@ -176,7 +176,21 @@ function ImportPanel({ type, staffMap }: { type: ImportType; staffMap: Record<st
     if (!rows) return;
     setImporting(true);
 
-    // For referral contacts: pre-fetch companies to build name→id map
+    // Pre-fetch all existing records once to build name→id map (avoids per-row Airtable lookups)
+    const existingMap = new Map<string, string>(); // name.toLowerCase() → id
+    try {
+      const existingRes = await fetch(cfg.apiPath);
+      if (existingRes.ok) {
+        const existingData = await existingRes.json();
+        const records: { id: string; name: string }[] =
+          existingData.companies ?? existingData.contacts ?? [];
+        for (const r of records) {
+          existingMap.set(r.name.toLowerCase(), r.id);
+        }
+      }
+    } catch {}
+
+    // For referral contacts: also pre-fetch companies to build name→id map
     let companyMap: Record<string, string> = {};
     if (type === "referral-contacts") {
       try {
@@ -205,11 +219,23 @@ function ImportPanel({ type, staffMap }: { type: ImportType; staffMap: Record<st
       }
 
       try {
-        const res = await fetch(`${cfg.apiPath}?upsert=true`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        const existingId = existingMap.get(payload["name"].toLowerCase());
+        let res: Response;
+        if (existingId) {
+          // Overwrite existing record
+          res = await fetch(cfg.apiPath, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: existingId, ...payload }),
+          });
+        } else {
+          // Create new record
+          res = await fetch(cfg.apiPath, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        }
         if (res.ok) imported++; else errors++;
       } catch { errors++; }
     }
