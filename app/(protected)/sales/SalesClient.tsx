@@ -5,6 +5,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
+import { PayoutModal } from "./PayoutModal";
 
 // ─── Calc payout from local vendor take rate ──────────────────────────────────
 
@@ -631,14 +632,15 @@ function SectionGrid({
 
 function ProofOfPaymentSection({
   tenantId,
-  initialFiles,
+  files,
   canDeleteProof,
+  onFilesChange,
 }: {
   tenantId: string;
-  initialFiles: ProjectFile[];
+  files: ProjectFile[];
   canDeleteProof: boolean;
+  onFilesChange: (files: ProjectFile[]) => void;
 }) {
-  const [files, setFiles] = useState(initialFiles);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -657,7 +659,7 @@ function ProofOfPaymentSection({
       const res = await fetch("/api/files", { method: "POST", body: fd });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setFiles(prev => [...prev, data.file]);
+      onFilesChange([...files, data.file]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -675,7 +677,7 @@ function ProofOfPaymentSection({
       tag: "Payment Proof",
     });
     const res = await fetch(`/api/files?${params}`, { method: "DELETE" });
-    if (res.ok) setFiles(prev => prev.filter(f => f.id !== file.id));
+    if (res.ok) onFilesChange(files.filter(f => f.id !== file.id));
     else setError("Delete failed — TTT Manager permission required");
   }
 
@@ -764,6 +766,8 @@ export function SalesClient({
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [proofFiles, setProofFiles] = useState<ProjectFile[]>(paymentProofFiles);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
 
   function handlePayoutSaved(itemId: string, amount: number) {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, payoutPaidAmount: amount } : i));
@@ -861,9 +865,19 @@ export function SalesClient({
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Item Sales</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{tenantName} — consignment & marketplace tracking</p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Item Sales</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{tenantName} — consignment & marketplace tracking</p>
+        </div>
+        {canEditPayout && (
+          <button
+            onClick={() => setShowPayoutModal(true)}
+            className="h-9 px-4 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Payout Client
+          </button>
+        )}
       </div>
 
       {/* Summary */}
@@ -938,9 +952,26 @@ export function SalesClient({
       {/* Proof of Payment */}
       <ProofOfPaymentSection
         tenantId={tenantId}
-        initialFiles={paymentProofFiles}
+        files={proofFiles}
         canDeleteProof={canDeleteProof}
+        onFilesChange={setProofFiles}
       />
+
+      {/* Payout Modal */}
+      {showPayoutModal && (
+        <PayoutModal
+          tenantId={tenantId}
+          tenantName={tenantName}
+          items={items}
+          pfSaleEvents={pfSaleEvents}
+          localVendors={localVendors}
+          onClose={() => setShowPayoutModal(false)}
+          onGenerated={(file) => {
+            setProofFiles(prev => [...prev, file]);
+            setShowPayoutModal(false);
+          }}
+        />
+      )}
 
       {/* Edit Item Modal */}
       {editingItem && (

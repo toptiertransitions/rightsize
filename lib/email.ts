@@ -479,6 +479,71 @@ export function buildVendorAssignmentEmail({
 </html>`;
 }
 
+export function buildPayoutEmail({
+  clientName,
+  total,
+  itemCount,
+  date,
+  companyName,
+}: {
+  clientName: string;
+  total: number;
+  itemCount: number;
+  date: string;
+  companyName: string;
+}): string {
+  const fmt = (n: number) =>
+    `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const itemWord = itemCount === 1 ? "item" : "items";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Payout Statement</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">${companyName}</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Payout Statement</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${clientName},</p>
+              <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+                Please find attached your payout statement dated <strong>${date}</strong>.
+                It reflects your share of proceeds from <strong>${itemCount} ${itemWord}</strong> sold on your behalf.
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+                <tr style="background-color:#f0fdf4;">
+                  <td style="padding:14px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;">Total Payout</td>
+                  <td style="padding:14px 16px;font-size:18px;font-weight:bold;color:#2E6B4F;text-align:right;">${fmt(total)}</td>
+                </tr>
+              </table>
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5;">
+                The full breakdown is attached as a PDF. If you have any questions, reply to this email or contact your ${companyName} coordinator.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">${companyName} &mdash; Payout Statement</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ─── Drip Campaign Email Builder ───────────────────────────────────────────────
 export function substituteVars(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
