@@ -79,6 +79,7 @@ interface SalesClientProps {
   pfSaleEvents: ItemSaleEvent[];
   canEdit: boolean;
   canEditPayout: boolean;
+  canPayoutClient: boolean;
   canDeleteProof: boolean;
 }
 
@@ -761,6 +762,7 @@ export function SalesClient({
   pfSaleEvents: initialPfSaleEvents,
   canEdit,
   canEditPayout,
+  canPayoutClient,
   canDeleteProof,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
@@ -870,7 +872,7 @@ export function SalesClient({
           <h1 className="text-2xl font-bold text-gray-900">Item Sales</h1>
           <p className="text-sm text-gray-500 mt-0.5">{tenantName} — consignment & marketplace tracking</p>
         </div>
-        {canEditPayout && (
+        {canPayoutClient && (
           <button
             onClick={() => setShowPayoutModal(true)}
             className="h-9 px-4 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"

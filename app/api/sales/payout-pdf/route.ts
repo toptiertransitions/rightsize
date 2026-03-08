@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+  if (!sysRole || !["TTTManager", "TTTAdmin"].includes(sysRole)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       });
 
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
-        from: process.env.RESEND_FROM_EMAIL || "payouts@yourdomain.com",
+        from: "hello@toptiertransitions.com",
         to: recipientEmail,
         subject: `Your Payout Statement — ${new Date(date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`,
         html,

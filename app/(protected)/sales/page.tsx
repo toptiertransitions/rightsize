@@ -63,6 +63,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
   const canEditPayout = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
 
   return (
@@ -77,6 +78,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       pfSaleEvents={pfSaleEvents}
       canEdit={canEdit}
       canEditPayout={canEditPayout}
+      canPayoutClient={canPayoutClient}
       canDeleteProof={canDeleteProof}
     />
   );
