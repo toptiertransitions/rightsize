@@ -75,6 +75,7 @@ interface SalesClientProps {
   rooms: Room[];
   localVendors: LocalVendor[];
   paymentProofFiles: ProjectFile[];
+  pfSaleEvents: ItemSaleEvent[];
   canEdit: boolean;
   canEditPayout: boolean;
   canDeleteProof: boolean;
@@ -297,19 +298,23 @@ function ItemCard({
 
 function PFItemCard({
   item,
+  initialEvents,
   canEditPayout,
   canEdit,
   onEdit,
+  onEventUpdated,
 }: {
   item: Item;
+  initialEvents: ItemSaleEvent[];
   canEditPayout: boolean;
   canEdit: boolean;
   onEdit: (item: Item) => void;
+  onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [events, setEvents] = useState<ItemSaleEvent[]>([]);
+  const [events, setEvents] = useState<ItemSaleEvent[]>(initialEvents);
   const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(initialEvents.length > 0);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const qty = item.quantity ?? 0;
@@ -344,6 +349,7 @@ function PFItemCard({
       if (res.ok) {
         const data = await res.json();
         setEvents(prev => prev.map(e => e.id === event.id ? data.event : e));
+        onEventUpdated(data.event);
       }
     } finally {
       setTogglingId(null);
@@ -533,14 +539,18 @@ function PFItemCard({
 
 function PFSalesSection({
   items,
+  allEvents,
   canEditPayout,
   canEdit,
   onEdit,
+  onEventUpdated,
 }: {
   items: Item[];
+  allEvents: ItemSaleEvent[];
   canEditPayout: boolean;
   canEdit: boolean;
   onEdit: (item: Item) => void;
+  onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
   if (items.length === 0) return null;
 
@@ -565,9 +575,11 @@ function PFSalesSection({
           <PFItemCard
             key={item.id}
             item={item}
+            initialEvents={allEvents.filter(e => e.itemId === item.id)}
             canEditPayout={canEditPayout}
             canEdit={canEdit}
             onEdit={onEdit}
+            onEventUpdated={onEventUpdated}
           />
         ))}
       </div>
@@ -741,11 +753,13 @@ export function SalesClient({
   rooms,
   localVendors,
   paymentProofFiles,
+  pfSaleEvents: initialPfSaleEvents,
   canEdit,
   canEditPayout,
   canDeleteProof,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
+  const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
   function handlePayoutSaved(itemId: string, amount: number) {
@@ -796,13 +810,24 @@ export function SalesClient({
     otherByVendor.set(key, list);
   }
 
-  // Summary totals — prefer calculated payout from take rate, fall back to stored consignorPayout
-  const soldItems = items.filter(i => i.status === "Sold");
-  const totalEarned = soldItems.reduce((s, i) => {
+  // Summary totals
+  // PF items: sum clientPayout from sale events (accurate, event-level)
+  // Other items: prefer calc payout from local vendor take rate, fall back to stored consignorPayout
+  const pfItemIds = new Set(profound.map(i => i.id));
+  const pfTotalEarned = pfSaleEvents.reduce((s, e) => s + (e.clientPayout ?? 0), 0);
+  const pfTotalPaid = pfSaleEvents.filter(e => e.payoutPaid).reduce((s, e) => s + (e.clientPayout ?? 0), 0);
+
+  const nonPfSoldItems = items.filter(i => i.status === "Sold" && !pfItemIds.has(i.id));
+  const nonPfTotalEarned = nonPfSoldItems.reduce((s, i) => {
     const calc = calcPayouts.get(i.id);
     return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
   }, 0);
-  const totalPaid = items.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
+  const nonPfTotalPaid = items
+    .filter(i => !pfItemIds.has(i.id))
+    .reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
+
+  const totalEarned = pfTotalEarned + nonPfTotalEarned;
+  const totalPaid = pfTotalPaid + nonPfTotalPaid;
   const totalOwed = Math.max(0, totalEarned - totalPaid);
 
   const statCard = (label: string, value: number, color: string) => (
@@ -833,9 +858,11 @@ export function SalesClient({
       <div className="space-y-10">
         <PFSalesSection
           items={profound}
+          allEvents={pfSaleEvents}
           canEditPayout={canEditPayout}
           canEdit={canEdit}
           onEdit={setEditingItem}
+          onEventUpdated={(updated) => setPfSaleEvents(prev => prev.map(e => e.id === updated.id ? updated : e))}
         />
         <SectionGrid
           title="FB / Marketplace"

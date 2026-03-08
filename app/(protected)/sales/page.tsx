@@ -10,6 +10,7 @@ import {
   getMembershipsForUser,
   getRoomsForTenant,
   getAllLocalVendors,
+  getItemSaleEventsForTenant,
 } from "@/lib/airtable";
 import { SalesClient } from "./SalesClient";
 import type { PrimaryRoute } from "@/lib/types";
@@ -41,7 +42,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     redirect("/home");
   }
 
-  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors] = await Promise.all([
+  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getItemsForTenant(tenantId).catch(() => []),
@@ -50,6 +51,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     getSystemRole(userId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
     getAllLocalVendors().catch(() => []),
+    getItemSaleEventsForTenant(tenantId).catch(() => []),
   ]);
 
   if (!tenant) redirect("/home");
@@ -72,6 +74,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       rooms={rooms}
       localVendors={localVendors}
       paymentProofFiles={paymentProofFiles}
+      pfSaleEvents={pfSaleEvents}
       canEdit={canEdit}
       canEditPayout={canEditPayout}
       canDeleteProof={canDeleteProof}

@@ -3357,6 +3357,14 @@ export async function getItemSaleEvents(itemId?: string): Promise<ItemSaleEvent[
   return (data.records as AirtableRecord[]).map(mapItemSaleEvent);
 }
 
+export async function getItemSaleEventsForTenant(tenantId: string): Promise<ItemSaleEvent[]> {
+  const formula = `?filterByFormula=${encodeURIComponent(`{TenantId} = "${tenantId}"`)}&sort[0][field]=SaleDate&sort[0][direction]=desc`;
+  const res = await saleEventsFetch(formula);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapItemSaleEvent);
+}
+
 export async function getSaleEventBySquarePaymentId(paymentId: string): Promise<ItemSaleEvent | null> {
   const formula = encodeURIComponent(`{SquarePaymentId} = "${paymentId}"`);
   const res = await saleEventsFetch(`?filterByFormula=${formula}`);
