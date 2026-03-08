@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { TimeEntry, FocusArea, SoldItemRow } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
 
@@ -287,6 +287,66 @@ function EntryRow({
   );
 }
 
+// ─── Searchable Combobox ──────────────────────────────────────────────────────
+interface ComboboxOption { id: string; name: string; }
+interface ComboboxProps {
+  value: string;
+  onChange: (id: string, name: string) => void;
+  options: ComboboxOption[];
+  placeholder?: string;
+  displaySuffix?: (opt: ComboboxOption) => string;
+}
+
+function SearchableCombobox({ value, onChange, options, placeholder = "Search…", displaySuffix }: ComboboxProps) {
+  const selected = options.find(o => o.id === value);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filtered = options.filter(o =>
+    o.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const displayLabel = (opt: ComboboxOption) =>
+    displaySuffix ? `${opt.name}${displaySuffix(opt)}` : opt.name;
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="text"
+        value={open ? query : (selected ? displayLabel(selected) : "")}
+        placeholder={placeholder}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+      />
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg max-h-52 overflow-y-auto shadow-xl">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-gray-500">No matches</li>
+          ) : filtered.map(opt => (
+            <li
+              key={opt.id}
+              onMouseDown={() => { onChange(opt.id, opt.name); setOpen(false); setQuery(""); }}
+              className={`px-3 py-2 text-sm cursor-pointer ${opt.id === value ? "bg-forest-700 text-white" : "text-gray-200 hover:bg-gray-700"}`}
+            >
+              {displayLabel(opt)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Log Time Modal ───────────────────────────────────────────────────────────
 interface ModalProps {
   entry?: TimeEntry;
@@ -397,17 +457,16 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
             {!entry && staffMembers && staffMembers.length > 0 && (
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">Log for</label>
-                <select value={forUserId} onChange={e => {
-                  const s = staffMembers.find(m => m.id === e.target.value);
-                  setForUserId(e.target.value);
-                  setForUserName(s?.name ?? currentUserName);
-                }}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
-                  <option value={currentUserId}>{currentUserName} (me)</option>
-                  {staffMembers.filter(m => m.id !== currentUserId).map(m =>
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  )}
-                </select>
+                <SearchableCombobox
+                  value={forUserId}
+                  onChange={(id, name) => { setForUserId(id); setForUserName(name); }}
+                  options={[
+                    { id: currentUserId, name: currentUserName },
+                    ...staffMembers.filter(m => m.id !== currentUserId),
+                  ]}
+                  displaySuffix={opt => opt.id === currentUserId ? " (me)" : ""}
+                  placeholder="Search staff…"
+                />
               </div>
             )}
 
@@ -419,11 +478,16 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
-              <select value={tenantId} onChange={e => setTenantId(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
-                {tenants.length === 0 && <option value="">No projects</option>}
-                {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              {tenants.length === 0 ? (
+                <p className="text-sm text-gray-500 py-2">No projects</p>
+              ) : (
+                <SearchableCombobox
+                  value={tenantId}
+                  onChange={(id) => setTenantId(id)}
+                  options={tenants}
+                  placeholder="Search projects…"
+                />
+              )}
             </div>
 
             <div>

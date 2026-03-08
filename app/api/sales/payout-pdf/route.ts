@@ -73,14 +73,18 @@ export async function POST(req: NextRequest) {
   });
   const pdfBuffer = Buffer.from(rawPdf as unknown as Uint8Array);
 
-  // Upload to Cloudinary
+  const safeName = clientName.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
+  const fileName = `Payout-${safeName}-${date}.pdf`;
+
+  // Upload to Cloudinary with explicit resource_type "raw" so the URL is
+  // always /raw/upload/... and the file is served as a downloadable PDF.
   const uploaded = await uploadFile(pdfBuffer, {
     folder: `rightsize/${tenantId}/payment-proofs`,
     tenantId,
     mimeType: "application/pdf",
+    resourceType: "raw",
+    publicId: fileName.replace(/\.pdf$/, ""),
   });
-
-  const fileName = `Payout-${clientName.replace(/\s+/g, "-")}-${date}.pdf`;
 
   // Save as ProjectFile with tag "Payment Proof"
   const file = await createProjectFile({

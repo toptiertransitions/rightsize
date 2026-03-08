@@ -64,16 +64,25 @@ export async function uploadFile(
     folder?: string;
     tenantId?: string;
     mimeType?: string;
+    resourceType?: "raw" | "image" | "video" | "auto";
+    publicId?: string;
   } = {}
 ): Promise<FileUploadResult> {
   const folder = options.folder || `rightsize/${options.tenantId || "shared"}/files`;
   const mime = options.mimeType || "application/octet-stream";
 
+  // Default non-image/video MIME types to "raw" so Cloudinary stores and
+  // serves them as-is (avoids misclassification of PDFs as images).
+  const resourceType: "raw" | "image" | "video" | "auto" =
+    options.resourceType ??
+    (mime.startsWith("image/") || mime.startsWith("video/") ? "auto" : "raw");
+
   const result = await cloudinary.uploader.upload(
     `data:${mime};base64,${buffer.toString("base64")}`,
     {
       folder,
-      resource_type: "auto",
+      resource_type: resourceType,
+      ...(options.publicId ? { public_id: options.publicId } : {}),
     }
   );
 
