@@ -79,6 +79,7 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
     status: item.status,
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
+    quantity: item.quantity ?? 1,
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -437,6 +438,10 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
               <Input label="Value High ($)" type="number" value={form.valueHigh ?? 0}
                 onChange={e => set("valueHigh", Number(e.target.value))} />
             </div>
+            {form.primaryRoute === "ProFoundFinds Consignment" && (
+              <Input label="Quantity" type="number" value={form.quantity ?? 1}
+                onChange={e => set("quantity", Math.max(1, Number(e.target.value)))} />
+            )}
             {(() => {
               const vendorTypeForRoute: Partial<Record<string, string>> = {
                 "Other Consignment": "Consignment Store",

@@ -259,6 +259,7 @@ export interface ItemAnalysis {
   listing_fb: string;
   listing_offerup: string;
   staff_tips: string;
+  quantity?: number;
 }
 
 // ─── Plan / Daily Focus ───────────────────────────────────────────────────────
