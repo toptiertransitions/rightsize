@@ -438,10 +438,8 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
               <Input label="Value High ($)" type="number" value={form.valueHigh ?? 0}
                 onChange={e => set("valueHigh", Number(e.target.value))} />
             </div>
-            {form.primaryRoute === "ProFoundFinds Consignment" && (
-              <Input label="Quantity" type="number" value={form.quantity ?? 1}
-                onChange={e => set("quantity", Math.max(1, Number(e.target.value)))} />
-            )}
+            <Input label="Quantity" type="number" value={form.quantity ?? 1}
+              onChange={e => set("quantity", Math.max(1, Number(e.target.value)))} />
             {(() => {
               const vendorTypeForRoute: Partial<Record<string, string>> = {
                 "Other Consignment": "Consignment Store",

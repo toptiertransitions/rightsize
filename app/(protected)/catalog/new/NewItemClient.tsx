@@ -205,7 +205,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
           listingFb: merged.listing_fb,
           listingOfferup: merged.listing_offerup,
           staffTips: merged.staff_tips,
-          ...(merged.primary_route === "ProFoundFinds Consignment" ? { quantity: merged.quantity ?? 1 } : {}),
+          quantity: merged.quantity ?? 1,
         }),
       });
       if (!res.ok) {
@@ -562,10 +562,8 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                   <Input label="Value High ($)" type="number" value={merged.value_high ?? 0}
                     onChange={(e) => update("value_high", Number(e.target.value))} />
                 </div>
-                {merged.primary_route === "ProFoundFinds Consignment" && (
-                  <Input label="Quantity" type="number" value={merged.quantity ?? 1}
-                    onChange={(e) => update("quantity", Math.max(1, Number(e.target.value)))} />
-                )}
+                <Input label="Quantity" type="number" value={merged.quantity ?? 1}
+                  onChange={(e) => update("quantity", Math.max(1, Number(e.target.value)))} />
                 <div className="grid grid-cols-2 gap-3">
                   <Select label="Size" value={merged.size_class ?? "Fits in Car-SUV"}
                     onChange={(e) => update("size_class", e.target.value as SizeClass)}

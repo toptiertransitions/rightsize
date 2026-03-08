@@ -124,6 +124,8 @@ export async function POST(req: NextRequest) {
         quantitySold: li.quantity,
         currentQuantity: item.quantity ?? 0,
         currentQuantitySold: item.quantitySold ?? 0,
+        salePrice: unitPriceDollars,
+        clientPayout,
       });
       console.log(`[square/webhook] applied sale to item=${item.id}`);
 

@@ -3407,6 +3407,8 @@ export async function applySquareSaleToItem(opts: {
   quantitySold: number;
   currentQuantity: number;
   currentQuantitySold: number;
+  salePrice?: number;
+  clientPayout?: number;
 }): Promise<Item> {
   const newQty = Math.max(0, opts.currentQuantity - opts.quantitySold);
   const newQtySold = opts.currentQuantitySold + opts.quantitySold;
@@ -3418,6 +3420,8 @@ export async function applySquareSaleToItem(opts: {
   if (newStatus) {
     fields["Status"] = newStatus;
     fields["SaleDate"] = new Date().toISOString();
+    if (opts.salePrice != null) fields["SalePrice"] = opts.salePrice;
+    if (opts.clientPayout != null) fields["ConsignorPayout"] = opts.clientPayout;
   }
   const base = getBase();
   const record = await base(AIRTABLE_TABLES.ITEMS).update(opts.itemId, fields, { typecast: true });
