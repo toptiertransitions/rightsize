@@ -314,7 +314,8 @@ function PFItemCard({
 
   const qty = item.quantity ?? 0;
   const qtySold = item.quantitySold ?? 0;
-  const qtyTotal = qty + qtySold;
+  const qtyTotal = qty + qtySold; // original total = remaining + sold
+  const hasQtyData = qtyTotal > 0;
   const isSold = item.status === "Sold";
 
   async function loadEvents() {
@@ -395,9 +396,13 @@ function PFItemCard({
 
         {/* Qty progress */}
         <div className="text-right flex-shrink-0">
-          <div className="text-sm font-semibold text-gray-900">
-            {qtySold}/{qtyTotal} sold
-          </div>
+          {hasQtyData ? (
+            <div className="text-sm font-semibold text-gray-900">
+              {qtySold} of {qtyTotal} sold
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400">—</div>
+          )}
           {item.clientSharePercent != null && (
             <div className="text-[10px] text-gray-400">{item.clientSharePercent}% share</div>
           )}
@@ -551,7 +556,7 @@ function PFSalesSection({
         </span>
         {totalQty > 0 && (
           <span className="text-xs text-gray-400">
-            {totalSold}/{totalQty} units sold
+            {totalSold} of {totalQty} units sold
           </span>
         )}
       </div>
