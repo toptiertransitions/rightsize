@@ -28,6 +28,12 @@ yarn-error.log*
 
 # vercel
 .vercel
+/package/
+vercel-next-*.tgz
+
+# generated docs
+PRD.md
+TESTING_PLAN.md
 
 # typescript
 *.tsbuildinfo
