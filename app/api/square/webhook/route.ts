@@ -13,7 +13,9 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-square-hmacsha256-signature") ?? "";
   const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY ?? "";
-  const webhookUrl = `https://${req.headers.get("host")}/api/square/webhook`;
+  const webhookUrl =
+    process.env.SQUARE_WEBHOOK_URL ??
+    `https://${req.headers.get("host")}/api/square/webhook`;
 
   // Validate signature
   if (signatureKey) {
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
       signature,
     });
     if (!valid) {
-      console.warn("[square/webhook] Invalid signature");
+      console.warn(`[square/webhook] Invalid signature. URL used: ${webhookUrl}. Sig received: ${signature.slice(0, 20)}…`);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
   }
