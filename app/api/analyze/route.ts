@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
 
   const rawBuffer = Buffer.from(await file.arrayBuffer());
 
-  // Resize and convert to JPEG — handles HEIC/HEIF from iOS, oversized mobile photos,
-  // and ensures Claude always receives a supported format at a manageable size.
+  // Resize and convert to JPEG — handles oversized mobile photos.
+  // Claude only accepts JPEG/PNG/GIF/WebP; HEIC must be converted first.
   let processedBuffer: Buffer;
   try {
     processedBuffer = await sharp(rawBuffer)
@@ -38,8 +38,17 @@ export async function POST(req: NextRequest) {
       .jpeg({ quality: 85 })
       .toBuffer();
   } catch {
-    // If sharp can't handle the format, fall back to the raw buffer
     processedBuffer = rawBuffer;
+  }
+
+  // Validate sharp actually produced a JPEG (FF D8 FF magic bytes).
+  // If not, the raw file is a format Claude can't process (e.g. HEIC on Vercel).
+  const isJpeg = processedBuffer[0] === 0xff && processedBuffer[1] === 0xd8;
+  if (!isJpeg) {
+    return NextResponse.json(
+      { error: "Could not convert this image format. Please convert your photo to JPEG or PNG before uploading. On iPhone: share the photo → Save to Files → choose JPEG format." },
+      { status: 400 }
+    );
   }
 
   // Run Cloudinary upload and Claude analysis in parallel to save time.

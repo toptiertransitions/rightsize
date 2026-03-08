@@ -35,6 +35,15 @@ export async function POST(req: NextRequest) {
     processedBuffer = rawBuffer;
   }
 
+  // Validate sharp produced a real JPEG before uploading.
+  const isJpeg = processedBuffer[0] === 0xff && processedBuffer[1] === 0xd8;
+  if (!isJpeg) {
+    return NextResponse.json(
+      { error: "Could not convert this image format. Please convert your photo to JPEG or PNG before uploading. On iPhone: share the photo → Save to Files → choose JPEG format." },
+      { status: 400 }
+    );
+  }
+
   try {
     const result = await uploadImage(processedBuffer, { tenantId: tenantId ?? "admin", mimeType: "image/jpeg" });
     return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });

@@ -42,6 +42,39 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
   staff_tips: "",
 };
 
+// Convert HEIC/HEIF to JPEG client-side using canvas.
+// Works natively on Safari/iOS (where HEIC originates). On browsers that don't
+// support HEIC in <img> (Chrome/Firefox on desktop), returns the original file
+// and the server will return a clear error.
+async function convertHeicToJpeg(file: File): Promise<File> {
+  const isHeic =
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    /\.(heic|heif)$/i.test(file.name);
+  if (!isHeic) return file;
+
+  try {
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(file);
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject();
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext("2d")!.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(b => (b ? resolve(b) : reject()), "image/jpeg", 0.92)
+    );
+    return new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+  } catch {
+    return file; // let server handle it and return a clear error
+  }
+}
+
 export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,12 +95,16 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [error, setError] = useState<string>("");
 
-  const handleFileSelect = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) { setError("Please select an image file."); return; }
-    setPhotoFile(file);
+  const handleFileSelect = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
+      setError("Please select an image file.");
+      return;
+    }
+    const converted = await convertHeicToJpeg(file);
+    setPhotoFile(converted);
     const reader = new FileReader();
     reader.onload = (e) => setPhotoPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(converted);
     setError("");
   }, []);
 
@@ -154,7 +191,8 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
     setError("");
     try {
       const uploaded: PhotoMeta[] = [];
-      for (const file of toUpload) {
+      for (const rawFile of toUpload) {
+        const file = await convertHeicToJpeg(rawFile);
         const fd = new FormData();
         fd.append("file", file);
         fd.append("tenantId", tenantId);
