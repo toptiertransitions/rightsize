@@ -3378,8 +3378,7 @@ export async function createItemSaleEvent(data: Omit<ItemSaleEvent, "id" | "crea
     SquareOrderId: data.squareOrderId || "",
     SaleDate: data.saleDate,
     PayoutPaid: data.payoutPaid ?? false,
-    Notes: data.notes || "",
-    CreatedAt: new Date().toISOString(),
+    ...(data.notes ? { Notes: data.notes } : {}),
   };
   const res = await saleEventsFetch("", {
     method: "POST",
@@ -3415,7 +3414,6 @@ export async function applySquareSaleToItem(opts: {
   const fields: Airtable.FieldSet = {
     Quantity: newQty,
     QuantitySold: newQtySold,
-    UpdatedAt: new Date().toISOString(),
   };
   if (newStatus) {
     fields["Status"] = newStatus;
