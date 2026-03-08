@@ -71,6 +71,7 @@ function fmtCurrency(n: number | undefined) {
 interface SalesClientProps {
   tenantId: string;
   tenantName: string;
+  ownerEmail: string;
   items: Item[];
   vendors: Vendor[];
   rooms: Room[];
@@ -754,6 +755,7 @@ function ProofOfPaymentSection({
 export function SalesClient({
   tenantId,
   tenantName,
+  ownerEmail,
   items: initialItems,
   vendors,
   rooms,
@@ -964,6 +966,7 @@ export function SalesClient({
         <PayoutModal
           tenantId={tenantId}
           tenantName={tenantName}
+          ownerEmail={ownerEmail}
           items={items}
           pfSaleEvents={pfSaleEvents}
           localVendors={localVendors}

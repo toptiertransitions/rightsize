@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import {
   getItemsForTenant,
@@ -58,6 +58,14 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const resolvedRole = role ?? sysRole;
   if (!resolvedRole) redirect("/home");
 
+  // Fetch owner email for pre-filling the payout email field
+  let ownerEmail = "";
+  if (tenant.ownerUserId) {
+    const clerk = await clerkClient();
+    const ownerUser = await clerk.users.getUser(tenant.ownerUserId).catch(() => null);
+    ownerEmail = ownerUser?.emailAddresses?.[0]?.emailAddress ?? "";
+  }
+
   const items = allItems.filter(i => CONSIGNMENT_ROUTES.includes(i.primaryRoute));
   const paymentProofFiles = files.filter(f => f.fileTag === "Payment Proof");
 
@@ -76,6 +84,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       localVendors={localVendors}
       paymentProofFiles={paymentProofFiles}
       pfSaleEvents={pfSaleEvents}
+      ownerEmail={ownerEmail}
       canEdit={canEdit}
       canEditPayout={canEditPayout}
       canPayoutClient={canPayoutClient}

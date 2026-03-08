@@ -54,11 +54,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  try {
   const date = new Date().toISOString().slice(0, 10);
   const total = items.reduce((s: number, i: PayoutLineItem) => s + i.clientPayout, 0);
 
-  // Generate PDF
-  const pdfBuffer = await renderPayoutPDF({
+  // Generate PDF — wrap in Buffer.from() to guarantee a real Node.js Buffer
+  // (renderToBuffer can return Uint8Array in some versions of @react-pdf/renderer)
+  const rawPdf = await renderPayoutPDF({
     clientName,
     clientAddress,
     clientEmail,
@@ -69,9 +71,10 @@ export async function POST(req: NextRequest) {
     date,
     items,
   });
+  const pdfBuffer = Buffer.from(rawPdf as unknown as Uint8Array);
 
   // Upload to Cloudinary
-  const uploaded = await uploadFile(pdfBuffer as Buffer, {
+  const uploaded = await uploadFile(pdfBuffer, {
     folder: `rightsize/${tenantId}/payment-proofs`,
     tenantId,
     mimeType: "application/pdf",
@@ -108,7 +111,7 @@ export async function POST(req: NextRequest) {
         attachments: [
           {
             filename: fileName,
-            content: (pdfBuffer as Buffer).toString("base64"),
+            content: pdfBuffer,
           },
         ],
       };
@@ -121,4 +124,9 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ file });
+  } catch (err) {
+    console.error("[payout-pdf] error:", err);
+    const msg = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

@@ -90,6 +90,7 @@ export function buildUnpaidLineItems(
 interface PayoutModalProps {
   tenantId: string;
   tenantName: string;
+  ownerEmail: string;
   items: Item[];
   pfSaleEvents: ItemSaleEvent[];
   localVendors: LocalVendor[];
@@ -100,6 +101,7 @@ interface PayoutModalProps {
 export function PayoutModal({
   tenantId,
   tenantName,
+  ownerEmail,
   items,
   pfSaleEvents,
   localVendors,
@@ -110,7 +112,7 @@ export function PayoutModal({
   const total = unpaidItems.reduce((s, i) => s + i.clientPayout, 0);
 
   const [sendEmail, setSendEmail] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState(ownerEmail);
   const [ccEmail, setCcEmail] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
@@ -211,7 +213,18 @@ export function PayoutModal({
               {sendEmail && (
                 <div className="space-y-3 pl-7">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-gray-600">To</label>
+                      {ownerEmail && recipientEmail !== ownerEmail && (
+                        <button
+                          type="button"
+                          onClick={() => setRecipientEmail(ownerEmail)}
+                          className="text-[11px] text-green-600 hover:underline"
+                        >
+                          Reset to {ownerEmail}
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="email"
                       value={recipientEmail}
