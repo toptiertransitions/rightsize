@@ -317,11 +317,14 @@ function PFItemCard({
   const [loaded, setLoaded] = useState(initialEvents.length > 0);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const qty = item.quantity ?? 0;
-  const qtySold = item.quantitySold ?? 0;
-  const qtyTotal = qty + qtySold; // original total = remaining + sold
-  const hasQtyData = qtyTotal > 0;
   const isSold = item.status === "Sold";
+  const qty = item.quantity ?? 0;
+  // If manually marked Sold with no Square sales tracked, treat all units as sold
+  const qtySold = (isSold && (item.quantitySold ?? 0) === 0 && qty > 0)
+    ? qty
+    : (item.quantitySold ?? 0);
+  const qtyTotal = qty + (item.quantitySold ?? 0); // original total = remaining + square-sold
+  const hasQtyData = qtyTotal > 0;
 
   async function loadEvents() {
     if (loaded) return;
@@ -811,12 +814,28 @@ export function SalesClient({
   }
 
   // Summary totals
-  // PF items: sum clientPayout from sale events (accurate, event-level)
-  // Other items: prefer calc payout from local vendor take rate, fall back to stored consignorPayout
   const pfItemIds = new Set(profound.map(i => i.id));
-  const pfTotalEarned = pfSaleEvents.reduce((s, e) => s + (e.clientPayout ?? 0), 0);
-  const pfTotalPaid = pfSaleEvents.filter(e => e.payoutPaid).reduce((s, e) => s + (e.clientPayout ?? 0), 0);
 
+  // Items that have Square sale events
+  const pfItemsWithEvents = new Set(pfSaleEvents.map(e => e.itemId));
+
+  // PF: Square sales → use event clientPayout (most accurate)
+  const pfEventTotalEarned = pfSaleEvents.reduce((s, e) => s + (e.clientPayout ?? 0), 0);
+  const pfEventTotalPaid = pfSaleEvents.filter(e => e.payoutPaid).reduce((s, e) => s + (e.clientPayout ?? 0), 0);
+
+  // PF: manually marked Sold (no Square events) → calculate from item price × share %
+  const pfManualSoldItems = profound.filter(i => i.status === "Sold" && !pfItemsWithEvents.has(i.id));
+  const pfManualTotalEarned = pfManualSoldItems.reduce((s, i) => {
+    if (i.consignorPayout) return s + i.consignorPayout;
+    if (i.valueMid && i.clientSharePercent) return s + (i.valueMid * (i.clientSharePercent / 100));
+    return s;
+  }, 0);
+  const pfManualTotalPaid = pfManualSoldItems.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
+
+  const pfTotalEarned = pfEventTotalEarned + pfManualTotalEarned;
+  const pfTotalPaid = pfEventTotalPaid + pfManualTotalPaid;
+
+  // Non-PF: prefer calc payout from local vendor take rate, fall back to stored consignorPayout
   const nonPfSoldItems = items.filter(i => i.status === "Sold" && !pfItemIds.has(i.id));
   const nonPfTotalEarned = nonPfSoldItems.reduce((s, i) => {
     const calc = calcPayouts.get(i.id);
