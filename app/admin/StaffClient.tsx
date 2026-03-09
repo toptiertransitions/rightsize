@@ -33,6 +33,31 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
   const [looking, setLooking] = useState(false);
   const [lookupError, setLookupError] = useState("");
   const [looked, setLooked] = useState(false);
+  // Invite flow
+  const [inviting, setInviting] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+
+  async function handleInvite() {
+    if (!lookupEmail.trim()) return;
+    setInviting(true);
+    setInviteError("");
+    setInviteSent(false);
+    try {
+      const res = await fetch("/api/admin/staff/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: lookupEmail.trim(), role }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send invite");
+      setInviteSent(true);
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : "Failed to send invite");
+    } finally {
+      setInviting(false);
+    }
+  }
 
   async function handleLookup() {
     if (!lookupEmail.trim()) return;
@@ -109,12 +134,24 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
           {!member && (
             <>
               <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
+                <select
+                  value={role}
+                  onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager")}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+                >
+                  <option value="TTTStaff">Staff</option>
+                  <option value="TTTManager">Manager</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">Email</label>
                 <div className="flex gap-2">
                   <input
                     type="email"
                     value={lookupEmail}
-                    onChange={e => { setLookupEmail(e.target.value); setLooked(false); setClerkUserId(""); }}
+                    onChange={e => { setLookupEmail(e.target.value); setLooked(false); setClerkUserId(""); setInviteSent(false); setInviteError(""); setLookupError(""); }}
                     onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleLookup())}
                     placeholder="user@example.com"
                     className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
@@ -128,21 +165,57 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
                     {looking ? "…" : "Find"}
                   </button>
                 </div>
-                {lookupError && <p className="text-red-400 text-xs mt-1">{lookupError}</p>}
+
+                {/* Lookup result */}
+                {lookupError && lookupError.includes("No Clerk account") ? (
+                  <div className="mt-2 p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+                    <p className="text-amber-300 text-xs mb-2">
+                      No account found. Send them an invitation to sign up first.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleInvite}
+                      disabled={inviting || inviteSent}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-forest-600 text-white hover:bg-forest-500 disabled:opacity-50 transition-colors"
+                    >
+                      {inviting ? "Sending…" : inviteSent ? "Invitation sent!" : "Send Invitation Email"}
+                    </button>
+                    {inviteError && <p className="text-red-400 text-xs mt-1">{inviteError}</p>}
+                    {inviteSent && (
+                      <p className="text-forest-400 text-xs mt-1">
+                        Once they sign up, use Find to look them up and add them.
+                      </p>
+                    )}
+                  </div>
+                ) : lookupError ? (
+                  <p className="text-red-400 text-xs mt-1">{lookupError}</p>
+                ) : null}
+
                 {looked && <p className="text-forest-400 text-xs mt-1">Found: {displayName} ({clerkUserId})</p>}
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
-                <select
-                  value={role}
-                  onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager")}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
-                >
-                  <option value="TTTStaff">Staff</option>
-                  <option value="TTTManager">Manager</option>
-                </select>
-              </div>
+              {/* Quick invite option before lookup */}
+              {!looked && !lookupError && lookupEmail.trim() && (
+                <div className="p-3 bg-gray-800 border border-gray-700 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-2">
+                    New user? Send them an invitation to sign up before adding them.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleInvite}
+                    disabled={inviting || inviteSent}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                  >
+                    {inviting ? "Sending…" : inviteSent ? "Invitation sent!" : "Send Invitation Email"}
+                  </button>
+                  {inviteError && <p className="text-red-400 text-xs mt-1">{inviteError}</p>}
+                  {inviteSent && (
+                    <p className="text-forest-400 text-xs mt-1">
+                      Invite sent! Click Find once they&apos;ve signed up.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {error && <p className="text-red-400 text-xs">{error}</p>}
 
