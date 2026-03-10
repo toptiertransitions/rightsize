@@ -10,7 +10,8 @@ async function checkAdmin() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await checkAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const adminId = await checkAdmin();
+  if (!adminId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const { action, email, clerkUserId } = body;
@@ -81,6 +82,21 @@ export async function POST(req: NextRequest) {
         },
         signInUrl: token.url,
       });
+    } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  if (action === "impersonate" && clerkUserId) {
+    try {
+      const actorToken = await client.actorTokens.create({
+        userId: clerkUserId,
+        actor: { sub: adminId },
+      });
+      if (!actorToken.token) {
+        return NextResponse.json({ error: "Actor token was not generated" }, { status: 500 });
+      }
+      return NextResponse.json({ token: actorToken.token });
     } catch (e) {
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }

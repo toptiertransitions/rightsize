@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useSignIn } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import type { AdminUser } from "./page";
 
 // Project-level membership roles (NOT system roles)
@@ -627,6 +629,29 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
   const [managing, setManaging] = useState<AdminUser | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newUserLink, setNewUserLink] = useState<{ userName: string; signInUrl: string } | null>(null);
+  const [impersonating, setImpersonating] = useState<string | null>(null);
+  const { signIn } = useSignIn();
+  const router = useRouter();
+
+  async function handleImpersonate(user: AdminUser) {
+    if (!signIn) return;
+    setImpersonating(user.clerkUserId);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "impersonate", clerkUserId: user.clerkUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to get impersonation token");
+      const { error } = await signIn.ticket({ ticket: data.token });
+      if (error) throw new Error(error.message ?? "Sign-in failed");
+      router.push("/home");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Impersonation failed");
+      setImpersonating(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return users;
@@ -770,12 +795,22 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
                   )}
                 </td>
                 <td className="px-5 py-3 text-right">
-                  <button
-                    onClick={() => setManaging(user)}
-                    className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    Manage
-                  </button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => handleImpersonate(user)}
+                      disabled={impersonating === user.clerkUserId}
+                      className="text-xs text-amber-400 hover:text-amber-300 border border-amber-800 hover:border-amber-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      title={`View app as ${user.name}`}
+                    >
+                      {impersonating === user.clerkUserId ? "…" : "View As"}
+                    </button>
+                    <button
+                      onClick={() => setManaging(user)}
+                      className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Manage
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

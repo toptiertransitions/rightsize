@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 
@@ -21,8 +21,13 @@ interface HeaderProps {
   isSales?: boolean;
 }
 
-export function Header({ tenantName, isImpersonating, onStopImpersonating, isManager, isStaff, isAdmin, isSales }: HeaderProps) {
+export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales }: HeaderProps) {
   const pathname = usePathname();
+  const { actor } = useAuth();
+  const { signOut } = useClerk();
+  const { user } = useUser();
+  const isImpersonating = isImpersonatingProp || !!actor;
+  const impersonatedName = actor ? (user?.firstName ? [user.firstName, user.lastName].filter(Boolean).join(" ") : user?.emailAddresses?.[0]?.emailAddress ?? "user") : undefined;
   const showSwitcher = isStaff && SWITCHER_PAGES.some((p) => pathname.startsWith(p));
   const allowAllProjects = ALL_PROJECTS_PAGES.some((p) => pathname.startsWith(p));
   const searchParams = useSearchParams();
@@ -85,10 +90,10 @@ export function Header({ tenantName, isImpersonating, onStopImpersonating, isMan
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            <span>TTT Staff View — {tenantName}</span>
+            <span>Viewing as {impersonatedName ?? tenantName ?? "user"}</span>
           </div>
           <button
-            onClick={onStopImpersonating}
+            onClick={actor ? () => signOut({ redirectUrl: "/admin/users" }) : onStopImpersonating}
             className="underline hover:no-underline ml-4"
           >
             Exit to Admin
