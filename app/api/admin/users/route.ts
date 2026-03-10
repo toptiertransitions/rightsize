@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       if (!actorToken.token) {
         return NextResponse.json({ error: "Actor token was not generated" }, { status: 500 });
       }
-      return NextResponse.json({ token: actorToken.token });
+      return NextResponse.json({ token: actorToken.token, url: actorToken.url });
     } catch (e) {
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }

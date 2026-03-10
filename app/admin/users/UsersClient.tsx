@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useSignIn } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import type { AdminUser } from "./page";
 
@@ -630,11 +629,9 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [newUserLink, setNewUserLink] = useState<{ userName: string; signInUrl: string } | null>(null);
   const [impersonating, setImpersonating] = useState<string | null>(null);
-  const { signIn } = useSignIn();
   const router = useRouter();
 
   async function handleImpersonate(user: AdminUser) {
-    if (!signIn) return;
     setImpersonating(user.clerkUserId);
     try {
       const res = await fetch("/api/admin/users", {
@@ -644,9 +641,14 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to get impersonation token");
-      const { error } = await signIn.ticket({ ticket: data.token });
-      if (error) throw new Error(error.message ?? "Sign-in failed");
-      router.push("/home");
+      // Navigate to Clerk's actor token URL — this performs a full-page redirect
+      // so Clerk middleware can exchange the ticket for a session without triggering
+      // the "already signed in" warning.
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No redirect URL returned");
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : "Impersonation failed");
       setImpersonating(null);
