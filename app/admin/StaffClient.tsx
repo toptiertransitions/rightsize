@@ -291,6 +291,8 @@ export function StaffClient({ initialStaff }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [editMember, setEditMember] = useState<StaffMember | undefined>(undefined);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [resending, setResending] = useState<string | null>(null);
+  const [resendSent, setResendSent] = useState<string | null>(null);
 
   function openNew() { setEditMember(undefined); setShowModal(true); }
   function openEdit(m: StaffMember) { setEditMember(m); setShowModal(true); }
@@ -307,6 +309,26 @@ export function StaffClient({ initialStaff }: Props) {
       return [...prev, saved];
     });
     closeModal();
+  }
+
+  async function handleResendInvite(member: StaffMember) {
+    if (!member.email) { alert("No email address on file for this staff member."); return; }
+    setResending(member.id);
+    setResendSent(null);
+    try {
+      const res = await fetch("/api/admin/staff/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: member.email, role: member.role }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed to send");
+      setResendSent(member.id);
+      setTimeout(() => setResendSent(null), 3000);
+    } catch (err) {
+      alert(String(err));
+    } finally {
+      setResending(null);
+    }
   }
 
   async function handleRemove(member: StaffMember) {
@@ -380,6 +402,17 @@ export function StaffClient({ initialStaff }: Props) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => handleResendInvite(m)}
+                        disabled={resending === m.id}
+                        className={`text-xs px-2 py-1 rounded transition-colors ${
+                          resendSent === m.id
+                            ? "text-forest-400 bg-forest-900/30"
+                            : "text-gray-400 hover:text-white hover:bg-gray-700"
+                        } disabled:opacity-50`}
+                      >
+                        {resending === m.id ? "Sending…" : resendSent === m.id ? "Sent!" : "Resend Invite"}
+                      </button>
                       <button
                         onClick={() => openEdit(m)}
                         className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
