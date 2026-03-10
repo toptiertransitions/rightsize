@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import type { AdminUser } from "./page";
 
@@ -629,6 +630,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [newUserLink, setNewUserLink] = useState<{ userName: string; signInUrl: string } | null>(null);
   const [impersonating, setImpersonating] = useState<string | null>(null);
+  const clerk = useClerk();
   const router = useRouter();
 
   async function handleImpersonate(user: AdminUser) {
@@ -641,14 +643,16 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to get impersonation token");
-      // Navigate to Clerk's actor token URL — this performs a full-page redirect
-      // so Clerk middleware can exchange the ticket for a session without triggering
-      // the "already signed in" warning.
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error("No redirect URL returned");
-      }
+      // Use the old SignInResource via clerk.client (not the v7 signals hook) so
+      // we can create an actor session while already signed in (multi-session).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (clerk as any).client.signIn.create({
+        strategy: "ticket",
+        ticket: data.token,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (clerk as any).setActive({ session: result.createdSessionId });
+      router.push("/home");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Impersonation failed");
       setImpersonating(null);
