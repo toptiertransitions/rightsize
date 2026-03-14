@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     try {
       const tenant = await getTenantById(tenantId).catch(() => null);
       if (!tenant) throw new Error("Tenant not found");
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
       const signingUrl = `${appUrl}/sign/${signToken}`;
 
       const toEmail = recipientEmail as string | undefined;

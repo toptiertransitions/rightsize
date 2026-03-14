@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     "The all-in-one platform for senior downsizing — catalog, estimate, and plan your move with confidence.",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    process.env.NEXT_PUBLIC_APP_URL || "https://app.toptiertransitions.com"
   ),
 };
 

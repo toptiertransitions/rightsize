@@ -24,7 +24,7 @@ export default async function InvitePage({ searchParams }: PageProps) {
   }
 
   const { userId } = await auth();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
   const returnUrl = `${appUrl}/invite?token=${token}`;
   const isInviter = userId === payload.invitedBy;
 

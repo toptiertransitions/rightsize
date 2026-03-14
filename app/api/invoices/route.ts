@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
   if (sendEmail && sentToEmail) {
     try {
       const settings = await getInvoiceSettings().catch(() => null);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
       const payUrl = `${appUrl}/pay/${invoice.id}`;
       const html = buildInvoiceEmail({
         invoiceNumber,

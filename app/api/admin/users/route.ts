@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       if (!actorToken.token) {
         return NextResponse.json({ error: "Actor token was not generated" }, { status: 500 });
       }
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
       const url = `${appUrl}/home?__clerk_ticket=${actorToken.token}`;
       return NextResponse.json({ token: actorToken.token, url });
     } catch (e) {
