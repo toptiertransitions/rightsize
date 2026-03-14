@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { uploadImage } from "@/lib/cloudinary";
+import { uploadImage, uploadFile } from "@/lib/cloudinary";
 import sharp from "sharp";
 
 export const maxDuration = 30;
@@ -23,8 +23,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
 
+  const mimeType = file.type || "application/octet-stream";
   const rawBuffer = Buffer.from(await file.arrayBuffer());
 
+  // PDFs and other non-image files — upload as raw files, skip image processing
+  if (!mimeType.startsWith("image/")) {
+    try {
+      const result = await uploadFile(rawBuffer, {
+        tenantId: tenantId ?? "admin",
+        mimeType,
+        resourceType: "raw",
+      });
+      return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
+    } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  // Images — resize and convert to JPEG via sharp
   let processedBuffer: Buffer;
   try {
     processedBuffer = await sharp(rawBuffer)
