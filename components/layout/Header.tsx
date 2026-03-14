@@ -54,8 +54,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
 
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
-  // Sales users only see CRM + Drips + Expenses
+  // Sales users see CRM + Drips + Expenses + Quoting + Invoices
   const salesOnlyLinks = [
+    { href: `/quoting${tq}`, base: "/quoting", label: "Quoting" },
+    { href: `/invoices${tq}`, base: "/invoices", label: "Invoices" },
     { href: "/crm", base: "/crm", label: "CRM" },
     { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
     { href: "/expenses", base: "/expenses", label: "Expenses" },

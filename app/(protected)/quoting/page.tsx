@@ -27,7 +27,7 @@ export default async function QuotingPage({ searchParams }: PageProps) {
   if (!userId) redirect("/sign-in");
 
   const sysRole = await getSystemRole(userId);
-  if (sysRole !== "TTTAdmin") redirect("/home");
+  if (!["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "")) redirect("/home");
 
   const { tenantId } = await searchParams;
   if (!tenantId) {

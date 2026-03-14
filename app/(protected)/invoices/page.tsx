@@ -29,12 +29,12 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     getUserRoleForTenant(userId, tenantId).catch(() => null),
   ]);
 
-  const isTTTStaff = sysRole === "TTTAdmin" || sysRole === "TTTManager" || sysRole === "TTTStaff";
+  const isTTTStaff = sysRole === "TTTAdmin" || sysRole === "TTTManager" || sysRole === "TTTStaff" || sysRole === "TTTSales";
 
   // Allow TTT staff (who may not have a membership row in every project) or tenant members
   if (!isTTTStaff && !tenantRole) redirect("/home");
 
-  const isManager = sysRole === "TTTAdmin" || sysRole === "TTTManager" ||
+  const isManager = sysRole === "TTTAdmin" || sysRole === "TTTManager" || sysRole === "TTTSales" ||
     tenantRole === "TTTAdmin" || tenantRole === "TTTManager";
 
   const [tenant, invoices, services, invoiceSettings, allContracts, timeEntries] =
