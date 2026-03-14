@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (!firstName || !newEmail || !role) {
       return NextResponse.json({ error: "firstName, email, and role are required" }, { status: 400 });
     }
-    if (!["TTTStaff", "TTTManager"].includes(role)) {
+    if (!["TTTStaff", "TTTManager", "TTTSales"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
     try {
