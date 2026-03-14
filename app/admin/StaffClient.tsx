@@ -10,6 +10,7 @@ interface Props {
 const ROLE_LABELS: Record<string, string> = {
   TTTStaff:   "Staff",
   TTTManager: "Manager",
+  TTTSales:   "Sales",
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -23,8 +24,8 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
   const [clerkUserId, setClerkUserId] = useState(member?.clerkUserId ?? "");
   const [displayName, setDisplayName] = useState(member?.displayName ?? "");
   const [email, setEmail] = useState(member?.email ?? "");
-  const [role, setRole] = useState<"TTTStaff" | "TTTManager">(
-    (member?.role === "TTTManager" ? "TTTManager" : "TTTStaff")
+  const [role, setRole] = useState<"TTTStaff" | "TTTManager" | "TTTSales">(
+    (member?.role === "TTTManager" ? "TTTManager" : member?.role === "TTTSales" ? "TTTSales" : "TTTStaff")
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -137,11 +138,12 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
                 <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
                 <select
                   value={role}
-                  onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager")}
+                  onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager" | "TTTSales")}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
                 >
                   <option value="TTTStaff">Staff</option>
                   <option value="TTTManager">Manager</option>
+                  <option value="TTTSales">Sales</option>
                 </select>
               </div>
 
@@ -260,11 +262,12 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
             <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
             <select
               value={role}
-              onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager")}
+              onChange={e => setRole(e.target.value as "TTTStaff" | "TTTManager" | "TTTSales")}
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
             >
               <option value="TTTStaff">Staff</option>
               <option value="TTTManager">Manager</option>
+              <option value="TTTSales">Sales</option>
             </select>
           </div>
 
@@ -388,6 +391,8 @@ export function StaffClient({ initialStaff }: Props) {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       m.role === "TTTManager"
                         ? "bg-purple-900/50 text-purple-300"
+                        : m.role === "TTTSales"
+                        ? "bg-blue-900/50 text-blue-300"
                         : "bg-gray-700 text-gray-300"
                     }`}>
                       {ROLE_LABELS[m.role] ?? m.role}
