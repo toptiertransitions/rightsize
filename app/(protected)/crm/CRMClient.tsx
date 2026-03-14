@@ -314,6 +314,7 @@ function OpportunitiesTab({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Owner</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Stage</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Est. Value</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Next Step</th>
@@ -323,14 +324,17 @@ function OpportunitiesTab({
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center py-10 text-gray-400">
+                <td colSpan={6} className="text-center py-10 text-gray-400">
                   No opportunities found
                 </td>
               </tr>
             )}
-            {sorted.map((opp) => (
+            {sorted.map((opp) => {
+              const ownerName = staffMembers.find(s => s.clerkUserId === (opp.assignedToClerkId || clientContacts.find(c => c.id === opp.clientContactId)?.assignedToClerkId))?.displayName;
+              return (
               <tr key={opp.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(opp)}>
                 <td className="px-4 py-3 font-medium text-gray-900">{getContactName(opp.clientContactId)}</td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ownerName || <span className="text-gray-400">—</span>}</td>
                 <td className="px-4 py-3">
                   <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", STAGE_COLORS[opp.stage])}>
                     {opp.stage}
@@ -349,7 +353,8 @@ function OpportunitiesTab({
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -358,6 +363,7 @@ function OpportunitiesTab({
         <OpportunityPanel
           opportunity={panelOpp}
           clientContacts={clientContacts}
+          staffMembers={staffMembers}
           gmailConnected={gmailConnected}
           onSaved={handleSaved}
           onClose={() => { setPanelOpen(false); clearPending?.(); }}
@@ -372,6 +378,7 @@ function OpportunitiesTab({
 function OpportunityPanel({
   opportunity,
   clientContacts,
+  staffMembers,
   gmailConnected,
   onSaved,
   onClose,
@@ -379,6 +386,7 @@ function OpportunityPanel({
 }: {
   opportunity: ClientOpportunity | null;
   clientContacts: ClientContact[];
+  staffMembers: StaffMember[];
   gmailConnected: boolean;
   onSaved: (opp: ClientOpportunity) => void;
   onClose: () => void;
@@ -405,6 +413,10 @@ function OpportunityPanel({
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
   const [converting, setConverting] = useState(false);
   const [convertedProject, setConvertedProject] = useState<{ id: string; name: string } | null>(null);
+
+  // Derive owner from the selected contact; fall back to existing opportunity owner
+  const derivedOwnerClerkId = clientContacts.find(c => c.id === clientContactId)?.assignedToClerkId || opportunity?.assignedToClerkId || "";
+  const ownerName = staffMembers.find(s => s.clerkUserId === derivedOwnerClerkId)?.displayName;
 
   const loadActivities = useCallback(async () => {
     if (!opportunity) return;
@@ -434,6 +446,7 @@ function OpportunityPanel({
         keyPeople,
         wonAt: stage === "Won" && !opportunity?.wonAt ? new Date().toISOString() : opportunity?.wonAt,
         lostAt: stage === "Lost" && !opportunity?.lostAt ? new Date().toISOString() : opportunity?.lostAt,
+        assignedToClerkId: derivedOwnerClerkId,
       };
       if (opportunity) {
         const res = await fetch("/api/crm/opportunities", {
@@ -532,6 +545,7 @@ function OpportunityPanel({
           keyPeople,
           wonAt: opportunity.wonAt,
           lostAt: opportunity.lostAt,
+          assignedToClerkId: derivedOwnerClerkId,
         };
         const oppRes = await fetch("/api/crm/opportunities", {
           method: "PATCH",
@@ -590,6 +604,9 @@ function OpportunityPanel({
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {ownerName && (
+              <p className="text-xs text-gray-500 mt-1">Owner: <span className="font-medium text-gray-700">{ownerName}</span></p>
+            )}
           </div>
 
           {/* Stage */}
@@ -1009,17 +1026,19 @@ function ContactsTab({
   initialContacts,
   referralContacts,
   allClientContacts,
+  staffMembers,
   onCreateOpportunity,
 }: {
   initialContacts: ClientContact[];
   referralContacts: ReferralContact[];
   allClientContacts: ClientContact[];
+  staffMembers: StaffMember[];
   onCreateOpportunity: (contactId: string) => void;
 }) {
   const [contacts, setContacts] = useState(initialContacts);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ClientContact | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "", assignedToClerkId: "" });
   const [rpQuery, setRpQuery] = useState("");
   const [crQuery, setCrQuery] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1075,7 +1094,7 @@ function ContactsTab({
 
   function openNew() {
     setEditing(null);
-    setForm({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "" });
+    setForm({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "", assignedToClerkId: "" });
     setRpQuery("");
     setCrQuery("");
     setModalOpen(true);
@@ -1083,7 +1102,7 @@ function ContactsTab({
 
   function openEdit(c: ClientContact) {
     setEditing(c);
-    setForm({ name: c.name, email: c.email, phone: c.phone, source: c.source, referralPartnerId: c.referralPartnerId || "", clientReferralId: c.clientReferralId || "", notes: c.notes });
+    setForm({ name: c.name, email: c.email, phone: c.phone, source: c.source, referralPartnerId: c.referralPartnerId || "", clientReferralId: c.clientReferralId || "", notes: c.notes, assignedToClerkId: c.assignedToClerkId || "" });
     // Pre-fill combobox queries from existing IDs
     const rp = referralContacts.find((r) => r.id === c.referralPartnerId);
     setRpQuery(rp ? rp.name : "");
@@ -1181,6 +1200,7 @@ function ContactsTab({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Owner</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Phone</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Source</th>
@@ -1189,11 +1209,14 @@ function ContactsTab({
           </thead>
           <tbody>
             {contacts.length === 0 && (
-              <tr><td colSpan={5} className="text-center py-10 text-gray-400">No contacts yet</td></tr>
+              <tr><td colSpan={6} className="text-center py-10 text-gray-400">No contacts yet</td></tr>
             )}
             {contacts.map((c) => (
               <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                  {staffMembers.find(s => s.clerkUserId === c.assignedToClerkId)?.displayName || <span className="text-gray-400">—</span>}
+                </td>
                 <td className="px-4 py-3 text-gray-600">{c.email || "—"}</td>
                 <td className="px-4 py-3 text-gray-600">{c.phone || "—"}</td>
                 <td className="px-4 py-3 text-gray-600">{c.source || "—"}</td>
@@ -1333,6 +1356,21 @@ function ContactsTab({
               </div>
             )}
 
+            {/* Owner */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Owner *</label>
+              <select
+                value={form.assignedToClerkId}
+                onChange={(e) => setForm((f) => ({ ...f, assignedToClerkId: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">— Select Owner —</option>
+                {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+                  <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
@@ -1341,7 +1379,7 @@ function ContactsTab({
 
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setModalOpen(false)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
+              <button onClick={handleSave} disabled={saving || !form.name || !form.assignedToClerkId} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
@@ -1372,7 +1410,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
   const [companyModal, setCompanyModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<ReferralCompany | null>(null);
-  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", assignedToClerkId: "" });
+  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", website: "", assignedToClerkId: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "" });
@@ -1508,13 +1546,13 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
 
   function openNewCompany() {
     setEditingCompany(null);
-    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", assignedToClerkId: "" });
+    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", website: "", assignedToClerkId: "" });
     setCompanyModal(true);
   }
 
   function openEditCompany(c: ReferralCompany) {
     setEditingCompany(c);
-    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, assignedToClerkId: c.assignedToClerkId || "" });
+    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, website: c.website || "", assignedToClerkId: c.assignedToClerkId || "" });
     setCompanyModal(true);
   }
 
@@ -1531,6 +1569,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
         zip: companyForm.zip,
         priority: companyForm.priority,
         notes: companyForm.notes,
+        website: companyForm.website,
         assignedToClerkId: companyForm.assignedToClerkId,
       };
       if (editingCompany) {
@@ -1828,6 +1867,11 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
                     {(company.city || company.state) && (
                       <span>{[company.city, company.state].filter(Boolean).join(", ")}</span>
                     )}
+                    {company.website && (
+                      <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer" className="text-forest-600 hover:underline" onClick={e => e.stopPropagation()}>
+                        {company.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                      </a>
+                    )}
                     {company.assignedToClerkId && staffById.get(company.assignedToClerkId) && (
                       <span>Owner: {staffById.get(company.assignedToClerkId)}</span>
                     )}
@@ -1983,7 +2027,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
               <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
               <select value={companyForm.assignedToClerkId} onChange={(e) => setCompanyForm((f) => ({ ...f, assignedToClerkId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                 <option value="">— Unassigned —</option>
-                {staffMembers.map(s => <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>)}
+                {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>)}
               </select>
             </div>
             <div>
@@ -2003,6 +2047,10 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
                 <label className="block text-sm font-medium text-gray-700 mb-1">Zip</label>
                 <input type="text" value={companyForm.zip} onChange={(e) => setCompanyForm((f) => ({ ...f, zip: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+              <input type="url" value={companyForm.website} onChange={(e) => setCompanyForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://example.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
@@ -2336,15 +2384,19 @@ function DashboardTab({
                 {opps.length === 0 && (
                   <p className="text-xs text-gray-400 px-4 py-3">No opportunities</p>
                 )}
-                {opps.slice(0, 5).map((o) => (
+                {opps.slice(0, 5).map((o) => {
+                  const oppOwner = staffById.get(o.assignedToClerkId || "");
+                  return (
                   <div key={o.id} className="px-4 py-2.5">
                     <p className="text-xs font-medium text-gray-800 truncate">{getContactName(o.clientContactId)}</p>
                     <p className="text-xs text-gray-400">
                       {o.estimatedValue > 0 ? fmt(o.estimatedValue) : "No value"}
                       {o.nextStepDate ? ` · ${new Date(o.nextStepDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                      {oppOwner ? ` · ${oppOwner}` : ""}
                     </p>
                   </div>
-                ))}
+                  );
+                })}
                 {opps.length > 5 && (
                   <p className="text-xs text-gray-400 px-4 py-2">+{opps.length - 5} more</p>
                 )}
@@ -3066,7 +3118,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           clearPending={() => setPendingContactId(null)}
         />
       )}
-      {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} onCreateOpportunity={handleCreateOpportunity} />}
+      {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} staffMembers={staffMembers} onCreateOpportunity={handleCreateOpportunity} />}
       {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} initialReferralContacts={referralContacts} staffMembers={staffMembers} />}
       {tab === "activity" && (
         <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />

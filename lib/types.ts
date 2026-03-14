@@ -553,6 +553,7 @@ export interface ReferralCompany {
   zip: string;
   priority: ReferralPriority;
   notes: string;
+  website?: string;
   assignedToClerkId: string;
   createdAt: string;
 }
@@ -590,6 +591,7 @@ export interface ClientContact {
   referralPartnerId?: string;
   clientReferralId?: string;
   notes: string;
+  assignedToClerkId: string;
   createdAt: string;
 }
 

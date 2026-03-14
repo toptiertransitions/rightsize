@@ -31,11 +31,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No items provided" }, { status: 400 });
   }
 
-  const results: Array<{ id: string; success: boolean; error?: string }> = [];
+  const results: Array<{ id: string; name: string; success: boolean; error?: string }> = [];
 
   for (const item of items) {
     if (!item.barcodeNumber) {
-      results.push({ id: item.id, success: false, error: "No barcode number" });
+      results.push({ id: item.id, name: item.itemName, success: false, error: "No barcode number" });
       continue;
     }
 
@@ -55,10 +55,13 @@ export async function POST(req: NextRequest) {
         squareSyncedAt: new Date().toISOString(),
       });
 
-      results.push({ id: item.id, success: true });
+      results.push({ id: item.id, name: item.itemName, success: true });
     } catch (e) {
-      results.push({ id: item.id, success: false, error: String(e) });
+      results.push({ id: item.id, name: item.itemName, success: false, error: String(e) });
     }
+
+    // Small delay to avoid hitting Square's catalog API rate limit (~100 req/min)
+    await new Promise(r => setTimeout(r, 120));
   }
 
   const succeeded = results.filter(r => r.success).length;

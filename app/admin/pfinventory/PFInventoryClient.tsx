@@ -242,6 +242,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const [squareLocation, setSquareLocation] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [syncErrors, setSyncErrors] = useState<{ name: string; error: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/square/status")
@@ -354,6 +355,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
     if (!targets.length) { setSyncResult("No eligible items (need barcode + Listed status)."); return; }
     setSyncing(true);
     setSyncResult(null);
+    setSyncErrors([]);
     try {
       const res = await fetch("/api/square/sync", {
         method: "POST",
@@ -367,6 +369,8 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
       });
       const data = await res.json();
       setSyncResult(`Synced ${data.succeeded} item${data.succeeded !== 1 ? "s" : ""} to Square${data.failed ? `, ${data.failed} failed` : ""}.`);
+      const failures = (data.results ?? []).filter((r: { success: boolean; name: string; error?: string }) => !r.success);
+      setSyncErrors(failures.map((r: { name: string; error?: string }) => ({ name: r.name, error: r.error ?? "Unknown error" })));
       // Refresh items to show updated squareSyncedAt
       const refreshed = await fetch("/api/items?primaryRoute=ProFoundFinds+Consignment").then(r => r.json()).catch(() => null);
       if (refreshed?.items) setItems(refreshed.items);
@@ -435,6 +439,23 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
           <span className="text-xs text-gray-400">{syncResult}</span>
         )}
       </div>
+
+      {/* Sync error details */}
+      {syncErrors.length > 0 && (
+        <div className="mb-4 bg-red-950/40 border border-red-800 rounded-xl p-3">
+          <p className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2">
+            {syncErrors.length} item{syncErrors.length !== 1 ? "s" : ""} failed to sync
+          </p>
+          <div className="max-h-40 overflow-y-auto space-y-1">
+            {syncErrors.map((e, i) => (
+              <div key={i} className="text-xs text-red-300">
+                <span className="font-medium text-red-200">{e.name}:</span>{" "}
+                <span className="text-red-400">{e.error}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">

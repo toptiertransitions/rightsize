@@ -189,6 +189,11 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 4.5 * 1024 * 1024) {
+      setUploadError("File is too large. Please upload a file under 4.5 MB.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setUploading(true);
     setUploadError("");
     try {

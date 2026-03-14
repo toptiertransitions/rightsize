@@ -2123,6 +2123,7 @@ function mapReferralCompany(record: AirtableRecord): ReferralCompany {
     zip: toStr(f["Zip"]),
     priority: (rawPriority === "High" || rawPriority === "Medium" || rawPriority === "Low" ? rawPriority : "") as import("./types").ReferralPriority,
     notes: toStr(f["Notes"]),
+    website: toStr(f["Website"]) || undefined,
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
   };
@@ -2159,6 +2160,7 @@ export async function createReferralCompany(data: {
   zip?: string;
   priority?: string;
   notes?: string;
+  website?: string;
   assignedToClerkId?: string;
 }): Promise<ReferralCompany> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, "", {
@@ -2173,6 +2175,7 @@ export async function createReferralCompany(data: {
         Zip: data.zip || "",
         ...(data.priority ? { Priority: data.priority } : {}),
         Notes: data.notes || "",
+        Website: data.website || "",
         AssignedToClerkId: data.assignedToClerkId || "",
         CreatedAt: new Date().toISOString(),
       },
@@ -2184,7 +2187,7 @@ export async function createReferralCompany(data: {
 
 export async function updateReferralCompany(
   id: string,
-  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; assignedToClerkId: string }>
+  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; website: string; assignedToClerkId: string }>
 ): Promise<ReferralCompany> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2195,6 +2198,7 @@ export async function updateReferralCompany(
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.priority !== undefined) fields["Priority"] = data.priority || null;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.website !== undefined) fields["Website"] = data.website;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, {
     method: "PATCH",
@@ -2331,6 +2335,7 @@ function mapClientContact(record: AirtableRecord): ClientContact {
     referralPartnerId: toStr(f["ReferralPartnerId"]) || undefined,
     clientReferralId: toStr(f["ClientReferralId"]) || undefined,
     notes: toStr(f["Notes"]),
+    assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
   };
 }
@@ -2365,6 +2370,7 @@ export async function createClientContact(data: {
   referralPartnerId?: string;
   clientReferralId?: string;
   notes?: string;
+  assignedToClerkId?: string;
 }): Promise<ClientContact> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, "", {
     method: "POST",
@@ -2377,6 +2383,7 @@ export async function createClientContact(data: {
         ReferralPartnerId: data.referralPartnerId || "",
         ClientReferralId: data.clientReferralId || "",
         Notes: data.notes || "",
+        AssignedToClerkId: data.assignedToClerkId || "",
         CreatedAt: new Date().toISOString(),
       },
     }),
@@ -2387,7 +2394,7 @@ export async function createClientContact(data: {
 
 export async function updateClientContact(
   id: string,
-  data: Partial<{ name: string; email: string; phone: string; source: string; referralPartnerId: string; clientReferralId: string; notes: string }>
+  data: Partial<{ name: string; email: string; phone: string; source: string; referralPartnerId: string; clientReferralId: string; notes: string; assignedToClerkId: string }>
 ): Promise<ClientContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2397,6 +2404,7 @@ export async function updateClientContact(
   if (data.referralPartnerId !== undefined) fields["ReferralPartnerId"] = data.referralPartnerId;
   if (data.clientReferralId !== undefined) fields["ClientReferralId"] = data.clientReferralId;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
