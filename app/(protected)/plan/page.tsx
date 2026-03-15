@@ -270,6 +270,19 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const isTTTStaff = sysRole === "TTTStaff";
+
+  // TTTStaff should only see shifts they are personally invited to
+  let filteredEntries = entries;
+  if (isTTTStaff) {
+    const clerk = await clerkClient();
+    const clerkUser = await clerk.users.getUser(userId!).catch(() => null);
+    const userEmail = clerkUser?.emailAddresses.find(
+      e => e.id === clerkUser.primaryEmailAddressId
+    )?.emailAddress;
+    filteredEntries = userEmail
+      ? entries.filter(entry => entry.helpers?.some(h => h.email === userEmail))
+      : [];
+  }
   const tenantOptions = (isManagerOrAdmin || isTTTStaff)
     ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }))
     : undefined;
@@ -290,7 +303,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
       </div>
 
       <PlanClient
-        entries={entries}
+        entries={filteredEntries}
         rooms={rooms}
         tenantId={tenantId}
         canEdit={canEdit}

@@ -548,6 +548,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
 
   // In "All Projects" mode (currentTenantId is one of the sentinel values), disable editing
   const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__" || currentTenantId === "__all_time__" || currentTenantId === "__my_projects__";
@@ -665,37 +666,131 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
     <>
       {/* ── Staff: All My Projects toggle ───────────────────────────────────── */}
       {isStaff && (
-        <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <button
-            type="button"
-            onClick={!isMyProjectsMode ? () => router.push("/plan") : undefined}
-            aria-pressed={isMyProjectsMode}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-400 ${
-              isMyProjectsMode ? "bg-forest-500 cursor-default" : "bg-gray-300 cursor-pointer hover:bg-gray-400"
-            }`}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-150 ${
-              isMyProjectsMode ? "translate-x-6" : "translate-x-1"
-            }`} />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-800">All My Projects</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {isMyProjectsMode
-                ? "Showing your shifts across all active and archived projects"
-                : "Viewing a single project — toggle to see all your shifts"}
-            </p>
-          </div>
-          {!isMyProjectsMode && (
+        <>
+          <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-sm">
             <button
               type="button"
-              onClick={() => router.push("/plan")}
-              className="flex-shrink-0 text-xs font-medium text-forest-600 hover:text-forest-700 underline underline-offset-2"
+              onClick={() => isMyProjectsMode ? setShowProjectPicker(true) : router.push("/plan")}
+              aria-pressed={isMyProjectsMode}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-400 cursor-pointer ${
+                isMyProjectsMode ? "bg-forest-500 hover:bg-forest-600" : "bg-gray-300 hover:bg-gray-400"
+              }`}
             >
-              View all
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-150 ${
+                isMyProjectsMode ? "translate-x-6" : "translate-x-1"
+              }`} />
             </button>
+            <div
+              className="flex-1 min-w-0 cursor-pointer"
+              onClick={() => isMyProjectsMode ? setShowProjectPicker(true) : router.push("/plan")}
+            >
+              <p className="text-sm font-semibold text-gray-800">All My Projects</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {isMyProjectsMode
+                  ? "Your shifts across all projects — click to filter by project"
+                  : "Viewing a single project — toggle to see all your shifts"}
+              </p>
+            </div>
+          </div>
+
+          {/* ── Project picker modal ──────────────────────────────────────── */}
+          {showProjectPicker && tenantOptions && (
+            <div
+              className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4"
+              onClick={() => setShowProjectPicker(false)}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="text-base font-bold text-gray-900">Select a view</h3>
+                  <button
+                    onClick={() => setShowProjectPicker(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="py-2 max-h-80 overflow-y-auto">
+                  {/* All My Projects option */}
+                  <button
+                    type="button"
+                    onClick={() => setShowProjectPicker(false)}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-left bg-forest-50 hover:bg-forest-100 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-forest-500 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-forest-700">All My Projects</p>
+                      <p className="text-xs text-forest-600/70">Your shifts across all projects</p>
+                    </div>
+                    <svg className="w-4 h-4 text-forest-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </button>
+
+                  {/* Divider */}
+                  <div className="px-5 py-2">
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Projects</p>
+                  </div>
+
+                  {/* Active projects */}
+                  {tenantOptions.filter(t => !t.isArchived).map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => { setShowProjectPicker(false); router.push(`/plan?tenantId=${t.id}`); }}
+                      className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <p className="flex-1 text-sm font-medium text-gray-800 truncate">{t.name}</p>
+                      <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  ))}
+
+                  {/* Archived projects */}
+                  {tenantOptions.some(t => t.isArchived) && (
+                    <>
+                      <div className="px-5 py-2 mt-1">
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Archived</p>
+                      </div>
+                      {tenantOptions.filter(t => t.isArchived).map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { setShowProjectPicker(false); router.push(`/plan?tenantId=${t.id}`); }}
+                          className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                          </div>
+                          <p className="flex-1 text-sm font-medium text-gray-500 truncate">{t.name}</p>
+                          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
