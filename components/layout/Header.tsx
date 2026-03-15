@@ -52,6 +52,13 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const navTenantId = isSentinel ? persistedTenantId : tenantId;
   const tq = navTenantId ? `?tenantId=${navTenantId}` : "";
 
+  // For staff, the Plan link only carries a tenantId when one is present in the
+  // *current* URL — so /home → Plan defaults to All My Projects (toggle ON),
+  // while /catalog?tenantId=X → Plan keeps the same project (toggle OFF).
+  const staffPlanTq = (isStaff && urlTenantId && !isSentinel)
+    ? `?tenantId=${urlTenantId}`
+    : "";
+
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
   // Sales users see CRM + Drips + Expenses + Quoting + Invoices
@@ -65,7 +72,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
 
   const navLinks = isVendorPortal ? [] : isSales ? salesOnlyLinks : [
     { href: "/home", label: "Home" },
-    { href: `/plan${tq}`, base: "/plan", label: "Plan" },
+    { href: `/plan${isStaff ? staffPlanTq : tq}`, base: "/plan", label: "Plan" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
