@@ -593,15 +593,27 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <Input label="Value Low ($)" type="number" value={merged.value_low ?? 0}
-                    onChange={(e) => update("value_low", Number(e.target.value))} />
-                  <Input label="Target Value ($)" type="number" value={merged.value_mid ?? 0}
-                    onChange={(e) => update("value_mid", Number(e.target.value))} />
-                  <Input label="Value High ($)" type="number" value={merged.value_high ?? 0}
-                    onChange={(e) => update("value_high", Number(e.target.value))} />
+                  <Input label="Value Low ($)" type="number" inputMode="decimal"
+                    value={merged.value_low || ""}
+                    placeholder="0"
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => update("value_low", e.target.value === "" ? 0 : Number(e.target.value))} />
+                  <Input label="Target Value ($)" type="number" inputMode="decimal"
+                    value={merged.value_mid || ""}
+                    placeholder="0"
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => update("value_mid", e.target.value === "" ? 0 : Number(e.target.value))} />
+                  <Input label="Value High ($)" type="number" inputMode="decimal"
+                    value={merged.value_high || ""}
+                    placeholder="0"
+                    onFocus={e => e.target.select()}
+                    onChange={(e) => update("value_high", e.target.value === "" ? 0 : Number(e.target.value))} />
                 </div>
-                <Input label="Quantity" type="number" value={merged.quantity ?? 1}
-                  onChange={(e) => update("quantity", Math.max(1, Number(e.target.value)))} />
+                <Input label="Quantity" type="number" inputMode="numeric"
+                  value={merged.quantity || ""}
+                  placeholder="1"
+                  onFocus={e => e.target.select()}
+                  onChange={(e) => update("quantity", e.target.value === "" ? 1 : Math.max(1, Number(e.target.value)))} />
                 <div className="grid grid-cols-2 gap-3">
                   <Select label="Size" value={merged.size_class ?? "Fits in Car-SUV"}
                     onChange={(e) => update("size_class", e.target.value as SizeClass)}

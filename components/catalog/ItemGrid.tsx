@@ -446,15 +446,27 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               <textarea rows={2} value={form.routeReasoning ?? ""} onChange={e => set("routeReasoning", e.target.value)} className={textareaClass} />
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Input label="Value Low ($)" type="number" value={form.valueLow ?? 0}
-                onChange={e => set("valueLow", Number(e.target.value))} />
-              <Input label="Target Value ($)" type="number" value={form.valueMid ?? 0}
-                onChange={e => set("valueMid", Number(e.target.value))} />
-              <Input label="Value High ($)" type="number" value={form.valueHigh ?? 0}
-                onChange={e => set("valueHigh", Number(e.target.value))} />
+              <Input label="Value Low ($)" type="number" inputMode="decimal"
+                value={form.valueLow || ""}
+                placeholder="0"
+                onFocus={e => e.target.select()}
+                onChange={e => set("valueLow", e.target.value === "" ? undefined : Number(e.target.value))} />
+              <Input label="Target Value ($)" type="number" inputMode="decimal"
+                value={form.valueMid || ""}
+                placeholder="0"
+                onFocus={e => e.target.select()}
+                onChange={e => set("valueMid", e.target.value === "" ? undefined : Number(e.target.value))} />
+              <Input label="Value High ($)" type="number" inputMode="decimal"
+                value={form.valueHigh || ""}
+                placeholder="0"
+                onFocus={e => e.target.select()}
+                onChange={e => set("valueHigh", e.target.value === "" ? undefined : Number(e.target.value))} />
             </div>
-            <Input label="Quantity" type="number" value={form.quantity ?? 1}
-              onChange={e => set("quantity", Math.max(1, Number(e.target.value)))} />
+            <Input label="Quantity" type="number" inputMode="numeric"
+              value={form.quantity || ""}
+              placeholder="1"
+              onFocus={e => e.target.select()}
+              onChange={e => set("quantity", e.target.value === "" ? 1 : Math.max(1, Number(e.target.value)))} />
             {(() => {
               const vendorTypeForRoute: Partial<Record<string, string>> = {
                 "Other Consignment": "Consignment Store",
