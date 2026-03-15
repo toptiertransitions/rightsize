@@ -35,6 +35,14 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
   const [editName, setEditName] = useState("");
   const [savingName, setSavingName] = useState(false);
 
+  // Location inline editing
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [editAddress, setEditAddress] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [editState, setEditState] = useState("");
+  const [editZip, setEditZip] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
+
   // Active projects view state
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeSearch, setActiveSearch] = useState("");
@@ -112,6 +120,42 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
       setEditingId(null);
     } finally {
       setSavingName(false);
+    }
+  }
+
+  function startEditLocation(tenant: Tenant) {
+    setEditingLocationId(tenant.id);
+    setEditAddress(tenant.address ?? "");
+    setEditCity(tenant.city ?? "");
+    setEditState(tenant.state ?? "");
+    setEditZip(tenant.zip ?? "");
+  }
+
+  async function saveLocation(tenantId: string) {
+    setSavingLocation(true);
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          address: editAddress.trim(),
+          city: editCity.trim(),
+          state: editState.trim(),
+          zip: editZip.trim(),
+        }),
+      });
+      if (!res.ok) return;
+      setTenants(prev => prev.map(t => t.id === tenantId ? {
+        ...t,
+        address: editAddress.trim(),
+        city: editCity.trim(),
+        state: editState.trim(),
+        zip: editZip.trim(),
+      } : t));
+      setEditingLocationId(null);
+    } finally {
+      setSavingLocation(false);
     }
   }
 
@@ -298,12 +342,13 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {activeTenants.map(tenant => {
-                const location = [tenant.city, tenant.state].filter(Boolean).join(", ");
+                const addressLine = [tenant.address, [tenant.city, tenant.state].filter(Boolean).join(", "), tenant.zip].filter(Boolean).join(" · ");
                 const createdDisplay = tenant.createdAt
                   ? new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                   : "—";
+                const editingLoc = editingLocationId === tenant.id;
                 return (
-                  <tr key={tenant.id} className="group hover:bg-gray-50/60 transition-colors">
+                  <tr key={tenant.id} className={cn("group transition-colors", editingLoc ? "bg-gray-50/80" : "hover:bg-gray-50/60")}>
                     <td className="px-4 py-3">
                       {editingId === tenant.id ? (
                         <div className="flex items-center gap-2">
@@ -343,16 +388,74 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-sm">{location || <span className="text-gray-300">—</span>}</td>
+                    {/* Location cell — inline editable */}
+                    <td className="px-4 py-3 text-sm">
+                      {editingLoc ? (
+                        <div className="space-y-1.5">
+                          <input
+                            autoFocus
+                            value={editAddress}
+                            onChange={e => setEditAddress(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Escape") setEditingLocationId(null); }}
+                            placeholder="Street address"
+                            className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                          />
+                          <div className="flex gap-1.5">
+                            <input
+                              value={editCity}
+                              onChange={e => setEditCity(e.target.value)}
+                              placeholder="City"
+                              className="flex-1 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                            />
+                            <input
+                              value={editState}
+                              onChange={e => setEditState(e.target.value)}
+                              placeholder="ST"
+                              className="w-14 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                            />
+                            <input
+                              value={editZip}
+                              onChange={e => setEditZip(e.target.value)}
+                              placeholder="Zip"
+                              className="w-20 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                            />
+                          </div>
+                          <div className="flex gap-2 pt-0.5">
+                            <button onClick={() => saveLocation(tenant.id)} disabled={savingLocation}
+                              className="text-xs text-forest-600 hover:text-forest-700 font-medium disabled:opacity-50">
+                              {savingLocation ? "Saving…" : "Save"}
+                            </button>
+                            <button onClick={() => setEditingLocationId(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 group/loc">
+                          <span className="text-gray-500">{addressLine || <span className="text-gray-300">—</span>}</span>
+                          <button
+                            onClick={() => startEditLocation(tenant)}
+                            className="opacity-0 group-hover/loc:opacity-100 flex-shrink-0 text-gray-300 hover:text-forest-600 transition-all"
+                            title="Edit address"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-400 text-sm whitespace-nowrap">{createdDisplay}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => setArchived(tenant.id, true)}
-                        disabled={archiving === tenant.id}
-                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
-                      >
-                        {archiving === tenant.id ? "…" : "Archive"}
-                      </button>
+                      {!editingLoc && (
+                        <button
+                          onClick={() => setArchived(tenant.id, true)}
+                          disabled={archiving === tenant.id}
+                          className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                        >
+                          {archiving === tenant.id ? "…" : "Archive"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
