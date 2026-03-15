@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getActivitiesForOpportunity, getActivitiesForContact, getAllActivities, createActivity, updateActivity, deleteActivity } from "@/lib/airtable";
 
-async function requireManager(userId: string) {
+async function requireCRMAccess(userId: string) {
   const sysRole = await getSystemRole(userId);
-  return sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  return sysRole === "TTTSales" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
 }
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await requireManager(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const opportunityId = req.nextUrl.searchParams.get("opportunityId");
   const contactId = req.nextUrl.searchParams.get("contactId");
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await requireManager(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const activity = await createActivity({ ...body, createdByClerkId: userId });
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await requireManager(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await requireManager(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
