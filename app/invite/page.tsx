@@ -24,8 +24,8 @@ export default async function InvitePage({ searchParams }: PageProps) {
   }
 
   const { userId } = await auth();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
-  const returnUrl = `${appUrl}/invite?token=${token}`;
+  // Use a relative path so Clerk doesn't need the domain in its allowed-redirect-URL list
+  const returnUrl = `/invite?token=${encodeURIComponent(token)}`;
   const isInviter = userId === payload.invitedBy;
 
   // ── Vendor invite ──────────────────────────────────────────────────────────

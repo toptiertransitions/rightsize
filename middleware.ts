@@ -5,6 +5,7 @@ const isPublicRoute = createRouteMatcher([
   "/calculator(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/invite(.*)",          // invite acceptance page — must be reachable before auth
   "/api/invites/(.*)",
   "/api/square/webhook",
   "/api/contracts/sign",
