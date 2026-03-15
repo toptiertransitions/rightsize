@@ -75,23 +75,55 @@ function todayISO(): string {
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
 function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string, to: string) {
-  const header = ["Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time", "Duration (hrs)", "Travel Time (min)", "Travel Miles", "Notes", "Commission ($)"];
+  const header = [
+    "Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time",
+    "Duration (hrs)",
+    "Travel Time (min)", "Unpaid Travel Time (min)", "Payable Travel Time (min)", "Total Payable Time (hrs)",
+    "Travel Miles", "Non-Reimbursed Travel Miles", "Travel Reimbursement Owed ($)",
+    "Notes", "Commission ($)",
+  ];
 
   const entryRows = entries
     .filter(e => e.date >= from && e.date <= to)
-    .map(e => [
-      e.date,
-      e.staffName,
-      e.projectName,
-      e.focusArea,
-      formatTime12(e.startTime),
-      formatTime12(e.endTime),
-      (e.durationMinutes / 60).toFixed(2),
-      e.travelMinutes != null ? String(e.travelMinutes) : "",
-      e.travelMiles != null ? String(e.travelMiles) : "",
-      e.notes ?? "",
-      "",
-    ]);
+    .map(e => {
+      const travelMins = e.travelMinutes ?? null;
+      const travelMi   = e.travelMiles   ?? null;
+
+      // Unpaid travel: first 30 min are unpaid (or all of it if < 30)
+      const unpaidTravel = travelMins != null && travelMins > 0
+        ? Math.min(travelMins, 30) : null;
+      // Payable travel: anything beyond the first 30 min
+      const payableTravel = travelMins != null && travelMins > 0
+        ? travelMins - Math.min(travelMins, 30) : null;
+      // Total payable time in hours = work duration + payable travel minutes
+      const totalPayableHrs = ((e.durationMinutes + (payableTravel ?? 0)) / 60).toFixed(2);
+
+      // Non-reimbursed miles: first 20 miles aren't reimbursed
+      const nonReimbursedMiles = travelMi != null && travelMi > 0
+        ? Math.min(travelMi, 20) : null;
+      // Reimbursement owed: miles beyond 20 × $0.725
+      const reimbursementOwed = travelMi != null && travelMi > 0
+        ? ((travelMi - Math.min(travelMi, 20)) * 0.725).toFixed(2) : null;
+
+      return [
+        e.date,
+        e.staffName,
+        e.projectName,
+        e.focusArea,
+        formatTime12(e.startTime),
+        formatTime12(e.endTime),
+        (e.durationMinutes / 60).toFixed(2),
+        travelMins != null ? String(travelMins) : "",
+        unpaidTravel  != null ? String(unpaidTravel)  : "",
+        payableTravel != null ? String(payableTravel) : "",
+        totalPayableHrs,
+        travelMi != null ? String(travelMi) : "",
+        nonReimbursedMiles  != null ? String(nonReimbursedMiles)  : "",
+        reimbursementOwed   != null ? String(reimbursementOwed)   : "",
+        e.notes ?? "",
+        "",
+      ];
+    });
 
   const saleRows = soldItems
     .filter(i => i.saleDate >= from && i.saleDate <= to)
@@ -109,8 +141,8 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string,
         "",
         "",
         (timeMinutes / 60).toFixed(2),
-        "",
-        "",
+        "", "", "", (timeMinutes / 60).toFixed(2), // travel cols blank; total payable = duration
+        "", "", "",                                  // miles cols blank
         i.itemName,
         commission,
       ];
