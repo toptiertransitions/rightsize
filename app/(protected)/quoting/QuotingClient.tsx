@@ -544,11 +544,32 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   const estimatorRooms = mode === "rooms" ? rooms : syntheticRooms;
   const hasRooms = mode === "rooms" ? rooms.length > 0 : syntheticRooms.length > 0;
 
-  function handleSaved(contract: Contract) {
+  async function handleSaved(contract: Contract) {
+    const isNew = !quotes.find((q) => q.id === contract.id);
+    const isFirstQuote = isNew && quotes.length === 0;
+
+    let finalContract = contract;
+
+    if (isFirstQuote) {
+      // Auto-set as primary so the user doesn't have to click "Set as Primary"
+      // when there's only one quote on the project.
+      try {
+        const res = await fetch("/api/contracts", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: contract.id, tenantId: tenant.id, action: "setPrimary" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          finalContract = data.contract ?? { ...contract, status: "Signed" as const };
+        }
+      } catch { /* ignore — contract still shows, just not auto-signed */ }
+    }
+
     setQuotes((prev) => {
-      const exists = prev.find((q) => q.id === contract.id);
-      if (exists) return prev.map((q) => (q.id === contract.id ? contract : q));
-      return [contract, ...prev];
+      const exists = prev.find((q) => q.id === finalContract.id);
+      if (exists) return prev.map((q) => (q.id === finalContract.id ? finalContract : q));
+      return [finalContract, ...prev];
     });
     setEditingContract(null);
     setShowEstimator(false);

@@ -56,8 +56,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
 
   // Sales users see CRM + Drips + Expenses + Quoting + Invoices
   const salesOnlyLinks = [
-    { href: `/quoting${tq}`, base: "/quoting", label: "Quoting" },
-    { href: `/invoices${tq}`, base: "/invoices", label: "Invoices" },
+    { href: "/quoting", base: "/quoting", label: "Quoting" },
+    { href: "/invoices", base: "/invoices", label: "Invoices" },
     { href: "/crm", base: "/crm", label: "CRM" },
     { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
     { href: "/expenses", base: "/expenses", label: "Expenses" },
@@ -70,9 +70,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     // Quoting — TTTAdmin only
-    ...(isAdmin ? [{ href: `/quoting${tq}`, base: "/quoting", label: "Quoting" }] : []),
-    // Invoices — hide from pure TTTStaff, visible to clients and Manager/Admin
-    ...(navTenantId && (!isStaff || isManager) ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    ...(isAdmin ? [{ href: "/quoting", base: "/quoting", label: "Quoting" }] : []),
+    // Invoices — clients (non-staff) get tenantId appended; managers/admins go to picker
+    ...(navTenantId && !isStaff ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    ...(isManager ? [{ href: "/invoices", base: "/invoices", label: "Invoices" }] : []),
     // CRM + Drips — Manager and Admin
     ...(isManager ? [
       { href: "/crm", base: "/crm", label: "CRM" },

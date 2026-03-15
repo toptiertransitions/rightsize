@@ -526,6 +526,7 @@ interface TenantOption {
 interface PlanClientProps {
   primaryContract?: Contract | null;
   isManager?: boolean;
+  isStaff?: boolean;
   entries: PlanEntry[];
   rooms: Room[];
   tenantId: string;
@@ -534,12 +535,12 @@ interface PlanClientProps {
   timeEntries: TimeEntry[];
   isAdmin: boolean;
   estimatedHours?: number;
-  tenantOptions?: TenantOption[];  // manager-only: all projects for filter dropdown
+  tenantOptions?: TenantOption[];  // manager/staff: all projects for name lookup
   currentTenantId?: string;        // which project is selected ("" = All)
   services?: string[];             // dynamic service names from Airtable
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services, primaryContract, isManager }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -549,7 +550,8 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
 
   // In "All Projects" mode (currentTenantId is one of the sentinel values), disable editing
-  const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__" || currentTenantId === "__all_time__";
+  const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__" || currentTenantId === "__all_time__" || currentTenantId === "__my_projects__";
+  const isMyProjectsMode = currentTenantId === "__my_projects__";
   const effectiveCanEdit = canEdit && !isAllProjectsMode;
 
   // Tenant name lookup for "All" mode chips
@@ -661,6 +663,41 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
 
   return (
     <>
+      {/* ── Staff: All My Projects toggle ───────────────────────────────────── */}
+      {isStaff && (
+        <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-white rounded-2xl border border-gray-200 shadow-sm">
+          <button
+            type="button"
+            onClick={!isMyProjectsMode ? () => router.push("/plan") : undefined}
+            aria-pressed={isMyProjectsMode}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-400 ${
+              isMyProjectsMode ? "bg-forest-500 cursor-default" : "bg-gray-300 cursor-pointer hover:bg-gray-400"
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-150 ${
+              isMyProjectsMode ? "translate-x-6" : "translate-x-1"
+            }`} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800">All My Projects</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isMyProjectsMode
+                ? "Showing your shifts across all active and archived projects"
+                : "Viewing a single project — toggle to see all your shifts"}
+            </p>
+          </div>
+          {!isMyProjectsMode && (
+            <button
+              type="button"
+              onClick={() => router.push("/plan")}
+              className="flex-shrink-0 text-xs font-medium text-forest-600 hover:text-forest-700 underline underline-offset-2"
+            >
+              View all
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         {/* Navigation */}

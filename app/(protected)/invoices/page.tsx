@@ -10,8 +10,10 @@ import {
   getServices,
   getInvoiceSettings,
   getTimeEntries,
+  getTenants,
 } from "@/lib/airtable";
 import { InvoicesClient } from "./InvoicesClient";
+import { QuotingProjectPicker } from "../quoting/QuotingProjectPicker";
 
 interface PageProps {
   searchParams: Promise<{ tenantId?: string }>;
@@ -22,12 +24,29 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   if (!userId) redirect("/sign-in");
 
   const { tenantId } = await searchParams;
-  if (!tenantId) redirect("/home");
 
   const [sysRole, tenantRole] = await Promise.all([
     getSystemRole(userId).catch(() => null),
-    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    tenantId ? getUserRoleForTenant(userId, tenantId).catch(() => null) : Promise.resolve(null),
   ]);
+
+  const isTTTInternal = ["TTTAdmin", "TTTManager", "TTTSales", "TTTStaff"].includes(sysRole ?? "");
+
+  if (!tenantId) {
+    if (isTTTInternal) {
+      const allTenants = await getTenants().catch(() => []);
+      const active = allTenants.filter(t => !t.isArchived).sort((a, b) => a.name.localeCompare(b.name));
+      return (
+        <QuotingProjectPicker
+          tenants={active}
+          basePath="/invoices"
+          title="Invoices"
+          description="Select a client project to view or create invoices."
+        />
+      );
+    }
+    redirect("/home");
+  }
 
   const isTTTStaff = sysRole === "TTTAdmin" || sysRole === "TTTManager" || sysRole === "TTTStaff" || sysRole === "TTTSales";
 

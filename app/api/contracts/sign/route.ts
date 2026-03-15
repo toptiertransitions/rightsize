@@ -12,18 +12,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const contract = await getContractByToken(token);
-  if (!contract) return NextResponse.json({ error: "Contract not found" }, { status: 404 });
-  if (contract.status === "Signed") return NextResponse.json({ error: "Already signed" }, { status: 409 });
+  let contract;
+  try {
+    contract = await getContractByToken(token);
+  } catch (e) {
+    console.error("getContractByToken error:", e);
+    return NextResponse.json({ error: "Unable to load the contract. Please try again or contact support." }, { status: 500 });
+  }
+  if (!contract) return NextResponse.json({ error: "This signing link is invalid or has expired. Please contact Top Tier Transitions for a new link." }, { status: 404 });
+  // A contract may have status "Signed" because TTT staff set it as the primary quote,
+  // but the client hasn't actually signed yet (signedAt is empty in that case).
+  if (contract.status === "Signed" && contract.signedAt) {
+    return NextResponse.json({ error: "This agreement has already been signed. No further action is needed." }, { status: 409 });
+  }
 
   const signedAt = new Date().toISOString();
-  await updateContract(contract.id, {
-    status: "Signed",
-    signatureData: signatureData ?? "",
-    signatureMethod: method === "type" ? "type" : "draw",
-    signedAt,
-    signedByName: signerName.trim(),
-  });
+  try {
+    await updateContract(contract.id, {
+      status: "Signed",
+      signatureData: signatureData ?? "",
+      signatureMethod: method === "type" ? "type" : "draw",
+      signedAt,
+      signedByName: signerName.trim(),
+    });
+  } catch (e) {
+    console.error("updateContract (sign) error:", e);
+    return NextResponse.json({ error: "Failed to save your signature. Please try again — your information was not lost." }, { status: 500 });
+  }
 
   // Auto-create a 40% deposit invoice
   let createdInvoice: Awaited<ReturnType<typeof createInvoice>> | null = null;

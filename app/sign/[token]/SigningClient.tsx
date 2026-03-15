@@ -101,11 +101,11 @@ export function SigningClient({ token }: SigningClientProps) {
 
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error ?? "Failed to sign");
+        throw new Error(d.error ?? `Submission failed (${res.status}). Please try again or contact Top Tier Transitions.`);
       }
       setSubmitted(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error submitting signature");
+      setError(e instanceof Error ? e.message : "An unexpected error occurred. Please try again or contact Top Tier Transitions.");
     } finally {
       setSubmitting(false);
     }
@@ -202,7 +202,12 @@ export function SigningClient({ token }: SigningClientProps) {
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <p className="text-sm font-medium text-red-700">Unable to submit</p>
+          <p className="text-sm text-red-600 mt-0.5">{error}</p>
+        </div>
+      )}
 
       <button
         onClick={handleSubmit}

@@ -4,7 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Tenant } from "@/lib/types";
 
-export function QuotingProjectPicker({ tenants }: { tenants: Tenant[] }) {
+interface Props {
+  tenants: Tenant[];
+  basePath?: string;
+  title?: string;
+  description?: string;
+}
+
+export function QuotingProjectPicker({
+  tenants,
+  basePath = "/quoting",
+  title = "Quoting",
+  description = "Select a client project to open or create a quote.",
+}: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
 
@@ -14,14 +26,14 @@ export function QuotingProjectPicker({ tenants }: { tenants: Tenant[] }) {
   );
 
   function select(tenantId: string) {
-    router.push(`/quoting?tenantId=${tenantId}`);
+    router.push(`${basePath}?tenantId=${tenantId}`);
   }
 
   return (
     <div className="max-w-lg mx-auto py-16">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Quoting</h1>
-        <p className="text-sm text-gray-500 mt-1">Select a client project to open or create a quote.</p>
+        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+        <p className="text-sm text-gray-500 mt-1">{description}</p>
       </div>
 
       <div className="relative mb-3">

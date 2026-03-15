@@ -3471,3 +3471,13 @@ export async function getItemBySquareVariationId(variationId: string): Promise<I
   if (!records.length) return null;
   return mapItem(records[0]);
 }
+
+/** Look up a PF item by its barcode number (SKU fallback for Square matching). */
+export async function getItemByBarcodeNumber(barcode: string): Promise<Item | null> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({ filterByFormula: `{BarcodeNumber} = "${barcode}"`, maxRecords: 1 })
+    .all();
+  if (!records.length) return null;
+  return mapItem(records[0]);
+}

@@ -25,7 +25,10 @@ export default async function SignPage({ params }: PageProps) {
     { label: "Unpacking", hours: contract.unpackingHours, rate: contract.unpackingRate },
   ];
 
-  const alreadySigned = contract.status === "Signed";
+  // A contract may have status "Signed" because TTT staff set it as the primary quote,
+  // but the client hasn't actually signed yet (signedAt is empty in that case).
+  // Only show the "Agreement Signed" confirmation when the client has truly signed.
+  const alreadySigned = contract.status === "Signed" && !!contract.signedAt;
 
   return (
     <div className="min-h-screen bg-cream-50" style={{ backgroundColor: "#F5F0E8" }}>

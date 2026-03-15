@@ -36,7 +36,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
   if (tenantId === "__all_active__" || tenantId === "__all_archived__" || tenantId === "__all_time__") {
     const sysRole = await getSystemRole(userId!).catch(() => null);
     const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-    if (!isManagerOrAdmin) redirect("/home");
+    if (!isManagerOrAdmin) {
+      // Staff users hitting a manager-only sentinel → send them to their personal view
+      if (sysRole === "TTTStaff") redirect("/plan");
+      redirect("/home");
+    }
 
     const allTenants = await getTenants().catch(() => []);
     const selectedTenants =
@@ -143,14 +147,21 @@ export default async function PlanPage({ searchParams }: PageProps) {
         getTenants().catch(() => []),
         getServices().catch(() => []),
       ]);
-      const activeTenants = allTenants.filter(t => !t.isArchived);
+
+      // Load ALL tenants (active + archived) for full shift history
       const allEntries = await Promise.all(
-        activeTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))
+        allTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))
       ).then(r => r.flat());
 
       const staffEntries = userEmail
         ? allEntries.filter(entry => entry.helpers?.some(h => h.email === userEmail))
         : [];
+
+      // Fetch time entries only for tenants where the staff member has shifts
+      const tenantIdsWithEntries = [...new Set(staffEntries.map(e => e.tenantId).filter(Boolean))];
+      const staffTimeEntries = await Promise.all(
+        tenantIdsWithEntries.map(id => getTimeEntries({ tenantId: id }).catch(() => []))
+      ).then(r => r.flat());
 
       const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
       const serviceNames = serviceList.map(s => s.name);
@@ -159,7 +170,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         <div>
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
-            <p className="text-gray-500 mt-0.5">Your scheduled daily focus shifts across all active projects</p>
+            <p className="text-gray-500 mt-0.5">Your scheduled shifts across all projects</p>
           </div>
           <PlanClient
             entries={staffEntries}
@@ -167,11 +178,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
             tenantId=""
             canEdit={false}
             projectFiles={[]}
-            timeEntries={[]}
+            timeEntries={staffTimeEntries}
             isAdmin={false}
             tenantOptions={tenantOptions}
-            currentTenantId="__all_active__"
+            currentTenantId="__my_projects__"
             services={serviceNames}
+            isStaff={true}
           />
         </div>
       );
@@ -257,7 +269,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
   const canEdit = EDIT_ROLES.includes(resolvedRole);
 
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const tenantOptions = isManagerOrAdmin
+  const isTTTStaff = sysRole === "TTTStaff";
+  const tenantOptions = (isManagerOrAdmin || isTTTStaff)
     ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }))
     : undefined;
   const serviceNames = serviceList.map(s => s.name);
@@ -290,6 +303,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         services={serviceNames}
         primaryContract={primaryContract}
         isManager={isManagerOrAdmin}
+        isStaff={isTTTStaff}
       />
     </div>
   );

@@ -117,6 +117,56 @@ export async function getSquareOrder(orderId: string): Promise<SquareOrderLineIt
   return lineItems;
 }
 
+// ─── Payments list (manual sales pull) ───────────────────────────────────────
+
+export interface SquarePaymentSummary {
+  paymentId: string;
+  orderId: string;
+  createdAt: string;
+}
+
+/**
+ * List recent completed Square payments, newest first.
+ * Used by the manual "pull sales" admin endpoint as a webhook fallback.
+ */
+export async function listSquareCompletedPayments(limitDays = 14): Promise<SquarePaymentSummary[]> {
+  const locationId = process.env.SQUARE_LOCATION_ID;
+  if (!locationId) return [];
+
+  const beginTime = new Date(Date.now() - limitDays * 24 * 60 * 60 * 1000).toISOString();
+  const params = new URLSearchParams({
+    location_id: locationId,
+    sort_order: "DESC",
+    limit: "100",
+    begin_time: beginTime,
+  });
+
+  const res = await squareFetch(`/payments?${params}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+
+  return ((data.payments ?? []) as Record<string, unknown>[])
+    .filter((p) => p.status === "COMPLETED" && p.order_id)
+    .map((p) => ({
+      paymentId: String(p.id),
+      orderId: String(p.order_id),
+      createdAt: String(p.created_at ?? ""),
+    }));
+}
+
+/** Fetch a Square catalog object and extract its SKU (for fallback barcode matching). */
+export async function getSquareCatalogObjectSku(objectId: string): Promise<string | null> {
+  const res = await squareFetch(`/catalog/object/${objectId}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const obj = data.object;
+  // Could be an ITEM_VARIATION directly
+  if (obj?.type === "ITEM_VARIATION") {
+    return (obj.item_variation_data?.sku as string) || null;
+  }
+  return null;
+}
+
 // ─── Webhook signature validation ─────────────────────────────────────────────
 
 /**
