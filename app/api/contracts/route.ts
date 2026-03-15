@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId);
-  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
+  if (!["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -141,7 +141,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId);
-  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
+  if (!["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -169,7 +169,7 @@ export async function DELETE(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId);
-  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
+  if (!["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

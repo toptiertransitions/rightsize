@@ -676,7 +676,15 @@ export function EstimatorSection({
         )}
 
         {successMsg && <span className="text-sm text-green-600 font-medium">{successMsg}</span>}
-        {errorMsg && <span className="text-sm text-red-600">{errorMsg}</span>}
+        {errorMsg && (
+          <span className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 block w-full">
+            {errorMsg === "Forbidden"
+              ? "Permission denied — TTT Manager or Admin access is required for this action."
+              : errorMsg === "Unauthorized"
+              ? "You must be signed in to perform this action."
+              : errorMsg}
+          </span>
+        )}
       </div>
 
       {/* Invoice section */}

@@ -4,6 +4,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import {
   getSystemRole,
   getTenantById,
+  getTenants,
   getRoomsForTenant,
   getMembershipsForTenant,
   getContractSettings,
@@ -17,6 +18,7 @@ import {
   getInvoicesForTenant,
 } from "@/lib/airtable";
 import { QuotingClient } from "./QuotingClient";
+import { QuotingProjectPicker } from "./QuotingProjectPicker";
 
 interface PageProps {
   searchParams: Promise<{ tenantId?: string }>;
@@ -31,14 +33,9 @@ export default async function QuotingPage({ searchParams }: PageProps) {
 
   const { tenantId } = await searchParams;
   if (!tenantId) {
-    return (
-      <div className="max-w-lg mx-auto py-20 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-3">Quoting</h1>
-        <p className="text-gray-500 text-sm">
-          Navigate to a project first — the Quoting tab will load that project&apos;s data automatically.
-        </p>
-      </div>
-    );
+    const allTenants = await getTenants().catch(() => []);
+    const active = allTenants.filter(t => !t.isArchived).sort((a, b) => a.name.localeCompare(b.name));
+    return <QuotingProjectPicker tenants={active} />;
   }
 
   const [tenant, rooms, contractSettings, contractTemplates, existingContracts, memberships, services, invoiceSettings, timeEntries, opportunities, clientContacts, invoices] =
