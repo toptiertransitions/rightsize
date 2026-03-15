@@ -179,13 +179,14 @@ export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity
   const router = useRouter();
   const [showInvite, setShowInvite] = useState(false);
   const [showRename, setShowRename] = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
+  const [showDeleteRequest, setShowDeleteRequest] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteRequestSent, setDeleteRequestSent] = useState(false);
   const [newName, setNewName] = useState(tenantName);
   const [address, setAddress] = useState(tenantAddress ?? "");
   const [city, setCity] = useState(tenantCity ?? "");
   const [state, setState] = useState(tenantState ?? "");
   const [zip, setZip] = useState(tenantZip ?? "");
-  const [confirmName, setConfirmName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -222,21 +223,23 @@ export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity
     }
   }
 
-  async function handleDelete() {
-    if (confirmName !== tenantName) return;
+  async function handleDeleteRequest() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/tenants?tenantId=${encodeURIComponent(tenantId)}`, {
-        method: "DELETE",
+      const res = await fetch("/api/tenants/delete-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, reason: deleteReason.trim() || undefined }),
       });
       if (!res.ok) {
         const d = await res.json();
-        throw new Error(d.error || "Failed to delete");
+        throw new Error(d.error || "Failed to send request");
       }
-      router.push("/home");
+      setDeleteRequestSent(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
       setLoading(false);
     }
   }
@@ -258,10 +261,10 @@ export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity
           Rename
         </button>
         <button
-          onClick={() => { setConfirmName(""); setError(""); setShowDelete(true); }}
+          onClick={() => { setDeleteReason(""); setDeleteRequestSent(false); setError(""); setShowDeleteRequest(true); }}
           className="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
         >
-          Delete Project
+          Request Deletion
         </button>
       </div>
 
@@ -331,41 +334,67 @@ export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity
         </div>
       )}
 
-      {/* Delete modal */}
-      {showDelete && (
+      {/* Deletion request modal */}
+      {showDeleteRequest && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Project</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              This will permanently delete <span className="font-semibold text-gray-700">{tenantName}</span> and all its rooms, items, and members. This cannot be undone.
-            </p>
-            <p className="text-sm text-gray-600 mb-2">
-              Type <span className="font-mono font-semibold">{tenantName}</span> to confirm:
-            </p>
-            <input
-              type="text"
-              value={confirmName}
-              onChange={e => setConfirmName(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
-              autoFocus
-            />
-            {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowDelete(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={loading || confirmName !== tenantName}
-                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? "Deleting…" : "Delete Forever"}
-              </button>
-            </div>
+            {deleteRequestSent ? (
+              <div className="text-center py-2">
+                <div className="w-12 h-12 bg-forest-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Request sent</h3>
+                <p className="text-sm text-gray-500 mb-5">
+                  The Top Tier team has been notified and will follow up with you shortly.
+                </p>
+                <button
+                  onClick={() => setShowDeleteRequest(false)}
+                  className="w-full px-4 py-2.5 text-sm font-medium bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Request Project Deletion</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  We&apos;ll notify the Top Tier team to review your request for{" "}
+                  <span className="font-semibold text-gray-700">{tenantName}</span>.
+                  They&apos;ll be in touch to confirm before anything is removed.
+                </p>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Reason <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    value={deleteReason}
+                    onChange={e => setDeleteReason(e.target.value)}
+                    rows={3}
+                    placeholder="Let us know why you'd like to delete this project…"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
+                  />
+                </div>
+                {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeleteRequest(false)}
+                    className="flex-1 px-4 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteRequest}
+                    disabled={loading}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loading ? "Sending…" : "Send Request"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
