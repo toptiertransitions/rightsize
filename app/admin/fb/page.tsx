@@ -1,18 +1,20 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isTTTAdmin } from "@/lib/config";
-import { getItemsByPrimaryRoute, getTenantById, getMembershipsForTenant, getUserByClerkId, getStaffMembers } from "@/lib/airtable";
+import { getItemsByPrimaryRoute, getTenantById, getMembershipsForTenant, getUserByClerkId, getStaffMembers, getInvoiceSettings } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { FBInventoryClient } from "./FBInventoryClient";
+import { PaymentHandlesPanel } from "./PaymentHandlesPanel";
 
 export default async function FBPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [items, staffMembers] = await Promise.all([
+  const [items, staffMembers, paymentSettings] = await Promise.all([
     getItemsByPrimaryRoute("FB/Marketplace").catch(() => []),
     getStaffMembers().catch(() => []),
+    getInvoiceSettings().catch(() => null),
   ]);
 
   // Get unique tenant IDs and resolve tenant name + client email
@@ -52,6 +54,7 @@ export default async function FBPage() {
             All client items routed to FB/Marketplace. Edit inline — changes sync back to the item catalog and sales page.
           </p>
         </div>
+        <PaymentHandlesPanel initialSettings={paymentSettings} />
         <FBInventoryClient
           items={items}
           tenantInfoMap={tenantInfoMap}

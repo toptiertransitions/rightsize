@@ -720,6 +720,12 @@ export interface InvoiceSettings {
   logoUrl: string;
   logoPublicId: string;
   updatedAt: string;
+  venmoHandle?: string;
+  venmoQrUrl?: string;
+  venmoQrPublicId?: string;
+  zelleHandle?: string;
+  zelleQrUrl?: string;
+  zelleQrPublicId?: string;
 }
 
 // ─── Drip Campaigns ───────────────────────────────────────────────────────────

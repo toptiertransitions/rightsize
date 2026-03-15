@@ -2966,6 +2966,12 @@ function mapInvoiceSettings(record: AirtableRecord): InvoiceSettings {
     logoUrl: toStr(f["LogoUrl"]),
     logoPublicId: toStr(f["LogoPublicId"]),
     updatedAt: toStr(f["UpdatedAt"]),
+    venmoHandle: toStr(f["VenmoHandle"]) || undefined,
+    venmoQrUrl: toStr(f["VenmoQrUrl"]) || undefined,
+    venmoQrPublicId: toStr(f["VenmoQrPublicId"]) || undefined,
+    zelleHandle: toStr(f["ZelleHandle"]) || undefined,
+    zelleQrUrl: toStr(f["ZelleQrUrl"]) || undefined,
+    zelleQrPublicId: toStr(f["ZelleQrPublicId"]) || undefined,
   };
 }
 
@@ -2988,6 +2994,12 @@ export async function upsertInvoiceSettings(data: Partial<Omit<InvoiceSettings, 
   if (data.invoiceFooter !== undefined) fields["InvoiceFooter"] = data.invoiceFooter;
   if (data.logoUrl !== undefined) fields["LogoUrl"] = data.logoUrl;
   if (data.logoPublicId !== undefined) fields["LogoPublicId"] = data.logoPublicId;
+  if (data.venmoHandle !== undefined) fields["VenmoHandle"] = data.venmoHandle;
+  if (data.venmoQrUrl !== undefined) fields["VenmoQrUrl"] = data.venmoQrUrl;
+  if (data.venmoQrPublicId !== undefined) fields["VenmoQrPublicId"] = data.venmoQrPublicId;
+  if (data.zelleHandle !== undefined) fields["ZelleHandle"] = data.zelleHandle;
+  if (data.zelleQrUrl !== undefined) fields["ZelleQrUrl"] = data.zelleQrUrl;
+  if (data.zelleQrPublicId !== undefined) fields["ZelleQrPublicId"] = data.zelleQrPublicId;
 
   if (existing?.id) {
     const res = await invoiceSettingsFetch(`/${existing.id}`, {

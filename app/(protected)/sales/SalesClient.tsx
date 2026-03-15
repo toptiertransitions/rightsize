@@ -68,6 +68,13 @@ function fmtCurrency(n: number | undefined) {
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+interface PaymentHandles {
+  venmoHandle?: string;
+  venmoQrUrl?: string;
+  zelleHandle?: string;
+  zelleQrUrl?: string;
+}
+
 interface SalesClientProps {
   tenantId: string;
   tenantName: string;
@@ -84,6 +91,7 @@ interface SalesClientProps {
   canDeleteProof: boolean;
   canReassign?: boolean;
   allTenants?: Tenant[];
+  paymentHandles?: PaymentHandles;
 }
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
@@ -770,6 +778,7 @@ export function SalesClient({
   canDeleteProof,
   canReassign,
   allTenants,
+  paymentHandles,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -870,8 +879,45 @@ export function SalesClient({
     </div>
   );
 
+  const hasPaymentHandles = paymentHandles && (
+    paymentHandles.venmoHandle || paymentHandles.venmoQrUrl ||
+    paymentHandles.zelleHandle || paymentHandles.zelleQrUrl
+  );
+
   return (
     <div>
+      {/* Payment handles — visible to TTT staff only */}
+      {hasPaymentHandles && (
+        <div className="mb-6 grid grid-cols-2 gap-3">
+          {(paymentHandles!.venmoHandle || paymentHandles!.venmoQrUrl) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col items-center gap-2">
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Venmo</span>
+              {paymentHandles!.venmoQrUrl && (
+                <div className="relative w-28 h-28 rounded-lg overflow-hidden bg-white border border-blue-100">
+                  <Image src={paymentHandles!.venmoQrUrl} alt="Venmo QR" fill className="object-contain p-1" />
+                </div>
+              )}
+              {paymentHandles!.venmoHandle && (
+                <span className="text-sm font-medium text-blue-800">{paymentHandles!.venmoHandle}</span>
+              )}
+            </div>
+          )}
+          {(paymentHandles!.zelleHandle || paymentHandles!.zelleQrUrl) && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex flex-col items-center gap-2">
+              <span className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">Zelle</span>
+              {paymentHandles!.zelleQrUrl && (
+                <div className="relative w-28 h-28 rounded-lg overflow-hidden bg-white border border-yellow-100">
+                  <Image src={paymentHandles!.zelleQrUrl} alt="Zelle QR" fill className="object-contain p-1" />
+                </div>
+              )}
+              {paymentHandles!.zelleHandle && (
+                <span className="text-sm font-medium text-yellow-800">{paymentHandles!.zelleHandle}</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Page header */}
       <div className="flex items-start justify-between mb-6">
         <div>

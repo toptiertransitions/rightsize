@@ -12,6 +12,7 @@ import {
   getAllLocalVendors,
   getItemSaleEventsForTenant,
   getTenants,
+  getInvoiceSettings,
 } from "@/lib/airtable";
 import { SalesClient } from "./SalesClient";
 import type { PrimaryRoute } from "@/lib/types";
@@ -43,7 +44,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     redirect("/home");
   }
 
-  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants] = await Promise.all([
+  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants, invoiceSettings] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getItemsForTenant(tenantId).catch(() => []),
@@ -54,6 +55,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     getAllLocalVendors().catch(() => []),
     getItemSaleEventsForTenant(tenantId).catch(() => []),
     getTenants().catch(() => []),
+    getInvoiceSettings().catch(() => null),
   ]);
 
   if (!tenant) redirect("/home");
@@ -76,6 +78,13 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const isStaff = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
+  const paymentHandles = isStaff && invoiceSettings ? {
+    venmoHandle: invoiceSettings.venmoHandle,
+    venmoQrUrl: invoiceSettings.venmoQrUrl,
+    zelleHandle: invoiceSettings.zelleHandle,
+    zelleQrUrl: invoiceSettings.zelleQrUrl,
+  } : undefined;
 
   return (
     <SalesClient
@@ -94,6 +103,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       canDeleteProof={canDeleteProof}
       canReassign={canReassign}
       allTenants={canReassign ? allTenants : undefined}
+      paymentHandles={paymentHandles}
     />
   );
 }
