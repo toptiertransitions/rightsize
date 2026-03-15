@@ -20,6 +20,8 @@ interface ItemGridProps {
   tenants?: Tenant[];  // provided in all-items mode for project name display
   localVendors?: LocalVendor[];
   canAutoRoute?: boolean;
+  canReassign?: boolean;
+  allTenants?: Tenant[];
 }
 
 const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray" | "red"; label: string }> = {
@@ -49,6 +51,8 @@ interface EditModalProps {
   item: Item;
   rooms: Room[];
   localVendors?: LocalVendor[];
+  canReassign?: boolean;
+  allTenants?: Tenant[];
   onClose: () => void;
   onSaved: (item: Item) => void;
   onDeleted?: () => void;
@@ -56,7 +60,7 @@ interface EditModalProps {
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
-export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onDeleted }: EditModalProps) {
+export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, onClose, onSaved, onDeleted }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -85,6 +89,7 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
+  const [reassignTenantId, setReassignTenantId] = useState(item.tenantId);
 
   // Photo management
   const [photos, setPhotos] = useState<ItemPhoto[]>(
@@ -153,20 +158,30 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
     setSaving(true);
     setError("");
     try {
+      const body: Record<string, unknown> = {
+        id: item.id,
+        tenantId: item.tenantId,
+        photos,
+        ...form,
+        roomId: form.roomId || undefined,
+      };
+      const isReassign = reassignTenantId !== item.tenantId;
+      if (isReassign) {
+        body.reassignTenantId = reassignTenantId;
+      }
       const res = await fetch("/api/items", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: item.id,
-          tenantId: item.tenantId,
-          photos,
-          ...form,
-          roomId: form.roomId || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to save");
       const { item: savedItem } = await res.json();
-      onSaved(savedItem);
+      if (isReassign) {
+        // Item moved to another project — remove from this view
+        if (onDeleted) onDeleted(); else onClose();
+      } else {
+        onSaved(savedItem);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -489,6 +504,22 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
               placeholder="Internal notes for TTT staff…" className={textareaClass} />
           </section>
 
+          {/* Reassign Project */}
+          {canReassign && allTenants && allTenants.length > 1 && (
+            <section className="space-y-3 border-t border-dashed border-gray-200 pt-5">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Reassign Project</h3>
+              <Select
+                label="Move to Project"
+                value={reassignTenantId}
+                onChange={e => setReassignTenantId(e.target.value)}
+                options={allTenants.filter(t => !t.isArchived).map(t => ({ value: t.id, label: t.name }))}
+              />
+              {reassignTenantId !== item.tenantId && (
+                <p className="text-xs text-amber-600">This item will be moved to the selected project and removed from this view on save.</p>
+              )}
+            </section>
+          )}
+
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
@@ -532,7 +563,7 @@ export function EditItemModal({ item, rooms, localVendors, onClose, onSaved, onD
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -694,6 +725,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           item={editingItem}
           rooms={rooms}
           localVendors={localVendors}
+          canReassign={canReassign}
+          allTenants={allTenants}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}

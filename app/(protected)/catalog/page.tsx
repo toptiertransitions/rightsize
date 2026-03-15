@@ -55,6 +55,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       tenantId === "__all_archived__" ? "All Archived Projects" :
       "All-Time Projects";
 
+    const canReassign = ["TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+
     return (
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
@@ -72,6 +74,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           tenants={selectedTenants}
           localVendors={localVendors}
           canAutoRoute={canAutoRoute}
+          canReassign={canReassign}
+          allTenants={canReassign ? allTenants : undefined}
         />
       </div>
     );
@@ -79,13 +83,14 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ───────────────────────────────────────────────────────
   if (tenantId) {
-    const [tenant, role, items, rooms, sysRole, localVendors] = await Promise.all([
+    const [tenant, role, items, rooms, sysRole, localVendors, allTenants] = await Promise.all([
       getTenantById(tenantId).catch(() => null),
       getUserRoleForTenant(userId, tenantId).catch(() => null),
       getItemsForTenant(tenantId).catch(() => []),
       getRoomsForTenant(tenantId).catch(() => []),
       getSystemRole(userId!).catch(() => null),
       getAllLocalVendors().catch(() => []),
+      getTenants().catch(() => []),
     ]);
 
     if (!tenant) redirect("/home");
@@ -93,6 +98,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     if (!resolvedRole) redirect("/home");
 
     const canEdit = EDIT_ROLES.includes(resolvedRole);
+    const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
 
     return (
       <div>
@@ -123,6 +129,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           rooms={rooms}
           localVendors={localVendors}
           canAutoRoute={resolvedRole ? ["TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole) : false}
+          canReassign={canReassign}
+          allTenants={canReassign ? allTenants : undefined}
         />
       </div>
     );

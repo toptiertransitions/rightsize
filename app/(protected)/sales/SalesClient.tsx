@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent } from "@/lib/types";
+import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { PayoutModal } from "./PayoutModal";
 
@@ -82,6 +82,8 @@ interface SalesClientProps {
   canEditPayout: boolean;
   canPayoutClient: boolean;
   canDeleteProof: boolean;
+  canReassign?: boolean;
+  allTenants?: Tenant[];
 }
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
@@ -766,6 +768,8 @@ export function SalesClient({
   canEditPayout,
   canPayoutClient,
   canDeleteProof,
+  canReassign,
+  allTenants,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -984,6 +988,8 @@ export function SalesClient({
           item={editingItem}
           rooms={rooms}
           localVendors={localVendors}
+          canReassign={canReassign}
+          allTenants={allTenants}
           onClose={() => setEditingItem(null)}
           onSaved={handleItemSaved}
           onDeleted={handleItemDeleted}

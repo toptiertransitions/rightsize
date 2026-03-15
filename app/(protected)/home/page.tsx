@@ -115,7 +115,7 @@ export default async function DashboardPage({
         {/* Client Projects */}
         <section>
           <h2 className="text-base font-semibold text-gray-900 mb-4">Client Projects</h2>
-          <AdminProjectsClient initialTenants={allTenants} />
+          <AdminProjectsClient initialTenants={allTenants} isManager={isAdmin || isManager} />
         </section>
       </div>
     );

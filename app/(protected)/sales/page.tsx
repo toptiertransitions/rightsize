@@ -11,6 +11,7 @@ import {
   getRoomsForTenant,
   getAllLocalVendors,
   getItemSaleEventsForTenant,
+  getTenants,
 } from "@/lib/airtable";
 import { SalesClient } from "./SalesClient";
 import type { PrimaryRoute } from "@/lib/types";
@@ -42,7 +43,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     redirect("/home");
   }
 
-  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents] = await Promise.all([
+  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getItemsForTenant(tenantId).catch(() => []),
@@ -52,6 +53,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     getRoomsForTenant(tenantId).catch(() => []),
     getAllLocalVendors().catch(() => []),
     getItemSaleEventsForTenant(tenantId).catch(() => []),
+    getTenants().catch(() => []),
   ]);
 
   if (!tenant) redirect("/home");
@@ -73,6 +75,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const canEditPayout = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
 
   return (
     <SalesClient
@@ -89,6 +92,8 @@ export default async function SalesPage({ searchParams }: PageProps) {
       canEditPayout={canEditPayout}
       canPayoutClient={canPayoutClient}
       canDeleteProof={canDeleteProof}
+      canReassign={canReassign}
+      allTenants={canReassign ? allTenants : undefined}
     />
   );
 }

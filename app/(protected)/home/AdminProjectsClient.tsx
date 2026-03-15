@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 
 interface Props {
   initialTenants: Tenant[];
+  isManager?: boolean;
 }
 
 function HouseIcon({ className }: { className?: string }) {
@@ -21,13 +22,16 @@ function HouseIcon({ className }: { className?: string }) {
 type SortField = "name" | "location" | "createdAt";
 type SortDir = "asc" | "desc";
 
-export function AdminProjectsClient({ initialTenants }: Props) {
+export function AdminProjectsClient({ initialTenants, isManager }: Props) {
   const [tenants, setTenants] = useState(initialTenants);
   const [archiving, setArchiving] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedFilter, setArchivedFilter] = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const activeTenants = tenants.filter(t => !t.isArchived);
 
@@ -55,6 +59,28 @@ export function AdminProjectsClient({ initialTenants }: Props) {
   }
 
   const archivedCount = tenants.filter(t => t.isArchived).length;
+
+  function startEdit(tenant: Tenant) {
+    setEditingId(tenant.id);
+    setEditName(tenant.name);
+  }
+
+  async function saveName(tenantId: string) {
+    if (!editName.trim()) return;
+    setSavingName(true);
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, name: editName.trim() }),
+      });
+      if (!res.ok) return;
+      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, name: editName.trim() } : t));
+      setEditingId(null);
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   async function setArchived(tenantId: string, isArchived: boolean) {
     setArchiving(tenantId);
@@ -87,17 +113,62 @@ export function AdminProjectsClient({ initialTenants }: Props) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                <h3 className="font-bold text-gray-900">{tenant.name}</h3>
+                {editingId === tenant.id ? (
+                  <input
+                    autoFocus
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") { e.preventDefault(); saveName(tenant.id); }
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    onClick={e => e.preventDefault()}
+                    className="w-full font-bold text-gray-900 border-b-2 border-forest-500 bg-transparent focus:outline-none text-base"
+                  />
+                ) : (
+                  <div className="flex items-center gap-1.5 group/name">
+                    <h3 className="font-bold text-gray-900">{tenant.name}</h3>
+                    {isManager && (
+                      <button
+                        onClick={e => { e.preventDefault(); startEdit(tenant); }}
+                        className="opacity-0 group-hover/name:opacity-100 transition-opacity text-gray-400 hover:text-forest-600"
+                        title="Rename project"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <p className="text-sm text-gray-400 mt-0.5">View catalog</p>
               </Link>
-              <div className="border-t border-gray-100 mt-3 pt-2">
-                <button
-                  onClick={() => setArchived(tenant.id, true)}
-                  disabled={archiving === tenant.id}
-                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-                >
-                  {archiving === tenant.id ? "Archiving…" : "Archive"}
-                </button>
+              <div className="border-t border-gray-100 mt-3 pt-2 flex items-center gap-3">
+                {editingId === tenant.id ? (
+                  <>
+                    <button
+                      onClick={() => saveName(tenant.id)}
+                      disabled={savingName || !editName.trim()}
+                      className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
+                    >
+                      {savingName ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setArchived(tenant.id, true)}
+                    disabled={archiving === tenant.id}
+                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                  >
+                    {archiving === tenant.id ? "Archiving…" : "Archive"}
+                  </button>
+                )}
               </div>
             </CardContent>
           </Card>

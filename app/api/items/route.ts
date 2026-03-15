@@ -112,6 +112,16 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Handle project reassignment (TTTManager/TTTAdmin only)
+  const reassignTenantId = (updates as Record<string, unknown>).reassignTenantId as string | undefined;
+  if (reassignTenantId !== undefined) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden: only TTTManager/TTTAdmin can reassign items" }, { status: 403 });
+    }
+    (updates as Record<string, unknown>).tenantId = reassignTenantId;
+    delete (updates as Record<string, unknown>).reassignTenantId;
+  }
+
   // Fetch existing item if needed for vendor change check, Sold backfill, or Sold reversal
   const newVendorId = updates.assignedVendorId as string | undefined;
   const needsExisting = newVendorId !== undefined || updates.status !== undefined;
