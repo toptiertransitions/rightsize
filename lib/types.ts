@@ -40,6 +40,7 @@ export interface Tenant {
   destinationSqFt?: number;
   payoutMethod?: PayoutMethod;
   payoutUsername?: string;
+  payoutCheckAddress?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

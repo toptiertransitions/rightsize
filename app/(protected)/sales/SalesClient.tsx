@@ -94,11 +94,13 @@ interface SalesClientProps {
   paymentHandles?: PaymentHandles;
   initialPayoutMethod?: PayoutMethod;
   initialPayoutUsername?: string;
+  initialPayoutCheckAddress?: string;
+  projectAddress?: string;
 }
 
-// ─── Item Card ────────────────────────────────────────────────────────────────
+// ─── Sales Table Row ──────────────────────────────────────────────────────────
 
-function ItemCard({
+function SalesTableRow({
   item,
   canEditPayout,
   canEdit,
@@ -123,7 +125,6 @@ function ItemCard({
   const [salePriceInput, setSalePriceInput] = useState(String(item.salePrice ?? ""));
   const [savingSalePrice, setSavingSalePrice] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
   const isSold = item.status === "Sold";
 
   async function savePayout() {
@@ -152,20 +153,19 @@ function ItemCard({
     } finally { setSavingSalePrice(false); }
   }
 
-  // Live-preview client payout while editing sale price
   const previewSalePrice = editingSalePrice ? (parseFloat(salePriceInput) || 0) : (item.salePrice ?? 0);
   const previewCalcPayout: CalcPayout | null = calcPayout && previewSalePrice > 0
     ? { ...calcPayout, amount: previewSalePrice * (1 - calcPayout.rate / 100) }
     : calcPayout;
+  const clientPayout = previewSalePrice > 0
+    ? (previewCalcPayout ? previewCalcPayout.amount : (item.consignorPayout ?? 0))
+    : null;
 
-  // Target Value: sale price if set, else valueMid estimate
-  const targetValue = item.salePrice && item.salePrice > 0 ? item.salePrice : item.valueMid;
-
-  const inlineInputClass = "w-20 border border-forest-400 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-forest-500";
-  const saveBtn = (onClick: () => void, saving: boolean) => (
+  const inlineInput = "w-20 border border-forest-400 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-forest-500";
+  const confirmBtn = (onClick: () => void, saving: boolean) => (
     <button onClick={onClick} disabled={saving}
       className="text-[10px] bg-forest-600 text-white px-1.5 py-0.5 rounded hover:bg-forest-700 disabled:opacity-50">
-      {saving ? "…" : "Save"}
+      {saving ? "…" : "✓"}
     </button>
   );
   const cancelBtn = (onClick: () => void) => (
@@ -173,139 +173,108 @@ function ItemCard({
   );
 
   return (
-    <div className={cn(
-      "group bg-white rounded-xl border overflow-hidden flex flex-col",
-      isSold ? "border-green-200" : "border-gray-200"
-    )}>
-      {/* Photo */}
-      <div className="relative h-36 bg-gray-100 flex-shrink-0">
-        {item.photoUrl ? (
-          <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="200px" />
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-300">
-            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        )}
-        {/* Status badge */}
-        <span className={cn(
-          "absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full",
-          STATUS_COLORS[item.status]
-        )}>
+    <tr className={cn("group border-b border-gray-50 last:border-0 transition-colors", isSold ? "bg-green-50/20 hover:bg-green-50/40" : "hover:bg-gray-50/60")}>
+      {/* Thumbnail */}
+      <td className="pl-3 py-2.5 w-10">
+        <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+          {item.photoUrl ? (
+            <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="36px" />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-200">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </td>
+      {/* Name + category */}
+      <td className="px-3 py-2.5 max-w-[220px]">
+        <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+        {item.category && <div className="text-[11px] text-gray-400 truncate">{item.category}</div>}
+      </td>
+      {/* Status */}
+      <td className="px-2 py-2.5 whitespace-nowrap">
+        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", STATUS_COLORS[item.status])}>
           {item.status}
         </span>
-        {/* Edit button */}
+      </td>
+      {/* Value (appraisal estimate) */}
+      <td className="px-2 py-2.5 text-right text-sm whitespace-nowrap tabular-nums">
+        <span className="text-gray-600">{item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">—</span>}</span>
+      </td>
+      {/* Sale Price (editable) */}
+      <td className="px-2 py-2.5 text-right whitespace-nowrap">
+        {canEditPayout ? (
+          editingSalePrice ? (
+            <div className="flex items-center justify-end gap-1">
+              <span className="text-xs text-gray-400">$</span>
+              <input type="number" min="0" step="0.01" value={salePriceInput}
+                onChange={e => setSalePriceInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveSalePrice(); if (e.key === "Escape") setEditingSalePrice(false); }}
+                className={inlineInput} autoFocus />
+              {confirmBtn(saveSalePrice, savingSalePrice)}
+              {cancelBtn(() => setEditingSalePrice(false))}
+            </div>
+          ) : (
+            <button onClick={() => { setEditingSalePrice(true); setSalePriceInput(String(item.salePrice ?? "")); }}
+              className="text-sm font-medium text-gray-800 hover:underline tabular-nums">
+              {item.salePrice ? fmtCurrency(item.salePrice) : <span className="text-gray-300 text-xs italic">Set</span>}
+            </button>
+          )
+        ) : (
+          <span className="text-sm text-gray-700 tabular-nums">{item.salePrice ? fmtCurrency(item.salePrice) : <span className="text-gray-300">—</span>}</span>
+        )}
+      </td>
+      {/* Client Payout */}
+      <td className="px-2 py-2.5 text-right whitespace-nowrap">
+        {clientPayout != null ? (
+          <div>
+            <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
+            {previewCalcPayout && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
+          </div>
+        ) : (
+          <span className="text-gray-300">—</span>
+        )}
+      </td>
+      {/* Paid to Client (editable) */}
+      <td className="px-2 py-2.5 text-right whitespace-nowrap">
+        {canEditPayout ? (
+          editingPayout ? (
+            <div className="flex items-center justify-end gap-1">
+              <span className="text-xs text-gray-400">$</span>
+              <input type="number" min="0" step="0.01" value={payoutInput}
+                onChange={e => setPayoutInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") savePayout(); if (e.key === "Escape") setEditingPayout(false); }}
+                className={inlineInput} autoFocus />
+              {confirmBtn(savePayout, savingPayout)}
+              {cancelBtn(() => setEditingPayout(false))}
+            </div>
+          ) : (
+            <button onClick={() => { setEditingPayout(true); setPayoutInput(String(item.payoutPaidAmount ?? 0)); }}
+              className="text-sm font-semibold text-forest-700 hover:underline tabular-nums">
+              {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+            </button>
+          )
+        ) : (
+          <span className="text-sm font-semibold text-gray-700 tabular-nums">
+            {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+          </span>
+        )}
+      </td>
+      {/* Edit */}
+      <td className="pr-3 py-2.5 w-8">
         {canEdit && (
-          <button
-            onClick={() => onEdit(item)}
-            className="absolute top-1 right-1 w-6 h-6 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Edit item"
-          >
-            <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <button onClick={() => onEdit(item)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all"
+            title="Edit item">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
         )}
-      </div>
-
-      {/* Content */}
-      <div className="p-3 flex flex-col gap-1.5 flex-1">
-        <div className="font-medium text-gray-900 text-sm leading-snug line-clamp-2">{item.itemName}</div>
-        <div className="text-xs text-gray-500">{item.category}</div>
-
-        {/* Target Value — shows sale price if set, otherwise estimate */}
-        <div className="flex justify-between text-xs mt-1">
-          <span className="text-gray-400">Target Value</span>
-          <span className="font-medium text-gray-700">
-            {targetValue > 0 ? fmtCurrency(targetValue) : "—"}
-          </span>
-        </div>
-
-        {/* Sale price — editable by TTT Staff/Manager */}
-        {(isSold || canEditPayout) && (
-          <div className="pt-1.5 border-t border-gray-100 space-y-1">
-            <div className="flex justify-between text-xs items-center gap-1">
-              <span className="text-gray-500">Sale price</span>
-              {canEditPayout ? (
-                editingSalePrice ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-gray-500">$</span>
-                    <input
-                      type="number" min="0" step="0.01"
-                      value={salePriceInput}
-                      onChange={e => setSalePriceInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") saveSalePrice(); if (e.key === "Escape") setEditingSalePrice(false); }}
-                      className={inlineInputClass}
-                      autoFocus
-                    />
-                    {saveBtn(saveSalePrice, savingSalePrice)}
-                    {cancelBtn(() => setEditingSalePrice(false))}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setEditingSalePrice(true); setSalePriceInput(String(item.salePrice ?? "")); }}
-                    className="text-xs font-medium text-gray-800 hover:underline"
-                  >
-                    {item.salePrice ? fmtCurrency(item.salePrice) : <span className="text-gray-400 italic text-[10px]">Set price</span>}
-                  </button>
-                )
-              ) : (
-                <span className="font-medium text-gray-800">{fmtCurrency(item.salePrice)}</span>
-              )}
-            </div>
-
-            {/* Client payout — only shown when a sale price exists */}
-            {previewSalePrice > 0 && (
-              <div className="flex justify-between text-xs items-center gap-1">
-                <span className="text-gray-500">Client payout</span>
-                <span className="font-semibold text-green-700 text-right">
-                  {previewCalcPayout
-                    ? <>{fmtCurrency(previewCalcPayout.amount)} <span className="text-[9px] font-normal text-gray-400">({previewCalcPayout.rate}% take)</span></>
-                    : fmtCurrency(item.consignorPayout)}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Payout paid */}
-        <div className="mt-auto pt-1.5 border-t border-gray-100">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[11px] text-gray-500">Paid to client</span>
-            {canEditPayout ? (
-              editingPayout ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">$</span>
-                  <input
-                    ref={inputRef}
-                    type="number" min="0" step="0.01"
-                    value={payoutInput}
-                    onChange={e => setPayoutInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") savePayout(); if (e.key === "Escape") setEditingPayout(false); }}
-                    className={inlineInputClass}
-                    autoFocus
-                  />
-                  {saveBtn(savePayout, savingPayout)}
-                  {cancelBtn(() => setEditingPayout(false))}
-                </div>
-              ) : (
-                <button
-                  onClick={() => { setEditingPayout(true); setPayoutInput(String(item.payoutPaidAmount ?? 0)); }}
-                  className="text-xs font-semibold text-forest-700 hover:underline"
-                >
-                  {fmtCurrency(item.payoutPaidAmount) === "—" ? "$0.00" : fmtCurrency(item.payoutPaidAmount)}
-                </button>
-              )
-            ) : (
-              <span className="text-xs font-semibold text-gray-700">
-                {fmtCurrency(item.payoutPaidAmount) === "—" ? "$0.00" : fmtCurrency(item.payoutPaidAmount)}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -417,6 +386,14 @@ function PFItemCard({
             )}
           </div>
         </div>
+
+        {/* Value */}
+        {item.valueMid > 0 && (
+          <div className="text-right flex-shrink-0 hidden sm:block">
+            <div className="text-xs text-gray-400">Value</div>
+            <div className="text-sm font-medium text-gray-700 tabular-nums">{fmtCurrency(item.valueMid)}</div>
+          </div>
+        )}
 
         {/* Qty progress */}
         <div className="text-right flex-shrink-0">
@@ -570,14 +547,54 @@ function PFSalesSection({
   onEdit: (item: Item) => void;
   onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
+  type SortCol = "name" | "value" | "status" | "qty";
+  const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
+  const [filterStatus, setFilterStatus] = useState("");
+
   if (items.length === 0) return null;
 
   const totalQty = items.reduce((s, i) => s + ((i.quantity ?? 0) + (i.quantitySold ?? 0)), 0);
   const totalSold = items.reduce((s, i) => s + (i.quantitySold ?? 0), 0);
+  const statuses = [...new Set(items.map(i => i.status))].sort();
+
+  const filtered = filterStatus ? items.filter(i => i.status === filterStatus) : items;
+
+  const getQtySold = (i: Item) => {
+    const qty = i.quantity ?? 0;
+    const sold = i.quantitySold ?? 0;
+    return (i.status === "Sold" && sold === 0 && qty > 0) ? qty : sold;
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    const d = sort.dir === "asc" ? 1 : -1;
+    switch (sort.col) {
+      case "name": return d * a.itemName.localeCompare(b.itemName);
+      case "value": return d * ((a.valueMid ?? 0) - (b.valueMid ?? 0));
+      case "status": return d * a.status.localeCompare(b.status);
+      case "qty": return d * (getQtySold(a) - getQtySold(b));
+      default: return 0;
+    }
+  });
+
+  function toggleSort(col: SortCol) {
+    setSort(prev => prev.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" });
+  }
+
+  function SortBtn({ col, label }: { col: SortCol; label: string }) {
+    const active = sort.col === col;
+    return (
+      <button onClick={() => toggleSort(col)}
+        className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors flex items-center gap-1",
+          active ? "border-forest-400 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+        {label}
+        <span className="text-[9px]">{active ? (sort.dir === "asc" ? "▲" : "▼") : ""}</span>
+      </button>
+    );
+  }
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <h2 className="text-base font-semibold text-gray-900">ProFoundFinds Consignment</h2>
         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
           {items.length} items
@@ -588,8 +605,32 @@ function PFSalesSection({
           </span>
         )}
       </div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span className="text-[11px] text-gray-400 font-medium">Sort:</span>
+        <SortBtn col="name" label="Name" />
+        <SortBtn col="value" label="Value" />
+        <SortBtn col="status" label="Status" />
+        <SortBtn col="qty" label="Qty Sold" />
+        {statuses.length > 1 && (
+          <>
+            <span className="text-[11px] text-gray-400 font-medium ml-2">Filter:</span>
+            <button onClick={() => setFilterStatus("")}
+              className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors",
+                filterStatus === "" ? "border-forest-400 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+              All
+            </button>
+            {statuses.map(s => (
+              <button key={s} onClick={() => setFilterStatus(s === filterStatus ? "" : s)}
+                className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors",
+                  filterStatus === s ? "border-forest-400 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+                {s}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
       <div className="space-y-2">
-        {items.map(item => (
+        {sorted.map(item => (
           <PFItemCard
             key={item.id}
             item={item}
@@ -605,9 +646,9 @@ function PFSalesSection({
   );
 }
 
-// ─── Section ──────────────────────────────────────────────────────────────────
+// ─── Sales Table (FB, Online, Other Consignment) ──────────────────────────────
 
-function SectionGrid({
+function SalesTable({
   title,
   items,
   canEditPayout,
@@ -626,17 +667,108 @@ function SectionGrid({
   onSalePriceSaved: (id: string, price: number) => void;
   onEdit: (item: Item) => void;
 }) {
+  type SortCol = "name" | "category" | "status" | "value" | "salePrice" | "payout" | "paid";
+  const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
+  const [filterStatus, setFilterStatus] = useState("");
+
   if (items.length === 0) return null;
+
+  const statuses = [...new Set(items.map(i => i.status))].sort();
+  const filtered = filterStatus ? items.filter(i => i.status === filterStatus) : items;
+
+  const getClientPayout = (item: Item) => {
+    const calc = calcPayouts.get(item.id);
+    const sp = item.salePrice ?? 0;
+    if (sp > 0 && calc) return sp * (1 - calc.rate / 100);
+    if (sp > 0) return item.consignorPayout ?? 0;
+    return 0;
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    const d = sort.dir === "asc" ? 1 : -1;
+    switch (sort.col) {
+      case "name": return d * a.itemName.localeCompare(b.itemName);
+      case "category": return d * (a.category ?? "").localeCompare(b.category ?? "");
+      case "status": return d * a.status.localeCompare(b.status);
+      case "value": return d * ((a.valueMid ?? 0) - (b.valueMid ?? 0));
+      case "salePrice": return d * ((a.salePrice ?? 0) - (b.salePrice ?? 0));
+      case "payout": return d * (getClientPayout(a) - getClientPayout(b));
+      case "paid": return d * ((a.payoutPaidAmount ?? 0) - (b.payoutPaidAmount ?? 0));
+      default: return 0;
+    }
+  });
+
+  function toggleSort(col: SortCol) {
+    setSort(prev => prev.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" });
+  }
+
+  function ThBtn({ col, label, right }: { col: SortCol; label: string; right?: boolean }) {
+    const active = sort.col === col;
+    return (
+      <button onClick={() => toggleSort(col)}
+        className={cn("flex items-center gap-0.5 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+          active ? "text-forest-700" : "text-gray-400 hover:text-gray-600",
+          right && "ml-auto")}>
+        {label}
+        <span className="text-[9px]">{active ? (sort.dir === "asc" ? "▲" : "▼") : "⇅"}</span>
+      </button>
+    );
+  }
+
   return (
     <div>
-      <div className="flex items-center gap-3 mb-3">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length}</span>
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        {title && <h2 className="text-base font-semibold text-gray-900">{title}</h2>}
+        {title && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length}</span>}
+        {statuses.length > 1 && (
+          <div className="flex gap-1.5 ml-1">
+            <button onClick={() => setFilterStatus("")}
+              className={cn("text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                filterStatus === "" ? "border-forest-500 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+              All
+            </button>
+            {statuses.map(s => (
+              <button key={s} onClick={() => setFilterStatus(s === filterStatus ? "" : s)}
+                className={cn("text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                  filterStatus === s ? "border-forest-500 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        {items.map(item => (
-          <ItemCard key={item.id} item={item} canEditPayout={canEditPayout} canEdit={canEdit} calcPayout={calcPayouts.get(item.id) ?? null} onPayoutSaved={onPayoutSaved} onSalePriceSaved={onSalePriceSaved} onEdit={onEdit} />
-        ))}
+      <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="pl-3 py-2.5 w-10" />
+              <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
+              <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
+              <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
+              <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
+              <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>
+              <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>
+              <th className="pr-3 py-2.5 w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(item => (
+              <SalesTableRow
+                key={item.id}
+                item={item}
+                canEditPayout={canEditPayout}
+                canEdit={canEdit}
+                calcPayout={calcPayouts.get(item.id) ?? null}
+                onPayoutSaved={onPayoutSaved}
+                onSalePriceSaved={onSalePriceSaved}
+                onEdit={onEdit}
+              />
+            ))}
+          </tbody>
+        </table>
+        {sorted.length === 0 && (
+          <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+        )}
       </div>
     </div>
   );
@@ -783,6 +915,8 @@ export function SalesClient({
   paymentHandles,
   initialPayoutMethod,
   initialPayoutUsername,
+  initialPayoutCheckAddress,
+  projectAddress,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -793,6 +927,7 @@ export function SalesClient({
   // Payout preference state
   const [payoutMethod, setPayoutMethod] = useState<PayoutMethod | "">(initialPayoutMethod ?? "");
   const [payoutUsername, setPayoutUsername] = useState(initialPayoutUsername ?? "");
+  const [payoutCheckAddress, setPayoutCheckAddress] = useState(initialPayoutCheckAddress || projectAddress || "");
   const [savingPayout, setSavingPayout] = useState(false);
   const [payoutSaved, setPayoutSaved] = useState(false);
 
@@ -807,6 +942,7 @@ export function SalesClient({
           tenantId,
           payoutMethod: payoutMethod || null,
           payoutUsername: payoutUsername.trim() || null,
+          payoutCheckAddress: payoutMethod === "Check" ? (payoutCheckAddress.trim() || null) : undefined,
         }),
       });
       setPayoutSaved(true);
@@ -981,7 +1117,7 @@ export function SalesClient({
           onEdit={setEditingItem}
           onEventUpdated={(updated) => setPfSaleEvents(prev => prev.map(e => e.id === updated.id ? updated : e))}
         />
-        <SectionGrid
+        <SalesTable
           title="FB / Marketplace"
           items={fb}
           canEditPayout={canEditPayout}
@@ -991,7 +1127,7 @@ export function SalesClient({
           onSalePriceSaved={handleSalePriceSaved}
           onEdit={setEditingItem}
         />
-        <SectionGrid
+        <SalesTable
           title="Online Marketplace"
           items={online}
           canEditPayout={canEditPayout}
@@ -1002,7 +1138,7 @@ export function SalesClient({
           onEdit={setEditingItem}
         />
 
-        {/* Other Consignment — grouped by vendor */}
+        {/* Other Consignment — grouped by vendor, each as a table */}
         {other.length > 0 && (
           <div>
             <div className="flex items-center gap-3 mb-4">
@@ -1015,13 +1151,17 @@ export function SalesClient({
                   <div className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />
                     {vendorName}
-                    <span className="text-xs text-gray-400">({vendorItems.length})</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    {vendorItems.map(item => (
-                      <ItemCard key={item.id} item={item} canEditPayout={canEditPayout} canEdit={canEdit} calcPayout={calcPayouts.get(item.id) ?? null} onPayoutSaved={handlePayoutSaved} onSalePriceSaved={handleSalePriceSaved} onEdit={setEditingItem} />
-                    ))}
-                  </div>
+                  <SalesTable
+                    title=""
+                    items={vendorItems}
+                    canEditPayout={canEditPayout}
+                    canEdit={canEdit}
+                    calcPayouts={calcPayouts}
+                    onPayoutSaved={handlePayoutSaved}
+                    onSalePriceSaved={handleSalePriceSaved}
+                    onEdit={setEditingItem}
+                  />
                 </div>
               ))}
             </div>
@@ -1076,6 +1216,19 @@ export function SalesClient({
             {savingPayout ? "Saving…" : payoutSaved ? "Saved!" : "Save"}
           </button>
         </div>
+        {payoutMethod === "Check" && (
+          <div className="mt-4 max-w-md">
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Check Mailing Address</label>
+            <textarea
+              value={payoutCheckAddress}
+              onChange={e => setPayoutCheckAddress(e.target.value)}
+              rows={3}
+              placeholder="Enter mailing address for check delivery"
+              className="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
+            />
+            <p className="text-xs text-gray-400 mt-1">This address is for payout only and will not change the project address on file.</p>
+          </div>
+        )}
       </div>
 
       {/* Proof of Payment */}

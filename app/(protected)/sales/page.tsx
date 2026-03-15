@@ -86,6 +86,8 @@ export default async function SalesPage({ searchParams }: PageProps) {
     zelleQrUrl: invoiceSettings.zelleQrUrl,
   } : undefined;
 
+  const projectAddress = [tenant.address, tenant.city, tenant.state, tenant.zip].filter(Boolean).join(", ");
+
   return (
     <SalesClient
       tenantId={tenantId}
@@ -106,6 +108,8 @@ export default async function SalesPage({ searchParams }: PageProps) {
       paymentHandles={paymentHandles}
       initialPayoutMethod={tenant.payoutMethod}
       initialPayoutUsername={tenant.payoutUsername}
+      initialPayoutCheckAddress={tenant.payoutCheckAddress}
+      projectAddress={projectAddress || undefined}
     />
   );
 }
