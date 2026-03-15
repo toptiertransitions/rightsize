@@ -152,6 +152,8 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     isArchived: f["IsArchived"] === true,
     destinationSqFt: f["DestinationSqFt"] != null ? toNum(f["DestinationSqFt"]) : undefined,
+    payoutMethod: toStr(f["PayoutMethod"]) as import("./types").PayoutMethod || undefined,
+    payoutUsername: toStr(f["PayoutUsername"]) || undefined,
   };
 }
 
@@ -604,7 +606,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; destinationSqFt?: number }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -616,6 +618,8 @@ export async function updateTenant(
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
   if (data.destinationSqFt !== undefined) fields["DestinationSqFt"] = data.destinationSqFt;
+  if (data.payoutMethod !== undefined) fields["PayoutMethod"] = data.payoutMethod ?? "";
+  if (data.payoutUsername !== undefined) fields["PayoutUsername"] = data.payoutUsername ?? "";
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }

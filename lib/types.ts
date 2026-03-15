@@ -21,6 +21,8 @@ export interface StaffMember {
 }
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
+export type PayoutMethod = "Zelle" | "Venmo" | "Check" | "Other";
+
 export interface Tenant {
   id: string; // Airtable record ID
   airtableId: string;
@@ -36,6 +38,8 @@ export interface Tenant {
   estimatedHours?: number;
   isArchived?: boolean;
   destinationSqFt?: number;
+  payoutMethod?: PayoutMethod;
+  payoutUsername?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

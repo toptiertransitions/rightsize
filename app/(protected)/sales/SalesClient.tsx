@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant } from "@/lib/types";
+import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { PayoutModal } from "./PayoutModal";
 
@@ -92,6 +92,8 @@ interface SalesClientProps {
   canReassign?: boolean;
   allTenants?: Tenant[];
   paymentHandles?: PaymentHandles;
+  initialPayoutMethod?: PayoutMethod;
+  initialPayoutUsername?: string;
 }
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
@@ -779,12 +781,40 @@ export function SalesClient({
   canReassign,
   allTenants,
   paymentHandles,
+  initialPayoutMethod,
+  initialPayoutUsername,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [proofFiles, setProofFiles] = useState<ProjectFile[]>(paymentProofFiles);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+
+  // Payout preference state
+  const [payoutMethod, setPayoutMethod] = useState<PayoutMethod | "">(initialPayoutMethod ?? "");
+  const [payoutUsername, setPayoutUsername] = useState(initialPayoutUsername ?? "");
+  const [savingPayout, setSavingPayout] = useState(false);
+  const [payoutSaved, setPayoutSaved] = useState(false);
+
+  async function savePayoutPreference() {
+    setSavingPayout(true);
+    setPayoutSaved(false);
+    try {
+      await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          payoutMethod: payoutMethod || null,
+          payoutUsername: payoutUsername.trim() || null,
+        }),
+      });
+      setPayoutSaved(true);
+      setTimeout(() => setPayoutSaved(false), 2000);
+    } finally {
+      setSavingPayout(false);
+    }
+  }
 
   function handlePayoutSaved(itemId: string, amount: number) {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, payoutPaidAmount: amount } : i));
@@ -1001,6 +1031,51 @@ export function SalesClient({
         {items.length === 0 && (
           <p className="text-center text-gray-400 py-16">No consignment or marketplace items yet</p>
         )}
+      </div>
+
+      {/* Client Preferred Payout */}
+      <div className="mt-10 pt-8 border-t border-gray-200">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Client Preferred Payout</h2>
+          <p className="text-xs text-gray-500 mt-0.5">How would you like to receive your payout?</p>
+        </div>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Method</label>
+            <select
+              value={payoutMethod}
+              onChange={e => setPayoutMethod(e.target.value as PayoutMethod | "")}
+              className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
+            >
+              <option value="">— Select —</option>
+              <option value="Zelle">Zelle</option>
+              <option value="Venmo">Venmo</option>
+              <option value="Check">Check</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          {(payoutMethod === "Zelle" || payoutMethod === "Venmo") && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                {payoutMethod} Username / Phone
+              </label>
+              <input
+                type="text"
+                value={payoutUsername}
+                onChange={e => setPayoutUsername(e.target.value)}
+                placeholder={payoutMethod === "Venmo" ? "@username" : "Phone or email"}
+                className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 w-52"
+              />
+            </div>
+          )}
+          <button
+            onClick={savePayoutPreference}
+            disabled={savingPayout || !payoutMethod}
+            className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+          >
+            {savingPayout ? "Saving…" : payoutSaved ? "Saved!" : "Save"}
+          </button>
+        </div>
       </div>
 
       {/* Proof of Payment */}

@@ -75,7 +75,7 @@ function StatusCell({ value, onSave }: { value: ItemStatus; onSave: (v: ItemStat
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
-type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate";
+type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced";
 
 function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; sortDir: "asc" | "desc" }) {
   const active = col === sortCol;
@@ -304,6 +304,11 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
       case "clientSharePercent": return dir * ((a.clientSharePercent ?? 0) - (b.clientSharePercent ?? 0));
       case "deliveryDate": return dir * (a.deliveryDate ?? "").localeCompare(b.deliveryDate ?? "");
       case "returnDate": return dir * ((a.deliveryDate ? new Date(a.deliveryDate).getTime() : 0) - (b.deliveryDate ? new Date(b.deliveryDate).getTime() : 0));
+      case "squareSynced": {
+        const aVal = a.squareSyncedAt ? 1 : 0;
+        const bVal = b.squareSyncedAt ? 1 : 0;
+        return dir * (aVal - bVal);
+      }
       default: return 0;
     }
   });
@@ -517,7 +522,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                   <th className="px-3 py-3 text-right w-24">{thBtn("clientSharePercent", "Client Share", "justify-end")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("deliveryDate", "Delivery")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("returnDate", "Return Date")}</th>
-                  <th className="px-3 py-3 text-left w-20"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Square</span></th>
+                  <th className="px-3 py-3 text-left w-20">{thBtn("squareSynced", "Square")}</th>
                 </tr>
               </thead>
               <tbody>

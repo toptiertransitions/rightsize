@@ -104,6 +104,8 @@ export default async function SalesPage({ searchParams }: PageProps) {
       canReassign={canReassign}
       allTenants={canReassign ? allTenants : undefined}
       paymentHandles={paymentHandles}
+      initialPayoutMethod={tenant.payoutMethod}
+      initialPayoutUsername={tenant.payoutUsername}
     />
   );
 }
