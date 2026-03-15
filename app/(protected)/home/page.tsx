@@ -264,17 +264,17 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
           </Link>
-          <Link href="/calculator" className="col-span-2 sm:col-span-1">
+          <Link href={`/plan?tenantId=${tenant.id}`} className="col-span-2 sm:col-span-1">
             <Card hover>
               <CardContent className="py-5">
                 <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
                   <svg className="w-4 h-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <p className="text-sm font-semibold text-gray-900">Project Plan</p>
-                <p className="text-xs text-gray-500 mt-0.5">Estimate timeline &amp; cost</p>
-                <p className="text-xs text-forest-600 mt-2 font-medium">Open calculator →</p>
+                <p className="text-xs text-gray-500 mt-0.5">View timeline and plans</p>
+                <p className="text-xs text-forest-600 mt-2 font-medium">View plan →</p>
               </CardContent>
             </Card>
           </Link>
