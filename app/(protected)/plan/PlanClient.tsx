@@ -121,14 +121,6 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const isCustomRoom = roomId === "__custom__";
   const isEdit = !!entry;
 
-  const addHelper = () => {
-    const email = helperInput.trim().toLowerCase();
-    if (!email || !email.includes("@")) return;
-    if (helpers.find(h => h.email === email)) return;
-    setHelpers(prev => [...prev, { email, status: "pending" }]);
-    setHelperInput("");
-  };
-
   const handleRemoveHelper = (index: number) => {
     setHelpers(prev => prev.filter((_, xi) => xi !== index));
   };
@@ -148,19 +140,19 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       .finally(() => setCalLoading(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSendInvites = async () => {
-    if (!isEdit) return;
+  // Core invite-send logic — accepts an explicit helpers array to avoid stale state
+  const sendCalendarInvites = async (helpersToSend: PlanHelper[]) => {
+    if (!isEdit || !entry?.id) return;
     setCalLoading("send");
     setCalError("");
     try {
       const res = await fetch("/api/plan/calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // pass current helpers so they're saved + used even if not yet saved
         body: JSON.stringify({
-          planEntryId: entry!.id,
+          planEntryId: entry.id,
           action: "send",
-          helpers,
+          helpers: helpersToSend,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           notes: notes.trim() || undefined,
@@ -173,6 +165,21 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       setCalError(e instanceof Error ? e.message : "Failed to send invites");
     } finally {
       setCalLoading(null);
+    }
+  };
+
+  const handleSendInvites = () => sendCalendarInvites(helpers);
+
+  // Adding a helper in edit mode immediately fires the calendar invite
+  const addHelper = async () => {
+    const email = helperInput.trim().toLowerCase();
+    if (!email || !email.includes("@")) return;
+    if (helpers.find(h => h.email === email)) return;
+    const updated: PlanHelper[] = [...helpers, { email, status: "pending" }];
+    setHelpers(updated);
+    setHelperInput("");
+    if (isEdit) {
+      await sendCalendarInvites(updated);
     }
   };
 
@@ -367,9 +374,10 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
               <button
                 type="button"
                 onClick={addHelper}
-                className="h-10 px-4 rounded-xl border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 transition-colors"
+                disabled={!!calLoading}
+                className="h-10 px-4 rounded-xl border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 transition-colors disabled:opacity-50"
               >
-                Add
+                {calLoading === "send" ? "Sending…" : "Add"}
               </button>
             </div>
             {helpers.length > 0 && (

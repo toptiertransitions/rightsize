@@ -1517,8 +1517,10 @@ export async function getTimeEntryById(id: string): Promise<TimeEntry | null> {
   }
 }
 
-// Optional fields that can be silently dropped if the Airtable table doesn't have them
-const OPTIONAL_TIME_ENTRY_FIELDS = ["TravelMiles", "TravelMinutes", "Notes"];
+// Optional fields that can be silently dropped if the Airtable table doesn't have them.
+// TravelMiles and TravelMinutes are NOT optional — failing loudly if they're missing is
+// preferable to silently discarding user-entered travel data.
+const OPTIONAL_TIME_ENTRY_FIELDS = ["Notes"];
 
 async function timeEntryWrite(path: string, method: "POST" | "PATCH", fields: Record<string, unknown>): Promise<AirtableRecord> {
   const current = { ...fields };
@@ -1572,8 +1574,8 @@ export async function updateTimeEntry(
   if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
   if (data.durationMinutes !== undefined) fields["DurationMinutes"] = data.durationMinutes;
   if (data.focusArea !== undefined) fields["FocusArea"] = String(data.focusArea).replace(/^"+|"+$/g, "").trim();
-  if (data.travelMiles != null && data.travelMiles > 0) fields["TravelMiles"] = data.travelMiles;
-  if (data.travelMinutes != null && data.travelMinutes > 0) fields["TravelMinutes"] = data.travelMinutes;
+  if (data.travelMiles != null) fields["TravelMiles"] = data.travelMiles;
+  if (data.travelMinutes != null) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   return mapTimeEntry(await timeEntryWrite(`/${id}`, "PATCH", fields));
 }
@@ -2710,6 +2712,42 @@ export async function saveGmailToken(
 export async function deleteGmailToken(id: string): Promise<void> {
   const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Google Calendar Token (stored in GmailTokens table with system key) ──────
+const GCAL_SYSTEM_KEY = "__gcal__";
+
+export async function getCalendarToken(): Promise<{ id: string; refreshToken: string } | null> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${GCAL_SYSTEM_KEY}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  const f = (data.records[0] as AirtableRecord).fields;
+  const token = toStr(f["RefreshToken"]);
+  return token ? { id: data.records[0].id, refreshToken: token } : null;
+}
+
+export async function saveCalendarToken(refreshToken: string): Promise<void> {
+  const existing = await getCalendarToken().catch(() => null);
+  const fields = {
+    ClerkUserId: GCAL_SYSTEM_KEY,
+    RefreshToken: refreshToken,
+    UpdatedAt: new Date().toISOString(),
+  };
+  if (existing) {
+    const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } else {
+    const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, "", {
+      method: "POST",
+      body: JSON.stringify({ fields: { ...fields, CreatedAt: new Date().toISOString() } }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
 }
 
 export async function deleteContract(id: string): Promise<void> {

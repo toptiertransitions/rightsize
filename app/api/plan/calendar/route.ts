@@ -137,6 +137,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (e) {
     console.error("plan/calendar error:", e);
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("invalid_grant")) {
+      return NextResponse.json(
+        { error: "Google Calendar authorization has expired. A TTTAdmin needs to re-authorize by visiting /api/admin/calendar-auth." },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

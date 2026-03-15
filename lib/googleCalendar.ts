@@ -1,15 +1,22 @@
 import { google } from "googleapis";
 import type { PlanEntry, PlanHelper } from "./types";
+import { getCalendarToken } from "./airtable";
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
-function getAuth() {
+// Prefer the token stored in Airtable (set via /api/admin/calendar-auth OAuth flow)
+// over the env-var refresh token so it can be re-issued without a redeploy.
+async function getAuth() {
   const auth = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
   );
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_CALENDAR_REFRESH_TOKEN });
+  const stored = await getCalendarToken().catch(() => null);
+  const refreshToken = stored?.refreshToken || process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
+  auth.setCredentials({ refresh_token: refreshToken });
   return auth;
 }
+
+export const CALENDAR_OAUTH_SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";
 const TIMEZONE = "America/Chicago";
@@ -36,7 +43,7 @@ export async function createOrUpdateCalendarEvent(
   projectName?: string, // tenant/project name for the invite title
   location?: string,    // project address shown as event location
 ): Promise<string> {
-  const calendar = google.calendar({ version: "v3", auth: getAuth() });
+  const calendar = google.calendar({ version: "v3", auth: await getAuth() });
 
   const room = roomName || entry.roomLabel || "";
   const prefix = projectName || "Daily Focus";
@@ -97,7 +104,7 @@ export async function createOrUpdateCalendarEvent(
 
 // ─── Cancel a Calendar event (sends cancellation emails to all attendees) ─────
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
-  const calendar = google.calendar({ version: "v3", auth: getAuth() });
+  const calendar = google.calendar({ version: "v3", auth: await getAuth() });
   await calendar.events.delete({
     calendarId: CALENDAR_ID,
     eventId,
@@ -109,7 +116,7 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
 export async function syncCalendarEventRSVPs(
   eventId: string,
 ): Promise<{ email: string; status: PlanHelper["status"]; comment?: string }[]> {
-  const calendar = google.calendar({ version: "v3", auth: getAuth() });
+  const calendar = google.calendar({ version: "v3", auth: await getAuth() });
   const res = await calendar.events.get({ calendarId: CALENDAR_ID, eventId });
 
   return (res.data.attendees || []).map((a) => ({
