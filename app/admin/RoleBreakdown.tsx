@@ -28,14 +28,14 @@ const STAFF_ROLES = [
     label: "TTT Staff",
     color: "border-gray-600",
     badge: "bg-gray-700 text-gray-300",
-    desc: "Field staff who log time and access client project data.",
+    desc: "Field staff who log time, access client project data, edit sale prices, view Venmo/Zelle payment QR codes on the Sales page, and edit project addresses from /home.",
   },
   {
     key: "TTTManager",
     label: "TTT Manager",
     color: "border-purple-700",
     badge: "bg-purple-900/50 text-purple-300",
-    desc: "Operations leads with full project, quoting, invoicing, expense, and time-tracking access.",
+    desc: "Operations leads with full project, quoting, invoicing, expense, and time-tracking access. Can reassign items between projects, configure payout settings, and manage payment handles.",
   },
   {
     key: "TTTSales",
@@ -49,7 +49,7 @@ const STAFF_ROLES = [
     label: "TTT Admin",
     color: "border-red-700",
     badge: "bg-red-900/50 text-red-300",
-    desc: "Full platform access including admin console and all settings.",
+    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, and item reassignment across projects.",
   },
 ] as const;
 
@@ -81,6 +81,9 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Route & approve items",      permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite members to project",  permissions: { Owner: true,  Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
   { label: "Archive project",            permissions: { Owner: true,  Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Reassign item to another project", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true,  TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Invoices" },
   { label: "View invoices & PDF",        permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Create invoices",            permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
@@ -97,14 +100,20 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Manage opportunities",       permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
   { label: "Convert lead to project",    permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
   { group: "Sales & Payouts" },
+  { label: "View sales page (consignment & marketplace)", permissions: { Owner: true, Collaborator: true, Viewer: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Set client payout preference (Zelle/Venmo/Check/Other)", permissions: { Owner: true, Collaborator: "view-only", Viewer: "view-only", TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Edit sale price & payout",    permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "View Venmo/Zelle payment QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Upload proof of payment",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Delete proof of payment",     permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Generate client payout PDF",  permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Delete payment proofs",       permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { group: "Admin Console" },
   { label: "Access /admin",              permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
   { label: "Manage users & roles",       permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
   { label: "Contract & invoice settings",permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
   { label: "Routing rules & integrations",permissions:{ Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
+  { label: "Configure Venmo/Zelle payment handles & QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "View PF/FB/eBay inventory tables", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
 ];
 
 function CheckCell({ value }: { value: Check | undefined }) {
