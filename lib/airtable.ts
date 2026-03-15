@@ -415,7 +415,7 @@ export async function createItem(data: Partial<Item> & {
     StaffTips: data.staffTips || "",
     Status: data.status || "Pending Review",
     BarcodeNumber: data.barcodeNumber || "",
-    Quantity: data.quantity ?? 0,
+    Quantity: data.quantity || 1,
     ClientSharePercent: data.clientSharePercent ?? 0,
     DeliveryDate: data.deliveryDate || "",
     CreatedAt: now,

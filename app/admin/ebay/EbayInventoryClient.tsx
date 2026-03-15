@@ -303,7 +303,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
       case "itemName": return dir * a.itemName.localeCompare(b.itemName);
       case "status": return dir * a.status.localeCompare(b.status);
       case "client": return dir * ((tenantInfoMap[a.tenantId]?.name ?? "").localeCompare(tenantInfoMap[b.tenantId]?.name ?? ""));
-      case "quantity": return dir * ((a.quantity ?? 0) - (b.quantity ?? 0));
+      case "quantity": return dir * ((a.quantity || 1) - (b.quantity || 1));
       case "valueMid": return dir * ((a.valueMid ?? 0) - (b.valueMid ?? 0));
       case "clientSharePercent": return dir * ((a.clientSharePercent ?? 0) - (b.clientSharePercent ?? 0));
       case "staffSellerName": return dir * ((a.staffSellerName ?? "").localeCompare(b.staffSellerName ?? ""));
@@ -502,7 +502,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
 
                       {/* Qty */}
                       <td className="px-1 py-1 text-right">
-                        <EditCell value={item.quantity ?? 1} type="number" onSave={(v) => patchItem(item.id, item.tenantId, { quantity: Number(v) || 1 })} className="text-right" />
+                        <EditCell value={item.quantity || 1} type="number" onSave={(v) => patchItem(item.id, item.tenantId, { quantity: Number(v) || 1 })} className="text-right" />
                       </td>
 
                       {/* Price */}
