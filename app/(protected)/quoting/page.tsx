@@ -108,7 +108,18 @@ export default async function QuotingPage({ searchParams }: PageProps) {
   // Deduplicate against membership recipients, then prepend
   const memberEmails = new Set(recipients.map((r) => r.email));
   const uniqueOpportunityRecipients = opportunityRecipients.filter((r) => !memberEmails.has(r.email));
-  const allRecipients = [...uniqueOpportunityRecipients, ...recipients];
+
+  // Also include all CRM client contacts with emails (deduplicated), so the
+  // dropdown is populated even when no CRM opportunity has been created yet.
+  const seenEmails = new Set([
+    ...uniqueOpportunityRecipients.map((r) => r.email),
+    ...recipients.map((r) => r.email),
+  ]);
+  const additionalContacts = clientContacts
+    .filter((c) => c.email && !seenEmails.has(c.email))
+    .map((c) => ({ name: c.name, email: c.email, role: "Contact" }));
+
+  const allRecipients = [...uniqueOpportunityRecipients, ...recipients, ...additionalContacts];
 
   return (
     <QuotingClient

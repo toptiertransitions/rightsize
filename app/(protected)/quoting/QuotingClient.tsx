@@ -550,9 +550,9 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
 
     let finalContract = contract;
 
-    if (isFirstQuote) {
-      // Auto-set as primary so the user doesn't have to click "Set as Primary"
-      // when there's only one quote on the project.
+    if (isFirstQuote && contract.status !== "Sent") {
+      // Auto-set as primary (Signed) only for saved drafts — NOT for contracts
+      // sent for signature, which must wait for the client to actually sign.
       try {
         const res = await fetch("/api/contracts", {
           method: "PATCH",

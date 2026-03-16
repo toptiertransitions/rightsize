@@ -14,6 +14,7 @@ interface Props {
   ownerEmail: string;
   currentUserEmail: string;
   invoiceSettings: InvoiceSettings | null;
+  invoices?: Invoice[];
 }
 
 type Tab = "Deposit" | "Full";
@@ -22,14 +23,6 @@ type FullSource = "contract" | "logged" | "specific";
 
 function fmt(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-// Sum of paid deposits for this tenant from the invoices list
-function getPaidDepositTotal(contracts: Contract[]): number {
-  // This is passed from the page — use invoice list from parent context
-  // We'll calculate it from the existing invoices passed via props
-  // (We don't have invoices here directly, so this must be passed in or computed)
-  return 0;
 }
 
 export function InvoiceCreatorModal({
@@ -43,6 +36,7 @@ export function InvoiceCreatorModal({
   ownerEmail,
   currentUserEmail,
   invoiceSettings,
+  invoices = [],
 }: Props) {
   const [tab, setTab] = useState<Tab>("Deposit");
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +56,16 @@ export function InvoiceCreatorModal({
   const [fullContractId, setFullContractId] = useState(contracts[0]?.id ?? "");
   const [specificAmount, setSpecificAmount] = useState("");
   const [specificServiceId, setSpecificServiceId] = useState(services[0]?.id ?? "");
+
+  // Deposit credit state
+  const paidDeposits = invoices.filter((inv) => inv.type === "Deposit" && inv.status === "Paid");
+  const totalPaidDeposit = paidDeposits.reduce((s, inv) => s + (inv.paidAmount ?? inv.amount), 0);
+  const [applyDeposit, setApplyDeposit] = useState(totalPaidDeposit > 0);
+
+  // Reset applyDeposit when switching to Full tab or when modal opens
+  useEffect(() => {
+    if (tab === "Full") setApplyDeposit(totalPaidDeposit > 0);
+  }, [tab, totalPaidDeposit]);
 
   // Shared
   const [sendEmail, setSendEmail] = useState(false);
@@ -101,12 +105,15 @@ export function InvoiceCreatorModal({
     0
   );
 
-  const fullAmount =
+  const fullSubtotal =
     fullSource === "contract"
       ? contractNetTotal
       : fullSource === "logged"
       ? loggedTotal
       : parseFloat(specificAmount) || 0;
+
+  const effectiveDeposit = tab === "Full" && applyDeposit && totalPaidDeposit > 0 ? totalPaidDeposit : 0;
+  const fullAmount = fullSubtotal - effectiveDeposit;
 
   const selectedDepositService = services.find((s) => s.id === depositServiceId);
   const selectedSpecificService = services.find((s) => s.id === specificServiceId);
@@ -126,6 +133,13 @@ export function InvoiceCreatorModal({
     setSentToEmail(ownerEmail);
     setCcEmail(currentUserEmail);
   }, [contracts, services, ownerEmail, currentUserEmail]);
+
+  const depositCreditLineItem = {
+    serviceId: "",
+    serviceName: "Deposit Applied",
+    hours: 1,
+    rate: -totalPaidDeposit,
+  };
 
   async function handleSubmit() {
     setError("");
@@ -153,38 +167,61 @@ export function InvoiceCreatorModal({
         };
       } else {
         // Full invoice
+        const withDepositCredit = effectiveDeposit > 0;
+
         if (fullSource === "contract") {
           const svc = services.find((s) => s.name.toLowerCase() === "services") ?? services[0];
-          body = {
-            ...body,
-            serviceId: svc?.id ?? "",
-            serviceName: svc?.name ?? "Services",
-            contractId: fullContractId,
-            lineItems: contractLineItems.map((li) => ({
+          const lineItems = [
+            ...contractLineItems.map((li) => ({
               serviceId: li.serviceId,
               serviceName: li.serviceName,
               hours: li.hours,
               rate: li.rate,
             })),
-          };
-        } else if (fullSource === "logged") {
-          const svc = services.find((s) => s.name.toLowerCase() === "services") ?? services[0];
+            ...(withDepositCredit ? [depositCreditLineItem] : []),
+          ];
           body = {
             ...body,
             serviceId: svc?.id ?? "",
             serviceName: svc?.name ?? "Services",
-            lineItems: Array.from(loggedGroups.values()).map((g) => ({
+            contractId: fullContractId,
+            lineItems,
+          };
+        } else if (fullSource === "logged") {
+          const svc = services.find((s) => s.name.toLowerCase() === "services") ?? services[0];
+          const lineItems = [
+            ...Array.from(loggedGroups.values()).map((g) => ({
               serviceId: g.service.id,
               serviceName: g.service.name,
               hours: Math.round(g.hours * 100) / 100,
               rate: g.service.hourlyRate,
             })),
+            ...(withDepositCredit ? [depositCreditLineItem] : []),
+          ];
+          body = {
+            ...body,
+            serviceId: svc?.id ?? "",
+            serviceName: svc?.name ?? "Services",
+            lineItems,
           };
         } else {
+          // Specific amount
+          const lineItems = withDepositCredit
+            ? [
+                {
+                  serviceId: specificServiceId,
+                  serviceName: selectedSpecificService?.name ?? "",
+                  hours: 1,
+                  rate: fullSubtotal,
+                },
+                depositCreditLineItem,
+              ]
+            : undefined;
           body = {
             ...body,
             serviceId: specificServiceId,
             serviceName: selectedSpecificService?.name ?? "",
+            ...(lineItems ? { lineItems } : {}),
           };
         }
       }
@@ -498,13 +535,46 @@ export function InvoiceCreatorModal({
                   </div>
                 </div>
               )}
+
+              {/* Deposit credit section */}
+              {totalPaidDeposit > 0 && (
+                <div className="border border-blue-200 bg-blue-50 rounded-xl px-4 py-3 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={applyDeposit}
+                      onChange={(e) => setApplyDeposit(e.target.checked)}
+                      className="rounded text-forest-600 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-blue-900">
+                      Apply paid deposit ({fmt(totalPaidDeposit)})
+                    </span>
+                  </label>
+                  {applyDeposit && fullSubtotal > 0 && (
+                    <div className="space-y-1.5 text-sm border-t border-blue-200 pt-3">
+                      <div className="flex justify-between text-gray-700">
+                        <span>Subtotal</span>
+                        <span>{fmt(fullSubtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-blue-700">
+                        <span>Deposit Applied</span>
+                        <span>-{fmt(totalPaidDeposit)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-gray-900 border-t border-blue-200 pt-1.5">
+                        <span>Balance Owed</span>
+                        <span>{fmt(Math.max(0, fullSubtotal - totalPaidDeposit))}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Amount summary */}
           <div className="bg-forest-50 border border-forest-200 rounded-xl px-4 py-3 flex items-center justify-between">
             <span className="text-sm font-medium text-forest-800">Invoice Total</span>
-            <span className="text-xl font-bold text-forest-700">{fmt(finalAmount)}</span>
+            <span className="text-xl font-bold text-forest-700">{fmt(Math.max(0, finalAmount))}</span>
           </div>
 
           {/* Email section */}
@@ -562,7 +632,7 @@ export function InvoiceCreatorModal({
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleSubmit}
-              disabled={submitting || finalAmount <= 0}
+              disabled={submitting || Math.max(0, finalAmount) <= 0}
               className="flex-1 py-2.5 rounded-xl bg-forest-600 text-white font-semibold text-sm hover:bg-forest-700 disabled:opacity-50 transition-colors"
             >
               {submitting ? "Creating…" : "Create Invoice"}

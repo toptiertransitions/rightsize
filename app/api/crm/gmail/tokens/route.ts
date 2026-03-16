@@ -7,7 +7,7 @@ export async function DELETE() {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId);
-  if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin") {
+  if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin" && sysRole !== "TTTSales") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

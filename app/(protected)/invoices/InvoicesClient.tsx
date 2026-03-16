@@ -450,6 +450,7 @@ export function InvoicesClient({
           services={services}
           contracts={contracts}
           timeEntries={timeEntries}
+          invoices={invoices}
           ownerEmail={ownerEmail}
           currentUserEmail={currentUserEmail}
           invoiceSettings={invoiceSettings}

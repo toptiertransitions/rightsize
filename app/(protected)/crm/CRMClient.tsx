@@ -2996,6 +2996,8 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
   const [connected, setConnected] = useState(gmailConnected);
   const [email, setEmail] = useState(gmailEmail);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   async function handleDisconnect() {
     if (!confirm("Disconnect Gmail?")) return;
@@ -3009,6 +3011,24 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
     }
   }
 
+  async function handleSyncAll() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/crm/gmail/sync-all", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult(`Sync complete — ${data.imported} emails imported from ${data.contactsSearched} contacts.`);
+      } else {
+        setSyncResult(`Sync failed: ${data.error || "Unknown error"}`);
+      }
+    } catch {
+      setSyncResult("Sync failed: network error");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="max-w-lg">
       <h3 className="text-lg font-semibold text-gray-900 mb-2">Gmail Integration</h3>
@@ -3017,25 +3037,45 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
       </p>
 
       {connected ? (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+        <div className="space-y-3">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-800">Connected</p>
+                {email && <p className="text-xs text-green-700">{email}</p>}
+              </div>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="text-sm text-red-600 hover:text-red-800 border border-red-200 rounded-lg px-3 py-1.5"
+            >
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          </div>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-              <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+            <button
+              onClick={handleSyncAll}
+              disabled={syncing}
+              className="flex items-center gap-2 text-sm border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
               </svg>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-green-800">Connected</p>
-              {email && <p className="text-xs text-green-700">{email}</p>}
-            </div>
+              {syncing ? "Syncing all emails…" : "Sync All Emails"}
+            </button>
+            {syncResult && (
+              <p className="text-sm text-gray-600">{syncResult}</p>
+            )}
           </div>
-          <button
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="text-sm text-red-600 hover:text-red-800 border border-red-200 rounded-lg px-3 py-1.5"
-          >
-            {disconnecting ? "Disconnecting…" : "Disconnect"}
-          </button>
+          <p className="text-xs text-gray-400">
+            Sync All imports the last 20 emails per contact across your entire CRM.
+          </p>
         </div>
       ) : (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">

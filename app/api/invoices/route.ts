@@ -146,6 +146,7 @@ export async function POST(req: NextRequest) {
         payUrl,
         companyName: settings?.companyName || "Top Tier Transitions",
         logoUrl: settings?.logoUrl,
+        lineItems: lineItems ?? undefined,
       });
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
         from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
@@ -169,7 +170,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (!sysRole || !["TTTManager", "TTTAdmin"].includes(sysRole)) {
+  if (!sysRole || !["TTTManager", "TTTAdmin", "TTTSales"].includes(sysRole)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

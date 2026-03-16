@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeCodeForTokens } from "@/lib/gmail";
+import { after } from "next/server";
+import { exchangeCodeForTokens, runGmailSyncAll } from "@/lib/gmail";
 import { saveGmailToken } from "@/lib/airtable";
 
 export async function GET(req: NextRequest) {
@@ -13,6 +14,16 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await exchangeCodeForTokens(code);
     await saveGmailToken(clerkUserId, tokens);
+
+    // Kick off a full email history sync in the background after redirect
+    after(async () => {
+      try {
+        await runGmailSyncAll(clerkUserId);
+      } catch (err) {
+        console.error("[gmail/callback] Auto-sync failed:", err);
+      }
+    });
+
     return NextResponse.redirect(new URL("/crm?tab=settings&connected=1", req.url));
   } catch (err) {
     console.error("Gmail OAuth callback error:", err);

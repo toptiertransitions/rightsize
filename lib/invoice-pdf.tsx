@@ -108,6 +108,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0fdf4",
     borderTop: "2pt solid #2E6B4F",
   },
+  subtotalRow: {
+    flexDirection: "row",
+    padding: "8 12",
+    backgroundColor: "#f9fafb",
+    borderTop: "1pt solid #e5e7eb",
+  },
+  creditRow: {
+    flexDirection: "row",
+    padding: "8 12",
+    backgroundColor: "#eff6ff",
+    borderBottom: "1pt solid #dbeafe",
+  },
   colService: { flex: 3, fontSize: 9, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
   colHrs: { flex: 1, fontSize: 9, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
   colRate: { flex: 1, fontSize: 9, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
@@ -116,6 +128,10 @@ const styles = StyleSheet.create({
   cellHrs: { flex: 1, fontSize: 10, color: "#374151", textAlign: "right" },
   cellRate: { flex: 1, fontSize: 10, color: "#374151", textAlign: "right" },
   cellAmount: { flex: 1.5, fontSize: 10, color: "#374151", textAlign: "right" },
+  subtotalLabel: { flex: 5, fontSize: 10, color: "#6b7280" },
+  subtotalValue: { flex: 1.5, fontSize: 10, color: "#6b7280", textAlign: "right" },
+  creditLabel: { flex: 5, fontSize: 10, color: "#1d4ed8", fontFamily: "Helvetica-Oblique" },
+  creditValue: { flex: 1.5, fontSize: 10, color: "#1d4ed8", fontFamily: "Helvetica-Oblique", textAlign: "right" },
   totalLabel: { flex: 5, fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2E6B4F" },
   totalValue: { flex: 1.5, fontSize: 11, fontFamily: "Helvetica-Bold", color: "#2E6B4F", textAlign: "right" },
   paymentSection: {
@@ -176,6 +192,11 @@ export function InvoicePDF({ invoice, tenantName, settings, payUrl }: InvoicePDF
       ? invoice.lineItems
       : [{ serviceId: invoice.serviceId, serviceName: invoice.serviceName, hours: 1, rate: invoice.amount }];
 
+  const positiveItems = lineItems.filter((item) => item.rate >= 0);
+  const creditItems = lineItems.filter((item) => item.rate < 0);
+  const hasCredits = creditItems.length > 0;
+  const subtotalAmount = positiveItems.reduce((s, item) => s + item.hours * item.rate, 0);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -233,7 +254,7 @@ export function InvoicePDF({ invoice, tenantName, settings, payUrl }: InvoicePDF
             <Text style={styles.colRate}>Rate</Text>
             <Text style={styles.colAmount}>Amount</Text>
           </View>
-          {lineItems.map((item, i) => (
+          {positiveItems.map((item, i) => (
             <View key={i} style={i % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
               <Text style={styles.cellService}>{item.serviceName}</Text>
               <Text style={styles.cellHrs}>{item.hours}</Text>
@@ -241,8 +262,20 @@ export function InvoicePDF({ invoice, tenantName, settings, payUrl }: InvoicePDF
               <Text style={styles.cellAmount}>{fmt(item.hours * item.rate)}</Text>
             </View>
           ))}
+          {hasCredits && (
+            <View style={styles.subtotalRow}>
+              <Text style={styles.subtotalLabel}>Subtotal</Text>
+              <Text style={styles.subtotalValue}>{fmt(subtotalAmount)}</Text>
+            </View>
+          )}
+          {creditItems.map((item, i) => (
+            <View key={`credit-${i}`} style={styles.creditRow}>
+              <Text style={styles.creditLabel}>{item.serviceName}</Text>
+              <Text style={styles.creditValue}>-{fmt(Math.abs(item.hours * item.rate))}</Text>
+            </View>
+          ))}
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Due</Text>
+            <Text style={styles.totalLabel}>{hasCredits ? "Balance Owed" : "Total Due"}</Text>
             <Text style={styles.totalValue}>{fmt(invoice.amount)}</Text>
           </View>
         </View>

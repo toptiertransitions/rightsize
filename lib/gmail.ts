@@ -1,4 +1,11 @@
-import { getGmailToken, saveGmailToken } from "./airtable";
+import {
+  getGmailToken,
+  saveGmailToken,
+  getClientContacts,
+  getReferralContacts,
+  getActivitiesForContact,
+  createActivity,
+} from "./airtable";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -113,6 +120,73 @@ export async function searchGmailMessages(
   if (!res.ok) throw new Error(`Gmail search failed: ${await res.text()}`);
   const data = await res.json();
   return data.messages || [];
+}
+
+export async function runGmailSyncAll(
+  clerkUserId: string
+): Promise<{ imported: number; contactsSearched: number }> {
+  const accessToken = await getValidAccessToken(clerkUserId);
+
+  const [clientContacts, referralContacts] = await Promise.all([
+    getClientContacts(),
+    getReferralContacts(),
+  ]);
+
+  const allContacts = [
+    ...clientContacts.map((c) => ({ id: c.id, email: c.email, name: c.name })),
+    ...referralContacts.map((c) => ({ id: c.id, email: c.email, name: c.name })),
+  ].filter((c) => !!c.email?.trim());
+
+  let totalImported = 0;
+  let contactsSearched = 0;
+
+  for (const contact of allContacts) {
+    const email = contact.email.toLowerCase().trim();
+
+    let messages;
+    try {
+      messages = await searchGmailMessages(accessToken, `from:${email} OR to:${email}`, 20);
+    } catch (err) {
+      console.error("[gmail/sync-all] Search failed for", email, err);
+      continue;
+    }
+    if (!messages.length) continue;
+
+    contactsSearched++;
+
+    const existing = await getActivitiesForContact(contact.id);
+    const importedIds = new Set(
+      existing.filter((a) => a.gmailMessageId).map((a) => a.gmailMessageId!)
+    );
+
+    for (const msg of messages) {
+      if (importedIds.has(msg.id)) continue;
+      try {
+        const detail = await getGmailMessage(accessToken, msg.id);
+        await createActivity({
+          clientContactId: contact.id,
+          type: "Email",
+          note: `Subject: ${detail.subject}\nFrom: ${detail.from}\n\n${detail.snippet}`,
+          isGmailImported: true,
+          gmailMessageId: msg.id,
+          gmailThreadId: detail.threadId,
+          activityDate: detail.date
+            ? new Date(detail.date).toISOString()
+            : new Date().toISOString(),
+          createdByClerkId: clerkUserId,
+        });
+        totalImported++;
+        importedIds.add(msg.id);
+      } catch (err) {
+        console.error("[gmail/sync-all] Failed to import message", msg.id, err);
+      }
+    }
+  }
+
+  console.log(
+    `[gmail/sync-all] userId=${clerkUserId} imported=${totalImported} contactsSearched=${contactsSearched} totalContacts=${allContacts.length}`
+  );
+  return { imported: totalImported, contactsSearched };
 }
 
 export async function getGmailMessage(
