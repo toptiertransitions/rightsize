@@ -160,17 +160,21 @@ function OpportunitiesTab({
   staffMembers,
   gmailConnected,
   pendingContactId,
+  pendingOppId,
   clearPending,
+  initialStageFilter = "All",
 }: {
   initialOpportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
   staffMembers: StaffMember[];
   gmailConnected: boolean;
   pendingContactId?: string | null;
+  pendingOppId?: string | null;
   clearPending?: () => void;
+  initialStageFilter?: OpportunityStage | "All";
 }) {
   const [opportunities, setOpportunities] = useState(initialOpportunities);
-  const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">("All");
+  const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">(initialStageFilter);
   const [sort, setSort] = useState<"newest" | "value" | "nextstep">("newest");
   const [filterOwner, setFilterOwner] = useState("");
   const [panelOpp, setPanelOpp] = useState<ClientOpportunity | null>(null);
@@ -185,6 +189,18 @@ function OpportunitiesTab({
       setPanelOpen(true);
     }
   }, [pendingContactId]);
+
+  // Auto-open panel when routed from Dashboard with a specific opp
+  useEffect(() => {
+    if (pendingOppId) {
+      const opp = opportunities.find(o => o.id === pendingOppId);
+      if (opp) {
+        setPanelOpp(opp);
+        setPanelInitialContactId(undefined);
+        setPanelOpen(true);
+      }
+    }
+  }, [pendingOppId, opportunities]);
 
   const filtered = opportunities.filter((o) => {
     if (stageFilter !== "All" && o.stage !== stageFilter) return false;
@@ -2274,24 +2290,40 @@ function DashboardTab({
   companies,
   referralContacts,
   staffMembers,
+  onNavigate,
 }: {
   opportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
   companies: ReferralCompany[];
   referralContacts: ReferralContact[];
   staffMembers: StaffMember[];
+  onNavigate: (tab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string }) => void;
 }) {
   const [ownerFilter, setOwnerFilter] = useState("");
+  type DateRange = "all" | "month" | "quarter" | "year";
+  const [dateRange, setDateRange] = useState<DateRange>("all");
+
+  // Date range filter
+  const dateFilteredOpps = (() => {
+    if (dateRange === "all") return opportunities;
+    const now = new Date();
+    let cutoff: Date;
+    if (dateRange === "month") cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+    else if (dateRange === "quarter") cutoff = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    else cutoff = new Date(now.getFullYear(), 0, 1);
+    return opportunities.filter(o => new Date(o.createdAt) >= cutoff);
+  })();
 
   // Apply owner filter
   const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
-  const filteredOpps = ownerFilter ? opportunities.filter(o => o.assignedToClerkId === ownerFilter) : opportunities;
+  const filteredOpps = ownerFilter ? dateFilteredOpps.filter(o => o.assignedToClerkId === ownerFilter) : dateFilteredOpps;
   const filteredCompanies = ownerFilter ? companies.filter(c => c.assignedToClerkId === ownerFilter) : companies;
   const filteredCompanyIds = new Set(filteredCompanies.map(c => c.id));
   const filteredRefContacts = referralContacts.filter(c => filteredCompanyIds.has(c.referralCompanyId));
 
   const activeStages: OpportunityStage[] = ["Lead", "Qualifying", "Proposing"];
   const pipelineValue = filteredOpps.filter((o) => activeStages.includes(o.stage)).reduce((s, o) => s + o.estimatedValue, 0);
+  const activeCount = filteredOpps.filter((o) => activeStages.includes(o.stage)).length;
   const wonValue = filteredOpps.filter((o) => o.stage === "Won").reduce((s, o) => s + o.estimatedValue, 0);
   const wonCount = filteredOpps.filter((o) => o.stage === "Won").length;
   const lostCount = filteredOpps.filter((o) => o.stage === "Lost").length;
@@ -2324,69 +2356,121 @@ function DashboardTab({
     return clientContacts.find((c) => c.id === id)?.name || "—";
   }
 
+  const dateRangeOptions: { key: DateRange; label: string }[] = [
+    { key: "all", label: "All Time" },
+    { key: "month", label: "This Month" },
+    { key: "quarter", label: "This Quarter" },
+    { key: "year", label: "This Year" },
+  ];
+
   return (
     <div className="space-y-8">
-      {/* Owner filter */}
-      {staffMembers.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mr-1">View:</span>
-          <button
-            onClick={() => setOwnerFilter("")}
-            className={cn(
-              "h-7 px-3 text-xs rounded-full border transition-colors",
-              ownerFilter === "" ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-300 text-gray-500 hover:border-gray-400"
-            )}
-          >
-            All
-          </button>
-          {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+      {/* Filters row */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* Date range filter */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Period:</span>
+          {dateRangeOptions.map(({ key, label }) => (
             <button
-              key={s.clerkUserId}
-              onClick={() => setOwnerFilter(o => o === s.clerkUserId ? "" : s.clerkUserId)}
+              key={key}
+              onClick={() => setDateRange(key)}
               className={cn(
                 "h-7 px-3 text-xs rounded-full border transition-colors",
-                ownerFilter === s.clerkUserId ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-300 text-gray-500 hover:border-gray-400"
+                dateRange === key
+                  ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
+                  : "border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"
               )}
             >
-              {s.displayName}
+              {label}
             </button>
           ))}
         </div>
-      )}
+
+        {/* Owner filter */}
+        {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Rep:</span>
+            <button
+              onClick={() => setOwnerFilter("")}
+              className={cn(
+                "h-7 px-3 text-xs rounded-full border transition-colors",
+                ownerFilter === "" ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"
+              )}
+            >
+              All
+            </button>
+            {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+              <button
+                key={s.clerkUserId}
+                onClick={() => setOwnerFilter(o => o === s.clerkUserId ? "" : s.clerkUserId)}
+                className={cn(
+                  "h-7 px-3 text-xs rounded-full border transition-colors",
+                  ownerFilter === s.clerkUserId ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"
+                )}
+              >
+                {s.displayName}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <button
+          onClick={() => onNavigate("opportunities", { stage: "All" })}
+          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-left hover:border-forest-300 hover:shadow-md transition-all group"
+        >
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Active Pipeline</p>
           <p className="text-2xl font-bold text-gray-900">{fmt(pipelineValue)}</p>
-          <p className="text-xs text-gray-400 mt-1">{filteredOpps.filter((o) => activeStages.includes(o.stage)).length} open opportunities</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs text-gray-400 mt-1 group-hover:text-forest-600 transition-colors">{activeCount} open opportunities →</p>
+        </button>
+        <button
+          onClick={() => onNavigate("opportunities", { stage: "Won" })}
+          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-left hover:border-green-300 hover:shadow-md transition-all group"
+        >
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Won Revenue</p>
           <p className="text-2xl font-bold text-green-600">{fmt(wonValue)}</p>
-          <p className="text-xs text-gray-400 mt-1">{wonCount} deal{wonCount !== 1 ? "s" : ""} closed</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs text-gray-400 mt-1 group-hover:text-green-600 transition-colors">{wonCount} deal{wonCount !== 1 ? "s" : ""} closed →</p>
+        </button>
+        <button
+          onClick={() => onNavigate("referrals")}
+          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-left hover:border-forest-300 hover:shadow-md transition-all group"
+        >
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Active Referral Partners</p>
           <p className="text-2xl font-bold text-green-600">{activePartnerCount}</p>
-          <p className="text-xs text-gray-400 mt-1">of {filteredCompanies.length} total partners</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-xs text-gray-400 mt-1 group-hover:text-forest-600 transition-colors">of {filteredCompanies.length} total →</p>
+        </button>
+        <button
+          onClick={() => onNavigate("opportunities", { stage: "All" })}
+          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-left hover:border-forest-300 hover:shadow-md transition-all group"
+        >
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Win Rate</p>
           <p className={cn("text-2xl font-bold", winRate >= 50 ? "text-green-600" : winRate > 0 ? "text-amber-600" : "text-gray-400")}>
             {closedCount > 0 ? `${winRate}%` : "—"}
           </p>
-          <p className="text-xs text-gray-400 mt-1">{wonCount}W / {lostCount}L closed</p>
-        </div>
+          <p className="text-xs text-gray-400 mt-1 group-hover:text-forest-600 transition-colors">{wonCount}W / {lostCount}L closed →</p>
+        </button>
       </div>
 
       {/* Opportunities Pipeline */}
       <div>
-        <h2 className="text-base font-semibold text-gray-900 mb-4">Opportunities Pipeline</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Opportunities Pipeline</h2>
+          <button
+            onClick={() => onNavigate("opportunities", { stage: "All" })}
+            className="text-xs text-forest-600 hover:text-forest-800 font-medium"
+          >
+            View all →
+          </button>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {byStage.map(({ stage, opps, value }) => (
             <div key={stage} className={cn("bg-white rounded-xl border-t-4 border border-gray-200 shadow-sm overflow-hidden", STAGE_BORDER[stage])}>
-              <div className={cn("px-4 py-3", STAGE_HEADER_BG[stage])}>
+              <button
+                onClick={() => onNavigate("opportunities", { stage })}
+                className={cn("w-full px-4 py-3 text-left hover:opacity-80 transition-opacity", STAGE_HEADER_BG[stage])}
+              >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-semibold text-gray-700">{stage}</span>
                   <span className={cn("text-xs font-bold px-1.5 py-0.5 rounded-full", STAGE_COUNT_COLOR[stage])}>
@@ -2394,7 +2478,7 @@ function DashboardTab({
                   </span>
                 </div>
                 <p className="text-sm font-bold text-gray-900">{value > 0 ? fmt(value) : "—"}</p>
-              </div>
+              </button>
               <div className="divide-y divide-gray-100">
                 {opps.length === 0 && (
                   <p className="text-xs text-gray-400 px-4 py-3">No opportunities</p>
@@ -2402,18 +2486,27 @@ function DashboardTab({
                 {opps.slice(0, 5).map((o) => {
                   const oppOwner = staffById.get(o.assignedToClerkId || "");
                   return (
-                  <div key={o.id} className="px-4 py-2.5">
-                    <p className="text-xs font-medium text-gray-800 truncate">{getContactName(o.clientContactId)}</p>
-                    <p className="text-xs text-gray-400">
-                      {o.estimatedValue > 0 ? fmt(o.estimatedValue) : "No value"}
-                      {o.nextStepDate ? ` · ${new Date(o.nextStepDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
-                      {oppOwner ? ` · ${oppOwner}` : ""}
-                    </p>
-                  </div>
+                    <button
+                      key={o.id}
+                      onClick={() => onNavigate("opportunities", { stage, oppId: o.id })}
+                      className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <p className="text-xs font-medium text-gray-800 truncate">{getContactName(o.clientContactId)}</p>
+                      <p className="text-xs text-gray-400">
+                        {o.estimatedValue > 0 ? fmt(o.estimatedValue) : "No value"}
+                        {o.nextStepDate ? ` · ${new Date(o.nextStepDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                        {oppOwner ? ` · ${oppOwner}` : ""}
+                      </p>
+                    </button>
                   );
                 })}
                 {opps.length > 5 && (
-                  <p className="text-xs text-gray-400 px-4 py-2">+{opps.length - 5} more</p>
+                  <button
+                    onClick={() => onNavigate("opportunities", { stage })}
+                    className="w-full text-xs text-forest-600 hover:text-forest-800 px-4 py-2 text-left font-medium"
+                  >
+                    +{opps.length - 5} more →
+                  </button>
                 )}
               </div>
             </div>
@@ -2423,7 +2516,15 @@ function DashboardTab({
 
       {/* Referral Partner Pipeline */}
       <div>
-        <h2 className="text-base font-semibold text-gray-900 mb-4">Referral Partner Pipeline</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Referral Partner Pipeline</h2>
+          <button
+            onClick={() => onNavigate("referrals")}
+            className="text-xs text-forest-600 hover:text-forest-800 font-medium"
+          >
+            View all →
+          </button>
+        </div>
         {filteredRefContacts.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
             No referral contacts yet — add them in the Referral Partners tab
@@ -2431,7 +2532,11 @@ function DashboardTab({
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {refFunnel.map(({ stage, count }) => (
-              <div key={stage} className="flex items-center gap-4 px-5 py-3">
+              <button
+                key={stage}
+                onClick={() => onNavigate("referrals")}
+                className="w-full flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
+              >
                 <div className="w-36 flex-shrink-0">
                   <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", REF_STAGE_COLORS[stage])}>
                     {stage}
@@ -2453,7 +2558,7 @@ function DashboardTab({
                 <div className="w-12 text-right">
                   <span className="text-sm font-semibold text-gray-800">{count}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -2461,7 +2566,15 @@ function DashboardTab({
 
       {/* Referral Partner Network */}
       <div>
-        <h2 className="text-base font-semibold text-gray-900 mb-4">Referral Partner Network</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Referral Partner Network</h2>
+          <button
+            onClick={() => onNavigate("referrals")}
+            className="text-xs text-forest-600 hover:text-forest-800 font-medium"
+          >
+            View all →
+          </button>
+        </div>
         {filteredCompanies.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
             No referral partners yet — add them in the Referral Partners tab
@@ -2471,7 +2584,11 @@ function DashboardTab({
             {Object.entries(typeGroups)
               .sort((a, b) => b[1] - a[1])
               .map(([type, count]) => (
-                <div key={type} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
+                <button
+                  key={type}
+                  onClick={() => onNavigate("referrals")}
+                  className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center justify-between hover:border-forest-300 hover:shadow-md transition-all text-left"
+                >
                   <div>
                     <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", COMPANY_TYPE_COLORS[type] || "bg-gray-100 text-gray-600")}>
                       {type}
@@ -2479,15 +2596,18 @@ function DashboardTab({
                     <p className="text-lg font-bold text-gray-900 mt-2">{count}</p>
                     <p className="text-xs text-gray-400">{count === 1 ? "partner" : "partners"}</p>
                   </div>
-                </div>
+                </button>
               ))}
-            <div className="bg-forest-50 rounded-xl border border-forest-200 p-4 shadow-sm flex items-center justify-between">
+            <button
+              onClick={() => onNavigate("referrals")}
+              className="bg-forest-50 rounded-xl border border-forest-200 p-4 shadow-sm flex items-center justify-between hover:bg-forest-100 transition-colors text-left"
+            >
               <div>
                 <p className="text-xs font-medium text-forest-600 uppercase tracking-wide">Total</p>
                 <p className="text-lg font-bold text-forest-800 mt-2">{filteredCompanies.length}</p>
-                <p className="text-xs text-forest-600">all partners</p>
+                <p className="text-xs text-forest-600">all partners →</p>
               </div>
-            </div>
+            </button>
           </div>
         )}
       </div>
@@ -3118,10 +3238,22 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
   const [pendingContactId, setPendingContactId] = useState<string | null>(null);
+  const [pendingOppId, setPendingOppId] = useState<string | null>(null);
+  const [oppInitialStage, setOppInitialStage] = useState<OpportunityStage | "All">("All");
+  const [oppTabKey, setOppTabKey] = useState(0);
 
   function handleCreateOpportunity(contactId: string) {
     setPendingContactId(contactId);
     setTab("opportunities");
+  }
+
+  function handleDashboardNavigate(targetTab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string }) {
+    if (targetTab === "opportunities") {
+      setOppInitialStage(options?.stage ?? "All");
+      setPendingOppId(options?.oppId ?? null);
+      setOppTabKey(k => k + 1);
+    }
+    setTab(targetTab);
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -3161,16 +3293,26 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       </div>
 
       {tab === "dashboard" && (
-        <DashboardTab opportunities={opportunities} clientContacts={clientContacts} companies={companies} referralContacts={referralContacts} staffMembers={staffMembers} />
+        <DashboardTab
+          opportunities={opportunities}
+          clientContacts={clientContacts}
+          companies={companies}
+          referralContacts={referralContacts}
+          staffMembers={staffMembers}
+          onNavigate={handleDashboardNavigate}
+        />
       )}
       {tab === "opportunities" && (
         <OpportunitiesTab
+          key={oppTabKey}
           initialOpportunities={opportunities}
           clientContacts={clientContacts}
           staffMembers={staffMembers}
           gmailConnected={gmailConnected}
           pendingContactId={pendingContactId}
-          clearPending={() => setPendingContactId(null)}
+          pendingOppId={pendingOppId}
+          clearPending={() => { setPendingContactId(null); setPendingOppId(null); }}
+          initialStageFilter={oppInitialStage}
         />
       )}
       {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} staffMembers={staffMembers} onCreateOpportunity={handleCreateOpportunity} />}
