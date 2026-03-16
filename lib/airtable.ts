@@ -2362,6 +2362,12 @@ export async function getClientContacts(): Promise<ClientContact[]> {
   return all;
 }
 
+export async function getClientContactById(id: string): Promise<ClientContact | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `/${id}`);
+  if (!res.ok) return null;
+  return mapClientContact(await res.json());
+}
+
 export async function findClientContactByName(name: string): Promise<ClientContact | null> {
   const formula = encodeURIComponent(`LOWER({Name}) = LOWER("${name.replace(/"/g, '\\"')}")`);
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula}&maxRecords=1`);

@@ -11,6 +11,8 @@ import {
   getInvoiceSettings,
   getTimeEntries,
   getTenants,
+  getOpportunitiesForTenant,
+  getClientContactById,
 } from "@/lib/airtable";
 import { InvoicesClient } from "./InvoicesClient";
 import { QuotingProjectPicker } from "../quoting/QuotingProjectPicker";
@@ -75,15 +77,31 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   // contracts: Signed only — used by manager invoice creation modal
   const contracts = allContracts.filter((c) => c.status === "Signed");
 
-  // Get owner email
-  let ownerEmail = "";
+  // Build recipient options from the CRM opportunity linked to this project
+  const recipientOptions: { label: string; email: string }[] = [];
   try {
-    const clerk = await clerkClient();
-    const ownerUser = await clerk.users.getUser(tenant.ownerUserId).catch(() => null);
-    ownerEmail = ownerUser?.emailAddresses?.[0]?.emailAddress ?? "";
-  } catch { /* ignore */ }
+    const opportunities = await getOpportunitiesForTenant(tenantId);
+    const seen = new Set<string>();
+    for (const opp of opportunities) {
+      // Primary contact
+      if (opp.clientContactId) {
+        const contact = await getClientContactById(opp.clientContactId).catch(() => null);
+        if (contact?.email && !seen.has(contact.email)) {
+          seen.add(contact.email);
+          recipientOptions.push({ label: `${contact.name} (Contact)`, email: contact.email });
+        }
+      }
+      // Key people with emails
+      for (const kp of opp.keyPeople ?? []) {
+        if (kp.email && !seen.has(kp.email)) {
+          seen.add(kp.email);
+          recipientOptions.push({ label: `${kp.name}${kp.relationship ? ` (${kp.relationship})` : ""}`, email: kp.email });
+        }
+      }
+    }
+  } catch { /* ignore — fall back to owner email */ }
 
-  // Get current user email
+  // Get current user email (for CC default)
   let currentUserEmail = "";
   try {
     const clerk = await clerkClient();
@@ -101,7 +119,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
       contracts={contracts}
       agreements={agreements}
       timeEntries={timeEntries}
-      ownerEmail={ownerEmail}
+      recipientOptions={recipientOptions}
       currentUserEmail={currentUserEmail}
     />
   );

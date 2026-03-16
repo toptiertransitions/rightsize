@@ -11,7 +11,8 @@ interface Props {
   services: Service[];
   contracts: Contract[];
   timeEntries: TimeEntry[];
-  ownerEmail: string;
+  recipientOptions?: { label: string; email: string }[];
+  ownerEmail?: string;
   currentUserEmail: string;
   invoiceSettings: InvoiceSettings | null;
   invoices?: Invoice[];
@@ -33,11 +34,15 @@ export function InvoiceCreatorModal({
   services,
   contracts,
   timeEntries,
-  ownerEmail,
+  recipientOptions: recipientOptionsProp = [],
+  ownerEmail = "",
   currentUserEmail,
   invoiceSettings,
   invoices = [],
 }: Props) {
+  const recipientOptions = recipientOptionsProp.length > 0
+    ? recipientOptionsProp
+    : ownerEmail ? [{ label: "Project Owner", email: ownerEmail }] : [];
   const [tab, setTab] = useState<Tab>("Deposit");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -69,7 +74,7 @@ export function InvoiceCreatorModal({
 
   // Shared
   const [sendEmail, setSendEmail] = useState(false);
-  const [sentToEmail, setSentToEmail] = useState(ownerEmail);
+  const [sentToEmail, setSentToEmail] = useState(recipientOptions[0]?.email ?? "");
   const [ccEmail, setCcEmail] = useState(currentUserEmail);
   const [pushToQBO, setPushToQBO] = useState(false);
 
@@ -130,9 +135,9 @@ export function InvoiceCreatorModal({
       setDepositServiceId(servicesEntry.id);
       setSpecificServiceId(services[0].id);
     }
-    setSentToEmail(ownerEmail);
+    setSentToEmail(recipientOptions[0]?.email ?? "");
     setCcEmail(currentUserEmail);
-  }, [contracts, services, ownerEmail, currentUserEmail]);
+  }, [contracts, services, recipientOptions, currentUserEmail]);
 
   const depositCreditLineItem = {
     serviceId: "",
@@ -592,12 +597,27 @@ export function InvoiceCreatorModal({
               <div className="space-y-2 pl-7">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">To</label>
-                  <input
-                    type="email"
-                    value={sentToEmail}
-                    onChange={(e) => setSentToEmail(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-                  />
+                  {recipientOptions.length > 0 ? (
+                    <select
+                      value={sentToEmail}
+                      onChange={(e) => setSentToEmail(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    >
+                      {recipientOptions.map((opt) => (
+                        <option key={opt.email} value={opt.email}>
+                          {opt.label} — {opt.email}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="email"
+                      value={sentToEmail}
+                      onChange={(e) => setSentToEmail(e.target.value)}
+                      placeholder="recipient@example.com"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">CC (optional)</label>
