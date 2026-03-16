@@ -59,6 +59,11 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     ? `?tenantId=${urlTenantId}`
     : "";
 
+  // For Quoting / Invoices (admin + manager): carry the project from the current URL only.
+  // Arriving from CRM or Home (no tenantId in URL) shows the project picker.
+  // Arriving from Catalog/Vendors/Sales/etc. with a project pre-selected keeps it.
+  const projectTq = (urlTenantId && !isSentinel) ? `?tenantId=${urlTenantId}` : "";
+
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
   // Sales users see CRM + Drips + Expenses + Quoting + Invoices
@@ -76,11 +81,11 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
-    // Quoting — TTTAdmin only
-    ...(isAdmin ? [{ href: "/quoting", base: "/quoting", label: "Quoting" }] : []),
-    // Invoices — clients (non-staff) get tenantId appended; managers/admins go to picker
+    // Quoting — TTTAdmin only; carry current project if one is selected
+    ...(isAdmin ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
+    // Invoices — clients (non-staff) get tenantId from nav; managers carry current project
     ...(navTenantId && !isStaff ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
-    ...(isManager ? [{ href: "/invoices", base: "/invoices", label: "Invoices" }] : []),
+    ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
     // CRM + Drips — Manager and Admin
     ...(isManager ? [
       { href: "/crm", base: "/crm", label: "CRM" },
