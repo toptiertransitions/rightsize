@@ -2535,7 +2535,7 @@ export async function updateOpportunity(
   if (data.stage !== undefined) fields["Stage"] = data.stage;
   if (data.keyPeople !== undefined) fields["KeyPeople"] = JSON.stringify(data.keyPeople);
   if (data.notes !== undefined) fields["Notes"] = data.notes;
-  if (data.nextStepDate !== undefined) fields["NextStepDate"] = data.nextStepDate;
+  if (data.nextStepDate !== undefined) fields["NextStepDate"] = data.nextStepDate || null;
   if (data.nextStepNote !== undefined) fields["NextStepNote"] = data.nextStepNote;
   if (data.estimatedValue !== undefined) fields["EstimatedValue"] = data.estimatedValue;
   if (data.wonAt !== undefined) fields["WonAt"] = data.wonAt;

@@ -34,8 +34,13 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  const opportunity = await updateOpportunity(id, data);
-  return NextResponse.json({ opportunity });
+  try {
+    const opportunity = await updateOpportunity(id, data);
+    return NextResponse.json({ opportunity });
+  } catch (err) {
+    console.error("[opportunities PATCH] update failed:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {

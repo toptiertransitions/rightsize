@@ -409,6 +409,7 @@ function OpportunityPanel({
   const [activityNote, setActivityNote] = useState("");
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
   const [converting, setConverting] = useState(false);
@@ -434,6 +435,7 @@ function OpportunityPanel({
   async function handleSave() {
     if (!clientContactId) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const payload = {
         clientContactId,
@@ -455,6 +457,10 @@ function OpportunityPanel({
           body: JSON.stringify({ id: opportunity.id, ...payload }),
         });
         const data = await res.json();
+        if (!res.ok) {
+          setSaveError(data.error || "Failed to save. Please try again.");
+          return;
+        }
         onSaved(data.opportunity);
       } else {
         const res = await fetch("/api/crm/opportunities", {
@@ -463,8 +469,14 @@ function OpportunityPanel({
           body: JSON.stringify(payload),
         });
         const data = await res.json();
+        if (!res.ok) {
+          setSaveError(data.error || "Failed to create. Please try again.");
+          return;
+        }
         onSaved(data.opportunity);
       }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -731,6 +743,9 @@ function OpportunityPanel({
           >
             {saving ? "Saving…" : opportunity ? "Update Opportunity" : "Create Opportunity"}
           </button>
+          {saveError && (
+            <p className="text-xs text-red-600 mt-1">{saveError}</p>
+          )}
 
           {/* Convert to Project — available in Proposing stage */}
           {stage === "Proposing" && (
