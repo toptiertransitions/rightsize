@@ -1435,7 +1435,19 @@ const PRIORITY_COLORS: Record<string, string> = {
   Low: "bg-gray-100 text-gray-600",
 };
 
-function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffMembers }: { initialCompanies: ReferralCompany[]; initialReferralContacts: ReferralContact[]; staffMembers: StaffMember[] }) {
+function ReferralPartnersTab({
+  initialCompanies,
+  initialReferralContacts,
+  staffMembers,
+  initialContactStage = "",
+  initialType = "",
+}: {
+  initialCompanies: ReferralCompany[];
+  initialReferralContacts: ReferralContact[];
+  staffMembers: StaffMember[];
+  initialContactStage?: ReferralContactStage | "";
+  initialType?: string;
+}) {
   const [companies, setCompanies] = useState(initialCompanies);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
@@ -1456,7 +1468,8 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
   // Search / filter / sort / pagination
   const [search, setSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState<"" | ReferralPriority>("");
-  const [filterType, setFilterType] = useState("");
+  const [filterType, setFilterType] = useState(initialType);
+  const [filterContactStage, setFilterContactStage] = useState<ReferralContactStage | "">(initialContactStage);
   const [filterOwner, setFilterOwner] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "priority">("name");
@@ -1470,6 +1483,13 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
       return contacts[companyId].some(c => c.stage === "Active Referral");
     }
     return initialReferralContacts.some(c => c.referralCompanyId === companyId && c.stage === "Active Referral");
+  }
+
+  function hasContactWithStage(companyId: string, stage: ReferralContactStage): boolean {
+    if (contacts[companyId]) {
+      return contacts[companyId].some(c => c.stage === stage);
+    }
+    return initialReferralContacts.some(c => c.referralCompanyId === companyId && c.stage === stage);
   }
 
   function handleCsvFile(type: "companies" | "contacts", e: React.ChangeEvent<HTMLInputElement>) {
@@ -1730,6 +1750,7 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
       if (filterType && c.type !== filterType) return false;
       if (filterOwner && c.assignedToClerkId !== filterOwner) return false;
       if (filterActiveOnly && !isActiveReferralCompany(c.id)) return false;
+      if (filterContactStage && !hasContactWithStage(c.id, filterContactStage)) return false;
       return true;
     })
     .sort((a, b) => {
@@ -1783,11 +1804,30 @@ function ReferralPartnersTab({ initialCompanies, initialReferralContacts, staffM
           >
             Active Partners
           </button>
+          {/* Contact stage filter */}
+          <select
+            value={filterContactStage}
+            onChange={e => handleFilterChange(setFilterContactStage)(e.target.value as ReferralContactStage | "")}
+            className={cn(
+              "h-7 border rounded-lg px-2 text-xs focus:outline-none transition-colors",
+              filterContactStage
+                ? "border-forest-500 bg-forest-50 text-forest-700 font-medium"
+                : "border-gray-300 text-gray-600"
+            )}
+          >
+            <option value="">All Stages</option>
+            {REFERRAL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
           {allTypes.length > 0 && (
             <select
               value={filterType}
               onChange={e => handleFilterChange(setFilterType)(e.target.value)}
-              className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
+              className={cn(
+                "h-7 border rounded-lg px-2 text-xs focus:outline-none transition-colors",
+                filterType
+                  ? "border-forest-500 bg-forest-50 text-forest-700 font-medium"
+                  : "border-gray-300 text-gray-600"
+              )}
             >
               <option value="">All Types</option>
               {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -2297,7 +2337,7 @@ function DashboardTab({
   companies: ReferralCompany[];
   referralContacts: ReferralContact[];
   staffMembers: StaffMember[];
-  onNavigate: (tab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string }) => void;
+  onNavigate: (tab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string; refContactStage?: ReferralContactStage | ""; refType?: string }) => void;
 }) {
   const [ownerFilter, setOwnerFilter] = useState("");
   type DateRange = "all" | "month" | "quarter" | "year";
@@ -2534,7 +2574,7 @@ function DashboardTab({
             {refFunnel.map(({ stage, count }) => (
               <button
                 key={stage}
-                onClick={() => onNavigate("referrals")}
+                onClick={() => onNavigate("referrals", { refContactStage: stage })}
                 className="w-full flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
               >
                 <div className="w-36 flex-shrink-0">
@@ -2586,7 +2626,7 @@ function DashboardTab({
               .map(([type, count]) => (
                 <button
                   key={type}
-                  onClick={() => onNavigate("referrals")}
+                  onClick={() => onNavigate("referrals", { refType: type })}
                   className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center justify-between hover:border-forest-300 hover:shadow-md transition-all text-left"
                 >
                   <div>
@@ -3241,17 +3281,25 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   const [pendingOppId, setPendingOppId] = useState<string | null>(null);
   const [oppInitialStage, setOppInitialStage] = useState<OpportunityStage | "All">("All");
   const [oppTabKey, setOppTabKey] = useState(0);
+  const [refInitialContactStage, setRefInitialContactStage] = useState<ReferralContactStage | "">("");
+  const [refInitialType, setRefInitialType] = useState("");
+  const [refTabKey, setRefTabKey] = useState(0);
 
   function handleCreateOpportunity(contactId: string) {
     setPendingContactId(contactId);
     setTab("opportunities");
   }
 
-  function handleDashboardNavigate(targetTab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string }) {
+  function handleDashboardNavigate(targetTab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string; refContactStage?: ReferralContactStage | ""; refType?: string }) {
     if (targetTab === "opportunities") {
       setOppInitialStage(options?.stage ?? "All");
       setPendingOppId(options?.oppId ?? null);
       setOppTabKey(k => k + 1);
+    }
+    if (targetTab === "referrals") {
+      setRefInitialContactStage(options?.refContactStage ?? "");
+      setRefInitialType(options?.refType ?? "");
+      setRefTabKey(k => k + 1);
     }
     setTab(targetTab);
   }
@@ -3316,7 +3364,16 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         />
       )}
       {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} staffMembers={staffMembers} onCreateOpportunity={handleCreateOpportunity} />}
-      {tab === "referrals" && <ReferralPartnersTab initialCompanies={companies} initialReferralContacts={referralContacts} staffMembers={staffMembers} />}
+      {tab === "referrals" && (
+        <ReferralPartnersTab
+          key={refTabKey}
+          initialCompanies={companies}
+          initialReferralContacts={referralContacts}
+          staffMembers={staffMembers}
+          initialContactStage={refInitialContactStage}
+          initialType={refInitialType}
+        />
+      )}
       {tab === "activity" && (
         <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
       )}
