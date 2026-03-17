@@ -1105,6 +1105,7 @@ function ContactsTab({
   tenants,
   onCreateOpportunity,
   onViewOpportunity,
+  onContactUpserted,
 }: {
   initialContacts: ClientContact[];
   referralContacts: ReferralContact[];
@@ -1114,6 +1115,7 @@ function ContactsTab({
   tenants: Tenant[];
   onCreateOpportunity: (contactId: string) => void;
   onViewOpportunity: (oppId: string) => void;
+  onContactUpserted?: (c: ClientContact) => void;
 }) {
   const [contacts, setContacts] = useState(initialContacts);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1285,6 +1287,7 @@ function ContactsTab({
         });
         const data = await res.json();
         setContacts((prev) => prev.map((c) => (c.id === editing.id ? data.contact : c)));
+        onContactUpserted?.(data.contact);
       } else {
         const res = await fetch("/api/crm/client-contacts", {
           method: "POST",
@@ -1293,6 +1296,7 @@ function ContactsTab({
         });
         const data = await res.json();
         setContacts((prev) => [data.contact, ...prev]);
+        onContactUpserted?.(data.contact);
       }
       setModalOpen(false);
     } finally {
@@ -3536,6 +3540,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [localContacts, setLocalContacts] = useState(clientContacts);
   const [pendingContactId, setPendingContactId] = useState<string | null>(null);
   const [pendingOppId, setPendingOppId] = useState<string | null>(null);
   const [oppInitialStage, setOppInitialStage] = useState<OpportunityStage | "All">("All");
@@ -3543,6 +3548,14 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   const [refInitialContactStage, setRefInitialContactStage] = useState<ReferralContactStage | "">("");
   const [refInitialType, setRefInitialType] = useState("");
   const [refTabKey, setRefTabKey] = useState(0);
+
+  function handleContactUpserted(contact: ClientContact) {
+    setLocalContacts(prev => {
+      const idx = prev.findIndex(c => c.id === contact.id);
+      if (idx >= 0) return prev.map(c => c.id === contact.id ? contact : c);
+      return [contact, ...prev];
+    });
+  }
 
   function handleCreateOpportunity(contactId: string) {
     setPendingContactId(contactId);
@@ -3609,7 +3622,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       {tab === "dashboard" && (
         <DashboardTab
           opportunities={opportunities}
-          clientContacts={clientContacts}
+          clientContacts={localContacts}
           companies={companies}
           referralContacts={referralContacts}
           staffMembers={staffMembers}
@@ -3620,7 +3633,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         <OpportunitiesTab
           key={oppTabKey}
           initialOpportunities={opportunities}
-          clientContacts={clientContacts}
+          clientContacts={localContacts}
           staffMembers={staffMembers}
           gmailConnected={gmailConnected}
           pendingContactId={pendingContactId}
@@ -3631,14 +3644,15 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       )}
       {tab === "contacts" && (
         <ContactsTab
-          initialContacts={clientContacts}
+          initialContacts={localContacts}
           referralContacts={referralContacts}
-          allClientContacts={clientContacts}
+          allClientContacts={localContacts}
           staffMembers={staffMembers}
           opportunities={opportunities}
           tenants={tenants}
           onCreateOpportunity={handleCreateOpportunity}
           onViewOpportunity={handleViewOpportunity}
+          onContactUpserted={handleContactUpserted}
         />
       )}
       {tab === "referrals" && (
@@ -3652,7 +3666,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         />
       )}
       {tab === "activity" && (
-        <ActivityLogTab opportunities={opportunities} clientContacts={clientContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
+        <ActivityLogTab opportunities={opportunities} clientContacts={localContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
       )}
       {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} />}
     </div>

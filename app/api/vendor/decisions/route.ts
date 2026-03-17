@@ -34,6 +34,8 @@ export async function PATCH(req: NextRequest) {
     vendorNotes: (vendorPriceNote ?? notes) || undefined,
     vendorPriceApproved: decision === "Approved" ? true : undefined,
     vendorRespondedAt: new Date().toISOString(),
+    // Approval locks in the route as Other Consignment
+    ...(decision === "Approved" ? { primaryRoute: "Other Consignment" } : {}),
   };
   if (vendorExpectedPrice !== undefined) {
     updateData.vendorExpectedPrice = vendorExpectedPrice;

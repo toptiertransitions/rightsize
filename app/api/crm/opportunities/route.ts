@@ -23,8 +23,13 @@ export async function POST(req: NextRequest) {
   if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const opportunity = await createOpportunity(body);
-  return NextResponse.json({ opportunity });
+  try {
+    const opportunity = await createOpportunity(body);
+    return NextResponse.json({ opportunity });
+  } catch (err) {
+    console.error("[opportunities POST] create failed:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {

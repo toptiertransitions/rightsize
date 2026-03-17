@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
 import { AdminProjectsClient } from "./AdminProjectsClient";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
+import { AvailabilitySection } from "./AvailabilitySection";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 const OWNER_ROLES = ["Owner", "TTTAdmin"];
@@ -117,6 +118,11 @@ export default async function DashboardPage({
           <h2 className="text-base font-semibold text-gray-900 mb-4">Client Projects</h2>
           <AdminProjectsClient initialTenants={allTenants} isManager={isAdmin || isManager} />
         </section>
+
+        {/* Availability — TTTStaff and TTTManager only (not admin-only accounts) */}
+        {(systemRole === "TTTStaff" || systemRole === "TTTManager") && (
+          <AvailabilitySection />
+        )}
       </div>
     );
   }

@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminHeader } from "../components/AdminHeader";
 import { Pagination } from "../components/Pagination";
+import { OtherConsignmentClient } from "./OtherConsignmentClient";
 
 const PAGE_SIZE = 25;
 import { VENDOR_TYPES, ITEM_CATEGORIES } from "@/lib/types";
-import type { LocalVendor, VendorType } from "@/lib/types";
+import type { LocalVendor, VendorType, Item } from "@/lib/types";
 
 // ─── Type badge colors ────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -59,6 +60,28 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const handleSendInvite = async () => {
+    if (!vendor) return;
+    setInviting(true);
+    setInviteMsg(null);
+    try {
+      const res = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendorId: vendor.id }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Failed to send invite");
+      setInviteMsg({ msg: `Login link sent to ${vendor.email}`, ok: true });
+    } catch (e) {
+      setInviteMsg({ msg: e instanceof Error ? e.message : "Error sending invite", ok: false });
+    } finally {
+      setInviting(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!vendorName.trim()) { setError("Vendor name is required"); return; }
@@ -295,6 +318,42 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
             </div>
           </div>
 
+          {/* Portal Access (edit only) */}
+          {isEdit && (
+            <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-300">Portal Access</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {vendor?.clerkUserId
+                      ? "Vendor has an active portal account"
+                      : "Vendor has not set up portal access yet"}
+                  </p>
+                </div>
+                <span className={`flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${
+                  vendor?.clerkUserId ? "bg-green-900/40 text-green-300" : "bg-gray-700/60 text-gray-400"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${vendor?.clerkUserId ? "bg-green-400" : "bg-gray-500"}`} />
+                  {vendor?.clerkUserId ? "Active" : "Not linked"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSendInvite}
+                disabled={inviting || !vendor?.email}
+                title={!vendor?.email ? "Add an email address first to send a login link" : undefined}
+                className="text-sm text-forest-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed border border-gray-600 whitespace-nowrap"
+              >
+                {inviting ? "Sending…" : vendor?.clerkUserId ? "Re-send Login Link" : "Send Login Link"}
+              </button>
+              {inviteMsg && (
+                <p className={`text-xs mt-2 ${inviteMsg.ok ? "text-green-400" : "text-red-400"}`}>
+                  {inviteMsg.msg}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Internal Notes</label>
@@ -350,9 +409,11 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
 // ─── Main Component ────────────────────────────────────────────────────────────
 interface LocalVendorsAdminProps {
   vendors: LocalVendor[];
+  consignmentItems: Item[];
+  tenantInfoMap: Record<string, { name: string; ownerEmail: string }>;
 }
 
-export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdminProps) {
+export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, tenantInfoMap }: LocalVendorsAdminProps) {
   const router = useRouter();
   const [stateFilter, setStateFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -581,6 +642,24 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
           </div>
         )}
       </main>
+
+      {/* ─── Other Consignment Items ─────────────────────────────────────── */}
+      <div className="mt-12 mb-8">
+        <div className="flex items-center gap-3 mb-1">
+          <h2 className="text-xl font-bold text-white">Other Consignment Items</h2>
+          <span className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">
+            {consignmentItems.length} item{consignmentItems.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <p className="text-gray-400 text-sm mb-6">
+          All client items routed to Other Consignment. Assign vendors, track responses, and manage payouts inline.
+        </p>
+        <OtherConsignmentClient
+          items={consignmentItems}
+          tenantInfoMap={tenantInfoMap}
+          vendors={initialVendors}
+        />
+      </div>
 
       {showModal && (
         <LocalVendorModal

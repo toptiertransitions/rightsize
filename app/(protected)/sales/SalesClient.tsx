@@ -923,6 +923,7 @@ export function SalesClient({
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [proofFiles, setProofFiles] = useState<ProjectFile[]>(paymentProofFiles);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
 
   // Payout preference state
   const [payoutMethod, setPayoutMethod] = useState<PayoutMethod | "">(initialPayoutMethod ?? "");
@@ -1042,14 +1043,88 @@ export function SalesClient({
   const totalPaid = pfTotalPaid + nonPfTotalPaid;
   const totalOwed = Math.max(0, totalEarned - totalPaid);
 
-  const statCard = (label: string, value: number, color: string) => (
-    <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-      <div className={cn("text-xl font-bold tabular-nums", color)}>
-        ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+  // ── Per-route breakdown for expandable cards ──────────────────────────────
+  const fbEarned = fb.filter(i => i.status === "Sold").reduce((s, i) => {
+    const calc = calcPayouts.get(i.id);
+    return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
+  }, 0);
+  const fbPaid = fb.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
+
+  const onlineEarned = online.filter(i => i.status === "Sold").reduce((s, i) => {
+    const calc = calcPayouts.get(i.id);
+    return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
+  }, 0);
+  const onlinePaid = online.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
+
+  const otherVendorBreakdown = [...otherByVendor.entries()].map(([vendorName, vItems]) => ({
+    label: `Other Consignment — ${vendorName}`,
+    earned: vItems.filter(i => i.status === "Sold").reduce((s, i) => {
+      const calc = calcPayouts.get(i.id);
+      return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
+    }, 0),
+    paid: vItems.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0),
+  }));
+
+  const allBreakdownRows = [
+    { label: "ProFoundFinds", earned: pfTotalEarned, paid: pfTotalPaid },
+    { label: "FB/Marketplace", earned: fbEarned, paid: fbPaid },
+    { label: "Online Marketplace", earned: onlineEarned, paid: onlinePaid },
+    ...otherVendorBreakdown,
+  ];
+
+  // Total inventory value: valueMid × clientSharePercent for all consignment items
+  const totalInventoryValue = items
+    .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment"].includes(i.primaryRoute))
+    .reduce((s, i) => (i.valueMid && i.clientSharePercent ? s + i.valueMid * i.clientSharePercent / 100 : s), 0);
+
+  const fmt = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const expandableCard = (
+    idx: number,
+    label: string,
+    value: number,
+    color: string,
+    getAmount: (row: typeof allBreakdownRows[0]) => number
+  ) => {
+    const isOpen = expandedCard === idx;
+    const rows = allBreakdownRows.filter(r => getAmount(r) > 0);
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className={cn("text-xl font-bold tabular-nums", color)}>{fmt(value)}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+          </div>
+          {rows.length > 0 && (
+            <button
+              onClick={() => setExpandedCard(isOpen ? null : idx)}
+              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all mt-0.5"
+              title={isOpen ? "Hide breakdown" : "Show breakdown"}
+            >
+              <svg
+                className={cn("w-3.5 h-3.5 transition-transform duration-200", isOpen && "rotate-180")}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {isOpen && rows.length > 0 && (
+          <div className="border-t border-gray-100 px-5 py-3 space-y-2">
+            {rows.map((row, i) => (
+              <div key={i} className="flex items-center justify-between gap-3">
+                <span className="text-xs text-gray-500 truncate">{row.label}</span>
+                <span className={cn("text-xs font-semibold tabular-nums flex-shrink-0", color)}>
+                  {fmt(getAmount(row))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
-    </div>
-  );
+    );
+  };
 
   const hasPaymentHandles = paymentHandles && (
     paymentHandles.venmoHandle || paymentHandles.venmoQrUrl ||
@@ -1107,10 +1182,15 @@ export function SalesClient({
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        {statCard("Total client earnings (sold)", totalEarned, "text-green-700")}
-        {statCard("Total paid to client", totalPaid, "text-blue-700")}
-        {statCard("Still owed to client", totalOwed, totalOwed > 0 ? "text-amber-600" : "text-gray-400")}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        {/* Inventory value — static card, no caret */}
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div className="text-xl font-bold tabular-nums text-gray-700">{fmt(totalInventoryValue)}</div>
+          <div className="text-xs text-gray-500 mt-0.5">Total value of inventory</div>
+        </div>
+        {expandableCard(0, "Total client earnings (sold)", totalEarned, "text-green-700", r => r.earned)}
+        {expandableCard(1, "Total paid to client", totalPaid, "text-blue-700", r => r.paid)}
+        {expandableCard(2, "Still owed to client", totalOwed, totalOwed > 0 ? "text-amber-600" : "text-gray-400", r => Math.max(0, r.earned - r.paid))}
       </div>
 
       {/* Sections */}

@@ -588,6 +588,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const handleSaved = useCallback((savedItem: Item) => {
     setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i));
@@ -626,6 +627,32 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       setSelected(new Set());
     } finally {
       setBulkLoading(false);
+    }
+  };
+
+  const handleMoversPDF = async () => {
+    if (selected.size === 0) return;
+    setPdfLoading(true);
+    try {
+      const firstItem = items.find((i) => selected.has(i.id));
+      const tid = tenantId ?? firstItem?.tenantId;
+      const res = await fetch("/api/items/movers-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: [...selected], tenantId: tid }),
+      });
+      if (!res.ok) throw new Error("Failed to generate PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `movers-list-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently ignore — browser will show nothing downloaded
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -995,6 +1022,16 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 Send Items to Vendor
               </button>
             )}
+            <button
+              onClick={handleMoversPDF}
+              disabled={pdfLoading}
+              className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {pdfLoading ? "Generating…" : "Create PDF for Movers"}
+            </button>
             <button
               onClick={() => setSelected(new Set())}
               className="h-8 px-3 rounded-lg border border-forest-300 text-forest-700 text-sm hover:bg-forest-100 transition-colors"

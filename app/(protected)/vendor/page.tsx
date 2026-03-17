@@ -8,7 +8,7 @@ export default async function VendorPortalPage() {
   if (!userId) redirect("/sign-in");
 
   const vendor = await getLocalVendorByClerkId(userId).catch(() => null);
-  if (!vendor) redirect("/home");
+  if (!vendor) redirect("/vendor/not-found");
 
   const items = await getItemsForVendor(vendor.id).catch(() => []);
 

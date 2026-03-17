@@ -60,6 +60,8 @@ import type {
   Expense,
   ExpenseCategory,
   ItemSaleEvent,
+  WeeklySchedule,
+  TimeOffEntry,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -1707,6 +1709,10 @@ function staffRolesFetch(path: string, options?: RequestInit) {
 
 function mapStaffMember(record: AirtableRecord): StaffMember {
   const f = record.fields;
+  let weeklySchedule: WeeklySchedule | undefined;
+  let timeOff: TimeOffEntry[] | undefined;
+  try { if (f["WeeklyAvailability"]) weeklySchedule = JSON.parse(f["WeeklyAvailability"] as string); } catch {}
+  try { if (f["UnavailableDates"]) timeOff = JSON.parse(f["UnavailableDates"] as string); } catch {}
   return {
     id: record.id,
     clerkUserId: toStr(f["ClerkUserId"]),
@@ -1715,6 +1721,8 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
     role: (toStr(f["Role"]) || "TTTStaff") as SystemRole,
     isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
+    weeklySchedule,
+    timeOff,
   };
 }
 
@@ -1801,6 +1809,23 @@ export async function updateStaffMember(
 export async function deleteStaffMember(id: string): Promise<void> {
   const res = await staffRolesFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// Availability fields — stored as JSON in StaffRoles table.
+// Requires two Long Text fields in Airtable: WeeklyAvailability, UnavailableDates
+export async function updateStaffAvailability(
+  staffMemberId: string,
+  data: { weeklySchedule?: WeeklySchedule; timeOff?: TimeOffEntry[] }
+): Promise<StaffMember> {
+  const fields: Record<string, unknown> = {};
+  if (data.weeklySchedule !== undefined) fields["WeeklyAvailability"] = JSON.stringify(data.weeklySchedule);
+  if (data.timeOff !== undefined) fields["UnavailableDates"] = JSON.stringify(data.timeOff);
+  const res = await staffRolesFetch(`/${staffMemberId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapStaffMember(await res.json());
 }
 
 // ─── System Role Resolution ───────────────────────────────────────────────────
@@ -2522,7 +2547,7 @@ export async function createOpportunity(data: {
         Stage: data.stage || "Lead",
         KeyPeople: data.keyPeople ? JSON.stringify(data.keyPeople) : "[]",
         Notes: data.notes || "",
-        NextStepDate: data.nextStepDate || "",
+        NextStepDate: data.nextStepDate || null,
         NextStepNote: data.nextStepNote || "",
         EstimatedValue: data.estimatedValue ?? 0,
         AssignedToClerkId: data.assignedToClerkId || "",

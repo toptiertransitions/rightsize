@@ -6,6 +6,13 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Default client share % by route — auto-applied on create and on route change
+const ROUTE_CLIENT_SHARE: Record<string, number> = {
+  "ProFoundFinds Consignment": 67,
+  "FB/Marketplace": 59,
+  "Online Marketplace": 59,
+};
+
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
@@ -57,6 +64,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const route = body.primaryRoute as string | undefined;
+    const autoShare = route ? ROUTE_CLIENT_SHARE[route] : undefined;
+
     const item = await createItem({
       tenantId,
       itemName: (body.itemName as string) || (body.item_name as string) || "Unknown Item",
@@ -73,7 +83,7 @@ export async function POST(req: NextRequest) {
       valueLow: Number(body.valueLow) || 0,
       valueMid: Number(body.valueMid) || 0,
       valueHigh: Number(body.valueHigh) || 0,
-      primaryRoute: body.primaryRoute as never,
+      primaryRoute: route as never,
       routeReasoning: body.routeReasoning as string,
       consignmentCategory: body.consignmentCategory as string,
       listingTitleEbay: body.listingTitleEbay as string,
@@ -82,6 +92,7 @@ export async function POST(req: NextRequest) {
       listingOfferup: body.listingOfferup as string,
       staffTips: body.staffTips as string,
       status: "Pending Review",
+      clientSharePercent: body.clientSharePercent != null ? Number(body.clientSharePercent) : autoShare,
     });
     return NextResponse.json({ item });
   } catch (e: unknown) {
@@ -127,6 +138,20 @@ export async function PATCH(req: NextRequest) {
     }
     (updates as Record<string, unknown>).tenantId = reassignTenantId;
     delete (updates as Record<string, unknown>).reassignTenantId;
+  }
+
+  // Vendor approval locks in the route as Other Consignment
+  if (updates.vendorDecision === "Approved" && updates.primaryRoute === undefined) {
+    (updates as Record<string, unknown>).primaryRoute = "Other Consignment";
+  }
+
+  // Auto-set clientSharePercent when primaryRoute changes (if not explicitly overriding)
+  const newRoute = updates.primaryRoute as string | undefined;
+  if (newRoute !== undefined && updates.clientSharePercent === undefined) {
+    const autoShare = ROUTE_CLIENT_SHARE[newRoute];
+    if (autoShare !== undefined) {
+      (updates as Record<string, unknown>).clientSharePercent = autoShare;
+    }
   }
 
   // Fetch existing item if needed for vendor change check, Sold backfill, or Sold reversal

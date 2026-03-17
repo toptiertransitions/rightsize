@@ -10,6 +10,36 @@ export type UserRole =
 
 export type SystemRole = "TTTStaff" | "TTTManager" | "TTTSales" | "TTTAdmin";
 
+// ─── Staff Availability ───────────────────────────────────────────────────────
+export interface DaySchedule {
+  available: boolean;
+  start: string; // "09:00"
+  end: string;   // "17:00"
+}
+
+export type WeeklySchedule = {
+  Mon: DaySchedule; Tue: DaySchedule; Wed: DaySchedule; Thu: DaySchedule;
+  Fri: DaySchedule; Sat: DaySchedule; Sun: DaySchedule;
+};
+
+export const DEFAULT_WEEKLY_SCHEDULE: WeeklySchedule = {
+  Mon: { available: true,  start: "09:00", end: "17:00" },
+  Tue: { available: true,  start: "09:00", end: "17:00" },
+  Wed: { available: true,  start: "09:00", end: "17:00" },
+  Thu: { available: true,  start: "09:00", end: "17:00" },
+  Fri: { available: true,  start: "09:00", end: "17:00" },
+  Sat: { available: false, start: "09:00", end: "17:00" },
+  Sun: { available: false, start: "09:00", end: "17:00" },
+};
+
+export interface TimeOffEntry {
+  id: string;
+  date: string;        // "YYYY-MM-DD"
+  allDay: boolean;
+  startTime?: string;  // "HH:MM"
+  endTime?: string;    // "HH:MM"
+}
+
 export interface StaffMember {
   id: string;            // Airtable record ID
   clerkUserId: string;
@@ -18,6 +48,8 @@ export interface StaffMember {
   role: SystemRole;
   isActive: boolean;
   createdAt: string;
+  weeklySchedule?: WeeklySchedule;
+  timeOff?: TimeOffEntry[];
 }
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
