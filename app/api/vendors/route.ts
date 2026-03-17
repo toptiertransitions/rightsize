@@ -7,10 +7,11 @@ import {
   deleteVendor,
   getVendorById,
   getUserRoleForTenant,
+  getSystemRole,
 } from "@/lib/airtable";
 import type { VendorType } from "@/lib/types";
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -60,9 +61,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !EDIT_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+    const role = await getUserRoleForTenant(userId, tenantId);
+    if (!role || !EDIT_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -104,9 +108,12 @@ export async function PATCH(req: NextRequest) {
   const existing = await getVendorById(id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const role = await getUserRoleForTenant(userId, existing.tenantId);
-  if (!role || !EDIT_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRolePatch = await getSystemRole(userId).catch(() => null);
+  if (!sysRolePatch || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRolePatch)) {
+    const role = await getUserRoleForTenant(userId, existing.tenantId);
+    if (!role || !EDIT_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -127,9 +134,12 @@ export async function DELETE(req: NextRequest) {
   const existing = await getVendorById(id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const role = await getUserRoleForTenant(userId, existing.tenantId);
-  if (!role || !EDIT_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRoleDel = await getSystemRole(userId).catch(() => null);
+  if (!sysRoleDel || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRoleDel)) {
+    const role = await getUserRoleForTenant(userId, existing.tenantId);
+    if (!role || !EDIT_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {

@@ -81,13 +81,13 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
-    // Quoting — TTTAdmin only; carry current project if one is selected
-    ...(isAdmin ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
+    // Quoting — Manager and Admin; carry current project if one is selected
+    ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
     // Invoices — clients (non-staff) get tenantId from nav; managers carry current project
     ...(navTenantId && !isStaff ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
-    // CRM + Drips — Manager and Admin
-    ...(isManager ? [
+    // CRM + Drips — Admin only
+    ...(isAdmin ? [
       { href: "/crm", base: "/crm", label: "CRM" },
       { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
     ] : []),

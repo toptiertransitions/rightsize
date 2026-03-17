@@ -1003,12 +1003,17 @@ export function SalesClient({
   // Summary totals
   const pfItemIds = new Set(profound.map(i => i.id));
 
+  // Only count PF events for items that actually exist in the ProFoundFinds route.
+  // This excludes orphaned events (items deleted from catalog) and prevents double-counting
+  // events for items whose route was later changed to FB/Marketplace etc.
+  const validPfEvents = pfSaleEvents.filter(e => pfItemIds.has(e.itemId));
+
   // Items that have Square sale events
-  const pfItemsWithEvents = new Set(pfSaleEvents.map(e => e.itemId));
+  const pfItemsWithEvents = new Set(validPfEvents.map(e => e.itemId));
 
   // PF: Square sales → use event clientPayout (most accurate)
-  const pfEventTotalEarned = pfSaleEvents.reduce((s, e) => s + (e.clientPayout ?? 0), 0);
-  const pfEventTotalPaid = pfSaleEvents.filter(e => e.payoutPaid).reduce((s, e) => s + (e.clientPayout ?? 0), 0);
+  const pfEventTotalEarned = validPfEvents.reduce((s, e) => s + (e.clientPayout ?? 0), 0);
+  const pfEventTotalPaid = validPfEvents.filter(e => e.payoutPaid).reduce((s, e) => s + (e.clientPayout ?? 0), 0);
 
   // PF: manually marked Sold (no Square events) → calculate from item price × share %
   const pfManualSoldItems = profound.filter(i => i.status === "Sold" && !pfItemsWithEvents.has(i.id));
@@ -1022,14 +1027,15 @@ export function SalesClient({
   const pfTotalEarned = pfEventTotalEarned + pfManualTotalEarned;
   const pfTotalPaid = pfEventTotalPaid + pfManualTotalPaid;
 
-  // Non-PF: prefer calc payout from local vendor take rate, fall back to stored consignorPayout
-  const nonPfSoldItems = items.filter(i => i.status === "Sold" && !pfItemIds.has(i.id));
+  // Non-PF: only count actual consignment routes — not Donate/Trash/Keep/Family/etc.
+  const CONSIGNMENT_ROUTES = new Set(["FB/Marketplace", "Online Marketplace", "Other Consignment"]);
+  const nonPfSoldItems = items.filter(i => i.status === "Sold" && CONSIGNMENT_ROUTES.has(i.primaryRoute));
   const nonPfTotalEarned = nonPfSoldItems.reduce((s, i) => {
     const calc = calcPayouts.get(i.id);
     return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
   }, 0);
   const nonPfTotalPaid = items
-    .filter(i => !pfItemIds.has(i.id))
+    .filter(i => CONSIGNMENT_ROUTES.has(i.primaryRoute))
     .reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
 
   const totalEarned = pfTotalEarned + nonPfTotalEarned;
@@ -1246,7 +1252,7 @@ export function SalesClient({
           tenantName={tenantName}
           ownerEmail={ownerEmail}
           items={items}
-          pfSaleEvents={pfSaleEvents}
+          pfSaleEvents={validPfEvents}
           localVendors={localVendors}
           onClose={() => setShowPayoutModal(false)}
           onGenerated={(file) => {

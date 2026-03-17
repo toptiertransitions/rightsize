@@ -34,8 +34,8 @@ export default async function QuotingPage({ searchParams }: PageProps) {
   const { tenantId } = await searchParams;
   if (!tenantId) {
     const allTenants = await getTenants().catch(() => []);
-    const active = allTenants.filter(t => !t.isArchived).sort((a, b) => a.name.localeCompare(b.name));
-    return <QuotingProjectPicker tenants={active} />;
+    const sorted = [...allTenants].sort((a, b) => a.name.localeCompare(b.name));
+    return <QuotingProjectPicker tenants={sorted} />;
   }
 
   const [tenant, rooms, contractSettings, contractTemplates, existingContracts, memberships, services, invoiceSettings, timeEntries, opportunities, clientContacts, invoices] =

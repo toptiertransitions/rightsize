@@ -42,36 +42,54 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
   staff_tips: "",
 };
 
-// Convert HEIC/HEIF to JPEG client-side using canvas.
-// Works natively on Safari/iOS (where HEIC originates). On browsers that don't
-// support HEIC in <img> (Chrome/Firefox on desktop), returns the original file
-// and the server will return a clear error.
-async function convertHeicToJpeg(file: File): Promise<File> {
+// Prepare any image for upload: convert HEIC → JPEG and resize to max 1800px.
+// Mobile cameras produce 10–15 MB files which exceed serverless body limits.
+// Resizing client-side gets them under 500 KB before they leave the device.
+const MAX_UPLOAD_DIM = 1800;
+const UPLOAD_QUALITY = 0.88;
+
+async function prepareImageForUpload(file: File): Promise<File> {
   const isHeic =
     file.type === "image/heic" ||
     file.type === "image/heif" ||
     /\.(heic|heif)$/i.test(file.name);
-  if (!isHeic) return file;
+
+  // Only process images (and HEIC files which report wrong MIME type)
+  if (!file.type.startsWith("image/") && !isHeic) return file;
 
   try {
     const img = document.createElement("img");
     const url = URL.createObjectURL(file);
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
-      img.onerror = () => reject();
+      img.onerror = () => reject(new Error("load failed"));
       img.src = url;
     });
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    canvas.getContext("2d")!.drawImage(img, 0, 0);
     URL.revokeObjectURL(url);
+
+    // Scale down if either dimension exceeds MAX_UPLOAD_DIM
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+    if (w > MAX_UPLOAD_DIM || h > MAX_UPLOAD_DIM) {
+      const scale = MAX_UPLOAD_DIM / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+
     const blob = await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob(b => (b ? resolve(b) : reject()), "image/jpeg", 0.92)
+      canvas.toBlob(b => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", UPLOAD_QUALITY)
     );
-    return new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+
+    const safeName = file.name.replace(/\.(heic|heif)$/i, ".jpg").replace(/\.[^.]+$/, ".jpg");
+    return new File([blob], safeName, { type: "image/jpeg" });
   } catch {
-    return file; // let server handle it and return a clear error
+    // Fallback: send the original; server-side sharp will attempt conversion
+    return file;
   }
 }
 
@@ -100,7 +118,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
       setError("Please select an image file.");
       return;
     }
-    const converted = await convertHeicToJpeg(file);
+    const converted = await prepareImageForUpload(file);
     setPhotoFile(converted);
     const reader = new FileReader();
     reader.onload = (e) => setPhotoPreview(e.target?.result as string);
@@ -127,6 +145,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
       formData.append("tenantId", tenantId);
       const res = await fetch("/api/analyze", { method: "POST", body: formData });
       if (!res.ok) {
+        if (res.status === 413) throw new Error("Photo is too large to upload. Please use a smaller image.");
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Analysis failed");
       }
@@ -164,6 +183,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
         formData.append("tenantId", tenantId);
         const res = await fetch("/api/upload", { method: "POST", body: formData });
         if (!res.ok) {
+          if (res.status === 413) throw new Error("Photo is too large to upload. Please use a smaller image.");
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Photo upload failed");
         }
@@ -192,13 +212,17 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
     try {
       const uploaded: PhotoMeta[] = [];
       for (const rawFile of toUpload) {
-        const file = await convertHeicToJpeg(rawFile);
+        const file = await prepareImageForUpload(rawFile);
         const fd = new FormData();
         fd.append("file", file);
         fd.append("tenantId", tenantId);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
+        if (!res.ok) {
+          if (res.status === 413) throw new Error("Photo is too large to upload. Please use a smaller image.");
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Upload failed");
+        }
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
         uploaded.push({ url: data.photoUrl, publicId: data.photoPublicId });
       }
       setPhotos(prev => [...prev, ...uploaded]);
@@ -592,7 +616,7 @@ export function NewItemClient({ tenantId, rooms }: NewItemClientProps) {
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-3 items-end">
                   <Input label="Value Low ($)" type="number" inputMode="decimal"
                     value={merged.value_low || ""}
                     placeholder="0"

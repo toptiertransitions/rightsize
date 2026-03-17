@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { Pagination } from "../components/Pagination";
+
+const PAGE_SIZE = 25;
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory } from "@/lib/types";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
@@ -124,6 +127,7 @@ export function AdminExpensesClient({ initialExpenses }: Props) {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<ExpenseCategory | "All">("All");
   const [filterStaff, setFilterStaff] = useState<string>("All");
+  const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<"date" | "total" | "staffName" | "category">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -159,6 +163,8 @@ export function AdminExpensesClient({ initialExpenses }: Props) {
     });
     return list;
   }, [expenses, search, filterCategory, filterStaff, sortKey, sortDir]);
+
+  useEffect(() => { setPage(1); }, [search, filterCategory, filterStaff]);
 
   const grandTotal = filtered.reduce((s, e) => s + (e.total ?? 0), 0);
 
@@ -313,7 +319,7 @@ export function AdminExpensesClient({ initialExpenses }: Props) {
                   <td colSpan={10} className="px-4 py-12 text-center text-gray-500 text-sm">No expenses found.</td>
                 </tr>
               )}
-              {filtered.map((expense) =>
+              {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((expense) =>
                 editingId === expense.id ? (
                   <EditRow key={expense.id} expense={expense} onSave={handleSaved} onCancel={() => setEditingId(null)} />
                 ) : (
@@ -365,6 +371,7 @@ export function AdminExpensesClient({ initialExpenses }: Props) {
               </tfoot>
             )}
           </table>
+        <Pagination currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
       </div>
     </div>

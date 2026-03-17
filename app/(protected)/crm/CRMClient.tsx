@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority } from "@/lib/types";
+import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority, Tenant } from "@/lib/types";
 
 // ─── CSV Helpers ─────────────────────────────────────────────────────────────
 function parseCSVLine(line: string): string[] {
@@ -48,6 +48,7 @@ interface CRMClientProps {
   staffMembers: StaffMember[];
   gmailConnected: boolean;
   gmailEmail?: string;
+  tenants: Tenant[];
 }
 
 const STAGES: OpportunityStage[] = ["Lead", "Qualifying", "Proposing", "Won", "Lost"];
@@ -94,7 +95,7 @@ function ActivityEditModal({
       const res = await fetch("/api/crm/activities", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: activity.id, type, note, activityDate: new Date(activityDate).toISOString() }),
+        body: JSON.stringify({ id: activity.id, type, note, activityDate }),
       });
       const data = await res.json();
       onSaved(data.activity);
@@ -271,8 +272,8 @@ function OpportunitiesTab({
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this opportunity?")) return;
-    await fetch(`/api/crm/opportunities?id=${id}`, { method: "DELETE" });
-    setOpportunities((prev) => prev.filter((o) => o.id !== id));
+    const res = await fetch(`/api/crm/opportunities?id=${id}`, { method: "DELETE" });
+    if (res.ok) setOpportunities((prev) => prev.filter((o) => o.id !== id));
   }
 
   return (
@@ -430,6 +431,7 @@ function OpportunityPanel({
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
   const [converting, setConverting] = useState(false);
   const [convertedProject, setConvertedProject] = useState<{ id: string; name: string } | null>(null);
+  const [gmailSyncMsg, setGmailSyncMsg] = useState<string | null>(null);
 
   // Derive owner from the selected contact; fall back to existing opportunity owner
   const derivedOwnerClerkId = clientContacts.find(c => c.id === clientContactId)?.assignedToClerkId || opportunity?.assignedToClerkId || "";
@@ -518,7 +520,7 @@ function OpportunityPanel({
         opportunityId: opportunity.id,
         type: activityType,
         note: activityNote,
-        activityDate: new Date(activityDate).toISOString(),
+        activityDate,
       }),
     });
     if (res.ok) {
@@ -529,18 +531,19 @@ function OpportunityPanel({
 
   async function deleteActivity(id: string) {
     if (!confirm("Delete this activity?")) return;
-    await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
-    setActivities((prev) => prev.filter((a) => a.id !== id));
+    const res = await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
+    if (res.ok) setActivities((prev) => prev.filter((a) => a.id !== id));
   }
 
   async function syncGmail() {
     if (!opportunity) return;
     const contact = clientContacts.find((c) => c.id === clientContactId);
     if (!contact?.email) {
-      alert("Client contact has no email address");
+      setGmailSyncMsg("This contact has no email address.");
       return;
     }
     setSyncingGmail(true);
+    setGmailSyncMsg(null);
     try {
       const res = await fetch("/api/crm/gmail/sync", {
         method: "POST",
@@ -548,8 +551,14 @@ function OpportunityPanel({
         body: JSON.stringify({ opportunityId: opportunity.id, query: `from:${contact.email} OR to:${contact.email}` }),
       });
       const data = await res.json();
-      alert(`Imported ${data.imported} email(s)`);
-      await loadActivities();
+      if (res.ok) {
+        setGmailSyncMsg(`Imported ${data.imported} email${data.imported !== 1 ? "s" : ""}.`);
+        await loadActivities();
+      } else {
+        setGmailSyncMsg(data.error || "Gmail sync failed.");
+      }
+    } catch {
+      setGmailSyncMsg("Gmail sync failed — network error.");
     } finally {
       setSyncingGmail(false);
     }
@@ -559,45 +568,68 @@ function OpportunityPanel({
     const contact = clientContacts.find((c) => c.id === clientContactId);
     if (!contact) return;
     setConverting(true);
+    setSaveError(null);
     try {
-      // Save the opportunity first (same payload as handleSave)
+      // Step 1: Save/update the opportunity
+      const oppPayload = {
+        clientContactId,
+        stage,
+        estimatedValue: parseFloat(estimatedValue) || 0,
+        notes,
+        nextStepDate,
+        nextStepNote,
+        lostReason: stage === "Lost" ? lostReason : "",
+        keyPeople,
+        wonAt: opportunity?.wonAt,
+        lostAt: opportunity?.lostAt,
+        assignedToClerkId: derivedOwnerClerkId,
+      };
+
+      let savedOpp: ClientOpportunity;
       if (opportunity) {
-        const oppPayload = {
-          clientContactId,
-          stage,
-          estimatedValue: parseFloat(estimatedValue) || 0,
-          notes,
-          nextStepDate,
-          nextStepNote,
-          lostReason: stage === "Lost" ? lostReason : "",
-          keyPeople,
-          wonAt: opportunity.wonAt,
-          lostAt: opportunity.lostAt,
-          assignedToClerkId: derivedOwnerClerkId,
-        };
         const oppRes = await fetch("/api/crm/opportunities", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: opportunity.id, ...oppPayload }),
         });
-        if (oppRes.ok) {
-          const oppData = await oppRes.json();
-          onSaved(oppData.opportunity);
+        const oppData = await oppRes.json();
+        if (!oppRes.ok) {
+          setSaveError(oppData.error || "Failed to update opportunity. Please try again.");
+          return;
         }
+        savedOpp = oppData.opportunity;
+      } else {
+        const oppRes = await fetch("/api/crm/opportunities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(oppPayload),
+        });
+        const oppData = await oppRes.json();
+        if (!oppRes.ok) {
+          setSaveError(oppData.error || "Failed to create opportunity. Please try again.");
+          return;
+        }
+        savedOpp = oppData.opportunity;
       }
-      // Create the project
-      const res = await fetch("/api/tenants", {
+
+      // Step 2: Create the project
+      const tenantRes = await fetch("/api/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: contact.name, email: contact.email, displayName: contact.name }),
       });
-      if (!res.ok) throw new Error("Failed");
-      const data = await res.json();
-      setConvertedProject({ id: data.tenant.id, name: data.tenant.name });
-      // Navigate to Quoting page for the new project
-      router.push(`/quoting?tenantId=${data.tenant.id}`);
-    } catch {
-      alert("Failed to create project. Please try again.");
+      if (!tenantRes.ok) {
+        setSaveError("Opportunity saved, but failed to create project. Please try again.");
+        return;
+      }
+      const tenantData = await tenantRes.json();
+
+      // Step 3: Both succeeded — update parent state then navigate
+      // (call onSaved last so the panel doesn't close before we navigate)
+      onSaved(savedOpp);
+      router.push(`/quoting?tenantId=${tenantData.tenant.id}`);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setConverting(false);
     }
@@ -787,7 +819,7 @@ function OpportunityPanel({
           {/* Activities */}
           {opportunity && (
             <div className="border-t border-gray-200 pt-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-1">
                 <h3 className="font-medium text-gray-900 text-sm">Activities</h3>
                 {gmailConnected && (
                   <button
@@ -802,6 +834,9 @@ function OpportunityPanel({
                   </button>
                 )}
               </div>
+              {gmailSyncMsg && (
+                <p className="text-xs text-gray-500 mb-2">{gmailSyncMsg}</p>
+              )}
 
               {/* Log Activity */}
               <div className="flex gap-2 mb-4">
@@ -853,7 +888,7 @@ function OpportunityPanel({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-gray-700 text-xs whitespace-pre-wrap">{a.note}</p>
-                      <p className="text-gray-400 text-xs mt-0.5">{a.activityDate ? new Date(a.activityDate).toLocaleDateString() : ""}</p>
+                      <p className="text-gray-400 text-xs mt-0.5">{a.activityDate ? new Date(a.activityDate.slice(0, 10) + "T12:00:00").toLocaleDateString() : ""}</p>
                     </div>
                     <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
@@ -927,7 +962,7 @@ function ContactActivityPanel({
         clientContactId: contact.id,
         type: activityType,
         note: activityNote,
-        activityDate: new Date(activityDate).toISOString(),
+        activityDate,
       }),
     });
     if (res.ok) {
@@ -938,8 +973,8 @@ function ContactActivityPanel({
 
   async function deleteOne(id: string) {
     if (!confirm("Delete this activity?")) return;
-    await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
-    setActivities((prev) => prev.filter((a) => a.id !== id));
+    const res = await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
+    if (res.ok) setActivities((prev) => prev.filter((a) => a.id !== id));
   }
 
   return (
@@ -1023,7 +1058,7 @@ function ContactActivityPanel({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-700 whitespace-pre-wrap">{a.note}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {a.activityDate ? new Date(a.activityDate).toLocaleDateString() : ""}
+                        {a.activityDate ? new Date(a.activityDate.slice(0, 10) + "T12:00:00").toLocaleDateString() : ""}
                       </p>
                     </div>
                     <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1053,18 +1088,32 @@ function ContactActivityPanel({
 }
 
 // ─── Contacts Tab ─────────────────────────────────────────────────────────────
+const OPP_STAGE_COLORS: Record<OpportunityStage, string> = {
+  Lead:       "bg-gray-100 text-gray-600",
+  Qualifying: "bg-blue-100 text-blue-700",
+  Proposing:  "bg-amber-100 text-amber-700",
+  Won:        "bg-green-100 text-green-700",
+  Lost:       "bg-red-100 text-red-600",
+};
+
 function ContactsTab({
   initialContacts,
   referralContacts,
   allClientContacts,
   staffMembers,
+  opportunities,
+  tenants,
   onCreateOpportunity,
+  onViewOpportunity,
 }: {
   initialContacts: ClientContact[];
   referralContacts: ReferralContact[];
   allClientContacts: ClientContact[];
   staffMembers: StaffMember[];
+  opportunities: ClientOpportunity[];
+  tenants: Tenant[];
   onCreateOpportunity: (contactId: string) => void;
+  onViewOpportunity: (oppId: string) => void;
 }) {
   const [contacts, setContacts] = useState(initialContacts);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1078,6 +1127,88 @@ function ContactsTab({
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
   const [csvResult, setCsvResult] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+
+  // Filters & sort
+  type ViewMode = "active" | "archived" | "all";
+  const [viewMode, setViewMode] = useState<ViewMode>("active");
+  const [search, setSearch] = useState("");
+  const [filterSource, setFilterSource] = useState("");
+  const [filterOwner, setFilterOwner] = useState("");
+  const [sortField, setSortField] = useState<"name" | "source" | "owner" | "stage">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const tenantMap = useMemo(() => new Map(tenants.map(t => [t.id, t])), [tenants]);
+
+  // Per-contact derived data
+  function getPrimaryOpp(contactId: string): ClientOpportunity | null {
+    const opps = opportunities.filter(o => o.clientContactId === contactId);
+    if (!opps.length) return null;
+    const order: Record<OpportunityStage, number> = { Lead: 0, Qualifying: 1, Proposing: 2, Won: 3, Lost: 4 };
+    return [...opps].sort((a, b) => {
+      const sd = order[a.stage] - order[b.stage];
+      return sd !== 0 ? sd : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })[0];
+  }
+
+  function getActiveTenant(contactId: string): Tenant | null {
+    const opps = opportunities.filter(o => o.clientContactId === contactId && o.tenantId);
+    for (const opp of opps) {
+      const t = tenantMap.get(opp.tenantId);
+      if (t && !t.isArchived) return t;
+    }
+    return null;
+  }
+
+  function isArchivedContact(contactId: string): boolean {
+    const oppsWithProject = opportunities.filter(o => o.clientContactId === contactId && o.tenantId);
+    if (!oppsWithProject.length) return false;
+    return oppsWithProject.every(o => tenantMap.get(o.tenantId)?.isArchived === true);
+  }
+
+  function toggleSort(field: typeof sortField) {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  }
+
+  const allSources = useMemo(() => [...new Set(contacts.map(c => c.source).filter(Boolean))].sort(), [contacts]);
+
+  const processed = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    return contacts
+      .filter(c => {
+        if (viewMode === "active" && isArchivedContact(c.id)) return false;
+        if (viewMode === "archived" && !isArchivedContact(c.id)) return false;
+        if (search && !c.name.toLowerCase().includes(searchLower) && !c.email.toLowerCase().includes(searchLower)) return false;
+        if (filterSource && c.source !== filterSource) return false;
+        if (filterOwner && c.assignedToClerkId !== filterOwner) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        let cmp = 0;
+        if (sortField === "name") cmp = a.name.localeCompare(b.name);
+        else if (sortField === "source") cmp = (a.source || "").localeCompare(b.source || "");
+        else if (sortField === "owner") {
+          const aN = staffMembers.find(s => s.clerkUserId === a.assignedToClerkId)?.displayName || "";
+          const bN = staffMembers.find(s => s.clerkUserId === b.assignedToClerkId)?.displayName || "";
+          cmp = aN.localeCompare(bN);
+        } else if (sortField === "stage") {
+          const order: Record<OpportunityStage, number> = { Lead: 0, Qualifying: 1, Proposing: 2, Won: 3, Lost: 4 };
+          const aS = getPrimaryOpp(a.id)?.stage;
+          const bS = getPrimaryOpp(b.id)?.stage;
+          const aO = aS ? order[aS] : 99;
+          const bO = bS ? order[bS] : 99;
+          cmp = aO - bO;
+        }
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, viewMode, search, filterSource, filterOwner, sortField, sortDir, opportunities, tenantMap]);
+
+  const SortIcon = ({ field }: { field: typeof sortField }) => (
+    <span className="ml-1 inline-block opacity-50">
+      {sortField === field ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+    </span>
+  );
 
   function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1170,16 +1301,67 @@ function ContactsTab({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this contact?")) return;
-    await fetch(`/api/crm/client-contacts?id=${id}`, { method: "DELETE" });
-    setContacts((prev) => prev.filter((c) => c.id !== id));
+    if (!confirm("Delete this client?")) return;
+    const res = await fetch(`/api/crm/client-contacts?id=${id}`, { method: "DELETE" });
+    if (res.ok) setContacts((prev) => prev.filter((c) => c.id !== id));
   }
 
   return (
     <div>
-      <div className="flex items-center justify-end mb-4">
-        <button onClick={openNew} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
-          + Add Contact
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px]">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">🔍</span>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search name or email…"
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-forest-500"
+          />
+        </div>
+
+        {/* View mode pills */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+          {(["active", "all", "archived"] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => setViewMode(m)}
+              className={`px-3 py-1.5 capitalize transition-colors ${viewMode === m ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              {m === "active" ? "Active" : m === "archived" ? "Archived" : "All"}
+            </button>
+          ))}
+        </div>
+
+        {/* Source filter */}
+        <select
+          value={filterSource}
+          onChange={e => setFilterSource(e.target.value)}
+          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-forest-500 bg-white"
+        >
+          <option value="">All Sources</option>
+          {allSources.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+
+        {/* Owner filter */}
+        <select
+          value={filterOwner}
+          onChange={e => setFilterOwner(e.target.value)}
+          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-forest-500 bg-white"
+        >
+          <option value="">All Owners</option>
+          {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+            <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+          ))}
+        </select>
+
+        <div className="flex-1" />
+
+        {/* Add Contact */}
+        <button onClick={openNew} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700 whitespace-nowrap">
+          + Add Client
         </button>
       </div>
 
@@ -1230,46 +1412,111 @@ function ContactsTab({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Owner</th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                onClick={() => toggleSort("name")}
+              >
+                Name <SortIcon field="name" />
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                onClick={() => toggleSort("owner")}
+              >
+                Owner <SortIcon field="owner" />
+              </th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Phone</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Source</th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                onClick={() => toggleSort("source")}
+              >
+                Source <SortIcon field="source" />
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                onClick={() => toggleSort("stage")}
+              >
+                Opportunity <SortIcon field="stage" />
+              </th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Project</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {contacts.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-10 text-gray-400">No contacts yet</td></tr>
-            )}
-            {contacts.map((c) => (
-              <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                  {staffMembers.find(s => s.clerkUserId === c.assignedToClerkId)?.displayName || <span className="text-gray-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-gray-600">{c.email || "—"}</td>
-                <td className="px-4 py-3 text-gray-600">{c.phone || "—"}</td>
-                <td className="px-4 py-3 text-gray-600">{c.source || "—"}</td>
-                <td className="px-4 py-3 text-right space-x-2">
-                  <button
-                    onClick={() => onCreateOpportunity(c.id)}
-                    className="text-xs bg-forest-600 text-white rounded px-2 py-1 hover:bg-forest-700"
-                    title="Create opportunity for this contact"
-                  >
-                    + Opp
-                  </button>
-                  <button
-                    onClick={() => setActivityContact(c)}
-                    className="text-forest-600 hover:text-forest-800 text-xs px-2 py-1"
-                  >
-                    Activities
-                  </button>
-                  <button onClick={() => openEdit(c)} className="text-gray-500 hover:text-gray-800 text-xs px-2 py-1">Edit</button>
-                  <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1">Delete</button>
+            {processed.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center py-10 text-gray-400">
+                  {contacts.length === 0
+                    ? "No clients yet"
+                    : viewMode === "archived"
+                    ? "No archived clients"
+                    : "No clients match your filters"}
                 </td>
               </tr>
-            ))}
+            )}
+            {processed.map((c) => {
+              const primaryOpp = getPrimaryOpp(c.id);
+              const activeTenant = getActiveTenant(c.id);
+              return (
+                <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{c.name}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                    {staffMembers.find(s => s.clerkUserId === c.assignedToClerkId)?.displayName || <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{c.email || "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{c.phone || "—"}</td>
+                  <td className="px-4 py-3 text-gray-600">{c.source || "—"}</td>
+                  <td className="px-4 py-3">
+                    {primaryOpp ? (
+                      <button
+                        onClick={() => onViewOpportunity(primaryOpp.id)}
+                        className="inline-flex items-center gap-1.5 text-sm hover:opacity-80 text-left"
+                        title="View opportunity"
+                      >
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${OPP_STAGE_COLORS[primaryOpp.stage] || "bg-gray-100 text-gray-600"}`}>
+                          {primaryOpp.stage}
+                        </span>
+                        {primaryOpp.nextStepNote && (
+                          <span className="text-gray-500 truncate max-w-[120px] text-xs">{primaryOpp.nextStepNote}</span>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="text-gray-400 text-xs">No opp</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {activeTenant ? (
+                      <a
+                        href={`/rooms?tenantId=${activeTenant.id}`}
+                        className="text-forest-600 hover:underline text-sm"
+                        title="View project"
+                      >
+                        {activeTenant.name}
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                    <button
+                      onClick={() => onCreateOpportunity(c.id)}
+                      className="text-xs bg-forest-600 text-white rounded px-2 py-1 hover:bg-forest-700"
+                      title="Create opportunity for this contact"
+                    >
+                      + Opp
+                    </button>
+                    <button
+                      onClick={() => setActivityContact(c)}
+                      className="text-forest-600 hover:text-forest-800 text-xs px-2 py-1"
+                    >
+                      Activities
+                    </button>
+                    <button onClick={() => openEdit(c)} className="text-gray-500 hover:text-gray-800 text-xs px-2 py-1">Edit</button>
+                    <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1">Delete</button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1278,7 +1525,7 @@ function ContactsTab({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setModalOpen(false)} />
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold text-gray-900">{editing ? "Edit Contact" : "Add Contact"}</h3>
+            <h3 className="font-semibold text-gray-900">{editing ? "Edit Client" : "Add Client"}</h3>
 
             {/* Name */}
             <div>
@@ -1648,8 +1895,8 @@ function ReferralPartnersTab({
 
   async function deleteCompany(id: string) {
     if (!confirm("Delete this company?")) return;
-    await fetch(`/api/crm/companies?id=${id}`, { method: "DELETE" });
-    setCompanies((prev) => prev.filter((c) => c.id !== id));
+    const res = await fetch(`/api/crm/companies?id=${id}`, { method: "DELETE" });
+    if (res.ok) setCompanies((prev) => prev.filter((c) => c.id !== id));
   }
 
   function openAddContact(companyId: string) {
@@ -1684,15 +1931,22 @@ function ReferralPartnersTab({
           // Move contact from old company bucket to new one
           setContacts((prev) => {
             const next = { ...prev };
-            next[oldCompanyId] = (next[oldCompanyId] || []).filter(c => c.id !== editingContact.id);
-            next[newCompanyId] = [...(next[newCompanyId] || []), data.contact];
+            const oldList = next[oldCompanyId] ?? initialReferralContacts.filter(rc => rc.referralCompanyId === oldCompanyId);
+            next[oldCompanyId] = oldList.filter(c => c.id !== editingContact.id);
+            const newList = next[newCompanyId] ?? initialReferralContacts.filter(rc => rc.referralCompanyId === newCompanyId);
+            next[newCompanyId] = [...newList, data.contact];
             return next;
           });
         } else {
-          setContacts((prev) => ({
-            ...prev,
-            [contactModal]: (prev[contactModal] || []).map((c) => (c.id === editingContact.id ? data.contact : c)),
-          }));
+          setContacts((prev) => {
+            // If this company's contacts haven't been fetched into state yet,
+            // fall back to initialReferralContacts so the map doesn't produce an empty array
+            const base = prev[contactModal] ?? initialReferralContacts.filter(rc => rc.referralCompanyId === contactModal);
+            return {
+              ...prev,
+              [contactModal]: base.map((c) => (c.id === editingContact.id ? data.contact : c)),
+            };
+          });
         }
       } else {
         const res = await fetch("/api/crm/contacts", {
@@ -1714,11 +1968,13 @@ function ReferralPartnersTab({
 
   async function deleteContact(companyId: string, contactId: string) {
     if (!confirm("Delete this contact?")) return;
-    await fetch(`/api/crm/contacts?id=${contactId}`, { method: "DELETE" });
-    setContacts((prev) => ({
-      ...prev,
-      [companyId]: (prev[companyId] || []).filter((c) => c.id !== contactId),
-    }));
+    const res = await fetch(`/api/crm/contacts?id=${contactId}`, { method: "DELETE" });
+    if (res.ok) {
+      setContacts((prev) => ({
+        ...prev,
+        [companyId]: (prev[companyId] || []).filter((c) => c.id !== contactId),
+      }));
+    }
   }
 
   // Compute unique types for filter dropdown
@@ -2909,15 +3165,18 @@ function ActivityLogTab({
 
   async function deleteOne(id: string) {
     if (!confirm("Delete this activity?")) return;
-    await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
-    setActivities((prev) => prev.filter((a) => a.id !== id));
-    setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+    const res = await fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setActivities((prev) => prev.filter((a) => a.id !== id));
+      setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+    }
   }
 
   async function deleteSelected() {
     if (!confirm(`Delete ${selected.size} selected activit${selected.size === 1 ? "y" : "ies"}?`)) return;
-    await Promise.all([...selected].map((id) => fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" })));
-    setActivities((prev) => prev.filter((a) => !selected.has(a.id)));
+    const results = await Promise.all([...selected].map((id) => fetch(`/api/crm/activities?id=${id}`, { method: "DELETE" })));
+    const deletedIds = new Set([...selected].filter((_, i) => results[i].ok));
+    setActivities((prev) => prev.filter((a) => !deletedIds.has(a.id)));
     setSelected(new Set());
   }
 
@@ -3044,7 +3303,7 @@ function ActivityLogTab({
                     />
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                    {a.activityDate ? new Date(a.activityDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    {a.activityDate ? new Date(a.activityDate.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
                     {staffById[a.createdByClerkId] || "—"}
@@ -3273,7 +3532,7 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
 }
 
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
-export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail }: CRMClientProps) {
+export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, tenants }: CRMClientProps) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -3287,6 +3546,13 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
 
   function handleCreateOpportunity(contactId: string) {
     setPendingContactId(contactId);
+    setTab("opportunities");
+  }
+
+  function handleViewOpportunity(oppId: string) {
+    setPendingOppId(oppId);
+    setOppInitialStage("All");
+    setOppTabKey(k => k + 1);
     setTab("opportunities");
   }
 
@@ -3307,7 +3573,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   const tabs: { key: Tab; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
     { key: "opportunities", label: "Opportunities" },
-    { key: "contacts", label: "Contacts" },
+    { key: "contacts", label: "Clients" },
     { key: "referrals", label: "Referral Partners" },
     { key: "activity", label: "Activity Log" },
     { key: "settings", label: "Settings" },
@@ -3317,7 +3583,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">CRM</h1>
-        <p className="text-sm text-gray-500">Manage referral partners, client contacts, and opportunities</p>
+        <p className="text-sm text-gray-500">Manage referral partners, clients, and opportunities</p>
       </div>
 
       {/* Tab bar */}
@@ -3363,7 +3629,18 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           initialStageFilter={oppInitialStage}
         />
       )}
-      {tab === "contacts" && <ContactsTab initialContacts={clientContacts} referralContacts={referralContacts} allClientContacts={clientContacts} staffMembers={staffMembers} onCreateOpportunity={handleCreateOpportunity} />}
+      {tab === "contacts" && (
+        <ContactsTab
+          initialContacts={clientContacts}
+          referralContacts={referralContacts}
+          allClientContacts={clientContacts}
+          staffMembers={staffMembers}
+          opportunities={opportunities}
+          tenants={tenants}
+          onCreateOpportunity={handleCreateOpportunity}
+          onViewOpportunity={handleViewOpportunity}
+        />
+      )}
       {tab === "referrals" && (
         <ReferralPartnersTab
           key={refTabKey}

@@ -336,11 +336,15 @@ function SearchableCombobox({ value, onChange, options, placeholder = "Search…
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    function handleOutside(e: MouseEvent | TouchEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
   }, []);
 
   const filtered = options.filter(o =>
@@ -367,7 +371,8 @@ function SearchableCombobox({ value, onChange, options, placeholder = "Search…
           ) : filtered.map(opt => (
             <li
               key={opt.id}
-              onMouseDown={() => { onChange(opt.id, opt.name); setOpen(false); setQuery(""); }}
+              onMouseDown={(e) => { e.preventDefault(); onChange(opt.id, opt.name); setOpen(false); setQuery(""); }}
+              onTouchEnd={(e) => { e.preventDefault(); onChange(opt.id, opt.name); setOpen(false); setQuery(""); }}
               className={`px-3 py-2 text-sm cursor-pointer ${opt.id === value ? "bg-forest-700 text-white" : "text-gray-200 hover:bg-gray-700"}`}
             >
               {displayLabel(opt)}

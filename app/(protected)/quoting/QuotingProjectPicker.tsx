@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Tenant } from "@/lib/types";
 
+type ViewMode = "active" | "archived" | "all";
+
 interface Props {
   tenants: Tenant[];
   basePath?: string;
@@ -19,11 +21,18 @@ export function QuotingProjectPicker({
 }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("active");
 
-  const filtered = tenants.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    [t.city, t.state].filter(Boolean).join(", ").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = tenants.filter(t => {
+    if (viewMode === "active" && t.isArchived) return false;
+    if (viewMode === "archived" && !t.isArchived) return false;
+    const q = search.toLowerCase();
+    if (!q) return true;
+    return (
+      t.name.toLowerCase().includes(q) ||
+      [t.city, t.state].filter(Boolean).join(", ").toLowerCase().includes(q)
+    );
+  });
 
   function select(tenantId: string) {
     router.push(`${basePath}?tenantId=${tenantId}`);
@@ -34,6 +43,23 @@ export function QuotingProjectPicker({
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
         <p className="text-sm text-gray-500 mt-1">{description}</p>
+      </div>
+
+      {/* View mode toggle */}
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-3 w-fit">
+        {(["active", "archived", "all"] as ViewMode[]).map(m => (
+          <button
+            key={m}
+            onClick={() => setViewMode(m)}
+            className={`px-4 py-1.5 text-sm capitalize transition-colors ${
+              viewMode === m
+                ? "bg-forest-600 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {m === "active" ? "Active" : m === "archived" ? "Archived" : "All"}
+          </button>
+        ))}
       </div>
 
       <div className="relative mb-3">
@@ -53,7 +79,11 @@ export function QuotingProjectPicker({
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
         {filtered.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-gray-400">
-            {search ? `No projects match "${search}"` : "No active projects found"}
+            {search
+              ? `No projects match "${search}"`
+              : viewMode === "archived"
+              ? "No archived projects found"
+              : "No active projects found"}
           </div>
         ) : (
           <ul className="divide-y divide-gray-50">
@@ -66,7 +96,12 @@ export function QuotingProjectPicker({
                     className="w-full text-left px-4 py-3 hover:bg-forest-50 transition-colors flex items-center justify-between group"
                   >
                     <div>
-                      <div className="text-sm font-medium text-gray-900 group-hover:text-forest-700 transition-colors">{t.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 group-hover:text-forest-700 transition-colors">{t.name}</span>
+                        {t.isArchived && (
+                          <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Archived</span>
+                        )}
+                      </div>
                       {location && <div className="text-xs text-gray-400 mt-0.5">{location}</div>}
                     </div>
                     <svg className="w-4 h-4 text-gray-300 group-hover:text-forest-500 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -80,7 +115,7 @@ export function QuotingProjectPicker({
         )}
       </div>
 
-      {tenants.length > 0 && filtered.length > 0 && (
+      {filtered.length > 0 && (
         <p className="text-xs text-gray-400 mt-2 text-right">{filtered.length} of {tenants.length} projects</p>
       )}
     </div>

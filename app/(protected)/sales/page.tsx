@@ -17,7 +17,7 @@ import {
 import { SalesClient } from "./SalesClient";
 import type { PrimaryRoute } from "@/lib/types";
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
 interface PageProps {
   searchParams: Promise<{ tenantId?: string }>;

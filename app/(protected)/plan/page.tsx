@@ -24,7 +24,7 @@ interface PageProps {
   searchParams: Promise<{ tenantId?: string; view?: string }>;
 }
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTManager", "TTTAdmin"];
 
 export default async function PlanPage({ searchParams }: PageProps) {
   const { userId } = await auth();
@@ -266,10 +266,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
   const resolvedRole = role ?? sysRole;
   if (!resolvedRole) redirect("/home");
 
-  const canEdit = EDIT_ROLES.includes(resolvedRole);
-
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const isTTTStaff = sysRole === "TTTStaff";
+
+  // TTTStaff can add/edit shifts (non-TTT-helper shifts) just like a client user
+  const canEdit = EDIT_ROLES.includes(resolvedRole) || isTTTStaff;
 
   // TTTStaff should only see shifts they are personally invited to
   let filteredEntries = entries;

@@ -175,10 +175,42 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, status, paidAmount, paidAt, notes } = body;
+  const { id, status, paidAmount, paidAt, notes, sendEmail, sentToEmail, ccEmail } = body;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  const invoice = await updateInvoice(id, { status, paidAmount, paidAt, notes });
+  let invoice = await updateInvoice(id, { status, paidAmount, paidAt, notes, sentToEmail, ccEmail });
+
+  // Send email for existing invoice if requested
+  if (sendEmail && sentToEmail) {
+    try {
+      const settings = await getInvoiceSettings().catch(() => null);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+      const payUrl = `${appUrl}/pay/${invoice.id}`;
+      const html = buildInvoiceEmail({
+        invoiceNumber: invoice.invoiceNumber,
+        tenantName: "Client",
+        type: invoice.type,
+        amount: invoice.amount,
+        serviceName: invoice.serviceName || "Services",
+        payUrl,
+        companyName: settings?.companyName || "Top Tier Transitions",
+        logoUrl: settings?.logoUrl,
+        lineItems: invoice.lineItems ?? undefined,
+      });
+      const emailOpts: Parameters<typeof resend.emails.send>[0] = {
+        from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
+        to: sentToEmail,
+        subject: `Invoice ${invoice.invoiceNumber} — ${invoice.type} Invoice`,
+        html,
+      };
+      if (ccEmail) emailOpts.cc = ccEmail;
+      await resend.emails.send(emailOpts);
+      invoice = await updateInvoice(invoice.id, { emailSent: true });
+    } catch (e) {
+      console.error("Invoice email send failed:", e);
+    }
+  }
+
   return NextResponse.json({ invoice });
 }
 

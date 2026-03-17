@@ -13,7 +13,7 @@ import type { FileTag } from "@/lib/types";
 
 export const maxDuration = 30;
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -54,9 +54,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing file, tenantId, or tag" }, { status: 400 });
   }
 
-  // Any authenticated member may upload
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // System staff can upload to any project; otherwise check tenant membership
+  const sysRolePost = await getSystemRole(userId).catch(() => null);
+  if (!sysRolePost || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRolePost)) {
+    const role = await getUserRoleForTenant(userId, tenantId);
+    if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -98,9 +101,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Missing id or tenantId" }, { status: 400 });
   }
 
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !EDIT_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRolePatch = await getSystemRole(userId).catch(() => null);
+  if (!sysRolePatch || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRolePatch)) {
+    const role = await getUserRoleForTenant(userId, tenantId);
+    if (!role || !EDIT_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -132,17 +138,18 @@ export async function DELETE(req: NextRequest) {
   }
 
   const [role, sysRole] = await Promise.all([
-    getUserRoleForTenant(userId, tenantId),
-    getSystemRole(userId),
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    getSystemRole(userId).catch(() => null),
   ]);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const isSystemStaff = sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  if (!role && !isSystemStaff) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Payment Proof files: only TTTManager or TTTAdmin can delete
   if (tag === "Payment Proof") {
     if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin") {
       return NextResponse.json({ error: "Forbidden — TTT Manager required" }, { status: 403 });
     }
-  } else if (!vendorId && !EDIT_ROLES.includes(role)) {
+  } else if (!vendorId && !isSystemStaff && !EDIT_ROLES.includes(role ?? "")) {
     // Vendor file deletes are allowed for any project member; other deletes require edit role
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -98,10 +98,15 @@ export async function DELETE(req: NextRequest) {
   const tenantId = req.nextUrl.searchParams.get("tenantId");
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !["Owner", "TTTAdmin"].includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const [tenantRole, sysRoleDel] = await Promise.all([
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    getSystemRole(userId).catch(() => null),
+  ]);
+  const canDelete =
+    tenantRole === "Owner" ||
+    sysRoleDel === "TTTAdmin" ||
+    sysRoleDel === "TTTManager";
+  if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await deleteTenantCascade(tenantId);
   return NextResponse.json({ success: true });

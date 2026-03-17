@@ -115,13 +115,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Auto-advance opportunity to Won
+  // Auto-advance opportunity to Won and set estimatedValue to the signed contract amount
   try {
     const opps = await getOpportunitiesForTenant(contract.tenantId).catch(() => []);
     const proposing = opps.filter((o) => o.stage === "Proposing");
     await Promise.all(
       proposing.map((o) =>
-        updateOpportunity(o.id, { stage: "Won", wonAt: new Date().toISOString() }).catch(() => null)
+        updateOpportunity(o.id, {
+          stage: "Won",
+          wonAt: new Date().toISOString(),
+          estimatedValue: contract.totalCost,
+        }).catch(() => null)
       )
     );
   } catch { /* non-fatal */ }

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { Pagination } from "../components/Pagination";
+
+const PAGE_SIZE = 25;
 import Image from "next/image";
 import type { Item, ItemStatus } from "@/lib/types";
 
@@ -232,6 +235,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const [flash, setFlash] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState<SortCol>("itemName");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -504,10 +508,10 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <input type="text" placeholder="Search items, clients, barcodes…" value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forest-500 w-64"
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-forest-500">
           <option value="all">All Statuses</option>
           {PF_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -565,13 +569,14 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((item, idx) => {
+                {sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item, idx) => {
                   const tenant = tenantInfoMap[item.tenantId];
                   const isSaving = saving[item.id];
                   const isFlashing = flash[item.id];
                   const isSelected = selected.has(item.id);
                   const overdue = isOverdue(item.deliveryDate);
                   const photoUrl = item.photos?.[0]?.url || item.photoUrl;
+                  const globalIdx = (page - 1) * PAGE_SIZE + idx;
 
                   return (
                     <tr key={item.id} className={`border-b border-gray-800/60 transition-colors ${
@@ -585,7 +590,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                         />
                       </td>
 
-                      <td className="px-3 py-2.5 text-gray-600 text-xs">{idx + 1}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs">{globalIdx + 1}</td>
 
                       {/* Photo */}
                       <td className="px-3 py-2.5">
@@ -689,6 +694,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                 })}
               </tbody>
             </table>
+          <Pagination currentPage={page} totalItems={sorted.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
           </div>
         </div>
       )}

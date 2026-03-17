@@ -17,9 +17,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
   }
 
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  const isSystemStaff = sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  if (!isSystemStaff) {
+    const role = await getUserRoleForTenant(userId, tenantId);
+    if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const items = await getItemsForTenant(tenantId);
@@ -44,9 +46,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
   }
 
-  const role = await getUserRoleForTenant(userId, tenantId);
-  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // TTT system users (Staff/Manager/Admin) can create items on any project
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+    // Non-system users must be an Owner or Collaborator on the tenant
+    const role = await getUserRoleForTenant(userId, tenantId);
+    if (!role || !["Owner", "Collaborator"].includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -107,7 +114,7 @@ export async function PATCH(req: NextRequest) {
   if (!isAdmin) {
     if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
     const role = await getUserRoleForTenant(userId, tenantId as string);
-    if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
+    if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
@@ -187,9 +194,13 @@ export async function DELETE(req: NextRequest) {
   const item = await getItemById(id).catch(() => null);
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const role = await getUserRoleForTenant(userId, item.tenantId);
-  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRoleDel = await getSystemRole(userId).catch(() => null);
+  const isSystemStaffDel = sysRoleDel && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRoleDel);
+  if (!isSystemStaffDel) {
+    const role = await getUserRoleForTenant(userId, item.tenantId);
+    if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {

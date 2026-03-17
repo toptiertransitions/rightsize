@@ -19,7 +19,7 @@ interface PageProps {
   searchParams: Promise<{ tenantId?: string }>;
 }
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
 export default async function CatalogPage({ searchParams }: PageProps) {
   const { userId } = await auth();

@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getSystemRole, getOpportunities, getClientContacts, getReferralCompanies, getReferralContacts, getGmailToken, getStaffMembers } from "@/lib/airtable";
+import { getSystemRole, getOpportunities, getClientContacts, getReferralCompanies, getReferralContacts, getGmailToken, getStaffMembers, getTenants } from "@/lib/airtable";
 import { CRMClient } from "./CRMClient";
 
 export default async function CRMPage() {
@@ -12,13 +12,14 @@ export default async function CRMPage() {
     redirect("/home");
   }
 
-  const [opportunities, clientContacts, companies, referralContacts, staffMembers, token] = await Promise.all([
+  const [opportunities, clientContacts, companies, referralContacts, staffMembers, token, tenants] = await Promise.all([
     getOpportunities(),
     getClientContacts(),
     getReferralCompanies(),
     getReferralContacts(),
     getStaffMembers().catch(() => []),
     getGmailToken(userId).catch(() => null),
+    getTenants().catch(() => []),
   ]);
 
   return (
@@ -30,6 +31,7 @@ export default async function CRMPage() {
       staffMembers={staffMembers}
       gmailConnected={!!token}
       gmailEmail={token?.email}
+      tenants={tenants}
     />
   );
 }

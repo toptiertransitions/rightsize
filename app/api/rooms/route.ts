@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     getSystemRole(userId).catch(() => null),
   ]);
   const canEdit =
-    (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(tenantRole)) ||
+    (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(tenantRole)) ||
     sysRole === "TTTManager" ||
     sysRole === "TTTAdmin";
   if (!canEdit) {
@@ -56,9 +56,12 @@ export async function PATCH(req: NextRequest) {
 
   const [tenantRole, sysRole] = await Promise.all([
     getUserRoleForTenant(userId, tenantId).catch(() => null),
-    getSystemRole(userId),
+    getSystemRole(userId).catch(() => null),
   ]);
-  if (!tenantRole && !sysRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const canEdit =
+    (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(tenantRole)) ||
+    (sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole));
+  if (!canEdit) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const room = await updateRoom(id, {
     name: typeof name === "string" ? name.trim() : undefined,
@@ -79,9 +82,12 @@ export async function DELETE(req: NextRequest) {
 
   const [tenantRole, sysRole] = await Promise.all([
     getUserRoleForTenant(userId, tenantId).catch(() => null),
-    getSystemRole(userId),
+    getSystemRole(userId).catch(() => null),
   ]);
-  if (!tenantRole && !sysRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const canDelete =
+    (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(tenantRole)) ||
+    (sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole));
+  if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await deleteRoom(id);
   return NextResponse.json({ success: true });

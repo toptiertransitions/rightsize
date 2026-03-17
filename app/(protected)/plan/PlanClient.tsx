@@ -84,6 +84,7 @@ function formatTime(t?: string): string {
 
 const ALL_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WORKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const FULL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -91,6 +92,8 @@ const MONTH_NAMES = [
 ];
 
 // ─── AddFocusModal ─────────────────────────────────────────────────────────────
+interface TTTUser { name: string; email: string; role: string; }
+
 interface ModalProps {
   tenantId: string;
   rooms: Room[];
@@ -99,9 +102,10 @@ interface ModalProps {
   onClose: () => void;
   onSaved: () => void;
   services?: string[];
+  canManageTTTHelpers: boolean;
 }
 
-function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services }: ModalProps) {
+function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers }: ModalProps) {
   const activityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));
   const [activity, setActivity] = useState<PlanActivity>(entry?.activity ?? (services?.[0] ?? "Coordinating"));
@@ -117,12 +121,15 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [calError, setCalError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [tttUsers, setTttUsers] = useState<TTTUser[]>([]);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
 
   const isCustomRoom = roomId === "__custom__";
   const isEdit = !!entry;
 
-  const handleRemoveHelper = (index: number) => {
-    setHelpers(prev => prev.filter((_, xi) => xi !== index));
+  const handleRemoveHelper = (email: string) => {
+    setHelpers(prev => prev.filter(h => h.email !== email));
   };
 
   // Auto-sync RSVPs when the modal opens for an entry that has invites sent
@@ -138,6 +145,14 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       .then(d => { if (d.entry?.helpers) setHelpers(d.entry.helpers); })
       .catch(() => {})
       .finally(() => setCalLoading(null));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load TTT team members for the staff picker
+  useEffect(() => {
+    fetch("/api/plan/ttt-users")
+      .then(r => r.json())
+      .then(d => { if (d.users) setTttUsers(d.users); })
+      .catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Core invite-send logic — accepts an explicit helpers array to avoid stale state
@@ -170,7 +185,27 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
   const handleSendInvites = () => sendCalendarInvites(helpers);
 
-  // Adding a helper in edit mode immediately fires the calendar invite
+  const handleSyncRSVPs = async () => {
+    if (!entry?.id || !googleEventId) return;
+    setCalLoading("sync");
+    setCalError("");
+    try {
+      const res = await fetch("/api/plan/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Sync failed");
+      if (d.entry?.helpers) setHelpers(d.entry.helpers);
+    } catch (e) {
+      setCalError(e instanceof Error ? e.message : "Failed to sync RSVPs");
+    } finally {
+      setCalLoading(null);
+    }
+  };
+
+  // Adding a helper by email in edit mode immediately fires the calendar invite
   const addHelper = async () => {
     const email = helperInput.trim().toLowerCase();
     if (!email || !email.includes("@")) return;
@@ -182,6 +217,28 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       await sendCalendarInvites(updated);
     }
   };
+
+  // Adding a TTT team member via the staff picker
+  const addTeamMember = async (user: TTTUser) => {
+    if (helpers.find(h => h.email === user.email)) return;
+    const updated: PlanHelper[] = [...helpers, { email: user.email, status: "pending" }];
+    setHelpers(updated);
+    setTeamSearch("");
+    setShowTeamDropdown(false);
+    if (isEdit) {
+      await sendCalendarInvites(updated);
+    }
+  };
+
+  // Derived lists for two-section display
+  const tttEmailSet = new Set(tttUsers.map(u => u.email.toLowerCase()));
+  const teamHelpers = helpers.filter(h => tttEmailSet.has(h.email.toLowerCase()));
+  const emailHelpers = helpers.filter(h => !tttEmailSet.has(h.email.toLowerCase()));
+  const filteredTTTUsers = tttUsers.filter(u =>
+    !helpers.find(h => h.email.toLowerCase() === u.email.toLowerCase()) &&
+    (u.name.toLowerCase().includes(teamSearch.toLowerCase()) ||
+     u.email.toLowerCase().includes(teamSearch.toLowerCase()))
+  );
 
   const handleSave = async () => {
     if (!date) { setError("Date is required"); return; }
@@ -357,7 +414,104 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
               className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none" />
           </div>
 
-          {/* Helper invites */}
+          {/* ── Team Members (TTT staff picker) ─────────────────────────────── */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Team Members <span className="text-xs text-gray-400 font-normal">(optional)</span>
+            </label>
+            {canManageTTTHelpers ? (
+              <div className="relative">
+                <input
+                  type="text"
+                  value={teamSearch}
+                  onChange={e => { setTeamSearch(e.target.value); setShowTeamDropdown(true); }}
+                  onFocus={() => setShowTeamDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowTeamDropdown(false), 150)}
+                  placeholder="Search by name…"
+                  className={inputCls}
+                />
+                {showTeamDropdown && teamSearch && filteredTTTUsers.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-48 overflow-y-auto">
+                    {filteredTTTUsers.map(user => (
+                      <button
+                        key={user.email}
+                        type="button"
+                        onMouseDown={() => addTeamMember(user)}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-forest-50 transition-colors text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{user.name}</p>
+                          <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                        </div>
+                        <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                          {user.role.replace("TTT", "")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showTeamDropdown && teamSearch && filteredTTTUsers.length === 0 && tttUsers.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-sm z-10 px-4 py-3">
+                    <p className="text-sm text-gray-400">No team members found</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 h-11 px-3 rounded-xl border border-gray-200 bg-gray-50">
+                <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span className="text-sm text-gray-400">Only Top Tier Managers can invite team members</span>
+              </div>
+            )}
+            {teamHelpers.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {teamHelpers.map(h => {
+                  const member = tttUsers.find(u => u.email.toLowerCase() === h.email.toLowerCase());
+                  return (
+                    <div key={h.email} className="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-2.5 px-3 py-2">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          h.status === "accepted" ? "bg-green-500" :
+                          h.status === "declined" ? "bg-red-500" : "bg-yellow-400"
+                        }`} title={h.status} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{member?.name ?? h.email}</p>
+                          {member && <p className="text-[11px] text-indigo-500 truncate">{member.role}</p>}
+                        </div>
+                        {isEdit && canManageTTTHelpers && (
+                          <select
+                            value={h.status}
+                            onChange={e => setHelpers(prev => prev.map(x =>
+                              x.email === h.email ? { ...x, status: e.target.value as PlanHelper["status"] } : x
+                            ))}
+                            className="text-xs border border-indigo-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="declined">Declined</option>
+                          </select>
+                        )}
+                        {canManageTTTHelpers && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveHelper(h.email)}
+                            className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Invite Helpers (free-form email) ────────────────────────────── */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Invite Helpers <span className="text-xs text-gray-400 font-normal">(optional)</span>
@@ -380,9 +534,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                 {calLoading === "send" ? "Sending…" : "Add"}
               </button>
             </div>
-            {helpers.length > 0 && (
+            {emailHelpers.length > 0 && (
               <div className="space-y-1.5">
-                {helpers.map((h, i) => (
+                {emailHelpers.map(h => (
                   <div key={h.email} className="bg-gray-50 rounded-xl overflow-hidden">
                     <div className="flex items-center gap-2.5 px-3 py-2">
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -393,8 +547,8 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                       {isEdit && (
                         <select
                           value={h.status}
-                          onChange={e => setHelpers(prev => prev.map((x, xi) =>
-                            xi === i ? { ...x, status: e.target.value as PlanHelper["status"] } : x
+                          onChange={e => setHelpers(prev => prev.map(x =>
+                            x.email === h.email ? { ...x, status: e.target.value as PlanHelper["status"] } : x
                           ))}
                           className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
                         >
@@ -405,7 +559,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                       )}
                       <button
                         type="button"
-                        onClick={() => handleRemoveHelper(i)}
+                        onClick={() => handleRemoveHelper(h.email)}
                         className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                       >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -437,12 +591,22 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                   <div>
                     <p className="text-sm font-medium text-gray-700">Google Calendar</p>
                     {googleEventId
-                      ? <p className="text-xs text-green-600">{calLoading === "sync" ? "Syncing RSVPs…" : "Invites sent"}</p>
+                      ? <p className="text-xs text-green-600">{calLoading === "sync" ? "Syncing RSVPs…" : "Invites sent · tap Sync Status to refresh"}</p>
                       : <p className="text-xs text-gray-400">No invites sent yet</p>
                     }
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {googleEventId && (
+                    <button
+                      type="button"
+                      onClick={handleSyncRSVPs}
+                      disabled={!!calLoading}
+                      className="h-9 px-3 text-sm rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50 font-medium"
+                    >
+                      {calLoading === "sync" ? "Syncing…" : "Sync Status"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleSendInvites}
@@ -550,7 +714,7 @@ interface PlanClientProps {
 
 export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff }: PlanClientProps) {
   const router = useRouter();
-  const [view, setView] = useState<"week" | "month">("week");
+  const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showModal, setShowModal] = useState(false);
@@ -644,6 +808,9 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   })();
 
   const navigateWeek = (dir: -1 | 1) => setCurrentDate(d => addDays(d, dir * 7));
+  const navigateDay  = (dir: -1 | 1) => setCurrentDate(d => addDays(d, dir));
+
+  const dayLabel = `${FULL_DAY_NAMES[currentDate.getDay()]}, ${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getDate()}, ${currentDate.getFullYear()}`;
 
   // ── Month view ───────────────────────────────────────────────────────────────
   const monthStart = startOfMonth(currentDate);
@@ -806,7 +973,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
         {/* Navigation */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => view === "week" ? navigateWeek(-1) : navigateMonth(-1)}
+            onClick={() => view === "week" ? navigateWeek(-1) : view === "month" ? navigateMonth(-1) : navigateDay(-1)}
             className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -814,10 +981,10 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
             </svg>
           </button>
           <span className="text-sm font-semibold text-gray-800 min-w-[180px] text-center">
-            {view === "week" ? weekLabel : monthLabel}
+            {view === "week" ? weekLabel : view === "month" ? monthLabel : dayLabel}
           </span>
           <button
-            onClick={() => view === "week" ? navigateWeek(1) : navigateMonth(1)}
+            onClick={() => view === "week" ? navigateWeek(1) : view === "month" ? navigateMonth(1) : navigateDay(1)}
             className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -834,24 +1001,34 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
 
         {/* Right controls */}
         <div className="flex items-center gap-2">
-          {/* Weekend toggle */}
-          <button
-            onClick={() => setShowWeekends(w => !w)}
-            className={`px-3 h-9 text-sm font-medium rounded-lg border transition-colors ${
-              showWeekends
-                ? "border-gray-200 text-gray-500 hover:bg-gray-50"
-                : "border-forest-400 bg-forest-50 text-forest-700"
-            }`}
-            title={showWeekends ? "Hide weekends (5-day view)" : "Show weekends (7-day view)"}
-          >
-            {showWeekends ? "5-Day" : "7-Day"}
-          </button>
+          {/* Weekend toggle — hidden in day view */}
+          {view !== "day" && (
+            <button
+              onClick={() => setShowWeekends(w => !w)}
+              className={`px-3 h-9 text-sm font-medium rounded-lg border transition-colors ${
+                showWeekends
+                  ? "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  : "border-forest-400 bg-forest-50 text-forest-700"
+              }`}
+              title={showWeekends ? "Hide weekends (5-day view)" : "Show weekends (7-day view)"}
+            >
+              {showWeekends ? "5-Day" : "7-Day"}
+            </button>
+          )}
 
-          {/* Week / Month toggle */}
+          {/* Day / Week / Month toggle */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             <button
+              onClick={() => setView("day")}
+              className={`px-3 h-9 text-sm font-medium transition-colors ${
+                view === "day" ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Day
+            </button>
+            <button
               onClick={() => setView("week")}
-              className={`px-4 h-9 text-sm font-medium transition-colors ${
+              className={`px-3 h-9 text-sm font-medium transition-colors ${
                 view === "week" ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-50"
               }`}
             >
@@ -859,7 +1036,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
             </button>
             <button
               onClick={() => setView("month")}
-              className={`px-4 h-9 text-sm font-medium transition-colors ${
+              className={`px-3 h-9 text-sm font-medium transition-colors ${
                 view === "month" ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-50"
               }`}
             >
@@ -880,13 +1057,17 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
 
               return (
                 <div key={iso} className="flex flex-col min-h-[200px]">
-                  {/* Header */}
-                  <div className={`px-2 py-3 text-center border-b border-gray-100 ${isToday ? "bg-forest-50" : ""}`}>
+                  {/* Header — click to jump to day view */}
+                  <button
+                    type="button"
+                    onClick={() => { setCurrentDate(day); setView("day"); }}
+                    className={`w-full px-2 py-3 text-center border-b border-gray-100 hover:bg-forest-50 transition-colors ${isToday ? "bg-forest-50" : ""}`}
+                  >
                     <div className="text-xs text-gray-400 font-medium">{dayNames[idx]}</div>
                     <div className={`text-lg font-bold mt-0.5 ${isToday ? "text-forest-700" : "text-gray-800"}`}>
                       {day.getDate()}
                     </div>
-                  </div>
+                  </button>
 
                   {/* Entries */}
                   <div className="flex-1 p-1.5 space-y-1">
@@ -919,6 +1100,44 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           </div>
         </div>
       )}
+
+      {/* ── Day View ────────────────────────────────────────────────────────── */}
+      {view === "day" && (() => {
+        const iso = toISO(currentDate);
+        const dayEntries = entriesByDate[iso] ?? [];
+        const isToday = iso === todayISO;
+        return (
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className={`px-4 py-3 border-b border-gray-100 ${isToday ? "bg-forest-50" : ""}`}>
+              <p className={`text-sm font-semibold ${isToday ? "text-forest-700" : "text-gray-800"}`}>{dayLabel}</p>
+              {isToday && <p className="text-xs text-forest-500 mt-0.5">Today</p>}
+            </div>
+            <div className="p-3 space-y-2 min-h-[200px]">
+              {dayEntries.length === 0 && (
+                <p className="text-sm text-gray-400 py-4 text-center">No events scheduled</p>
+              )}
+              {dayEntries.map(entry => (
+                <ActivityChip
+                  key={entry.id}
+                  entry={entry}
+                  rooms={rooms}
+                  onClick={effectiveCanEdit ? () => openEdit(entry) : undefined}
+                  projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
+                  serviceList={services}
+                />
+              ))}
+              {effectiveCanEdit && (
+                <button
+                  onClick={() => openAdd(iso)}
+                  className="w-full py-2 rounded-lg text-sm text-gray-400 hover:text-forest-600 hover:bg-forest-50 transition-colors border border-dashed border-gray-200 hover:border-forest-300 mt-1"
+                >
+                  + Add event
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Monthly View ────────────────────────────────────────────────────── */}
       {view === "month" && (
@@ -1012,6 +1231,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           onClose={closeModal}
           onSaved={onSaved}
           services={services}
+          canManageTTTHelpers={!!(isManager || isAdmin)}
         />
       )}
     </>

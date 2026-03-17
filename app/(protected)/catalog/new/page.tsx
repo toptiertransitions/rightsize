@@ -26,7 +26,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
   const resolvedRole = role ?? sysRole;
   if (!resolvedRole) redirect("/home");
 
-  const canEdit = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(resolvedRole);
+  const canEdit = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole);
   if (!canEdit) redirect(`/catalog?tenantId=${tenantId}`);
 
   return (

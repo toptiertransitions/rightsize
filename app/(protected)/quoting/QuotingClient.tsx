@@ -58,19 +58,7 @@ function DepositInvoicePanel({
       const res = await fetch("/api/invoices", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: invoice.id, sentToEmail: toEmail, emailSent: true }),
-      });
-      // Also trigger sending via the invoices send endpoint
-      const sendRes = await fetch("/api/invoices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...invoice,
-          sendEmail: true,
-          sentToEmail: toEmail,
-          tenantName: "",
-          customerName: "",
-        }),
+        body: JSON.stringify({ id: invoice.id, sendEmail: true, sentToEmail: toEmail }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -78,9 +66,9 @@ function DepositInvoicePanel({
         setMsg("Invoice sent!");
         setExpanded(false);
       } else {
-        setMsg("Failed to send");
+        const err = await res.json().catch(() => ({}));
+        setMsg(err.error || "Failed to send. Please try again.");
       }
-      void sendRes;
     } finally {
       setSending(false);
     }
@@ -88,10 +76,17 @@ function DepositInvoicePanel({
 
   async function deleteInvoice() {
     setDeleting(true);
-    await fetch(`/api/invoices?id=${invoice.id}`, { method: "DELETE" });
-    setDeleting(false);
-    setDeleteConfirm(false);
-    setInvoice({ ...invoice, status: "Paid" }); // visually hide
+    try {
+      const res = await fetch(`/api/invoices?id=${invoice.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setInvoice({ ...invoice, status: "Paid", emailSent: true }); // visually hide (status Paid + emailSent hides the card)
+      } else {
+        setMsg("Failed to delete invoice. Please try again.");
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(false);
+    }
   }
 
   if (invoice.status === "Paid" && invoice.emailSent) return null;

@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminHeader } from "../components/AdminHeader";
+import { Pagination } from "../components/Pagination";
+
+const PAGE_SIZE = 25;
 import { VENDOR_TYPES, ITEM_CATEGORIES } from "@/lib/types";
 import type { LocalVendor, VendorType } from "@/lib/types";
 
@@ -352,6 +355,7 @@ interface LocalVendorsAdminProps {
 export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdminProps) {
   const router = useRouter();
   const [stateFilter, setStateFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<LocalVendor | undefined>(undefined);
   const [sortCol, setSortCol] = useState<string>("vendorType");
@@ -439,7 +443,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
           <div className="flex items-center gap-3">
             <select
               value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
+              onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}
               className="h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none"
             >
               <option value="">All States</option>
@@ -482,7 +486,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((v, i) => (
+                {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((v, i) => (
                   <tr
                     key={v.id}
                     className={`border-b border-gray-800 group ${i % 2 === 0 ? "" : "bg-gray-800/20"}`}
@@ -573,6 +577,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors }: LocalVendorsAdmin
                 ))}
               </tbody>
             </table>
+            <Pagination currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
           </div>
         )}
       </main>

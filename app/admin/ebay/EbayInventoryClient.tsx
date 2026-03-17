@@ -3,7 +3,9 @@
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { Item, ItemStatus } from "@/lib/types";
+import { Pagination } from "../components/Pagination";
 
+const PAGE_SIZE = 25;
 const PF_STATUSES: ItemStatus[] = ["Listed", "Sold", "Discarded"];
 
 interface TenantInfo { name: string; ownerEmail: string; }
@@ -245,6 +247,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
   const [flash, setFlash] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [sortCol, setSortCol] = useState<SortCol>("itemName");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -368,10 +371,10 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <input type="text" placeholder="Search items, clients, staff…" value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forest-500 w-64"
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-forest-500">
           <option value="all">All Statuses</option>
           {PF_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -432,7 +435,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((item, idx) => {
+                {sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item, idx) => {
                   const tenant = tenantInfoMap[item.tenantId];
                   const isSaving = saving[item.id];
                   const isFlashing = flash[item.id];
@@ -442,6 +445,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                   const commissionDollars = item.status === "Sold" && item.staffCommissionPercent != null && item.valueMid
                     ? (item.staffCommissionPercent / 100) * item.valueMid
                     : null;
+                  const globalIdx = (page - 1) * PAGE_SIZE + idx;
 
                   return (
                     <tr key={item.id} className={`border-b border-gray-800/60 transition-colors ${
@@ -454,7 +458,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                         />
                       </td>
 
-                      <td className="px-3 py-2.5 text-gray-600 text-xs">{idx + 1}</td>
+                      <td className="px-3 py-2.5 text-gray-600 text-xs">{globalIdx + 1}</td>
 
                       {/* Photo */}
                       <td className="px-3 py-2.5">
@@ -570,6 +574,8 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
           </div>
         </div>
       )}
+
+      <Pagination currentPage={page} totalItems={sorted.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
 
       <p className="text-xs text-gray-600 mt-3">
         Click any cell to edit inline. Staff Time auto-sets to 10 min (≤$100) or 20 min (&gt;$100) based on price. Staff Commission $ shows when status is Sold.

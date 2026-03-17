@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import type { StaffMember, SystemRole } from "@/lib/types";
+import { Pagination } from "./components/Pagination";
+
+const PAGE_SIZE = 25;
 
 interface Props {
   initialStaff: StaffMember[];
@@ -291,6 +294,7 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function StaffClient({ initialStaff }: Props) {
   const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
+  const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editMember, setEditMember] = useState<StaffMember | undefined>(undefined);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -380,8 +384,8 @@ export function StaffClient({ initialStaff }: Props) {
               </tr>
             </thead>
             <tbody>
-              {staff.map((m, i) => (
-                <tr key={m.id} className={i < staff.length - 1 ? "border-b border-gray-800" : ""}>
+              {staff.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((m, i, arr) => (
+                <tr key={m.id} className={i < arr.length - 1 ? "border-b border-gray-800" : ""}>
                   <td className="px-4 py-3">
                     <span className="text-white font-medium">{m.displayName}</span>
                     <p className="text-xs text-gray-500 font-mono mt-0.5 truncate max-w-[140px]">{m.clerkUserId}</p>
@@ -437,6 +441,7 @@ export function StaffClient({ initialStaff }: Props) {
               ))}
             </tbody>
           </table>
+          <Pagination currentPage={page} totalItems={staff.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
       )}
 

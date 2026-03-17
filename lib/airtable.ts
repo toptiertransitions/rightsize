@@ -1736,6 +1736,20 @@ export async function getStaffMember(clerkUserId: string): Promise<StaffMember |
   return mapStaffMember(data.records[0] as AirtableRecord);
 }
 
+// Returns the subset of the given emails that belong to active TTT staff members.
+export async function getStaffMembersByEmails(emails: string[]): Promise<string[]> {
+  if (!emails.length) return [];
+  const lower = emails.map(e => e.toLowerCase());
+  const orFormulas = lower.map(e => `{Email} = "${e}"`).join(",");
+  const formula = encodeURIComponent(`AND(OR(${orFormulas}),{IsActive}=TRUE())`);
+  const res = await staffRolesFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ records: [] }));
+  return (data.records as AirtableRecord[])
+    .map(r => (r.fields["Email"] as string | undefined)?.toLowerCase() ?? "")
+    .filter(Boolean);
+}
+
 export async function upsertStaffMember(data: {
   clerkUserId: string;
   displayName: string;
@@ -2720,6 +2734,15 @@ export async function deleteGmailToken(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+/** Returns the first available Gmail token in the system (any user). Used as fallback for shared syncs. */
+export async function getAnyGmailToken(): Promise<GmailToken | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapGmailToken(data.records[0] as AirtableRecord);
+}
+
 // ─── Google Calendar Token (stored in GmailTokens table with system key) ──────
 const GCAL_SYSTEM_KEY = "__gcal__";
 
@@ -2979,6 +3002,8 @@ export async function updateInvoice(
     qboInvoiceId: string;
     qboDocNumber: string;
     emailSent: boolean;
+    sentToEmail: string;
+    ccEmail: string;
   }>
 ): Promise<Invoice> {
   const fields: Record<string, unknown> = {};
@@ -2989,6 +3014,8 @@ export async function updateInvoice(
   if (data.qboInvoiceId !== undefined) fields["QBOInvoiceId"] = data.qboInvoiceId;
   if (data.qboDocNumber !== undefined) fields["QBODocNumber"] = data.qboDocNumber;
   if (data.emailSent !== undefined) fields["EmailSent"] = data.emailSent;
+  if (data.sentToEmail) fields["SentToEmail"] = data.sentToEmail;
+  if (data.ccEmail) fields["CCEmail"] = data.ccEmail;
   const res = await invoicesFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

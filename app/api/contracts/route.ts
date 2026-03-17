@@ -8,6 +8,8 @@ import {
   getSystemRole,
   getUserRoleForTenant,
   getTenantById,
+  getOpportunitiesForTenant,
+  updateOpportunity,
 } from "@/lib/airtable";
 import { buildContractSentEmail } from "@/lib/email";
 import { Resend } from "resend";
@@ -157,6 +159,24 @@ export async function PATCH(req: NextRequest) {
         .map((c) => updateContract(c.id, { status: "Archived" }))
     );
     const contract = await updateContract(id, { status: "Signed" });
+
+    // Advance related opportunity to Won and stamp the signed contract amount
+    try {
+      const opps = await getOpportunitiesForTenant(actionTenantId).catch(() => []);
+      const primaryContract = all.find((c) => c.id === id);
+      const signedValue = primaryContract?.totalCost ?? contract.totalCost;
+      const active = opps.filter((o) => o.stage !== "Won" && o.stage !== "Lost");
+      await Promise.all(
+        active.map((o) =>
+          updateOpportunity(o.id, {
+            stage: "Won",
+            wonAt: new Date().toISOString(),
+            estimatedValue: signedValue,
+          }).catch(() => null)
+        )
+      );
+    } catch { /* non-fatal */ }
+
     return NextResponse.json({ contract });
   }
 

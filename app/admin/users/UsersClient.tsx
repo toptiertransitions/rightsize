@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { Pagination } from "../components/Pagination";
+
+const PAGE_SIZE = 25;
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import type { AdminUser } from "./page";
@@ -626,6 +629,7 @@ interface Props {
 export function UsersClient({ users: initialUsers, tenants }: Props) {
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [managing, setManaging] = useState<AdminUser | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newUserLink, setNewUserLink] = useState<{ userName: string; signInUrl: string } | null>(null);
@@ -734,7 +738,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
             type="text"
             placeholder="Search name or email…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-64 h-10 pl-9 pr-3 rounded-xl border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500 placeholder-gray-500"
           />
         </div>
@@ -756,7 +760,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {filtered.map(user => (
+            {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(user => (
               <tr key={user.clerkUserId} className="hover:bg-gray-800/50 transition-colors">
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
@@ -827,6 +831,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
             )}
           </tbody>
         </table>
+        <Pagination currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </>
   );

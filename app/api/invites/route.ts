@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     if (!sysRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   } else {
     const userRole = await getUserRoleForTenant(userId, tenantId);
-    if (!userRole || !["Owner", "Collaborator", "TTTStaff", "TTTAdmin"].includes(userRole)) {
+    if (!userRole || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(userRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }

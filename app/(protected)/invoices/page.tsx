@@ -37,10 +37,10 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   if (!tenantId) {
     if (isTTTInternal) {
       const allTenants = await getTenants().catch(() => []);
-      const active = allTenants.filter(t => !t.isArchived).sort((a, b) => a.name.localeCompare(b.name));
+      const sorted = [...allTenants].sort((a, b) => a.name.localeCompare(b.name));
       return (
         <QuotingProjectPicker
-          tenants={active}
+          tenants={sorted}
           basePath="/invoices"
           title="Invoices"
           description="Select a client project to view or create invoices."

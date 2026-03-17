@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant, getTenantById } from "@/lib/airtable";
+import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant, getTenantById, getSystemRole } from "@/lib/airtable";
 import { createOrUpdateCalendarEvent, syncCalendarEventRSVPs, cancelCalendarEvent } from "@/lib/googleCalendar";
 import type { PlanHelper } from "@/lib/types";
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -32,9 +32,12 @@ export async function POST(req: NextRequest) {
   const entry = await getPlanEntryById(planEntryId);
   if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const role = await getUserRoleForTenant(userId, entry.tenantId);
-  if (!role || !EDIT_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+    const role = await getUserRoleForTenant(userId, entry.tenantId);
+    if (!role || !EDIT_ROLES.includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   // Check Google credentials are configured
