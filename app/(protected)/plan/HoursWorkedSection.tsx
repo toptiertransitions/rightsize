@@ -248,6 +248,9 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
   const [entries, setEntries] = useState(timeEntries);
   const [showLog, setShowLog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [logStaffFilter, setLogStaffFilter] = useState<string[]>([]);
+  const [logDateFrom, setLogDateFrom] = useState("");
+  const [logDateTo, setLogDateTo] = useState("");
   const [estimatedHours, setEstimatedHours] = useState(
     isLockedByContract ? contractTotalHours : (initialEstimatedHours ?? 0)
   );
@@ -262,6 +265,16 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
   const [remOpen, setRemOpen] = useState(false);
 
   const totalMins = entries.reduce((s, e) => s + e.durationMinutes, 0);
+
+  // Shift log filter helpers
+  const uniqueStaffNames = Array.from(new Set(entries.map(e => e.staffName).filter(Boolean))).sort();
+  const logHasFilters = logStaffFilter.length > 0 || !!logDateFrom || !!logDateTo;
+  const filteredLogEntries = entries.filter(e => {
+    if (logStaffFilter.length > 0 && !logStaffFilter.includes(e.staffName)) return false;
+    if (logDateFrom && e.date < logDateFrom) return false;
+    if (logDateTo && e.date > logDateTo) return false;
+    return true;
+  });
 
   // Scheduled = TTT Staff helper shifts on plan calendar
   // Build per-service map so we can show breakdown and subtract per-service from Remaining
@@ -602,34 +615,103 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
           </button>
 
           {showLog && (
-            <div className="mt-2 space-y-1.5">
-              {entries.map(e => (
-                <div key={e.id}
-                  className="flex items-start justify-between py-2.5 px-3 bg-white border border-gray-100 rounded-lg">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
-                      style={{ backgroundColor: getFocusColor(e.focusArea, serviceList) }} />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900">
-                        {fmtDate(e.date)} · {e.focusArea} · {fmtMins(e.durationMinutes)}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {fmt12(e.startTime)} – {fmt12(e.endTime)}
-                        {isAdmin && ` · ${e.staffName}`}
-                        {e.travelMinutes ? ` · ${e.travelMinutes}min travel` : ""}
-                        {e.travelMiles ? ` · ${e.travelMiles}mi` : ""}
-                        {e.notes ? ` · ${e.notes}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                  {isAdmin && (
-                    <button onClick={() => setEditingEntry(e)}
-                      className="text-xs text-gray-400 hover:text-forest-600 ml-3 flex-shrink-0 font-medium">
-                      Edit
-                    </button>
-                  )}
+            <div className="mt-2">
+              {/* ── Filters ── */}
+              <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                {/* Date range */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Date</span>
+                  <input
+                    type="date"
+                    value={logDateFrom}
+                    onChange={e => setLogDateFrom(e.target.value)}
+                    className="h-7 px-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                    placeholder="From"
+                  />
+                  <span className="text-xs text-gray-400">–</span>
+                  <input
+                    type="date"
+                    value={logDateTo}
+                    onChange={e => setLogDateTo(e.target.value)}
+                    className="h-7 px-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                    placeholder="To"
+                  />
                 </div>
-              ))}
+
+                {/* Staff filter pills — only shown to admins (non-admin only see their own entries) */}
+                {isAdmin && uniqueStaffNames.length > 1 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Staff</span>
+                    {uniqueStaffNames.map(name => (
+                      <button
+                        key={name}
+                        onClick={() => setLogStaffFilter(prev =>
+                          prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+                        )}
+                        className={`h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${
+                          logStaffFilter.includes(name)
+                            ? "bg-forest-600 text-white border-forest-600"
+                            : "bg-white text-gray-600 border-gray-200 hover:border-forest-300 hover:text-forest-700"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Clear filters */}
+                {logHasFilters && (
+                  <button
+                    onClick={() => { setLogDateFrom(""); setLogDateTo(""); setLogStaffFilter([]); }}
+                    className="text-[11px] text-gray-400 hover:text-gray-600 font-medium ml-auto"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
+              {/* Entry count after filtering */}
+              {logHasFilters && (
+                <p className="text-xs text-gray-400 mb-2">
+                  Showing {filteredLogEntries.length} of {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                </p>
+              )}
+
+              {/* Log entries */}
+              {filteredLogEntries.length === 0 ? (
+                <p className="text-xs text-gray-400 py-2 text-center">No entries match the current filters.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {filteredLogEntries.map(e => (
+                    <div key={e.id}
+                      className="flex items-start justify-between py-2.5 px-3 bg-white border border-gray-100 rounded-lg">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
+                          style={{ backgroundColor: getFocusColor(e.focusArea, serviceList) }} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900">
+                            {fmtDate(e.date)} · {e.focusArea} · {fmtMins(e.durationMinutes)}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {fmt12(e.startTime)} – {fmt12(e.endTime)}
+                            {isAdmin && ` · ${e.staffName}`}
+                            {e.travelMinutes ? ` · ${e.travelMinutes}min travel` : ""}
+                            {e.travelMiles ? ` · ${e.travelMiles}mi` : ""}
+                            {e.notes ? ` · ${e.notes}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => setEditingEntry(e)}
+                          className="text-xs text-gray-400 hover:text-forest-600 ml-3 flex-shrink-0 font-medium">
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -647,7 +647,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 }
 
 // ─── ActivityChip ──────────────────────────────────────────────────────────────
-function ActivityChip({ entry, rooms, onClick, projectName, serviceList }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[] }) {
+function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUsers }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[]; tttUsers?: TTTUser[] }) {
   const room = entry.roomId ? rooms.find(r => r.id === entry.roomId) : null;
   const roomLabel = room?.name ?? entry.roomLabel ?? "";
   const colorClass = getActivityColor(entry.activity, serviceList ?? []);
@@ -657,6 +657,8 @@ function ActivityChip({ entry, rooms, onClick, projectName, serviceList }: { ent
       ? `${formatTime(entry.startTime)} – ${formatTime(entry.endTime)}`
       : formatTime(entry.startTime)
     : "";
+
+  const MAX_VISIBLE = 4;
 
   return (
     <button
@@ -668,19 +670,24 @@ function ActivityChip({ entry, rooms, onClick, projectName, serviceList }: { ent
       {roomLabel && <div className="truncate opacity-70 text-[10px]">{roomLabel}</div>}
       {timeLabel && <div className="truncate opacity-70 text-[10px]">{timeLabel}</div>}
       {entry.helpers && entry.helpers.length > 0 && (
-        <div className="flex items-center gap-0.5 mt-0.5">
-          {entry.helpers.slice(0, 6).map((h, i) => (
-            <span
-              key={i}
-              title={`${h.email}: ${h.status}`}
-              className={`w-1.5 h-1.5 rounded-full ${
-                h.status === "accepted" ? "bg-green-500" :
-                h.status === "declined" ? "bg-red-500" : "bg-yellow-400"
-              }`}
-            />
-          ))}
-          {entry.helpers.length > 6 && (
-            <span className="text-[9px] opacity-60 ml-0.5">+{entry.helpers.length - 6}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+          {entry.helpers.slice(0, MAX_VISIBLE).map((h, i) => {
+            const tttUser = tttUsers?.find(u => u.email.toLowerCase() === h.email.toLowerCase());
+            const displayName = tttUser
+              ? (tttUser.name.split(" ")[0] ?? tttUser.name)
+              : h.email.split("@")[0];
+            return (
+              <span key={i} className="flex items-center gap-0.5" title={`${h.email}: ${h.status}`}>
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  h.status === "accepted" ? "bg-green-500" :
+                  h.status === "declined" ? "bg-red-500" : "bg-yellow-400"
+                }`} />
+                <span className="text-[9px] opacity-80 max-w-[52px] truncate">{displayName}</span>
+              </span>
+            );
+          })}
+          {entry.helpers.length > MAX_VISIBLE && (
+            <span className="text-[9px] opacity-60">+{entry.helpers.length - MAX_VISIBLE}</span>
           )}
         </div>
       )}
@@ -721,6 +728,15 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+
+  // TTT users for resolving helper names on calendar chips
+  const [tttUsers, setTttUsers] = useState<TTTUser[]>([]);
+  useEffect(() => {
+    fetch("/api/plan/ttt-users")
+      .then(r => r.json())
+      .then(d => { if (d.users) setTttUsers(d.users); })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // In "All Projects" mode (currentTenantId is one of the sentinel values), disable editing
   const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__" || currentTenantId === "__all_time__" || currentTenantId === "__my_projects__";
@@ -1079,6 +1095,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                         onClick={effectiveCanEdit ? () => openEdit(entry) : undefined}
                         projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                         serviceList={services}
+                        tttUsers={tttUsers}
                       />
                     ))}
                   </div>
@@ -1124,6 +1141,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                   onClick={effectiveCanEdit ? () => openEdit(entry) : undefined}
                   projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                   serviceList={services}
+                  tttUsers={tttUsers}
                 />
               ))}
               {effectiveCanEdit && (
@@ -1182,6 +1200,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                           rooms={rooms}
                           projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                           serviceList={services}
+                          tttUsers={tttUsers}
                         />
                       </div>
                     ))}
