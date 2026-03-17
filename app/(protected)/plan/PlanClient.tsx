@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES } from "@/lib/types";
-import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry, Contract } from "@/lib/types";
+import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
 
@@ -92,7 +92,80 @@ const MONTH_NAMES = [
 ];
 
 // ─── AddFocusModal ─────────────────────────────────────────────────────────────
-interface TTTUser { name: string; email: string; role: string; }
+interface TTTUser {
+  name: string;
+  email: string;
+  role: string;
+  weeklySchedule?: WeeklySchedule | null;
+  timeOff?: TimeOffEntry[];
+}
+
+// Day-of-week key matching WeeklySchedule keys
+const ISO_TO_DAY: Record<number, keyof WeeklySchedule> = {
+  0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat",
+};
+
+type AvailabilityConflict =
+  | { kind: "time_off"; date: string }
+  | { kind: "day_off"; day: string }
+  | { kind: "outside_hours"; day: string; schedStart: string; schedEnd: string };
+
+function checkAvailabilityConflict(
+  user: TTTUser,
+  date: string,
+  startTime: string,
+  endTime: string,
+): AvailabilityConflict | null {
+  // Time-off check
+  if (user.timeOff && user.timeOff.length > 0) {
+    const match = user.timeOff.find(t => t.date === date);
+    if (match) {
+      if (match.allDay) return { kind: "time_off", date };
+      // Partial-day time off — only flag if shift overlaps
+      if (startTime && endTime && match.startTime && match.endTime) {
+        const shiftStart = startTime;
+        const shiftEnd = endTime;
+        const offStart = match.startTime;
+        const offEnd = match.endTime;
+        if (shiftStart < offEnd && shiftEnd > offStart) {
+          return { kind: "time_off", date };
+        }
+      } else {
+        return { kind: "time_off", date };
+      }
+    }
+  }
+
+  // Weekly schedule check
+  if (user.weeklySchedule && date) {
+    const [y, mo, d] = date.split("-").map(Number);
+    const dayOfWeek = new Date(y, mo - 1, d).getDay();
+    const dayKey = ISO_TO_DAY[dayOfWeek];
+    const daySched = user.weeklySchedule[dayKey];
+    if (!daySched.available) {
+      return { kind: "day_off", day: dayKey };
+    }
+    if (startTime && endTime) {
+      if (startTime < daySched.start || endTime > daySched.end) {
+        return {
+          kind: "outside_hours",
+          day: dayKey,
+          schedStart: daySched.start,
+          schedEnd: daySched.end,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function fmt12simple(t: string) {
+  if (!t) return "";
+  const [hStr, m] = t.split(":");
+  const h = parseInt(hStr, 10);
+  return `${h % 12 || 12}:${m}${h < 12 ? "am" : "pm"}`;
+}
 
 interface ModalProps {
   tenantId: string;
@@ -468,6 +541,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
               <div className="mt-2 space-y-1.5">
                 {teamHelpers.map(h => {
                   const member = tttUsers.find(u => u.email.toLowerCase() === h.email.toLowerCase());
+                  const conflict = member ? checkAvailabilityConflict(member, date, startTime, endTime) : null;
                   return (
                     <div key={h.email} className="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden">
                       <div className="flex items-center gap-2.5 px-3 py-2">
@@ -504,6 +578,18 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                           </button>
                         )}
                       </div>
+                      {conflict && (
+                        <div className="flex items-center gap-1.5 px-3 pb-2 pt-0">
+                          <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                          </svg>
+                          <span className="text-[11px] text-amber-700 font-medium">
+                            {conflict.kind === "time_off" && "Has time off on this date"}
+                            {conflict.kind === "day_off" && `Not available on ${conflict.day}s`}
+                            {conflict.kind === "outside_hours" && `Available ${conflict.day} ${fmt12simple(conflict.schedStart)}–${fmt12simple(conflict.schedEnd)}`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
