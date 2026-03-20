@@ -55,9 +55,11 @@ interface StaffAutofillProps {
   onChange: (name: string, id: string) => void;
   staffMembers: StaffMember[];
   label?: string;
+  placeholder?: string;
+  inputClassName?: string;
 }
 
-function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller" }: StaffAutofillProps) {
+function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller", placeholder = "Search staff…", inputClassName }: StaffAutofillProps) {
   const [open, setOpen] = useState(false);
   const [inputVal, setInputVal] = useState(value);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,17 +83,19 @@ function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller" }
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
+  const defaultInputClass = "w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent";
+
   return (
     <div ref={containerRef} className="relative">
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>}
       <input
         type="text"
         value={inputVal}
-        placeholder="Search staff…"
+        placeholder={placeholder}
         onFocus={() => setOpen(true)}
         onChange={e => { setInputVal(e.target.value); setOpen(true); onChange(e.target.value, ""); }}
         onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
-        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+        className={inputClassName ?? defaultInputClass}
       />
       {open && matches.length > 0 && (
         <ul className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto text-sm">
@@ -950,14 +954,17 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         </select>
 
         {/* Staff Seller filter — TTT users only */}
-        {isTTTUser && (
-          <input
-            type="text"
-            placeholder="Filter by seller…"
-            value={staffSellerFilter}
-            onChange={e => setStaffSellerFilter(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500 w-36"
-          />
+        {isTTTUser && staffMembers.length > 0 && (
+          <div className="w-40">
+            <StaffAutofill
+              value={staffSellerFilter}
+              onChange={(name) => setStaffSellerFilter(name)}
+              staffMembers={staffMembers}
+              label=""
+              placeholder="Filter by seller…"
+              inputClassName="w-full h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500"
+            />
+          </div>
         )}
 
         {/* Sort */}
