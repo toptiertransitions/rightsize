@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
-import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor } from "@/lib/types";
+import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor, StaffMember } from "@/lib/types";
 import { VendorFileModal } from "./VendorFileModal";
 
 interface ItemGridProps {
@@ -22,6 +22,9 @@ interface ItemGridProps {
   canAutoRoute?: boolean;
   canReassign?: boolean;
   allTenants?: Tenant[];
+  isTTT?: boolean;
+  staffMembers?: StaffMember[];
+  isTTTUser?: boolean;
 }
 
 const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray" | "red"; label: string }> = {
@@ -45,6 +48,68 @@ const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray"
   "Discard":                      { variant: "gray",   label: "Discard" },
 };
 
+// ─── Staff Autofill Combobox ──────────────────────────────────────────────────
+
+interface StaffAutofillProps {
+  value: string;
+  onChange: (name: string, id: string) => void;
+  staffMembers: StaffMember[];
+  label?: string;
+}
+
+function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller" }: StaffAutofillProps) {
+  const [open, setOpen] = useState(false);
+  const [inputVal, setInputVal] = useState(value);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync external value changes
+  useEffect(() => { setInputVal(value); }, [value]);
+
+  const matches = useMemo(() => {
+    const q = inputVal.toLowerCase();
+    if (!q) return staffMembers;
+    return staffMembers.filter(s => s.displayName.toLowerCase().includes(q));
+  }, [inputVal, staffMembers]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+      <input
+        type="text"
+        value={inputVal}
+        placeholder="Search staff…"
+        onFocus={() => setOpen(true)}
+        onChange={e => { setInputVal(e.target.value); setOpen(true); onChange(e.target.value, ""); }}
+        onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
+        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+      />
+      {open && matches.length > 0 && (
+        <ul className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto text-sm">
+          {matches.map(s => (
+            <li
+              key={s.id}
+              onMouseDown={e => { e.preventDefault(); onChange(s.displayName, s.id); setInputVal(s.displayName); setOpen(false); }}
+              className="px-4 py-2 cursor-pointer hover:bg-forest-50 text-gray-900"
+            >
+              {s.displayName}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 
 interface EditModalProps {
@@ -53,6 +118,8 @@ interface EditModalProps {
   localVendors?: LocalVendor[];
   canReassign?: boolean;
   allTenants?: Tenant[];
+  isTTT?: boolean;
+  staffMembers?: StaffMember[];
   onClose: () => void;
   onSaved: (item: Item) => void;
   onDeleted?: () => void;
@@ -60,7 +127,7 @@ interface EditModalProps {
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
-export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, onClose, onSaved, onDeleted }: EditModalProps) {
+export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], onClose, onSaved, onDeleted }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -84,6 +151,9 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
     quantity: item.quantity ?? 1,
+    staffSellerId: item.staffSellerId ?? "",
+    staffSellerName: item.staffSellerName ?? "",
+    completedDate: item.completedDate ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -353,7 +423,16 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               <Select label="Status" value={form.status ?? "Pending Review"}
                 onChange={e => {
                   const newStatus = e.target.value as ItemStatus;
-                  set("status", newStatus);
+                  const completedStatuses = ["Sold", "Donated", "Discarded"];
+                  if (completedStatuses.includes(newStatus)) {
+                    setForm(f => ({
+                      ...f,
+                      status: newStatus,
+                      completedDate: f.completedDate || new Date().toISOString().split("T")[0],
+                    }));
+                  } else {
+                    setForm(f => ({ ...f, status: newStatus, completedDate: "" }));
+                  }
                   // Auto-fill Target Value = Sale Price when marking Sold
                   if (newStatus === "Sold" && item.salePrice && item.salePrice > 0) {
                     set("valueMid", item.salePrice);
@@ -374,6 +453,17 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               <label className={labelClass}>Condition Notes</label>
               <textarea rows={2} value={form.conditionNotes ?? ""} onChange={e => set("conditionNotes", e.target.value)} className={textareaClass} />
             </div>
+            {(form.completedDate !== undefined || ["Sold", "Donated", "Discarded"].includes(form.status ?? "")) && (
+              <div>
+                <label className={labelClass}>Completed Date</label>
+                <input
+                  type="date"
+                  value={form.completedDate ?? ""}
+                  onChange={e => set("completedDate", e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                />
+              </div>
+            )}
           </section>
 
           {/* Physical */}
@@ -430,7 +520,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 options={[
                   { value: "Keep",                         label: "Keep" },
                   { value: "Family Keeping",               label: "Family Keeping" },
-                  { value: "ProFoundFinds Consignment",    label: "ProFoundFinds Consignment" },
+                  ...(isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                   { value: "FB/Marketplace",               label: "FB/Marketplace" },
                   { value: "Online Marketplace",           label: "Online Marketplace" },
                   { value: "Other Consignment",            label: "Other Consignment" },
@@ -488,6 +578,13 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 />
               ) : null;
             })()}
+            {(form.primaryRoute === "FB/Marketplace" || form.primaryRoute === "Online Marketplace") && staffMembers.length > 0 && (
+              <StaffAutofill
+                value={form.staffSellerName ?? ""}
+                onChange={(name, id) => setForm(f => ({ ...f, staffSellerName: name, staffSellerId: id }))}
+                staffMembers={staffMembers}
+              />
+            )}
           </section>
 
           {/* Listings */}
@@ -575,7 +672,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -585,6 +682,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [routeFilter, setRouteFilter] = useState("");
+  const [staffSellerFilter, setStaffSellerFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
@@ -692,8 +790,11 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     if (routeFilter) {
       result = result.filter(i => i.primaryRoute === routeFilter);
     }
+    if (staffSellerFilter) {
+      result = result.filter(i => i.staffSellerName?.toLowerCase().includes(staffSellerFilter.toLowerCase()));
+    }
     return result;
-  }, [items, search, statusFilter, routeFilter]);
+  }, [items, search, statusFilter, routeFilter, staffSellerFilter]);
 
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -716,13 +817,24 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         case "value":     av = a.valueMid;                 bv = b.valueMid;                 break;
         case "route":     av = a.primaryRoute.toLowerCase(); bv = b.primaryRoute.toLowerCase(); break;
         case "status":    av = a.status.toLowerCase();     bv = b.status.toLowerCase();     break;
-        case "createdAt": av = a.createdAt ?? "";           bv = b.createdAt ?? "";           break;
+        case "createdAt":     av = a.createdAt ?? "";                       bv = b.createdAt ?? "";                       break;
+        case "completedDate": av = a.completedDate ?? "";                   bv = b.completedDate ?? "";                   break;
       }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
   }, [filtered, sortCol, sortDir, tenantMap]);
+
+  // ── Pagination ───────────────────────────────────────────────────────────
+  const [pageSize, setPageSize] = useState<25 | 50 | 0>(25); // 0 = All
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset to page 1 whenever filters or sort change
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, routeFilter, staffSellerFilter, sortCol, sortDir]);
+
+  const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paged = pageSize === 0 ? sorted : sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const sortTh = (col: string, label: string, extraClass = "", align?: "right") => (
     <th
@@ -766,6 +878,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           localVendors={localVendors}
           canReassign={canReassign}
           allTenants={allTenants}
+          isTTT={isTTT}
+          staffMembers={staffMembers}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
@@ -811,7 +925,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="">All Routes</option>
           <option value="Keep">Keep</option>
           <option value="Family Keeping">Family Keeping</option>
-          <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>
+          {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
           <option value="FB/Marketplace">FB/Marketplace</option>
           <option value="Online Marketplace">Online Marketplace</option>
           <option value="Other Consignment">Other Consignment</option>
@@ -834,6 +948,17 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="Discarded">Discarded</option>
           <option value="Rejected / Revisit">Rejected / Revisit</option>
         </select>
+
+        {/* Staff Seller filter — TTT users only */}
+        {isTTTUser && (
+          <input
+            type="text"
+            placeholder="Filter by seller…"
+            value={staffSellerFilter}
+            onChange={e => setStaffSellerFilter(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500 w-36"
+          />
+        )}
 
         {/* Sort */}
         <select
@@ -902,7 +1027,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
 
       {view === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {sorted.map((item) => {
+          {paged.map((item) => {
             const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
             const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const, label: item.primaryRoute };
 
@@ -1048,10 +1173,14 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <tr className="border-b border-cream-100 bg-cream-50">
                   <th className="px-4 py-3 w-10">
                     <input type="checkbox"
-                      checked={sorted.length > 0 && sorted.every(i => selected.has(i.id))}
+                      checked={paged.length > 0 && paged.every(i => selected.has(i.id))}
                       onChange={e => {
-                        if (e.target.checked) setSelected(new Set(sorted.map(i => i.id)));
-                        else setSelected(new Set());
+                        setSelected(prev => {
+                          const next = new Set(prev);
+                          if (e.target.checked) paged.forEach(i => next.add(i.id));
+                          else paged.forEach(i => next.delete(i.id));
+                          return next;
+                        });
                       }}
                       className="rounded border-gray-300 text-forest-600 focus:ring-forest-500"
                     />
@@ -1063,12 +1192,13 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   {sortTh("value", "Value", "", "right")}
                   {sortTh("route", "Recommended Route")}
                   {sortTh("status", "Status")}
+                  {sortTh("completedDate", "Completed")}
                   {localVendors && <th className="text-left px-4 py-3 font-semibold text-gray-600">Vendor</th>}
                   {canEdit && <th className="w-10 px-3 py-3"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
-                {sorted.map((item) => {
+                {paged.map((item) => {
                   const status = STATUS_BADGE[item.status] || STATUS_BADGE["Pending Review"];
                   const route = ROUTE_BADGE[item.primaryRoute] || { variant: "gray" as const, label: item.primaryRoute };
                   return (
@@ -1138,6 +1268,10 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       <td className="px-4 py-2.5">
                         <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
                       </td>
+                      {/* Completed Date */}
+                      <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">
+                        {item.completedDate ?? "—"}
+                      </td>
                       {/* Vendor */}
                       {localVendors && (
                         <td className="px-4 py-2.5 text-gray-500 text-xs">
@@ -1192,6 +1326,53 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           </div>
         </div>
         </>
+      )}
+
+      {/* Pagination bar — shown whenever there are more items than the smallest page size */}
+      {sorted.length > 25 && (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <span>
+              {pageSize === 0
+                ? `All ${sorted.length} items`
+                : `${Math.min((currentPage - 1) * pageSize + 1, sorted.length)}–${Math.min(currentPage * pageSize, sorted.length)} of ${sorted.length}`}
+            </span>
+            <span className="text-gray-300">·</span>
+            <span className="text-xs text-gray-400">Per page:</span>
+            {([25, 50, 0] as const).map(size => (
+              <button
+                key={size}
+                onClick={() => { setPageSize(size); setCurrentPage(1); }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  pageSize === size
+                    ? "bg-forest-600 text-white"
+                    : "border border-gray-300 text-gray-600 hover:border-forest-400 hover:text-forest-700"
+                }`}
+              >
+                {size === 0 ? "All" : size}
+              </button>
+            ))}
+          </div>
+          {pageSize !== 0 && totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded-lg border border-gray-300 text-sm text-gray-600 disabled:opacity-40 hover:border-forest-400 hover:text-forest-700 transition-colors"
+              >
+                ←
+              </button>
+              <span className="text-xs text-gray-500 min-w-[3rem] text-center">{currentPage} / {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded-lg border border-gray-300 text-sm text-gray-600 disabled:opacity-40 hover:border-forest-400 hover:text-forest-700 transition-colors"
+              >
+                →
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </>
   );

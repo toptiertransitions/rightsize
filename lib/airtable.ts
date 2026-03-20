@@ -62,6 +62,9 @@ import type {
   ItemSaleEvent,
   WeeklySchedule,
   TimeOffEntry,
+  CrateLocation,
+  InventoryContainer,
+  InventoryItem,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -120,6 +123,7 @@ export async function createTenant(data: {
   city?: string;
   state?: string;
   zip?: string;
+  isTTT?: boolean;
 }): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {
@@ -128,6 +132,7 @@ export async function createTenant(data: {
     OwnerUserId: data.ownerUserId,
     Plan: data.plan || "free",
     CreatedAt: new Date().toISOString(),
+    IsTTT: data.isTTT ?? false,
   };
   if (data.address) fields["Address"] = data.address;
   if (data.city) fields["City"] = data.city;
@@ -153,6 +158,8 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     zip: toStr(f["Zip"]) || undefined,
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     isArchived: f["IsArchived"] === true,
+    isTTT: f["IsTTT"] === true,
+    isConsignmentOnly: f["IsConsignmentOnly"] === true,
     destinationSqFt: f["DestinationSqFt"] != null ? toNum(f["DestinationSqFt"]) : undefined,
     payoutMethod: toStr(f["PayoutMethod"]) as import("./types").PayoutMethod || undefined,
     payoutUsername: toStr(f["PayoutUsername"]) || undefined,
@@ -496,6 +503,8 @@ export async function updateItem(
     staffSellerName: "StaffSellerName",
     staffCommissionPercent: "StaffCommissionPercent",
     staffTimeMinutes: "StaffTimeMinutes",
+    // Completion tracking
+    completedDate: "CompletedDate",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -584,6 +593,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     staffSellerName: toStr(f["StaffSellerName"]) || undefined,
     staffCommissionPercent: f["StaffCommissionPercent"] != null ? toNum(f["StaffCommissionPercent"]) : undefined,
     staffTimeMinutes: f["StaffTimeMinutes"] != null ? toNum(f["StaffTimeMinutes"]) : undefined,
+    completedDate: toStr(f["CompletedDate"]) || undefined,
   };
 }
 
@@ -609,7 +619,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -620,6 +630,8 @@ export async function updateTenant(
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
+  if (data.isTTT !== undefined) fields["IsTTT"] = data.isTTT;
+  if (data.isConsignmentOnly !== undefined) fields["IsConsignmentOnly"] = data.isConsignmentOnly;
   if (data.destinationSqFt !== undefined) fields["DestinationSqFt"] = data.destinationSqFt;
   if (data.payoutMethod !== undefined) fields["PayoutMethod"] = data.payoutMethod ?? "";
   if (data.payoutUsername !== undefined) fields["PayoutUsername"] = data.payoutUsername ?? "";
@@ -2277,6 +2289,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     coffeeOrder: toStr(f["CoffeeOrder"]) || undefined,
     orgsGroups: toStr(f["OrgsGroups"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
+    lastActivityDate: toStr(f["LastActivityDate"]) || undefined,
   };
 }
 
@@ -2343,7 +2356,7 @@ export async function createReferralContact(data: {
 
 export async function updateReferralContact(
   id: string,
-  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string }>
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string }>
 ): Promise<ReferralContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2357,6 +2370,7 @@ export async function updateReferralContact(
   if (data.interests !== undefined) fields["Interests"] = data.interests;
   if (data.coffeeOrder !== undefined) fields["CoffeeOrder"] = data.coffeeOrder;
   if (data.orgsGroups !== undefined) fields["OrgsGroups"] = data.orgsGroups;
+  if (data.lastActivityDate !== undefined) fields["LastActivityDate"] = data.lastActivityDate;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -2701,6 +2715,41 @@ export async function updateActivity(
 export async function deleteActivity(id: string): Promise<void> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, `/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// Fetch all activities that have a ClientContactId (paginated)
+export async function getAllActivitiesWithContactId(): Promise<CRMActivity[]> {
+  const formula = encodeURIComponent(`{ClientContactId} != ""`);
+  const all: CRMActivity[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapCRMActivity));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+// Batch-update LastActivityDate on referral contacts (max 10 per Airtable request)
+export async function batchUpdateReferralLastActivity(
+  updates: Array<{ id: string; lastActivityDate: string }>
+): Promise<void> {
+  for (let i = 0; i < updates.length; i += 10) {
+    const batch = updates.slice(i, i + 10);
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, "", {
+      method: "PATCH",
+      body: JSON.stringify({
+        records: batch.map(u => ({
+          id: u.id,
+          fields: { LastActivityDate: u.lastActivityDate },
+        })),
+      }),
+    });
+    if (!res.ok) console.error("batchUpdateReferralLastActivity failed:", await res.text());
+  }
 }
 
 // ─── Gmail Tokens ─────────────────────────────────────────────────────────────
@@ -3576,4 +3625,109 @@ export async function getItemByBarcodeNumber(barcode: string): Promise<Item | nu
     .all();
   if (!records.length) return null;
   return mapItem(records[0]);
+}
+
+// ─── Supply Tracking: Crate Locations ────────────────────────────────────────
+
+function mapCrateLocation(record: Airtable.Record<Airtable.FieldSet>): CrateLocation {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    type: (toStr(f["Type"]) || "Storage") as "Storage" | "Project",
+    crateCount: toNum(f["CrateCount"]),
+    tenantId: toStr(f["TenantId"]) || undefined,
+    isActive: f["IsActive"] !== false,
+  };
+}
+
+export async function getCrateLocations(): Promise<CrateLocation[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.SUPPLY_CRATE_LOCATIONS)
+    .select({ filterByFormula: "{IsActive} = 1", sort: [{ field: "Name", direction: "asc" }] })
+    .all();
+  return records.map(mapCrateLocation);
+}
+
+export async function createCrateLocation(data: { name: string; type: "Storage" | "Project"; crateCount: number; tenantId?: string }): Promise<CrateLocation> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {
+    Name: data.name,
+    Type: data.type,
+    CrateCount: data.crateCount,
+    IsActive: true,
+  };
+  if (data.tenantId) fields["TenantId"] = data.tenantId;
+  const record = await base(AIRTABLE_TABLES.SUPPLY_CRATE_LOCATIONS).create(fields);
+  return mapCrateLocation(record);
+}
+
+export async function updateCrateLocation(id: string, data: Partial<{ name: string; crateCount: number; tenantId: string }>): Promise<CrateLocation> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.crateCount !== undefined) fields["CrateCount"] = data.crateCount;
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId;
+  const record = await base(AIRTABLE_TABLES.SUPPLY_CRATE_LOCATIONS).update(id, fields);
+  return mapCrateLocation(record);
+}
+
+export async function deleteCrateLocation(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.SUPPLY_CRATE_LOCATIONS).destroy(id);
+}
+
+// ─── Supply Tracking: Inventory Containers ───────────────────────────────────
+
+function mapInventoryContainer(record: Airtable.Record<Airtable.FieldSet>): InventoryContainer {
+  const f = record.fields;
+  let items: InventoryItem[] = [];
+  try {
+    const raw = toStr(f["Items"]);
+    if (raw) items = JSON.parse(raw);
+  } catch { /* ignore */ }
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    containerType: (toStr(f["ContainerType"]) || "HQ") as "HQ" | "Kit",
+    tenantId: toStr(f["TenantId"]) || undefined,
+    items,
+    isActive: f["IsActive"] !== false,
+  };
+}
+
+export async function getInventoryContainers(): Promise<InventoryContainer[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.SUPPLY_INVENTORY)
+    .select({ filterByFormula: "{IsActive} = 1", sort: [{ field: "Name", direction: "asc" }] })
+    .all();
+  return records.map(mapInventoryContainer);
+}
+
+export async function createInventoryContainer(data: { name: string; containerType: "HQ" | "Kit"; tenantId?: string }): Promise<InventoryContainer> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {
+    Name: data.name,
+    ContainerType: data.containerType,
+    Items: "[]",
+    IsActive: true,
+  };
+  if (data.tenantId) fields["TenantId"] = data.tenantId;
+  const record = await base(AIRTABLE_TABLES.SUPPLY_INVENTORY).create(fields);
+  return mapInventoryContainer(record);
+}
+
+export async function updateInventoryContainer(id: string, data: Partial<{ name: string; items: InventoryItem[]; tenantId: string }>): Promise<InventoryContainer> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.items !== undefined) fields["Items"] = JSON.stringify(data.items);
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId;
+  const record = await base(AIRTABLE_TABLES.SUPPLY_INVENTORY).update(id, fields);
+  return mapInventoryContainer(record);
+}
+
+export async function deleteInventoryContainer(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.SUPPLY_INVENTORY).destroy(id);
 }

@@ -69,6 +69,8 @@ export interface Tenant {
   zip?: string;
   estimatedHours?: number;
   isArchived?: boolean;
+  isTTT?: boolean;
+  isConsignmentOnly?: boolean;
   destinationSqFt?: number;
   payoutMethod?: PayoutMethod;
   payoutUsername?: string;
@@ -243,6 +245,8 @@ export interface Item {
   staffSellerName?: string;
   staffCommissionPercent?: number;
   staffTimeMinutes?: number;
+  // Completion tracking
+  completedDate?: string;   // ISO date string; auto-set when status → Sold/Donated/Discarded
 }
 
 // ─── Sold Item Row (for Time Tracking CSV export) ─────────────────────────────
@@ -617,6 +621,7 @@ export interface ReferralContact {
   coffeeOrder?: string;
   orgsGroups?: string;
   createdAt: string;
+  lastActivityDate?: string;
 }
 
 export interface ClientContact {
@@ -869,4 +874,31 @@ export interface Expense {
   receiptPublicId?: string;   // Cloudinary public ID
   notes?: string;             // User notes
   createdAt: string;          // ISO timestamp when logged
+}
+
+// ─── Supply Tracking ──────────────────────────────────────────────────────────
+export interface CrateLocation {
+  id: string;
+  name: string;
+  type: "Storage" | "Project";
+  crateCount: number;
+  tenantId?: string;
+  isActive: boolean;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unit?: string;
+  notes?: string;
+}
+
+export interface InventoryContainer {
+  id: string;
+  name: string;
+  containerType: "HQ" | "Kit";
+  tenantId?: string;
+  items: InventoryItem[];
+  isActive: boolean;
 }

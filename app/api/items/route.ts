@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getSystemRole, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { Resend } from "resend";
 
@@ -11,6 +11,13 @@ const ROUTE_CLIENT_SHARE: Record<string, number> = {
   "ProFoundFinds Consignment": 67,
   "FB/Marketplace": 59,
   "Online Marketplace": 59,
+};
+
+// Non-TTT projects use different client share rates
+const NON_TTT_SHARE: Record<string, number> = {
+  "FB/Marketplace": 100,
+  "Online Marketplace": 100,
+  "Other Consignment": 50,
 };
 
 export async function GET(req: NextRequest) {
@@ -63,9 +70,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Check if this is a non-TTT project
+  const itemTenant = await getTenantById(tenantId).catch(() => null);
+  const isNonTTT = itemTenant ? !(itemTenant.isTTT ?? true) : false;
+
   try {
-    const route = body.primaryRoute as string | undefined;
-    const autoShare = route ? ROUTE_CLIENT_SHARE[route] : undefined;
+    // Substitute ProFoundFinds → Other Consignment for non-TTT projects
+    const rawRoute = body.primaryRoute as string | undefined;
+    const route = isNonTTT && rawRoute === "ProFoundFinds Consignment"
+      ? "Other Consignment"
+      : rawRoute;
+
+    const autoShare = route
+      ? (isNonTTT && NON_TTT_SHARE[route] !== undefined ? NON_TTT_SHARE[route] : ROUTE_CLIENT_SHARE[route])
+      : undefined;
 
     const item = await createItem({
       tenantId,
@@ -118,14 +136,16 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  // TTTAdmin can update any item without needing tenant membership
+  // TTTStaff and above can update any item without needing tenant membership
   const sysRole = await getSystemRole(userId).catch(() => null);
+  const isSystemStaff = sysRole !== null && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  // isAdmin = can reassign items across projects (manager/admin only)
   const isAdmin = sysRole === "TTTAdmin" || sysRole === "TTTManager";
 
-  if (!isAdmin) {
+  if (!isSystemStaff) {
     if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
     const role = await getUserRoleForTenant(userId, tenantId as string);
-    if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
+    if (!role || !["Owner", "Collaborator"].includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
@@ -145,10 +165,25 @@ export async function PATCH(req: NextRequest) {
     (updates as Record<string, unknown>).primaryRoute = "Other Consignment";
   }
 
-  // Auto-set clientSharePercent when primaryRoute changes (if not explicitly overriding)
+  // Check if non-TTT project for route/share overrides
+  const patchTenantId = (tenantId ?? (await getItemById(id as string).catch(() => null))?.tenantId) as string | undefined;
+  const patchTenant = patchTenantId ? await getTenantById(patchTenantId).catch(() => null) : null;
+  const patchIsNonTTT = patchTenant ? !(patchTenant.isTTT ?? true) : false;
+
+  // Substitute ProFoundFinds → Other Consignment for non-TTT projects
   const newRoute = updates.primaryRoute as string | undefined;
-  if (newRoute !== undefined && updates.clientSharePercent === undefined) {
-    const autoShare = ROUTE_CLIENT_SHARE[newRoute];
+  if (patchIsNonTTT && newRoute === "ProFoundFinds Consignment") {
+    (updates as Record<string, unknown>).primaryRoute = "Other Consignment";
+  }
+  const resolvedNewRoute = patchIsNonTTT && newRoute === "ProFoundFinds Consignment"
+    ? "Other Consignment"
+    : newRoute;
+
+  // Auto-set clientSharePercent when primaryRoute changes (if not explicitly overriding)
+  if (resolvedNewRoute !== undefined && updates.clientSharePercent === undefined) {
+    const autoShare = patchIsNonTTT && NON_TTT_SHARE[resolvedNewRoute] !== undefined
+      ? NON_TTT_SHARE[resolvedNewRoute]
+      : ROUTE_CLIENT_SHARE[resolvedNewRoute];
     if (autoShare !== undefined) {
       (updates as Record<string, unknown>).clientSharePercent = autoShare;
     }
@@ -165,6 +200,8 @@ export async function PATCH(req: NextRequest) {
     // Reset decision on reassignment
     (updates as Record<string, unknown>).vendorDecision = "Pending";
   }
+
+  const COMPLETED_STATUSES = ["Sold", "Donated", "Discarded"];
 
   // When marking Sold: set saleDate, set salePrice = valueMid (Price for Label) if not provided
   if (updates.status === "Sold") {
@@ -183,6 +220,17 @@ export async function PATCH(req: NextRequest) {
     }
     if (!(updates as Record<string, unknown>).saleDate) {
       (updates as Record<string, unknown>).saleDate = "";
+    }
+  }
+
+  // Auto-set completedDate when status → Sold/Donated/Discarded; clear when reverting
+  const newStatus = updates.status as string | undefined;
+  const explicitCompletedDate = (updates as Record<string, unknown>).completedDate;
+  if (explicitCompletedDate === undefined) {
+    if (newStatus && COMPLETED_STATUSES.includes(newStatus)) {
+      (updates as Record<string, unknown>).completedDate = new Date().toISOString().split("T")[0];
+    } else if (newStatus && !COMPLETED_STATUSES.includes(newStatus)) {
+      (updates as Record<string, unknown>).completedDate = null;
     }
   }
 

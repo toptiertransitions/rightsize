@@ -10,6 +10,7 @@ import {
   getMembershipsForUser,
   getSystemRole,
   getAllLocalVendors,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
@@ -39,10 +40,11 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :
       allTenants;
 
-    const [itemArrays, roomArrays, localVendors] = await Promise.all([
+    const [itemArrays, roomArrays, localVendors, staffMembers] = await Promise.all([
       Promise.all(selectedTenants.map((t) => getItemsForTenant(t.id).catch(() => []))),
       Promise.all(selectedTenants.map((t) => getRoomsForTenant(t.id).catch(() => []))),
       getAllLocalVendors().catch(() => []),
+      getStaffMembers().catch(() => []),
     ]);
 
     const items = itemArrays.flat().sort(
@@ -56,6 +58,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       "All-Time Projects";
 
     const canReassign = ["TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+    const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
 
     return (
       <div>
@@ -76,6 +79,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           canAutoRoute={canAutoRoute}
           canReassign={canReassign}
           allTenants={canReassign ? allTenants : undefined}
+          staffMembers={staffMembers}
+          isTTTUser={isTTTUser}
         />
       </div>
     );
@@ -83,7 +88,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ───────────────────────────────────────────────────────
   if (tenantId) {
-    const [tenant, role, items, rooms, sysRole, localVendors, allTenants] = await Promise.all([
+    const [tenant, role, items, rooms, sysRole, localVendors, allTenants, staffMembers] = await Promise.all([
       getTenantById(tenantId).catch(() => null),
       getUserRoleForTenant(userId, tenantId).catch(() => null),
       getItemsForTenant(tenantId).catch(() => []),
@@ -91,6 +96,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       getSystemRole(userId!).catch(() => null),
       getAllLocalVendors().catch(() => []),
       getTenants().catch(() => []),
+      getStaffMembers().catch(() => []),
     ]);
 
     if (!tenant) redirect("/home");
@@ -99,6 +105,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
     const canEdit = EDIT_ROLES.includes(resolvedRole);
     const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+    const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
 
     return (
       <div>
@@ -131,6 +138,9 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           canAutoRoute={resolvedRole ? ["TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole) : false}
           canReassign={canReassign}
           allTenants={canReassign ? allTenants : undefined}
+          isTTT={tenant.isTTT ?? true}
+          staffMembers={staffMembers}
+          isTTTUser={isTTTUser}
         />
       </div>
     );
