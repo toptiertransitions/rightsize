@@ -124,6 +124,7 @@ interface EditModalProps {
   allTenants?: Tenant[];
   isTTT?: boolean;
   staffMembers?: StaffMember[];
+  isTTTUser?: boolean;
   onClose: () => void;
   onSaved: (item: Item) => void;
   onDeleted?: () => void;
@@ -131,7 +132,7 @@ interface EditModalProps {
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
-export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], onClose, onSaved, onDeleted }: EditModalProps) {
+export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, onClose, onSaved, onDeleted }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -582,7 +583,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 />
               ) : null;
             })()}
-            {(form.primaryRoute === "FB/Marketplace" || form.primaryRoute === "Online Marketplace") && staffMembers.length > 0 && (
+            {isTTTUser && (form.primaryRoute === "FB/Marketplace" || form.primaryRoute === "Online Marketplace") && staffMembers.length > 0 && (
               <StaffAutofill
                 value={form.staffSellerName ?? ""}
                 onChange={(name, id) => setForm(f => ({ ...f, staffSellerName: name, staffSellerId: id }))}
@@ -884,6 +885,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           allTenants={allTenants}
           isTTT={isTTT}
           staffMembers={staffMembers}
+          isTTTUser={isTTTUser}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}

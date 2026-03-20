@@ -4,21 +4,31 @@ const CLIENT_ROLES = [
     label: "Owner",
     color: "border-amber-600",
     badge: "bg-amber-900/50 text-amber-300",
-    desc: "Project owner with full visibility and the ability to manage their estate project.",
+    desc: "TTT-managed project owner with full visibility. Receives a formal contract, TTT-issued invoices, and has TTT field staff assigned to their project.",
   },
   {
     key: "Collaborator",
     label: "Collaborator",
     color: "border-sky-700",
     badge: "bg-sky-900/50 text-sky-300",
-    desc: "Family member or trusted contact with edit access to items and rooms.",
+    desc: "Family member or trusted contact on a TTT-managed project with edit access to items and rooms.",
   },
   {
     key: "Viewer",
     label: "Viewer",
     color: "border-gray-600",
     badge: "bg-gray-700 text-gray-400",
-    desc: "Read-only access to view project status, catalog, and invoices.",
+    desc: "Read-only access to view project status, catalog, and invoices on a TTT-managed project.",
+  },
+] as const;
+
+const NON_TTT_CLIENT_ROLES = [
+  {
+    key: "NonTTTOwner",
+    label: "Non-TTT Owner",
+    color: "border-orange-700",
+    badge: "bg-orange-900/50 text-orange-300",
+    desc: "Self-managed project owner. Catalogs and routes items independently to FB/Marketplace, Online Marketplace, or Other Consignment. Receives higher client share rates (100% marketplace, 50% consignment). Uses the Free Estimator on Home for self-service hour estimates. No TTT staff, formal contract, or TTT-issued invoices.",
   },
 ] as const;
 
@@ -28,7 +38,7 @@ const STAFF_ROLES = [
     label: "TTT Staff",
     color: "border-gray-600",
     badge: "bg-gray-700 text-gray-300",
-    desc: "Field staff who log time, access client project data, edit sale prices, view Venmo/Zelle payment QR codes on the Sales page, and edit project addresses from /home.",
+    desc: "Field staff who log time, access client project data, edit sale prices, view Venmo/Zelle payment QR codes on the Sales page, edit project addresses from /home, assign themselves as Staff Seller on FB/Online Marketplace items, and filter the Catalog by staff seller.",
   },
   {
     key: "TTTManager",
@@ -53,9 +63,8 @@ const STAFF_ROLES = [
   },
 ] as const;
 
-const ALL_ROLES = [...CLIENT_ROLES, ...STAFF_ROLES] as const;
-type RoleKey = (typeof ALL_ROLES)[number]["key"];
-type Check = true | false | "view-only";
+type RoleKey = "Owner" | "Collaborator" | "Viewer" | "NonTTTOwner" | "TTTStaff" | "TTTManager" | "TTTSales" | "TTTAdmin";
+type Check = true | false | "view-only" | "partial";
 
 interface FeatureRow {
   group?: string;
@@ -65,60 +74,75 @@ interface FeatureRow {
 
 const FEATURE_ROWS: FeatureRow[] = [
   { group: "Navigation" },
-  { label: "Home dashboard",              permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Plan tab",                    permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Catalog tab",                 permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Vendors tab",                 permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Sales tab",                   permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Invoices tab",               permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "Expenses tab",               permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "CRM tab",                     permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
-  { label: "Drips tab",                   permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
-  { label: "Quoting tab",                 permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Home dashboard",              permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Plan tab",                    permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Catalog tab",                 permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Vendors tab",                 permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Sales tab",                   permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Invoices tab",                permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Expenses tab",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "CRM tab",                     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Drips tab",                   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Quoting tab",                 permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { group: "Plan & Calendar" },
-  { label: "View Daily Focus shifts",                         permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Add & edit Daily Focus shifts",                   permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Invite Team Members via staff name picker",       permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Invite Helpers via email (family / friends)",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "View Daily Focus shifts",                         permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Add & edit Daily Focus shifts",                   permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Invite TTT Team Members via staff name picker",   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Invite Helpers via email (family / friends)",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { group: "Project Access" },
-  { label: "View project & rooms",       permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Add & edit items",           permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Route & approve items",      permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Invite members to project",  permissions: { Owner: true,  Collaborator: false, Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "Archive project",            permissions: { Owner: true,  Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Reassign item to another project", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
-  { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true,  TTTManager: true, TTTSales: false, TTTAdmin: true } },
-  { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "View project & rooms",        permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Add & edit items",            permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Route & approve items",       permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: "partial", TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Invite members to project",   permissions: { Owner: true,  Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Archive project",             permissions: { Owner: true,  Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Assign Staff Seller on FB/Online Marketplace items", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Filter Catalog by Staff Seller",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Completed Date auto-stamp (status → Sold/Donated/Discarded)", permissions: { Owner: true, Collaborator: true, Viewer: false, NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Completed Date column & sort in Catalog table view", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Reassign item to another project", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { group: "Service Model" },
+  { label: "TTT field staff assigned to project",           permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Formal TTT contract & signed quote",            permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Receives TTT-issued invoices",                  permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "ProFoundFinds Consignment routing available",   permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "TTT-managed payout rates (67% PF, 59% FB/Online)", permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Self-service Free Estimator (Home page)",       permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "FB & Online Marketplace at 100% client share",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "Other Consignment at 50% client share (self-managed)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "Visible to TTT Staff in project views & time tracker", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Invoices" },
-  { label: "View invoices & PDF",        permissions: { Owner: true,  Collaborator: true,  Viewer: true,  TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "Create invoices",            permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "Mark invoices paid",         permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "View invoices & PDF",         permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Create invoices",             permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Mark invoices paid",          permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { group: "Time Tracking" },
-  { label: "Log own time",               permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "View all staff time",        permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Export time data",           permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Log own time",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "View all staff time",         permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Export time data",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { group: "Expenses" },
-  { label: "Submit own expenses",        permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
-  { label: "View & edit all expenses",   permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
-  { group: "CRM & Sales" },
-  { label: "View pipeline & contacts",   permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
-  { label: "Manage opportunities",       permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
-  { label: "Convert lead to project",    permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Submit own expenses",         permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "View & edit all expenses",    permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
+  { group: "CRM & Sales Pipeline" },
+  { label: "View pipeline & contacts",    permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Manage opportunities",        permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Convert lead to project",     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
   { group: "Sales & Payouts" },
-  { label: "View sales page (consignment & marketplace)", permissions: { Owner: true, Collaborator: true, Viewer: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
-  { label: "Set client payout preference (Zelle/Venmo/Check/Other)", permissions: { Owner: true, Collaborator: "view-only", Viewer: "view-only", TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
-  { label: "Edit sale price & payout",    permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "View Venmo/Zelle payment QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
-  { label: "Upload proof of payment",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Delete proof of payment",     permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Generate client payout PDF",  permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "View sales page (consignment & marketplace)", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Set client payout preference (Zelle/Venmo/Check/Other)", permissions: { Owner: true, Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Edit sale price & payout",    permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "View Venmo/Zelle payment QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Upload proof of payment",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Delete proof of payment",     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Generate client payout PDF",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { group: "Admin Console" },
-  { label: "Access /admin",              permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
-  { label: "Manage users & roles",       permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
-  { label: "Contract & invoice settings",permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
-  { label: "Routing rules & integrations",permissions:{ Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
-  { label: "Configure Venmo/Zelle payment handles & QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
-  { label: "View PF/FB/eBay inventory tables", permissions: { Owner: false, Collaborator: false, Viewer: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Access /admin",              permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
+  { label: "Manage users & roles",       permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
+  { label: "Contract & invoice settings",permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
+  { label: "Routing rules & integrations",permissions:{ Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
+  { label: "Configure Venmo/Zelle payment handles & QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Toggle TTT / Non-TTT flag per project",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "View PF/FB/eBay inventory tables", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
 ];
 
 function CheckCell({ value }: { value: Check | undefined }) {
@@ -131,6 +155,9 @@ function CheckCell({ value }: { value: Check | undefined }) {
   }
   if (value === "view-only") {
     return <span className="text-xs text-gray-500 block text-center">View</span>;
+  }
+  if (value === "partial") {
+    return <span className="text-xs text-amber-500 block text-center font-semibold" title="Available with restrictions">~</span>;
   }
   return (
     <svg className="w-3.5 h-3.5 text-gray-700 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -147,8 +174,8 @@ export function RoleBreakdown() {
         <p className="text-sm text-gray-400 mt-0.5">Permissions and access for every role type across the platform.</p>
       </div>
 
-      {/* Client role cards */}
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Client Roles</p>
+      {/* TTT Client role cards */}
+      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">TTT Client Roles</p>
       <div className="grid grid-cols-3 gap-3 mb-4">
         {CLIENT_ROLES.map((r) => (
           <div key={r.key} className={`bg-gray-900 border ${r.color} rounded-xl p-4`}>
@@ -158,6 +185,28 @@ export function RoleBreakdown() {
             <p className="text-xs text-gray-400 leading-relaxed">{r.desc}</p>
           </div>
         ))}
+      </div>
+
+      {/* Non-TTT Client role cards */}
+      <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-2">Non-TTT Client Roles</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        {NON_TTT_CLIENT_ROLES.map((r) => (
+          <div key={r.key} className={`bg-gray-900 border ${r.color} rounded-xl p-4`}>
+            <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium mb-2 ${r.badge}`}>
+              {r.label}
+            </span>
+            <p className="text-xs text-gray-400 leading-relaxed">{r.desc}</p>
+          </div>
+        ))}
+        <div className="bg-gray-900 border border-orange-900/40 rounded-xl p-4">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-orange-900/30 text-orange-400">~ Partial access</span>
+            <span className="text-xs text-gray-600">legend</span>
+          </div>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            In the matrix below, <span className="text-amber-500 font-semibold">~</span> means the feature exists but with restrictions — for example, Non-TTT Owners can route items but ProFoundFinds Consignment is replaced by Other Consignment, and client share rates differ from TTT-managed projects.
+          </p>
+        </div>
       </div>
 
       {/* Staff role cards */}
@@ -176,13 +225,17 @@ export function RoleBreakdown() {
       {/* Feature matrix */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[780px]">
+          <table className="w-full text-sm min-w-[960px]">
             <thead>
               <tr className="border-b border-gray-800">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 w-[30%]">Feature</th>
-                {/* Client group header */}
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 w-[28%]">Feature</th>
+                {/* TTT Client group header */}
                 <th colSpan={3} className="px-3 py-3 text-center border-l border-gray-800">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Client</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">TTT Client</span>
+                </th>
+                {/* Non-TTT Client group header */}
+                <th colSpan={1} className="px-3 py-3 text-center border-l border-orange-900/50">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-orange-500">Non-TTT Client</span>
                 </th>
                 {/* Staff group header */}
                 <th colSpan={4} className="px-3 py-3 text-center border-l border-gray-800">
@@ -191,6 +244,7 @@ export function RoleBreakdown() {
               </tr>
               <tr className="border-b border-gray-800 bg-gray-800/30">
                 <th className="px-5 py-2" />
+                {/* TTT Client role badges */}
                 {CLIENT_ROLES.map((r, i) => (
                   <th key={r.key} className={`px-3 py-2 text-center ${i === 0 ? "border-l border-gray-800" : ""}`}>
                     <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${r.badge}`}>
@@ -198,6 +252,15 @@ export function RoleBreakdown() {
                     </span>
                   </th>
                 ))}
+                {/* Non-TTT Client badge */}
+                {NON_TTT_CLIENT_ROLES.map((r) => (
+                  <th key={r.key} className="px-3 py-2 text-center border-l border-orange-900/40">
+                    <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${r.badge}`}>
+                      {r.label}
+                    </span>
+                  </th>
+                ))}
+                {/* Staff role badges */}
                 {STAFF_ROLES.map((r, i) => (
                   <th key={r.key} className={`px-3 py-2 text-center ${i === 0 ? "border-l border-gray-800" : ""}`}>
                     <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${r.badge}`}>
@@ -211,21 +274,29 @@ export function RoleBreakdown() {
               {FEATURE_ROWS.map((row, i) =>
                 row.group ? (
                   <tr key={`g-${i}`} className="bg-gray-800/40">
-                    <td colSpan={8} className="px-5 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                    <td colSpan={9} className="px-5 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                       {row.group}
                     </td>
                   </tr>
                 ) : (
                   <tr key={`f-${i}`} className="hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-2.5 text-sm text-gray-300">{row.label}</td>
+                    {/* TTT Client cells */}
                     {CLIENT_ROLES.map((r, i) => (
                       <td key={r.key} className={`px-3 py-2.5 text-center ${i === 0 ? "border-l border-gray-800/50" : ""}`}>
-                        <CheckCell value={row.permissions?.[r.key]} />
+                        <CheckCell value={row.permissions?.[r.key as RoleKey]} />
                       </td>
                     ))}
+                    {/* Non-TTT Client cells */}
+                    {NON_TTT_CLIENT_ROLES.map((r) => (
+                      <td key={r.key} className="px-3 py-2.5 text-center border-l border-orange-900/30 bg-orange-950/10">
+                        <CheckCell value={row.permissions?.[r.key as RoleKey]} />
+                      </td>
+                    ))}
+                    {/* Staff cells */}
                     {STAFF_ROLES.map((r, i) => (
                       <td key={r.key} className={`px-3 py-2.5 text-center ${i === 0 ? "border-l border-gray-800/50" : ""}`}>
-                        <CheckCell value={row.permissions?.[r.key]} />
+                        <CheckCell value={row.permissions?.[r.key as RoleKey]} />
                       </td>
                     ))}
                   </tr>
