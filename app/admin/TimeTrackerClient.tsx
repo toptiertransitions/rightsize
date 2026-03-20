@@ -12,6 +12,8 @@ interface TenantOption {
 interface StaffOption {
   id: string;
   name: string;
+  email?: string;
+  role?: string;
 }
 
 interface Props {
@@ -384,12 +386,289 @@ function SearchableCombobox({ value, onChange, options, placeholder = "Search…
   );
 }
 
+// ─── Staff Combobox ───────────────────────────────────────────────────────────
+const STAFF_ROLE_BADGE: Record<string, { label: string; cls: string }> = {
+  TTTAdmin:   { label: "Admin",   cls: "bg-purple-900 text-purple-300" },
+  TTTManager: { label: "Manager", cls: "bg-blue-900   text-blue-300"   },
+  TTTStaff:   { label: "Staff",   cls: "bg-gray-700   text-gray-300"   },
+};
+
+interface StaffComboboxProps {
+  value: string;
+  onChange: (id: string, name: string) => void;
+  options: StaffOption[];
+  currentUserId: string;
+  loading?: boolean;
+}
+
+function StaffCombobox({ value, onChange, options, currentUserId, loading }: StaffComboboxProps) {
+  const selected = options.find(o => o.id === value);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, []);
+
+  // Scroll cursor item into view
+  useEffect(() => {
+    if (!listRef.current || cursor < 0) return;
+    const item = listRef.current.children[cursor] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
+
+  const filtered = query
+    ? options.filter(o => {
+        const q = query.toLowerCase();
+        return o.name.toLowerCase().includes(q) || (o.email ?? "").toLowerCase().includes(q);
+      })
+    : options;
+
+  function select(opt: StaffOption) {
+    onChange(opt.id, opt.name);
+    setOpen(false);
+    setQuery("");
+    setCursor(-1);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "Enter") { e.preventDefault(); setOpen(true); }
+      return;
+    }
+    if (e.key === "Escape") { setOpen(false); setCursor(-1); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setCursor(c => Math.min(c + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)); }
+    else if (e.key === "Enter" && cursor >= 0) { e.preventDefault(); if (filtered[cursor]) select(filtered[cursor]); }
+  }
+
+  const displayName = selected
+    ? `${selected.name}${selected.id === currentUserId ? " (me)" : ""}`
+    : "";
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={open ? query : displayName}
+          placeholder={loading ? "Loading staff…" : "Search by name or email…"}
+          disabled={loading}
+          onFocus={() => { setQuery(""); setOpen(true); setCursor(-1); }}
+          onChange={e => { setQuery(e.target.value); setOpen(true); setCursor(-1); }}
+          onKeyDown={handleKeyDown}
+          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-8 disabled:opacity-50"
+        />
+        <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+        </svg>
+      </div>
+      {open && !loading && (
+        <ul ref={listRef} className="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-600 rounded-xl max-h-64 overflow-y-auto shadow-2xl divide-y divide-gray-700/50">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-3 text-sm text-gray-500">
+              {query ? `No staff matching "${query}"` : "No staff available"}
+            </li>
+          ) : filtered.map((opt, i) => {
+            const badge = STAFF_ROLE_BADGE[opt.role ?? ""];
+            const isMe = opt.id === currentUserId;
+            const isSelected = opt.id === value;
+            return (
+              <li
+                key={opt.id}
+                onMouseDown={e => { e.preventDefault(); select(opt); }}
+                onMouseEnter={() => setCursor(i)}
+                className={`px-3 py-2.5 cursor-pointer flex items-center gap-3 transition-colors ${i === cursor || isSelected ? "bg-gray-700" : "hover:bg-gray-750"}`}
+              >
+                {/* Avatar initial */}
+                <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold text-gray-200 shrink-0">
+                  {opt.name.charAt(0).toUpperCase()}
+                </div>
+                {/* Name + email */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-medium text-white">
+                      {opt.name}{isMe && <span className="text-gray-400 font-normal"> (me)</span>}
+                    </span>
+                    {badge && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  {opt.email && <p className="text-xs text-gray-500 truncate">{opt.email}</p>}
+                </div>
+                {isSelected && (
+                  <svg className="w-4 h-4 text-forest-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── Staff Filter Combobox (main view selector) ───────────────────────────────
+interface StaffFilterComboboxProps {
+  value: string; // clerkUserId or "" for all
+  onChange: (id: string) => void;
+  options: StaffOption[];
+  loading?: boolean;
+}
+
+function StaffFilterCombobox({ value, onChange, options, loading }: StaffFilterComboboxProps) {
+  const selected = options.find(o => o.id === value);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!listRef.current || cursor < 0) return;
+    const item = listRef.current.children[cursor] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
+
+  // "All Staff" is index 0; actual staff start at index 1
+  const filteredOptions = query
+    ? options.filter(o => {
+        const q = query.toLowerCase();
+        return o.name.toLowerCase().includes(q) || (o.email ?? "").toLowerCase().includes(q);
+      })
+    : options;
+  // total items = "All Staff" row + filteredOptions
+  const totalItems = 1 + filteredOptions.length;
+
+  function selectAll() { onChange(""); setOpen(false); setQuery(""); setCursor(-1); }
+  function selectOpt(opt: StaffOption) { onChange(opt.id); setOpen(false); setQuery(""); setCursor(-1); }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "Enter") { e.preventDefault(); setOpen(true); }
+      return;
+    }
+    if (e.key === "Escape") { setOpen(false); setCursor(-1); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setCursor(c => Math.min(c + 1, totalItems - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (cursor === 0) selectAll();
+      else if (cursor > 0 && filteredOptions[cursor - 1]) selectOpt(filteredOptions[cursor - 1]);
+    }
+  }
+
+  const displayValue = selected ? selected.name : "All Staff";
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={open ? query : displayValue}
+          placeholder={loading ? "Loading staff…" : "Filter by staff member…"}
+          disabled={loading}
+          onFocus={() => { setQuery(""); setOpen(true); setCursor(-1); }}
+          onChange={e => { setQuery(e.target.value); setOpen(true); setCursor(-1); }}
+          onKeyDown={handleKeyDown}
+          className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-forest-500 pr-8 w-52 disabled:opacity-50"
+        />
+        <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+        </svg>
+      </div>
+      {open && !loading && (
+        <ul ref={listRef} className="absolute z-50 mt-1 w-full min-w-[13rem] bg-gray-800 border border-gray-600 rounded-xl max-h-64 overflow-y-auto shadow-2xl divide-y divide-gray-700/50">
+          {/* All Staff option */}
+          <li
+            onMouseDown={e => { e.preventDefault(); selectAll(); }}
+            onMouseEnter={() => setCursor(0)}
+            className={`px-3 py-2.5 cursor-pointer flex items-center gap-2 transition-colors ${cursor === 0 || value === "" ? "bg-gray-700" : "hover:bg-gray-750"}`}
+          >
+            <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold text-gray-300 shrink-0">
+              ★
+            </div>
+            <span className="text-sm font-medium text-white">All Staff</span>
+            {value === "" && (
+              <svg className="w-4 h-4 text-forest-400 shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </li>
+          {filteredOptions.length === 0 && query ? (
+            <li className="px-3 py-3 text-sm text-gray-500">No staff matching &ldquo;{query}&rdquo;</li>
+          ) : filteredOptions.map((opt, i) => {
+            const badge = STAFF_ROLE_BADGE[opt.role ?? ""];
+            const isSelected = opt.id === value;
+            const itemCursor = i + 1;
+            return (
+              <li
+                key={opt.id}
+                onMouseDown={e => { e.preventDefault(); selectOpt(opt); }}
+                onMouseEnter={() => setCursor(itemCursor)}
+                className={`px-3 py-2.5 cursor-pointer flex items-center gap-3 transition-colors ${itemCursor === cursor || isSelected ? "bg-gray-700" : "hover:bg-gray-750"}`}
+              >
+                <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold text-gray-200 shrink-0">
+                  {opt.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-medium text-white">{opt.name}</span>
+                    {badge && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  {opt.email && <p className="text-xs text-gray-500 truncate">{opt.email}</p>}
+                </div>
+                {isSelected && (
+                  <svg className="w-4 h-4 text-forest-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Log Time Modal ───────────────────────────────────────────────────────────
 interface ModalProps {
   entry?: TimeEntry;
   tenants: TenantOption[];
   onClose: () => void;
-  onSaved: (entry: TimeEntry) => void;
+  onSaved: (entries: TimeEntry[], deletedId?: string) => void;
   onDeleted?: (id: string) => void;
   staffMembers?: StaffOption[];
   currentUserId: string;
@@ -399,9 +678,12 @@ interface ModalProps {
 
 function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMembers, currentUserId, currentUserName, services }: ModalProps) {
   const focusAreaOptions = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
+  const firstFocusArea = entry?.focusArea ?? focusAreaOptions[0] ?? "Coordinating";
   const [date, setDate] = useState(entry?.date ?? todayISO());
   const [tenantId, setTenantId] = useState(entry?.tenantId ?? (tenants[0]?.id ?? ""));
-  const [focusArea, setFocusArea] = useState<FocusArea>(entry?.focusArea ?? (focusAreaOptions[0] ?? "Coordinating"));
+  const [splits, setSplits] = useState<{ focusArea: string; durationMinutes: number }[]>([
+    { focusArea: firstFocusArea, durationMinutes: entry?.durationMinutes ?? computeDuration("09:00", "17:00") }
+  ]);
   const [startTime, setStartTime] = useState(entry?.startTime ?? "09:00");
   const [endTime, setEndTime] = useState(entry?.endTime ?? "17:00");
   const [travelMiles, setTravelMiles] = useState(entry?.travelMiles != null ? String(entry.travelMiles) : "");
@@ -413,30 +695,111 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
+  // Always fetch fresh staff list when modal opens (admin/manager only)
+  const isAdminModal = staffMembers !== undefined;
+  const [liveStaff, setLiveStaff] = useState<StaffOption[]>(staffMembers ?? []);
+  const [loadingStaff, setLoadingStaff] = useState(isAdminModal);
+
+  useEffect(() => {
+    if (!isAdminModal) return;
+    fetch("/api/admin/staff", { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.staff)) {
+          const opts: StaffOption[] = data.staff
+            .filter((s: { isActive: boolean }) => s.isActive)
+            .map((s: { clerkUserId: string; displayName: string; email: string; role: string }) => ({
+              id: s.clerkUserId,
+              name: s.displayName,
+              email: s.email,
+              role: s.role,
+            }));
+          setLiveStaff(opts);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingStaff(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const duration = useMemo(() => computeDuration(startTime, endTime), [startTime, endTime]);
   const selectedProject = tenants.find(t => t.id === tenantId);
+
+  // Sync duration changes into splits
+  useEffect(() => {
+    setSplits(prev => {
+      if (prev.length === 1) {
+        return [{ ...prev[0], durationMinutes: duration }];
+      }
+      // Multi mode: last split absorbs the diff
+      const total = prev.reduce((s, sp) => s + sp.durationMinutes, 0);
+      const diff = duration - total;
+      if (diff === 0) return prev;
+      const last = prev[prev.length - 1];
+      return [...prev.slice(0, -1), { ...last, durationMinutes: Math.max(0, last.durationMinutes + diff) }];
+    });
+  }, [duration]);
+
+  function addSplit() {
+    setSplits(prev => {
+      if (prev.length === 1) {
+        const half = Math.floor(duration / 2);
+        return [
+          { ...prev[0], durationMinutes: half },
+          { focusArea: focusAreaOptions[0], durationMinutes: duration - half },
+        ];
+      }
+      const total = prev.reduce((s, sp) => s + sp.durationMinutes, 0);
+      const remaining = Math.max(1, duration - total);
+      return [...prev, { focusArea: focusAreaOptions[0], durationMinutes: remaining }];
+    });
+  }
+
+  function removeSplit(i: number) {
+    setSplits(prev => {
+      const next = prev.filter((_, idx) => idx !== i);
+      if (next.length === 1) return [{ ...next[0], durationMinutes: duration }];
+      return next;
+    });
+  }
+
+  function updateSplit(i: number, patch: Partial<{ focusArea: string; durationMinutes: number }>) {
+    setSplits(prev => prev.map((sp, idx) => idx === i ? { ...sp, ...patch } : sp));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) { setError("Select a project"); return; }
     if (duration <= 0) { setError("End time must be after start time"); return; }
+    if (splits.length > 1) {
+      const splitTotal = splits.reduce((s, sp) => s + sp.durationMinutes, 0);
+      if (Math.abs(splitTotal - duration) > 1) {
+        setError(`Split durations must sum to ${duration} min (currently ${splitTotal} min)`);
+        return;
+      }
+      if (splits.some(sp => !sp.focusArea)) {
+        setError("All splits must have a focus area");
+        return;
+      }
+    }
     setSaving(true);
     setError("");
     try {
-      const body = {
+      const sharedFields = {
         tenantId,
         projectName: selectedProject?.name ?? entry?.projectName ?? "",
         date,
         startTime,
         endTime,
-        durationMinutes: duration,
-        focusArea,
         travelMiles: travelMiles ? parseFloat(travelMiles) : undefined,
         travelMinutes: travelMinutes ? parseInt(travelMinutes) : undefined,
         notes: notes || undefined,
         ...(entry ? { id: entry.id } : {}),
         ...(!entry && forUserId !== currentUserId ? { staffUserId: forUserId, staffName: forUserName } : {}),
       };
+      const body = splits.length > 1
+        ? { ...sharedFields, splits: splits.map(sp => ({ focusArea: sp.focusArea, durationMinutes: sp.durationMinutes })), durationMinutes: duration }
+        : { ...sharedFields, focusArea: splits[0].focusArea, durationMinutes: duration };
       const res = await fetch("/api/time-entries", {
         method: entry ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -450,7 +813,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
       }
       if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
       const data = await res.json();
-      onSaved(data.entry);
+      onSaved(data.entries ?? [data.entry], data.deletedId);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -491,18 +854,18 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
         <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
 
-            {!entry && staffMembers && staffMembers.length > 0 && (
+            {!entry && isAdminModal && (
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">Log for</label>
-                <SearchableCombobox
+                <StaffCombobox
                   value={forUserId}
                   onChange={(id, name) => { setForUserId(id); setForUserName(name); }}
                   options={[
                     { id: currentUserId, name: currentUserName },
-                    ...staffMembers.filter(m => m.id !== currentUserId),
+                    ...liveStaff.filter(m => m.id !== currentUserId),
                   ]}
-                  displaySuffix={opt => opt.id === currentUserId ? " (me)" : ""}
-                  placeholder="Search staff…"
+                  currentUserId={currentUserId}
+                  loading={loadingStaff}
                 />
               </div>
             )}
@@ -527,13 +890,86 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Focus Area</label>
-              <select value={focusArea} onChange={e => setFocusArea(e.target.value as FocusArea)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500">
-                {focusAreaOptions.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
+            {/* Focus Area — single or split */}
+            {splits.length === 1 ? (
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Focus Area</label>
+                <select
+                  value={splits[0].focusArea}
+                  onChange={e => setSplits([{ focusArea: e.target.value, durationMinutes: duration }])}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+                >
+                  {focusAreaOptions.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <button
+                  type="button"
+                  onClick={addSplit}
+                  className="mt-1.5 text-xs text-gray-500 hover:text-forest-400 transition-colors"
+                >
+                  + Split across focus areas
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-medium text-gray-400">Focus Areas</label>
+                  <span className="text-xs text-gray-600">Duration</span>
+                </div>
+                <div className="space-y-2">
+                  {splits.map((sp, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <select
+                        value={sp.focusArea}
+                        onChange={e => updateSplit(i, { focusArea: e.target.value })}
+                        className="min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500 flex-[3]"
+                      >
+                        {focusAreaOptions.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                      <div className="relative w-[6rem] shrink-0">
+                        <input
+                          type="number"
+                          min="1"
+                          value={sp.durationMinutes}
+                          onChange={e => updateSplit(i, { durationMinutes: Math.max(0, parseInt(e.target.value) || 0) })}
+                          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500 pr-7"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">min</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSplit(i)}
+                        className="text-gray-600 hover:text-red-400 transition-colors shrink-0 text-lg leading-none"
+                        aria-label="Remove split"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between mt-2.5">
+                  <button
+                    type="button"
+                    onClick={addSplit}
+                    className="text-xs text-forest-400 hover:text-forest-300 transition-colors"
+                  >
+                    + Add focus area
+                  </button>
+                  {(() => {
+                    const splitTotal = splits.reduce((s, sp) => s + sp.durationMinutes, 0);
+                    const diff = duration - splitTotal;
+                    if (diff === 0) return (
+                      <span className="text-xs text-forest-400 font-medium">{splitTotal} / {duration} min</span>
+                    );
+                    if (diff > 0) return (
+                      <span className="text-xs text-amber-400">{diff} min unallocated · {splitTotal} / {duration}</span>
+                    );
+                    return (
+                      <span className="text-xs text-red-400">{-diff} min over · {splitTotal} / {duration}</span>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
 
             {/* Start / End — each full width on mobile, side-by-side on sm+ */}
             <div className="grid grid-cols-2 gap-3">
@@ -614,6 +1050,8 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [liveFilterStaff, setLiveFilterStaff] = useState<StaffOption[]>(staffMembers ?? []);
+  const [loadingFilterStaff, setLoadingFilterStaff] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
@@ -681,24 +1119,46 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
       });
   }, [visibleEntries, currentWeekStartISO]);
 
-  // ── Staff list (admin or manager) ────────────────────────────────────────
-  const staffList = useMemo(() => {
-    if (!canViewAll) return [];
-    const seen = new Map<string, string>();
-    for (const e of entries) if (!seen.has(e.clerkUserId)) seen.set(e.clerkUserId, e.staffName);
-    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
-  }, [entries, canViewAll]);
+  // ── Live staff fetch for filter combobox ─────────────────────────────────
+  useEffect(() => {
+    if (!canViewAll) return;
+    setLoadingFilterStaff(true);
+    fetch("/api/admin/staff", { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.staff)) {
+          const opts: StaffOption[] = data.staff
+            .filter((s: { isActive: boolean }) => s.isActive)
+            .map((s: { clerkUserId: string; displayName: string; email: string; role: string }) => ({
+              id: s.clerkUserId,
+              name: s.displayName,
+              email: s.email,
+              role: s.role,
+            }))
+            .sort((a: StaffOption, b: StaffOption) => a.name.localeCompare(b.name));
+          setLiveFilterStaff(opts);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFilterStaff(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canViewAll]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function openNew() { setEditEntry(undefined); setShowModal(true); }
   function openEdit(entry: TimeEntry) { setEditEntry(entry); setShowModal(true); }
   function closeModal() { setShowModal(false); setEditEntry(undefined); }
 
-  function handleSaved(saved: TimeEntry) {
+  function handleSaved(newEntries: TimeEntry[], deletedId?: string) {
     setEntries(prev => {
-      const idx = prev.findIndex(e => e.id === saved.id);
-      if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
-      return [saved, ...prev];
+      // Remove the original entry if it was replaced by a split
+      let result = deletedId ? prev.filter(e => e.id !== deletedId) : [...prev];
+      for (const saved of newEntries) {
+        const idx = result.findIndex(e => e.id === saved.id);
+        if (idx >= 0) result = result.map(e => e.id === saved.id ? saved : e);
+        else result = [saved, ...result];
+      }
+      return result;
     });
     closeModal();
   }
@@ -725,12 +1185,13 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
     <div>
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {canViewAll && staffList.length > 0 && (
-          <select value={staffFilter} onChange={e => setStaffFilter(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-forest-500">
-            <option value="">All Staff</option>
-            {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+        {canViewAll && (
+          <StaffFilterCombobox
+            value={staffFilter}
+            onChange={setStaffFilter}
+            options={liveFilterStaff}
+            loading={loadingFilterStaff}
+          />
         )}
         <div className="flex-1" />
         <button

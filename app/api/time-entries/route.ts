@@ -11,6 +11,17 @@ import {
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import type { FocusArea } from "@/lib/types";
 
+function parseToMins(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minsToTime(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -59,12 +70,13 @@ export async function POST(req: NextRequest) {
     startTime: string;
     endTime: string;
     durationMinutes: number;
-    focusArea: FocusArea;
+    focusArea?: FocusArea;
     travelMiles?: number;
     travelMinutes?: number;
     notes?: string;
     staffUserId?: string;
     staffName?: string;
+    splits?: { focusArea: string; durationMinutes: number }[];
   };
   try {
     body = await req.json();
@@ -72,25 +84,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { tenantId, projectName, date, startTime, endTime, durationMinutes, focusArea } = body;
-  if (!tenantId || !projectName || !date || !startTime || !endTime || !focusArea) {
+  const { tenantId, projectName, date, startTime, endTime, splits } = body;
+  const focusArea = body.focusArea;
+  if (!tenantId || !projectName || !date || !startTime || !endTime) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+  if (!focusArea && !(splits && splits.length > 1)) {
+    return NextResponse.json({ error: "Missing focusArea" }, { status: 400 });
   }
 
   const entryUserId = (canEditAll && body.staffUserId) ? body.staffUserId : userId;
   const staffName = (canEditAll && body.staffUserId && body.staffName) ? body.staffName : authenticatedStaffName;
 
+  const sharedFields = {
+    clerkUserId: entryUserId,
+    staffName,
+    tenantId,
+    projectName,
+    date,
+  };
+
+  // ── Split path: create N entries sequentially ────────────────────────────
+  if (splits && splits.length > 1) {
+    try {
+      let cursor = parseToMins(startTime);
+      const created = [];
+      for (let i = 0; i < splits.length; i++) {
+        const splitStart = minsToTime(cursor);
+        const splitEnd = minsToTime(cursor + splits[i].durationMinutes);
+        cursor += splits[i].durationMinutes;
+        const entry = await createTimeEntry({
+          ...sharedFields,
+          startTime: splitStart,
+          endTime: splitEnd,
+          durationMinutes: splits[i].durationMinutes,
+          focusArea: splits[i].focusArea as FocusArea,
+          travelMiles: i === 0 ? body.travelMiles : undefined,
+          travelMinutes: i === 0 ? body.travelMinutes : undefined,
+          notes: i === 0 ? body.notes : undefined,
+        });
+        created.push(entry);
+      }
+      return NextResponse.json({ entries: created, entry: created[0] });
+    } catch (e) {
+      console.error("createTimeEntry (split) error:", e);
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  // ── Single entry path ────────────────────────────────────────────────────
   try {
     const entry = await createTimeEntry({
-      clerkUserId: entryUserId,
-      staffName,
-      tenantId,
-      projectName,
-      date,
+      ...sharedFields,
       startTime,
       endTime,
-      durationMinutes,
-      focusArea,
+      durationMinutes: body.durationMinutes,
+      focusArea: focusArea!,
       travelMiles: body.travelMiles,
       travelMinutes: body.travelMinutes,
       notes: body.notes,
@@ -123,6 +172,7 @@ export async function PATCH(req: NextRequest) {
     travelMiles?: number;
     travelMinutes?: number;
     notes?: string;
+    splits?: { focusArea: string; durationMinutes: number }[];
   };
   try {
     body = await req.json();
@@ -130,7 +180,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, ...fields } = body;
+  const { id, splits, ...fields } = body;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const existing = await getTimeEntryById(id);
@@ -140,6 +190,44 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // ── Split path: delete original, create N new entries ───────────────────
+  if (splits && splits.length > 1) {
+    const startTime = fields.startTime ?? existing.startTime;
+    const date = fields.date ?? existing.date;
+    const tenantId = fields.tenantId ?? existing.tenantId;
+    const projectName = fields.projectName ?? existing.projectName;
+    try {
+      await deleteTimeEntry(id);
+      let cursor = parseToMins(startTime);
+      const created = [];
+      for (let i = 0; i < splits.length; i++) {
+        const splitStart = minsToTime(cursor);
+        const splitEnd = minsToTime(cursor + splits[i].durationMinutes);
+        cursor += splits[i].durationMinutes;
+        const newEntry = await createTimeEntry({
+          clerkUserId: existing.clerkUserId,
+          staffName: existing.staffName,
+          tenantId,
+          projectName,
+          date,
+          startTime: splitStart,
+          endTime: splitEnd,
+          durationMinutes: splits[i].durationMinutes,
+          focusArea: splits[i].focusArea as FocusArea,
+          travelMiles: i === 0 ? body.travelMiles : undefined,
+          travelMinutes: i === 0 ? body.travelMinutes : undefined,
+          notes: i === 0 ? (body.notes || undefined) : undefined,
+        });
+        created.push(newEntry);
+      }
+      return NextResponse.json({ entries: created, deletedId: id });
+    } catch (e) {
+      console.error("updateTimeEntry (split) error:", e);
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  // ── Single entry path ────────────────────────────────────────────────────
   try {
     const entry = await updateTimeEntry(id, fields);
     return NextResponse.json({ entry });
