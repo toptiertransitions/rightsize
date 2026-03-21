@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getAnyGmailToken } from "@/lib/airtable";
+import { getSystemRole, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
 import { getValidAccessToken, fetchZellePayments } from "@/lib/gmail";
 
 export async function GET(req: NextRequest) {
@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
   const days: number | "all" = daysParam === "all" ? "all" : (parseInt(daysParam) || 7);
 
   try {
-    const token = await getAnyGmailToken();
+    const zelleEmail = process.env.ZELLE_GMAIL_EMAIL;
+    const token = zelleEmail
+      ? await getGmailTokenByEmail(zelleEmail)
+      : await getAnyGmailToken();
     if (!token) return NextResponse.json({ payments: [], connected: false, tokenError: "No token record found" });
     let accessToken: string;
     try {
