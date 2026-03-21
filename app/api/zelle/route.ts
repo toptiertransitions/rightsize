@@ -17,7 +17,13 @@ export async function GET(req: NextRequest) {
   try {
     const token = await getAnyGmailToken();
     if (!token) return NextResponse.json({ payments: [], connected: false });
-    const accessToken = await getValidAccessToken(token.clerkUserId);
+    let accessToken: string;
+    try {
+      accessToken = await getValidAccessToken(token.clerkUserId);
+    } catch (e) {
+      // Missing or expired refresh token — treat as not connected
+      return NextResponse.json({ payments: [], connected: false, tokenError: String(e) });
+    }
     const payments = await fetchZellePayments(accessToken, days);
     return NextResponse.json({ payments, connected: true });
   } catch (e) {

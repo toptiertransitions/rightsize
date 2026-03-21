@@ -92,6 +92,10 @@ export async function getValidAccessToken(clerkUserId: string): Promise<string> 
     return token.accessToken;
   }
 
+  if (!token.refreshToken) {
+    throw new Error("NO_REFRESH_TOKEN");
+  }
+
   // Refresh
   const { accessToken, expiresAt: newExpiresAt } = await refreshAccessToken(token.refreshToken);
   await saveGmailToken(clerkUserId, {
