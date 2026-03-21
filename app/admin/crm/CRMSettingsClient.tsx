@@ -75,6 +75,13 @@ export function CRMSettingsClient({ gmailConnected, gmailEmail }: { gmailConnect
             <p className="text-xs text-gray-500">
               This may take a minute if you have many contacts. The page will stay open during the sync.
             </p>
+
+            <a
+              href="/api/crm/gmail/auth"
+              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 underline underline-offset-2 transition-colors"
+            >
+              Reconnect Gmail account
+            </a>
           </div>
         ) : (
           <div>
