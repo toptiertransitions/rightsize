@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { PayoutModal } from "./PayoutModal";
+import { ZellePayments } from "./ZellePayments";
 
 // ─── Calc payout from local vendor take rate ──────────────────────────────────
 
@@ -41,7 +42,17 @@ function computeCalcPayout(item: Item, localVendors: LocalVendor[]): CalcPayout 
     }
   }
 
-  if (!match || match.consignmentTake <= 0) return null;
+  if (!match || match.consignmentTake <= 0) {
+    // Fallback: item has a stored clientSharePercent (e.g. non-TTT 50% share)
+    if (item.clientSharePercent != null && item.clientSharePercent > 0) {
+      return {
+        amount: item.salePrice * (item.clientSharePercent / 100),
+        vendorName: "",
+        rate: 100 - item.clientSharePercent,
+      };
+    }
+    return null;
+  }
   return {
     amount: item.salePrice * (1 - match.consignmentTake / 100),
     vendorName: match.vendorName,
@@ -96,6 +107,7 @@ interface SalesClientProps {
   initialPayoutUsername?: string;
   initialPayoutCheckAddress?: string;
   projectAddress?: string;
+  isTTT?: boolean;
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -231,7 +243,7 @@ function SalesTableRow({
         {clientPayout != null ? (
           <div>
             <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
-            {previewCalcPayout && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
+            {previewCalcPayout && previewCalcPayout.vendorName && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
           </div>
         ) : (
           <span className="text-gray-300">—</span>
@@ -917,6 +929,7 @@ export function SalesClient({
   initialPayoutUsername,
   initialPayoutCheckAddress,
   projectAddress,
+  isTTT = true,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -1227,10 +1240,16 @@ export function SalesClient({
         {/* Other Consignment — grouped by vendor, each as a table */}
         {other.length > 0 && (
           <div>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-1">
               <h2 className="text-base font-semibold text-gray-900">Other Consignment</h2>
               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{other.length}</span>
             </div>
+            {!isTTT && (
+              <p className="text-xs text-gray-500 mb-4">
+                Client share on Other Consignment is set to 50% for self-managed projects.
+                This rate may be adjusted if your project transitions to a full TTT service agreement.
+              </p>
+            )}
             <div className="space-y-6">
               {[...otherByVendor.entries()].map(([vendorName, vendorItems]) => (
                 <div key={vendorName}>
@@ -1324,6 +1343,9 @@ export function SalesClient({
         canDeleteProof={canDeleteProof}
         onFilesChange={setProofFiles}
       />
+
+      {/* Zelle Payment Feed (TTT staff only) */}
+      {canEditPayout && <ZellePayments />}
 
       {/* Payout Modal */}
       {showPayoutModal && (

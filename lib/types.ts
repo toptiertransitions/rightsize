@@ -45,11 +45,21 @@ export interface StaffMember {
   clerkUserId: string;
   displayName: string;
   email: string;
+  phone?: string;
   role: SystemRole;
   isActive: boolean;
   createdAt: string;
   weeklySchedule?: WeeklySchedule;
   timeOff?: TimeOffEntry[];
+}
+
+// ─── Zelle Payment ────────────────────────────────────────────────────────────
+export interface ZellePayment {
+  messageId: string;
+  payerName: string;
+  amount: number;
+  sentOn: string;   // YYYY-MM-DD
+  memo: string;
 }
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
@@ -726,6 +736,14 @@ export interface InvoiceLineItem {
   rate: number;
 }
 
+export interface InvoiceExpenseItem {
+  expenseId?: string;   // reference to original expense (undefined for manually-added items)
+  vendor: string;
+  description: string;
+  date: string;
+  amount: number;
+}
+
 export interface Invoice {
   id: string;
   tenantId: string;
@@ -738,6 +756,7 @@ export interface Invoice {
   amount: number;
   contractId?: string;
   lineItems?: InvoiceLineItem[];
+  expenseItems?: InvoiceExpenseItem[];
   qboInvoiceId?: string;
   qboDocNumber?: string;
   status: InvoiceStatus;
@@ -874,6 +893,8 @@ export interface Expense {
   receiptPublicId?: string;   // Cloudinary public ID
   notes?: string;             // User notes
   createdAt: string;          // ISO timestamp when logged
+  tenantId?: string;          // Linked project (optional)
+  tenantName?: string;        // Project display name (optional, denormalized)
 }
 
 // ─── Supply Tracking ──────────────────────────────────────────────────────────
@@ -901,4 +922,17 @@ export interface InventoryContainer {
   tenantId?: string;
   items: InventoryItem[];
   isActive: boolean;
+}
+
+// ─── Subcontractor ────────────────────────────────────────────────────────────
+export interface Subcontractor {
+  id: string;
+  name: string;
+  charges: number;
+  scope: string;
+  paid: boolean;
+  paidDate?: string;    // YYYY-MM-DD; auto-set when paid toggled on
+  tenantId?: string;
+  tenantName?: string;
+  createdAt: string;
 }

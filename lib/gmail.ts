@@ -6,6 +6,7 @@ import {
   getActivitiesForContact,
   createActivity,
 } from "./airtable";
+import type { ZellePayment } from "./types";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -210,4 +211,70 @@ export async function getGmailMessage(
     snippet: data.snippet || "",
     threadId: data.threadId || "",
   };
+}
+
+// ─── Zelle Payment Parsing ────────────────────────────────────────────────────
+
+function extractPlainText(payload: Record<string, unknown>): string {
+  const mimeType = payload.mimeType as string;
+  const body = payload.body as { data?: string } | undefined;
+  const parts = payload.parts as Record<string, unknown>[] | undefined;
+  if (mimeType === "text/plain" && body?.data) {
+    return Buffer.from(
+      body.data.replace(/-/g, "+").replace(/_/g, "/"),
+      "base64"
+    ).toString("utf-8");
+  }
+  if (parts) {
+    for (const part of parts) {
+      const text = extractPlainText(part);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function parseZelleEmail(body: string): Omit<ZellePayment, "messageId"> | null {
+  const payerMatch = body.match(/^(.+?)\s+sent you\b/im);
+  const amountMatch = body.match(/Amount\s+\$?([\d,]+\.?\d*)/i);
+  const sentOnMatch = body.match(/Sent on\s+(.+)/i);
+  const memoMatch = body.match(/^Memo\s+(.+)/im);
+  if (!payerMatch || !amountMatch || !sentOnMatch) return null;
+  const dateStr = sentOnMatch[1].trim();
+  const parsed = new Date(dateStr);
+  const sentOn = isNaN(parsed.getTime()) ? dateStr : parsed.toISOString().split("T")[0];
+  return {
+    payerName: payerMatch[1].trim(),
+    amount: parseFloat(amountMatch[1].replace(/,/g, "")),
+    sentOn,
+    memo: memoMatch ? memoMatch[1].trim() : "",
+  };
+}
+
+export async function fetchZellePayments(
+  accessToken: string,
+  days: number | "all"
+): Promise<ZellePayment[]> {
+  const query =
+    days === "all"
+      ? `subject:"You received money with Zelle"`
+      : `subject:"You received money with Zelle" newer_than:${days}d`;
+  const messages = await searchGmailMessages(accessToken, query, 100);
+  const results: ZellePayment[] = [];
+  for (const msg of messages) {
+    try {
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      const body = extractPlainText(data.payload ?? {});
+      const parsed = parseZelleEmail(body);
+      if (parsed) results.push({ messageId: msg.id, ...parsed });
+    } catch {
+      continue;
+    }
+  }
+  return results.sort((a, b) => b.sentOn.localeCompare(a.sentOn));
 }
