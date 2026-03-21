@@ -57,6 +57,7 @@ import type {
   InvoiceSettings,
   InvoiceStatus,
   InvoiceLineItem,
+  InvoiceExpenseItem,
   Expense,
   ExpenseCategory,
   ItemSaleEvent,
@@ -693,6 +694,21 @@ export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
     return mapPlanEntry(await res.json());
   } catch {
     return null;
+  }
+}
+
+// Find all plan entries for a given date where `email` is in the helpers array
+export async function getPlanEntriesForTodayByEmail(email: string, date: string): Promise<PlanEntry[]> {
+  try {
+    const formula = encodeURIComponent(
+      `AND({Date} = "${date}", FIND("${email.toLowerCase()}", LOWER({Helpers})) > 0)`
+    );
+    const res = await planFetch(`?filterByFormula=${formula}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.records as AirtableRecord[]).map(mapPlanEntry);
+  } catch {
+    return [];
   }
 }
 
@@ -1730,6 +1746,7 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
     clerkUserId: toStr(f["ClerkUserId"]),
     displayName: toStr(f["DisplayName"]),
     email: toStr(f["Email"]),
+    phone: toStr(f["Phone"]) || undefined,
     role: (toStr(f["Role"]) || "TTTStaff") as SystemRole,
     isActive: f["IsActive"] === true,
     createdAt: toStr(f["CreatedAt"]),
@@ -1803,11 +1820,12 @@ export async function upsertStaffMember(data: {
 
 export async function updateStaffMember(
   id: string,
-  data: Partial<{ displayName: string; email: string; role: "TTTStaff" | "TTTManager"; isActive: boolean }>
+  data: Partial<{ displayName: string; email: string; phone: string; role: "TTTStaff" | "TTTManager"; isActive: boolean }>
 ): Promise<StaffMember> {
   const fields: Record<string, unknown> = {};
   if (data.displayName !== undefined) fields["DisplayName"] = data.displayName;
   if (data.email !== undefined) fields["Email"] = data.email;
+  if (data.phone !== undefined) fields["Phone"] = data.phone;
   if (data.role !== undefined) fields["Role"] = data.role;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
   const res = await staffRolesFetch(`/${id}`, {
@@ -2779,14 +2797,15 @@ export async function saveGmailToken(
   data: { accessToken: string; refreshToken: string; expiresAt: string; email: string }
 ): Promise<GmailToken> {
   const existing = await getGmailToken(clerkUserId);
-  const fields = {
+  const fields: Record<string, string> = {
     ClerkUserId: clerkUserId,
     AccessToken: data.accessToken,
-    RefreshToken: data.refreshToken,
     ExpiresAt: data.expiresAt,
     Email: data.email,
     UpdatedAt: new Date().toISOString(),
   };
+  // Only write RefreshToken when we actually have one — never overwrite with empty
+  if (data.refreshToken) fields.RefreshToken = data.refreshToken;
   if (existing) {
     const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${existing.id}`, {
       method: "PATCH",
@@ -2808,9 +2827,10 @@ export async function deleteGmailToken(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
-/** Returns the first available Gmail token in the system (any user). Used as fallback for shared syncs. */
+/** Returns the first available Gmail token that has a refresh token. Used as fallback for shared syncs. */
 export async function getAnyGmailToken(): Promise<GmailToken | null> {
-  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?maxRecords=1`);
+  const formula = encodeURIComponent(`NOT({RefreshToken} = "")`);
+  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
   if (!res.ok) return null;
   const data = await res.json();
   if (!data.records?.length) return null;
@@ -2970,6 +2990,11 @@ function mapInvoice(record: AirtableRecord): Invoice {
   if (rawLineItems) {
     try { lineItems = JSON.parse(rawLineItems); } catch { /* ignore */ }
   }
+  let expenseItems: InvoiceExpenseItem[] | undefined;
+  const rawExpenses = toStr(f["ExpensesJson"]);
+  if (rawExpenses) {
+    try { expenseItems = JSON.parse(rawExpenses); } catch { /* ignore */ }
+  }
   return {
     id: record.id,
     tenantId: toStr(f["TenantId"]),
@@ -2982,6 +3007,7 @@ function mapInvoice(record: AirtableRecord): Invoice {
     amount: typeof f["Amount"] === "number" ? f["Amount"] as number : 0,
     contractId: toStr(f["ContractId"]) || undefined,
     lineItems,
+    expenseItems,
     qboInvoiceId: toStr(f["QBOInvoiceId"]) || undefined,
     qboDocNumber: toStr(f["QBODocNumber"]) || undefined,
     status: (toStr(f["Status"]) || "Unpaid") as InvoiceStatus,
@@ -3030,6 +3056,7 @@ export async function createInvoice(data: {
   amount: number;
   contractId?: string;
   lineItems?: InvoiceLineItem[];
+  expenseItems?: InvoiceExpenseItem[];
   qboInvoiceId?: string;
   qboDocNumber?: string;
   sentToEmail?: string;
@@ -3052,6 +3079,7 @@ export async function createInvoice(data: {
   if (data.depositPercent !== undefined) fields["DepositPercent"] = data.depositPercent;
   if (data.contractId) fields["ContractId"] = data.contractId;
   if (data.lineItems) fields["LineItemsJson"] = JSON.stringify(data.lineItems);
+  if (data.expenseItems?.length) fields["ExpensesJson"] = JSON.stringify(data.expenseItems);
   if (data.qboInvoiceId) fields["QBOInvoiceId"] = data.qboInvoiceId;
   if (data.qboDocNumber) fields["QBODocNumber"] = data.qboDocNumber;
   if (data.sentToEmail) fields["SentToEmail"] = data.sentToEmail;
@@ -3198,6 +3226,8 @@ function mapExpense(record: AirtableRecord): Expense {
     receiptPublicId: toStr(f["ReceiptPublicId"]) || undefined,
     notes: toStr(f["Notes"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
+    tenantId: toStr(f["TenantId"]) || undefined,
+    tenantName: toStr(f["TenantName"]) || undefined,
   };
 }
 
@@ -3252,7 +3282,7 @@ export async function createExpense(data: {
 
 export async function updateExpense(
   id: string,
-  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes">>
+  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes" | "tenantId" | "tenantName">>
 ): Promise<Expense> {
   const fields: Record<string, unknown> = {};
   if (data.date !== undefined) fields["Date"] = data.date;
@@ -3261,9 +3291,21 @@ export async function updateExpense(
   if (data.category !== undefined) fields["Category"] = data.category;
   if (data.description !== undefined) fields["Description"] = data.description;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId || null;
+  if (data.tenantName !== undefined) fields["TenantName"] = data.tenantName || null;
   const res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
   if (!res.ok) throw new Error(await res.text());
   return mapExpense(await res.json() as AirtableRecord);
+}
+
+export async function getExpensesForTenant(tenantId: string): Promise<Expense[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await expensesFetch(
+    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapExpense);
 }
 
 export async function deleteExpense(id: string): Promise<void> {
@@ -3730,4 +3772,83 @@ export async function updateInventoryContainer(id: string, data: Partial<{ name:
 export async function deleteInventoryContainer(id: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.SUPPLY_INVENTORY).destroy(id);
+}
+
+// ─── Subcontractors ───────────────────────────────────────────────────────────
+
+function mapSubcontractor(record: Airtable.Record<Airtable.FieldSet>): import("./types").Subcontractor {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    charges: typeof f["Charges"] === "number" ? (f["Charges"] as number) : 0,
+    scope: toStr(f["Scope"]),
+    paid: f["Paid"] === true,
+    paidDate: toStr(f["PaidDate"]) || undefined,
+    tenantId: toStr(f["TenantId"]) || undefined,
+    tenantName: toStr(f["TenantName"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getSubcontractors(): Promise<import("./types").Subcontractor[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.SUBCONTRACTORS)
+    .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapSubcontractor);
+}
+
+export async function createSubcontractor(data: {
+  name: string;
+  charges: number;
+  scope: string;
+  paid?: boolean;
+  paidDate?: string;
+  tenantId?: string;
+  tenantName?: string;
+}): Promise<import("./types").Subcontractor> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {
+    Name: data.name,
+    Charges: data.charges,
+    Scope: data.scope,
+    Paid: data.paid ?? false,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.paidDate) fields["PaidDate"] = data.paidDate;
+  if (data.tenantId) fields["TenantId"] = data.tenantId;
+  if (data.tenantName) fields["TenantName"] = data.tenantName;
+  const record = await base(AIRTABLE_TABLES.SUBCONTRACTORS).create(fields);
+  return mapSubcontractor(record);
+}
+
+export async function updateSubcontractor(
+  id: string,
+  data: Partial<{
+    name: string;
+    charges: number;
+    scope: string;
+    paid: boolean;
+    paidDate: string | null;
+    tenantId: string | null;
+    tenantName: string | null;
+  }>
+): Promise<import("./types").Subcontractor> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.charges !== undefined) fields["Charges"] = data.charges;
+  if (data.scope !== undefined) fields["Scope"] = data.scope;
+  if (data.paid !== undefined) fields["Paid"] = data.paid;
+  if (data.paidDate !== undefined) fields["PaidDate"] = data.paidDate ?? "";
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId ?? "";
+  if (data.tenantName !== undefined) fields["TenantName"] = data.tenantName ?? "";
+  const record = await base(AIRTABLE_TABLES.SUBCONTRACTORS).update(id, fields);
+  return mapSubcontractor(record);
+}
+
+export async function deleteSubcontractor(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.SUBCONTRACTORS).destroy(id);
 }
