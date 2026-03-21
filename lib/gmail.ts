@@ -267,21 +267,36 @@ export async function fetchZellePayments(
   const messages = await searchGmailMessages(accessToken, query, 100);
 
   if (debug) {
-    // In debug mode, fetch subjects and return them as a thrown object so the caller can surface them
-    const subjects: string[] = [];
-    for (const msg of messages.slice(0, 10)) {
+    // Try several candidate queries to find which one matches Chase Zelle emails
+    const candidates = [
+      `subject:"You received money with Zelle"`,
+      `subject:"received money with Zelle"`,
+      `subject:"received money" Zelle`,
+      `from:chase.com Zelle`,
+      `from:alertsp.chase.com`,
+      `from:no.reply.alerts@chase.com`,
+    ];
+    const results: Record<string, { count: number; subjects: string[] }> = {};
+    for (const q of candidates) {
       try {
-        const res = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        if (!res.ok) continue;
-        const data = await res.json();
-        const subj = (data.payload?.headers as Array<{name:string;value:string}>)?.find(h => h.name === "Subject")?.value ?? "(no subject)";
-        subjects.push(subj);
-      } catch { continue; }
+        const msgs = await searchGmailMessages(accessToken, q + (days === "all" ? "" : ` newer_than:${days}d`), 5);
+        const subjects: string[] = [];
+        for (const msg of msgs) {
+          const r = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (!r.ok) continue;
+          const d = await r.json();
+          const hdrs = d.payload?.headers as Array<{name:string;value:string}> ?? [];
+          const subj = hdrs.find(h => h.name === "Subject")?.value ?? "(no subject)";
+          const from = hdrs.find(h => h.name === "From")?.value ?? "";
+          subjects.push(`${subj} | from: ${from}`);
+        }
+        results[q] = { count: msgs.length, subjects };
+      } catch { results[q] = { count: -1, subjects: [] }; }
     }
-    throw Object.assign(new Error("DEBUG"), { subjects, totalFound: messages.length });
+    throw Object.assign(new Error("DEBUG"), { results });
   }
 
   const results: ZellePayment[] = [];

@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ payments, connected: true, count: payments.length });
     } catch (e: unknown) {
       if (e instanceof Error && e.message === "DEBUG") {
-        const { subjects, totalFound } = e as Error & { subjects: string[]; totalFound: number };
-        return NextResponse.json({ debug: true, totalFound, subjects });
+        const { results } = e as Error & { results: unknown };
+        return NextResponse.json({ debug: true, results });
       }
       throw e;
     }
