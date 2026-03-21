@@ -62,6 +62,7 @@ export const AIRTABLE_TABLES = {
   ITEM_SALE_EVENTS: process.env.AIRTABLE_ITEM_SALE_EVENTS_TABLE || "ItemSaleEvents",
   SUPPLY_CRATE_LOCATIONS: process.env.AIRTABLE_SUPPLY_CRATE_LOCATIONS_TABLE || "SupplyCrateLocations",
   SUPPLY_INVENTORY: process.env.AIRTABLE_SUPPLY_INVENTORY_TABLE || "SupplyInventory",
+  SUBCONTRACTORS: process.env.AIRTABLE_SUBCONTRACTORS_TABLE || "Subcontractors",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
