@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     } catch (e: unknown) {
       if (e instanceof Error && e.message === "DEBUG") {
         const { results } = e as Error & { results: unknown };
-        return NextResponse.json({ debug: true, results });
+        return NextResponse.json({ debug: true, connectedEmail: token.email, results });
       }
       throw e;
     }
