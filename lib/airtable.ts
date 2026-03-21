@@ -2829,7 +2829,7 @@ export async function deleteGmailToken(id: string): Promise<void> {
 
 /** Returns the first available Gmail token that has a refresh token. Used as fallback for shared syncs. */
 export async function getAnyGmailToken(): Promise<GmailToken | null> {
-  const formula = encodeURIComponent(`NOT({RefreshToken} = "")`);
+  const formula = encodeURIComponent(`LEN({RefreshToken}) > 10`);
   const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
   if (!res.ok) return null;
   const data = await res.json();
