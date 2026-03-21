@@ -24,8 +24,17 @@ export async function GET(req: NextRequest) {
       // Missing or expired refresh token — treat as not connected
       return NextResponse.json({ payments: [], connected: false, tokenError: String(e), tokenEmail: token.email });
     }
-    const payments = await fetchZellePayments(accessToken, days);
-    return NextResponse.json({ payments, connected: true });
+    const debug = req.nextUrl.searchParams.get("debug") === "1";
+    try {
+      const payments = await fetchZellePayments(accessToken, days, debug);
+      return NextResponse.json({ payments, connected: true, count: payments.length });
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === "DEBUG") {
+        const { subjects, totalFound } = e as Error & { subjects: string[]; totalFound: number };
+        return NextResponse.json({ debug: true, totalFound, subjects });
+      }
+      throw e;
+    }
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
