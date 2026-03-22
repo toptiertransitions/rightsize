@@ -25,7 +25,6 @@ interface Props {
   currentUserName: string;
   staffMembers?: StaffOption[];
   services?: string[];
-  soldItems?: SoldItemRow[];
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -163,9 +162,8 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string,
 }
 
 // ─── Export Modal ─────────────────────────────────────────────────────────────
-function ExportModal({ entries, soldItems = [], onClose, weekStart }: {
+function ExportModal({ entries, onClose, weekStart }: {
   entries: TimeEntry[];
-  soldItems?: SoldItemRow[];
   onClose: () => void;
   weekStart: Date;
 }) {
@@ -178,6 +176,15 @@ function ExportModal({ entries, soldItems = [], onClose, weekStart }: {
 
   const [fromDate, setFromDate] = useState(twoWeeksFrom);
   const [toDate,   setToDate]   = useState(twoWeeksTo);
+  const [soldItems, setSoldItems] = useState<SoldItemRow[]>([]);
+
+  // Fetch sold items on demand when modal opens
+  useEffect(() => {
+    fetch("/api/sold-items")
+      .then(r => r.json())
+      .then(d => setSoldItems(d.items ?? []))
+      .catch(() => {});
+  }, []);
 
   const presets = [
     { label: "This Week",    from: thisWeekFrom, to: thisWeekTo },
@@ -1046,7 +1053,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services, soldItems = [] }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
@@ -1345,7 +1352,6 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
       {showExportModal && (
         <ExportModal
           entries={visibleEntries}
-          soldItems={soldItems}
           onClose={() => setShowExportModal(false)}
           weekStart={currentWeekStart}
         />

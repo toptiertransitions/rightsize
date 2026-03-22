@@ -1,8 +1,7 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getItemsByPrimaryRoute, getInvoicesForTenant, getPlanEntriesForTodayByEmail } from "@/lib/airtable";
-import type { SoldItemRow } from "@/lib/types";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -48,13 +47,11 @@ export default async function DashboardPage({
     const todayStr = new Date().toISOString().slice(0, 10);
     const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager";
 
-    const [allTenants, timeEntries, allStaff, serviceList, fbItems, ebayItems, todayPlanEntries] = await Promise.all([
+    const [allTenants, timeEntries, allStaff, serviceList, todayPlanEntries] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
       getStaffMembers().catch(() => []),
       getServices().catch(() => []),
-      canViewAll ? getItemsByPrimaryRoute("FB/Marketplace").catch(() => []) : Promise.resolve([]),
-      canViewAll ? getItemsByPrimaryRoute("Online Marketplace").catch(() => []) : Promise.resolve([]),
       showTodaysPlan && userEmail ? getPlanEntriesForTodayByEmail(userEmail, todayStr) : Promise.resolve([]),
     ]);
 
@@ -116,39 +113,6 @@ export default async function DashboardPage({
       });
     }
 
-    // Build sold items for CSV export
-    const tenantNameMap = new Map(allTenants.map(t => [t.id, t.name]));
-    const soldItems: SoldItemRow[] = [];
-    if (canViewAll) {
-      for (const item of fbItems) {
-        if (item.status === "Sold" && item.saleDate) {
-          soldItems.push({
-            saleDate: item.saleDate.slice(0, 10),
-            staffSellerName: item.staffSellerName,
-            tenantName: tenantNameMap.get(item.tenantId) ?? "",
-            itemName: item.itemName,
-            valueMid: item.valueMid,
-            staffCommissionPercent: item.staffCommissionPercent,
-            staffTimeMinutes: item.staffTimeMinutes,
-            channel: "FB",
-          });
-        }
-      }
-      for (const item of ebayItems) {
-        if (item.status === "Sold" && item.saleDate) {
-          soldItems.push({
-            saleDate: item.saleDate.slice(0, 10),
-            staffSellerName: item.staffSellerName,
-            tenantName: tenantNameMap.get(item.tenantId) ?? "",
-            itemName: item.itemName,
-            valueMid: item.valueMid,
-            staffCommissionPercent: item.staffCommissionPercent,
-            staffTimeMinutes: item.staffTimeMinutes,
-            channel: "eBay",
-          });
-        }
-      }
-    }
     const serviceNames = serviceList.map(s => s.name);
 
     const staffMembers = canViewAll
@@ -182,7 +146,6 @@ export default async function DashboardPage({
               currentUserName={firstName}
               staffMembers={staffMembers}
               services={serviceNames}
-              soldItems={soldItems}
             />
           </div>
         </section>

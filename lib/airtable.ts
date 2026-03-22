@@ -4,6 +4,8 @@
  */
 
 import Airtable from "airtable";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { AIRTABLE_TABLES, isTTTAdmin, isTTTStaff } from "./config";
 import { getZipCentroid, haversineDistanceMiles } from "./zip-centroids";
 import type {
@@ -89,13 +91,17 @@ function toNum(v: unknown): number {
 }
 
 // ─── Tenants ──────────────────────────────────────────────────────────────────
-export async function getTenants(): Promise<Tenant[]> {
-  const base = getBase();
-  const records = await base(AIRTABLE_TABLES.TENANTS)
-    .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
-    .all();
-  return records.map(mapTenant);
-}
+export const getTenants = unstable_cache(
+  async (): Promise<Tenant[]> => {
+    const base = getBase();
+    const records = await base(AIRTABLE_TABLES.TENANTS)
+      .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+      .all();
+    return records.map(mapTenant);
+  },
+  ["tenants"],
+  { revalidate: 60 }
+);
 
 export async function getTenantById(id: string): Promise<Tenant | null> {
   try {
@@ -685,6 +691,24 @@ export async function getPlanEntriesForTenant(tenantId: string): Promise<PlanEnt
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapPlanEntry);
+}
+
+export async function getPlanEntriesForTenants(tenantIds: string[]): Promise<PlanEntry[]> {
+  if (tenantIds.length === 0) return [];
+  if (tenantIds.length === 1) return getPlanEntriesForTenant(tenantIds[0]);
+  const orParts = tenantIds.map(id => `{TenantID} = "${id}"`).join(",");
+  const formula = encodeURIComponent(`OR(${orParts})`);
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await planFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapPlanEntry);
 }
 
 export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
@@ -1648,12 +1672,16 @@ function mapService(record: AirtableRecord): Service {
   };
 }
 
-export async function getServices(): Promise<Service[]> {
-  const res = await servicesFetch(`?sort[0][field]=SortOrder&sort[0][direction]=asc`);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapService).filter(s => s.isActive);
-}
+export const getServices = unstable_cache(
+  async (): Promise<Service[]> => {
+    const res = await servicesFetch(`?sort[0][field]=SortOrder&sort[0][direction]=asc`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return (data.records as AirtableRecord[]).map(mapService).filter(s => s.isActive);
+  },
+  ["services"],
+  { revalidate: 300 }
+);
 
 export async function getAllServices(): Promise<Service[]> {
   const res = await servicesFetch(`?sort[0][field]=SortOrder&sort[0][direction]=asc`);
@@ -1864,7 +1892,7 @@ export async function updateStaffAvailability(
 // 2. TTT_STAFF_USER_IDS env var  → TTTStaff (legacy compat, skipped if also admin)
 // 3. StaffRoles table (IsActive) → role from record
 // 4. Otherwise → null
-export async function getSystemRole(clerkUserId: string): Promise<SystemRole | null> {
+export const getSystemRole = cache(async (clerkUserId: string): Promise<SystemRole | null> => {
   if (isTTTAdmin(clerkUserId)) return "TTTAdmin";
 
   // Check StaffRoles table first (takes precedence over legacy env var for TTTManager)
@@ -1879,7 +1907,7 @@ export async function getSystemRole(clerkUserId: string): Promise<SystemRole | n
   if (isTTTStaff(clerkUserId)) return "TTTStaff";
 
   return null;
-}
+});
 
 // ─── Contract Settings ────────────────────────────────────────────────────────
 function contractFetch(table: string, path: string, options?: RequestInit) {

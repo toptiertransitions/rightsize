@@ -7,6 +7,7 @@ import {
   getUserRoleForTenant,
   getRoomsForTenant,
   getPlanEntriesForTenant,
+  getPlanEntriesForTenants,
   getMembershipsForUser,
   getProjectFiles,
   getTimeEntries,
@@ -54,7 +55,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
 
     const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
-      Promise.all(selectedTenants.map((t) => getPlanEntriesForTenant(t.id).catch(() => []))).then((r) => r.flat()),
+      getPlanEntriesForTenants(selectedTenants.map(t => t.id)).catch(() => []),
       Promise.all(selectedTenants.map((t) => getTimeEntries({ tenantId: t.id }).catch(() => []))).then((r) => r.flat()),
       Promise.all(selectedTenants.map((t) => getProjectFiles(t.id).catch(() => []))).then((r) => r.flat()),
       getServices().catch(() => []),
@@ -109,7 +110,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
       // Fetch plan entries, time entries, project files, and services for all tenants in selected group
       const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
-        Promise.all(selectedTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))).then(r => r.flat()),
+        getPlanEntriesForTenants(selectedTenants.map(t => t.id)).catch(() => []),
         Promise.all(selectedTenants.map(t => getTimeEntries({ tenantId: t.id }).catch(() => []))).then(r => r.flat()),
         Promise.all(selectedTenants.map(t => getProjectFiles(t.id).catch(() => []))).then(r => r.flat()),
         getServices().catch(() => []),

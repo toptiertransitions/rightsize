@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "rightsize": {
+      "type": "http",
+      "url": "https://app.toptiertransitions.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer 969847e9e47f22ef849df8afb1f82f2ce756db55361b7164dad3e320db4da7e5"
+      }
+    }
+  }
+}

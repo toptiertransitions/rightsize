@@ -83,10 +83,14 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   try {
     const opportunities = await getOpportunitiesForTenant(tenantId);
     const seen = new Set<string>();
+    // Batch-fetch all primary contacts in parallel (avoids N+1 sequential Airtable calls)
+    const contactIds = opportunities.map(o => o.clientContactId).filter((id): id is string => !!id);
+    const contacts = await Promise.all(contactIds.map(id => getClientContactById(id).catch(() => null)));
+    const contactMap = new Map(contacts.filter(Boolean).map(c => [c!.id, c!]));
     for (const opp of opportunities) {
       // Primary contact
       if (opp.clientContactId) {
-        const contact = await getClientContactById(opp.clientContactId).catch(() => null);
+        const contact = contactMap.get(opp.clientContactId);
         if (contact?.email && !seen.has(contact.email)) {
           seen.add(contact.email);
           recipientOptions.push({ label: `${contact.name} (Contact)`, email: contact.email });
