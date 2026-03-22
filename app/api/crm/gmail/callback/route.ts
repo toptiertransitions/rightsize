@@ -13,8 +13,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const tokens = await exchangeCodeForTokens(code);
-    const hasRefreshToken = !!tokens.refreshToken;
-    console.log(`[gmail/callback] clerkUserId=${clerkUserId} email=${tokens.email} hasRefreshToken=${hasRefreshToken}`);
+    console.log(`[gmail/callback] clerkUserId=${clerkUserId} email=${tokens.email} hasRefreshToken=${!!tokens.refreshToken}`);
     await saveGmailToken(clerkUserId, tokens);
 
     // Kick off a full email history sync in the background after redirect
@@ -26,9 +25,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const dest = new URL("/crm?tab=settings&connected=1", req.url);
-    dest.searchParams.set("hasRefreshToken", hasRefreshToken ? "1" : "0");
-    return NextResponse.redirect(dest);
+    return NextResponse.redirect(new URL("/crm?tab=settings&connected=1", req.url));
   } catch (err) {
     console.error("Gmail OAuth callback error:", err);
     return NextResponse.redirect(new URL("/crm?tab=settings&error=oauth_failed", req.url));

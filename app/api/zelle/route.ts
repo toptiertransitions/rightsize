@@ -19,25 +19,16 @@ export async function GET(req: NextRequest) {
     const token = zelleEmail
       ? await getGmailTokenByEmail(zelleEmail)
       : await getAnyGmailToken();
-    if (!token) return NextResponse.json({ payments: [], connected: false, tokenError: "No token record found" });
+    if (!token) return NextResponse.json({ payments: [], connected: false });
     let accessToken: string;
     try {
       accessToken = await getValidAccessToken(token.clerkUserId);
     } catch (e) {
-      // Missing or expired refresh token — treat as not connected
-      return NextResponse.json({ payments: [], connected: false, tokenError: String(e), tokenEmail: token.email });
+      console.error("[zelle] Token error:", String(e));
+      return NextResponse.json({ payments: [], connected: false });
     }
-    const debug = req.nextUrl.searchParams.get("debug") === "1";
-    try {
-      const payments = await fetchZellePayments(accessToken, days, debug);
-      return NextResponse.json({ payments, connected: true, count: payments.length });
-    } catch (e: unknown) {
-      if (e instanceof Error && e.message === "DEBUG") {
-        const { totalFound, snippet, plainTextPreview, mimeType } = e as Error & Record<string, unknown>;
-        return NextResponse.json({ debug: true, connectedEmail: token.email, totalFound, mimeType, snippet, plainTextPreview });
-      }
-      throw e;
-    }
+    const payments = await fetchZellePayments(accessToken, days);
+    return NextResponse.json({ payments, connected: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

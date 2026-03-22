@@ -282,31 +282,11 @@ function parseZelleEmail(body: string): Omit<ZellePayment, "messageId"> | null {
 
 export async function fetchZellePayments(
   accessToken: string,
-  days: number | "all",
-  debug = false
+  days: number | "all"
 ): Promise<ZellePayment[]> {
   const base = `subject:"You received money with Zelle"`;
   const query = days === "all" ? base : `${base} newer_than:${days}d`;
   const messages = await searchGmailMessages(accessToken, query, 100);
-
-  if (debug) {
-    // Fetch the first message's full body to diagnose parsing
-    const firstMsg = messages[0];
-    if (!firstMsg) throw Object.assign(new Error("DEBUG"), { totalFound: 0, body: null, snippet: null });
-    const r = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${firstMsg.id}?format=full`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    const d = await r.json();
-    const plainText = extractPlainText(d.payload ?? {});
-    throw Object.assign(new Error("DEBUG"), {
-      totalFound: messages.length,
-      snippet: d.snippet ?? null,
-      plainTextPreview: plainText.slice(0, 1500),
-      mimeType: (d.payload as Record<string,unknown>)?.mimeType ?? null,
-    });
-  }
-
   const results: ZellePayment[] = [];
   for (const msg of messages) {
     try {
