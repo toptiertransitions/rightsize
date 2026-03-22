@@ -270,8 +270,10 @@ function parseZelleEmail(body: string): Omit<ZellePayment, "messageId"> | null {
   const parsed = new Date(dateStr);
   const sentOn = isNaN(parsed.getTime()) ? dateStr : parsed.toISOString().split("T")[0];
   const memo = memoMatch ? memoMatch[1].trim() : "";
+  // Strip quoted-reply markers ("> ", ">> ", etc.) that appear in forwarded emails
+  const payerName = payerMatch[1].trim().replace(/^[>\s]+/, "").trim();
   return {
-    payerName: payerMatch[1].trim(),
+    payerName,
     amount: parseFloat(amountMatch[1].replace(/,/g, "")),
     sentOn,
     memo: memo === "N/A" ? "" : memo,
@@ -321,5 +323,13 @@ export async function fetchZellePayments(
       continue;
     }
   }
-  return results.sort((a, b) => b.sentOn.localeCompare(a.sentOn));
+  // Deduplicate: same payer + amount + date can appear across forwarded email threads
+  const seen = new Set<string>();
+  const deduped = results.filter((p) => {
+    const key = `${p.payerName.toLowerCase()}|${p.amount}|${p.sentOn}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return deduped.sort((a, b) => b.sentOn.localeCompare(a.sentOn));
 }
