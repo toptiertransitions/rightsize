@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ payments, connected: true, count: payments.length });
     } catch (e: unknown) {
       if (e instanceof Error && e.message === "DEBUG") {
-        const { results } = e as Error & { results: unknown };
-        return NextResponse.json({ debug: true, connectedEmail: token.email, results });
+        const { totalFound, snippet, plainTextPreview, mimeType } = e as Error & Record<string, unknown>;
+        return NextResponse.json({ debug: true, connectedEmail: token.email, totalFound, mimeType, snippet, plainTextPreview });
       }
       throw e;
     }

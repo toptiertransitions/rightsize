@@ -260,43 +260,26 @@ export async function fetchZellePayments(
   days: number | "all",
   debug = false
 ): Promise<ZellePayment[]> {
-  const query =
-    days === "all"
-      ? `Zelle`
-      : `Zelle newer_than:${days}d`;
+  const base = `subject:"You received money with Zelle"`;
+  const query = days === "all" ? base : `${base} newer_than:${days}d`;
   const messages = await searchGmailMessages(accessToken, query, 100);
 
   if (debug) {
-    // Try several candidate queries to find which one matches Chase Zelle emails
-    const candidates = [
-      `subject:"You received money with Zelle"`,
-      `subject:"received money with Zelle"`,
-      `subject:"received money" Zelle`,
-      `from:chase.com Zelle`,
-      `from:alertsp.chase.com`,
-      `from:no.reply.alerts@chase.com`,
-    ];
-    const results: Record<string, { count: number; subjects: string[] }> = {};
-    for (const q of candidates) {
-      try {
-        const msgs = await searchGmailMessages(accessToken, q + (days === "all" ? "" : ` newer_than:${days}d`), 5);
-        const subjects: string[] = [];
-        for (const msg of msgs) {
-          const r = await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          if (!r.ok) continue;
-          const d = await r.json();
-          const hdrs = d.payload?.headers as Array<{name:string;value:string}> ?? [];
-          const subj = hdrs.find(h => h.name === "Subject")?.value ?? "(no subject)";
-          const from = hdrs.find(h => h.name === "From")?.value ?? "";
-          subjects.push(`${subj} | from: ${from}`);
-        }
-        results[q] = { count: msgs.length, subjects };
-      } catch { results[q] = { count: -1, subjects: [] }; }
-    }
-    throw Object.assign(new Error("DEBUG"), { results });
+    // Fetch the first message's full body to diagnose parsing
+    const firstMsg = messages[0];
+    if (!firstMsg) throw Object.assign(new Error("DEBUG"), { totalFound: 0, body: null, snippet: null });
+    const r = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${firstMsg.id}?format=full`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const d = await r.json();
+    const plainText = extractPlainText(d.payload ?? {});
+    throw Object.assign(new Error("DEBUG"), {
+      totalFound: messages.length,
+      snippet: d.snippet ?? null,
+      plainTextPreview: plainText.slice(0, 1500),
+      mimeType: (d.payload as Record<string,unknown>)?.mimeType ?? null,
+    });
   }
 
   const results: ZellePayment[] = [];
