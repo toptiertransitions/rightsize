@@ -16,7 +16,10 @@ async function getAuth() {
   return auth;
 }
 
-export const CALENDAR_OAUTH_SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
+export const CALENDAR_OAUTH_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/userinfo.email",
+];
 
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";
 const TIMEZONE = "America/Chicago";
