@@ -2827,10 +2827,13 @@ export async function deleteGmailToken(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
-/** Returns the Gmail token for a specific email address. */
+/** Returns the Gmail token for a specific email address (most recently updated). */
 export async function getGmailTokenByEmail(email: string): Promise<GmailToken | null> {
   const formula = encodeURIComponent(`{Email} = "${email}"`);
-  const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
+  const res = await crmFetch(
+    AIRTABLE_TABLES.GMAIL_TOKENS,
+    `?filterByFormula=${formula}&sort[0][field]=UpdatedAt&sort[0][direction]=desc&maxRecords=1`
+  );
   if (!res.ok) return null;
   const data = await res.json();
   if (!data.records?.length) return null;
