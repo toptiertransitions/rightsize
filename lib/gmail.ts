@@ -219,17 +219,38 @@ export async function getGmailMessage(
 
 // ─── Zelle Payment Parsing ────────────────────────────────────────────────────
 
+function decodeBase64Url(data: string): string {
+  return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|td|tr|li|h[1-6])\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function extractPlainText(payload: Record<string, unknown>): string {
   const mimeType = payload.mimeType as string;
   const body = payload.body as { data?: string } | undefined;
   const parts = payload.parts as Record<string, unknown>[] | undefined;
-  if (mimeType === "text/plain" && body?.data) {
-    return Buffer.from(
-      body.data.replace(/-/g, "+").replace(/_/g, "/"),
-      "base64"
-    ).toString("utf-8");
-  }
+  if (mimeType === "text/plain" && body?.data) return decodeBase64Url(body.data);
+  if (mimeType === "text/html" && body?.data) return htmlToText(decodeBase64Url(body.data));
   if (parts) {
+    // Prefer text/plain first
+    for (const part of parts) {
+      if ((part as Record<string, unknown>).mimeType === "text/plain") {
+        const text = extractPlainText(part);
+        if (text) return text;
+      }
+    }
+    // Fall back to any part (including html)
     for (const part of parts) {
       const text = extractPlainText(part);
       if (text) return text;
@@ -239,19 +260,21 @@ function extractPlainText(payload: Record<string, unknown>): string {
 }
 
 function parseZelleEmail(body: string): Omit<ZellePayment, "messageId"> | null {
-  const payerMatch = body.match(/^(.+?)\s+sent you\b/im);
+  // Payer: handles both "NAME sent you" (plain text) and "payment NAME sent you" (HTML-derived)
+  const payerMatch = body.match(/(?:payment\s+)?(.+?)\s+sent you\b/i);
   const amountMatch = body.match(/Amount\s+\$?([\d,]+\.?\d*)/i);
   const sentOnMatch = body.match(/Sent on\s+(.+)/i);
-  const memoMatch = body.match(/^Memo\s+(.+)/im);
+  const memoMatch = body.match(/Memo\s+(.+)/i);
   if (!payerMatch || !amountMatch || !sentOnMatch) return null;
   const dateStr = sentOnMatch[1].trim();
   const parsed = new Date(dateStr);
   const sentOn = isNaN(parsed.getTime()) ? dateStr : parsed.toISOString().split("T")[0];
+  const memo = memoMatch ? memoMatch[1].trim() : "";
   return {
     payerName: payerMatch[1].trim(),
     amount: parseFloat(amountMatch[1].replace(/,/g, "")),
     sentOn,
-    memo: memoMatch ? memoMatch[1].trim() : "",
+    memo: memo === "N/A" ? "" : memo,
   };
 }
 
