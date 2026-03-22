@@ -198,6 +198,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [calError, setCalError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [tttUsers, setTttUsers] = useState<TTTUser[]>([]);
   const [teamSearch, setTeamSearch] = useState("");
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
@@ -222,7 +223,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
     })
       .then(r => r.json())
-      .then(d => { if (d.entry?.helpers) setHelpers(d.entry.helpers); })
+      .then(d => { if (d.entry?.helpers?.length) setHelpers(d.entry.helpers); })
       .catch(() => {})
       .finally(() => setCalLoading(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -286,7 +287,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Sync failed");
-      if (d.entry?.helpers) setHelpers(d.entry.helpers);
+      if (d.entry?.helpers?.length) setHelpers(d.entry.helpers);
     } catch (e) {
       setCalError(e instanceof Error ? e.message : "Failed to sync RSVPs");
     } finally {
@@ -302,9 +303,11 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
     const updated: PlanHelper[] = [...helpers, { email, status: "pending" }];
     setHelpers(updated);
     setHelperInput("");
-    if (isEdit) {
-      await sendCalendarInvites(updated);
-    }
+    // Don't auto-send here in edit mode — the save handler calls action:"update" which
+    // PATCHes the Google Calendar event (with sendUpdates:"all") and Google sends invite
+    // emails to newly added attendees at that point. Auto-sending immediately caused a
+    // race condition: add helper → invite sent → remove helper before saving → save
+    // PATCHes Google Calendar without that helper → Google sends them a cancellation.
   };
 
   // Adding a TTT team member via the staff picker
@@ -314,9 +317,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
     setHelpers(updated);
     setTeamSearch("");
     setShowTeamDropdown(false);
-    if (isEdit) {
-      await sendCalendarInvites(updated);
-    }
+    // Same rationale as addHelper: don't auto-send on add, let save handle it.
   };
 
   // Derived lists for two-section display
@@ -746,11 +747,26 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
         {/* Footer */}
         <div className="px-6 py-4 flex gap-3 border-t border-cream-100 flex-shrink-0">
-          {isEdit && (
-            <button onClick={handleDelete} disabled={loading}
+          {isEdit && !confirmDelete && (
+            <button onClick={() => setConfirmDelete(true)} disabled={loading}
               className="h-11 px-4 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50">
               Delete
             </button>
+          )}
+          {isEdit && confirmDelete && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600 font-medium whitespace-nowrap">
+                {googleEventId ? "Cancel invites too?" : "Sure?"}
+              </span>
+              <button onClick={handleDelete} disabled={loading}
+                className="h-9 px-3 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors disabled:opacity-50">
+                Yes, delete
+              </button>
+              <button onClick={() => setConfirmDelete(false)} disabled={loading}
+                className="h-9 px-3 rounded-lg border border-gray-300 text-gray-600 text-xs font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
+                No
+              </button>
+            </div>
           )}
           <button onClick={onClose} disabled={loading}
             className="flex-1 h-11 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
