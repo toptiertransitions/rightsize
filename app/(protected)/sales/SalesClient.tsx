@@ -1149,19 +1149,6 @@ export function SalesClient({
       {/* Payment handles — visible to TTT staff only */}
       {hasPaymentHandles && (
         <div className="mb-6 grid grid-cols-2 gap-3">
-          {(paymentHandles!.venmoHandle || paymentHandles!.venmoQrUrl) && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col items-center gap-2">
-              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Venmo</span>
-              {paymentHandles!.venmoQrUrl && (
-                <div className="relative w-28 h-28 rounded-lg overflow-hidden bg-white border border-blue-100">
-                  <Image src={paymentHandles!.venmoQrUrl} alt="Venmo QR" fill className="object-contain p-1" />
-                </div>
-              )}
-              {paymentHandles!.venmoHandle && (
-                <span className="text-sm font-medium text-blue-800">{paymentHandles!.venmoHandle}</span>
-              )}
-            </div>
-          )}
           {(paymentHandles!.zelleHandle || paymentHandles!.zelleQrUrl) && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex flex-col items-center gap-2">
               <span className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">Zelle</span>
@@ -1172,6 +1159,19 @@ export function SalesClient({
               )}
               {paymentHandles!.zelleHandle && (
                 <span className="text-sm font-medium text-yellow-800">{paymentHandles!.zelleHandle}</span>
+              )}
+            </div>
+          )}
+          {(paymentHandles!.venmoHandle || paymentHandles!.venmoQrUrl) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col items-center gap-2">
+              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Venmo</span>
+              {paymentHandles!.venmoQrUrl && (
+                <div className="relative w-28 h-28 rounded-lg overflow-hidden bg-white border border-blue-100">
+                  <Image src={paymentHandles!.venmoQrUrl} alt="Venmo QR" fill className="object-contain p-1" />
+                </div>
+              )}
+              {paymentHandles!.venmoHandle && (
+                <span className="text-sm font-medium text-blue-800">{paymentHandles!.venmoHandle}</span>
               )}
             </div>
           )}
