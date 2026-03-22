@@ -767,7 +767,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 }
 
 // ─── ActivityChip ──────────────────────────────────────────────────────────────
-function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUsers }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[]; tttUsers?: TTTUser[] }) {
+function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUsers, syncFailed }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[]; tttUsers?: TTTUser[]; syncFailed?: boolean }) {
   const room = entry.roomId ? rooms.find(r => r.id === entry.roomId) : null;
   const roomLabel = room?.name ?? entry.roomLabel ?? "";
   const colorClass = getActivityColor(entry.activity, serviceList ?? []);
@@ -808,6 +808,9 @@ function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUser
           })}
           {entry.helpers.length > MAX_VISIBLE && (
             <span className="text-[9px] opacity-60">+{entry.helpers.length - MAX_VISIBLE}</span>
+          )}
+          {syncFailed && (
+            <span title="Calendar sync failed — open shift to retry" className="text-[9px] opacity-70">⚠</span>
           )}
         </div>
       )}
@@ -878,6 +881,9 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [liveEntries, setLiveEntries] = useState(entries);
   useEffect(() => { setLiveEntries(entries); }, [entries]);
 
+  // Entries where background RSVP sync failed (shows ⚠ on calendar chip)
+  const [failedSyncIds, setFailedSyncIds] = useState<Set<string>>(new Set());
+
   // Background-sync RSVPs for any entry with a googleEventId (staggered 400ms apart)
   useEffect(() => {
     const toSync = entries.filter(e => e.googleEventId);
@@ -893,9 +899,14 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           .then(d => {
             if (d.entry) {
               setLiveEntries(prev => prev.map(e => e.id === d.entry.id ? d.entry : e));
+              setFailedSyncIds(prev => { const next = new Set(prev); next.delete(entry.id); return next; });
+            } else if (d.error) {
+              setFailedSyncIds(prev => new Set(prev).add(entry.id));
             }
           })
-          .catch(() => {}); // silent — never block the UI
+          .catch(() => {
+            setFailedSyncIds(prev => new Set(prev).add(entry.id));
+          });
       }, i * 400);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1218,6 +1229,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                         projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                         serviceList={services}
                         tttUsers={tttUsers}
+                        syncFailed={failedSyncIds.has(entry.id)}
                       />
                     ))}
                   </div>
@@ -1264,6 +1276,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                   projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                   serviceList={services}
                   tttUsers={tttUsers}
+                  syncFailed={failedSyncIds.has(entry.id)}
                 />
               ))}
               {effectiveCanEdit && (
@@ -1323,6 +1336,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
                           projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
                           serviceList={services}
                           tttUsers={tttUsers}
+                          syncFailed={failedSyncIds.has(entry.id)}
                         />
                       </div>
                     ))}
