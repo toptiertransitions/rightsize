@@ -94,8 +94,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
       { href: "/crm", base: "/crm", label: "CRM" },
       { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
     ] : []),
-    // Expenses — Manager and Admin
-    ...(isManager ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
+    // Expenses — Staff, Manager, and Admin
+    ...((isManager || isStaff) ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
     // Ops — Manager and Admin only
     ...(isManager ? [{ href: "/staff", base: "/staff", label: "Ops" }] : []),
     { href: "/help", base: "/help", label: "Help" },

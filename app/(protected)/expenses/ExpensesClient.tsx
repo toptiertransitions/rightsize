@@ -5,6 +5,77 @@ import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory, Tenant } from "@/lib/types";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 
+// ─── Tenant combobox ───────────────────────────────────────────────────────────
+function TenantCombobox({ tenants, value, onChange, inputCls }: {
+  tenants: Tenant[];
+  value: string;
+  onChange: (id: string) => void;
+  inputCls?: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selected = tenants.find(t => t.id === value);
+  const filtered = query === ""
+    ? tenants
+    : tenants.filter(t => t.name.toLowerCase().includes(query.toLowerCase()));
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={open ? query : (selected?.name ?? "")}
+          placeholder="Search project…"
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          className={cn("pr-6", inputCls ?? "border border-gray-300 rounded-lg px-2 py-1 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-forest-400")}
+        />
+        {value && !open && (
+          <button
+            type="button"
+            onMouseDown={e => { e.preventDefault(); onChange(""); }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 leading-none"
+          >×</button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-56 max-h-52 overflow-auto bg-white border border-gray-200 rounded-xl shadow-lg">
+          <button
+            type="button"
+            onMouseDown={() => { onChange(""); setOpen(false); setQuery(""); }}
+            className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100"
+          >— No project —</button>
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
+          ) : filtered.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onMouseDown={() => { onChange(t.id); setOpen(false); setQuery(""); }}
+              className={cn(
+                "w-full text-left px-3 py-2 text-sm hover:bg-forest-50 transition-colors",
+                value === t.id ? "bg-forest-50 text-forest-700 font-medium" : "text-gray-700"
+              )}
+            >{t.name}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   initialExpenses: Expense[];
   staffName: string;
@@ -106,10 +177,12 @@ function EditRow({
         <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional…" className={cn(inputCls, "w-36")} />
       </td>
       <td className="px-3 py-2">
-        <select value={tenantId} onChange={e => setTenantId(e.target.value)} className={cn(inputCls, "w-44")}>
-          <option value="">— No project —</option>
-          {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        <TenantCombobox
+          tenants={tenants}
+          value={tenantId}
+          onChange={setTenantId}
+          inputCls={cn(inputCls, "w-48")}
+        />
       </td>
       <td className="px-3 py-2">
         {expense.receiptUrl && (
@@ -173,11 +246,12 @@ function BulkEditBar({
         className="text-sm border border-gray-300 rounded-lg px-2 py-1.5" />
       <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Set vendor…"
         className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-32" />
-      <select value={tenantId} onChange={e => setTenantId(e.target.value)}
-        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5">
-        <option value="">Assign project…</option>
-        {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-      </select>
+      <TenantCombobox
+        tenants={tenants}
+        value={tenantId}
+        onChange={setTenantId}
+        inputCls="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-44 focus:outline-none focus:ring-1 focus:ring-forest-400"
+      />
       <button onClick={handleApply}
         className="text-sm bg-forest-600 text-white px-3 py-1.5 rounded-lg hover:bg-forest-700">
         Apply
