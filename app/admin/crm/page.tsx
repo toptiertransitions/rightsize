@@ -25,7 +25,7 @@ export default async function AdminCRMPage() {
             Manage Gmail integration and email activity syncing for the CRM.
           </p>
         </div>
-        <CRMSettingsClient gmailConnected={!!token} gmailEmail={token?.email} calendarConnected={!!calendarToken} />
+        <CRMSettingsClient gmailConnected={!!token} gmailEmail={token?.email} calendarConnected={!!calendarToken} calendarEmail={calendarToken?.email} />
       </main>
     </div>
   );

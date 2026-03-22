@@ -2881,7 +2881,7 @@ export async function getAnyGmailToken(): Promise<GmailToken | null> {
 // ─── Google Calendar Token (stored in GmailTokens table with system key) ──────
 const GCAL_SYSTEM_KEY = "__gcal__";
 
-export async function getCalendarToken(): Promise<{ id: string; refreshToken: string } | null> {
+export async function getCalendarToken(): Promise<{ id: string; refreshToken: string; email: string } | null> {
   const formula = encodeURIComponent(`{ClerkUserId} = "${GCAL_SYSTEM_KEY}"`);
   const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
   if (!res.ok) return null;
@@ -2889,16 +2889,17 @@ export async function getCalendarToken(): Promise<{ id: string; refreshToken: st
   if (!data.records?.length) return null;
   const f = (data.records[0] as AirtableRecord).fields;
   const token = toStr(f["RefreshToken"]);
-  return token ? { id: data.records[0].id, refreshToken: token } : null;
+  return token ? { id: data.records[0].id, refreshToken: token, email: toStr(f["Email"]) } : null;
 }
 
-export async function saveCalendarToken(refreshToken: string): Promise<void> {
+export async function saveCalendarToken(refreshToken: string, email?: string): Promise<void> {
   const existing = await getCalendarToken().catch(() => null);
-  const fields = {
+  const fields: Record<string, string> = {
     ClerkUserId: GCAL_SYSTEM_KEY,
     RefreshToken: refreshToken,
     UpdatedAt: new Date().toISOString(),
   };
+  if (email) fields.Email = email;
   if (existing) {
     const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${existing.id}`, {
       method: "PATCH",

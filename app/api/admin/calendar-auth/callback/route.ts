@@ -35,7 +35,16 @@ export async function GET(req: NextRequest) {
         new URL("/admin/crm?calendar=error&msg=no_refresh_token_visit_calendar_auth_again", appUrl)
       );
     }
-    await saveCalendarToken(tokens.refresh_token);
+    // Fetch the connected account email via userinfo
+    let calendarEmail: string | undefined;
+    try {
+      oauth2.setCredentials(tokens);
+      const oauth2api = google.oauth2({ version: "v2", auth: oauth2 });
+      const { data: userInfo } = await oauth2api.userinfo.get();
+      calendarEmail = userInfo.email ?? undefined;
+    } catch { /* non-fatal */ }
+
+    await saveCalendarToken(tokens.refresh_token, calendarEmail);
     return NextResponse.redirect(new URL("/admin/crm?calendar=connected", appUrl));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown_error";

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnected }: { gmailConnected: boolean; gmailEmail?: string; calendarConnected: boolean }) {
+export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnected, calendarEmail }: { gmailConnected: boolean; gmailEmail?: string; calendarConnected: boolean; calendarEmail?: string }) {
   const searchParams = useSearchParams();
   const calendarStatus = searchParams.get("calendar");
   const calendarMsg = searchParams.get("msg");
@@ -124,7 +124,7 @@ export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnecte
           {calendarConnected ? (
             <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-medium px-2.5 py-1 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-              Connected
+              Connected{calendarEmail ? ` · ${calendarEmail}` : ""}
             </span>
           ) : (
             <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-2.5 py-1 rounded-full">
