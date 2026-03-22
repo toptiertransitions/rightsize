@@ -10,12 +10,12 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     return NextResponse.redirect(
-      new URL(`/admin/users?calendar=error&msg=${encodeURIComponent(error)}`, appUrl)
+      new URL(`/admin/crm?calendar=error&msg=${encodeURIComponent(error)}`, appUrl)
     );
   }
   if (!code) {
     return NextResponse.redirect(
-      new URL("/admin/users?calendar=error&msg=missing_code", appUrl)
+      new URL("/admin/crm?calendar=error&msg=missing_code", appUrl)
     );
   }
 
@@ -32,15 +32,15 @@ export async function GET(req: NextRequest) {
     if (!tokens.refresh_token) {
       // Google only returns a refresh_token on first consent — if missing, revoke & retry
       return NextResponse.redirect(
-        new URL("/admin/users?calendar=error&msg=no_refresh_token_visit_calendar_auth_again", appUrl)
+        new URL("/admin/crm?calendar=error&msg=no_refresh_token_visit_calendar_auth_again", appUrl)
       );
     }
     await saveCalendarToken(tokens.refresh_token);
-    return NextResponse.redirect(new URL("/admin/users?calendar=connected", appUrl));
+    return NextResponse.redirect(new URL("/admin/crm?calendar=connected", appUrl));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown_error";
     return NextResponse.redirect(
-      new URL(`/admin/users?calendar=error&msg=${encodeURIComponent(msg)}`, appUrl)
+      new URL(`/admin/crm?calendar=error&msg=${encodeURIComponent(msg)}`, appUrl)
     );
   }
 }

@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isTTTAdmin } from "@/lib/config";
-import { getGmailToken } from "@/lib/airtable";
+import { getGmailToken, getCalendarToken } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { CRMSettingsClient } from "./CRMSettingsClient";
 
@@ -10,7 +10,10 @@ export default async function AdminCRMPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const token = await getGmailToken(userId).catch(() => null);
+  const [token, calendarToken] = await Promise.all([
+    getGmailToken(userId).catch(() => null),
+    getCalendarToken().catch(() => null),
+  ]);
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -22,7 +25,7 @@ export default async function AdminCRMPage() {
             Manage Gmail integration and email activity syncing for the CRM.
           </p>
         </div>
-        <CRMSettingsClient gmailConnected={!!token} gmailEmail={token?.email} />
+        <CRMSettingsClient gmailConnected={!!token} gmailEmail={token?.email} calendarConnected={!!calendarToken} />
       </main>
     </div>
   );

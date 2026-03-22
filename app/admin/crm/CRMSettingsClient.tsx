@@ -1,8 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
-export function CRMSettingsClient({ gmailConnected, gmailEmail }: { gmailConnected: boolean; gmailEmail?: string }) {
+export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnected }: { gmailConnected: boolean; gmailEmail?: string; calendarConnected: boolean }) {
+  const searchParams = useSearchParams();
+  const calendarStatus = searchParams.get("calendar");
+  const calendarMsg = searchParams.get("msg");
+
+  const [calendarToast, setCalendarToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    if (calendarStatus === "connected") {
+      setCalendarToast({ ok: true, msg: "Google Calendar connected successfully." });
+    } else if (calendarStatus === "error") {
+      setCalendarToast({ ok: false, msg: calendarMsg ? decodeURIComponent(calendarMsg) : "Calendar connection failed." });
+    }
+  }, [calendarStatus, calendarMsg]);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -95,6 +109,51 @@ export function CRMSettingsClient({ gmailConnected, gmailEmail }: { gmailConnect
               Go to CRM Settings →
             </a>
           </div>
+        )}
+      </div>
+      {/* Google Calendar card */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-white">Google Calendar Integration</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              Enables syncing daily focus shifts to Google Calendar and reading attendee RSVP status.
+              Reconnect if the sync status dot shows a warning on the Plan page.
+            </p>
+          </div>
+          {calendarConnected ? (
+            <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-medium px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+              Connected
+            </span>
+          ) : (
+            <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-500 inline-block" />
+              Not connected
+            </span>
+          )}
+        </div>
+
+        {calendarToast && (
+          <p className={`text-sm mb-3 ${calendarToast.ok ? "text-green-400" : "text-red-400"}`}>
+            {calendarToast.msg}
+          </p>
+        )}
+
+        <a
+          href="/api/admin/calendar-auth"
+          className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          {calendarConnected ? "Reconnect Google Calendar" : "Connect Google Calendar"}
+        </a>
+
+        {calendarConnected && (
+          <p className="text-xs text-gray-500 mt-3">
+            If you see ⚠ warning icons on calendar chips, click Reconnect to refresh the OAuth token.
+          </p>
         )}
       </div>
     </div>
