@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES } from "@/lib/types";
 import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
@@ -901,8 +901,12 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
   const [failedSyncIds, setFailedSyncIds] = useState<Set<string>>(new Set());
 
   // Background-sync RSVPs for any entry with a googleEventId (staggered 400ms apart)
-  useEffect(() => {
-    const toSync = entries.filter(e => e.googleEventId);
+  // Uses a ref so the interval always sees the latest liveEntries without re-registering
+  const liveEntriesRef = useRef(liveEntries);
+  useEffect(() => { liveEntriesRef.current = liveEntries; }, [liveEntries]);
+
+  const runRsvpSync = useCallback(() => {
+    const toSync = liveEntriesRef.current.filter(e => e.googleEventId);
     if (!toSync.length) return;
     toSync.forEach((entry, i) => {
       setTimeout(() => {
@@ -925,7 +929,14 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           });
       }, i * 400);
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Run once on mount, then every 3 minutes
+  useEffect(() => {
+    runRsvpSync();
+    const interval = setInterval(runRsvpSync, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [runRsvpSync]);
 
   const entriesByDate = liveEntries.reduce<Record<string, PlanEntry[]>>((acc, e) => {
     if (!acc[e.date]) acc[e.date] = [];

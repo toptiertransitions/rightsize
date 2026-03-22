@@ -40,14 +40,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Check Google credentials are configured
-  if (
-    !process.env.GOOGLE_CLIENT_ID ||
-    !process.env.GOOGLE_CLIENT_SECRET ||
-    !process.env.GOOGLE_CALENDAR_REFRESH_TOKEN
-  ) {
+  // Check Google OAuth credentials are configured (refresh token can come from Airtable)
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return NextResponse.json(
-      { error: "Google Calendar credentials not configured. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALENDAR_REFRESH_TOKEN to environment variables." },
+      { error: "Google Calendar credentials not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to environment variables." },
       { status: 503 }
     );
   }
