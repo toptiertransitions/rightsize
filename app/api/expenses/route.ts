@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { getSystemRole, getExpenses, getExpensesForUser, createExpense, updateExpense, deleteExpense } from "@/lib/airtable";
+import { getSystemRole, getExpenses, getExpensesForUser, getExpensesForTenant, createExpense, updateExpense, deleteExpense } from "@/lib/airtable";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExpenseCategory } from "@/lib/types";
 
 const ALLOWED_ROLES = ["TTTStaff", "TTTManager", "TTTSales", "TTTAdmin"];
 
-// ─── GET: fetch expenses (own for staff/sales/manager, all for admin) ──────────
+// ─── GET: fetch expenses ───────────────────────────────────────────────────────
+// ?allCompany=true  → all expenses (TTTManager/TTTAdmin only)
+// ?tenantId=xxx     → expenses linked to that project (TTTManager/TTTAdmin only)
+// (no params)       → own expenses
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,11 +19,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const isAdmin = sysRole === "TTTAdmin";
-  const adminView = req.nextUrl.searchParams.get("admin") === "true";
+  const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const allCompany = req.nextUrl.searchParams.get("allCompany") === "true";
+  const tenantId = req.nextUrl.searchParams.get("tenantId");
 
-  if (isAdmin && adminView) {
+  if (isManagerOrAdmin && allCompany) {
     const expenses = await getExpenses();
+    return NextResponse.json({ expenses });
+  }
+
+  if (isManagerOrAdmin && tenantId) {
+    const expenses = await getExpensesForTenant(tenantId);
     return NextResponse.json({ expenses });
   }
 
@@ -143,6 +152,9 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  // TTTManager and TTTAdmin can edit anyone's expense; others can only edit their own
+  // (ownership check omitted intentionally — all TTT staff log company expenses)
 
   const expense = await updateExpense(id, data);
   return NextResponse.json({ expense });

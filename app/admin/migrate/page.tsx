@@ -23,6 +23,10 @@ export default function MigrateClerkIdsPage() {
   const [autoError, setAutoError] = useState("");
   const [autoMessage, setAutoMessage] = useState("");
 
+  const [isTTTLoading, setIsTTTLoading] = useState(false);
+  const [isTTTResult, setIsTTTResult] = useState<{ updated: number } | null>(null);
+  const [isTTTError, setIsTTTError] = useState("");
+
   function updateRow(i: number, field: "oldId" | "newId", value: string) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
   }
@@ -85,6 +89,23 @@ export default function MigrateClerkIdsPage() {
     }
   }
 
+  async function handleIsTTTMigration() {
+    setIsTTTError("");
+    setIsTTTResult(null);
+    if (!confirm("Set all existing projects to isTTT = true? This is a one-time migration and is safe to run.")) return;
+    setIsTTTLoading(true);
+    try {
+      const res = await fetch("/api/admin/migrate-isTTT", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Migration failed");
+      setIsTTTResult(data);
+    } catch (e) {
+      setIsTTTError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setIsTTTLoading(false);
+    }
+  }
+
   const inputClass = "h-9 px-3 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-forest-500 w-full";
 
   return (
@@ -96,6 +117,30 @@ export default function MigrateClerkIdsPage() {
             One-time tools to remap old dev Clerk IDs to new production Clerk IDs across all Airtable tables.
             Find IDs in the <a href="/admin/users" className="text-forest-400 underline">Users page</a>.
           </p>
+        </div>
+
+        {/* isTTT migration section */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-4">
+          <div>
+            <h2 className="font-semibold text-white">Backfill isTTT Flag</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              One-time migration: sets <code className="text-forest-400">IsTTT = true</code> on all existing projects.
+              Run this once after adding the IsTTT checkbox field in Airtable.
+            </p>
+          </div>
+
+          {isTTTError && <p className="text-sm text-red-400">{isTTTError}</p>}
+          {isTTTResult && (
+            <p className="text-sm text-forest-400">Done — {isTTTResult.updated} project{isTTTResult.updated !== 1 ? "s" : ""} updated.</p>
+          )}
+
+          <button
+            onClick={handleIsTTTMigration}
+            disabled={isTTTLoading || !!isTTTResult}
+            className="w-full h-11 rounded-xl bg-forest-600 text-white font-semibold hover:bg-forest-700 disabled:opacity-50 transition-colors"
+          >
+            {isTTTLoading ? "Running…" : isTTTResult ? "Migration complete" : "Run isTTT Backfill"}
+          </button>
         </div>
 
         {/* Auto-fix section */}

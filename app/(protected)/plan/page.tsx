@@ -43,12 +43,15 @@ export default async function PlanPage({ searchParams }: PageProps) {
     }
 
     const allTenants = await getTenants().catch(() => []);
+    const isAdminCaller = sysRole === "TTTAdmin";
+    // Non-admin staff can only see TTT projects
+    const visibleTenants = isAdminCaller ? allTenants : allTenants.filter(t => t.isTTT ?? true);
     const selectedTenants =
-      tenantId === "__all_active__" ? allTenants.filter((t) => !t.isArchived) :
-      tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :
-      allTenants;
+      tenantId === "__all_active__" ? visibleTenants.filter((t) => !t.isArchived) :
+      tenantId === "__all_archived__" ? visibleTenants.filter((t) => t.isArchived) :
+      visibleTenants;
 
-    const tenantOptions = allTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+    const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
 
     const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
       Promise.all(selectedTenants.map((t) => getPlanEntriesForTenant(t.id).catch(() => []))).then((r) => r.flat()),
@@ -75,13 +78,14 @@ export default async function PlanPage({ searchParams }: PageProps) {
           entries={allEntries}
           rooms={[]}
           tenantId=""
-          canEdit={false}
+          canEdit={tenantId === "__all_active__" && isManagerOrAdmin}
           projectFiles={allProjectFiles}
           timeEntries={allTimeEntries}
           isAdmin={sysRole === "TTTAdmin"}
           tenantOptions={tenantOptions}
           currentTenantId={tenantId}
           services={serviceNames}
+          isManager={isManagerOrAdmin}
         />
       </div>
     );
@@ -94,12 +98,14 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
     if (isManagerOrAdmin) {
       const allTenants = await getTenants().catch(() => []);
+      const isAdminCaller2 = sysRole === "TTTAdmin";
+      const visibleTenants2 = isAdminCaller2 ? allTenants : allTenants.filter(t => t.isTTT ?? true);
       const showArchived = view === "archived";
       const selectedTenants = showArchived
-        ? allTenants.filter(t => t.isArchived)
-        : allTenants.filter(t => !t.isArchived);
+        ? visibleTenants2.filter(t => t.isArchived)
+        : visibleTenants2.filter(t => !t.isArchived);
       const currentTenantId = showArchived ? "__all_archived__" : "__all_active__";
-      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+      const tenantOptions = visibleTenants2.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
 
       // Fetch plan entries, time entries, project files, and services for all tenants in selected group
       const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
@@ -123,13 +129,14 @@ export default async function PlanPage({ searchParams }: PageProps) {
             entries={allEntries}
             rooms={[]}
             tenantId=""
-            canEdit={false}
+            canEdit={!showArchived && isManagerOrAdmin}
             projectFiles={allProjectFiles}
             timeEntries={allTimeEntries}
             isAdmin={sysRole === "TTTAdmin"}
             tenantOptions={tenantOptions}
             currentTenantId={currentTenantId}
             services={serviceNames}
+            isManager={isManagerOrAdmin}
           />
         </div>
       );
@@ -143,12 +150,15 @@ export default async function PlanPage({ searchParams }: PageProps) {
         e => e.id === clerkUser.primaryEmailAddressId
       )?.emailAddress;
 
-      const [allTenants, serviceList] = await Promise.all([
+      const [allTenantsRaw, serviceList] = await Promise.all([
         getTenants().catch(() => []),
         getServices().catch(() => []),
       ]);
 
-      // Load ALL tenants (active + archived) for full shift history
+      // TTTStaff only see TTT-managed projects
+      const allTenants = allTenantsRaw.filter(t => t.isTTT ?? true);
+
+      // Load all TTT tenants (active + archived) for full shift history
       const allEntries = await Promise.all(
         allTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))
       ).then(r => r.flat());

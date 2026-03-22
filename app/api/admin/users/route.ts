@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { Resend } from "resend";
 import { isTTTAdmin } from "@/lib/config";
-import { upsertStaffMember } from "@/lib/airtable";
+import { upsertStaffMember, getMembershipsForUser, deleteMembership, getStaffMember, deleteStaffMember } from "@/lib/airtable";
+import { buildStaffWelcomeEmail } from "@/lib/email";
 
 async function checkAdmin() {
   const { userId } = await auth();
@@ -67,8 +69,20 @@ export async function POST(req: NextRequest) {
       // 2. Register in Airtable StaffMembers
       const displayName = [firstName, lastName].filter(Boolean).join(" ");
       await upsertStaffMember({ clerkUserId: newUser.id, displayName, email: newEmail, role, isActive: true });
-      // 3. Generate a 7-day sign-in link they can use to set up their account
+      // 3. Generate a 7-day sign-in link
       const token = await client.signInTokens.createSignInToken({ userId: newUser.id, expiresInSeconds: 604800 });
+
+      // 4. Send branded welcome email directly to the new staff member
+      const roleLabel = role === "TTTManager" ? "Manager" : role === "TTTSales" ? "Sales" : "Staff";
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const { error: emailError } = await resend.emails.send({
+        from: "hello@toptiertransitions.com",
+        to: newEmail,
+        subject: "Welcome to Top Tier Transitions — You're In",
+        html: buildStaffWelcomeEmail({ firstName, roleLabel, signInUrl: token.url }),
+      });
+      if (emailError) console.error("[createStaff] email error:", emailError);
+
       return NextResponse.json({
         user: {
           clerkUserId: newUser.id,
@@ -80,7 +94,7 @@ export async function POST(req: NextRequest) {
           memberships: [],
           systemRole: role,
         },
-        signInUrl: token.url,
+        emailSent: !emailError,
       });
     } catch (e) {
       return NextResponse.json({ error: String(e) }, { status: 500 });
@@ -100,6 +114,32 @@ export async function POST(req: NextRequest) {
       const url = `${appUrl}/home?__clerk_ticket=${actorToken.token}`;
       return NextResponse.json({ token: actorToken.token, url });
     } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  if (action === "deleteUser" && clerkUserId) {
+    if (clerkUserId === adminId) {
+      return NextResponse.json({ error: "You cannot delete your own account" }, { status: 400 });
+    }
+    if (isTTTAdmin(clerkUserId)) {
+      return NextResponse.json({ error: "Cannot delete a TTT Admin account" }, { status: 400 });
+    }
+    try {
+      // 1. Remove all Airtable project memberships
+      const memberships = await getMembershipsForUser(clerkUserId);
+      await Promise.all(memberships.map(m => deleteMembership(m.id)));
+
+      // 2. Remove StaffMember record if one exists
+      const staffMember = await getStaffMember(clerkUserId);
+      if (staffMember) await deleteStaffMember(staffMember.id);
+
+      // 3. Delete from Clerk (must be last — point of no return)
+      await client.users.deleteUser(clerkUserId);
+
+      return NextResponse.json({ success: true });
+    } catch (e) {
+      console.error("deleteUser error:", e);
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }
   }

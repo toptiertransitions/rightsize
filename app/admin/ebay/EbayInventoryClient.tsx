@@ -8,7 +8,7 @@ import { Pagination } from "../components/Pagination";
 const PAGE_SIZE = 25;
 const PF_STATUSES: ItemStatus[] = ["Listed", "Sold", "Discarded"];
 
-interface TenantInfo { name: string; ownerEmail: string; }
+interface TenantInfo { name: string; ownerEmail: string; isTTT: boolean; }
 interface StaffMemberOption { id: string; name: string; }
 interface Props {
   items: Item[];
@@ -251,6 +251,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
   const [sortCol, setSortCol] = useState<SortCol>("itemName");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tttFilter, setTttFilter] = useState<"all" | "ttt" | "client">("all");
 
   const flashRow = useCallback((id: string) => {
     setFlash((p) => ({ ...p, [id]: true }));
@@ -297,7 +298,10 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
   const filtered = items.filter((item) => {
     const tenant = tenantInfoMap[item.tenantId];
     const haystack = [item.itemName, tenant?.name, tenant?.ownerEmail, item.staffSellerName].join(" ").toLowerCase();
-    return (!search || haystack.includes(search.toLowerCase())) && (statusFilter === "all" || item.status === statusFilter);
+    const matchesSearch = !search || haystack.includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+    const matchesTTT = tttFilter === "all" || (tttFilter === "ttt" ? (tenant?.isTTT ?? true) : !(tenant?.isTTT ?? true));
+    return matchesSearch && matchesStatus && matchesTTT;
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -379,6 +383,14 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
           <option value="all">All Statuses</option>
           {PF_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        <div className="flex rounded-lg overflow-hidden border border-gray-700">
+          {([["all", "All"], ["ttt", "TTT Only"], ["client", "Client Only"]] as const).map(([v, label]) => (
+            <button key={v} onClick={() => { setTttFilter(v); setPage(1); }}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${tttFilter === v ? "bg-forest-600 text-white" : "bg-gray-900 text-gray-400 hover:text-gray-200"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bulk action bar */}
@@ -424,6 +436,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                   <th className="px-3 py-3 text-left min-w-[180px]">{thBtn("itemName", "Item Name")}</th>
                   <th className="px-3 py-3 text-left w-24">{thBtn("status", "Status")}</th>
                   <th className="px-3 py-3 text-left min-w-[140px]">{thBtn("client", "Client")}</th>
+                  <th className="px-3 py-3 text-left w-16"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Type</span></th>
                   <th className="px-3 py-3 text-right w-14">{thBtn("quantity", "Qty", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-28">{thBtn("valueMid", "Price", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-24">{thBtn("clientSharePercent", "Client Share", "justify-end")}</th>
@@ -502,6 +515,17 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                             <p className="text-gray-500 text-[10px] truncate max-w-[130px]">{tenant.ownerEmail}</p>
                           </div>
                         ) : <span className="text-gray-600 text-xs">—</span>}
+                      </td>
+
+                      {/* TTT Type */}
+                      <td className="px-3 py-2.5">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                          (tenant?.isTTT ?? true)
+                            ? "bg-green-900/40 text-green-400 border-green-700"
+                            : "bg-gray-800 text-gray-400 border-gray-600"
+                        }`}>
+                          {(tenant?.isTTT ?? true) ? "TTT" : "Client"}
+                        </span>
                       </td>
 
                       {/* Qty */}

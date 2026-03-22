@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 interface Props {
   initialTenants: Tenant[];
   isManager?: boolean;
+  isAdmin?: boolean;
 }
 
 function HouseIcon({ className }: { className?: string }) {
@@ -24,9 +25,10 @@ type SortField = "name" | "location" | "createdAt";
 type SortDir = "asc" | "desc";
 type ViewMode = "cards" | "table";
 
-export function AdminProjectsClient({ initialTenants, isManager }: Props) {
+export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Props) {
   const [tenants, setTenants] = useState(initialTenants);
   const [archiving, setArchiving] = useState<string | null>(null);
+  const [togglingTTT, setTogglingTTT] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedFilter, setArchivedFilter] = useState("");
   const [archivedSortField, setArchivedSortField] = useState<SortField>("name");
@@ -34,6 +36,16 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [showConsignment, setShowConsignment] = useState(false);
+  const [togglingConsignment, setTogglingConsignment] = useState<string | null>(null);
+  const [consignmentFilter, setConsignmentFilter] = useState("");
+  const [consignmentSortField, setConsignmentSortField] = useState<SortField>("name");
+  const [consignmentSortDir, setConsignmentSortDir] = useState<SortDir>("asc");
+  const [pendingConfirm, setPendingConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
+  function requestConfirm(message: string, onConfirm: () => void) {
+    setPendingConfirm({ message, onConfirm });
+  }
 
   // Location inline editing
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
@@ -50,7 +62,7 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
   const [activeSortDir, setActiveSortDir] = useState<SortDir>("asc");
 
   const activeTenants = useMemo(() => {
-    const filtered = tenants.filter(t => !t.isArchived).filter(t => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false)).filter(t => {
       if (!activeSearch) return true;
       const q = activeSearch.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -89,6 +101,24 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
     });
   }, [tenants, archivedFilter, archivedSortField, archivedSortDir]);
 
+  const sortedConsignmentTenants = useMemo(() => {
+    const filtered = tenants.filter(t => !t.isArchived && (t.isConsignmentOnly ?? false)).filter(t => {
+      if (!consignmentFilter) return true;
+      const q = consignmentFilter.toLowerCase();
+      const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
+      return t.name.toLowerCase().includes(q) || loc.includes(q);
+    });
+    return filtered.sort((a, b) => {
+      let av = "", bv = "";
+      if (consignmentSortField === "name") { av = a.name; bv = b.name; }
+      else if (consignmentSortField === "location") {
+        av = [a.city, a.state].filter(Boolean).join(", ");
+        bv = [b.city, b.state].filter(Boolean).join(", ");
+      } else if (consignmentSortField === "createdAt") { av = a.createdAt ?? ""; bv = b.createdAt ?? ""; }
+      return consignmentSortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }, [tenants, consignmentFilter, consignmentSortField, consignmentSortDir]);
+
   function toggleActiveSort(field: SortField) {
     if (activeSortField === field) setActiveSortDir(d => d === "asc" ? "desc" : "asc");
     else { setActiveSortField(field); setActiveSortDir("asc"); }
@@ -100,6 +130,30 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
   }
 
   const archivedCount = tenants.filter(t => t.isArchived).length;
+  const consignmentCount = tenants.filter(t => !t.isArchived && (t.isConsignmentOnly ?? false)).length;
+
+  function toggleConsignmentSort(field: SortField) {
+    if (consignmentSortField === field) setConsignmentSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setConsignmentSortField(field); setConsignmentSortDir("asc"); }
+  }
+
+  async function toggleConsignment(tenantId: string, current: boolean) {
+    setTogglingConsignment(tenantId);
+    const newVal = !current;
+    setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isConsignmentOnly: newVal } : t));
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, isConsignmentOnly: newVal }),
+      });
+      if (!res.ok) setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isConsignmentOnly: current } : t));
+    } catch {
+      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isConsignmentOnly: current } : t));
+    } finally {
+      setTogglingConsignment(null);
+    }
+  }
 
   function startEdit(tenant: Tenant) {
     setEditingId(tenant.id);
@@ -171,6 +225,28 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
       setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isArchived } : t));
     } finally {
       setArchiving(null);
+    }
+  }
+
+  async function toggleTTT(tenantId: string, currentIsTTT: boolean) {
+    setTogglingTTT(tenantId);
+    const newValue = !currentIsTTT;
+    // Optimistic update
+    setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isTTT: newValue } : t));
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, isTTT: newValue }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isTTT: currentIsTTT } : t));
+      }
+    } catch {
+      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isTTT: currentIsTTT } : t));
+    } finally {
+      setTogglingTTT(null);
     }
   }
 
@@ -264,6 +340,47 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
                   <p className="text-sm text-gray-400 mt-1">View catalog</p>
                 </Link>
                 <div className="border-t border-gray-100 mt-3 pt-2 flex items-center gap-3">
+                  {/* TTT badge */}
+                  {isAdmin ? (
+                    <button
+                      onClick={e => { e.preventDefault(); requestConfirm(`Mark "${tenant.name}" as ${(tenant.isTTT ?? false) ? "Client" : "TTT"}?`, () => toggleTTT(tenant.id, tenant.isTTT ?? false)); }}
+                      disabled={togglingTTT === tenant.id}
+                      className={cn(
+                        "text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors",
+                        (tenant.isTTT ?? false)
+                          ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+                          : "bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200"
+                      )}
+                      title={`Click to mark as ${(tenant.isTTT ?? false) ? "Client" : "TTT"}`}
+                    >
+                      {(tenant.isTTT ?? false) ? "TTT" : "Client"}
+                    </button>
+                  ) : (
+                    <span className={cn(
+                      "text-[10px] font-semibold px-1.5 py-0.5 rounded border",
+                      (tenant.isTTT ?? false)
+                        ? "bg-green-50 text-green-700 border-green-300"
+                        : "bg-gray-100 text-gray-500 border-gray-300"
+                    )}>
+                      {(tenant.isTTT ?? false) ? "TTT" : "Client"}
+                    </span>
+                  )}
+                  {/* Consignment badge */}
+                  {(isManager || isAdmin) && (
+                    <button
+                      onClick={e => { e.preventDefault(); requestConfirm((tenant.isConsignmentOnly ?? false) ? `Mark "${tenant.name}" as Active?` : `Move "${tenant.name}" to Post-Move Consignment?`, () => toggleConsignment(tenant.id, tenant.isConsignmentOnly ?? false)); }}
+                      disabled={togglingConsignment === tenant.id}
+                      className={cn(
+                        "text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors",
+                        (tenant.isConsignmentOnly ?? false)
+                          ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
+                          : "bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200"
+                      )}
+                      title={`Click to ${(tenant.isConsignmentOnly ?? false) ? "mark as Active" : "mark as Consignment Only"}`}
+                    >
+                      {(tenant.isConsignmentOnly ?? false) ? "Consign Only" : "Active"}
+                    </button>
+                  )}
                   {editingId === tenant.id ? (
                     <>
                       <button
@@ -282,7 +399,7 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
                     </>
                   ) : (
                     <button
-                      onClick={() => setArchived(tenant.id, true)}
+                      onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
                       disabled={archiving === tenant.id}
                       className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
                     >
@@ -337,6 +454,7 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
                     Created <SortArrow field="createdAt" current={activeSortField} dir={activeSortDir} />
                   </button>
                 </th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Type</th>
                 <th className="px-4 py-3 w-8" />
               </tr>
             </thead>
@@ -446,10 +564,52 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-sm whitespace-nowrap">{createdDisplay}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        {isAdmin ? (
+                          <button
+                            onClick={() => requestConfirm(`Mark "${tenant.name}" as ${(tenant.isTTT ?? false) ? "Client" : "TTT"}?`, () => toggleTTT(tenant.id, tenant.isTTT ?? false))}
+                            disabled={togglingTTT === tenant.id}
+                            className={cn(
+                              "text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors",
+                              (tenant.isTTT ?? false)
+                                ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100"
+                                : "bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200"
+                            )}
+                          >
+                            {(tenant.isTTT ?? false) ? "TTT" : "Client"}
+                          </button>
+                        ) : (
+                          <span className={cn(
+                            "text-[10px] font-semibold px-1.5 py-0.5 rounded border",
+                            (tenant.isTTT ?? false)
+                              ? "bg-green-50 text-green-700 border-green-300"
+                              : "bg-gray-100 text-gray-500 border-gray-300"
+                          )}>
+                            {(tenant.isTTT ?? false) ? "TTT" : "Client"}
+                          </span>
+                        )}
+                        {(isManager || isAdmin) && (
+                          <button
+                            onClick={() => requestConfirm((tenant.isConsignmentOnly ?? false) ? `Mark "${tenant.name}" as Active?` : `Move "${tenant.name}" to Post-Move Consignment?`, () => toggleConsignment(tenant.id, tenant.isConsignmentOnly ?? false))}
+                            disabled={togglingConsignment === tenant.id}
+                            className={cn(
+                              "text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors",
+                              (tenant.isConsignmentOnly ?? false)
+                                ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
+                                : "bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200"
+                            )}
+                            title={`Click to ${(tenant.isConsignmentOnly ?? false) ? "mark as Active" : "mark as Consignment Only"}`}
+                          >
+                            {(tenant.isConsignmentOnly ?? false) ? "Consign Only" : "Active"}
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-right">
                       {!editingLoc && (
                         <button
-                          onClick={() => setArchived(tenant.id, true)}
+                          onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
                           disabled={archiving === tenant.id}
                           className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
                         >
@@ -462,7 +622,7 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
               })}
               {activeTenants.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
                     {activeSearch ? `No projects match "${activeSearch}"` : "No active projects"}
                   </td>
                 </tr>
@@ -474,6 +634,103 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
               + New Project
             </Link>
           </div>
+        </div>
+      )}
+
+      {/* ── Post-Move Consignment accordion ── */}
+      {consignmentCount > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowConsignment(v => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-amber-600 hover:text-amber-800 transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${showConsignment ? "rotate-90" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Post-Move Consignment ({consignmentCount})
+          </button>
+
+          {showConsignment && (
+            <div className="mt-4 opacity-80">
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={consignmentFilter}
+                  onChange={e => setConsignmentFilter(e.target.value)}
+                  placeholder="Filter by name or location…"
+                  className="w-full sm:w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-300"
+                />
+              </div>
+
+              <div className="border border-amber-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-amber-50 border-b border-amber-200">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium text-amber-700">
+                        <button onClick={() => toggleConsignmentSort("name")}
+                          className="flex items-center gap-1 hover:text-amber-900 transition-colors">
+                          Project <SortArrow field="name" current={consignmentSortField} dir={consignmentSortDir} />
+                        </button>
+                      </th>
+                      <th className="text-left px-4 py-2.5 font-medium text-amber-700">
+                        <button onClick={() => toggleConsignmentSort("location")}
+                          className="flex items-center gap-1 hover:text-amber-900 transition-colors">
+                          Location <SortArrow field="location" current={consignmentSortField} dir={consignmentSortDir} />
+                        </button>
+                      </th>
+                      <th className="text-left px-4 py-2.5 font-medium text-amber-700">
+                        <button onClick={() => toggleConsignmentSort("createdAt")}
+                          className="flex items-center gap-1 hover:text-amber-900 transition-colors">
+                          Created <SortArrow field="createdAt" current={consignmentSortField} dir={consignmentSortDir} />
+                        </button>
+                      </th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100 bg-white">
+                    {sortedConsignmentTenants.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-gray-400 text-sm">
+                          No consignment projects match your filter.
+                        </td>
+                      </tr>
+                    ) : sortedConsignmentTenants.map(tenant => {
+                      const location = [tenant.city, tenant.state].filter(Boolean).join(", ");
+                      const createdDisplay = tenant.createdAt
+                        ? new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—";
+                      return (
+                        <tr key={tenant.id} className="hover:bg-amber-50/40 transition-colors">
+                          <td className="px-4 py-3">
+                            <Link href={`/catalog?tenantId=${tenant.id}`}
+                              className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                              {tenant.name}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">{location || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
+                          <td className="px-4 py-3 text-right">
+                            {(isManager || isAdmin) && (
+                              <button
+                                onClick={() => requestConfirm(`Mark "${tenant.name}" as Active?`, () => toggleConsignment(tenant.id, true))}
+                                disabled={togglingConsignment === tenant.id}
+                                className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
+                              >
+                                {togglingConsignment === tenant.id ? "Moving…" : "Mark Active"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -554,7 +811,7 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
                           <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
                           <td className="px-4 py-3 text-right">
                             <button
-                              onClick={() => setArchived(tenant.id, false)}
+                              onClick={() => requestConfirm(`Unarchive "${tenant.name}"?`, () => setArchived(tenant.id, false))}
                               disabled={archiving === tenant.id}
                               className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
                             >
@@ -569,6 +826,29 @@ export function AdminProjectsClient({ initialTenants, isManager }: Props) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Confirmation modal ── */}
+      {pendingConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setPendingConfirm(null)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <p className="text-sm text-gray-700 mb-6">{pendingConfirm.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setPendingConfirm(null)}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
+                className="px-4 py-2 text-sm font-medium bg-forest-600 text-white rounded-lg hover:bg-forest-700 transition-colors"
+              >
+                Yes, confirm
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -61,12 +61,12 @@ function getFocusColor(area: string, serviceList: string[]): string {
 }
 
 function fmtMins(mins: number): string {
-  const h = Math.round((mins / 60) * 10) / 10;
+  const h = Math.round((mins / 60) * 100) / 100;
   return `${h}h`;
 }
 
 function fmtHours(h: number): string {
-  return `${Math.round(h * 10) / 10}h`;
+  return `${Math.round(h * 100) / 100}h`;
 }
 
 function fmtDate(dateStr: string): string {
@@ -269,16 +269,24 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
   // Shift log filter helpers
   const uniqueStaffNames = Array.from(new Set(entries.map(e => e.staffName).filter(Boolean))).sort();
   const logHasFilters = logStaffFilter.length > 0 || !!logDateFrom || !!logDateTo;
-  const filteredLogEntries = entries.filter(e => {
-    if (logStaffFilter.length > 0 && !logStaffFilter.includes(e.staffName)) return false;
-    if (logDateFrom && e.date < logDateFrom) return false;
-    if (logDateTo && e.date > logDateTo) return false;
-    return true;
-  });
+  const filteredLogEntries = entries
+    .filter(e => {
+      if (logStaffFilter.length > 0 && !logStaffFilter.includes(e.staffName)) return false;
+      if (logDateFrom && e.date < logDateFrom) return false;
+      if (logDateTo && e.date > logDateTo) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const dateCmp = b.date.localeCompare(a.date);
+      if (dateCmp !== 0) return dateCmp;
+      return (b.startTime ?? "").localeCompare(a.startTime ?? "");
+    });
 
-  // Scheduled = TTT Staff helper shifts on plan calendar
-  // Build per-service map so we can show breakdown and subtract per-service from Remaining
-  const scheduledByServiceMap = new Map<string, number>();
+  // Scheduled = TTT Staff helper shifts on plan calendar, net of hours already logged
+  // for the same date + service so we don't double-count with the Logged card.
+
+  // Step 1: gross scheduled minutes keyed by "date|service"
+  const grossByDateService = new Map<string, number>();
   for (const pe of (planEntries ?? [])) {
     if (!pe.startTime || !pe.endTime) continue;
     const [sh, sm] = pe.startTime.split(":").map(Number);
@@ -287,8 +295,26 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
     if (shiftMins === 0) continue;
     const helperCount = (pe.helpers ?? []).filter(h => h.status !== "declined").length;
     if (helperCount === 0) continue;
-    const key = (pe.activity as string) || "Other";
-    scheduledByServiceMap.set(key, (scheduledByServiceMap.get(key) ?? 0) + helperCount * shiftMins);
+    const service = (pe.activity as string) || "Other";
+    const dsKey = `${pe.date}|${service}`;
+    grossByDateService.set(dsKey, (grossByDateService.get(dsKey) ?? 0) + helperCount * shiftMins);
+  }
+
+  // Step 2: logged minutes keyed by "date|focusArea" (matches the same keys)
+  const loggedByDateService = new Map<string, number>();
+  for (const te of entries) {
+    const dsKey = `${te.date}|${te.focusArea}`;
+    loggedByDateService.set(dsKey, (loggedByDateService.get(dsKey) ?? 0) + te.durationMinutes);
+  }
+
+  // Step 3: net scheduled per service — subtract already-logged hours for each date+service
+  const scheduledByServiceMap = new Map<string, number>();
+  for (const [dsKey, grossMins] of grossByDateService) {
+    const pipeIdx = dsKey.indexOf("|");
+    const service = dsKey.slice(pipeIdx + 1);
+    const logged = loggedByDateService.get(dsKey) ?? 0;
+    const net = Math.max(0, grossMins - logged);
+    scheduledByServiceMap.set(service, (scheduledByServiceMap.get(service) ?? 0) + net);
   }
   const scheduledMins = Array.from(scheduledByServiceMap.values()).reduce((s, m) => s + m, 0);
   const scheduledBreakdown = Array.from(scheduledByServiceMap.entries())

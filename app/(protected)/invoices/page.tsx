@@ -36,7 +36,8 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
 
   if (!tenantId) {
     if (isTTTInternal) {
-      const allTenants = await getTenants().catch(() => []);
+      const allTenants = (await getTenants().catch(() => []))
+        .filter(t => sysRole === "TTTAdmin" || (t.isTTT ?? true));
       const sorted = [...allTenants].sort((a, b) => a.name.localeCompare(b.name));
       return (
         <QuotingProjectPicker

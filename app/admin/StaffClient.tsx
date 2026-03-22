@@ -27,6 +27,7 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
   const [clerkUserId, setClerkUserId] = useState(member?.clerkUserId ?? "");
   const [displayName, setDisplayName] = useState(member?.displayName ?? "");
   const [email, setEmail] = useState(member?.email ?? "");
+  const [phone, setPhone] = useState(member?.phone ?? "");
   const [role, setRole] = useState<"TTTStaff" | "TTTManager" | "TTTSales">(
     (member?.role === "TTTManager" ? "TTTManager" : member?.role === "TTTSales" ? "TTTSales" : "TTTStaff")
   );
@@ -99,7 +100,7 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
         const res = await fetch("/api/admin/staff", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: member.id, displayName, email, role }),
+          body: JSON.stringify({ id: member.id, displayName, email, phone, role }),
         });
         if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
         onSaved((await res.json()).member);
@@ -257,6 +258,17 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
               onChange={e => setEmail(e.target.value)}
               required
               placeholder="jane@example.com"
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Phone</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="(555) 555-5555"
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
             />
           </div>

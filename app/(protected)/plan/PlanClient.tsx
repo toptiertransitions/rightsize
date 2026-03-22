@@ -176,12 +176,16 @@ interface ModalProps {
   onSaved: () => void;
   services?: string[];
   canManageTTTHelpers: boolean;
+  tenantOptions?: TenantOption[];
 }
 
-function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers }: ModalProps) {
+function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions }: ModalProps) {
   const activityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));
   const [activity, setActivity] = useState<PlanActivity>(entry?.activity ?? (services?.[0] ?? "Coordinating"));
+  // In all-projects mode (tenantId=""), track which project is selected
+  const [selectedTenantId, setSelectedTenantId] = useState(entry?.tenantId ?? "");
+  const [dynamicRooms, setDynamicRooms] = useState<Room[]>(rooms);
   const [roomId, setRoomId] = useState(entry?.roomId ?? "");
   const [customRoom, setCustomRoom] = useState(entry?.roomLabel ?? "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
@@ -197,6 +201,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [tttUsers, setTttUsers] = useState<TTTUser[]>([]);
   const [teamSearch, setTeamSearch] = useState("");
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+
+  // Effective tenant ID: use prop if set, otherwise fall back to selected
+  const effectiveTenantId = tenantId || selectedTenantId;
 
   const isCustomRoom = roomId === "__custom__";
   const isEdit = !!entry;
@@ -227,6 +234,15 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       .then(d => { if (d.users) setTttUsers(d.users); })
       .catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch rooms dynamically when in all-projects mode and a project is selected
+  useEffect(() => {
+    if (!effectiveTenantId || rooms.length > 0) return;
+    fetch(`/api/rooms?tenantId=${effectiveTenantId}`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.rooms)) setDynamicRooms(d.rooms); })
+      .catch(() => {});
+  }, [effectiveTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Core invite-send logic — accepts an explicit helpers array to avoid stale state
   const sendCalendarInvites = async (helpersToSend: PlanHelper[]) => {
@@ -315,11 +331,12 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
   const handleSave = async () => {
     if (!date) { setError("Date is required"); return; }
+    if (!isEdit && !effectiveTenantId) { setError("Please select a project"); return; }
     setLoading(true);
     setError("");
     try {
       const payload = {
-        ...(isEdit ? { id: entry.id } : { tenantId }),
+        ...(isEdit ? { id: entry.id } : { tenantId: effectiveTenantId }),
         date,
         activity,
         roomId: isCustomRoom ? "" : roomId || "",
@@ -419,6 +436,23 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+          {/* Project selector — only shown in all-projects mode when creating */}
+          {!isEdit && tenantOptions && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Project</label>
+              <select
+                value={selectedTenantId}
+                onChange={e => { setSelectedTenantId(e.target.value); setDynamicRooms([]); setRoomId(""); }}
+                className={inputCls}
+              >
+                <option value="">— Select project —</option>
+                {tenantOptions.filter(t => !t.isArchived).map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
@@ -465,7 +499,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Room <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
             <select value={roomId} onChange={e => setRoomId(e.target.value)} className={inputCls}>
               <option value="">— None —</option>
-              {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {dynamicRooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
               <option disabled>─────────────────</option>
               <option value="__custom__">Custom (not in project)</option>
             </select>
@@ -824,10 +858,12 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
       .catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // In "All Projects" mode (currentTenantId is one of the sentinel values), disable editing
+  // In "All Projects" mode (currentTenantId is one of the sentinel values)
   const isAllProjectsMode = currentTenantId === "__all_active__" || currentTenantId === "__all_archived__" || currentTenantId === "__all_time__" || currentTenantId === "__my_projects__";
   const isMyProjectsMode = currentTenantId === "__my_projects__";
-  const effectiveCanEdit = canEdit && !isAllProjectsMode;
+  // Allow editing in __all_active__ when canEdit=true (TTTManager/TTTAdmin); block in archived/all-time/my-projects
+  const isReadOnlySentinel = currentTenantId === "__all_archived__" || currentTenantId === "__all_time__" || currentTenantId === "__my_projects__";
+  const effectiveCanEdit = canEdit && !isReadOnlySentinel;
 
   // Tenant name lookup for "All" mode chips
   const tenantNameMap: Record<string, string> = {};
@@ -1337,6 +1373,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           onSaved={onSaved}
           services={services}
           canManageTTTHelpers={!!(isManager || isAdmin)}
+          tenantOptions={isAllProjectsMode ? tenantOptions : undefined}
         />
       )}
     </>

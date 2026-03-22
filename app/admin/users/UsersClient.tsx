@@ -21,6 +21,19 @@ const SYSTEM_ROLE_LABELS: Record<string, string> = {
   TTTStaff: "TTT Staff",
 };
 
+function formatRelativeDate(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 2) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: days > 365 ? "numeric" : undefined });
+}
+
 function avatar(user: AdminUser) {
   return user.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "?";
 }
@@ -33,14 +46,16 @@ function avatarColor(id: string) {
 }
 
 const PROJECT_ROLE_COLORS: Record<string, string> = {
-  Owner:        "bg-amber-900/50 text-amber-300 border border-amber-800",
-  Collaborator: "bg-blue-900/50 text-blue-300 border border-blue-800",
-  Viewer:       "bg-gray-700 text-gray-300 border border-gray-600",
-  Vendor:       "bg-teal-900/50 text-teal-300 border border-teal-800",
+  "Owner-TTT":    "bg-green-900/50 text-green-300 border border-green-800",
+  "Owner-Client": "bg-amber-900/50 text-amber-300 border border-amber-800",
+  Owner:          "bg-amber-900/50 text-amber-300 border border-amber-800", // fallback
+  Collaborator:   "bg-blue-900/50 text-blue-300 border border-blue-800",
+  Viewer:         "bg-gray-700 text-gray-300 border border-gray-600",
+  Vendor:         "bg-teal-900/50 text-teal-300 border border-teal-800",
 };
 
 // Returns the badge(s) to show in the "User Type" column
-function userTypeBadges(user: AdminUser) {
+function userTypeBadges(user: AdminUser, tenantMap: Map<string, { isTTT?: boolean }>) {
   // System role takes priority
   if (user.systemRole) {
     const label = SYSTEM_ROLE_LABELS[user.systemRole] ?? user.systemRole;
@@ -58,8 +73,17 @@ function userTypeBadges(user: AdminUser) {
   if (user.isVendor) {
     return [<span key="vendor" className="text-xs px-2 py-0.5 rounded-full font-medium bg-teal-900/50 text-teal-300 border border-teal-800">Vendor</span>];
   }
-  // Distinct project roles from memberships
-  const roles = [...new Set(user.memberships.map(m => m.role))];
+  // Distinct project roles — split Owner into Owner-TTT / Owner-Client based on tenant type
+  const roleKeys = new Set<string>();
+  for (const m of user.memberships) {
+    if (m.role === "Owner") {
+      const t = tenantMap.get(m.tenantId);
+      roleKeys.add(t?.isTTT ? "Owner-TTT" : "Owner-Client");
+    } else {
+      roleKeys.add(m.role);
+    }
+  }
+  const roles = [...roleKeys];
   if (roles.length === 0) return [<span key="none" className="text-xs text-gray-600">—</span>];
   return roles.map(r => (
     <span key={r} className={`text-xs px-2 py-0.5 rounded-full font-medium ${PROJECT_ROLE_COLORS[r] ?? "bg-gray-700 text-gray-300 border border-gray-600"}`}>
@@ -85,17 +109,22 @@ function systemRoleBadge(role: string | undefined) {
 interface ManageModalProps {
   user: AdminUser;
   tenants: Array<{ id: string; name: string }>;
+  currentUserId: string;
   onClose: () => void;
   onUpdate: (updated: AdminUser) => void;
+  onDeleted: (clerkUserId: string) => void;
 }
 
-function ManageModal({ user, tenants, onClose, onUpdate }: ManageModalProps) {
+function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDeleted }: ManageModalProps) {
   const [current, setCurrent] = useState(user);
   const [addTenantId, setAddTenantId] = useState("");
   const [addRole, setAddRole] = useState<string>(PROJECT_ROLES[1]);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [resetLink, setResetLink] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const availableTenants = tenants.filter(t => !current.memberships.some(m => m.tenantId === t.id));
   const isHardAdmin = current.systemRole === "TTTAdmin"; // hardcoded via env — can't be changed via API
@@ -240,6 +269,27 @@ function ManageModal({ user, tenants, onClose, onUpdate }: ManageModalProps) {
     } catch (e) { setError(e instanceof Error ? e.message : "Failed to generate reset link"); }
     finally { setLoading(null); }
   }
+
+  async function handleDeleteUser() {
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deleteUser", clerkUserId: current.clerkUserId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Delete failed");
+      onDeleted(current.clerkUserId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
+  const isSelf = current.clerkUserId === currentUserId;
+  const canDelete = !isHardAdmin && !isSelf;
 
   const inputClass = "h-9 px-3 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500";
 
@@ -408,16 +458,111 @@ function ManageModal({ user, tenants, onClose, onUpdate }: ManageModalProps) {
                 {loading === "suspend" ? "…" : current.banned ? "Unsuspend Account" : "Suspend Account"}
               </button>
             </div>
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={!!loading || deleting}
+                className="w-full h-9 rounded-lg border border-red-700 bg-red-950/30 text-red-400 text-sm font-medium hover:bg-red-900/40 disabled:opacity-40 transition-colors"
+              >
+                Delete User from System
+              </button>
+            )}
           </section>
         </div>
       </div>
+
+      {/* Delete confirmation overlay */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-red-800 rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete User Account</h3>
+                <p className="text-xs text-gray-400">This action cannot be undone</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-sm mb-5">
+              <p className="text-gray-300">
+                You are about to permanently delete <span className="font-semibold text-white">{current.name}</span> ({current.email}).
+              </p>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">What will be removed</p>
+                {current.memberships.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-gray-300">
+                    <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    {current.memberships.length} project membership{current.memberships.length !== 1 ? "s" : ""}
+                    {current.memberships.length <= 3
+                      ? `: ${current.memberships.map(m => m.tenantName).join(", ")}`
+                      : ` (${current.memberships.slice(0, 2).map(m => m.tenantName).join(", ")}, +${current.memberships.length - 2} more)`}
+                  </div>
+                )}
+                {current.staffMemberId && (
+                  <div className="flex items-center gap-2 text-xs text-gray-300">
+                    <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Staff role record ({current.systemRole})
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-xs text-gray-300">
+                  <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clerk account (login credentials)
+                </div>
+              </div>
+              <div className="bg-amber-950/40 border border-amber-800/60 rounded-xl p-3 text-xs text-amber-300">
+                <span className="font-semibold">Not deleted:</span> their projects, items, time entries, and all other project data remain intact.
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                Type <span className="font-mono font-bold text-red-400">DELETE</span> to confirm
+              </label>
+              <input
+                value={deleteInput}
+                onChange={e => setDeleteInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && deleteInput === "DELETE") handleDeleteUser(); }}
+                className="w-full h-9 px-3 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-red-500 placeholder-gray-600"
+                placeholder="DELETE"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); }}
+                className="flex-1 h-9 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={deleteInput !== "DELETE" || deleting}
+                className="flex-1 h-9 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {deleting ? "Deleting…" : "Delete User"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Create Staff Modal ────────────────────────────────────────────────────────
 
-function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreated: (user: AdminUser, signInUrl: string) => void }) {
+function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreated: (user: AdminUser, email: string) => void }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -425,7 +570,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const inputClass = "h-9 px-3 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500 w-full";
+  const inputClass = "h-9 px-3 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500 w-full placeholder:text-gray-600";
 
   async function handleCreate() {
     if (!firstName.trim() || !email.trim()) { setError("First name and email are required."); return; }
@@ -439,7 +584,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create user");
-      onCreated(data.user, data.signInUrl);
+      onCreated(data.user, email.trim());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -448,11 +593,14 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center overflow-y-auto py-8 px-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md my-auto">
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h2 className="font-semibold text-white">Create Staff User</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400">
+          <div>
+            <h2 className="font-semibold text-white">New Staff Member</h2>
+            <p className="text-xs text-gray-500 mt-0.5">They&apos;ll receive a welcome email with a login link</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -461,27 +609,29 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
         <div className="px-6 py-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">First Name *</label>
-              <input value={firstName} onChange={e => setFirstName(e.target.value)} className={inputClass} placeholder="Jane" />
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">First Name <span className="text-gray-600">*</span></label>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()} className={inputClass} placeholder="Jane" autoFocus />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Last Name</label>
-              <input value={lastName} onChange={e => setLastName(e.target.value)} className={inputClass} placeholder="Smith" />
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Last Name</label>
+              <input value={lastName} onChange={e => setLastName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()} className={inputClass} placeholder="Smith" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Email *</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="jane@example.com" />
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">Email Address <span className="text-gray-600">*</span></label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()} className={inputClass} placeholder="jane@toptiertransitions.com" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Role</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">Role</label>
             <div className="flex gap-2">
               {(["TTTStaff", "TTTManager", "TTTSales"] as const).map(r => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
                   className={`flex-1 h-9 rounded-lg text-sm font-medium transition-colors ${
-                    role === r ? "bg-forest-600 text-white" : "border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white"
+                    role === r
+                      ? "bg-forest-600 text-white"
+                      : "border border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300"
                   }`}
                 >
                   {SYSTEM_ROLE_LABELS[r]}
@@ -489,17 +639,39 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
               ))}
             </div>
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && (
+            <div className="flex items-center gap-2 bg-red-950/40 border border-red-800/50 rounded-lg px-3 py-2">
+              <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
           <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 h-9 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500 hover:text-white transition-colors">
+            <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-gray-700 text-sm text-gray-400 hover:border-gray-500 hover:text-gray-200 transition-colors">
               Cancel
             </button>
             <button
               onClick={handleCreate}
               disabled={loading || !firstName.trim() || !email.trim()}
-              className="flex-1 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+              className="flex-1 h-10 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
             >
-              {loading ? "Creating…" : "Create User"}
+              {loading ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Sending Invite…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Send Invite
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -508,42 +680,41 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
   );
 }
 
-// ─── Sign-In Link Modal ────────────────────────────────────────────────────────
+// ─── Invitation Sent Modal ─────────────────────────────────────────────────────
 
-function SignInLinkModal({ userName, signInUrl, onClose }: { userName: string; signInUrl: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-
-  function copy() {
-    navigator.clipboard.writeText(signInUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
+function InvitationSentModal({ userName, email, onClose }: { userName: string; email: string; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center overflow-y-auto py-8 px-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md my-auto">
-        <div className="px-6 py-5 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-forest-600/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-forest-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-semibold text-white">{userName} created</p>
-              <p className="text-xs text-gray-400">Share the sign-in link below so they can access their account</p>
-            </div>
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="px-6 py-8 flex flex-col items-center text-center">
+          {/* Success icon */}
+          <div className="w-14 h-14 rounded-full bg-forest-600/15 border border-forest-600/30 flex items-center justify-center mb-5">
+            <svg className="w-7 h-7 text-forest-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
           </div>
-          <div className="bg-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-2">One-time sign-in link (valid 7 days):</p>
-            <div className="flex items-center gap-2">
-              <input readOnly value={signInUrl} className="flex-1 text-xs text-green-400 bg-transparent font-mono focus:outline-none truncate" />
-              <button onClick={copy} className="flex-shrink-0 text-xs border border-gray-600 rounded-lg px-3 py-1.5 text-gray-300 hover:text-white hover:border-gray-400 transition-colors">
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
+
+          <p className="text-lg font-bold text-white mb-1">Invitation sent</p>
+          <p className="text-sm text-gray-400 mb-5">
+            <span className="text-white font-medium">{userName}</span> will receive a welcome email at
+          </p>
+
+          {/* Email pill */}
+          <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 mb-6">
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="text-sm text-gray-200 font-mono">{email}</span>
           </div>
-          <button onClick={onClose} className="w-full h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors">
+
+          <p className="text-xs text-gray-600 mb-6">
+            The email contains a one-click login link. No password setup needed. Link expires in 7 days.
+          </p>
+
+          <button
+            onClick={onClose}
+            className="w-full h-10 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 transition-colors"
+          >
             Done
           </button>
         </div>
@@ -623,16 +794,17 @@ function LookupPanel({ tenants, onFound }: { tenants: Array<{ id: string; name: 
 
 interface Props {
   users: AdminUser[];
-  tenants: Array<{ id: string; name: string }>;
+  tenants: Array<{ id: string; name: string; isTTT?: boolean }>;
+  currentUserId: string;
 }
 
-export function UsersClient({ users: initialUsers, tenants }: Props) {
+export function UsersClient({ users: initialUsers, tenants, currentUserId }: Props) {
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [managing, setManaging] = useState<AdminUser | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newUserLink, setNewUserLink] = useState<{ userName: string; signInUrl: string } | null>(null);
+  const [inviteSent, setInviteSent] = useState<{ userName: string; email: string } | null>(null);
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const clerk = useClerk();
   const router = useRouter();
@@ -663,6 +835,11 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
     }
   }
 
+  const tenantMap = useMemo(
+    () => new Map(tenants.map(t => [t.id, { isTTT: t.isTTT }])),
+    [tenants]
+  );
+
   const filtered = useMemo(() => {
     if (!search.trim()) return users;
     const q = search.toLowerCase();
@@ -684,6 +861,11 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
     }
   }
 
+  function handleDeleted(clerkUserId: string) {
+    setUsers(prev => prev.filter(u => u.clerkUserId !== clerkUserId));
+    setManaging(null);
+  }
+
   const isStaffOrAdmin = (u: AdminUser) =>
     u.systemRole === "TTTAdmin" || u.systemRole === "TTTManager" || u.systemRole === "TTTStaff" || u.systemRole === "TTTSales";
 
@@ -693,25 +875,27 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
         <ManageModal
           user={managing}
           tenants={tenants}
+          currentUserId={currentUserId}
           onClose={() => setManaging(null)}
           onUpdate={handleUpdate}
+          onDeleted={handleDeleted}
         />
       )}
       {showCreate && (
         <CreateStaffModal
           onClose={() => setShowCreate(false)}
-          onCreated={(user, signInUrl) => {
+          onCreated={(user, email) => {
             setUsers(prev => [user, ...prev]);
             setShowCreate(false);
-            setNewUserLink({ userName: user.name, signInUrl });
+            setInviteSent({ userName: user.name, email });
           }}
         />
       )}
-      {newUserLink && (
-        <SignInLinkModal
-          userName={newUserLink.userName}
-          signInUrl={newUserLink.signInUrl}
-          onClose={() => setNewUserLink(null)}
+      {inviteSent && (
+        <InvitationSentModal
+          userName={inviteSent.userName}
+          email={inviteSent.email}
+          onClose={() => setInviteSent(null)}
         />
       )}
 
@@ -755,6 +939,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
               <th className="text-left px-5 py-3 font-semibold text-gray-400">User Type</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden md:table-cell">Projects</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden lg:table-cell">Joined</th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden xl:table-cell">Last Active</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-400">Status</th>
               <th className="px-5 py-3 w-24"></th>
             </tr>
@@ -774,7 +959,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
                   </div>
                 </td>
                 <td className="px-5 py-3">
-                  <div className="flex flex-wrap gap-1">{userTypeBadges(user)}</div>
+                  <div className="flex flex-wrap gap-1">{userTypeBadges(user, tenantMap)}</div>
                 </td>
                 <td className="px-5 py-3 hidden md:table-cell">
                   {isStaffOrAdmin(user) ? (
@@ -796,6 +981,15 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
                 </td>
                 <td className="px-5 py-3 text-gray-500 text-xs hidden lg:table-cell">
                   {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                </td>
+                <td className="px-5 py-3 text-xs hidden xl:table-cell">
+                  {user.lastActiveAt ? (
+                    <span className="text-gray-300" title={new Date(user.lastActiveAt).toLocaleString()}>
+                      {formatRelativeDate(user.lastActiveAt)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-600">Never</span>
+                  )}
                 </td>
                 <td className="px-5 py-3">
                   {user.banned ? (
@@ -826,7 +1020,7 @@ export function UsersClient({ users: initialUsers, tenants }: Props) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-12 text-center text-gray-600">No users found.</td>
+                <td colSpan={7} className="px-5 py-12 text-center text-gray-600">No users found.</td>
               </tr>
             )}
           </tbody>

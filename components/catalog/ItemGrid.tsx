@@ -675,6 +675,61 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
   );
 }
 
+// ─── Label Modal ─────────────────────────────────────────────────────────────
+
+function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () => void; onPrint: (w: number, h: number) => void }) {
+  const [width, setWidth] = useState("2");
+  const [height, setHeight] = useState("1");
+  const [printing, setPrinting] = useState(false);
+
+  const handlePrint = async () => {
+    const w = parseFloat(width) || 2;
+    const h = parseFloat(height) || 1;
+    setPrinting(true);
+    await onPrint(w, h);
+    setPrinting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-80">
+        <h3 className="text-white font-bold text-lg mb-1">Print Labels</h3>
+        <p className="text-gray-400 text-sm mb-5">{count} label{count !== 1 ? "s" : ""} will be generated as a PDF.</p>
+        <div className="flex gap-3 mb-4">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-400 mb-1">Width (in)</label>
+            <input
+              type="number"
+              value={width}
+              onChange={e => setWidth(e.target.value)}
+              min={0.5} max={8} step={0.25}
+              className="w-full h-9 px-3 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-gray-400 mb-1">Height (in)</label>
+            <input
+              type="number"
+              value={height}
+              onChange={e => setHeight(e.target.value)}
+              min={0.25} max={8} step={0.25}
+              className="w-full h-9 px-3 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mb-5">Each label includes the price, item name, scannable barcode, and barcode number. One label per page — use printer settings to fit multiple on a sheet.</p>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 h-9 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800 transition-colors">Cancel</button>
+          <button onClick={handlePrint} disabled={printing} className="flex-1 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors">
+            {printing ? "Generating…" : "Download PDF"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
 export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false }: ItemGridProps) {
@@ -692,6 +747,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [bulkLoading, setBulkLoading] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [showLabelModal, setShowLabelModal] = useState(false);
+  const [labelLoading, setLabelLoading] = useState(false);
 
   const handleSaved = useCallback((savedItem: Item) => {
     setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i));
@@ -719,17 +776,53 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     if (selected.size === 0) return;
     setBulkLoading(true);
     try {
-      await Promise.all([...selected].map(id =>
+      // Only approve items that are still "Pending Review"; skip anything already further along
+      const toApprove = [...selected].filter(id => items.find(i => i.id === id)?.status === "Pending Review");
+      await Promise.all(toApprove.map(id =>
         fetch("/api/items", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, tenantId: items.find(i => i.id === id)?.tenantId, status: "Approved" }),
         })
       ));
-      setItems(prev => prev.map(i => selected.has(i.id) ? { ...i, status: "Approved" as const } : i));
+      setItems(prev => prev.map(i => (toApprove.includes(i.id) ? { ...i, status: "Approved" as const } : i)));
       setSelected(new Set());
     } finally {
       setBulkLoading(false);
+    }
+  };
+
+  const handlePrintLabels = async (widthIn: number, heightIn: number) => {
+    const pfItems = [...selected]
+      .map(id => items.find(i => i.id === id))
+      .filter((i): i is Item => !!i && i.primaryRoute === "ProFoundFinds Consignment");
+    if (pfItems.length === 0) return;
+    setLabelLoading(true);
+    try {
+      const labelItems = pfItems.map(i => ({
+        id: i.id,
+        itemName: i.itemName,
+        price: i.valueMid ?? 0,
+        barcodeNumber: i.barcodeNumber,
+      }));
+      const res = await fetch("/api/pfinventory/labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: labelItems, widthIn, heightIn }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `labels-${Date.now()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowLabelModal(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to generate labels");
+    } finally {
+      setLabelLoading(false);
     }
   };
 
@@ -1166,6 +1259,18 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
               </svg>
               {pdfLoading ? "Generating…" : "Create PDF for Movers"}
             </button>
+            {isTTTUser && [...selected].some(id => items.find(i => i.id === id)?.primaryRoute === "ProFoundFinds Consignment") && (
+              <button
+                onClick={() => setShowLabelModal(true)}
+                disabled={labelLoading}
+                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5l4.586 4.586a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-4-4a2 2 0 010-2.828L7 3z" />
+                </svg>
+                Print PF Labels
+              </button>
+            )}
             <button
               onClick={() => setSelected(new Set())}
               className="h-8 px-3 rounded-lg border border-forest-300 text-forest-700 text-sm hover:bg-forest-100 transition-colors"
@@ -1382,6 +1487,14 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
             </div>
           )}
         </div>
+      )}
+
+      {showLabelModal && (
+        <LabelModal
+          count={[...selected].filter(id => items.find(i => i.id === id)?.primaryRoute === "ProFoundFinds Consignment").length}
+          onClose={() => setShowLabelModal(false)}
+          onPrint={handlePrintLabels}
+        />
       )}
     </>
   );

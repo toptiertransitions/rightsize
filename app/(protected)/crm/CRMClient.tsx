@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority, Tenant } from "@/lib/types";
 
@@ -70,6 +71,15 @@ const REF_STAGE_COLORS: Record<ReferralContactStage, string> = {
   "Shared Leads":     "bg-amber-100 text-amber-700",
   "Active Referral":  "bg-green-100 text-green-700",
   "Inactive Referral":"bg-red-100 text-red-600",
+};
+
+const REFERRAL_STAGE_PRIORITY: Record<ReferralContactStage, number> = {
+  "Inactive Referral": 0,
+  "Identified": 1,
+  "Met": 2,
+  "Agreed to Refer": 3,
+  "Shared Leads": 4,
+  "Active Referral": 5,
 };
 
 // ─── Activity Edit Modal ──────────────────────────────────────────────────────
@@ -930,9 +940,11 @@ function OpportunityPanel({
 function ContactActivityPanel({
   contact,
   onClose,
+  afterLog,
 }: {
   contact: { id: string; name: string; email?: string };
   onClose: () => void;
+  afterLog?: (contactId: string, date: string) => void;
 }) {
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -967,6 +979,7 @@ function ContactActivityPanel({
     });
     if (res.ok) {
       setActivityNote("");
+      afterLog?.(contact.id, activityDate);
       await load();
     }
   }
@@ -1723,24 +1736,87 @@ function ReferralPartnersTab({
   const [filterContactStage, setFilterContactStage] = useState<ReferralContactStage | "">(initialContactStage);
   const [filterOwner, setFilterOwner] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<"name" | "priority">("name");
+  const [sortBy, setSortBy] = useState<"name" | "priority" | "lastActivity">("name");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;
+  // Local map updated when new activities are logged this session (contactId -> date)
+  const [localActivityDates, setLocalActivityDates] = useState<Map<string, string>>(new Map());
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
-  // Determine which companies have at least one "Active Referral" contact
-  // Uses lazily-loaded local contacts state when available, otherwise falls back to server data
-  function isActiveReferralCompany(companyId: string): boolean {
-    if (contacts[companyId]) {
-      return contacts[companyId].some(c => c.stage === "Active Referral");
-    }
-    return initialReferralContacts.some(c => c.referralCompanyId === companyId && c.stage === "Active Referral");
+  // Called by ContactActivityPanel after a new activity is logged
+  function handleActivityLogged(contactId: string, date: string) {
+    const dateStr = date.slice(0, 10);
+    setLocalActivityDates(prev => {
+      const current = prev.get(contactId);
+      if (!current || dateStr > current) {
+        return new Map(prev).set(contactId, dateStr);
+      }
+      return prev;
+    });
+    // Persist to Airtable in background
+    fetch("/api/crm/contacts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: contactId, lastActivityDate: dateStr }),
+    }).catch(() => {});
   }
 
-  function hasContactWithStage(companyId: string, stage: ReferralContactStage): boolean {
-    if (contacts[companyId]) {
-      return contacts[companyId].some(c => c.stage === stage);
+  async function handleSyncActivityDates() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/admin/backfill-referral-activity", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult(`Done — ${data.contactsUpdated} contacts updated from ${data.activitiesScanned} activities`);
+      } else {
+        setSyncResult(`Error: ${data.error || "sync failed"}`);
+      }
+    } catch {
+      setSyncResult("Sync failed — check your connection");
+    } finally {
+      setSyncing(false);
     }
-    return initialReferralContacts.some(c => c.referralCompanyId === companyId && c.stage === stage);
+  }
+
+  // Returns the effective last activity date for a contact (local session > stored Airtable field)
+  function getEffectiveLastActivity(contactId: string, storedDate?: string): string | undefined {
+    return localActivityDates.get(contactId) ?? storedDate ?? undefined;
+  }
+
+  // Returns the highest-ranked stage among all contacts for a company
+  function getCompanyBestStage(companyId: string): ReferralContactStage | null {
+    const companyContacts = contacts[companyId] ?? initialReferralContacts.filter(c => c.referralCompanyId === companyId);
+    if (companyContacts.length === 0) return null;
+    let bestPriority = -1;
+    let bestStage: ReferralContactStage | null = null;
+    for (const c of companyContacts) {
+      const p = REFERRAL_STAGE_PRIORITY[c.stage] ?? -1;
+      if (p > bestPriority) { bestPriority = p; bestStage = c.stage; }
+    }
+    return bestStage;
+  }
+
+  // Returns the most recent activity date across all contacts for a company
+  function getCompanyLastActivity(companyId: string): string | null {
+    const companyContacts = contacts[companyId] ?? initialReferralContacts.filter(c => c.referralCompanyId === companyId);
+    let latest: string | null = null;
+    for (const c of companyContacts) {
+      const date = getEffectiveLastActivity(c.id, c.lastActivityDate);
+      if (date && (!latest || date > latest)) latest = date;
+    }
+    return latest;
+  }
+
+  // Company is "Active Partner" if its best stage is "Active Referral"
+  function isActiveReferralCompany(companyId: string): boolean {
+    return getCompanyBestStage(companyId) === "Active Referral";
+  }
+
+  // Stage filter operates at company level (best stage)
+  function hasContactWithStage(companyId: string, stage: ReferralContactStage): boolean {
+    return getCompanyBestStage(companyId) === stage;
   }
 
   function handleCsvFile(type: "companies" | "contacts", e: React.ChangeEvent<HTMLInputElement>) {
@@ -2015,6 +2091,14 @@ function ReferralPartnersTab({
     })
     .sort((a, b) => {
       if (sortBy === "priority") return (PRIORITY_ORDER[a.priority || ""] ?? 3) - (PRIORITY_ORDER[b.priority || ""] ?? 3);
+      if (sortBy === "lastActivity") {
+        const aDate = getCompanyLastActivity(a.id);
+        const bDate = getCompanyLastActivity(b.id);
+        if (!aDate && !bDate) return a.name.localeCompare(b.name);
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        return bDate.localeCompare(aDate); // most recent first
+      }
       return a.name.localeCompare(b.name);
     });
 
@@ -2107,19 +2191,33 @@ function ReferralPartnersTab({
           )}
           <select
             value={sortBy}
-            onChange={e => { setSortBy(e.target.value as "name" | "priority"); setPage(1); }}
+            onChange={e => { setSortBy(e.target.value as "name" | "priority" | "lastActivity"); setPage(1); }}
             className="h-7 border border-gray-300 rounded-lg px-2 text-xs text-gray-600 focus:outline-none"
           >
             <option value="name">Sort: Name A–Z</option>
             <option value="priority">Sort: Priority</option>
+            <option value="lastActivity">Sort: Last Activity</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncActivityDates}
+            disabled={syncing}
+            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {syncing ? "Syncing…" : "Sync Activity Dates"}
+          </button>
           <button onClick={openNewCompany} className="text-sm bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700">
             + Add Company
           </button>
         </div>
       </div>
+
+      {syncResult && (
+        <p className={cn("text-sm mb-3", syncResult.startsWith("Error") ? "text-red-600" : "text-green-600")}>
+          {syncResult}
+        </p>
+      )}
 
       {csvResult && <p className="text-sm text-green-600 mb-3">{csvResult}</p>}
 
@@ -2206,6 +2304,11 @@ function ReferralPartnersTab({
                     {company.assignedToClerkId && staffById.get(company.assignedToClerkId) && (
                       <span>Owner: {staffById.get(company.assignedToClerkId)}</span>
                     )}
+                    {getCompanyLastActivity(company.id) && (
+                      <span className="text-gray-400">
+                        Last activity: {new Date(getCompanyLastActivity(company.id)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2234,6 +2337,7 @@ function ReferralPartnersTab({
                         <tr className="text-left text-xs text-gray-500">
                           <th className="pb-1 font-medium">Name</th>
                           <th className="pb-1 font-medium">Stage</th>
+                          <th className="pb-1 font-medium">Last Activity</th>
                           <th className="pb-1 font-medium">Title</th>
                           <th className="pb-1 font-medium">Email</th>
                           <th className="pb-1 font-medium">Phone</th>
@@ -2248,6 +2352,11 @@ function ReferralPartnersTab({
                             <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", REF_STAGE_COLORS[c.stage || "Identified"])}>
                               {c.stage || "Identified"}
                             </span>
+                          </td>
+                          <td className="py-1.5 text-xs text-gray-500">
+                            {getEffectiveLastActivity(c.id, c.lastActivityDate)
+                              ? new Date(getEffectiveLastActivity(c.id, c.lastActivityDate)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : "—"}
                           </td>
                           <td className="py-1.5 text-gray-600">{c.title || "—"}</td>
                           <td className="py-1.5 text-gray-600">{c.email || "—"}</td>
@@ -2536,6 +2645,7 @@ function ReferralPartnersTab({
         <ContactActivityPanel
           contact={activityContact}
           onClose={() => setActivityContact(null)}
+          afterLog={handleActivityLogged}
         />
       )}
     </div>
@@ -2584,6 +2694,36 @@ function fmt(n: number) {
   return `$${n.toLocaleString()}`;
 }
 
+const ACTIVITY_BAR_COLORS: Record<string, string> = {
+  Call: "#22c55e",
+  Email: "#3b82f6",
+  Meeting: "#a855f7",
+  Note: "#9ca3af",
+  Task: "#f97316",
+};
+
+const REP_LINE_COLORS = ["#16a34a", "#6366f1", "#f59e0b", "#ef4444", "#0ea5e9", "#ec4899"];
+
+function getMondayOf(d: Date): Date {
+  const day = d.getDay();
+  const m = new Date(d);
+  m.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  m.setHours(0, 0, 0, 0);
+  return m;
+}
+
+function getLast10WorkDays(): Date[] {
+  const days: Date[] = [];
+  let d = new Date();
+  d.setHours(0, 0, 0, 0);
+  while (days.length < 10) {
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) days.unshift(new Date(d));
+    d = new Date(d.getTime() - 86400000);
+  }
+  return days;
+}
+
 function DashboardTab({
   opportunities,
   clientContacts,
@@ -2599,9 +2739,19 @@ function DashboardTab({
   staffMembers: StaffMember[];
   onNavigate: (tab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string; refContactStage?: ReferralContactStage | ""; refType?: string }) => void;
 }) {
-  const [ownerFilter, setOwnerFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   type DateRange = "all" | "month" | "quarter" | "year";
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  const [activities, setActivities] = useState<CRMActivity[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/crm/activities")
+      .then(r => r.json())
+      .then(d => setActivities(d.activities || []))
+      .catch(() => {})
+      .finally(() => setActivitiesLoading(false));
+  }, []);
 
   // Date range filter
   const dateFilteredOpps = (() => {
@@ -2614,10 +2764,10 @@ function DashboardTab({
     return opportunities.filter(o => new Date(o.createdAt) >= cutoff);
   })();
 
-  // Apply owner filter
+  // Apply owner filter (multi-select)
   const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
-  const filteredOpps = ownerFilter ? dateFilteredOpps.filter(o => o.assignedToClerkId === ownerFilter) : dateFilteredOpps;
-  const filteredCompanies = ownerFilter ? companies.filter(c => c.assignedToClerkId === ownerFilter) : companies;
+  const filteredOpps = ownerFilter.size > 0 ? dateFilteredOpps.filter(o => ownerFilter.has(o.assignedToClerkId)) : dateFilteredOpps;
+  const filteredCompanies = ownerFilter.size > 0 ? companies.filter(c => ownerFilter.has(c.assignedToClerkId)) : companies;
   const filteredCompanyIds = new Set(filteredCompanies.map(c => c.id));
   const filteredRefContacts = referralContacts.filter(c => filteredCompanyIds.has(c.referralCompanyId));
 
@@ -2656,6 +2806,56 @@ function DashboardTab({
     return clientContacts.find((c) => c.id === id)?.name || "—";
   }
 
+  const salesReps = staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin");
+
+  // Weekly stacked bar data — last 10 weeks, filtered by selected reps
+  const weeklyActivityData = useMemo(() => {
+    const thisMonday = getMondayOf(new Date());
+    const weeks: Date[] = [];
+    for (let i = 9; i >= 0; i--) {
+      const wk = new Date(thisMonday);
+      wk.setDate(thisMonday.getDate() - i * 7);
+      weeks.push(wk);
+    }
+    const filteredActs = ownerFilter.size > 0
+      ? activities.filter(a => ownerFilter.has(a.createdByClerkId))
+      : activities;
+    return weeks.map(weekStart => {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+      const wkActs = filteredActs.filter(a => {
+        const d = new Date((a.activityDate || a.createdAt).slice(0, 10) + "T12:00:00");
+        return d >= weekStart && d < weekEnd;
+      });
+      return {
+        week: weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        Call:    wkActs.filter(a => a.type === "Call").length,
+        Email:   wkActs.filter(a => a.type === "Email").length,
+        Meeting: wkActs.filter(a => a.type === "Meeting").length,
+        Note:    wkActs.filter(a => a.type === "Note").length,
+        Task:    wkActs.filter(a => a.type === "Task").length,
+      };
+    });
+  }, [activities, ownerFilter]);
+
+  // Daily per-rep line data — last 10 work days (Mon–Fri)
+  const dailyRepData = useMemo(() => {
+    const workDays = getLast10WorkDays();
+    return workDays.map(day => {
+      const dayStr = day.toISOString().slice(0, 10);
+      const label = day.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
+      const entry: Record<string, string | number> = { label };
+      for (const rep of salesReps) {
+        entry[rep.clerkUserId] = activities.filter(a =>
+          a.createdByClerkId === rep.clerkUserId &&
+          (a.activityDate || a.createdAt).slice(0, 10) === dayStr
+        ).length;
+      }
+      return entry;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activities, salesReps.map(r => r.clerkUserId).join(",")]);
+
   const dateRangeOptions: { key: DateRange; label: string }[] = [
     { key: "all", label: "All Time" },
     { key: "month", label: "This Month" },
@@ -2686,26 +2886,30 @@ function DashboardTab({
           ))}
         </div>
 
-        {/* Owner filter */}
-        {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").length > 0 && (
+        {/* Owner filter (multi-select) */}
+        {salesReps.length > 0 && (
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Rep:</span>
             <button
-              onClick={() => setOwnerFilter("")}
+              onClick={() => setOwnerFilter(new Set())}
               className={cn(
                 "h-7 px-3 text-xs rounded-full border transition-colors",
-                ownerFilter === "" ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"
+                ownerFilter.size === 0 ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"
               )}
             >
               All
             </button>
-            {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+            {salesReps.map(s => (
               <button
                 key={s.clerkUserId}
-                onClick={() => setOwnerFilter(o => o === s.clerkUserId ? "" : s.clerkUserId)}
+                onClick={() => setOwnerFilter(prev => {
+                  const next = new Set(prev);
+                  next.has(s.clerkUserId) ? next.delete(s.clerkUserId) : next.add(s.clerkUserId);
+                  return next;
+                })}
                 className={cn(
                   "h-7 px-3 text-xs rounded-full border transition-colors",
-                  ownerFilter === s.clerkUserId ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"
+                  ownerFilter.has(s.clerkUserId) ? "border-forest-600 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"
                 )}
               >
                 {s.displayName}
@@ -2860,6 +3064,70 @@ function DashboardTab({
                 </div>
               </button>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Activity Trends */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Activity Trends</h2>
+        {activitiesLoading ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">Loading activity data…</div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Left: 10-week stacked bar by type */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <p className="text-sm font-semibold text-gray-800 mb-0.5">Weekly Volume by Type</p>
+              <p className="text-xs text-gray-400 mb-4">Last 10 weeks</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={weeklyActivityData} barSize={18} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                  <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+                    cursor={{ fill: "#f9fafb" }}
+                  />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                  {(["Call", "Email", "Meeting", "Note", "Task"] as const).map(type => (
+                    <Bar key={type} dataKey={type} stackId="a" fill={ACTIVITY_BAR_COLORS[type]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Right: last 10 work days per-rep line chart */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <p className="text-sm font-semibold text-gray-800 mb-0.5">Daily Activity by Rep</p>
+              <p className="text-xs text-gray-400 mb-4">Last 10 work days (Mon–Fri)</p>
+              {salesReps.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-10">No sales reps found</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={dailyRepData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+                    />
+                    <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                    {salesReps.map((rep, i) => (
+                      <Line
+                        key={rep.clerkUserId}
+                        type="monotone"
+                        dataKey={rep.clerkUserId}
+                        name={rep.displayName}
+                        stroke={REP_LINE_COLORS[i % REP_LINE_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3, strokeWidth: 0 }}
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -3020,6 +3288,8 @@ function ActivityLogTab({
   const [logging, setLogging] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<25 | 50 | "all">(25);
 
   const staffById = useMemo(() => {
     const m: Record<string, string> = {};
@@ -3103,6 +3373,7 @@ function ActivityLogTab({
   function handleSort(col: "date" | "name" | "type" | "client") {
     if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortCol(col); setSortDir("asc"); }
+    setPage(1);
   }
 
   function SortIcon({ col }: { col: "date" | "name" | "type" | "client" }) {
@@ -3141,19 +3412,23 @@ function ActivityLogTab({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activities, typeFilter, staffFilter, sortCol, sortDir, staffById, clientContacts, referralContacts, opportunities]);
 
-  const allSelected = filtered.length > 0 && filtered.every((a) => selected.has(a.id));
+  const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / (pageSize as number)));
+  const safePage = Math.min(page, totalPages);
+  const paginated = pageSize === "all" ? filtered : filtered.slice((safePage - 1) * (pageSize as number), safePage * (pageSize as number));
+
+  const allSelected = paginated.length > 0 && paginated.every((a) => selected.has(a.id));
 
   function toggleAll() {
     if (allSelected) {
       setSelected((prev) => {
         const next = new Set(prev);
-        filtered.forEach((a) => next.delete(a.id));
+        paginated.forEach((a) => next.delete(a.id));
         return next;
       });
     } else {
       setSelected((prev) => {
         const next = new Set(prev);
-        filtered.forEach((a) => next.add(a.id));
+        paginated.forEach((a) => next.add(a.id));
         return next;
       });
     }
@@ -3190,7 +3465,7 @@ function ActivityLogTab({
         {(["All", "Call", "Email", "Meeting", "Note", "Task"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTypeFilter(t)}
+            onClick={() => { setTypeFilter(t); setPage(1); }}
             className={cn(
               "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
               typeFilter === t
@@ -3205,7 +3480,7 @@ function ActivityLogTab({
         {[{ id: "All", label: "All" }, ...staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map((s) => ({ id: s.clerkUserId, label: s.displayName }))].map((s) => (
           <button
             key={s.id}
-            onClick={() => setStaffFilter(s.id)}
+            onClick={() => { setStaffFilter(s.id); setPage(1); }}
             className={cn(
               "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
               staffFilter === s.id
@@ -3296,7 +3571,7 @@ function ActivityLogTab({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => (
+              {paginated.map((a) => (
                 <tr key={a.id} className={cn("border-b border-gray-100 hover:bg-gray-50", selected.has(a.id) && "bg-blue-50")}>
                   <td className="px-4 py-3">
                     <input
@@ -3354,6 +3629,78 @@ function ActivityLogTab({
           </table>
         )}
       </div>
+
+      {/* Pagination controls */}
+      {!loading && filtered.length > 0 && (
+        <div className="flex items-center justify-between mt-3 pt-1">
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span>Rows per page:</span>
+            {([25, 50, "all"] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => { setPageSize(size); setPage(1); }}
+                className={cn(
+                  "px-2 py-0.5 rounded border text-xs transition-colors",
+                  pageSize === size
+                    ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
+                    : "border-gray-300 text-gray-500 hover:border-gray-400"
+                )}
+              >
+                {size === "all" ? "All" : size}
+              </button>
+            ))}
+            <span className="ml-2 text-gray-400">
+              {pageSize === "all"
+                ? `${filtered.length} activities`
+                : `${(safePage - 1) * (pageSize as number) + 1}–${Math.min(safePage * (pageSize as number), filtered.length)} of ${filtered.length}`}
+            </span>
+          </div>
+
+          {pageSize !== "all" && totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="h-7 px-2.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                  if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === "…" ? (
+                    <span key={`e-${i}`} className="px-1 text-gray-400 text-xs">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      className={cn(
+                        "h-7 w-7 text-xs rounded-lg border transition-colors",
+                        safePage === p
+                          ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
+                          : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                      )}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="h-7 px-2.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {editingActivity && (
         <ActivityEditModal

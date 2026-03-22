@@ -9,7 +9,7 @@ const PAGE_SIZE = 25;
 const ITEM_STATUSES: ItemStatus[] = ["Listed", "Sold", "Discarded"];
 const VENDOR_DECISIONS: VendorDecision[] = ["Pending", "Approved", "Rejected", "Hold"];
 
-interface TenantInfo { name: string; ownerEmail: string; }
+interface TenantInfo { name: string; ownerEmail: string; isTTT: boolean; }
 interface Props {
   items: Item[];
   tenantInfoMap: Record<string, TenantInfo>;
@@ -280,6 +280,7 @@ export function OtherConsignmentClient({ items: initialItems, tenantInfoMap, ven
   const [sortCol, setSortCol] = useState<SortCol>("itemName");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tttFilter, setTttFilter] = useState<"all" | "ttt" | "client">("all");
 
   const vendorMap = new Map(vendors.map(v => [v.id, v]));
 
@@ -327,6 +328,7 @@ export function OtherConsignmentClient({ items: initialItems, tenantInfoMap, ven
     if (search && !haystack.includes(search.toLowerCase())) return false;
     if (statusFilter !== "all" && item.status !== statusFilter) return false;
     if (vendorFilter !== "all" && (vendorFilter === "__unassigned__" ? !!item.assignedVendorId : item.assignedVendorId !== vendorFilter)) return false;
+    if (tttFilter !== "all" && (tttFilter === "ttt" ? !(tenant?.isTTT ?? true) : (tenant?.isTTT ?? true))) return false;
     return true;
   });
 
@@ -421,6 +423,14 @@ export function OtherConsignmentClient({ items: initialItems, tenantInfoMap, ven
           <option value="__unassigned__">— Unassigned</option>
           {vendorsInUse.map(v => <option key={v.id} value={v.id}>{v.vendorName}</option>)}
         </select>
+        <div className="flex rounded-lg overflow-hidden border border-gray-700">
+          {([["all", "All"], ["ttt", "TTT Only"], ["client", "Client Only"]] as const).map(([v, label]) => (
+            <button key={v} onClick={() => { setTttFilter(v); setPage(1); }}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${tttFilter === v ? "bg-forest-600 text-white" : "bg-gray-900 text-gray-400 hover:text-gray-200"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bulk action bar */}
@@ -459,6 +469,7 @@ export function OtherConsignmentClient({ items: initialItems, tenantInfoMap, ven
                   <th className="px-3 py-3 text-left min-w-[180px]">{thBtn("itemName", "Item")}</th>
                   <th className="px-3 py-3 text-left w-24">{thBtn("status", "Status")}</th>
                   <th className="px-3 py-3 text-left min-w-[130px]">{thBtn("client", "Client")}</th>
+                  <th className="px-3 py-3 text-left w-16"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Type</span></th>
                   <th className="px-3 py-3 text-right w-14">{thBtn("quantity", "Qty", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-28">{thBtn("valueMid", "Label Value", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-28">{thBtn("salePrice", "Sale Price", "justify-end")}</th>
@@ -532,6 +543,17 @@ export function OtherConsignmentClient({ items: initialItems, tenantInfoMap, ven
                             <p className="text-gray-500 text-[10px] truncate max-w-[120px]">{tenant.ownerEmail}</p>
                           </div>
                         ) : <span className="text-gray-600 text-xs">—</span>}
+                      </td>
+
+                      {/* TTT Type */}
+                      <td className="px-3 py-2.5">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                          (tenant?.isTTT ?? true)
+                            ? "bg-green-900/40 text-green-400 border-green-700"
+                            : "bg-gray-800 text-gray-400 border-gray-600"
+                        }`}>
+                          {(tenant?.isTTT ?? true) ? "TTT" : "Client"}
+                        </span>
                       </td>
 
                       {/* Qty */}

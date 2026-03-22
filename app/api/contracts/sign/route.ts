@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, updateOpportunity } from "@/lib/airtable";
+import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, updateOpportunity } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { Resend } from "resend";
@@ -113,6 +113,14 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error("Failed to auto-send deposit invoice:", e);
     }
+  }
+
+  // Update tenant estimatedHours to the signed contract total hours
+  try {
+    const totalContractHours = contract.rightsizingHours + contract.packingHours + contract.unpackingHours;
+    await updateTenant(contract.tenantId, { estimatedHours: totalContractHours });
+  } catch (e) {
+    console.error("Failed to update tenant estimatedHours on sign:", e);
   }
 
   // Auto-advance opportunity to Won and set estimatedValue to the signed contract amount

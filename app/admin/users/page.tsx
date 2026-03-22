@@ -11,6 +11,7 @@ export type AdminUser = {
   name: string;
   imageUrl: string;
   createdAt: string;
+  lastActiveAt?: string;
   banned: boolean;
   systemRole?: string;
   staffMemberId?: string; // Airtable record ID for the StaffMember row (if any)
@@ -63,6 +64,7 @@ export default async function AdminUsersPage() {
     name: (`${u.firstName ?? ""} ${u.lastName ?? ""}`).trim() || (u.emailAddresses[0]?.emailAddress ?? "Unknown"),
     imageUrl: u.imageUrl,
     createdAt: new Date(u.createdAt).toISOString(),
+    lastActiveAt: u.lastSignInAt ? new Date(u.lastSignInAt).toISOString() : undefined,
     banned: u.banned ?? false,
     systemRole: isTTTAdmin(u.id) ? "TTTAdmin" : (staffRoleByClerkId.get(u.id) ?? undefined),
     staffMemberId: staffIdByClerkId.get(u.id),
@@ -70,14 +72,14 @@ export default async function AdminUsersPage() {
     memberships: membershipsByUser.get(u.id) ?? [],
   }));
 
-  const tenantList = tenants.map(t => ({ id: t.id, name: t.name }));
+  const tenantList = tenants.map(t => ({ id: t.id, name: t.name, isTTT: t.isTTT ?? false }));
 
   return (
     <div className="min-h-screen bg-gray-950">
       <AdminHeader active="users" />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <UsersClient users={users} tenants={tenantList} />
+        <UsersClient users={users} tenants={tenantList} currentUserId={userId} />
       </main>
     </div>
   );

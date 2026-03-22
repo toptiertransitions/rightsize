@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { Tenant, Invoice, InvoiceSettings, Service, Contract, TimeEntry } from "@/lib/types";
+import type { Tenant, Invoice, InvoiceSettings, Service, Contract, TimeEntry, InvoiceExpenseItem } from "@/lib/types";
 
 interface Props {
   isOpen: boolean;
@@ -67,6 +67,35 @@ export function InvoiceCreatorModal({
   const totalPaidDeposit = paidDeposits.reduce((s, inv) => s + (inv.paidAmount ?? inv.amount), 0);
   const [applyDeposit, setApplyDeposit] = useState(totalPaidDeposit > 0);
 
+  // Expenses state
+  const [expenseItems, setExpenseItems] = useState<InvoiceExpenseItem[]>([]);
+  const [includeExpenses, setIncludeExpenses] = useState(true);
+  const [expensesLoaded, setExpensesLoaded] = useState(false);
+  const [editingExpenseIdx, setEditingExpenseIdx] = useState<number | null>(null);
+  const [newExpense, setNewExpense] = useState<Partial<InvoiceExpenseItem> | null>(null);
+
+  // Fetch project expenses when Full tab is opened (once)
+  useEffect(() => {
+    if (tab !== "Full" || expensesLoaded) return;
+    fetch(`/api/expenses?tenantId=${tenant.id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.expenses) {
+          setExpenseItems(d.expenses.map((e: { id: string; vendor: string; description: string; date: string; total: number }) => ({
+            expenseId: e.id,
+            vendor: e.vendor,
+            description: e.description,
+            date: e.date,
+            amount: e.total,
+          })));
+        }
+        setExpensesLoaded(true);
+      })
+      .catch(() => setExpensesLoaded(true));
+  }, [tab, expensesLoaded, tenant.id]);
+
+  const expensesTotal = includeExpenses ? expenseItems.reduce((s, e) => s + e.amount, 0) : 0;
+
   // Reset applyDeposit when switching to Full tab or when modal opens
   useEffect(() => {
     if (tab === "Full") setApplyDeposit(totalPaidDeposit > 0);
@@ -118,7 +147,7 @@ export function InvoiceCreatorModal({
       : parseFloat(specificAmount) || 0;
 
   const effectiveDeposit = tab === "Full" && applyDeposit && totalPaidDeposit > 0 ? totalPaidDeposit : 0;
-  const fullAmount = fullSubtotal - effectiveDeposit;
+  const fullAmount = fullSubtotal + expensesTotal - effectiveDeposit;
 
   const selectedDepositService = services.find((s) => s.id === depositServiceId);
   const selectedSpecificService = services.find((s) => s.id === specificServiceId);
@@ -150,6 +179,8 @@ export function InvoiceCreatorModal({
     setError("");
     setSubmitting(true);
     try {
+      const activeExpenseItems = tab === "Full" && includeExpenses && expenseItems.length > 0 ? expenseItems : undefined;
+
       let body: Record<string, unknown> = {
         tenantId: tenant.id,
         type: tab,
@@ -159,6 +190,7 @@ export function InvoiceCreatorModal({
         sendEmail,
         sentToEmail: sendEmail ? sentToEmail : undefined,
         ccEmail: sendEmail ? ccEmail : undefined,
+        expenseItems: activeExpenseItems,
       };
 
       if (tab === "Deposit") {
@@ -569,6 +601,147 @@ export function InvoiceCreatorModal({
                         <span>Balance Owed</span>
                         <span>{fmt(Math.max(0, fullSubtotal - totalPaidDeposit))}</span>
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Expenses section (Full Invoice only) ─────────────────────── */}
+          {tab === "Full" && (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeExpenses}
+                    onChange={e => setIncludeExpenses(e.target.checked)}
+                    className="rounded text-forest-600 w-4 h-4"
+                  />
+                  <span className="text-sm font-semibold text-gray-800">
+                    Include Project Expenses
+                    {expensesTotal > 0 && <span className="ml-1.5 text-forest-700">(+{fmt(expensesTotal)})</span>}
+                  </span>
+                </label>
+                {includeExpenses && (
+                  <button
+                    type="button"
+                    onClick={() => setNewExpense({ vendor: "", description: "", date: new Date().toISOString().slice(0, 10), amount: 0 })}
+                    className="text-xs text-forest-600 hover:text-forest-800 font-medium flex items-center gap-1"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add
+                  </button>
+                )}
+              </div>
+
+              {includeExpenses && (
+                <div className="divide-y divide-gray-100">
+                  {!expensesLoaded && (
+                    <p className="px-4 py-3 text-xs text-gray-400">Loading expenses…</p>
+                  )}
+                  {expensesLoaded && expenseItems.length === 0 && !newExpense && (
+                    <p className="px-4 py-3 text-xs text-gray-400">No expenses linked to this project yet. Use the Expenses page to associate expenses with this project, or add one manually above.</p>
+                  )}
+                  {expenseItems.map((ei, idx) =>
+                    editingExpenseIdx === idx ? (
+                      <div key={idx} className="px-4 py-2.5 bg-forest-50 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Vendor</label>
+                            <input value={ei.vendor} onChange={e => setExpenseItems(prev => prev.map((x, i) => i === idx ? { ...x, vendor: e.target.value } : x))}
+                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Date</label>
+                            <input type="date" value={ei.date} onChange={e => setExpenseItems(prev => prev.map((x, i) => i === idx ? { ...x, date: e.target.value } : x))}
+                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Description</label>
+                            <input value={ei.description} onChange={e => setExpenseItems(prev => prev.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))}
+                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Amount ($)</label>
+                            <input type="number" step="0.01" value={ei.amount} onChange={e => setExpenseItems(prev => prev.map((x, i) => i === idx ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
+                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                          </div>
+                        </div>
+                        <button onClick={() => setEditingExpenseIdx(null)} className="text-xs text-forest-600 hover:text-forest-800 font-medium">Done</button>
+                      </div>
+                    ) : (
+                      <div key={idx} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 group">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 font-medium truncate">{ei.vendor || "—"}</p>
+                          <p className="text-xs text-gray-500 truncate">{ei.description}{ei.date ? ` · ${ei.date}` : ""}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 tabular-nums shrink-0">{fmt(ei.amount)}</span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setEditingExpenseIdx(idx)} className="text-xs text-gray-400 hover:text-forest-600 px-1.5 py-0.5 rounded hover:bg-gray-100">Edit</button>
+                          <button onClick={() => { setExpenseItems(prev => prev.filter((_, i) => i !== idx)); if (editingExpenseIdx === idx) setEditingExpenseIdx(null); }}
+                            className="text-xs text-gray-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50">×</button>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {/* New expense row */}
+                  {newExpense !== null && (
+                    <div className="px-4 py-2.5 bg-forest-50 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Vendor</label>
+                          <input value={newExpense.vendor ?? ""} onChange={e => setNewExpense(p => ({ ...p!, vendor: e.target.value }))}
+                            placeholder="e.g. Home Depot"
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Date</label>
+                          <input type="date" value={newExpense.date ?? ""} onChange={e => setNewExpense(p => ({ ...p!, date: e.target.value }))}
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Description</label>
+                          <input value={newExpense.description ?? ""} onChange={e => setNewExpense(p => ({ ...p!, description: e.target.value }))}
+                            placeholder="Brief description"
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Amount ($)</label>
+                          <input type="number" step="0.01" value={newExpense.amount ?? ""} onChange={e => setNewExpense(p => ({ ...p!, amount: parseFloat(e.target.value) || 0 }))}
+                            placeholder="0.00"
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (newExpense.vendor || newExpense.amount) {
+                              setExpenseItems(prev => [...prev, { vendor: newExpense.vendor || "", description: newExpense.description || "", date: newExpense.date || "", amount: newExpense.amount || 0 }]);
+                            }
+                            setNewExpense(null);
+                          }}
+                          className="text-xs bg-forest-600 text-white px-2.5 py-1 rounded-lg hover:bg-forest-700"
+                        >
+                          Add
+                        </button>
+                        <button onClick={() => setNewExpense(null)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {expenseItems.length > 0 && (
+                    <div className="flex justify-between px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-700">
+                      <span>Expenses subtotal</span>
+                      <span>{fmt(expensesTotal)}</span>
                     </div>
                   )}
                 </div>

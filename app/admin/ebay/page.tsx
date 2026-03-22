@@ -18,7 +18,7 @@ export default async function EbayPage() {
   // Get unique tenant IDs and resolve tenant name + client email
   const uniqueTenantIds = [...new Set(items.map((i) => i.tenantId).filter(Boolean))];
 
-  const tenantInfoMap: Record<string, { name: string; ownerEmail: string }> = {};
+  const tenantInfoMap: Record<string, { name: string; ownerEmail: string; isTTT: boolean }> = {};
 
   await Promise.all(
     uniqueTenantIds.map(async (tenantId) => {
@@ -37,7 +37,7 @@ export default async function EbayPage() {
           }
         } catch { /* ignore */ }
 
-        tenantInfoMap[tenantId] = { name: tenant.name, ownerEmail };
+        tenantInfoMap[tenantId] = { name: tenant.name, ownerEmail, isTTT: tenant.isTTT ?? true };
       } catch { /* ignore */ }
     })
   );

@@ -57,6 +57,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   // while /catalog?tenantId=X → Plan keeps the same project (toggle OFF).
   const staffPlanTq = (isStaff && urlTenantId && !isSentinel)
     ? `?tenantId=${urlTenantId}`
+    : (isAdmin || isManager)
+    ? `?tenantId=__all_active__`
     : "";
 
   // For Quoting / Invoices (admin + manager): carry the project from the current URL only.
@@ -73,6 +75,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: "/crm", base: "/crm", label: "CRM" },
     { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
     { href: "/expenses", base: "/expenses", label: "Expenses" },
+    { href: "/help", base: "/help", label: "Help" },
   ];
 
   const navLinks = isVendorPortal ? [] : isSales ? salesOnlyLinks : [
@@ -93,8 +96,9 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     ] : []),
     // Expenses — Manager and Admin
     ...(isManager ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
-    // Staff — Manager and Admin only
-    ...(isManager ? [{ href: "/staff", base: "/staff", label: "Staff" }] : []),
+    // Ops — Manager and Admin only
+    ...(isManager ? [{ href: "/staff", base: "/staff", label: "Ops" }] : []),
+    { href: "/help", base: "/help", label: "Help" },
   ];
 
   return (

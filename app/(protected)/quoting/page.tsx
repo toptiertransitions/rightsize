@@ -33,7 +33,8 @@ export default async function QuotingPage({ searchParams }: PageProps) {
 
   const { tenantId } = await searchParams;
   if (!tenantId) {
-    const allTenants = await getTenants().catch(() => []);
+    const allTenants = (await getTenants().catch(() => []))
+      .filter(t => sysRole === "TTTAdmin" || (t.isTTT ?? true));
     const sorted = [...allTenants].sort((a, b) => a.name.localeCompare(b.name));
     return <QuotingProjectPicker tenants={sorted} />;
   }

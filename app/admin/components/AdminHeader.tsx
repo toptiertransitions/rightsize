@@ -16,7 +16,8 @@ type AdminTab =
   | "pfinventory"
   | "fb"
   | "ebay"
-  | "crm";
+  | "crm"
+  | "ops";
 
 const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "projects", label: "Home", href: "/admin" },
@@ -32,6 +33,7 @@ const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "fb", label: "FB", href: "/admin/fb" },
   { tab: "ebay", label: "eBay", href: "/admin/ebay" },
   { tab: "crm", label: "CRM", href: "/admin/crm" },
+  { tab: "ops", label: "Ops", href: "/admin/ops" },
 ];
 
 interface AdminHeaderProps {

@@ -410,7 +410,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
 interface LocalVendorsAdminProps {
   vendors: LocalVendor[];
   consignmentItems: Item[];
-  tenantInfoMap: Record<string, { name: string; ownerEmail: string }>;
+  tenantInfoMap: Record<string, { name: string; ownerEmail: string; isTTT: boolean }>;
 }
 
 export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, tenantInfoMap }: LocalVendorsAdminProps) {

@@ -8,11 +8,13 @@ import type { Tenant } from "@/lib/types";
 const PAGE_SIZE = 25;
 
 type ViewFilter = "active" | "archived" | "all";
+type TypeFilter = "all" | "ttt" | "client";
 
 interface ProjectRow {
   id: string;
   name: string;
-  plan: string;
+  isTTT: boolean;
+  isConsignmentOnly: boolean;
   memberCount: number;
   createdAt: string;
   isArchived: boolean;
@@ -25,6 +27,7 @@ interface Props {
 
 export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
   const [view, setView] = useState<ViewFilter>("active");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -33,7 +36,8 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
       tenants.map((t) => ({
         id: t.id,
         name: t.name,
-        plan: t.plan ?? "standard",
+        isTTT: t.isTTT ?? false,
+        isConsignmentOnly: t.isConsignmentOnly ?? false,
         memberCount: memberCountByTenant[t.id] ?? 0,
         createdAt: t.createdAt,
         isArchived: t.isArchived ?? false,
@@ -45,35 +49,38 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
     let list = rows;
     if (view === "active") list = list.filter((r) => !r.isArchived);
     else if (view === "archived") list = list.filter((r) => r.isArchived);
+    if (typeFilter === "ttt") list = list.filter((r) => r.isTTT);
+    else if (typeFilter === "client") list = list.filter((r) => !r.isTTT);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) => r.name.toLowerCase().includes(q));
     }
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows, view, search]);
+  }, [rows, view, typeFilter, search]);
 
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  function handleViewChange(v: ViewFilter) {
-    setView(v);
-    setPage(1);
-  }
-  function handleSearch(s: string) {
-    setSearch(s);
-    setPage(1);
-  }
+  function handleViewChange(v: ViewFilter) { setView(v); setPage(1); }
+  function handleTypeChange(v: TypeFilter) { setTypeFilter(v); setPage(1); }
+  function handleSearch(s: string) { setSearch(s); setPage(1); }
 
-  const activeCount = rows.filter((r) => !r.isArchived).length;
+  const activeRows = rows.filter((r) => !r.isArchived);
+  const activeCount = activeRows.length;
   const archivedCount = rows.filter((r) => r.isArchived).length;
+  const tttCount = activeRows.filter((r) => r.isTTT).length;
+  const clientCount = activeRows.filter((r) => !r.isTTT).length;
 
   return (
     <div>
-      {/* Controls row */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-        {/* Toggle */}
-        <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1 self-start">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {/* Active / Archived / All */}
+        <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
           {(["active", "archived", "all"] as ViewFilter[]).map((v) => {
-            const label = v === "active" ? `Active (${activeCount})` : v === "archived" ? `Archived (${archivedCount})` : `All (${rows.length})`;
+            const label =
+              v === "active" ? `Active (${activeCount})`
+              : v === "archived" ? `Archived (${archivedCount})`
+              : `All (${rows.length})`;
             return (
               <button
                 key={v}
@@ -86,6 +93,34 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
               </button>
             );
           })}
+        </div>
+
+        {/* TTT / Client type filter */}
+        <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
+          <button
+            onClick={() => handleTypeChange("all")}
+            className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              typeFilter === "all" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            All Types
+          </button>
+          <button
+            onClick={() => handleTypeChange("ttt")}
+            className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              typeFilter === "ttt" ? "bg-green-800 text-green-200" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            TTT <span className="text-xs font-normal opacity-70">({tttCount})</span>
+          </button>
+          <button
+            onClick={() => handleTypeChange("client")}
+            className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              typeFilter === "client" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            Client <span className="text-xs font-normal opacity-70">({clientCount})</span>
+          </button>
         </div>
 
         {/* Search */}
@@ -110,7 +145,7 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
             <thead>
               <tr className="border-b border-gray-800 bg-gray-800/40">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Project</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Plan</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Members</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Created</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Status</th>
@@ -121,7 +156,11 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
               {paginated.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-gray-500">
-                    {search ? "No projects match your search." : view === "archived" ? "No archived projects." : "No active projects."}
+                    {search
+                      ? "No projects match your search."
+                      : view === "archived"
+                      ? "No archived projects."
+                      : "No projects match the selected filter."}
                   </td>
                 </tr>
               ) : (
@@ -131,7 +170,20 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
                       <span className="font-medium text-white">{r.name}</span>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded-full capitalize">{r.plan}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          r.isTTT
+                            ? "bg-green-900/40 text-green-400 border border-green-800/60"
+                            : "bg-gray-700/60 text-gray-400 border border-gray-700"
+                        }`}>
+                          {r.isTTT ? "TTT" : "Client"}
+                        </span>
+                        {r.isConsignmentOnly && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-900/40 text-amber-400 border border-amber-800/60">
+                            Consign
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{r.memberCount}</td>
                     <td className="px-4 py-3 text-gray-400 hidden lg:table-cell">

@@ -1,15 +1,18 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getItemsByPrimaryRoute, getInvoicesForTenant } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getItemsByPrimaryRoute, getInvoicesForTenant, getPlanEntriesForTodayByEmail } from "@/lib/airtable";
 import type { SoldItemRow } from "@/lib/types";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
 import { AdminProjectsClient } from "./AdminProjectsClient";
+import { FreeEstimatorCard } from "./FreeEstimatorCard";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
 import { AvailabilitySection } from "./AvailabilitySection";
+import { TodaysPlan } from "./TodaysPlan";
+import type { TodayShift } from "./TodaysPlan";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 const OWNER_ROLES = ["Owner", "TTTAdmin"];
@@ -41,14 +44,77 @@ export default async function DashboardPage({
   // ── TTTStaff/Manager/Admin: time tracker + all-tenant picker ─────────────────
   if (isStaff && !tenantIdParam) {
     const canViewAll = isAdmin || isManager;
-    const [allTenants, timeEntries, allStaff, serviceList, fbItems, ebayItems] = await Promise.all([
+    const userEmail = user?.emailAddresses?.[0]?.emailAddress ?? "";
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager";
+
+    const [allTenants, timeEntries, allStaff, serviceList, fbItems, ebayItems, todayPlanEntries] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
-      canViewAll ? getStaffMembers().catch(() => []) : Promise.resolve([]),
+      getStaffMembers().catch(() => []),
       getServices().catch(() => []),
       canViewAll ? getItemsByPrimaryRoute("FB/Marketplace").catch(() => []) : Promise.resolve([]),
       canViewAll ? getItemsByPrimaryRoute("Online Marketplace").catch(() => []) : Promise.resolve([]),
+      showTodaysPlan && userEmail ? getPlanEntriesForTodayByEmail(userEmail, todayStr) : Promise.resolve([]),
     ]);
+
+    // ── Build Today's Plan data ──────────────────────────────────────────────
+    let todayShifts: TodayShift[] = [];
+    if (showTodaysPlan && todayPlanEntries.length > 0) {
+      const tenantMap = new Map(allTenants.map((t) => [t.id, t]));
+      const staffByEmail = new Map(allStaff.map((s) => [s.email.toLowerCase(), s]));
+
+      // Batch-fetch Clerk photos for all helpers
+      const helperEmails = new Set(
+        todayPlanEntries.flatMap((e) => (e.helpers ?? []).map((h) => h.email.toLowerCase()))
+      );
+      const helperClerkIds = [...helperEmails]
+        .map((email) => staffByEmail.get(email)?.clerkUserId)
+        .filter((id): id is string => !!id);
+
+      const clerkPhotoMap = new Map<string, string>();
+      if (helperClerkIds.length > 0) {
+        try {
+          const client = await clerkClient();
+          const { data: clerkUsers } = await client.users.getUserList({ userId: helperClerkIds, limit: 100 });
+          for (const cu of clerkUsers) clerkPhotoMap.set(cu.id, cu.imageUrl);
+        } catch { /* photos are best-effort */ }
+      }
+
+      todayShifts = todayPlanEntries.map((entry) => {
+        const tenant = tenantMap.get(entry.tenantId);
+        const teammates = (entry.helpers ?? [])
+          .filter((h) => h.email.toLowerCase() !== userEmail.toLowerCase())
+          .map((h) => {
+            const staff = staffByEmail.get(h.email.toLowerCase());
+            return {
+              displayName: staff?.displayName ?? h.email,
+              phone: staff?.phone,
+              imageUrl: staff?.clerkUserId ? clerkPhotoMap.get(staff.clerkUserId) : undefined,
+              initials: (staff?.displayName ?? h.email).charAt(0).toUpperCase(),
+            };
+          });
+
+        let mapUrl: string | undefined;
+        let fullAddress: string | undefined;
+        if (tenant?.address) {
+          fullAddress = [tenant.address, tenant.city, tenant.state, tenant.zip].filter(Boolean).join(", ");
+          mapUrl = `https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`;
+        }
+
+        return {
+          id: entry.id,
+          activity: entry.activity,
+          notes: entry.notes,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          projectName: tenant?.name ?? "Unknown Project",
+          fullAddress,
+          mapUrl,
+          teammates,
+        };
+      });
+    }
 
     // Build sold items for CSV export
     const tenantNameMap = new Map(allTenants.map(t => [t.id, t.name]));
@@ -86,8 +152,11 @@ export default async function DashboardPage({
     const serviceNames = serviceList.map(s => s.name);
 
     const staffMembers = canViewAll
-      ? allStaff.filter(s => s.isActive).map(s => ({ id: s.clerkUserId, name: s.displayName }))
+      ? allStaff.filter((s) => s.isActive).map((s) => ({ id: s.clerkUserId, name: s.displayName }))
       : undefined;
+
+    // Filter tenants for staff views: admin sees all, staff/manager sees only TTT
+    const filteredTenants = allTenants.filter(t => !t.isArchived && (isAdmin || (t.isTTT ?? true)));
 
     return (
       <div>
@@ -95,13 +164,18 @@ export default async function DashboardPage({
           <h1 className="text-2xl font-bold text-gray-900">Welcome back, {firstName}</h1>
         </div>
 
+        {/* Today's Plan — TTTStaff and TTTManager */}
+        {showTodaysPlan && (
+          <TodaysPlan shifts={todayShifts} today={todayStr} />
+        )}
+
         {/* Time Tracker */}
         <section className="mb-10">
           <h2 className="text-base font-semibold text-gray-900 mb-4">Time Tracking</h2>
           <div className="bg-gray-950 rounded-2xl p-6">
             <TimeTrackerClient
               initialEntries={timeEntries}
-              tenants={allTenants.filter(t => !t.isArchived).map(t => ({ id: t.id, name: t.name }))}
+              tenants={filteredTenants.map(t => ({ id: t.id, name: t.name }))}
               isAdmin={isAdmin}
               isManager={isManager}
               currentUserId={userId}
@@ -116,7 +190,7 @@ export default async function DashboardPage({
         {/* Client Projects */}
         <section>
           <h2 className="text-base font-semibold text-gray-900 mb-4">Client Projects</h2>
-          <AdminProjectsClient initialTenants={allTenants} isManager={isAdmin || isManager} />
+          <AdminProjectsClient initialTenants={isAdmin ? allTenants : filteredTenants} isManager={isAdmin || isManager} isAdmin={isAdmin} />
         </section>
 
         {/* Availability — TTTStaff and TTTManager only (not admin-only accounts) */}
@@ -174,12 +248,13 @@ export default async function DashboardPage({
     const isStaffOnly = systemRole === "TTTStaff";
     const isOwnerOrCollab = membership.role === "Owner" || membership.role === "Collaborator";
 
-    const [tenant, items, rooms, contracts, invoices] = await Promise.all([
+    const [tenant, items, rooms, contracts, invoices, services] = await Promise.all([
       getTenantById(membership.tenantId).catch(() => null),
       getItemsForTenant(membership.tenantId).catch(() => []),
       getRoomsForTenant(membership.tenantId).catch(() => []),
       (isOwnerOrCollab || isStaffOnly) ? getContractsForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
       isOwnerOrCollab ? getInvoicesForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
+      isOwnerOrCollab ? getServices().catch(() => []) : Promise.resolve([]),
     ]);
 
     if (!tenant) redirect("/onboarding");
@@ -252,8 +327,8 @@ export default async function DashboardPage({
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
-          <Link href={`/catalog?tenantId=${tenant.id}`}>
-            <Card hover>
+          <Link href={`/catalog?tenantId=${tenant.id}`} className="block h-full">
+            <Card hover className="h-full">
               <CardContent className="py-5">
                 <p className="text-3xl font-bold text-gray-900">{items.length}</p>
                 <p className="text-sm text-gray-500 mt-0.5">Items cataloged</p>
@@ -261,8 +336,8 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
           </Link>
-          <Link href={`/rooms?tenantId=${tenant.id}`}>
-            <Card hover>
+          <Link href={`/rooms?tenantId=${tenant.id}`} className="block h-full">
+            <Card hover className="h-full">
               <CardContent className="py-5">
                 <p className="text-3xl font-bold text-gray-900">{rooms.length}</p>
                 <p className="text-sm text-gray-500 mt-0.5">Rooms · {totalSqFt.toLocaleString()} SF</p>
@@ -270,8 +345,8 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
           </Link>
-          <Link href={`/plan?tenantId=${tenant.id}`} className="col-span-2 sm:col-span-1">
-            <Card hover>
+          <Link href={`/plan?tenantId=${tenant.id}`} className="col-span-2 sm:col-span-1 block h-full">
+            <Card hover className="h-full">
               <CardContent className="py-5">
                 <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
                   <svg className="w-4 h-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -285,6 +360,19 @@ export default async function DashboardPage({
             </Card>
           </Link>
         </div>
+
+        {/* Free Estimator — for Non-TTT owners/collaborators */}
+        {!(tenant.isTTT ?? true) && isOwnerOrCollab && (
+          <div className="mb-8">
+            <FreeEstimatorCard
+              tenantId={tenant.id}
+              rooms={rooms}
+              services={services}
+              currentEstimatedHours={tenant.estimatedHours}
+              savedDestinationSqFt={tenant.destinationSqFt}
+            />
+          </div>
+        )}
 
         {/* Financial snapshot — invoice balance + consignment */}
         {isOwnerOrCollab && (invoiceAmountDue > 0 || consignmentPayout > 0 || pendingConsignment > 0) && (

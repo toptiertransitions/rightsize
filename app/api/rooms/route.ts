@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createRoom, updateRoom, deleteRoom, getUserRoleForTenant, getSystemRole } from "@/lib/airtable";
+import { createRoom, updateRoom, deleteRoom, getRoomsForTenant, getUserRoleForTenant, getSystemRole } from "@/lib/airtable";
+
+export async function GET(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const tenantId = req.nextUrl.searchParams.get("tenantId");
+  if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
+
+  const [tenantRole, sysRole] = await Promise.all([
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    getSystemRole(userId).catch(() => null),
+  ]);
+  if (!tenantRole && !sysRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const rooms = await getRoomsForTenant(tenantId).catch(() => []);
+  return NextResponse.json({ rooms });
+}
 
 import type { DensityLevel, RoomType } from "@/lib/types";
 

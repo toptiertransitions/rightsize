@@ -22,7 +22,7 @@ export default async function LocalVendorsPage() {
 
   // Resolve tenant name + owner email for each unique tenant
   const uniqueTenantIds = [...new Set(consignmentItems.map(i => i.tenantId).filter(Boolean))];
-  const tenantInfoMap: Record<string, { name: string; ownerEmail: string }> = {};
+  const tenantInfoMap: Record<string, { name: string; ownerEmail: string; isTTT: boolean }> = {};
 
   await Promise.all(
     uniqueTenantIds.map(async (tenantId) => {
@@ -39,7 +39,7 @@ export default async function LocalVendorsPage() {
             if (user?.email) { ownerEmail = user.email; break; }
           }
         } catch { /* ignore */ }
-        tenantInfoMap[tenantId] = { name: tenant.name, ownerEmail };
+        tenantInfoMap[tenantId] = { name: tenant.name, ownerEmail, isTTT: tenant.isTTT ?? true };
       } catch { /* ignore */ }
     })
   );

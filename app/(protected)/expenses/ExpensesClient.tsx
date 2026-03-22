@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import type { Expense, ExpenseCategory } from "@/lib/types";
+import type { Expense, ExpenseCategory, Tenant } from "@/lib/types";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 
 interface Props {
   initialExpenses: Expense[];
   staffName: string;
+  tenants: Tenant[];
+  isManagerOrAdmin: boolean;
 }
 
 function fmtDate(d: string) {
@@ -34,10 +36,12 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
 // ─── Inline row editor ─────────────────────────────────────────────────────────
 function EditRow({
   expense,
+  tenants,
   onSave,
   onCancel,
 }: {
   expense: Expense;
+  tenants: Tenant[];
   onSave: (updated: Expense) => void;
   onCancel: () => void;
 }) {
@@ -47,11 +51,13 @@ function EditRow({
   const [category, setCategory] = useState<ExpenseCategory>(expense.category);
   const [description, setDescription] = useState(expense.description);
   const [notes, setNotes] = useState(expense.notes ?? "");
+  const [tenantId, setTenantId] = useState(expense.tenantId ?? "");
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
     try {
+      const selectedTenant = tenants.find(t => t.id === tenantId);
       const res = await fetch("/api/expenses", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -63,6 +69,8 @@ function EditRow({
           category,
           description,
           notes: notes || undefined,
+          tenantId: tenantId || null,
+          tenantName: selectedTenant?.name || null,
         }),
       });
       if (!res.ok) throw new Error("Save failed");
@@ -72,52 +80,49 @@ function EditRow({
     finally { setSaving(false); }
   }
 
+  const inputCls = "border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400";
+
   return (
-    <tr className="bg-forest-50">
+    <tr className="bg-forest-50/60 border-b border-forest-100">
       <td className="px-3 py-2"><input type="checkbox" disabled /></td>
       <td className="px-3 py-2">
-        <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm w-32" />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={cn(inputCls, "w-32")} />
       </td>
       <td className="px-3 py-2">
-        <input value={vendor} onChange={e => setVendor(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm w-36" />
+        <input value={vendor} onChange={e => setVendor(e.target.value)} className={cn(inputCls, "w-32")} />
       </td>
       <td className="px-3 py-2">
-        <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm w-44">
+        <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)} className={cn(inputCls, "w-44")}>
           {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </td>
       <td className="px-3 py-2">
-        <input type="number" step="0.01" value={total} onChange={e => setTotal(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm w-24" />
+        <input type="number" step="0.01" value={total} onChange={e => setTotal(e.target.value)} className={cn(inputCls, "w-24")} />
       </td>
       <td className="px-3 py-2">
-        <input value={description} onChange={e => setDescription(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm w-48" />
+        <input value={description} onChange={e => setDescription(e.target.value)} className={cn(inputCls, "w-44")} />
       </td>
       <td className="px-3 py-2">
-        <input value={notes} onChange={e => setNotes(e.target.value)}
-          placeholder="Optional notes…"
-          className="border border-gray-300 rounded px-2 py-1 text-sm w-40" />
+        <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional…" className={cn(inputCls, "w-36")} />
+      </td>
+      <td className="px-3 py-2">
+        <select value={tenantId} onChange={e => setTenantId(e.target.value)} className={cn(inputCls, "w-44")}>
+          <option value="">— No project —</option>
+          {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
       </td>
       <td className="px-3 py-2">
         {expense.receiptUrl && (
-          <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer"
-            className="text-xs text-forest-600 underline">View</a>
+          <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-forest-600 underline">View</a>
         )}
       </td>
       <td className="px-3 py-2">
         <div className="flex gap-1">
           <button onClick={handleSave} disabled={saving}
-            className="text-xs bg-forest-600 text-white px-2 py-1 rounded hover:bg-forest-700 disabled:opacity-50">
+            className="text-xs bg-forest-600 text-white px-2 py-1 rounded-lg hover:bg-forest-700 disabled:opacity-50">
             {saving ? "…" : "Save"}
           </button>
-          <button onClick={onCancel}
-            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">
-            Cancel
-          </button>
+          <button onClick={onCancel} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancel</button>
         </div>
       </td>
     </tr>
@@ -127,26 +132,33 @@ function EditRow({
 // ─── Bulk edit bar ─────────────────────────────────────────────────────────────
 function BulkEditBar({
   count,
+  tenants,
   onApply,
   onDelete,
   onClear,
 }: {
   count: number;
-  onApply: (data: { category?: ExpenseCategory; date?: string; vendor?: string }) => void;
+  tenants: Tenant[];
+  onApply: (data: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string }) => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
   const [category, setCategory] = useState<ExpenseCategory | "">("");
   const [date, setDate] = useState("");
   const [vendor, setVendor] = useState("");
+  const [tenantId, setTenantId] = useState("");
 
   function handleApply() {
-    const patch: { category?: ExpenseCategory; date?: string; vendor?: string } = {};
+    const patch: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string } = {};
     if (category) patch.category = category as ExpenseCategory;
     if (date) patch.date = date;
     if (vendor) patch.vendor = vendor;
+    if (tenantId) {
+      patch.tenantId = tenantId;
+      patch.tenantName = tenants.find(t => t.id === tenantId)?.name;
+    }
     onApply(patch);
-    setCategory(""); setDate(""); setVendor("");
+    setCategory(""); setDate(""); setVendor(""); setTenantId("");
   }
 
   return (
@@ -160,7 +172,12 @@ function BulkEditBar({
       <input type="date" value={date} onChange={e => setDate(e.target.value)}
         className="text-sm border border-gray-300 rounded-lg px-2 py-1.5" />
       <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Set vendor…"
-        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-36" />
+        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-32" />
+      <select value={tenantId} onChange={e => setTenantId(e.target.value)}
+        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5">
+        <option value="">Assign project…</option>
+        {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
       <button onClick={handleApply}
         className="text-sm bg-forest-600 text-white px-3 py-1.5 rounded-lg hover:bg-forest-700">
         Apply
@@ -175,15 +192,41 @@ function BulkEditBar({
 }
 
 // ─── Main client ───────────────────────────────────────────────────────────────
-export function ExpensesClient({ initialExpenses, staffName }: Props) {
+export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerOrAdmin }: Props) {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [allCompanyView, setAllCompanyView] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const totalSpend = expenses.reduce((s, e) => s + e.total, 0);
+  const displayExpenses = expenses;
+  const totalSpend = displayExpenses.reduce((s, e) => s + e.total, 0);
+
+  // ── All Company toggle ─────────────────────────────────────────────────────
+  async function switchView(toAllCompany: boolean) {
+    setAllCompanyView(toAllCompany);
+    setSelected(new Set());
+    setEditingId(null);
+    if (toAllCompany) {
+      setLoadingAll(true);
+      try {
+        const res = await fetch("/api/expenses?allCompany=true");
+        const data = await res.json();
+        if (data.expenses) setExpenses(data.expenses);
+      } catch { /* ignore */ }
+      finally { setLoadingAll(false); }
+    } else {
+      setExpenses(initialExpenses);
+    }
+  }
+
+  // Keep in sync if initialExpenses changes (e.g. page reload)
+  useEffect(() => {
+    if (!allCompanyView) setExpenses(initialExpenses);
+  }, [initialExpenses, allCompanyView]);
 
   // ── Upload + AI analysis ──────────────────────────────────────────────────
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -197,14 +240,12 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
     setUploading(true);
     setUploadError("");
     try {
-      // 1. Upload to Cloudinary
       const formData = new FormData();
       formData.append("file", file);
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       if (!uploadRes.ok) throw new Error("Upload failed");
       const { photoUrl, photoPublicId } = await uploadRes.json();
 
-      // 2. Create expense + AI analysis
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -232,38 +273,32 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
 
   function toggleAll() {
     setSelected(prev =>
-      prev.size === expenses.length ? new Set() : new Set(expenses.map(e => e.id))
+      prev.size === displayExpenses.length ? new Set() : new Set(displayExpenses.map(e => e.id))
     );
   }
 
   // ── Bulk edit ─────────────────────────────────────────────────────────────
-  async function handleBulkApply(patch: { category?: ExpenseCategory; date?: string; vendor?: string }) {
+  async function handleBulkApply(patch: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string }) {
     const ids = [...selected];
     await Promise.all(ids.map(id =>
       fetch("/api/expenses", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...patch }),
-      }).then(r => r.json()).then(d => d.expense)
+      })
     ));
-    // Refresh all changed rows
-    setExpenses(prev => prev.map(e =>
-      selected.has(e.id) ? { ...e, ...patch } : e
-    ));
+    setExpenses(prev => prev.map(e => selected.has(e.id) ? { ...e, ...patch } : e));
     setSelected(new Set());
   }
 
   async function handleBulkDelete() {
     if (!confirm(`Delete ${selected.size} expense(s)?`)) return;
     const ids = [...selected];
-    await Promise.all(ids.map(id =>
-      fetch(`/api/expenses?id=${id}`, { method: "DELETE" })
-    ));
+    await Promise.all(ids.map(id => fetch(`/api/expenses?id=${id}`, { method: "DELETE" })));
     setExpenses(prev => prev.filter(e => !selected.has(e.id)));
     setSelected(new Set());
   }
 
-  // ── Single delete ─────────────────────────────────────────────────────────
   async function handleDelete(id: string) {
     if (!confirm("Delete this expense?")) return;
     await fetch(`/api/expenses?id=${id}`, { method: "DELETE" });
@@ -275,61 +310,82 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Expenses</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {allCompanyView ? "All Company Expenses" : "My Expenses"}
+          </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {expenses.length} expense{expenses.length !== 1 ? "s" : ""} · {fmtCurrency(totalSpend)} total
+            {loadingAll ? "Loading…" : `${displayExpenses.length} expense${displayExpenses.length !== 1 ? "s" : ""} · ${fmtCurrency(totalSpend)} total`}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            capture="environment"
-            onChange={handleFileChange}
-            className="hidden"
-            id="receipt-upload"
-          />
-          <label
-            htmlFor="receipt-upload"
-            className={cn(
-              "inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition-colors",
-              uploading
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-forest-600 text-white hover:bg-forest-700"
-            )}
-          >
-            {uploading ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-                Analyzing receipt…
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Upload Receipt
-              </>
-            )}
-          </label>
+          {/* All Company toggle for managers/admins */}
+          {isManagerOrAdmin && (
+            <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl">
+              <button
+                onClick={() => switchView(false)}
+                className={cn("px-3 py-1.5 rounded-lg text-sm font-medium transition-all", !allCompanyView ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+              >
+                My Expenses
+              </button>
+              <button
+                onClick={() => switchView(true)}
+                className={cn("px-3 py-1.5 rounded-lg text-sm font-medium transition-all", allCompanyView ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+              >
+                All Company
+              </button>
+            </div>
+          )}
+
+          {!allCompanyView && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                capture="environment"
+                onChange={handleFileChange}
+                className="hidden"
+                id="receipt-upload"
+              />
+              <label
+                htmlFor="receipt-upload"
+                className={cn(
+                  "inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition-colors",
+                  uploading ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-forest-600 text-white hover:bg-forest-700"
+                )}
+              >
+                {uploading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Upload Receipt
+                  </>
+                )}
+              </label>
+            </>
+          )}
         </div>
       </div>
 
       {uploadError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-          {uploadError}
-        </div>
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{uploadError}</div>
       )}
 
       {/* Bulk edit bar */}
       {selected.size > 0 && (
         <BulkEditBar
           count={selected.size}
+          tenants={tenants}
           onApply={handleBulkApply}
           onDelete={handleBulkDelete}
           onClear={() => setSelected(new Set())}
@@ -337,7 +393,9 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
       )}
 
       {/* Table */}
-      {expenses.length === 0 ? (
+      {loadingAll ? (
+        <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center text-sm text-gray-400">Loading all expenses…</div>
+      ) : displayExpenses.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
           <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -354,7 +412,7 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-3 py-3 text-left w-8">
-                    <input type="checkbox" checked={selected.size === expenses.length && expenses.length > 0}
+                    <input type="checkbox" checked={selected.size === displayExpenses.length && displayExpenses.length > 0}
                       onChange={toggleAll} className="rounded" />
                   </th>
                   <th className="px-3 py-3 text-left">Date</th>
@@ -363,16 +421,19 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
                   <th className="px-3 py-3 text-right">Total</th>
                   <th className="px-3 py-3 text-left">Description</th>
                   <th className="px-3 py-3 text-left">Notes</th>
+                  <th className="px-3 py-3 text-left">Project</th>
+                  {allCompanyView && <th className="px-3 py-3 text-left">Staff</th>}
                   <th className="px-3 py-3 text-left">Receipt</th>
                   <th className="px-3 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {expenses.map(expense =>
+                {displayExpenses.map(expense =>
                   editingId === expense.id ? (
                     <EditRow
                       key={expense.id}
                       expense={expense}
+                      tenants={tenants}
                       onSave={updated => {
                         setExpenses(prev => prev.map(e => e.id === updated.id ? updated : e));
                         setEditingId(null);
@@ -401,11 +462,21 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
                       <td className="px-3 py-3 text-gray-600 max-w-xs truncate">{expense.description || "—"}</td>
                       <td className="px-3 py-3 text-gray-500 text-xs max-w-[120px] truncate">{expense.notes || "—"}</td>
                       <td className="px-3 py-3">
+                        {expense.tenantName ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-forest-100 text-forest-700 whitespace-nowrap">
+                            {expense.tenantName}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      {allCompanyView && (
+                        <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">{expense.staffName || "—"}</td>
+                      )}
+                      <td className="px-3 py-3">
                         {expense.receiptUrl ? (
                           <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-forest-600 underline hover:text-forest-800">
-                            View
-                          </a>
+                            className="text-xs text-forest-600 underline hover:text-forest-800">View</a>
                         ) : <span className="text-gray-300 text-xs">—</span>}
                       </td>
                       <td className="px-3 py-3 text-right">
@@ -426,9 +497,11 @@ export function ExpensesClient({ initialExpenses, staffName }: Props) {
               </tbody>
               <tfoot>
                 <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
-                  <td colSpan={4} className="px-3 py-3 text-gray-700">Total ({expenses.length} expenses)</td>
+                  <td colSpan={4} className="px-3 py-3 text-gray-700">
+                    Total ({displayExpenses.length} expense{displayExpenses.length !== 1 ? "s" : ""})
+                  </td>
                   <td className="px-3 py-3 text-right tabular-nums text-gray-900">{fmtCurrency(totalSpend)}</td>
-                  <td colSpan={4} />
+                  <td colSpan={allCompanyView ? 6 : 5} />
                 </tr>
               </tfoot>
             </table>

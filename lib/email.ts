@@ -605,6 +605,105 @@ export function buildPayoutEmail({
 </html>`;
 }
 
+// ─── Staff Welcome Email ───────────────────────────────────────────────────────
+export function buildStaffWelcomeEmail({
+  firstName,
+  roleLabel,
+  signInUrl,
+}: {
+  firstName: string;
+  roleLabel: string;
+  signInUrl: string;
+}): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:32px 36px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;opacity:0.6;">Top Tier Transitions</p>
+            <p style="margin:8px 0 0;color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;line-height:1.2;">Welcome to the team.</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:36px;border-radius:0 0 14px 14px;">
+
+            <p style="margin:0 0 20px;font-size:16px;color:#111827;line-height:1.6;">Hi ${firstName},</p>
+            <p style="margin:0 0 28px;font-size:15px;color:#4B5563;line-height:1.7;">
+              You&rsquo;ve been added to the <strong style="color:#111827;">Top Tier Transitions</strong> internal team
+              as a <strong style="color:#111827;">${roleLabel}</strong>. Click below to confirm your account
+              and get into your portal &mdash; no password setup required.
+            </p>
+
+            <!-- CTA Button -->
+            <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
+              <tr>
+                <td style="background-color:#2E6B4F;border-radius:10px;">
+                  <a href="${signInUrl}"
+                     style="display:inline-block;padding:15px 36px;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;letter-spacing:-0.2px;">
+                    Get Started &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <!-- What's inside -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+              <tr style="background-color:#F9FAFB;">
+                <td style="padding:10px 16px;font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.8px;">What you&rsquo;ll find inside</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-top:1px solid #E5E7EB;">
+                  <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">Projects &amp; Plan</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">Browse active client projects, timelines, and daily plans</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-top:1px solid #E5E7EB;background-color:#FAFAFA;">
+                  <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">Item Catalog</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">Catalog, route, and manage items across all projects</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-top:1px solid #E5E7EB;">
+                  <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">Time Tracking &amp; Sales</p>
+                  <p style="margin:3px 0 0;font-size:13px;color:#6B7280;">Log hours, track consignment sales, and manage payouts</p>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 6px;font-size:13px;color:#9CA3AF;">Or copy this link into your browser:</p>
+            <p style="margin:0 0 28px;font-size:12px;color:#6B7280;word-break:break-all;font-family:monospace;">${signInUrl}</p>
+
+            <p style="margin:0;font-size:12px;color:#D1D5DB;text-align:center;">This link expires in 7 days and can only be used once.</p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">Top Tier Transitions &mdash; Internal Staff Portal</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ─── Drip Campaign Email Builder ───────────────────────────────────────────────
 export function substituteVars(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -683,6 +782,82 @@ export function buildDripEmail({
               ${settings.companyName}${settings.companyAddress ? ` · ${settings.companyAddress}` : ""}<br/>
               <a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
             </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ─── Time Off Notification Email ──────────────────────────────────────────────
+export function buildTimeOffEmail({
+  staffName,
+  entries,
+  opsUrl,
+}: {
+  staffName: string;
+  entries: Array<{ date: string; allDay: boolean; startTime?: string; endTime?: string }>;
+  opsUrl: string;
+}): string {
+  function fmt12h(t: string) {
+    const [h, m] = t.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
+  }
+  function fmtDate(d: string) {
+    return new Date(d + "T12:00:00").toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric", year: "numeric",
+    });
+  }
+  const dateRows = entries.map((e) => {
+    const timeStr = e.allDay ? "All Day"
+      : e.startTime ? `${fmt12h(e.startTime)}${e.endTime ? ` \u2013 ${fmt12h(e.endTime)}` : ""}` : "All Day";
+    return `<tr>
+      <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">${fmtDate(e.date)}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${timeStr}</td>
+    </tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Time Off Notice \u2014 ${staffName}</title></head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+            <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Team Availability Notice</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            <p style="margin:0 0 8px;font-size:16px;color:#1a1a1a;font-weight:bold;">Hi there,</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+              Just a heads up \u2014 <strong>${staffName}</strong> has marked the following date${entries.length > 1 ? "s" : ""} as unavailable:
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
+              <tr style="background-color:#f9fafb;">
+                <th style="padding:10px 16px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Date</th>
+                <th style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Time</th>
+              </tr>
+              ${dateRows}
+            </table>
+            <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+              No action required \u2014 this is a courtesy notification to help with scheduling.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background-color:#2E6B4F;border-radius:8px;padding:13px 28px;">
+                  <a href="${opsUrl}" style="color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Review Team Availability \u2192</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions \u2014 Internal Notification</p>
           </td>
         </tr>
       </table>
