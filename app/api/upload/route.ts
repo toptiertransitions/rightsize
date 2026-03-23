@@ -23,7 +23,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
 
-  const mimeType = file.type || "application/octet-stream";
+  // HEIC files from Chrome arrive with an empty MIME type — detect by extension.
+  const isHeicByExtension = /\.(heic|heif)$/i.test(file.name);
+  const rawMime = file.type || "application/octet-stream";
+  const mimeType = (rawMime === "application/octet-stream" && isHeicByExtension)
+    ? "image/heic"
+    : rawMime;
   const rawBuffer = Buffer.from(await file.arrayBuffer());
 
   // PDFs and other non-image files — upload as raw files, skip image processing

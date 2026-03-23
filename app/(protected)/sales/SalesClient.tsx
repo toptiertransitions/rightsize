@@ -848,7 +848,7 @@ function ProofOfPaymentSection({
           <p className="text-xs text-gray-500 mt-0.5">Upload receipts or screenshots of payments made to the client.</p>
         </div>
         <div>
-          <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} />
+          <input ref={fileRef} type="file" accept=".heic,.heif,image/*,.pdf" className="hidden" onChange={handleUpload} />
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}

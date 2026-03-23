@@ -562,7 +562,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,application/pdf"
+                accept=".heic,.heif,image/*,application/pdf"
                 capture="environment"
                 onChange={handleFileChange}
                 className="hidden"

@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Run Cloudinary upload and Claude analysis in parallel to save time.
-  // Claude always receives base64 JPEG (more reliable than depending on a Cloudinary URL).
+  // Send processedBuffer (JPEG) to Cloudinary — avoids uploading raw HEIC.
   const [uploadResult, analysisResult] = await Promise.allSettled([
-    uploadImage(rawBuffer, { tenantId, mimeType: file.type }),
+    uploadImage(processedBuffer, { tenantId, mimeType: "image/jpeg" }),
     analyzeItemPhoto(processedBuffer.toString("base64")),
   ]);
 
