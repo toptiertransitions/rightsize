@@ -400,6 +400,21 @@ export async function getItemById(id: string): Promise<Item | null> {
 
 // ─── Storefront helpers ───────────────────────────────────────────────────────
 
+export async function getReservedStorefrontItems(): Promise<{ id: string; itemName: string; updatedAt: string }[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", {Status} = "Reserved")`,
+      fields: ["ItemName", "UpdatedAt"],
+    })
+    .all();
+  return records.map((r) => ({
+    id: r.id,
+    itemName: String(r.fields["ItemName"] ?? ""),
+    updatedAt: String(r.fields["UpdatedAt"] ?? new Date(0).toISOString()),
+  }));
+}
+
 export async function getProFoundFindsStorefrontItems(): Promise<Item[]> {
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
