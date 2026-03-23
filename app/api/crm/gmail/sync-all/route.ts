@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getGmailToken, getAnyGmailToken } from "@/lib/airtable";
+import { getSystemRole, getAllGmailTokens } from "@/lib/airtable";
 import { runGmailSyncAll } from "@/lib/gmail";
 
 export async function POST(req: NextRequest) {
@@ -13,20 +13,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Use the calling user's Gmail token if available, otherwise fall back to any connected account
-  let token = await getGmailToken(userId).catch(() => null);
-  if (!token) {
-    token = await getAnyGmailToken().catch(() => null);
-  }
-
-  if (!token) {
+  // Fetch all connected Gmail accounts and sync every one
+  const tokens = await getAllGmailTokens().catch(() => []);
+  if (tokens.length === 0) {
     return NextResponse.json(
-      { error: "No Gmail account is connected. Please connect Gmail in CRM → Settings first." },
-      { status: 400 }
+      { error: "No Gmail accounts are connected. Connect Gmail in CRM → Settings first." },
+      { status: 400 },
     );
   }
 
-  // Run the sync using whichever account's token is available
-  const result = await runGmailSyncAll(token.clerkUserId);
+  const clerkUserIds = tokens.map((t) => t.clerkUserId);
+  const result = await runGmailSyncAll(clerkUserIds);
   return NextResponse.json(result);
 }

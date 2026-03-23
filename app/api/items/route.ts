@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { Resend } from "resend";
 
@@ -85,6 +85,11 @@ export async function POST(req: NextRequest) {
       ? (isNonTTT && NON_TTT_SHARE[route] !== undefined ? NON_TTT_SHARE[route] : ROUTE_CLIENT_SHARE[route])
       : undefined;
 
+    // Auto-assign a permanent ProFoundFinds barcode if created directly with that route
+    const barcodeNumber = route === "ProFoundFinds Consignment"
+      ? await getNextBarcodeNumber()
+      : undefined;
+
     const item = await createItem({
       tenantId,
       itemName: (body.itemName as string) || (body.item_name as string) || "Unknown Item",
@@ -111,6 +116,7 @@ export async function POST(req: NextRequest) {
       staffTips: body.staffTips as string,
       status: "Pending Review",
       clientSharePercent: body.clientSharePercent != null ? Number(body.clientSharePercent) : autoShare,
+      barcodeNumber,
     });
     return NextResponse.json({ item });
   } catch (e: unknown) {
@@ -189,9 +195,11 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Fetch existing item if needed for vendor change check, Sold backfill, or Sold reversal
+  // Fetch existing item if needed for vendor change check, Sold backfill, Sold reversal,
+  // or barcode assignment (to see if one is already set)
   const newVendorId = updates.assignedVendorId as string | undefined;
-  const needsExisting = newVendorId !== undefined || updates.status !== undefined;
+  const needsExisting = newVendorId !== undefined || updates.status !== undefined
+    || resolvedNewRoute === "ProFoundFinds Consignment";
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
 
   let vendorChanged = false;
@@ -232,6 +240,15 @@ export async function PATCH(req: NextRequest) {
     } else if (newStatus && !COMPLETED_STATUSES.includes(newStatus)) {
       (updates as Record<string, unknown>).completedDate = null;
     }
+  }
+
+  // Auto-assign a permanent ProFoundFinds barcode when routing to PF Consignment.
+  // Only assigned once — if the item already has a barcode (from a previous PF routing),
+  // that number is kept and the slot remains permanently consumed.
+  if (resolvedNewRoute === "ProFoundFinds Consignment"
+    && !(updates as Record<string, unknown>).barcodeNumber
+    && !existing?.barcodeNumber) {
+    (updates as Record<string, unknown>).barcodeNumber = await getNextBarcodeNumber();
   }
 
   const item = await updateItem(id as string, updates as never);

@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -91,6 +91,9 @@ export async function PATCH(req: NextRequest) {
   const resolvedConsignment = (typeof isConsignmentOnly === "boolean" && canToggleConsignment)
     ? isConsignmentOnly : undefined;
 
+  // Only TTT internal roles can edit client contact info
+  const isTTTInternalRole = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+
   const tenant = await updateTenant(tenantId, {
     name: typeof name === "string" && name.trim() ? name.trim() : undefined,
     address: typeof address === "string" ? address : undefined,
@@ -104,6 +107,8 @@ export async function PATCH(req: NextRequest) {
     destinationSqFt: typeof destinationSqFt === "number" ? destinationSqFt : undefined,
     payoutMethod: payoutMethod !== undefined ? (payoutMethod as string | null) : undefined,
     payoutUsername: payoutUsername !== undefined ? (payoutUsername as string | null) : undefined,
+    clientEmail: isTTTInternalRole && clientEmail !== undefined ? (clientEmail as string | null) : undefined,
+    clientPhone: isTTTInternalRole && clientPhone !== undefined ? (clientPhone as string | null) : undefined,
   });
   return NextResponse.json({ tenant });
 }

@@ -33,6 +33,7 @@ export default async function ExpensesPage() {
       staffName={staffName}
       tenants={activeTenants}
       isManagerOrAdmin={isManagerOrAdmin}
+      sysRole={sysRole}
     />
   );
 }

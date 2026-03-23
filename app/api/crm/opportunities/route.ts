@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity } from "@/lib/airtable";
+import { getSystemRole, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity, getClientContactById, getTenantById, updateTenant } from "@/lib/airtable";
 
 async function requireCRMAccess(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -25,6 +25,24 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   try {
     const opportunity = await createOpportunity(body);
+
+    // When a project (tenantId) is linked at creation time, auto-populate the
+    // tenant's clientEmail and clientPhone from the linked ClientContact.
+    if (opportunity.tenantId && opportunity.clientContactId) {
+      try {
+        const [contact, tenant] = await Promise.all([
+          getClientContactById(opportunity.clientContactId),
+          getTenantById(opportunity.tenantId),
+        ]);
+        if (contact && tenant && !tenant.clientEmail && !tenant.clientPhone) {
+          await updateTenant(opportunity.tenantId, {
+            clientEmail: contact.email || null,
+            clientPhone: contact.phone || null,
+          });
+        }
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({ opportunity });
   } catch (err) {
     console.error("[opportunities POST] create failed:", err);

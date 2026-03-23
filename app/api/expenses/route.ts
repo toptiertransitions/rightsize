@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { getSystemRole, getExpenses, getExpensesForUser, getExpensesForTenant, createExpense, updateExpense, deleteExpense } from "@/lib/airtable";
+import { getSystemRole, getExpenses, getExpensesForUser, getExpensesForTenant, getReimbursableExpenses, createExpense, updateExpense, deleteExpense } from "@/lib/airtable";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExpenseCategory } from "@/lib/types";
 
@@ -22,6 +22,15 @@ export async function GET(req: NextRequest) {
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const allCompany = req.nextUrl.searchParams.get("allCompany") === "true";
   const tenantId = req.nextUrl.searchParams.get("tenantId");
+
+  // ?reimbursable=true&from=YYYY-MM-DD&to=YYYY-MM-DD → for CSV payroll export
+  const reimbursableOnly = req.nextUrl.searchParams.get("reimbursable") === "true";
+  const from = req.nextUrl.searchParams.get("from") ?? "";
+  const to = req.nextUrl.searchParams.get("to") ?? "";
+  if (isManagerOrAdmin && reimbursableOnly && from && to) {
+    const expenses = await getReimbursableExpenses(from, to);
+    return NextResponse.json({ expenses });
+  }
 
   if (isManagerOrAdmin && allCompany) {
     const expenses = await getExpenses();
@@ -56,12 +65,25 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { receiptUrl, receiptPublicId, receiptBase64, mimeType } = body;
 
+  // Default reimbursable by role: TTTStaff + TTTManager = YES, TTTAdmin + TTTSales = NO
+  const defaultReimbursable = sysRole === "TTTStaff" || sysRole === "TTTManager";
+  const reimbursable = typeof body.reimbursable === "boolean" ? body.reimbursable : defaultReimbursable;
+
   // ── Claude AI receipt analysis ─────────────────────────────────────────────
   let date = new Date().toISOString().slice(0, 10);
   let vendor = "";
   let total = 0;
   let category: ExpenseCategory = "Other";
   let description = "";
+
+  // If no receipt, accept manually-supplied fields (no-receipt entry flow)
+  if (!receiptUrl && !receiptBase64) {
+    if (body.date) date = body.date;
+    if (body.vendor) vendor = String(body.vendor);
+    if (typeof body.total === "number") total = body.total;
+    if (body.category) category = body.category as ExpenseCategory;
+    if (body.description) description = String(body.description || "");
+  }
 
   if (receiptBase64 || receiptUrl) {
     try {
@@ -135,6 +157,9 @@ If any field is unclear, use sensible defaults (today's date, "Unknown" for vend
     receiptUrl: receiptUrl || undefined,
     receiptPublicId: receiptPublicId || undefined,
     notes: body.notes || undefined,
+    reimbursable,
+    tenantId: body.tenantId || undefined,
+    tenantName: body.tenantName || undefined,
   });
 
   return NextResponse.json({ expense });

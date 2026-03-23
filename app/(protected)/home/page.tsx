@@ -47,13 +47,21 @@ export default async function DashboardPage({
     const todayStr = new Date().toISOString().slice(0, 10);
     const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager";
 
-    const [allTenants, timeEntries, allStaff, serviceList, todayPlanEntries] = await Promise.all([
+    const [allTenants, timeEntries, allStaff, serviceList] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
       getStaffMembers().catch(() => []),
       getServices().catch(() => []),
-      showTodaysPlan && userEmail ? getPlanEntriesForTodayByEmail(userEmail, todayStr) : Promise.resolve([]),
     ]);
+
+    // Use the Airtable-stored email (what's actually saved in plan helpers JSON)
+    // rather than the Clerk primary email, which may differ
+    const currentStaff = allStaff.find(s => s.clerkUserId === userId);
+    const planQueryEmail = currentStaff?.email?.toLowerCase() || userEmail;
+
+    const todayPlanEntries = showTodaysPlan && planQueryEmail
+      ? await getPlanEntriesForTodayByEmail(planQueryEmail, todayStr).catch(() => [])
+      : [];
 
     // ── Build Today's Plan data ──────────────────────────────────────────────
     let todayShifts: TodayShift[] = [];
@@ -108,6 +116,8 @@ export default async function DashboardPage({
           projectName: tenant?.name ?? "Unknown Project",
           fullAddress,
           mapUrl,
+          clientPhone: tenant?.clientPhone,
+          clientEmail: tenant?.clientEmail,
           teammates,
         };
       });

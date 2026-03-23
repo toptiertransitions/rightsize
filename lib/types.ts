@@ -53,6 +53,43 @@ export interface StaffMember {
   timeOff?: TimeOffEntry[];
 }
 
+// ─── First Visit Intake Form ──────────────────────────────────────────────────
+export interface IntakeForm {
+  // Home Details
+  bedrooms?: number;
+  hasKitchen?: boolean;
+  hasDiningRoom?: boolean;
+  numLivingSpaces?: number;
+  numBathrooms?: number;
+  hasBasement?: boolean;
+  hasAttic?: boolean;
+  garbageDay?: string;
+  homeDetailsNotes?: string;
+  // Timeline & Move Planning
+  timeframe?: string;
+  financialTakeoverDate?: string;
+  beginPackingDate?: string;
+  moveInDate?: string;
+  sellingCurrentHome?: boolean;
+  closingDate?: string;
+  moversToFamily?: boolean;
+  moversToFamilyDetails?: string;
+  moversToStorage?: boolean;
+  storageLocation?: string;
+  // Special Considerations
+  medicalDevices?: string;
+  giftItems?: string;
+  sentimentalItems?: string;
+  itemsToSell?: string;
+  storageNeeded?: boolean;
+  storageDetails?: string;
+  additionalNotes?: string;
+  // Metadata
+  updatedAt?: string;
+  updatedByName?: string;
+  updatedByEmail?: string;
+}
+
 // ─── Zelle Payment ────────────────────────────────────────────────────────────
 export interface ZellePayment {
   messageId: string;
@@ -85,6 +122,8 @@ export interface Tenant {
   payoutMethod?: PayoutMethod;
   payoutUsername?: string;
   payoutCheckAddress?: string;
+  clientEmail?: string;
+  clientPhone?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -185,6 +224,7 @@ export type ItemStatus =
   | "Pending Review"
   | "Approved"
   | "Listed"
+  | "Reserved"
   | "Sold"
   | "Donated"
   | "Discarded"
@@ -257,6 +297,13 @@ export interface Item {
   staffTimeMinutes?: number;
   // Completion tracking
   completedDate?: string;   // ISO date string; auto-set when status → Sold/Donated/Discarded
+  // Storefront / online sale fields
+  saleChannel?: string;
+  buyerName?: string;
+  buyerEmail?: string;
+  stripePaymentIntentId?: string;
+  onlineListingSlug?: string;
+  storefrontActive?: boolean;
 }
 
 // ─── Sold Item Row (for Time Tracking CSV export) ─────────────────────────────
@@ -895,6 +942,7 @@ export interface Expense {
   createdAt: string;          // ISO timestamp when logged
   tenantId?: string;          // Linked project (optional)
   tenantName?: string;        // Project display name (optional, denormalized)
+  reimbursable: boolean;      // Whether TTT should reimburse this expense
 }
 
 // ─── Supply Tracking ──────────────────────────────────────────────────────────

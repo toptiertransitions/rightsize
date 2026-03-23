@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import type { TimeEntry, FocusArea, SoldItemRow } from "@/lib/types";
+import type { TimeEntry, FocusArea, SoldItemRow, Expense } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
 
 interface TenantOption {
@@ -75,13 +75,13 @@ function todayISO(): string {
 }
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
-function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string, to: string) {
+function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], expenses: Expense[], from: string, to: string) {
   const header = [
     "Date", "Staff Name", "Project", "Focus Area", "Start Time", "End Time",
     "Duration (hrs)",
     "Travel Time (min)", "Unpaid Travel Time (min)", "Payable Travel Time (min)", "Total Payable Time (hrs)",
     "Travel Miles", "Non-Reimbursed Travel Miles", "Travel Reimbursement Owed ($)",
-    "Notes", "Commission ($)",
+    "Notes", "Commission ($)", "Expense Reimbursement ($)",
   ];
 
   const entryRows = entries
@@ -122,7 +122,8 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string,
         nonReimbursedMiles  != null ? String(nonReimbursedMiles)  : "",
         reimbursementOwed   != null ? String(reimbursementOwed)   : "",
         e.notes ?? "",
-        "",
+        "",  // Commission (blank for time entries)
+        "",  // Expense Reimbursement (blank for time entries)
       ];
     });
 
@@ -146,10 +147,26 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], from: string,
         "", "", "",                                  // miles cols blank
         i.itemName,
         commission,
+        "",  // Expense Reimbursement (blank for sale rows)
       ];
     });
 
-  const allRows = [...entryRows, ...saleRows].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const expenseRows = expenses
+    .filter(e => e.date >= from && e.date <= to)
+    .map(e => [
+      e.date,
+      e.staffName,
+      e.tenantName ?? "",
+      "Expense Reimbursement",
+      "", "", "",       // start, end, duration
+      "", "", "", "",   // travel time cols
+      "", "", "",       // miles cols
+      e.vendor + (e.description ? ` – ${e.description}` : ""),
+      "",               // Commission
+      e.total.toFixed(2),
+    ]);
+
+  const allRows = [...entryRows, ...saleRows, ...expenseRows].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
   const csv = [header, ...allRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -177,12 +194,17 @@ function ExportModal({ entries, onClose, weekStart }: {
   const [fromDate, setFromDate] = useState(twoWeeksFrom);
   const [toDate,   setToDate]   = useState(twoWeeksTo);
   const [soldItems, setSoldItems] = useState<SoldItemRow[]>([]);
+  const [reimbursableExpenses, setReimbursableExpenses] = useState<Expense[]>([]);
 
-  // Fetch sold items on demand when modal opens
+  // Fetch sold items and reimbursable expenses on demand when modal opens
   useEffect(() => {
     fetch("/api/sold-items")
       .then(r => r.json())
       .then(d => setSoldItems(d.items ?? []))
+      .catch(() => {});
+    fetch("/api/expenses?reimbursable=true&from=2020-01-01&to=2099-12-31")
+      .then(r => r.json())
+      .then(d => setReimbursableExpenses(d.expenses ?? []))
       .catch(() => {});
   }, []);
 
@@ -194,11 +216,12 @@ function ExportModal({ entries, onClose, weekStart }: {
 
   const filtered = entries.filter(e => e.date >= fromDate && e.date <= toDate);
   const filteredSales = soldItems.filter(i => i.saleDate >= fromDate && i.saleDate <= toDate);
+  const filteredExpenses = reimbursableExpenses.filter(e => e.date >= fromDate && e.date <= toDate);
   const isPreset = (p: typeof presets[0]) => fromDate === p.from && toDate === p.to;
-  const totalRows = filtered.length + filteredSales.length;
+  const totalRows = filtered.length + filteredSales.length + filteredExpenses.length;
 
   function doExport() {
-    exportCSV(entries, soldItems, fromDate, toDate);
+    exportCSV(entries, soldItems, reimbursableExpenses, fromDate, toDate);
     onClose();
   }
 
@@ -254,18 +277,24 @@ function ExportModal({ entries, onClose, weekStart }: {
         </div>
 
         {/* Entry count */}
-        <p className="text-xs text-gray-500 mb-1">
-          {filtered.length === 0 && filteredSales.length === 0
-            ? "No entries in this range"
-            : `${filtered.length} time ${filtered.length === 1 ? "entry" : "entries"} · ${(filtered.reduce((s, e) => s + e.durationMinutes, 0) / 60).toFixed(1)} hrs`
-          }
-        </p>
-        {filteredSales.length > 0 && (
-          <p className="text-xs text-gray-500 mb-4">
-            {filteredSales.length} sold {filteredSales.length === 1 ? "item" : "items"} (FB/eBay)
+        <div className="mb-4">
+          <p className="text-xs text-gray-500">
+            {filtered.length === 0 && filteredSales.length === 0 && filteredExpenses.length === 0
+              ? "No entries in this range"
+              : `${filtered.length} time ${filtered.length === 1 ? "entry" : "entries"} · ${(filtered.reduce((s, e) => s + e.durationMinutes, 0) / 60).toFixed(1)} hrs`
+            }
           </p>
-        )}
-        {filteredSales.length === 0 && <div className="mb-4" />}
+          {filteredSales.length > 0 && (
+            <p className="text-xs text-gray-500">
+              {filteredSales.length} sold {filteredSales.length === 1 ? "item" : "items"} (FB/eBay)
+            </p>
+          )}
+          {filteredExpenses.length > 0 && (
+            <p className="text-xs text-gray-500">
+              {filteredExpenses.length} reimbursable {filteredExpenses.length === 1 ? "expense" : "expenses"} · ${filteredExpenses.reduce((s, e) => s + e.total, 0).toFixed(2)}
+            </p>
+          )}
+        </div>
 
         {/* Actions */}
         <div className="flex gap-3">

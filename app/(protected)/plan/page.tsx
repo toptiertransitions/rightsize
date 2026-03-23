@@ -18,6 +18,8 @@ import {
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
+import { IntakeFormSection } from "./IntakeFormSection";
+import { ClientContactBar } from "./ClientContactBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
 import type { Tenant } from "@/lib/types";
 
@@ -304,10 +306,17 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
           <p className="text-gray-500 mt-0.5">Schedule daily focus areas for your project</p>
+          {isTTTStaffOrAbove && (
+            <ClientContactBar
+              tenantId={tenantId}
+              initialEmail={tenant.clientEmail}
+              initialPhone={tenant.clientPhone}
+            />
+          )}
         </div>
         {isTTTStaffOrAbove && tenant && (
           <AddClientUserButton tenantId={tenantId} projectName={tenant.name} />
@@ -330,6 +339,9 @@ export default async function PlanPage({ searchParams }: PageProps) {
         isManager={isManagerOrAdmin}
         isStaff={isTTTStaff}
       />
+
+      {/* First Visit Intake — visible to TTTStaff, TTTManager, TTTAdmin only */}
+      {isTTTStaffOrAbove && <IntakeFormSection tenantId={tenantId} />}
     </div>
   );
 }

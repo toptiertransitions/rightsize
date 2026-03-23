@@ -118,11 +118,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ entry: updated });
     }
 
-    // Update: entry already saved to Airtable; just patch the calendar event
+    // Update: entry already saved to Airtable; just patch the calendar event.
+    // Pass skipAttendees=true so we don't reset Google RSVP statuses to needsAction.
     if (action === "update") {
       if (!entry.googleEventId) return NextResponse.json({ entry }); // no event yet, no-op
       const { projectName, roomName, location } = await resolveContext();
-      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId, projectName, location);
+      await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId, projectName, location, true);
       return NextResponse.json({ entry });
     }
 

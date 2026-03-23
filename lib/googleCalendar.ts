@@ -45,6 +45,7 @@ export async function createOrUpdateCalendarEvent(
   existingEventId?: string,
   projectName?: string, // tenant/project name for the invite title
   location?: string,    // project address shown as event location
+  skipAttendees = false, // when true, don't patch attendees (preserves Google RSVP statuses)
 ): Promise<string> {
   const calendar = google.calendar({ version: "v3", auth: await getAuth() });
 
@@ -81,13 +82,16 @@ export async function createOrUpdateCalendarEvent(
     description,
     start,
     end,
-    attendees: helpers.map((h) => ({ email: h.email })),
     guestCanInviteOthers: false,
     guestCanSeeOtherGuests: true,
   };
   if (location) requestBody.location = location;
 
   if (existingEventId) {
+    // Only include attendees when not skipping — skipping preserves Google RSVP statuses
+    if (!skipAttendees) {
+      requestBody.attendees = helpers.map((h) => ({ email: h.email }));
+    }
     const res = await calendar.events.patch({
       calendarId: CALENDAR_ID,
       eventId: existingEventId,
@@ -96,6 +100,8 @@ export async function createOrUpdateCalendarEvent(
     });
     return res.data.id!;
   } else {
+    // Always include attendees for new event inserts
+    requestBody.attendees = helpers.map((h) => ({ email: h.email }));
     const res = await calendar.events.insert({
       calendarId: CALENDAR_ID,
       sendUpdates: "all",

@@ -171,6 +171,8 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     payoutMethod: toStr(f["PayoutMethod"]) as import("./types").PayoutMethod || undefined,
     payoutUsername: toStr(f["PayoutUsername"]) || undefined,
     payoutCheckAddress: toStr(f["PayoutCheckAddress"]) || undefined,
+    clientEmail: toStr(f["ClientEmail"]) || undefined,
+    clientPhone: toStr(f["ClientPhone"]) || undefined,
   };
 }
 
@@ -396,6 +398,50 @@ export async function getItemById(id: string): Promise<Item | null> {
   }
 }
 
+// ─── Storefront helpers ───────────────────────────────────────────────────────
+
+export async function getProFoundFindsStorefrontItems(): Promise<Item[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", {Status} = "Listed", {StorefrontActive})`,
+      sort: [{ field: "CreatedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapItem);
+}
+
+export async function getItemByOnlineSlug(slug: string): Promise<Item | null> {
+  try {
+    const base = getBase();
+    const records = await base(AIRTABLE_TABLES.ITEMS)
+      .select({
+        filterByFormula: `AND({OnlineListingSlug} = "${slug}", {PrimaryRoute} = "ProFoundFinds Consignment")`,
+        maxRecords: 1,
+      })
+      .all();
+    return records.length ? mapItem(records[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function logFailedSaleSync(data: {
+  itemId: string;
+  payload: string;
+  error: string;
+  retryCount: number;
+}): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.FAILED_SALE_SYNC).create({
+    ItemId: data.itemId,
+    Payload: data.payload,
+    Error: data.error,
+    RetryCount: data.retryCount,
+    CreatedAt: new Date().toISOString(),
+  }, { typecast: true });
+}
+
 export async function createItem(data: Partial<Item> & {
   tenantId: string;
   itemName: string;
@@ -512,6 +558,13 @@ export async function updateItem(
     staffTimeMinutes: "StaffTimeMinutes",
     // Completion tracking
     completedDate: "CompletedDate",
+    // Storefront fields
+    saleChannel: "SaleChannel",
+    buyerName: "BuyerName",
+    buyerEmail: "BuyerEmail",
+    stripePaymentIntentId: "StripePaymentIntentId",
+    onlineListingSlug: "OnlineListingSlug",
+    storefrontActive: "StorefrontActive",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -534,6 +587,22 @@ export async function updateItem(
 export async function deleteItem(id: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.ITEMS).destroy(id);
+}
+
+// Returns the next available ProFoundFinds barcode number (8 digits, starts with 1000).
+// Scans every item that has ever been assigned a barcode (even if later re-routed) so
+// numbers are permanently consumed and never reused.
+export async function getNextBarcodeNumber(): Promise<string> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({ fields: ["BarcodeNumber"], filterByFormula: `NOT({BarcodeNumber} = "")` })
+    .all();
+  let max = 10000000;
+  for (const r of records) {
+    const num = parseInt((r.fields["BarcodeNumber"] as string) || "0", 10);
+    if (!isNaN(num) && num > max) max = num;
+  }
+  return String(max + 1);
 }
 
 function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
@@ -601,6 +670,13 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     staffCommissionPercent: f["StaffCommissionPercent"] != null ? toNum(f["StaffCommissionPercent"]) : undefined,
     staffTimeMinutes: f["StaffTimeMinutes"] != null ? toNum(f["StaffTimeMinutes"]) : undefined,
     completedDate: toStr(f["CompletedDate"]) || undefined,
+    // Storefront fields
+    saleChannel: toStr(f["SaleChannel"]) || undefined,
+    buyerName: toStr(f["BuyerName"]) || undefined,
+    buyerEmail: toStr(f["BuyerEmail"]) || undefined,
+    stripePaymentIntentId: toStr(f["StripePaymentIntentId"]) || undefined,
+    onlineListingSlug: toStr(f["OnlineListingSlug"]) || undefined,
+    storefrontActive: f["StorefrontActive"] === true ? true : undefined,
   };
 }
 
@@ -626,7 +702,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -643,8 +719,34 @@ export async function updateTenant(
   if (data.payoutMethod !== undefined) fields["PayoutMethod"] = data.payoutMethod ?? "";
   if (data.payoutUsername !== undefined) fields["PayoutUsername"] = data.payoutUsername ?? "";
   if (data.payoutCheckAddress !== undefined) fields["PayoutCheckAddress"] = data.payoutCheckAddress ?? "";
+  if (data.clientEmail !== undefined) fields["ClientEmail"] = data.clientEmail ?? "";
+  if (data.clientPhone !== undefined) fields["ClientPhone"] = data.clientPhone ?? "";
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
+}
+
+// ─── First Visit Intake Form (stored as JSON on Tenant record) ───────────────
+// Requires one Airtable field on the Tenants table: IntakeFormJson (Long text)
+export async function getIntakeForm(tenantId: string): Promise<import("./types").IntakeForm | null> {
+  const base = getBase();
+  try {
+    const record = await base(AIRTABLE_TABLES.TENANTS).find(tenantId);
+    const json = toStr(record.fields["IntakeFormJson"]);
+    return json ? (JSON.parse(json) as import("./types").IntakeForm) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveIntakeForm(
+  tenantId: string,
+  form: import("./types").IntakeForm,
+): Promise<import("./types").IntakeForm> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.TENANTS).update(tenantId, {
+    IntakeFormJson: JSON.stringify(form),
+  });
+  return form;
 }
 
 export async function deleteTenantCascade(tenantId: string): Promise<void> {
@@ -721,16 +823,17 @@ export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
   }
 }
 
-// Find all plan entries for a given date where `email` is in the helpers array
+// Find all plan entries for a given date where `email` is in the helpers array.
+// Fetches up to 200 entries sorted by Date DESC and filters entirely in JS to
+// avoid Airtable formula edge cases (special chars in emails, date format mismatches).
 export async function getPlanEntriesForTodayByEmail(email: string, date: string): Promise<PlanEntry[]> {
   try {
-    const formula = encodeURIComponent(
-      `AND({Date} = "${date}", FIND("${email.toLowerCase()}", LOWER({Helpers})) > 0)`
-    );
-    const res = await planFetch(`?filterByFormula=${formula}`);
+    const res = await planFetch(`?maxRecords=200&sort[0][field]=Date&sort[0][direction]=desc`);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.records as AirtableRecord[]).map(mapPlanEntry);
+    const all = (data.records as AirtableRecord[]).map(mapPlanEntry);
+    const emailLower = email.toLowerCase();
+    return all.filter(e => e.date === date && e.helpers?.some(h => h.email.toLowerCase() === emailLower));
   } catch {
     return [];
   }
@@ -2811,6 +2914,18 @@ function mapGmailToken(record: AirtableRecord): GmailToken {
   };
 }
 
+/** Returns all stored Gmail tokens (one per connected user, excluding the system calendar key). */
+export async function getAllGmailTokens(): Promise<GmailToken[]> {
+  const formula = encodeURIComponent(`AND(LEN({RefreshToken}) > 10, {ClerkUserId} != "__gcal__")`);
+  const res = await crmFetch(
+    AIRTABLE_TABLES.GMAIL_TOKENS,
+    `?filterByFormula=${formula}&sort[0][field]=UpdatedAt&sort[0][direction]=desc`,
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapGmailToken);
+}
+
 export async function getGmailToken(clerkUserId: string): Promise<GmailToken | null> {
   const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
   const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
@@ -3270,6 +3385,7 @@ function mapExpense(record: AirtableRecord): Expense {
     createdAt: toStr(f["CreatedAt"]),
     tenantId: toStr(f["TenantId"]) || undefined,
     tenantName: toStr(f["TenantName"]) || undefined,
+    reimbursable: f["Reimbursable"] === true,
   };
 }
 
@@ -3303,6 +3419,9 @@ export async function createExpense(data: {
   receiptUrl?: string;
   receiptPublicId?: string;
   notes?: string;
+  reimbursable?: boolean;
+  tenantId?: string;
+  tenantName?: string;
 }): Promise<Expense> {
   const fields: Record<string, unknown> = {
     ClerkUserId: data.clerkUserId,
@@ -3312,11 +3431,14 @@ export async function createExpense(data: {
     Total: data.total,
     Category: data.category,
     Description: data.description,
+    Reimbursable: data.reimbursable ?? false,
     CreatedAt: new Date().toISOString(),
   };
   if (data.receiptUrl) fields["ReceiptUrl"] = data.receiptUrl;
   if (data.receiptPublicId) fields["ReceiptPublicId"] = data.receiptPublicId;
   if (data.notes) fields["Notes"] = data.notes;
+  if (data.tenantId) fields["TenantId"] = data.tenantId;
+  if (data.tenantName) fields["TenantName"] = data.tenantName;
   const res = await expensesFetch("", { method: "POST", body: JSON.stringify({ fields }) });
   if (!res.ok) throw new Error(await res.text());
   return mapExpense(await res.json() as AirtableRecord);
@@ -3324,7 +3446,7 @@ export async function createExpense(data: {
 
 export async function updateExpense(
   id: string,
-  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes" | "tenantId" | "tenantName">>
+  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes" | "tenantId" | "tenantName" | "reimbursable">>
 ): Promise<Expense> {
   const fields: Record<string, unknown> = {};
   if (data.date !== undefined) fields["Date"] = data.date;
@@ -3335,9 +3457,20 @@ export async function updateExpense(
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId || null;
   if (data.tenantName !== undefined) fields["TenantName"] = data.tenantName || null;
+  if (data.reimbursable !== undefined) fields["Reimbursable"] = data.reimbursable;
   const res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
   if (!res.ok) throw new Error(await res.text());
   return mapExpense(await res.json() as AirtableRecord);
+}
+
+export async function getReimbursableExpenses(from: string, to: string): Promise<Expense[]> {
+  const formula = encodeURIComponent(`AND({Reimbursable} = TRUE(), {Date} >= "${from}", {Date} <= "${to}")`);
+  const res = await expensesFetch(
+    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapExpense);
 }
 
 export async function getExpensesForTenant(tenantId: string): Promise<Expense[]> {

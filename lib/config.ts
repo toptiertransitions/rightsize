@@ -63,6 +63,7 @@ export const AIRTABLE_TABLES = {
   SUPPLY_CRATE_LOCATIONS: process.env.AIRTABLE_SUPPLY_CRATE_LOCATIONS_TABLE || "SupplyCrateLocations",
   SUPPLY_INVENTORY: process.env.AIRTABLE_SUPPLY_INVENTORY_TABLE || "SupplyInventory",
   SUBCONTRACTORS: process.env.AIRTABLE_SUBCONTRACTORS_TABLE || "Subcontractors",
+  FAILED_SALE_SYNC: process.env.AIRTABLE_FAILED_SALE_SYNC_TABLE || "FailedSaleSync",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export const ITEM_STATUS_COLORS: Record<string, string> = {
   "Pending Review": "bg-yellow-100 text-yellow-800",
   Approved: "bg-blue-100 text-blue-800",
   Listed: "bg-purple-100 text-purple-800",
+  Reserved: "bg-orange-100 text-orange-800",
   Sold: "bg-green-100 text-green-800",
   Donated: "bg-teal-100 text-teal-800",
   Discarded: "bg-gray-100 text-gray-800",

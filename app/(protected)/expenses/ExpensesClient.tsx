@@ -81,6 +81,7 @@ interface Props {
   staffName: string;
   tenants: Tenant[];
   isManagerOrAdmin: boolean;
+  sysRole: string | null;
 }
 
 function fmtDate(d: string) {
@@ -91,6 +92,14 @@ function fmtDate(d: string) {
 
 function fmtCurrency(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function defaultReimbursableForRole(sysRole: string | null): boolean {
+  return sysRole === "TTTStaff" || sysRole === "TTTManager";
 }
 
 const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
@@ -104,7 +113,7 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
   "Other": "bg-gray-100 text-gray-600",
 };
 
-// ─── Inline row editor ─────────────────────────────────────────────────────────
+// ─── Inline row editor (existing expense) ──────────────────────────────────────
 function EditRow({
   expense,
   tenants,
@@ -123,6 +132,7 @@ function EditRow({
   const [description, setDescription] = useState(expense.description);
   const [notes, setNotes] = useState(expense.notes ?? "");
   const [tenantId, setTenantId] = useState(expense.tenantId ?? "");
+  const [reimbursable, setReimbursable] = useState(expense.reimbursable);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -142,6 +152,7 @@ function EditRow({
           notes: notes || undefined,
           tenantId: tenantId || null,
           tenantName: selectedTenant?.name || null,
+          reimbursable,
         }),
       });
       if (!res.ok) throw new Error("Save failed");
@@ -177,12 +188,10 @@ function EditRow({
         <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional…" className={cn(inputCls, "w-36")} />
       </td>
       <td className="px-3 py-2">
-        <TenantCombobox
-          tenants={tenants}
-          value={tenantId}
-          onChange={setTenantId}
-          inputCls={cn(inputCls, "w-48")}
-        />
+        <TenantCombobox tenants={tenants} value={tenantId} onChange={setTenantId} inputCls={cn(inputCls, "w-48")} />
+      </td>
+      <td className="px-3 py-2 text-center">
+        <input type="checkbox" checked={reimbursable} onChange={e => setReimbursable(e.target.checked)} className="rounded accent-forest-600 w-4 h-4" />
       </td>
       <td className="px-3 py-2">
         {expense.receiptUrl && (
@@ -192,6 +201,102 @@ function EditRow({
       <td className="px-3 py-2">
         <div className="flex gap-1">
           <button onClick={handleSave} disabled={saving}
+            className="text-xs bg-forest-600 text-white px-2 py-1 rounded-lg hover:bg-forest-700 disabled:opacity-50">
+            {saving ? "…" : "Save"}
+          </button>
+          <button onClick={onCancel} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancel</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─── New expense row (no receipt) ─────────────────────────────────────────────
+function NewExpenseRow({
+  tenants,
+  reimbursableDefault,
+  onSave,
+  onCancel,
+}: {
+  tenants: Tenant[];
+  reimbursableDefault: boolean;
+  onSave: (expense: Expense) => void;
+  onCancel: () => void;
+}) {
+  const [date, setDate] = useState(todayISO());
+  const [vendor, setVendor] = useState("");
+  const [total, setTotal] = useState("");
+  const [category, setCategory] = useState<ExpenseCategory>("Other");
+  const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
+  const [tenantId, setTenantId] = useState("");
+  const [reimbursable, setReimbursable] = useState(reimbursableDefault);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!vendor.trim()) return;
+    setSaving(true);
+    try {
+      const selectedTenant = tenants.find(t => t.id === tenantId);
+      const res = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date,
+          vendor: vendor.trim(),
+          total: parseFloat(total) || 0,
+          category,
+          description: description.trim(),
+          notes: notes.trim() || undefined,
+          tenantId: tenantId || undefined,
+          tenantName: selectedTenant?.name || undefined,
+          reimbursable,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const data = await res.json();
+      onSave(data.expense);
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  }
+
+  const inputCls = "border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400";
+
+  return (
+    <tr className="bg-amber-50/60 border-b border-amber-100">
+      <td className="px-3 py-2"><input type="checkbox" disabled /></td>
+      <td className="px-3 py-2">
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={cn(inputCls, "w-32")} />
+      </td>
+      <td className="px-3 py-2">
+        <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={cn(inputCls, "w-32")} autoFocus />
+      </td>
+      <td className="px-3 py-2">
+        <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)} className={cn(inputCls, "w-44")}>
+          {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </td>
+      <td className="px-3 py-2">
+        <input type="number" step="0.01" value={total} onChange={e => setTotal(e.target.value)} placeholder="0.00" className={cn(inputCls, "w-24")} />
+      </td>
+      <td className="px-3 py-2">
+        <input value={description} onChange={e => setDescription(e.target.value)} placeholder="What was purchased…" className={cn(inputCls, "w-44")} />
+      </td>
+      <td className="px-3 py-2">
+        <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional…" className={cn(inputCls, "w-36")} />
+      </td>
+      <td className="px-3 py-2">
+        <TenantCombobox tenants={tenants} value={tenantId} onChange={setTenantId} inputCls={cn(inputCls, "w-48")} />
+      </td>
+      <td className="px-3 py-2 text-center">
+        <input type="checkbox" checked={reimbursable} onChange={e => setReimbursable(e.target.checked)} className="rounded accent-forest-600 w-4 h-4" />
+      </td>
+      <td className="px-3 py-2">
+        <span className="text-gray-300 text-xs">—</span>
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex gap-1">
+          <button onClick={handleSave} disabled={saving || !vendor.trim()}
             className="text-xs bg-forest-600 text-white px-2 py-1 rounded-lg hover:bg-forest-700 disabled:opacity-50">
             {saving ? "…" : "Save"}
           </button>
@@ -212,7 +317,7 @@ function BulkEditBar({
 }: {
   count: number;
   tenants: Tenant[];
-  onApply: (data: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string }) => void;
+  onApply: (data: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string; reimbursable?: boolean }) => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
@@ -252,6 +357,14 @@ function BulkEditBar({
         onChange={setTenantId}
         inputCls="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-44 focus:outline-none focus:ring-1 focus:ring-forest-400"
       />
+      <button onClick={() => onApply({ reimbursable: true })}
+        className="text-xs bg-green-100 text-green-700 border border-green-300 px-3 py-1.5 rounded-lg hover:bg-green-200">
+        Mark Reimbursable
+      </button>
+      <button onClick={() => onApply({ reimbursable: false })}
+        className="text-xs bg-gray-100 text-gray-600 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-200">
+        Mark Non-Reimbursable
+      </button>
       <button onClick={handleApply}
         className="text-sm bg-forest-600 text-white px-3 py-1.5 rounded-lg hover:bg-forest-700">
         Apply
@@ -265,25 +378,36 @@ function BulkEditBar({
   );
 }
 
+type ReimbursableFilter = "all" | "reimbursable" | "non-reimbursable";
+
 // ─── Main client ───────────────────────────────────────────────────────────────
-export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerOrAdmin }: Props) {
+export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerOrAdmin, sysRole }: Props) {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showNewRow, setShowNewRow] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [allCompanyView, setAllCompanyView] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
+  const [reimbursableFilter, setReimbursableFilter] = useState<ReimbursableFilter>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const displayExpenses = expenses;
-  const totalSpend = displayExpenses.reduce((s, e) => s + e.total, 0);
+  const filteredExpenses = expenses.filter(e => {
+    if (reimbursableFilter === "reimbursable") return e.reimbursable;
+    if (reimbursableFilter === "non-reimbursable") return !e.reimbursable;
+    return true;
+  });
+
+  const totalSpend = filteredExpenses.reduce((s, e) => s + e.total, 0);
+  const reimbursableTotal = filteredExpenses.filter(e => e.reimbursable).reduce((s, e) => s + e.total, 0);
 
   // ── All Company toggle ─────────────────────────────────────────────────────
   async function switchView(toAllCompany: boolean) {
     setAllCompanyView(toAllCompany);
     setSelected(new Set());
     setEditingId(null);
+    setShowNewRow(false);
     if (toAllCompany) {
       setLoadingAll(true);
       try {
@@ -297,7 +421,6 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
     }
   }
 
-  // Keep in sync if initialExpenses changes (e.g. page reload)
   useEffect(() => {
     if (!allCompanyView) setExpenses(initialExpenses);
   }, [initialExpenses, allCompanyView]);
@@ -313,6 +436,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
     }
     setUploading(true);
     setUploadError("");
+    setShowNewRow(false);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -347,12 +471,12 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
 
   function toggleAll() {
     setSelected(prev =>
-      prev.size === displayExpenses.length ? new Set() : new Set(displayExpenses.map(e => e.id))
+      prev.size === filteredExpenses.length ? new Set() : new Set(filteredExpenses.map(e => e.id))
     );
   }
 
   // ── Bulk edit ─────────────────────────────────────────────────────────────
-  async function handleBulkApply(patch: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string }) {
+  async function handleBulkApply(patch: { category?: ExpenseCategory; date?: string; vendor?: string; tenantId?: string; tenantName?: string; reimbursable?: boolean }) {
     const ids = [...selected];
     await Promise.all(ids.map(id =>
       fetch("/api/expenses", {
@@ -379,6 +503,20 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
     setExpenses(prev => prev.filter(e => e.id !== id));
   }
 
+  async function handleToggleReimbursable(expense: Expense) {
+    const next = !expense.reimbursable;
+    await fetch("/api/expenses", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: expense.id, reimbursable: next }),
+    });
+    setExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, reimbursable: next } : e));
+  }
+
+  const showStaffCol = allCompanyView;
+  // colspan for footer: checkbox + date + vendor + category + total = 5, then desc + notes + project + reimbursable + receipt + actions
+  const footerTrailingCols = showStaffCol ? 7 : 6;
+
   return (
     <div>
       {/* Header */}
@@ -388,30 +526,39 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
             {allCompanyView ? "All Company Expenses" : "My Expenses"}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {loadingAll ? "Loading…" : `${displayExpenses.length} expense${displayExpenses.length !== 1 ? "s" : ""} · ${fmtCurrency(totalSpend)} total`}
+            {loadingAll ? "Loading…" : `${filteredExpenses.length} expense${filteredExpenses.length !== 1 ? "s" : ""} · ${fmtCurrency(totalSpend)} total${reimbursableFilter === "all" && reimbursableTotal > 0 ? ` · ${fmtCurrency(reimbursableTotal)} reimbursable` : ""}`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* All Company toggle for managers/admins */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* All Company toggle */}
           {isManagerOrAdmin && (
             <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl">
               <button
                 onClick={() => switchView(false)}
                 className={cn("px-3 py-1.5 rounded-lg text-sm font-medium transition-all", !allCompanyView ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
-              >
-                My Expenses
-              </button>
+              >My Expenses</button>
               <button
                 onClick={() => switchView(true)}
                 className={cn("px-3 py-1.5 rounded-lg text-sm font-medium transition-all", allCompanyView ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
-              >
-                All Company
-              </button>
+              >All Company</button>
             </div>
           )}
 
           {!allCompanyView && (
             <>
+              {/* Log expense without receipt */}
+              <button
+                onClick={() => { setShowNewRow(true); setEditingId(null); }}
+                disabled={showNewRow}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Log Expense
+              </button>
+
+              {/* Upload receipt */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -455,6 +602,24 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{uploadError}</div>
       )}
 
+      {/* Reimbursable filter */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-gray-500 font-medium">Reimbursable:</span>
+        {(["all", "reimbursable", "non-reimbursable"] as ReimbursableFilter[]).map(f => (
+          <button key={f} onClick={() => setReimbursableFilter(f)}
+            className={cn(
+              "px-3 py-1 rounded-lg text-xs font-medium transition-all border",
+              reimbursableFilter === f
+                ? f === "reimbursable" ? "bg-green-600 text-white border-green-600"
+                : f === "non-reimbursable" ? "bg-gray-600 text-white border-gray-600"
+                : "bg-forest-600 text-white border-forest-600"
+                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+            )}>
+            {f === "all" ? "All" : f === "reimbursable" ? "Reimbursable" : "Non-Reimbursable"}
+          </button>
+        ))}
+      </div>
+
       {/* Bulk edit bar */}
       {selected.size > 0 && (
         <BulkEditBar
@@ -469,7 +634,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
       {/* Table */}
       {loadingAll ? (
         <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center text-sm text-gray-400">Loading all expenses…</div>
-      ) : displayExpenses.length === 0 ? (
+      ) : !showNewRow && filteredExpenses.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
           <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -477,7 +642,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
             </svg>
           </div>
           <p className="text-gray-500 text-sm">No expenses logged yet.</p>
-          <p className="text-gray-400 text-xs mt-1">Upload a receipt to get started — Claude AI will extract the details automatically.</p>
+          <p className="text-gray-400 text-xs mt-1">Upload a receipt to scan it automatically, or click Log Expense to enter details manually.</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
@@ -486,7 +651,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-3 py-3 text-left w-8">
-                    <input type="checkbox" checked={selected.size === displayExpenses.length && displayExpenses.length > 0}
+                    <input type="checkbox" checked={selected.size === filteredExpenses.length && filteredExpenses.length > 0}
                       onChange={toggleAll} className="rounded" />
                   </th>
                   <th className="px-3 py-3 text-left">Date</th>
@@ -496,13 +661,27 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
                   <th className="px-3 py-3 text-left">Description</th>
                   <th className="px-3 py-3 text-left">Notes</th>
                   <th className="px-3 py-3 text-left">Project</th>
-                  {allCompanyView && <th className="px-3 py-3 text-left">Staff</th>}
+                  {showStaffCol && <th className="px-3 py-3 text-left">Staff</th>}
+                  <th className="px-3 py-3 text-center">Reimbursable</th>
                   <th className="px-3 py-3 text-left">Receipt</th>
                   <th className="px-3 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {displayExpenses.map(expense =>
+                {/* New expense row (no receipt) */}
+                {showNewRow && (
+                  <NewExpenseRow
+                    tenants={tenants}
+                    reimbursableDefault={defaultReimbursableForRole(sysRole)}
+                    onSave={expense => {
+                      setExpenses(prev => [expense, ...prev]);
+                      setShowNewRow(false);
+                    }}
+                    onCancel={() => setShowNewRow(false)}
+                  />
+                )}
+
+                {filteredExpenses.map(expense =>
                   editingId === expense.id ? (
                     <EditRow
                       key={expense.id}
@@ -544,9 +723,31 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
                           <span className="text-gray-300 text-xs">—</span>
                         )}
                       </td>
-                      {allCompanyView && (
+                      {showStaffCol && (
                         <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">{expense.staffName || "—"}</td>
                       )}
+                      <td className="px-3 py-3 text-center">
+                        <button
+                          onClick={() => handleToggleReimbursable(expense)}
+                          title={expense.reimbursable ? "Reimbursable — click to toggle" : "Not reimbursable — click to toggle"}
+                          className={cn(
+                            "inline-flex items-center justify-center w-6 h-6 rounded-full border transition-colors",
+                            expense.reimbursable
+                              ? "bg-green-100 border-green-400 text-green-600 hover:bg-green-200"
+                              : "bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200"
+                          )}
+                        >
+                          {expense.reimbursable ? (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                        </button>
+                      </td>
                       <td className="px-3 py-3">
                         {expense.receiptUrl ? (
                           <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer"
@@ -572,10 +773,10 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
               <tfoot>
                 <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
                   <td colSpan={4} className="px-3 py-3 text-gray-700">
-                    Total ({displayExpenses.length} expense{displayExpenses.length !== 1 ? "s" : ""})
+                    Total ({filteredExpenses.length} expense{filteredExpenses.length !== 1 ? "s" : ""})
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-gray-900">{fmtCurrency(totalSpend)}</td>
-                  <td colSpan={allCompanyView ? 6 : 5} />
+                  <td colSpan={footerTrailingCols} />
                 </tr>
               </tfoot>
             </table>

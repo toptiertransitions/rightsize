@@ -127,20 +127,12 @@ export async function searchGmailMessages(
   return data.messages || [];
 }
 
-export async function runGmailSyncAll(
-  clerkUserId: string
+// Sync one Gmail account against all CRM contacts. Returns counts for that account.
+async function runGmailSyncForUser(
+  clerkUserId: string,
+  allContacts: Array<{ id: string; email: string; name: string }>,
 ): Promise<{ imported: number; contactsSearched: number }> {
   const accessToken = await getValidAccessToken(clerkUserId);
-
-  const [clientContacts, referralContacts] = await Promise.all([
-    getClientContacts(),
-    getReferralContacts(),
-  ]);
-
-  const allContacts = [
-    ...clientContacts.map((c) => ({ id: c.id, email: c.email, name: c.name })),
-    ...referralContacts.map((c) => ({ id: c.id, email: c.email, name: c.name })),
-  ].filter((c) => !!c.email?.trim());
 
   let totalImported = 0;
   let contactsSearched = 0;
@@ -152,7 +144,7 @@ export async function runGmailSyncAll(
     try {
       messages = await searchGmailMessages(accessToken, `from:${email} OR to:${email}`, 20);
     } catch (err) {
-      console.error("[gmail/sync-all] Search failed for", email, err);
+      console.error("[gmail/sync-all] Search failed for", email, "userId:", clerkUserId, err);
       continue;
     }
     if (!messages.length) continue;
@@ -188,10 +180,44 @@ export async function runGmailSyncAll(
     }
   }
 
-  console.log(
-    `[gmail/sync-all] userId=${clerkUserId} imported=${totalImported} contactsSearched=${contactsSearched} totalContacts=${allContacts.length}`
-  );
   return { imported: totalImported, contactsSearched };
+}
+
+// Sync ALL connected Gmail accounts against all CRM contacts.
+// Each connected user's inbox is searched independently so no emails are missed.
+export async function runGmailSyncAll(
+  clerkUserIds: string | string[],
+): Promise<{ imported: number; contactsSearched: number; accountsSynced: number }> {
+  const ids = Array.isArray(clerkUserIds) ? clerkUserIds : [clerkUserIds];
+
+  const [clientContacts, referralContacts] = await Promise.all([
+    getClientContacts(),
+    getReferralContacts(),
+  ]);
+
+  const allContacts = [
+    ...clientContacts.map((c) => ({ id: c.id, email: c.email, name: c.name })),
+    ...referralContacts.map((c) => ({ id: c.id, email: c.email, name: c.name })),
+  ].filter((c) => !!c.email?.trim());
+
+  let totalImported = 0;
+  let totalContactsSearched = 0;
+  let accountsSynced = 0;
+
+  for (const userId of ids) {
+    try {
+      const result = await runGmailSyncForUser(userId, allContacts);
+      totalImported += result.imported;
+      totalContactsSearched = Math.max(totalContactsSearched, result.contactsSearched);
+      accountsSynced++;
+      console.log(`[gmail/sync-all] userId=${userId} imported=${result.imported} contactsSearched=${result.contactsSearched}`);
+    } catch (err) {
+      console.error(`[gmail/sync-all] Failed for userId=${userId}:`, err);
+    }
+  }
+
+  console.log(`[gmail/sync-all] total imported=${totalImported} accounts=${accountsSynced}/${ids.length}`);
+  return { imported: totalImported, contactsSearched: totalContactsSearched, accountsSynced };
 }
 
 export async function getGmailMessage(
