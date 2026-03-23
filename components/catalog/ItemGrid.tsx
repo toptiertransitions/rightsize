@@ -153,6 +153,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     listingOfferup: item.listingOfferup,
     staffTips: item.staffTips,
     status: item.status,
+    storefrontActive: item.storefrontActive ?? false,
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
     quantity: item.quantity ?? 1,
@@ -414,7 +415,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Item Info</h3>
             <Input label="Item Name" value={form.itemName ?? ""} onChange={e => set("itemName", e.target.value)} />
             <Input label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)} />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
               <Select label="Condition" value={form.condition ?? "Good"}
                 onChange={e => set("condition", e.target.value as ItemCondition)}
                 options={[
@@ -429,6 +430,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 onChange={e => {
                   const newStatus = e.target.value as ItemStatus;
                   const completedStatuses = ["Sold", "Donated", "Discarded"];
+                  const isPF = form.primaryRoute === "ProFoundFinds Consignment";
                   if (completedStatuses.includes(newStatus)) {
                     setForm(f => ({
                       ...f,
@@ -436,7 +438,13 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                       completedDate: f.completedDate || new Date().toISOString().split("T")[0],
                     }));
                   } else {
-                    setForm(f => ({ ...f, status: newStatus, completedDate: "" }));
+                    setForm(f => ({
+                      ...f,
+                      status: newStatus,
+                      completedDate: "",
+                      // Auto-enable site when conditions first match
+                      storefrontActive: isPF && newStatus === "Listed" ? true : f.storefrontActive,
+                    }));
                   }
                   // Auto-fill Target Value = Sale Price when marking Sold
                   if (newStatus === "Sold" && item.salePrice && item.salePrice > 0) {
@@ -453,6 +461,35 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Rejected / Revisit",label: "Rejected / Revisit" },
                 ]}
               />
+              {/* Site? — storefrontActive toggle */}
+              {(() => {
+                const eligible = form.primaryRoute === "ProFoundFinds Consignment" && form.status === "Listed";
+                return (
+                  <div className="flex flex-col items-center gap-1 pb-0.5">
+                    <span className={`text-[11px] font-medium uppercase tracking-wide ${eligible ? "text-gray-500" : "text-gray-600"}`}>
+                      Site?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => set("storefrontActive", !form.storefrontActive)}
+                      className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-colors ${
+                        form.storefrontActive
+                          ? "bg-forest-600 border-forest-500 text-white"
+                          : eligible
+                          ? "bg-white border-gray-300 text-gray-300 hover:border-gray-400"
+                          : "bg-gray-100 border-gray-200 text-gray-300"
+                      }`}
+                      title={eligible ? (form.storefrontActive ? "On profoundfinds.com" : "Not on profoundfinds.com") : "Only available for ProFoundFinds Consignment items with Status = Listed"}
+                    >
+                      {form.storefrontActive && (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <label className={labelClass}>Condition Notes</label>
