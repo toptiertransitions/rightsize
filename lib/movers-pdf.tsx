@@ -8,6 +8,7 @@ import {
   Image,
 } from "@react-pdf/renderer";
 import type { Item, InvoiceSettings } from "./types";
+import type { MoverGroup } from "./anthropic";
 
 const styles = StyleSheet.create({
   page: {
@@ -249,6 +250,7 @@ const styles = StyleSheet.create({
 interface MoversPDFProps {
   items: Pick<Item, "id" | "itemName" | "photoUrl" | "category" | "condition" | "sizeClass">[];
   settings: Pick<InvoiceSettings, "logoUrl" | "companyName"> | null;
+  aiGroups?: MoverGroup[];
 }
 
 // ─── Summary page helpers ──────────────────────────────────────────────────────
@@ -285,14 +287,18 @@ function buildSizeCounts(
 }
 
 // ─── Summary first page ───────────────────────────────────────────────────────
-function SummaryPage({ items, settings }: MoversPDFProps) {
+function SummaryPage({ items, settings, aiGroups }: MoversPDFProps) {
   const companyName = settings?.companyName || "Top Tier Transitions";
   const logoUrl = settings?.logoUrl || null;
   const date = new Date().toLocaleDateString("en-US", {
     month: "long", day: "numeric", year: "numeric",
   });
 
-  const itemRows = buildItemCounts(items);
+  // Prefer AI-grouped categories; fall back to exact-name counts
+  const useAI = aiGroups && aiGroups.length > 0;
+  const itemRows: { name: string; count: number }[] = useAI
+    ? aiGroups.map(g => ({ name: g.category, count: g.count }))
+    : buildItemCounts(items);
   const sizeRows = buildSizeCounts(items);
 
   return (
@@ -318,7 +324,7 @@ function SummaryPage({ items, settings }: MoversPDFProps) {
         <Text style={styles.summaryDate}>Generated {date} · {items.length} item{items.length !== 1 ? "s" : ""} total</Text>
 
         {/* Item count table */}
-        <Text style={styles.sectionLabel}>Items</Text>
+        <Text style={styles.sectionLabel}>{useAI ? "Items by Category (AI Grouped)" : "Items"}</Text>
         <View style={styles.tableHeaderRow}>
           <Text style={styles.tableHeaderItem}>Item</Text>
           <Text style={styles.tableHeaderQty}>Qty</Text>
@@ -360,14 +366,14 @@ function SummaryPage({ items, settings }: MoversPDFProps) {
 }
 
 // ─── Main PDF document ────────────────────────────────────────────────────────
-export function MoversPDF({ items, settings }: MoversPDFProps) {
+export function MoversPDF({ items, settings, aiGroups }: MoversPDFProps) {
   const companyName = settings?.companyName || "Top Tier Transitions";
   const logoUrl = settings?.logoUrl || null;
 
   return (
     <Document title="Movers Item List">
       {/* Page 1: Summary */}
-      <SummaryPage items={items} settings={settings} />
+      <SummaryPage items={items} settings={settings} aiGroups={aiGroups} />
 
       {/* Remaining pages: one per item */}
       {items.map((item, idx) => (

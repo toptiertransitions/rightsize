@@ -29,6 +29,41 @@ Analyze the photo of this household item and return a JSON object with EXACTLY t
 
 Return ONLY valid JSON with no markdown, no explanation, no code fences.`;
 
+export interface MoverGroup {
+  category: string;
+  count: number;
+}
+
+// Groups a flat list of item names into mover-friendly categories for a quote summary.
+// Uses Haiku for speed. Falls back gracefully — caller should catch.
+export async function groupItemsForMovers(itemNames: string[]): Promise<MoverGroup[]> {
+  if (itemNames.length === 0) return [];
+
+  const message = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1024,
+    messages: [
+      {
+        role: "user",
+        content: `You are a moving company estimator reviewing a household item list to prepare a quote.
+
+Group these ${itemNames.length} items into practical moving categories. Combine semantically similar items (e.g. "King Bed", "Queen Bed", "Twin Bed Frame" → "Beds"). Use clear, mover-friendly names like "Beds", "Sofas & Seating", "Dressers", "Dining Chairs", "Tables", "Lamps", "Rugs", "Artwork & Mirrors", "Boxes & Totes", etc. Every item must be counted exactly once. Sort by count descending, then category name A–Z.
+
+Items (${itemNames.length} total, one per line):
+${itemNames.join("\n")}
+
+Return ONLY a valid JSON array with no markdown, explanation, or code fences:
+[{"category":"Beds","count":3},{"category":"Sofas & Seating","count":2}]`,
+      },
+    ],
+  });
+
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const parsed = JSON.parse(cleaned) as MoverGroup[];
+  return parsed.filter(g => typeof g.category === "string" && g.count > 0);
+}
+
 export async function analyzeItemPhoto(
   imageData: string | { url: string },
   mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg"

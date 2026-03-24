@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getUserRoleForTenant, getItemById, getInvoiceSettings } from "@/lib/airtable";
 import { renderMoversPDF } from "@/lib/movers-pdf";
+import { groupItemsForMovers } from "@/lib/anthropic";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -47,7 +48,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No valid items found" }, { status: 404 });
   }
 
-  const pdfBuffer = await renderMoversPDF({ items, settings });
+  // AI grouping for summary page — fire-and-forget with graceful fallback
+  const aiGroups = await groupItemsForMovers(items.map(i => i.itemName)).catch(() => null);
+
+  const pdfBuffer = await renderMoversPDF({ items, settings, aiGroups: aiGroups ?? undefined });
 
   const date = new Date().toISOString().slice(0, 10);
   return new NextResponse(new Uint8Array(pdfBuffer), {
