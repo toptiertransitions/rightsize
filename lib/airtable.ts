@@ -878,6 +878,24 @@ export async function getPlanEntriesForTodayByEmail(email: string, date: string)
   }
 }
 
+export async function getPlanEntriesForDateRange(
+  from: string, // "YYYY-MM-DD"
+  to: string
+): Promise<PlanEntry[]> {
+  const formula = encodeURIComponent(`AND({Date} >= "${from}", {Date} <= "${to}")`);
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await planFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapPlanEntry);
+}
+
 export async function createPlanEntry(data: {
   tenantId: string;
   date: string;

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useId, useRef, useEffect } from "react";
 import type { StaffMember, WeeklySchedule, TimeOffEntry, CrateLocation, InventoryContainer, InventoryItem, Subcontractor } from "@/lib/types";
+import { StaffCalendarTab } from "./StaffCalendarTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1216,7 +1217,7 @@ interface Props {
 }
 
 export function StaffClient({ members, crateLocations, inventoryContainers, tenants, subcontractors }: Props) {
-  const [activeTab, setActiveTab] = useState<"availability" | "supply" | "subcontractors">("availability");
+  const [activeTab, setActiveTab] = useState<"availability" | "calendar" | "supply" | "subcontractors">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
@@ -1232,6 +1233,7 @@ export function StaffClient({ members, crateLocations, inventoryContainers, tena
       <div className="flex items-center gap-1 border-b border-gray-200 mb-8">
         {([
           { key: "availability", label: "Staff Availability" },
+          { key: "calendar", label: "Staff Calendar" },
           { key: "supply", label: "Supply Tracking" },
           { key: "subcontractors", label: "Subcontractor Management" },
         ] as const).map(tab => (
@@ -1277,6 +1279,11 @@ export function StaffClient({ members, crateLocations, inventoryContainers, tena
             <p className="ml-auto italic">Staff update their own availability from the Home page.</p>
           </div>
         </div>
+      )}
+
+      {/* Staff Calendar Tab */}
+      {activeTab === "calendar" && (
+        <StaffCalendarTab members={members} tenants={tenants} />
       )}
 
       {/* Supply Tracking Tab */}

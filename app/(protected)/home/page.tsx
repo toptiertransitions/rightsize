@@ -156,6 +156,7 @@ export default async function DashboardPage({
               currentUserName={firstName}
               staffMembers={staffMembers}
               services={serviceNames}
+              todayShift={todayPlanEntries[0]}
             />
           </div>
         </section>

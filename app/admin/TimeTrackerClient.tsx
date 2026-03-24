@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import type { TimeEntry, FocusArea, SoldItemRow, Expense } from "@/lib/types";
+import type { TimeEntry, FocusArea, SoldItemRow, Expense, PlanEntry } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
 
 interface TenantOption {
@@ -25,6 +25,7 @@ interface Props {
   currentUserName: string;
   staffMembers?: StaffOption[];
   services?: string[];
+  todayShift?: PlanEntry;
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -710,18 +711,33 @@ interface ModalProps {
   currentUserId: string;
   currentUserName: string;
   services?: string[];
+  todayShift?: PlanEntry;
 }
 
-function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMembers, currentUserId, currentUserName, services }: ModalProps) {
+function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMembers, currentUserId, currentUserName, services, todayShift }: ModalProps) {
   const focusAreaOptions = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
-  const firstFocusArea = entry?.focusArea ?? focusAreaOptions[0] ?? "Coordinating";
+
+  // For new entries: pre-fill from today's shift (if any), otherwise leave blank.
+  // For edits: always use the existing entry values.
+  const shiftDefaults = !entry ? todayShift : undefined;
+  const defaultTenantId = entry?.tenantId ?? (shiftDefaults?.tenantId ?? "");
+  const defaultStartTime = entry?.startTime ?? (shiftDefaults?.startTime ?? "");
+  const defaultEndTime = entry?.endTime ?? (shiftDefaults?.endTime ?? "");
+  const shiftActivity = shiftDefaults?.activity;
+  const firstFocusArea = entry?.focusArea ??
+    (shiftActivity && focusAreaOptions.includes(shiftActivity) ? shiftActivity : "");
+
   const [date, setDate] = useState(entry?.date ?? todayISO());
-  const [tenantId, setTenantId] = useState(entry?.tenantId ?? (tenants[0]?.id ?? ""));
+  const [tenantId, setTenantId] = useState(defaultTenantId);
   const [splits, setSplits] = useState<{ focusArea: string; durationMinutes: number }[]>([
-    { focusArea: firstFocusArea, durationMinutes: entry?.durationMinutes ?? computeDuration("09:00", "17:00") }
+    {
+      focusArea: firstFocusArea,
+      durationMinutes: entry?.durationMinutes ??
+        (defaultStartTime && defaultEndTime ? computeDuration(defaultStartTime, defaultEndTime) : 0),
+    }
   ]);
-  const [startTime, setStartTime] = useState(entry?.startTime ?? "09:00");
-  const [endTime, setEndTime] = useState(entry?.endTime ?? "17:00");
+  const [startTime, setStartTime] = useState(defaultStartTime);
+  const [endTime, setEndTime] = useState(defaultEndTime);
   const [travelMiles, setTravelMiles] = useState(entry?.travelMiles != null ? String(entry.travelMiles) : "");
   const [travelMinutes, setTravelMinutes] = useState(entry?.travelMinutes != null ? String(entry.travelMinutes) : "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
@@ -935,6 +951,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
                   onChange={e => setSplits([{ focusArea: e.target.value, durationMinutes: duration }])}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
                 >
+                  <option value="" disabled hidden>Select focus area…</option>
                   {focusAreaOptions.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
                 <button
@@ -959,6 +976,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
                         onChange={e => updateSplit(i, { focusArea: e.target.value })}
                         className="min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-forest-500 flex-[3]"
                       >
+                        <option value="" disabled hidden>Select…</option>
                         {focusAreaOptions.map(a => <option key={a} value={a}>{a}</option>)}
                       </select>
                       <div className="relative w-[6rem] shrink-0">
@@ -1082,7 +1100,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services, todayShift }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
@@ -1374,6 +1392,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
           currentUserId={currentUserId}
           currentUserName={currentUserName}
           services={services}
+          todayShift={editEntry ? undefined : todayShift}
         />
       )}
 
