@@ -56,18 +56,25 @@ export async function POST(req: NextRequest) {
     processedBuffer = rawBuffer;
   }
 
-  // Validate sharp produced a real JPEG before uploading.
+  // Check if sharp produced a valid JPEG.
   const isJpeg = processedBuffer[0] === 0xff && processedBuffer[1] === 0xd8;
-  if (!isJpeg) {
-    return NextResponse.json(
-      { error: "Could not convert this image format. Please convert your photo to JPEG or PNG before uploading. On iPhone: share the photo → Save to Files → choose JPEG format." },
-      { status: 400 }
-    );
-  }
+  const isHeic = isHeicByExtension || mimeType === "image/heic" || mimeType === "image/heif";
 
   try {
-    const result = await uploadImage(processedBuffer, { tenantId: tenantId ?? "admin", mimeType: "image/jpeg" });
-    return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
+    if (isJpeg) {
+      // Sharp converted successfully — upload as JPEG.
+      const result = await uploadImage(processedBuffer, { tenantId: tenantId ?? "admin", mimeType: "image/jpeg" });
+      return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
+    } else if (isHeic) {
+      // Sharp couldn't convert HEIC (no libheif on Vercel) — Cloudinary handles HEIC natively.
+      const result = await uploadImage(rawBuffer, { tenantId: tenantId ?? "admin", mimeType: "image/heic" });
+      return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
+    } else {
+      return NextResponse.json(
+        { error: "Could not process this image format. Please upload a JPEG, PNG, or HEIC file." },
+        { status: 400 }
+      );
+    }
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
