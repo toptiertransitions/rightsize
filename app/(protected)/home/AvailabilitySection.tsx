@@ -120,7 +120,7 @@ function TimeOffTab({
   onChange: (e: TimeOffEntry[]) => void;
   onAutoSave: (e: TimeOffEntry[]) => Promise<void>;
 }) {
-  const [date, setDate] = useState(todayStr());
+  const [date, setDate] = useState("");
   const [allDay, setAllDay] = useState(true);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
@@ -157,8 +157,8 @@ function TimeOffTab({
     const updated = [...entries, entry];
     onChange(updated);
     await persist(updated);
-    // Reset date input to today for next entry
-    setDate(todayStr());
+    // Reset date input to blank for next entry
+    setDate("");
   }
 
   async function remove(id: string) {
