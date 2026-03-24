@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import type { Room, ItemAnalysis, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemPhoto } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { prepareImageForUpload } from "@/lib/image-utils";
 
 interface NewItemClientProps {
   tenantId: string;
@@ -43,56 +44,6 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
   staff_tips: "",
 };
 
-// Prepare any image for upload: convert HEIC → JPEG and resize to max 1800px.
-// Mobile cameras produce 10–15 MB files which exceed serverless body limits.
-// Resizing client-side gets them under 500 KB before they leave the device.
-const MAX_UPLOAD_DIM = 1800;
-const UPLOAD_QUALITY = 0.88;
-
-async function prepareImageForUpload(file: File): Promise<File> {
-  const isHeic =
-    file.type === "image/heic" ||
-    file.type === "image/heif" ||
-    /\.(heic|heif)$/i.test(file.name);
-
-  // Only process images (and HEIC files which report wrong MIME type)
-  if (!file.type.startsWith("image/") && !isHeic) return file;
-
-  try {
-    const img = document.createElement("img");
-    const url = URL.createObjectURL(file);
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("load failed"));
-      img.src = url;
-    });
-    URL.revokeObjectURL(url);
-
-    // Scale down if either dimension exceeds MAX_UPLOAD_DIM
-    let w = img.naturalWidth;
-    let h = img.naturalHeight;
-    if (w > MAX_UPLOAD_DIM || h > MAX_UPLOAD_DIM) {
-      const scale = MAX_UPLOAD_DIM / Math.max(w, h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-
-    const blob = await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob(b => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", UPLOAD_QUALITY)
-    );
-
-    const safeName = file.name.replace(/\.(heic|heif)$/i, ".jpg").replace(/\.[^.]+$/, ".jpg");
-    return new File([blob], safeName, { type: "image/jpeg" });
-  } catch {
-    // Fallback: send the original; server-side sharp will attempt conversion
-    return file;
-  }
-}
 
 export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientProps) {
   const router = useRouter();

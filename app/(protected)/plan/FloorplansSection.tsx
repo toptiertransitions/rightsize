@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { prepareImageForUpload } from "@/lib/image-utils";
 import type { ProjectFile, FileTag } from "@/lib/types";
 import {
   DndContext,
@@ -94,7 +95,8 @@ function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
     setError("");
     const results: ProjectFile[] = [];
     try {
-      for (const file of selectedFiles) {
+      for (const rawFile of selectedFiles) {
+        const file = await prepareImageForUpload(rawFile);
         const fd = new FormData();
         fd.append("file", file);
         fd.append("tenantId", tenantId);

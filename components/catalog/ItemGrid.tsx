@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { prepareImageForUpload } from "@/lib/image-utils";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -213,7 +214,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     setError("");
     try {
       const uploaded: ItemPhoto[] = [];
-      for (const file of toUpload) {
+      for (const rawFile of toUpload) {
+        const file = await prepareImageForUpload(rawFile);
         const fd = new FormData();
         fd.append("file", file);
         fd.append("tenantId", item.tenantId);
@@ -313,7 +315,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             <input
               ref={addPhotoRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.heic,.heif"
               multiple
               className="hidden"
               onChange={e => handleAddPhotos(e.target.files)}
