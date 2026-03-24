@@ -50,6 +50,22 @@ export async function uploadImage(
   };
 }
 
+export async function uploadPng(buffer: Buffer, options: { tenantId?: string } = {}): Promise<UploadResult> {
+  const folder = `rightsize/${options.tenantId || "shared"}`;
+  const result = await cloudinary.uploader.upload(
+    `data:image/png;base64,${buffer.toString("base64")}`,
+    { folder, transformation: [{ width: 1200, height: 1200, crop: "limit" }] }
+  );
+  return {
+    publicId: result.public_id,
+    url: result.url,
+    secureUrl: result.secure_url,
+    width: result.width,
+    height: result.height,
+    format: result.format,
+  };
+}
+
 export async function deleteImage(publicId: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId);
 }

@@ -180,6 +180,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [photoDragIdx, setPhotoDragIdx] = useState<number | null>(null);
   const [photoDropIdx, setPhotoDropIdx] = useState<number | null>(null);
+  const [removingBgIdx, setRemovingBgIdx] = useState<number | null>(null);
   const addPhotoRef = useRef<HTMLInputElement>(null);
 
   // Only show rooms belonging to this item's tenant
@@ -230,6 +231,25 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     } finally {
       setUploadingPhotos(false);
       if (addPhotoRef.current) addPhotoRef.current.value = "";
+    }
+  };
+
+  const handleRemoveBg = async (idx: number) => {
+    setRemovingBgIdx(idx);
+    setError("");
+    try {
+      const res = await fetch("/api/remove-background", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: photos[idx].url, tenantId: item.tenantId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Background removal failed");
+      setPhotos(prev => prev.map((p, i) => i === idx ? { url: data.photoUrl, publicId: data.photoPublicId } : p));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Background removal failed");
+    } finally {
+      setRemovingBgIdx(null);
     }
   };
 
@@ -385,6 +405,25 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
+                    {/* Remove background wand */}
+                    <button
+                      type="button"
+                      title="Remove background with AI"
+                      disabled={removingBgIdx !== null}
+                      onClick={() => handleRemoveBg(i)}
+                      className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-purple-600 transition-colors text-white disabled:opacity-50"
+                    >
+                      {removingBgIdx === i ? (
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l1.5 1.5M3 5l1.5 1.5M12 3l1.5 1.5M3 12l1.5 1.5M7.5 7.5l9 9M16 8l-1-1 1-3 3-1 1 1-1 3-3 1z" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 ))}
                 {photos.length < 10 && (
@@ -409,7 +448,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               </div>
             )}
             {photos.length > 0 && (
-              <p className="text-xs text-gray-400">Drag to reorder · ★ = primary · {photos.length}/10</p>
+              <p className="text-xs text-gray-400">Drag to reorder · ★ = primary · ✦ remove bg · {photos.length}/10</p>
             )}
           </section>
 
