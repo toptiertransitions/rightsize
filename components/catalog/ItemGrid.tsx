@@ -154,6 +154,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     staffTips: item.staffTips,
     status: item.status,
     storefrontActive: item.storefrontActive ?? false,
+    pickupLocation: item.pickupLocation ?? "",
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
     quantity: item.quantity ?? 1,
@@ -471,7 +472,15 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                     </span>
                     <button
                       type="button"
-                      onClick={() => set("storefrontActive", !form.storefrontActive)}
+                      onClick={() => {
+                        const turningOn = !form.storefrontActive;
+                        if (turningOn && !form.pickupLocation) {
+                          const city = allTenants?.find(t => t.id === item.tenantId)?.city;
+                          setForm(f => ({ ...f, storefrontActive: true, pickupLocation: city ?? "" }));
+                        } else {
+                          set("storefrontActive", !form.storefrontActive);
+                        }
+                      }}
                       className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-colors ${
                         form.storefrontActive
                           ? "bg-forest-600 border-forest-500 text-white"
@@ -491,6 +500,19 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 );
               })()}
             </div>
+            {form.primaryRoute === "ProFoundFinds Consignment" && (
+              <div>
+                <label className={labelClass}>Pickup Location</label>
+                <input
+                  type="text"
+                  value={form.pickupLocation ?? ""}
+                  onChange={e => set("pickupLocation", e.target.value)}
+                  placeholder="e.g. Lincoln Park, River North, Storage - Elk Grove"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-gray-400">Auto-filled from client city. Shown to shoppers on profoundfinds.com.</p>
+              </div>
+            )}
             <div>
               <label className={labelClass}>Condition Notes</label>
               <textarea rows={2} value={form.conditionNotes ?? ""} onChange={e => set("conditionNotes", e.target.value)} className={textareaClass} />
