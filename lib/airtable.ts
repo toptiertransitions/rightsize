@@ -580,6 +580,7 @@ export async function updateItem(
     stripePaymentIntentId: "StripePaymentIntentId",
     onlineListingSlug: "OnlineListingSlug",
     storefrontActive: "StorefrontActive",
+    pickupLocation: "PickupLocation",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -692,6 +693,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     stripePaymentIntentId: toStr(f["StripePaymentIntentId"]) || undefined,
     onlineListingSlug: toStr(f["OnlineListingSlug"]) || undefined,
     storefrontActive: f["StorefrontActive"] === true ? true : undefined,
+    pickupLocation: toStr(f["PickupLocation"]) || undefined,
   };
 }
 

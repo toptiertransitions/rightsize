@@ -304,6 +304,7 @@ export interface Item {
   stripePaymentIntentId?: string;
   onlineListingSlug?: string;
   storefrontActive?: boolean;
+  pickupLocation?: string;   // e.g. "Lincoln Park", "River North", "Storage - Elk Grove"
 }
 
 // ─── Sold Item Row (for Time Tracking CSV export) ─────────────────────────────
