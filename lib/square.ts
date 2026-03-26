@@ -30,9 +30,124 @@ export interface SquareCatalogResult {
 }
 
 /**
+ * Search Square catalog for ALL ITEM_VARIATIONs whose SKU exactly matches `sku`.
+ * Returns every match (itemId + variationId). More than one = duplicates exist.
+ */
+export async function findAllSquareItemsBySku(sku: string): Promise<Array<{ itemId: string; variationId: string }>> {
+  try {
+    const res = await squareFetch("/catalog/search-catalog-objects", {
+      method: "POST",
+      body: JSON.stringify({
+        object_types: ["ITEM_VARIATION"],
+        query: { text_query: { keywords: [sku] } },
+      }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const variations = (data.objects ?? []) as Array<{
+      id: string;
+      item_variation_data?: { item_id?: string; sku?: string };
+    }>;
+    return variations
+      .filter((v) => v.item_variation_data?.sku === sku && v.item_variation_data?.item_id)
+      .map((v) => ({ variationId: v.id, itemId: v.item_variation_data!.item_id! }));
+  } catch {
+    return [];
+  }
+}
+
+/** Internal single-match helper used by upsertSquareCatalogItem. */
+async function findSquareItemBySku(sku: string): Promise<{ itemId: string; variationId: string } | null> {
+  const all = await findAllSquareItemsBySku(sku);
+  return all[0] ?? null;
+}
+
+/**
+ * Delete a Square catalog ITEM (and all its variations) by Square item ID.
+ * Used to remove duplicate catalog entries.
+ */
+export async function deleteSquareCatalogObject(objectId: string): Promise<boolean> {
+  try {
+    const res = await squareFetch(`/catalog/object/${objectId}`, { method: "DELETE" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * List ALL ITEM_VARIATIONs in the Square catalog (paginated).
+ * Returns only entries that have a SKU set. Used for full-catalog reset/dedup.
+ */
+export async function listAllSquareCatalogVariationsWithSku(): Promise<Array<{ itemId: string; variationId: string; sku: string }>> {
+  const results: Array<{ itemId: string; variationId: string; sku: string }> = [];
+  let cursor: string | undefined;
+  do {
+    try {
+      const params = new URLSearchParams({ types: "ITEM_VARIATION" });
+      if (cursor) params.set("cursor", cursor);
+      const res = await squareFetch(`/catalog/list?${params}`);
+      if (!res.ok) break;
+      const data = await res.json();
+      const objects = (data.objects ?? []) as Array<{
+        id: string;
+        type: string;
+        item_variation_data?: { item_id?: string; sku?: string };
+      }>;
+      for (const obj of objects) {
+        const sku = obj.item_variation_data?.sku;
+        const itemId = obj.item_variation_data?.item_id;
+        if (sku && itemId) {
+          results.push({ variationId: obj.id, itemId, sku });
+        }
+      }
+      cursor = data.cursor ?? undefined;
+    } catch {
+      break;
+    }
+  } while (cursor);
+  return results;
+}
+
+/**
+ * Batch-delete Square catalog objects using the batch-delete endpoint (max 200 per call).
+ * Falls back to individual deletes if batch fails.
+ */
+export async function batchDeleteSquareCatalogObjects(objectIds: string[]): Promise<{ deleted: number; failed: number }> {
+  let deleted = 0;
+  let failed = 0;
+  const BATCH_SIZE = 200;
+  for (let i = 0; i < objectIds.length; i += BATCH_SIZE) {
+    const batch = objectIds.slice(i, i + BATCH_SIZE);
+    try {
+      const res = await squareFetch("/catalog/batch-delete", {
+        method: "POST",
+        body: JSON.stringify({ object_ids: batch }),
+      });
+      if (res.ok) {
+        deleted += batch.length;
+      } else {
+        // Fall back to individual deletes
+        for (const id of batch) {
+          const ok = await deleteSquareCatalogObject(id);
+          if (ok) deleted++; else failed++;
+        }
+      }
+    } catch {
+      failed += batch.length;
+    }
+  }
+  return { deleted, failed };
+}
+
+/**
  * Upsert a single item into Square catalog.
  * Uses the barcode as the SKU on the item variation.
  * Returns the stable Square IDs to store back in Airtable.
+ *
+ * Dedup strategy: if no stored Square IDs are provided, we first search
+ * Square by SKU. If an existing variation with that SKU is found we update
+ * it rather than creating a second entry.
  */
 export async function upsertSquareCatalogItem(opts: {
   existingItemId?: string;       // If already synced, pass the Square item ID
@@ -42,20 +157,54 @@ export async function upsertSquareCatalogItem(opts: {
   sku: string;                   // barcode number
   locationId: string;
 }): Promise<SquareCatalogResult> {
-  const itemId = opts.existingItemId ?? `#item-${opts.sku}`;
-  const variationId = opts.existingVariationId ?? `#variation-${opts.sku}`;
+  // If we don't have stored IDs, look up by SKU first to avoid creating a duplicate
+  let resolvedItemId = opts.existingItemId;
+  let resolvedVariationId = opts.existingVariationId;
+
+  if (!resolvedItemId) {
+    const found = await findSquareItemBySku(opts.sku);
+    if (found) {
+      resolvedItemId = found.itemId;
+      resolvedVariationId = found.variationId;
+    }
+  }
+
+  const itemId = resolvedItemId ?? `#item-${opts.sku}`;
+  const variationId = resolvedVariationId ?? `#variation-${opts.sku}`;
+
+  // Square requires a `version` when updating an existing catalog object.
+  // Fetch the current object to get the version before upserting.
+  let itemVersion: number | undefined;
+  let variationVersion: number | undefined;
+  const isExisting = !itemId.startsWith("#");
+  if (isExisting) {
+    try {
+      const vRes = await squareFetch(`/catalog/object/${itemId}`);
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        itemVersion = vData.object?.version;
+        const vars = (vData.object?.item_data?.variations ?? []) as Array<{ id: string; version?: number }>;
+        const matchedVar = vars.find((v) => v.id === variationId);
+        variationVersion = matchedVar?.version;
+      }
+    } catch {
+      // Proceed without version — Square will return VERSION_MISMATCH but we surface the real error below
+    }
+  }
 
   const body = {
     idempotency_key: `upsert-${opts.sku}-${Date.now()}`,
     object: {
       type: "ITEM",
       id: itemId,
+      ...(itemVersion !== undefined ? { version: itemVersion } : {}),
       item_data: {
         name: opts.name,
         variations: [
           {
             type: "ITEM_VARIATION",
             id: variationId,
+            ...(variationVersion !== undefined ? { version: variationVersion } : {}),
             item_variation_data: {
               item_id: itemId,
               name: "Default",

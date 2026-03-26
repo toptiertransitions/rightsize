@@ -597,6 +597,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                       { value: "Other Consignment", label: "Other Consignment" },
                       { value: "Donate", label: "Donate" },
                       { value: "Discard", label: "Discard" },
+                      ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
                     ]}
                   />
                 </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useId, useRef, useEffect } from "react";
+import Image from "next/image";
 import type { StaffMember, WeeklySchedule, TimeOffEntry, CrateLocation, InventoryContainer, InventoryItem, Subcontractor } from "@/lib/types";
 import { StaffCalendarTab } from "./StaffCalendarTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
@@ -65,9 +66,15 @@ function MemberCard({ member }: { member: StaffMember }) {
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-forest-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-sm font-bold text-forest-700">{(member.displayName || member.email).charAt(0).toUpperCase()}</span>
-          </div>
+          {member.profileImageUrl ? (
+            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+              <Image src={member.profileImageUrl} alt={member.displayName || member.email} width={36} height={36} className="object-cover w-full h-full" />
+            </div>
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-forest-100 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-forest-700">{(member.displayName || member.email).charAt(0).toUpperCase()}</span>
+            </div>
+          )}
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">{member.displayName || member.email}</p>
             <p className="text-xs text-gray-400 truncate">{member.email}</p>

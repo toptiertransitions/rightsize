@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getSystemRole, getStaffMembers, getCrateLocations, getInventoryContainers, getTenants, getSubcontractors } from "@/lib/airtable";
 import { StaffClient } from "./StaffClient";
@@ -19,6 +19,17 @@ export default async function StaffPage() {
   ]);
 
   const active = members.filter((m) => m.isActive && m.role !== "TTTSales");
+
+  // Enrich with Clerk profile images
+  try {
+    const clerk = await clerkClient();
+    const clerkUserIds = active.map((m) => m.clerkUserId).filter(Boolean);
+    if (clerkUserIds.length > 0) {
+      const { data: clerkUsers } = await clerk.users.getUserList({ userId: clerkUserIds, limit: 100 });
+      const imageMap = new Map(clerkUsers.map((u) => [u.id, u.imageUrl]));
+      active.forEach((m) => { m.profileImageUrl = imageMap.get(m.clerkUserId) || undefined; });
+    }
+  } catch { /* non-fatal — fall back to initials */ }
   const activeTenants = allTenants
     .filter((t) => !t.isArchived)
     .filter((t) => role === "TTTAdmin" || (t.isTTT ?? true))

@@ -77,6 +77,215 @@ function StatusCell({ value, onSave }: { value: ItemStatus; onSave: (v: ItemStat
   );
 }
 
+// ─── Photo cell ───────────────────────────────────────────────────────────────
+function PhotoCell({ item, onUpload }: { item: Item; onUpload: (url: string, publicId: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const photoUrl = item.photos?.[0]?.url || item.photoUrl;
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      onUpload(data.photoUrl, data.photoPublicId);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div
+      className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0 cursor-pointer group"
+      onClick={() => !uploading && inputRef.current?.click()}
+      title="Click to upload photo"
+    >
+      <input
+        ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+      />
+      {uploading ? (
+        <div className="w-10 h-10 flex items-center justify-center bg-gray-800">
+          <svg className="w-4 h-4 animate-spin text-forest-400" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+        </div>
+      ) : photoUrl ? (
+        <>
+          <div className="relative w-10 h-10">
+            <Image src={photoUrl} alt={item.itemName} fill className="object-cover" />
+          </div>
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+        </>
+      ) : (
+        <div className="w-10 h-10 flex items-center justify-center text-gray-600 group-hover:text-gray-400 transition-colors">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Bulk photo import modal ───────────────────────────────────────────────────
+interface BulkImportState {
+  total: number; matched: number; skipped: number;
+  uploaded: number; failed: number;
+  running: boolean; done: boolean; log: string[];
+}
+
+function BulkPhotoImport({ items, onClose, onItemUpdated }: {
+  items: Item[];
+  onClose: () => void;
+  onItemUpdated: (id: string, photoUrl: string, photoPublicId: string) => void;
+}) {
+  const [state, setState] = useState<BulkImportState | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const barcodeMap = new Map<string, Item>();
+  for (const item of items) {
+    if (item.barcodeNumber) barcodeMap.set(String(item.barcodeNumber).trim(), item);
+  }
+
+  async function handleFiles(files: FileList) {
+    const fileArr = Array.from(files);
+    const matched: { file: File; item: Item }[] = [];
+    let skipped = 0;
+
+    for (const file of fileArr) {
+      const barcode = file.name.replace(/\.[^.]+$/, "").trim();
+      const item = barcodeMap.get(barcode);
+      if (item) matched.push({ file, item });
+      else skipped++;
+    }
+
+    setState({
+      total: fileArr.length, matched: matched.length, skipped,
+      uploaded: 0, failed: 0, running: true, done: false,
+      log: [`Found ${matched.length} match${matched.length !== 1 ? "es" : ""}, ${skipped} unmatched file${skipped !== 1 ? "s" : ""}.`],
+    });
+
+    const CONCURRENCY = 3;
+    let uploaded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < matched.length; i += CONCURRENCY) {
+      const chunk = matched.slice(i, i + CONCURRENCY);
+      await Promise.all(chunk.map(async ({ file, item }) => {
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+          if (!uploadRes.ok) throw new Error("Upload failed");
+          const { photoUrl, photoPublicId } = await uploadRes.json();
+
+          const patchRes = await fetch("/api/items", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: item.id, tenantId: item.tenantId, photos: [{ url: photoUrl, publicId: photoPublicId }] }),
+          });
+          if (!patchRes.ok) throw new Error("Save failed");
+
+          onItemUpdated(item.id, photoUrl, photoPublicId);
+          uploaded++;
+          setState((p) => p ? { ...p, uploaded, log: [...p.log, `✓ ${item.itemName} (${file.name})`] } : p);
+        } catch (e) {
+          failed++;
+          setState((p) => p ? { ...p, failed, log: [...p.log, `✗ ${file.name}: ${e instanceof Error ? e.message : "Error"}`] } : p);
+        }
+      }));
+    }
+
+    setState((p) => p ? { ...p, running: false, done: true } : p);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={!state?.running ? onClose : undefined} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[480px] max-h-[80vh] flex flex-col">
+        <h3 className="text-white font-bold text-lg mb-1">Bulk Photo Import</h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Select images named by barcode (e.g. <code className="text-forest-400 text-xs">12345678.jpg</code>). Unmatched files are skipped automatically.
+        </p>
+
+        {!state && (
+          <>
+            <div className="text-xs text-gray-500 mb-5 bg-gray-800/60 rounded-xl p-3 space-y-1">
+              <p>• File name must be exactly the barcode number, e.g. <code className="text-gray-300">12345678.jpg</code></p>
+              <p>• Files without a matching barcode are silently skipped</p>
+              <p>• Existing photos will be replaced</p>
+              <p>• {barcodeMap.size} item{barcodeMap.size !== 1 ? "s" : ""} with barcodes available</p>
+            </div>
+            <input ref={inputRef} type="file" accept="image/*" multiple className="hidden"
+              onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); }}
+            />
+            <div className="flex gap-2 mt-auto">
+              <button onClick={onClose} className="flex-1 px-4 py-2 rounded-xl text-sm text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={() => inputRef.current?.click()} className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-forest-600 hover:bg-forest-700 text-white transition-colors">
+                Select Images
+              </button>
+            </div>
+          </>
+        )}
+
+        {state && (
+          <>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {[
+                { label: "Total", value: state.total, cls: "text-white" },
+                { label: "Matched", value: state.matched, cls: "text-forest-300" },
+                { label: "Uploaded", value: state.uploaded, cls: "text-green-300" },
+                { label: "Failed", value: state.failed, cls: state.failed > 0 ? "text-red-300" : "text-gray-500" },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                  <p className={`text-lg font-bold ${cls}`}>{value}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {state.matched > 0 && (
+              <div className="w-full bg-gray-800 rounded-full h-1.5 mb-3">
+                <div
+                  className="bg-forest-500 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${((state.uploaded + state.failed) / state.matched) * 100}%` }}
+                />
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto bg-gray-800/40 rounded-xl p-3 space-y-0.5 min-h-[100px] max-h-[240px] text-xs font-mono">
+              {state.log.map((line, i) => (
+                <p key={i} className={line.startsWith("✓") ? "text-green-400" : line.startsWith("✗") ? "text-red-400" : "text-gray-400"}>{line}</p>
+              ))}
+              {state.running && <p className="text-gray-500 animate-pulse">Processing…</p>}
+              {state.done && <p className="text-forest-400 font-semibold">Done!</p>}
+            </div>
+
+            {state.done && (
+              <button onClick={onClose} className="mt-4 w-full px-4 py-2 rounded-xl text-sm font-semibold bg-forest-600 hover:bg-forest-700 text-white transition-colors">
+                Close
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Sort ─────────────────────────────────────────────────────────────────────
 type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced" | "storefrontActive";
 
@@ -244,6 +453,236 @@ function BulkBar({
   );
 }
 
+// ─── Square full reset modal ──────────────────────────────────────────────────
+interface FullResetSummary {
+  dryRun: boolean;
+  scanned: number;
+  barcodesFound: number;
+  squareVariationsScanned: number;
+  squareItemsFound: number;
+  squareDeleted: number;
+  squareFailed: number;
+  airtableCleared: number;
+  airtableFailed: number;
+}
+
+function SquareFullResetModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [phase, setPhase] = useState<"confirm" | "running" | "done">("confirm");
+  const [summary, setSummary] = useState<FullResetSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+
+  async function run() {
+    setPhase("running");
+    setError(null);
+    try {
+      const res = await fetch("/api/square/full-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reset failed");
+      setSummary(data);
+      setPhase("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reset failed");
+      setPhase("confirm");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={phase !== "running" ? onClose : undefined} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[520px] max-h-[80vh] flex flex-col">
+        <h3 className="text-white font-bold text-lg mb-1">Full Square Reset + Re-Sync</h3>
+
+        {phase === "confirm" && (
+          <>
+            <p className="text-gray-400 text-sm mb-3">
+              This will scan every item in your Square catalog, delete <strong className="text-white">all entries</strong> whose SKU matches a PFInventory barcode, and clear the Square IDs in Airtable — giving you a clean slate for a fresh sync.
+            </p>
+            <div className="bg-red-950/50 border border-red-700 rounded-xl p-3 mb-4 text-xs text-red-300 space-y-1">
+              <p className="font-bold text-red-200">This is irreversible. Read before continuing:</p>
+              <p>• All PFInventory items will be deleted from Square catalog</p>
+              <p>• Square sales history for those items will be lost</p>
+              <p>• After this completes, click "Sync Listed to Square" to rebuild</p>
+              <p>• Run during off-hours — may take 2–5 minutes for large catalogs</p>
+            </div>
+            <label className="flex items-center gap-2 mb-5 cursor-pointer select-none">
+              <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)}
+                className="w-4 h-4 rounded accent-red-500" />
+              <span className="text-sm text-gray-300">I understand this will delete all PFInventory items from Square</span>
+            </label>
+            {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+            <div className="flex gap-2 mt-auto">
+              <button onClick={onClose} className="flex-1 px-4 py-2 rounded-xl text-sm text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={run} disabled={!confirmed}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-red-700 hover:bg-red-600 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                Delete All + Clear Airtable
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === "running" && (
+          <div className="flex-1 flex flex-col items-center justify-center py-12 gap-4">
+            <svg className="w-8 h-8 animate-spin text-red-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <div className="text-center space-y-1">
+              <p className="text-gray-300 text-sm font-medium">Resetting Square catalog…</p>
+              <p className="text-gray-500 text-xs">Scanning Square → deleting matched items → clearing Airtable IDs</p>
+              <p className="text-gray-600 text-xs">This may take 2–5 minutes. Do not close this window.</p>
+            </div>
+          </div>
+        )}
+
+        {phase === "done" && summary && (
+          <>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: "Square Scanned", value: summary.squareVariationsScanned, cls: "text-white" },
+                { label: "Deleted", value: summary.squareDeleted, cls: summary.squareDeleted > 0 ? "text-red-300" : "text-gray-500" },
+                { label: "AT Cleared", value: summary.airtableCleared, cls: "text-amber-300" },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                  <p className={`text-xl font-bold ${cls}`}>{value}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
+                </div>
+              ))}
+            </div>
+            {summary.squareFailed > 0 && (
+              <p className="text-amber-400 text-xs mb-3">{summary.squareFailed} Square delete{summary.squareFailed !== 1 ? "s" : ""} failed — they may already be gone.</p>
+            )}
+            {summary.airtableFailed > 0 && (
+              <p className="text-red-400 text-xs mb-3">{summary.airtableFailed} Airtable clear{summary.airtableFailed !== 1 ? "s" : ""} failed — re-run if needed.</p>
+            )}
+            <div className="bg-blue-950/40 border border-blue-800 rounded-xl p-3 mb-4 text-xs text-blue-300">
+              Square catalog cleared. Now click <strong className="text-white">"Sync Listed to Square"</strong> to push all Listed items back to Square with clean, fresh entries.
+            </div>
+            <button onClick={() => { onDone(); onClose(); }} className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-forest-600 hover:bg-forest-700 text-white transition-colors">
+              Done
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Square duplicate cleanup modal ───────────────────────────────────────────
+interface CleanupResult {
+  barcode: string; itemName: string; found: number;
+  kept: string; deleted: string[]; airtableUpdated: boolean; error?: string;
+}
+interface CleanupSummary {
+  dryRun: boolean; scanned: number; duplicatesFound: number; totalDeleted: number;
+  results: CleanupResult[];
+}
+
+function SquareCleanupModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [phase, setPhase] = useState<"confirm" | "running" | "done">("confirm");
+  const [summary, setSummary] = useState<CleanupSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setPhase("running");
+    setError(null);
+    try {
+      const res = await fetch("/api/square/cleanup-duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Cleanup failed");
+      setSummary(data);
+      setPhase("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Cleanup failed");
+      setPhase("confirm");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={phase !== "running" ? onClose : undefined} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[520px] max-h-[80vh] flex flex-col">
+        <h3 className="text-white font-bold text-lg mb-1">Clean Up Square Duplicates</h3>
+
+        {phase === "confirm" && (
+          <>
+            <p className="text-gray-400 text-sm mb-4">
+              This will scan every PFInventory item with a barcode, find duplicate Square catalog entries for the same SKU, and delete the extras — keeping the one linked to Airtable (or the first found). Airtable Square IDs will be corrected if needed.
+            </p>
+            <div className="bg-amber-950/40 border border-amber-700 rounded-xl p-3 mb-5 text-xs text-amber-300 space-y-1">
+              <p className="font-semibold">Before running:</p>
+              <p>• This cannot be undone — deleted Square items are permanently removed</p>
+              <p>• Items sold via a deleted duplicate may lose their Square history</p>
+              <p>• Run during off-hours if possible</p>
+            </div>
+            {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+            <div className="flex gap-2 mt-auto">
+              <button onClick={onClose} className="flex-1 px-4 py-2 rounded-xl text-sm text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors">Cancel</button>
+              <button onClick={run} className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-red-700 hover:bg-red-600 text-white transition-colors">
+                Delete Duplicates
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === "running" && (
+          <div className="flex-1 flex flex-col items-center justify-center py-12 gap-4">
+            <svg className="w-8 h-8 animate-spin text-forest-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-gray-400 text-sm text-center">Scanning all barcodes against Square…<br/>This may take a few minutes for large inventories.</p>
+          </div>
+        )}
+
+        {phase === "done" && summary && (
+          <>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: "Scanned", value: summary.scanned, cls: "text-white" },
+                { label: "Duplicates", value: summary.duplicatesFound, cls: "text-amber-300" },
+                { label: "Deleted", value: summary.totalDeleted, cls: summary.totalDeleted > 0 ? "text-red-300" : "text-gray-500" },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                  <p className={`text-xl font-bold ${cls}`}>{value}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {summary.results.length > 0 ? (
+              <div className="flex-1 overflow-y-auto bg-gray-800/40 rounded-xl p-3 space-y-1 max-h-[280px] text-xs font-mono mb-4">
+                {summary.results.map((r, i) => (
+                  <div key={i} className={r.error ? "text-red-400" : "text-gray-300"}>
+                    {r.error
+                      ? `✗ ${r.barcode} (${r.itemName}): ${r.error}`
+                      : `✓ ${r.barcode} · kept ${r.kept.slice(-6)} · deleted ${r.deleted.length}${r.airtableUpdated ? " · Airtable updated" : ""}`
+                    }
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-green-400 text-sm mb-4">No duplicates found — Square catalog is clean.</p>
+            )}
+
+            <button onClick={() => { onDone(); onClose(); }} className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-forest-600 hover:bg-forest-700 text-white transition-colors">
+              Done
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props) {
   const [items, setItems] = useState<Item[]>(initialItems);
@@ -256,6 +695,16 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showLabelModal, setShowLabelModal] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+
+  function handleItemPhotoUpdate(id: string, photoUrl: string, photoPublicId: string) {
+    setItems((prev) => prev.map((item) => item.id === id
+      ? { ...item, photoUrl, photos: [{ url: photoUrl, publicId: photoPublicId }] }
+      : item
+    ));
+  }
 
   // Square sync state
   const [squareConnected, setSquareConnected] = useState<boolean | null>(null);
@@ -384,21 +833,40 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
     setSyncing(true);
     setSyncResult(null);
     setSyncErrors([]);
+
+    const BATCH = 20;
+    let totalSucceeded = 0;
+    let totalFailed = 0;
+    const allFailures: { name: string; error: string }[] = [];
+
     try {
-      const res = await fetch("/api/square/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: targets.map(i => ({
-          id: i.id, itemName: i.itemName, valueMid: i.valueMid ?? 0,
-          barcodeNumber: i.barcodeNumber,
-          squareCatalogItemId: i.squareCatalogItemId,
-          squareCatalogVariationId: i.squareCatalogVariationId,
-        })) }),
-      });
-      const data = await res.json();
-      setSyncResult(`Synced ${data.succeeded} item${data.succeeded !== 1 ? "s" : ""} to Square${data.failed ? `, ${data.failed} failed` : ""}.`);
-      const failures = (data.results ?? []).filter((r: { success: boolean; name: string; error?: string }) => !r.success);
-      setSyncErrors(failures.map((r: { name: string; error?: string }) => ({ name: r.name, error: r.error ?? "Unknown error" })));
+      for (let i = 0; i < targets.length; i += BATCH) {
+        const batch = targets.slice(i, i + BATCH);
+        setSyncResult(`Syncing… ${Math.min(i + BATCH, targets.length)} / ${targets.length}`);
+
+        const res = await fetch("/api/square/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: batch.map(item => ({
+            id: item.id, itemName: item.itemName, valueMid: item.valueMid ?? 0,
+            barcodeNumber: item.barcodeNumber,
+            squareCatalogItemId: item.squareCatalogItemId,
+            squareCatalogVariationId: item.squareCatalogVariationId,
+          })) }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "Unknown error");
+          throw new Error(`Batch ${Math.floor(i / BATCH) + 1} failed: ${text.slice(0, 120)}`);
+        }
+        const data = await res.json();
+        totalSucceeded += data.succeeded ?? 0;
+        totalFailed += data.failed ?? 0;
+        const failures = (data.results ?? []).filter((r: { success: boolean; name: string; error?: string }) => !r.success);
+        allFailures.push(...failures.map((r: { name: string; error?: string }) => ({ name: r.name, error: r.error ?? "Unknown error" })));
+      }
+
+      setSyncResult(`Synced ${totalSucceeded} item${totalSucceeded !== 1 ? "s" : ""} to Square${totalFailed ? `, ${totalFailed} failed` : ""}.`);
+      setSyncErrors(allFailures);
       // Refresh items to show updated squareSyncedAt
       const refreshed = await fetch("/api/items?primaryRoute=ProFoundFinds+Consignment").then(r => r.json()).catch(() => null);
       if (refreshed?.items) setItems(refreshed.items);
@@ -489,6 +957,26 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
               {syncing ? "Syncing…" : selectedIds.length > 0 ? `Sync ${selectedIds.length} to Square` : "Sync Listed to Square"}
             </button>
             <button
+              onClick={() => setShowCleanup(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-xs font-medium text-white transition-colors"
+              title="Find and delete duplicate Square catalog entries for the same barcode/SKU"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Clean Duplicates
+            </button>
+            <button
+              onClick={() => setShowReset(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950 hover:bg-red-900 border border-red-700 text-xs font-medium text-red-300 transition-colors"
+              title="Delete ALL PFInventory items from Square and clear Airtable IDs — then re-sync from scratch"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              Full Reset
+            </button>
+            <button
               onClick={handlePullSales}
               disabled={pullingSales}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-800 hover:bg-green-700 text-xs font-medium text-white transition-colors disabled:opacity-50"
@@ -522,7 +1010,18 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters + Bulk Photo Import */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <button
+          onClick={() => setShowBulkImport(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-700 bg-gray-800 hover:bg-gray-700 text-sm font-medium text-gray-200 transition-colors"
+        >
+          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Bulk Photo Import
+        </button>
+      </div>
       <div className="flex flex-wrap gap-3 mb-4">
         <input type="text" placeholder="Search items, clients, barcodes…" value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -594,7 +1093,6 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                   const isFlashing = flash[item.id];
                   const isSelected = selected.has(item.id);
                   const overdue = isOverdue(item.deliveryDate);
-                  const photoUrl = item.photos?.[0]?.url || item.photoUrl;
                   const globalIdx = (page - 1) * PAGE_SIZE + idx;
 
                   return (
@@ -613,19 +1111,10 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
 
                       {/* Photo */}
                       <td className="px-3 py-2.5">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
-                          {photoUrl ? (
-                            <div className="relative w-10 h-10">
-                              <Image src={photoUrl} alt={item.itemName} fill className="object-cover" />
-                            </div>
-                          ) : (
-                            <div className="w-10 h-10 flex items-center justify-center text-gray-600">
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
+                        <PhotoCell
+                          item={item}
+                          onUpload={(url, publicId) => patchItem(item.id, item.tenantId, { photos: [{ url, publicId }] })}
+                        />
                       </td>
 
                       {/* Item name */}
@@ -744,6 +1233,40 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
           count={selectedIds.length}
           onClose={() => setShowLabelModal(false)}
           onPrint={handlePrintLabels}
+        />
+      )}
+
+      {showBulkImport && (
+        <BulkPhotoImport
+          items={items}
+          onClose={() => setShowBulkImport(false)}
+          onItemUpdated={handleItemPhotoUpdate}
+        />
+      )}
+
+      {showCleanup && (
+        <SquareCleanupModal
+          onClose={() => setShowCleanup(false)}
+          onDone={() => {
+            // Refresh items so updated Square IDs are reflected
+            fetch("/api/items?primaryRoute=ProFoundFinds+Consignment")
+              .then(r => r.json())
+              .then(d => { if (d.items) setItems(d.items); })
+              .catch(() => null);
+          }}
+        />
+      )}
+
+      {showReset && (
+        <SquareFullResetModal
+          onClose={() => setShowReset(false)}
+          onDone={() => {
+            // Refresh items so cleared Square IDs are reflected
+            fetch("/api/items?primaryRoute=ProFoundFinds+Consignment")
+              .then(r => r.json())
+              .then(d => { if (d.items) setItems(d.items); })
+              .catch(() => null);
+          }}
         />
       )}
     </div>

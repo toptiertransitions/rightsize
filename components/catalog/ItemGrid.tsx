@@ -47,6 +47,7 @@ const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray"
   "Other Consignment":            { variant: "purple", label: "Other Consign" },
   "Donate":                       { variant: "teal",   label: "Donate" },
   "Discard":                      { variant: "gray",   label: "Discard" },
+  "Estate Sale":                  { variant: "yellow", label: "Estate Sale" },
 };
 
 // ─── Staff Autofill Combobox ──────────────────────────────────────────────────
@@ -156,6 +157,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     status: item.status,
     storefrontActive: item.storefrontActive ?? false,
     pickupLocation: item.pickupLocation ?? "",
+    estateSaleId: item.estateSaleId ?? "",
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
     quantity: item.quantity ?? 1,
@@ -472,7 +474,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 onChange={e => {
                   const newStatus = e.target.value as ItemStatus;
                   const completedStatuses = ["Sold", "Donated", "Discarded"];
-                  const isPF = form.primaryRoute === "ProFoundFinds Consignment";
+                  const isPF = form.primaryRoute === "ProFoundFinds Consignment" || form.primaryRoute === "Estate Sale";
                   if (completedStatuses.includes(newStatus)) {
                     setForm(f => ({
                       ...f,
@@ -505,7 +507,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               />
               {/* Site? — storefrontActive toggle */}
               {(() => {
-                const eligible = form.primaryRoute === "ProFoundFinds Consignment" && form.status === "Listed";
+                const eligible = (form.primaryRoute === "ProFoundFinds Consignment" || form.primaryRoute === "Estate Sale") && form.status === "Listed";
                 return (
                   <div className="flex flex-col items-center gap-1 pb-0.5">
                     <span className={`text-[11px] font-medium uppercase tracking-wide ${eligible ? "text-gray-500" : "text-gray-600"}`}>
@@ -552,6 +554,19 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
                 />
                 <p className="mt-1 text-xs text-gray-400">Auto-filled from client city. Shown to shoppers on profoundfinds.com.</p>
+              </div>
+            )}
+            {isTTT && form.primaryRoute === "Estate Sale" && (
+              <div>
+                <label className={labelClass}>Estate Sale ID</label>
+                <input
+                  type="text"
+                  value={form.estateSaleId ?? ""}
+                  onChange={e => set("estateSaleId", e.target.value)}
+                  placeholder="Airtable record ID from /admin/estates"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent font-mono text-xs"
+                />
+                <p className="mt-1 text-xs text-gray-400">Copy from the estate card in /admin/estates. Used for Dutch auction pricing.</p>
               </div>
             )}
             <div>
@@ -631,6 +646,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Other Consignment",            label: "Other Consignment" },
                   { value: "Donate",                       label: "Donate" },
                   { value: "Discard",                      label: "Discard" },
+                  ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
                 ]}
               />
               <Input label="Consignment Category" value={form.consignmentCategory ?? ""}

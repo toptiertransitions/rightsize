@@ -230,6 +230,7 @@ function QuoteCard({
   onDelete,
   onSetPrimary,
   onArchive,
+  onRevertToSent,
 }: {
   contract: Contract;
   tenantId: string;
@@ -238,9 +239,11 @@ function QuoteCard({
   onDelete: () => void;
   onSetPrimary: () => void;
   onArchive: () => void;
+  onRevertToSent: () => void;
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [revertToSentConfirm, setRevertToSentConfirm] = useState(false);
   const [working, setWorking] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -275,6 +278,21 @@ function QuoteCard({
       if (!res.ok) throw new Error("Failed");
       onArchive();
       setArchiveConfirm(false);
+    } catch { /* ignore */ }
+    finally { setWorking(false); }
+  }
+
+  async function handleRevertToSent() {
+    setWorking(true);
+    try {
+      const res = await fetch("/api/contracts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: contract.id, status: "Sent" }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      onRevertToSent();
+      setRevertToSentConfirm(false);
     } catch { /* ignore */ }
     finally { setWorking(false); }
   }
@@ -372,10 +390,20 @@ function QuoteCard({
             </a>
           )}
 
+          {/* Change to Sent — Signed only (no client signature yet) */}
+          {isSigned && !contract.signedAt && (
+            <button
+              onClick={() => { setRevertToSentConfirm(true); setArchiveConfirm(false); }}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+            >
+              Change to Sent
+            </button>
+          )}
+
           {/* Unsign & Archive — Signed only */}
           {isSigned && (
             <button
-              onClick={() => setArchiveConfirm(true)}
+              onClick={() => { setArchiveConfirm(true); setRevertToSentConfirm(false); }}
               className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-colors ml-auto"
             >
               Unsign & Archive
@@ -412,6 +440,29 @@ function QuoteCard({
             </button>
             <button
               onClick={() => setArchiveConfirm(false)}
+              className="text-sm font-medium px-4 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Change to Sent confirm */}
+      {revertToSentConfirm && (
+        <div className="border-t border-blue-100 bg-blue-50 px-5 py-3">
+          <p className="text-sm text-blue-800 font-medium mb-0.5">Change this quote back to Sent?</p>
+          <p className="text-xs text-blue-600 mb-3">The client will still be able to sign the quote using their original signing link. This removes its Primary Quote designation.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRevertToSent}
+              disabled={working}
+              className="text-sm font-medium px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {working ? "Saving…" : "Change to Sent"}
+            </button>
+            <button
+              onClick={() => setRevertToSentConfirm(false)}
               className="text-sm font-medium px-4 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
             >
               Cancel
@@ -575,15 +626,22 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   }
 
   function handleSetPrimary(id: string) {
-    // Mark selected as Signed, archive all others that were Signed (UI mirrors API action)
+    // Mirror API: keep Sent contracts as Sent; promote Draft/Archived to Signed.
+    // Archive any other currently-Signed contract.
     setQuotes((prev) =>
       prev.map((q) =>
         q.id === id
-          ? { ...q, status: "Signed" as const }
+          ? { ...q, status: q.status === "Sent" ? ("Sent" as const) : ("Signed" as const) }
           : q.status === "Signed"
           ? { ...q, status: "Archived" as const }
           : q
       )
+    );
+  }
+
+  function handleRevertToSent(id: string) {
+    setQuotes((prev) =>
+      prev.map((q) => q.id === id ? { ...q, status: "Sent" as const } : q)
     );
   }
 
@@ -658,6 +716,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                     onDelete={() => handleDeleted(q.id)}
                     onSetPrimary={() => handleSetPrimary(q.id)}
                     onArchive={() => handleArchived(q.id)}
+                    onRevertToSent={() => handleRevertToSent(q.id)}
                   />
                   {depositInvoice && q.status === "Signed" && !depositInvoice.emailSent && (
                     <DepositInvoicePanel invoice={depositInvoice} recipients={recipients} />

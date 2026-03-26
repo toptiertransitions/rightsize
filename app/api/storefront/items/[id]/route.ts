@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, getItemByOnlineSlug } from "@/lib/airtable";
+import { getItemById, getItemByOnlineSlug, getEstateById } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -23,11 +23,19 @@ export async function GET(
     if (!item) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    // Gate: must be ProFoundFinds Consignment route
-    if (item.primaryRoute !== "ProFoundFinds Consignment") {
+    // Gate: must be ProFoundFinds Consignment or Estate Sale route
+    if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({ item });
+
+    // For estate sale items, append estate slug for client-side price validation
+    let estateSaleSlug: string | undefined;
+    if (item.primaryRoute === "Estate Sale" && item.estateSaleId) {
+      const estate = await getEstateById(item.estateSaleId).catch(() => null);
+      if (estate) estateSaleSlug = estate.slug;
+    }
+
+    return NextResponse.json({ item: { ...item, estateSaleSlug } });
   } catch (e) {
     console.error("[storefront/items/[id]] GET error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });

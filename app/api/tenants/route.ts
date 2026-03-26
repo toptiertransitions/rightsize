@@ -27,14 +27,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { name: string; email?: string; displayName?: string; address?: string; city?: string; state?: string; zip?: string };
+  let body: { name: string; email?: string; displayName?: string; address?: string; city?: string; state?: string; zip?: string; clientEmail?: string; clientPhone?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, email, displayName, address, city, state, zip } = body;
+  const { name, email, displayName, address, city, state, zip, clientEmail, clientPhone } = body;
   if (!name?.trim()) {
     return NextResponse.json({ error: "Project name is required" }, { status: 400 });
   }
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   const isTTTCreator = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRoleForCreate ?? "");
 
   // Create tenant
-  const tenant = await createTenant({ name: name.trim(), slug, ownerUserId: userId, address, city, state, zip, isTTT: isTTTCreator });
+  const tenant = await createTenant({ name: name.trim(), slug, ownerUserId: userId, address, city, state, zip, isTTT: isTTTCreator, clientEmail, clientPhone });
 
   // Create owner membership
   await createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" });
@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -109,6 +109,9 @@ export async function PATCH(req: NextRequest) {
     payoutUsername: payoutUsername !== undefined ? (payoutUsername as string | null) : undefined,
     clientEmail: isTTTInternalRole && clientEmail !== undefined ? (clientEmail as string | null) : undefined,
     clientPhone: isTTTInternalRole && clientPhone !== undefined ? (clientPhone as string | null) : undefined,
+    // Only TTTManager/TTTAdmin can set consignment expenses
+    consignmentExpense: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && consignmentExpense !== undefined ? (consignmentExpense as number | null) : undefined,
+    consignmentExpenseNote: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && consignmentExpenseNote !== undefined ? (consignmentExpenseNote as string | null) : undefined,
   });
   return NextResponse.json({ tenant });
 }

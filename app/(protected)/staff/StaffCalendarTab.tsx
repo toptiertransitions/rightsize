@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import type { StaffMember, PlanEntry } from "@/lib/types";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
@@ -95,6 +96,25 @@ function initials(name: string): string {
   return name.split(" ").map(w => w[0] ?? "").join("").toUpperCase().slice(0, 2);
 }
 
+function MemberAvatar({ member, sizePx, className }: {
+  member: StaffMember; sizePx: number; className?: string;
+}) {
+  const name = member.displayName || member.email;
+  if (member.profileImageUrl) {
+    return (
+      <div className="rounded-full overflow-hidden flex-shrink-0" style={{ width: sizePx, height: sizePx }}>
+        <Image src={member.profileImageUrl} alt={name} width={sizePx} height={sizePx} className="object-cover w-full h-full" />
+      </div>
+    );
+  }
+  return (
+    <div className={`rounded-full flex items-center justify-center flex-shrink-0 font-bold ${className ?? ""}`}
+      style={{ width: sizePx, height: sizePx, fontSize: sizePx * 0.38 }}>
+      {initials(name)}
+    </div>
+  );
+}
+
 interface DateRange { from: Date; to: Date; days: Date[] }
 
 function getDateRange(view: CalendarView, currentDate: Date): DateRange {
@@ -184,9 +204,7 @@ function CompactMemberRow({
 
   return (
     <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] ${rowCls} ${textCls}`}>
-      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-[9px] ${avatarCls}`}>
-        {initials(name)}
-      </div>
+      <MemberAvatar member={member} sizePx={20} className={avatarCls} />
       <span className="font-medium truncate flex-shrink-0" style={{ maxWidth: 60 }}>{firstName}</span>
       {rightLabel && (
         <span className="ml-auto whitespace-nowrap opacity-75 text-[10px] truncate" style={{ maxWidth: 100 }}>
@@ -562,13 +580,10 @@ export function StaffCalendarTab({ members, tenants }: Props) {
                   isScheduled ? "border-sky-200" : "border-gray-200"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isScheduled ? "bg-sky-100" : "bg-forest-100"
-                }`}>
-                  <span className={`text-sm font-bold ${isScheduled ? "text-sky-700" : "text-forest-700"}`}>
-                    {initials(member.displayName || member.email)}
-                  </span>
-                </div>
+                <MemberAvatar
+                  member={member} sizePx={36}
+                  className={isScheduled ? "bg-sky-100 text-sky-700" : "bg-forest-100 text-forest-700"}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <p className="text-sm font-semibold text-gray-900">{member.displayName || member.email}</p>

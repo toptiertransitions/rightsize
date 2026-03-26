@@ -109,6 +109,9 @@ interface SalesClientProps {
   initialPayoutCheckAddress?: string;
   projectAddress?: string;
   isTTT?: boolean;
+  canEditExpense?: boolean;
+  initialConsignmentExpense?: number;
+  initialConsignmentExpenseNote?: string;
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -931,6 +934,9 @@ export function SalesClient({
   initialPayoutCheckAddress,
   projectAddress,
   isTTT = true,
+  canEditExpense = false,
+  initialConsignmentExpense = 0,
+  initialConsignmentExpenseNote = "",
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -938,6 +944,14 @@ export function SalesClient({
   const [proofFiles, setProofFiles] = useState<ProjectFile[]>(paymentProofFiles);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
+
+  // Consignment expense state
+  const [expense, setExpense] = useState(initialConsignmentExpense);
+  const [expenseNote, setExpenseNote] = useState(initialConsignmentExpenseNote);
+  const [editingExpense, setEditingExpense] = useState(false);
+  const [expenseDraft, setExpenseDraft] = useState(String(initialConsignmentExpense || ""));
+  const [expenseNoteDraft, setExpenseNoteDraft] = useState(initialConsignmentExpenseNote);
+  const [savingExpense, setSavingExpense] = useState(false);
 
   // Payout preference state
   const [payoutMethod, setPayoutMethod] = useState<PayoutMethod | "">(initialPayoutMethod ?? "");
@@ -969,6 +983,25 @@ export function SalesClient({
 
   function handlePayoutSaved(itemId: string, amount: number) {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, payoutPaidAmount: amount } : i));
+  }
+
+  async function saveExpense() {
+    const amount = parseFloat(expenseDraft) || 0;
+    setSavingExpense(true);
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, consignmentExpense: amount, consignmentExpenseNote: expenseNoteDraft }),
+      });
+      if (res.ok) {
+        setExpense(amount);
+        setExpenseNote(expenseNoteDraft);
+        setEditingExpense(false);
+      }
+    } finally {
+      setSavingExpense(false);
+    }
   }
 
   function handleSalePriceSaved(itemId: string, price: number) {
@@ -1055,7 +1088,7 @@ export function SalesClient({
 
   const totalEarned = pfTotalEarned + nonPfTotalEarned;
   const totalPaid = pfTotalPaid + nonPfTotalPaid;
-  const totalOwed = Math.max(0, totalEarned - totalPaid);
+  const totalOwed = Math.max(0, totalEarned - totalPaid - expense);
 
   // ── Per-route breakdown for expandable cards ──────────────────────────────
   const fbEarned = fb.filter(i => i.status === "Sold").reduce((s, i) => {
@@ -1196,15 +1229,78 @@ export function SalesClient({
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {/* Inventory value — static card, no caret */}
         <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <div className="text-xl font-bold tabular-nums text-gray-700">{fmt(totalInventoryValue)}</div>
           <div className="text-xs text-gray-500 mt-0.5">Total value of inventory</div>
         </div>
+
         {expandableCard(0, "Total client earnings (sold)", totalEarned, "text-green-700", r => r.earned)}
+
+        {/* Expenses from Consignment */}
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          {editingExpense ? (
+            <div>
+              <div className="mb-2">
+                <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Amount ($)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={expenseDraft}
+                  onChange={(e) => setExpenseDraft(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
+              <div className="mb-3">
+                <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Note</label>
+                <input
+                  type="text"
+                  value={expenseNoteDraft}
+                  onChange={(e) => setExpenseNoteDraft(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
+                  placeholder="e.g. Delivery fees"
+                  onKeyDown={(e) => { if (e.key === "Enter") saveExpense(); if (e.key === "Escape") setEditingExpense(false); }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={saveExpense} disabled={savingExpense}
+                  className="flex-1 text-xs bg-forest-600 hover:bg-forest-700 text-white rounded px-2 py-1 disabled:opacity-50">
+                  {savingExpense ? "Saving…" : "Save"}
+                </button>
+                <button onClick={() => { setEditingExpense(false); setExpenseDraft(String(expense || "")); setExpenseNoteDraft(expenseNote); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className={cn("text-xl font-bold tabular-nums", expense > 0 ? "text-red-600" : "text-gray-400")}>
+                  {expense > 0 ? fmt(expense) : "—"}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">Expenses from Consignment</div>
+                {expenseNote && <div className="text-xs text-gray-400 mt-1 italic truncate">{expenseNote}</div>}
+              </div>
+              {canEditExpense && (
+                <button
+                  onClick={() => { setExpenseDraft(String(expense || "")); setExpenseNoteDraft(expenseNote); setEditingExpense(true); }}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all mt-0.5"
+                  title="Edit expense"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {expandableCard(1, "Total paid to client", totalPaid, "text-blue-700", r => r.paid)}
-        {expandableCard(2, "Still owed to client", totalOwed, totalOwed > 0 ? "text-amber-600" : "text-gray-400", r => Math.max(0, r.earned - r.paid))}
+        {expandableCard(2, "Still owed to client", totalOwed, totalOwed > 0 ? "text-amber-600" : "text-gray-400", r => Math.max(0, r.earned - r.paid - expense))}
       </div>
 
       {/* Sections */}

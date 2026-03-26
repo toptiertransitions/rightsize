@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, updateOpportunity } from "@/lib/airtable";
+import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { Resend } from "resend";
@@ -123,12 +123,26 @@ export async function POST(req: NextRequest) {
     console.error("Failed to update tenant estimatedHours on sign:", e);
   }
 
-  // Auto-advance opportunity to Won and set estimatedValue to the signed contract amount
+  // Auto-advance opportunity to Won and set estimatedValue to the signed contract amount.
+  // Two lookup paths:
+  //   1. Primary: find opportunities by TenantId (set on opportunity when created)
+  //   2. Fallback: if none found, look up the ClientContact by the contract's recipient
+  //      email and find their opportunities (handles cases where TenantId wasn't populated)
+  // Stage filter: any active stage (Lead / Qualifying / Proposing) → not just Proposing,
+  //   since the opportunity may not have been manually advanced before signing.
   try {
-    const opps = await getOpportunitiesForTenant(contract.tenantId).catch(() => []);
-    const proposing = opps.filter((o) => o.stage === "Proposing");
+    let opps = await getOpportunitiesForTenant(contract.tenantId).catch(() => []);
+
+    if (opps.length === 0 && contract.recipientEmail) {
+      const contact = await getClientContactByEmail(contract.recipientEmail).catch(() => null);
+      if (contact) {
+        opps = await getOpportunitiesForContact(contact.id).catch(() => []);
+      }
+    }
+
+    const toUpdate = opps.filter((o) => !["Won", "Lost"].includes(o.stage));
     await Promise.all(
-      proposing.map((o) =>
+      toUpdate.map((o) =>
         updateOpportunity(o.id, {
           stage: "Won",
           wonAt: new Date().toISOString(),

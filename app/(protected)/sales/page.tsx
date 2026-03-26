@@ -76,6 +76,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const canEdit = EDIT_ROLES.includes(resolvedRole);
   const canEditPayout = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canEditExpense = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const isStaff = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
@@ -111,6 +112,9 @@ export default async function SalesPage({ searchParams }: PageProps) {
       initialPayoutCheckAddress={tenant.payoutCheckAddress}
       projectAddress={projectAddress || undefined}
       isTTT={tenant.isTTT ?? true}
+      canEditExpense={canEditExpense}
+      initialConsignmentExpense={tenant.consignmentExpense ?? 0}
+      initialConsignmentExpenseNote={tenant.consignmentExpenseNote ?? ""}
     />
   );
 }

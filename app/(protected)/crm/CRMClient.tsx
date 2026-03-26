@@ -437,6 +437,10 @@ function OpportunityPanel({
   const [activityType, setActivityType] = useState<CRMActivityType>("Note");
   const [activityNote, setActivityNote] = useState("");
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
+  const [oppAddress, setOppAddress] = useState(opportunity?.address || "");
+  const [oppCity, setOppCity] = useState(opportunity?.city || "");
+  const [oppState, setOppState] = useState(opportunity?.state || "");
+  const [oppZip, setOppZip] = useState(opportunity?.zip || "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [syncingGmail, setSyncingGmail] = useState(false);
@@ -479,6 +483,10 @@ function OpportunityPanel({
         wonAt: stage === "Won" && !opportunity?.wonAt ? new Date().toISOString() : opportunity?.wonAt,
         lostAt: stage === "Lost" && !opportunity?.lostAt ? new Date().toISOString() : opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
+        address: oppAddress,
+        city: oppCity,
+        state: oppState,
+        zip: oppZip,
       };
       if (opportunity) {
         const res = await fetch("/api/crm/opportunities", {
@@ -595,6 +603,10 @@ function OpportunityPanel({
         wonAt: opportunity?.wonAt,
         lostAt: opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
+        address: oppAddress,
+        city: oppCity,
+        state: oppState,
+        zip: oppZip,
       };
 
       let savedOpp: ClientOpportunity;
@@ -624,11 +636,21 @@ function OpportunityPanel({
         savedOpp = oppData.opportunity;
       }
 
-      // Step 2: Create the project
+      // Step 2: Create the project — pass contact phone/email + opportunity address fields
       const tenantRes = await fetch("/api/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: contact.name, email: contact.email, displayName: contact.name }),
+        body: JSON.stringify({
+          name: contact.name,
+          email: contact.email,
+          displayName: contact.name,
+          clientEmail: contact.email || undefined,
+          clientPhone: contact.phone || undefined,
+          address: oppAddress || undefined,
+          city: oppCity || undefined,
+          state: oppState || undefined,
+          zip: oppZip || undefined,
+        }),
       });
       if (!tenantRes.ok) {
         setSaveError("Opportunity saved, but failed to create project. Please try again.");
@@ -710,6 +732,41 @@ function OpportunityPanel({
               placeholder="0"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address <span className="font-normal text-gray-400">(optional)</span></label>
+            <input
+              type="text"
+              value={oppAddress}
+              onChange={(e) => setOppAddress(e.target.value)}
+              placeholder="Street address"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={oppCity}
+                onChange={(e) => setOppCity(e.target.value)}
+                placeholder="City"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                value={oppState}
+                onChange={(e) => setOppState(e.target.value)}
+                placeholder="State"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                value={oppZip}
+                onChange={(e) => setOppZip(e.target.value)}
+                placeholder="Zip"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
           </div>
 
           {/* Key People */}
@@ -3280,7 +3337,7 @@ function ActivityLogTab({
           clientContactId: logForm.contactId,
           type: logForm.type,
           note: logForm.note,
-          activityDate: new Date(logForm.date).toISOString(),
+          activityDate: logForm.date,
         }),
       });
       setLogModalOpen(false);

@@ -150,15 +150,19 @@ export async function PATCH(req: NextRequest) {
   const { id, action, tenantId: actionTenantId, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  // setPrimary: archive all currently-Signed contracts for this tenant, then sign this one
+  // setPrimary: archive all currently-Signed contracts for this tenant, then mark this one.
+  // If the target is "Sent" (waiting for client signature) leave it as Sent so the client
+  // can still sign; otherwise promote Draft/Archived to Signed.
   if (action === "setPrimary" && actionTenantId) {
     const all = await getContractsForTenant(actionTenantId);
+    const target = all.find((c) => c.id === id);
+    const newStatus = target?.status === "Sent" ? "Sent" : "Signed";
     await Promise.all(
       all
         .filter((c) => c.status === "Signed" && c.id !== id)
         .map((c) => updateContract(c.id, { status: "Archived" }))
     );
-    const contract = await updateContract(id, { status: "Signed" });
+    const contract = await updateContract(id, { status: newStatus });
 
     // Advance related opportunity to Won and stamp the signed contract amount
     try {

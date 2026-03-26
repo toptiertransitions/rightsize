@@ -104,6 +104,64 @@ function StaffSellerCell({ sellerId, sellerName, staffMembers, onSave }: {
   );
 }
 
+// ─── Photo cell ───────────────────────────────────────────────────────────────
+function PhotoCell({ item, onUpload }: { item: Item; onUpload: (url: string, publicId: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const photoUrl = item.photos?.[0]?.url || item.photoUrl;
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      onUpload(data.photoUrl, data.photoPublicId);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0 cursor-pointer group"
+      onClick={() => !uploading && inputRef.current?.click()} title="Click to upload photo">
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+      {uploading ? (
+        <div className="w-10 h-10 flex items-center justify-center bg-gray-800">
+          <svg className="w-4 h-4 animate-spin text-forest-400" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+        </div>
+      ) : photoUrl ? (
+        <>
+          <div className="relative w-10 h-10">
+            <Image src={photoUrl} alt={item.itemName} fill className="object-cover" />
+          </div>
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+        </>
+      ) : (
+        <div className="w-10 h-10 flex items-center justify-center text-gray-600 group-hover:text-gray-400 transition-colors">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Sort ─────────────────────────────────────────────────────────────────────
 type SortCol = "itemName" | "status" | "client" | "quantity" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate";
 
@@ -453,7 +511,6 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                   const isSaving = saving[item.id];
                   const isFlashing = flash[item.id];
                   const isSelected = selected.has(item.id);
-                  const photoUrl = item.photos?.[0]?.url || item.photoUrl;
                   const staffTime = calcStaffTime(item.valueMid);
                   const commissionDollars = item.status === "Sold" && item.staffCommissionPercent != null && item.valueMid
                     ? (item.staffCommissionPercent / 100) * item.valueMid
@@ -475,19 +532,10 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
 
                       {/* Photo */}
                       <td className="px-3 py-2.5">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
-                          {photoUrl ? (
-                            <div className="relative w-10 h-10">
-                              <Image src={photoUrl} alt={item.itemName} fill className="object-cover" />
-                            </div>
-                          ) : (
-                            <div className="w-10 h-10 flex items-center justify-center text-gray-600">
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
+                        <PhotoCell
+                          item={item}
+                          onUpload={(url, publicId) => patchItem(item.id, item.tenantId, { photos: [{ url, publicId }] })}
+                        />
                       </td>
 
                       {/* Item name */}

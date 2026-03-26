@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
       results.push({ id: item.id, name: item.itemName, success: false, error: String(e) });
     }
 
-    // Small delay to avoid hitting Square's catalog API rate limit (~100 req/min)
-    await new Promise(r => setTimeout(r, 120));
+    // Small delay to stay under Square's catalog API rate limit (~100 req/min)
+    await new Promise(r => setTimeout(r, 50));
   }
 
   const succeeded = results.filter(r => r.success).length;
