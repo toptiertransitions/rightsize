@@ -59,6 +59,7 @@ const ROUTE_COLORS: Record<PrimaryRoute, string> = {
   "Other Consignment":          "bg-indigo-900/60 text-indigo-300",
   "Donate":                     "bg-teal-900/60 text-teal-300",
   "Discard":                    "bg-red-900/60 text-red-300",
+  "Estate Sale":                "bg-amber-900/60 text-amber-300",
 };
 
 // ── Checkbox group helper ──────────────────────────────────────────────────────
