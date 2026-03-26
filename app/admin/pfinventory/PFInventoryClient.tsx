@@ -287,7 +287,7 @@ function BulkPhotoImport({ items, onClose, onItemUpdated }: {
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
-type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced" | "storefrontActive" | "payoutPaidAt";
+type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "quantitySold" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced" | "storefrontActive" | "payoutPaidAt";
 
 function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; sortDir: "asc" | "desc" }) {
   const active = col === sortCol;
@@ -760,7 +760,13 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const filtered = items.filter((item) => {
     const tenant = tenantInfoMap[item.tenantId];
     const haystack = [item.itemName, item.barcodeNumber, tenant?.name, tenant?.ownerEmail].join(" ").toLowerCase();
-    return (!search || haystack.includes(search.toLowerCase())) && (statusFilter === "all" || item.status === statusFilter);
+    const sold = item.quantitySold ?? 0;
+    const remaining = item.quantity ?? 0;
+    const matchesStatus =
+      statusFilter === "all" ||
+      item.status === statusFilter ||
+      (statusFilter === "partial" && sold > 0 && remaining > 0);
+    return (!search || haystack.includes(search.toLowerCase())) && matchesStatus;
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -770,7 +776,8 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
       case "status": return dir * a.status.localeCompare(b.status);
       case "client": return dir * ((tenantInfoMap[a.tenantId]?.name ?? "").localeCompare(tenantInfoMap[b.tenantId]?.name ?? ""));
       case "barcodeNumber": return dir * (a.barcodeNumber ?? "").localeCompare(b.barcodeNumber ?? "");
-      case "quantity": return dir * ((a.quantity || 1) - (b.quantity || 1));
+      case "quantity": return dir * ((a.quantity ?? 0) - (b.quantity ?? 0));
+      case "quantitySold": return dir * ((a.quantitySold ?? 0) - (b.quantitySold ?? 0));
       case "valueMid": return dir * ((a.valueMid ?? 0) - (b.valueMid ?? 0));
       case "clientSharePercent": return dir * ((a.clientSharePercent ?? 0) - (b.clientSharePercent ?? 0));
       case "deliveryDate": return dir * (a.deliveryDate ?? "").localeCompare(b.deliveryDate ?? "");
@@ -914,6 +921,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const totalValue = filtered.reduce((s, i) => s + (i.valueMid || 0), 0);
   const soldCount = filtered.filter((i) => i.status === "Sold").length;
   const listedCount = filtered.filter((i) => i.status === "Listed").length;
+  const partialCount = filtered.filter((i) => (i.quantitySold ?? 0) > 0 && (i.quantity ?? 0) > 0).length;
 
   return (
     <div>
@@ -923,6 +931,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
           { label: "Total Items", value: filtered.length, cls: "text-white" },
           { label: "Listed", value: listedCount, cls: "text-purple-300" },
           { label: "Sold", value: soldCount, cls: "text-green-300" },
+          ...(partialCount > 0 ? [{ label: "Partially Sold", value: partialCount, cls: "text-amber-300" }] : []),
         ].map(({ label, value, cls }) => (
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-2">
             <span className="text-xs text-gray-400">{label}</span>
@@ -1032,6 +1041,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
           className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-forest-500">
           <option value="all">All Statuses</option>
           {PF_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="partial">Partially Sold</option>
         </select>
       </div>
 
@@ -1078,7 +1088,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                   <th className="px-3 py-3 text-left w-24">{thBtn("status", "Status")}</th>
                   <th className="px-3 py-3 text-left min-w-[140px]">{thBtn("client", "Client")}</th>
                   <th className="px-3 py-3 text-left w-24">{thBtn("barcodeNumber", "Barcode")}</th>
-                  <th className="px-3 py-3 text-right w-14">{thBtn("quantity", "Qty", "justify-end")}</th>
+                  <th className="px-3 py-3 text-right w-20">{thBtn("quantitySold", "Qty", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-28">{thBtn("valueMid", "Price / Label", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-24">{thBtn("clientSharePercent", "Client Share", "justify-end")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("deliveryDate", "Delivery")}</th>
@@ -1154,7 +1164,29 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
 
                       {/* Qty */}
                       <td className="px-1 py-1 text-right">
-                        <EditCell value={item.quantity || 1} type="number" onSave={(v) => patchItem(item.id, item.tenantId, { quantity: Number(v) || 1 })} className="text-right" />
+                        {(() => {
+                          const sold = item.quantitySold ?? 0;
+                          const remaining = item.quantity ?? 1;
+                          if (sold > 0) {
+                            const total = sold + remaining;
+                            const allSold = remaining === 0;
+                            return (
+                              <div className="flex flex-col items-end gap-0.5 px-2 py-1">
+                                <div className="flex items-center gap-1">
+                                  <span className={`text-xs font-bold tabular-nums ${allSold ? "text-green-400" : "text-amber-400"}`}>
+                                    {sold}/{total}
+                                  </span>
+                                  <span className="text-[9px] text-gray-500">sold</span>
+                                </div>
+                                <div className="w-10 h-0.5 rounded-full bg-gray-700 overflow-hidden">
+                                  <div className={`h-full rounded-full ${allSold ? "bg-green-400" : "bg-amber-400"}`}
+                                    style={{ width: `${(sold / total) * 100}%` }} />
+                                </div>
+                              </div>
+                            );
+                          }
+                          return <EditCell value={remaining} type="number" onSave={(v) => patchItem(item.id, item.tenantId, { quantity: Number(v) || 1 })} className="text-right" />;
+                        })()}
                       </td>
 
                       {/* Price for Label */}

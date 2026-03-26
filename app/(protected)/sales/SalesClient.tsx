@@ -598,7 +598,13 @@ function PFSalesSection({
   const totalSold = items.reduce((s, i) => s + (i.quantitySold ?? 0), 0);
   const statuses = [...new Set(items.map(i => i.status))].sort();
 
-  const filtered = filterStatus ? items.filter(i => i.status === filterStatus) : items;
+  const hasPartial = items.some(i => (i.quantitySold ?? 0) > 0 && i.status !== "Sold");
+
+  const filtered = !filterStatus ? items : items.filter(i => {
+    if (filterStatus === "Sold") return i.status === "Sold" || (i.quantitySold ?? 0) > 0;
+    if (filterStatus === "__partial__") return (i.quantitySold ?? 0) > 0 && i.status !== "Sold";
+    return i.status === filterStatus;
+  });
 
   const getQtySold = (i: Item) => {
     const qty = i.quantity ?? 0;
@@ -652,7 +658,7 @@ function PFSalesSection({
         <SortBtn col="value" label="Value" />
         <SortBtn col="status" label="Status" />
         <SortBtn col="qty" label="Qty Sold" />
-        {statuses.length > 1 && (
+        {(statuses.length > 1 || hasPartial) && (
           <>
             <span className="text-[11px] text-gray-400 font-medium ml-2">Filter:</span>
             <button onClick={() => setFilterStatus("")}
@@ -667,6 +673,13 @@ function PFSalesSection({
                 {s}
               </button>
             ))}
+            {hasPartial && (
+              <button onClick={() => setFilterStatus(filterStatus === "__partial__" ? "" : "__partial__")}
+                className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors",
+                  filterStatus === "__partial__" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+                Partially Sold
+              </button>
+            )}
           </>
         )}
       </div>
