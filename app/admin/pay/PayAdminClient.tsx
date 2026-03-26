@@ -7,7 +7,7 @@ const PAGE_SIZE = 25;
 const TODAY = new Date().toISOString().slice(0, 10);
 const FIRST_OF_MONTH = TODAY.slice(0, 8) + "01";
 
-type Tab = "hours" | "commission" | "mileage" | "expenses";
+type Tab = "hours" | "commission" | "mileage" | "travel" | "expenses";
 type SortDir = "asc" | "desc";
 
 interface StaffOption {
@@ -62,6 +62,20 @@ interface ExpenseRow {
   description: string;
   total: number;
   paidAt: string | null;
+}
+
+interface TravelRow {
+  entryId: string;
+  clerkUserId: string;
+  staffName: string;
+  date: string;
+  projectName: string;
+  totalTravelMinutes: number;
+  commuteMinutes: number;
+  payableMinutes: number;
+  hourlyRate: number;
+  pay: number;
+  travelPaidAt: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -735,6 +749,134 @@ function ExpensesTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   );
 }
 
+// ─── Travel Tab ───────────────────────────────────────────────────────────────
+function fmtMins(mins: number) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function TravelTab({ staffMembers }: { staffMembers: StaffOption[] }) {
+  const [from, setFrom] = useState(FIRST_OF_MONTH);
+  const [to, setTo] = useState(TODAY);
+  const [staffId, setStaffId] = useState("");
+  const [paid, setPaid] = useState("all");
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<TravelRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [marking, setMarking] = useState(false);
+  const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState<keyof TravelRow>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(PAGE_SIZE) });
+      if (staffId) params.set("staffId", staffId);
+      if (paid !== "all") params.set("paid", paid);
+      const res = await fetch(`/api/admin/pay/travel?${params}`);
+      if (!res.ok) throw new Error((await res.json()).error);
+      const data = await res.json();
+      setRows(data.rows); setTotal(data.total);
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); }
+  }, [from, to, staffId, paid, page]);
+
+  useEffect(() => { setPage(1); }, [from, to, staffId, paid]);
+  useEffect(() => { load(); }, [load]);
+
+  function handleSort(col: string) {
+    const key = col as keyof TravelRow;
+    setSortDir(sortKey === key && sortDir === "asc" ? "desc" : "asc");
+    setSortKey(key);
+  }
+
+  async function markPaid() {
+    if (!selected.size) return;
+    setMarking(true); setError("");
+    try {
+      const res = await fetch("/api/admin/pay/travel", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected], travelPaidAt: TODAY }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setSelected(new Set()); await load();
+    } catch (e) { setError(String(e)); }
+    finally { setMarking(false); }
+  }
+
+  const sorted = sortRows(rows, sortKey, sortDir);
+  const allIds = rows.map(r => r.entryId);
+  const allSelected = allIds.length > 0 && allIds.every(id => selected.has(id));
+  function toggleAll() {
+    if (allSelected) setSelected(prev => { const n = new Set(prev); allIds.forEach(id => n.delete(id)); return n; });
+    else setSelected(prev => { const n = new Set(prev); allIds.forEach(id => n.add(id)); return n; });
+  }
+
+  const sh = (label: string, col: string, className?: string) => (
+    <SortableHeader label={label} col={col} sortKey={String(sortKey)} sortDir={sortDir} onSort={handleSort} className={className} />
+  );
+
+  return (
+    <div>
+      <FilterBar from={from} to={to} staffId={staffId} paid={paid} staffMembers={staffMembers}
+        onFromChange={setFrom} onToChange={setTo} onStaffChange={setStaffId} onPaidChange={setPaid} />
+      {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
+      <MarkPaidBar total={total} label="travel entries" selected={selected.size} marking={marking} onMark={markPaid} />
+
+      <div className="overflow-x-auto rounded-xl border border-gray-800">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-800 text-gray-400">
+            <tr>
+              <th className="px-3 py-2.5">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded border-gray-600 bg-gray-700" />
+              </th>
+              {sh("Date", "date")}
+              {sh("Staff", "staffName")}
+              {sh("Project", "projectName")}
+              {sh("Total Travel", "totalTravelMinutes", "text-right")}
+              {sh("−30 Commute", "commuteMinutes", "text-right")}
+              {sh("Payable", "payableMinutes", "text-right")}
+              {sh("Rate", "hourlyRate", "text-right")}
+              {sh("Pay", "pay", "text-right")}
+              {sh("Status", "travelPaidAt")}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={10} className="py-8 text-center text-gray-500">Loading…</td></tr>
+            ) : sorted.length === 0 ? (
+              <tr><td colSpan={10} className="py-8 text-center text-gray-500">No travel time entries found.</td></tr>
+            ) : sorted.map(row => (
+              <tr key={row.entryId} className="border-t border-gray-800 hover:bg-gray-800/40">
+                <td className="px-3 py-2.5 text-center">
+                  <input type="checkbox" checked={selected.has(row.entryId)}
+                    onChange={e => setSelected(prev => { const n = new Set(prev); e.target.checked ? n.add(row.entryId) : n.delete(row.entryId); return n; })}
+                    className="rounded border-gray-600 bg-gray-700" />
+                </td>
+                <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{row.date}</td>
+                <td className="px-3 py-2.5 text-white">{row.staffName}</td>
+                <td className="px-3 py-2.5 text-gray-300 max-w-[180px] truncate">{row.projectName}</td>
+                <td className="px-3 py-2.5 text-right text-gray-300">{fmtMins(row.totalTravelMinutes)}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400">−{fmtMins(row.commuteMinutes)}</td>
+                <td className="px-3 py-2.5 text-right text-gray-300">{fmtMins(row.payableMinutes)}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400">{row.hourlyRate > 0 ? fmt$(row.hourlyRate) : "—"}</td>
+                <td className="px-3 py-2.5 text-right text-white font-medium">{row.hourlyRate > 0 ? fmt$(row.pay) : "—"}</td>
+                <td className="px-3 py-2.5"><PaidBadge paidAt={row.travelPaidAt} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination currentPage={page} totalItems={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [tab, setTab] = useState<Tab>("hours");
@@ -743,6 +885,7 @@ export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }
     { id: "hours", label: "Hours" },
     { id: "commission", label: "Commission" },
     { id: "mileage", label: "Mileage" },
+    { id: "travel", label: "Travel Time" },
     { id: "expenses", label: "Expenses" },
   ];
 
@@ -762,6 +905,7 @@ export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }
       {tab === "hours" && <HoursTab staffMembers={staffMembers} />}
       {tab === "commission" && <CommissionTab staffMembers={staffMembers} />}
       {tab === "mileage" && <MileageTab staffMembers={staffMembers} />}
+      {tab === "travel" && <TravelTab staffMembers={staffMembers} />}
       {tab === "expenses" && <ExpensesTab staffMembers={staffMembers} />}
     </div>
   );

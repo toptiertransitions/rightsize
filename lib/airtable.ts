@@ -1722,6 +1722,7 @@ function mapTimeEntry(record: AirtableRecord): TimeEntry {
     createdAt: toStr(f["CreatedAt"]),
     hoursPaidAt: toStr(f["HoursPaidAt"]) || undefined,
     mileagePaidAt: toStr(f["MileagePaidAt"]) || undefined,
+    travelPaidAt: toStr(f["TravelPaidAt"]) || undefined,
   };
 }
 
@@ -3714,11 +3715,12 @@ export async function getReimbursableExpensesInRange(
 // Bulk update time entries in batches of 10
 export async function bulkUpdateTimeEntries(
   ids: string[],
-  data: Partial<{ hoursPaidAt: string | null; mileagePaidAt: string | null }>
+  data: Partial<{ hoursPaidAt: string | null; mileagePaidAt: string | null; travelPaidAt: string | null }>
 ): Promise<void> {
   const fields: Record<string, unknown> = {};
   if (data.hoursPaidAt !== undefined) fields["HoursPaidAt"] = data.hoursPaidAt;
   if (data.mileagePaidAt !== undefined) fields["MileagePaidAt"] = data.mileagePaidAt;
+  if (data.travelPaidAt !== undefined) fields["TravelPaidAt"] = data.travelPaidAt;
   for (let i = 0; i < ids.length; i += 10) {
     const batch = ids.slice(i, i + 10);
     const res = await timeFetch("", {

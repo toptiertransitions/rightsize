@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/Card";
 
-type LineItemType = "hours" | "commission" | "mileage" | "expense";
+type LineItemType = "hours" | "commission" | "mileage" | "travel" | "expense";
 
 interface LineItem {
   type: LineItemType;
@@ -21,6 +21,8 @@ interface PaySummary {
   hourlyPay: number;
   commissionEarned: number;
   reimbursableMiles: number;
+  payableTravelMinutes: number;
+  travelPay: number;
   reimbursableExpensesTotal: number;
   totalPretaxPay: number;
   lineItems: LineItem[];
@@ -47,6 +49,7 @@ const TYPE_LABEL: Record<LineItemType, string> = {
   hours: "Hours",
   commission: "Commission",
   mileage: "Mileage",
+  travel: "Travel",
   expense: "Expense",
 };
 
@@ -54,6 +57,7 @@ const TYPE_COLOR: Record<LineItemType, string> = {
   hours: "text-blue-600 bg-blue-50",
   commission: "text-purple-600 bg-purple-50",
   mileage: "text-amber-600 bg-amber-50",
+  travel: "text-orange-600 bg-orange-50",
   expense: "text-teal-600 bg-teal-50",
 };
 
@@ -104,7 +108,7 @@ export function MyPaySection({ clerkUserId }: { clerkUserId: string }) {
       {/* Summary cards */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 7 }).map((_, i) => (
             <Card key={i}>
               <CardContent className="py-4">
                 <div className="h-6 bg-gray-100 rounded animate-pulse mb-1 w-16" />
@@ -145,6 +149,16 @@ export function MyPaySection({ clerkUserId }: { clerkUserId: string }) {
                 <p className="text-lg font-bold text-gray-900">{summary.reimbursableMiles.toFixed(1)} mi</p>
                 <p className="text-xs text-gray-500 mt-0.5">Reimbursable Miles</p>
                 <p className="text-[10px] text-gray-400 mt-1">after 20-mi/day deduction</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="py-4">
+                <p className="text-lg font-bold text-gray-900">{fmt$(summary.travelPay)}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Travel Time Pay</p>
+                {summary.payableTravelMinutes > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-1">{fmtMinutes(summary.payableTravelMinutes)} after 30-min deduction</p>
+                )}
               </CardContent>
             </Card>
 
@@ -210,7 +224,7 @@ export function MyPaySection({ clerkUserId }: { clerkUserId: string }) {
 
                   {/* Hours */}
                   <span className="text-sm text-gray-500 text-right self-center tabular-nums">
-                    {item.type === "hours" && item.minutes != null ? fmtMinutes(item.minutes) : "—"}
+                    {(item.type === "hours" || item.type === "travel") && item.minutes != null ? fmtMinutes(item.minutes) : "—"}
                   </span>
 
                   {/* Amount */}

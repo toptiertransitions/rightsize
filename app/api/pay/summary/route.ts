@@ -7,7 +7,7 @@ import {
   getSoldItemsForCommission,
   getReimbursableExpensesInRange,
 } from "@/lib/airtable";
-import { calcReimbursableMiles } from "@/lib/pay-utils";
+import { calcReimbursableMiles, calcPayableTravelTime } from "@/lib/pay-utils";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -45,8 +45,12 @@ export async function GET(req: NextRequest) {
     const dailyMileage = calcReimbursableMiles(timeEntries);
     const reimbursableMiles = dailyMileage.reduce((s, d) => s + d.reimbursableMiles, 0);
 
+    const travelRows = calcPayableTravelTime(timeEntries);
+    const payableTravelMinutes = travelRows.reduce((s, r) => s + r.payableMinutes, 0);
+    const travelPay = (payableTravelMinutes / 60) * hourlyRate;
+
     const reimbursableExpensesTotal = expenses.reduce((s, e) => s + e.total, 0);
-    const totalPretaxPay = hourlyPay + commissionEarned + reimbursableExpensesTotal;
+    const totalPretaxPay = hourlyPay + commissionEarned + travelPay + reimbursableExpensesTotal;
 
     // ── Line items for accordion detail ───────────────────────────────────────
     const lineItems = [
@@ -74,6 +78,14 @@ export async function GET(req: NextRequest) {
         minutes: null as number | null,
         value: d.reimbursableMiles,
       })),
+      // Travel time — one row per entry with payable travel minutes
+      ...travelRows.filter(r => r.payableMinutes > 0).map(r => ({
+        type: "travel" as const,
+        date: r.date,
+        description: r.projectName,
+        minutes: r.payableMinutes,
+        value: (r.payableMinutes / 60) * hourlyRate,
+      })),
       // Expenses — one row per expense
       ...expenses.map(e => ({
         type: "expense" as const,
@@ -92,6 +104,8 @@ export async function GET(req: NextRequest) {
       hourlyPay,
       commissionEarned,
       reimbursableMiles,
+      payableTravelMinutes,
+      travelPay,
       reimbursableExpensesTotal,
       totalPretaxPay,
       lineItems,

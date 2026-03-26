@@ -1,5 +1,43 @@
 import type { TimeEntry } from "./types";
 
+export interface PayableTravelEntry {
+  entryId: string;
+  clerkUserId: string;
+  staffName: string;
+  date: string;
+  projectName: string;
+  totalTravelMinutes: number;
+  commuteMinutes: number;   // first 30 — unpaid
+  payableMinutes: number;   // beyond 30 — paid at hourly rate
+  travelPaidAt: string | null;
+}
+
+/**
+ * Returns one row per time entry that has travelMinutes > 0.
+ * First 30 minutes per entry = commute (unpaid). Anything beyond = payable.
+ */
+export function calcPayableTravelTime(entries: TimeEntry[]): PayableTravelEntry[] {
+  return entries
+    .filter(e => (e.travelMinutes ?? 0) > 0)
+    .map(e => {
+      const total = e.travelMinutes!;
+      const commute = Math.min(total, 30);
+      const payable = Math.max(0, total - 30);
+      return {
+        entryId: e.id,
+        clerkUserId: e.clerkUserId,
+        staffName: e.staffName,
+        date: e.date,
+        projectName: e.projectName,
+        totalTravelMinutes: total,
+        commuteMinutes: commute,
+        payableMinutes: payable,
+        travelPaidAt: e.travelPaidAt ?? null,
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export interface DailyMileage {
   clerkUserId: string;
   staffName: string;
