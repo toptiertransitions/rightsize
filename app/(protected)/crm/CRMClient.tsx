@@ -658,7 +658,16 @@ function OpportunityPanel({
       }
       const tenantData = await tenantRes.json();
 
-      // Step 3: Both succeeded — update parent state then navigate
+      // Step 3: Link the opportunity back to the new project so address sync works going forward
+      try {
+        await fetch("/api/crm/opportunities", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: savedOpp.id, tenantId: tenantData.tenant.id }),
+        });
+      } catch { /* non-fatal */ }
+
+      // Step 4: Both succeeded — update parent state then navigate
       // (call onSaved last so the panel doesn't close before we navigate)
       onSaved(savedOpp);
       router.push(`/quoting?tenantId=${tenantData.tenant.id}`);

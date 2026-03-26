@@ -2832,6 +2832,7 @@ export async function createOpportunity(data: {
 export async function updateOpportunity(
   id: string,
   data: Partial<{
+    tenantId: string;
     clientContactId: string;
     stage: OpportunityStage;
     keyPeople: KeyPerson[];
@@ -2850,6 +2851,7 @@ export async function updateOpportunity(
   }>
 ): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {};
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId;
   if (data.clientContactId !== undefined) fields["ClientContactId"] = data.clientContactId;
   if (data.stage !== undefined) fields["Stage"] = data.stage;
   if (data.keyPeople !== undefined) fields["KeyPeople"] = JSON.stringify(data.keyPeople);
