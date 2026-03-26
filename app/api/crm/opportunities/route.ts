@@ -59,6 +59,20 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   try {
     const opportunity = await updateOpportunity(id, data);
+
+    // When address fields are updated, sync them to the linked project.
+    const addressChanged = ["address", "city", "state", "zip"].some(f => f in data);
+    if (addressChanged && opportunity.tenantId) {
+      try {
+        await updateTenant(opportunity.tenantId, {
+          address: opportunity.address,
+          city: opportunity.city,
+          state: opportunity.state,
+          zip: opportunity.zip,
+        });
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({ opportunity });
   } catch (err) {
     console.error("[opportunities PATCH] update failed:", err);
