@@ -8,7 +8,7 @@ export default async function StaffPage() {
   if (!userId) redirect("/sign-in");
 
   const role = await getSystemRole(userId);
-  if (role !== "TTTManager" && role !== "TTTAdmin") redirect("/home");
+  if (role !== "TTTSales" && role !== "TTTManager" && role !== "TTTAdmin") redirect("/home");
 
   const [members, crateLocations, inventoryContainers, allTenants, subcontractors] = await Promise.all([
     getStaffMembers().catch(() => []),

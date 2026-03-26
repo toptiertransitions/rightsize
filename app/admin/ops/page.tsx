@@ -6,7 +6,7 @@ import { getSystemRole, getSubcontractors, getTenants } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { OpsClient } from "./OpsClient";
 
-const ALLOWED_ROLES = ["TTTSales", "TTTManager", "TTTAdmin"];
+const ALLOWED_ROLES = ["TTTManager", "TTTAdmin"];
 
 export default async function OpsPage() {
   const { userId } = await auth();
@@ -28,7 +28,7 @@ export default async function OpsPage() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-white">Ops</h1>
-          <p className="text-gray-400 text-sm mt-1">Operations management for TTT Sales, Managers, and Admins.</p>
+          <p className="text-gray-400 text-sm mt-1">Operations management for TTT Managers and Admins.</p>
         </div>
         <OpsClient initialSubcontractors={subcontractors} tenants={tenants} />
       </main>
