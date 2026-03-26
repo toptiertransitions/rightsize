@@ -68,6 +68,9 @@ import type {
   CrateLocation,
   InventoryContainer,
   InventoryItem,
+  Estate,
+  EstateStatus,
+  EstateSaleType,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -131,6 +134,8 @@ export async function createTenant(data: {
   state?: string;
   zip?: string;
   isTTT?: boolean;
+  clientEmail?: string;
+  clientPhone?: string;
 }): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {
@@ -145,6 +150,8 @@ export async function createTenant(data: {
   if (data.city) fields["City"] = data.city;
   if (data.state) fields["State"] = data.state;
   if (data.zip) fields["Zip"] = data.zip;
+  if (data.clientEmail) fields["ClientEmail"] = data.clientEmail;
+  if (data.clientPhone) fields["ClientPhone"] = data.clientPhone;
   const record = await base(AIRTABLE_TABLES.TENANTS).create(fields);
   return mapTenant(record);
 }
@@ -173,6 +180,8 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     payoutCheckAddress: toStr(f["PayoutCheckAddress"]) || undefined,
     clientEmail: toStr(f["ClientEmail"]) || undefined,
     clientPhone: toStr(f["ClientPhone"]) || undefined,
+    consignmentExpense: f["ConsignmentExpense"] != null ? toNum(f["ConsignmentExpense"]) : undefined,
+    consignmentExpenseNote: toStr(f["ConsignmentExpenseNote"]) || undefined,
   };
 }
 
@@ -603,6 +612,9 @@ export async function updateItem(
     onlineListingSlug: "OnlineListingSlug",
     storefrontActive: "StorefrontActive",
     pickupLocation: "PickupLocation",
+    estateSaleId: "EstateSaleId",
+    // Pay tracking
+    commissionPaidAt: "CommissionPaidAt",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -716,6 +728,8 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     onlineListingSlug: toStr(f["OnlineListingSlug"]) || undefined,
     storefrontActive: f["StorefrontActive"] === true ? true : undefined,
     pickupLocation: toStr(f["PickupLocation"]) || undefined,
+    estateSaleId: toStr(f["EstateSaleId"]) || undefined,
+    commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
   };
 }
 
@@ -741,7 +755,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -760,6 +774,8 @@ export async function updateTenant(
   if (data.payoutCheckAddress !== undefined) fields["PayoutCheckAddress"] = data.payoutCheckAddress ?? "";
   if (data.clientEmail !== undefined) fields["ClientEmail"] = data.clientEmail ?? "";
   if (data.clientPhone !== undefined) fields["ClientPhone"] = data.clientPhone ?? "";
+  if (data.consignmentExpense !== undefined) fields["ConsignmentExpense"] = data.consignmentExpense ?? 0;
+  if (data.consignmentExpenseNote !== undefined) fields["ConsignmentExpenseNote"] = data.consignmentExpenseNote ?? "";
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }
@@ -1704,6 +1720,8 @@ function mapTimeEntry(record: AirtableRecord): TimeEntry {
     travelMinutes: f["TravelMinutes"] != null ? toNum(f["TravelMinutes"]) : undefined,
     notes: toStr(f["Notes"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
+    hoursPaidAt: toStr(f["HoursPaidAt"]) || undefined,
+    mileagePaidAt: toStr(f["MileagePaidAt"]) || undefined,
   };
 }
 
@@ -1940,6 +1958,7 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
     createdAt: toStr(f["CreatedAt"]),
     weeklySchedule,
     timeOff,
+    hourlyRate: f["HourlyRate"] != null ? toNum(f["HourlyRate"]) : undefined,
   };
 }
 
@@ -2008,7 +2027,7 @@ export async function upsertStaffMember(data: {
 
 export async function updateStaffMember(
   id: string,
-  data: Partial<{ displayName: string; email: string; phone: string; role: "TTTStaff" | "TTTManager"; isActive: boolean }>
+  data: Partial<{ displayName: string; email: string; phone: string; role: "TTTStaff" | "TTTManager"; isActive: boolean; hourlyRate: number | null }>
 ): Promise<StaffMember> {
   const fields: Record<string, unknown> = {};
   if (data.displayName !== undefined) fields["DisplayName"] = data.displayName;
@@ -2016,6 +2035,7 @@ export async function updateStaffMember(
   if (data.phone !== undefined) fields["Phone"] = data.phone;
   if (data.role !== undefined) fields["Role"] = data.role;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  if (data.hourlyRate !== undefined) fields["HourlyRate"] = data.hourlyRate;
   const res = await staffRolesFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -2391,6 +2411,7 @@ function mapReferralCompany(record: AirtableRecord): ReferralCompany {
     website: toStr(f["Website"]) || undefined,
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
+    lastActivityDate: toStr(f["LastActivityDate"]) || undefined,
   };
 }
 
@@ -2452,7 +2473,7 @@ export async function createReferralCompany(data: {
 
 export async function updateReferralCompany(
   id: string,
-  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; website: string; assignedToClerkId: string }>
+  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; website: string; assignedToClerkId: string; lastActivityDate: string }>
 ): Promise<ReferralCompany> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2465,6 +2486,7 @@ export async function updateReferralCompany(
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.website !== undefined) fields["Website"] = data.website;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
+  if (data.lastActivityDate !== undefined) fields["LastActivityDate"] = data.lastActivityDate;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -2691,6 +2713,14 @@ export async function deleteClientContact(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export async function getClientContactByEmail(email: string): Promise<ClientContact | null> {
+  const formula = encodeURIComponent(`{Email} = "${email}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length > 0 ? mapClientContact(data.records[0]) : null;
+}
+
 // ─── CRM Opportunities ────────────────────────────────────────────────────────
 function mapOpportunity(record: AirtableRecord): ClientOpportunity {
   const f = record.fields;
@@ -2716,6 +2746,10 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     lostReason: toStr(f["LostReason"]) || undefined,
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
+    address: toStr(f["Address"]) || undefined,
+    city: toStr(f["City"]) || undefined,
+    state: toStr(f["State"]) || undefined,
+    zip: toStr(f["Zip"]) || undefined,
   };
 }
 
@@ -2747,6 +2781,14 @@ export async function getOpportunitiesForTenant(tenantId: string): Promise<Clien
   return (data.records as AirtableRecord[]).map(mapOpportunity);
 }
 
+export async function getOpportunitiesForContact(clientContactId: string): Promise<ClientOpportunity[]> {
+  const formula = encodeURIComponent(`{ClientContactId} = "${clientContactId}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOpportunity);
+}
+
 export async function createOpportunity(data: {
   tenantId?: string;
   clientContactId: string;
@@ -2757,23 +2799,30 @@ export async function createOpportunity(data: {
   nextStepNote?: string;
   estimatedValue?: number;
   assignedToClerkId?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 }): Promise<ClientOpportunity> {
+  const fields: Record<string, unknown> = {
+    TenantId: data.tenantId || "",
+    ClientContactId: data.clientContactId,
+    Stage: data.stage || "Lead",
+    KeyPeople: data.keyPeople ? JSON.stringify(data.keyPeople) : "[]",
+    Notes: data.notes || "",
+    NextStepDate: data.nextStepDate || null,
+    NextStepNote: data.nextStepNote || "",
+    EstimatedValue: data.estimatedValue ?? 0,
+    AssignedToClerkId: data.assignedToClerkId || "",
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.city !== undefined) fields["City"] = data.city;
+  if (data.state !== undefined) fields["State"] = data.state;
+  if (data.zip !== undefined) fields["Zip"] = data.zip;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, "", {
     method: "POST",
-    body: JSON.stringify({
-      fields: {
-        TenantId: data.tenantId || "",
-        ClientContactId: data.clientContactId,
-        Stage: data.stage || "Lead",
-        KeyPeople: data.keyPeople ? JSON.stringify(data.keyPeople) : "[]",
-        Notes: data.notes || "",
-        NextStepDate: data.nextStepDate || null,
-        NextStepNote: data.nextStepNote || "",
-        EstimatedValue: data.estimatedValue ?? 0,
-        AssignedToClerkId: data.assignedToClerkId || "",
-        CreatedAt: new Date().toISOString(),
-      },
-    }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapOpportunity(await res.json());
@@ -2793,6 +2842,10 @@ export async function updateOpportunity(
     lostAt: string;
     lostReason: string;
     assignedToClerkId: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
   }>
 ): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {};
@@ -2807,6 +2860,10 @@ export async function updateOpportunity(
   if (data.lostAt !== undefined) fields["LostAt"] = data.lostAt;
   if (data.lostReason !== undefined) fields["LostReason"] = data.lostReason;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.city !== undefined) fields["City"] = data.city;
+  if (data.state !== undefined) fields["State"] = data.state;
+  if (data.zip !== undefined) fields["Zip"] = data.zip;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -2850,13 +2907,17 @@ export async function getActivitiesForOpportunity(opportunityId: string): Promis
 }
 
 export async function getAllActivities(): Promise<CRMActivity[]> {
-  const res = await crmFetch(
-    AIRTABLE_TABLES.CRM_ACTIVITIES,
-    `?sort[0][field]=ActivityDate&sort[0][direction]=desc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapCRMActivity);
+  const all: CRMActivity[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=ActivityDate&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapCRMActivity));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function createActivity(data: {
@@ -2888,7 +2949,32 @@ export async function createActivity(data: {
     }),
   });
   if (!res.ok) throw new Error(await res.text());
-  return mapCRMActivity(await res.json());
+  const activity = mapCRMActivity(await res.json());
+
+  // After saving the activity, propagate LastActivityDate to the referral contact and its company.
+  // Uses try/catch so a failure here never blocks the activity from being saved.
+  // LastActivityDate is a Date field in Airtable — must be YYYY-MM-DD only (no time component).
+  if (data.clientContactId) {
+    const dateOnly = data.activityDate ? data.activityDate.slice(0, 10) : "";
+    try {
+      const contactPatchRes = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${data.clientContactId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ fields: { LastActivityDate: dateOnly } }),
+      });
+      if (contactPatchRes.ok) {
+        const contactRecord = await contactPatchRes.json();
+        const companyId = toStr(contactRecord.fields?.ReferralCompanyId);
+        if (companyId) {
+          await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${companyId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ fields: { LastActivityDate: dateOnly } }),
+          });
+        }
+      }
+    } catch { /* non-fatal — activity is already saved */ }
+  }
+
+  return activity;
 }
 
 export async function getActivitiesForContact(clientContactId: string): Promise<CRMActivity[]> {
@@ -2955,6 +3041,25 @@ export async function batchUpdateReferralLastActivity(
       }),
     });
     if (!res.ok) console.error("batchUpdateReferralLastActivity failed:", await res.text());
+  }
+}
+
+// Batch-update LastActivityDate on referral companies (max 10 per Airtable request)
+export async function batchUpdateCompanyLastActivity(
+  updates: Array<{ id: string; lastActivityDate: string }>
+): Promise<void> {
+  for (let i = 0; i < updates.length; i += 10) {
+    const batch = updates.slice(i, i + 10);
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, "", {
+      method: "PATCH",
+      body: JSON.stringify({
+        records: batch.map(u => ({
+          id: u.id,
+          fields: { LastActivityDate: u.lastActivityDate },
+        })),
+      }),
+    });
+    if (!res.ok) console.error("batchUpdateCompanyLastActivity failed:", await res.text());
   }
 }
 
@@ -3443,6 +3548,7 @@ function mapExpense(record: AirtableRecord): Expense {
     tenantId: toStr(f["TenantId"]) || undefined,
     tenantName: toStr(f["TenantName"]) || undefined,
     reimbursable: f["Reimbursable"] === true,
+    paidAt: toStr(f["PaidAt"]) || undefined,
   };
 }
 
@@ -3543,6 +3649,120 @@ export async function getExpensesForTenant(tenantId: string): Promise<Expense[]>
 export async function deleteExpense(id: string): Promise<void> {
   const res = await expensesFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Pay: range queries and bulk updates ──────────────────────────────────────
+
+export async function getTimeEntriesInRange(
+  from: string,
+  to: string,
+  clerkUserId?: string
+): Promise<TimeEntry[]> {
+  const parts = [`{Date} >= "${from}"`, `{Date} <= "${to}"`];
+  if (clerkUserId) parts.push(`{ClerkUserId} = "${clerkUserId}"`);
+  const formula = encodeURIComponent(`AND(${parts.join(", ")})`);
+  const res = await timeFetch(
+    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc&sort[1][field]=CreatedAt&sort[1][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapTimeEntry);
+}
+
+export async function getSoldItemsForCommission(
+  from: string,
+  to: string,
+  staffSellerId?: string
+): Promise<Item[]> {
+  const parts = [
+    `{Status} = "Sold"`,
+    `{SaleDate} >= "${from}"`,
+    `{SaleDate} <= "${to}"`,
+    `{StaffSellerId} != ""`,
+  ];
+  if (staffSellerId) parts.push(`{StaffSellerId} = "${staffSellerId}"`);
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND(${parts.join(", ")})`,
+      sort: [{ field: "SaleDate", direction: "asc" }],
+    })
+    .all();
+  return records.map(mapItem);
+}
+
+export async function getReimbursableExpensesInRange(
+  from: string,
+  to: string,
+  clerkUserId?: string
+): Promise<Expense[]> {
+  const parts = [
+    `{Reimbursable} = TRUE()`,
+    `{Date} >= "${from}"`,
+    `{Date} <= "${to}"`,
+  ];
+  if (clerkUserId) parts.push(`{ClerkUserId} = "${clerkUserId}"`);
+  const formula = encodeURIComponent(`AND(${parts.join(", ")})`);
+  const res = await expensesFetch(
+    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapExpense);
+}
+
+// Bulk update time entries in batches of 10
+export async function bulkUpdateTimeEntries(
+  ids: string[],
+  data: Partial<{ hoursPaidAt: string | null; mileagePaidAt: string | null }>
+): Promise<void> {
+  const fields: Record<string, unknown> = {};
+  if (data.hoursPaidAt !== undefined) fields["HoursPaidAt"] = data.hoursPaidAt;
+  if (data.mileagePaidAt !== undefined) fields["MileagePaidAt"] = data.mileagePaidAt;
+  for (let i = 0; i < ids.length; i += 10) {
+    const batch = ids.slice(i, i + 10);
+    const res = await timeFetch("", {
+      method: "PATCH",
+      body: JSON.stringify({ records: batch.map(id => ({ id, fields })) }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
+}
+
+// Bulk update items in batches of 10 (using Airtable SDK)
+export async function bulkUpdateItems(
+  ids: string[],
+  data: Partial<{ commissionPaidAt: string | null }>
+): Promise<void> {
+  const fields: Airtable.FieldSet = {};
+  if (data.commissionPaidAt !== undefined) {
+    // Airtable SDK does not accept null; pass empty string to clear, or the value
+    fields["CommissionPaidAt"] = data.commissionPaidAt ?? "" as unknown as string;
+  }
+  const base = getBase();
+  for (let i = 0; i < ids.length; i += 10) {
+    const batch = ids.slice(i, i + 10);
+    await base(AIRTABLE_TABLES.ITEMS).update(
+      batch.map(id => ({ id, fields }))
+    );
+  }
+}
+
+// Bulk update expenses in batches of 10
+export async function bulkUpdateExpenses(
+  ids: string[],
+  data: Partial<{ paidAt: string | null }>
+): Promise<void> {
+  const fields: Record<string, unknown> = {};
+  if (data.paidAt !== undefined) fields["PaidAt"] = data.paidAt;
+  for (let i = 0; i < ids.length; i += 10) {
+    const batch = ids.slice(i, i + 10);
+    const res = await expensesFetch("", {
+      method: "PATCH",
+      body: JSON.stringify({ records: batch.map(id => ({ id, fields })) }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+  }
 }
 
 // ─── Drip Campaigns ───────────────────────────────────────────────────────────
@@ -4083,4 +4303,181 @@ export async function updateSubcontractor(
 export async function deleteSubcontractor(id: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.SUBCONTRACTORS).destroy(id);
+}
+
+// ─── Estates ──────────────────────────────────────────────────────────────────
+
+function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    name: toStr(f["Name"]),
+    slug: toStr(f["Slug"]),
+    tenantId: toStr(f["TenantId"]),
+    description: toStr(f["Description"]),
+    status: (toStr(f["Status"]) || "Upcoming") as EstateStatus,
+    saleType: (toStr(f["SaleType"]) || "Online") as EstateSaleType,
+    saleStartDate: toStr(f["SaleStartDate"]),
+    saleEndDate: toStr(f["SaleEndDate"]),
+    dropIntervalHours: f["DropIntervalHours"] != null ? toNum(f["DropIntervalHours"]) : 48,
+    dropPercent: f["DropPercent"] != null ? toNum(f["DropPercent"]) : 10,
+    floorPercent: f["FloorPercent"] != null ? toNum(f["FloorPercent"]) : 40,
+    pickupAddress: toStr(f["PickupAddress"]),
+    pickupWindowStart: toStr(f["PickupWindowStart"]),
+    pickupWindowEnd: toStr(f["PickupWindowEnd"]),
+    shippingAvailable: f["ShippingAvailable"] === true,
+    shippingNotes: toStr(f["ShippingNotes"]),
+    terms: toStr(f["Terms"]),
+    contactEmail: toStr(f["ContactEmail"]),
+    contactPhone: toStr(f["ContactPhone"]),
+    cityRegion: toStr(f["CityRegion"]),
+    featuredImageUrl: toStr(f["FeaturedImageUrl"]),
+    featuredImagePublicId: toStr(f["FeaturedImagePublicId"]),
+    galleryJson: toStr(f["GalleryJson"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getEstates(): Promise<Estate[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ESTATES)
+    .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapEstate);
+}
+
+export async function getEstateById(id: string): Promise<Estate | null> {
+  try {
+    const base = getBase();
+    const record = await base(AIRTABLE_TABLES.ESTATES).find(id);
+    return mapEstate(record);
+  } catch {
+    return null;
+  }
+}
+
+export async function getEstateBySlug(slug: string): Promise<Estate | null> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ESTATES)
+    .select({ filterByFormula: `{Slug} = "${slug}"`, maxRecords: 1 })
+    .all();
+  return records.length > 0 ? mapEstate(records[0]) : null;
+}
+
+export async function getEstateWithItems(
+  slug: string
+): Promise<{ estate: Estate; items: Item[] } | null> {
+  const estate = await getEstateBySlug(slug);
+  if (!estate) return null;
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND({EstateSaleId} = "${estate.id}", {StorefrontActive})`,
+      sort: [{ field: "CreatedAt", direction: "desc" }],
+    })
+    .all();
+  const items = records.map(mapItem);
+  return { estate, items };
+}
+
+export async function createEstate(
+  data: Omit<Estate, "id" | "airtableId" | "createdAt">
+): Promise<Estate> {
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.ESTATES).create(
+    {
+      Name: data.name,
+      Slug: data.slug,
+      TenantId: data.tenantId,
+      Description: data.description,
+      Status: data.status,
+      SaleType: data.saleType,
+      SaleStartDate: data.saleStartDate,
+      SaleEndDate: data.saleEndDate,
+      DropIntervalHours: data.dropIntervalHours,
+      DropPercent: data.dropPercent,
+      FloorPercent: data.floorPercent,
+      PickupAddress: data.pickupAddress,
+      PickupWindowStart: data.pickupWindowStart,
+      PickupWindowEnd: data.pickupWindowEnd,
+      ShippingAvailable: data.shippingAvailable,
+      ShippingNotes: data.shippingNotes,
+      Terms: data.terms,
+      ContactEmail: data.contactEmail,
+      ContactPhone: data.contactPhone,
+      CityRegion: data.cityRegion,
+      FeaturedImageUrl: data.featuredImageUrl,
+      FeaturedImagePublicId: data.featuredImagePublicId,
+      GalleryJson: data.galleryJson || "",
+      CreatedAt: new Date().toISOString(),
+    },
+    { typecast: true }
+  );
+  return mapEstate(record);
+}
+
+export async function updateEstate(
+  id: string,
+  data: Partial<Omit<Estate, "id" | "airtableId" | "createdAt">>
+): Promise<Estate> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.slug !== undefined) fields["Slug"] = data.slug;
+  if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId;
+  if (data.description !== undefined) fields["Description"] = data.description;
+  if (data.status !== undefined) fields["Status"] = data.status;
+  if (data.saleType !== undefined) fields["SaleType"] = data.saleType;
+  if (data.saleStartDate !== undefined) fields["SaleStartDate"] = data.saleStartDate;
+  if (data.saleEndDate !== undefined) fields["SaleEndDate"] = data.saleEndDate;
+  if (data.dropIntervalHours !== undefined) fields["DropIntervalHours"] = data.dropIntervalHours;
+  if (data.dropPercent !== undefined) fields["DropPercent"] = data.dropPercent;
+  if (data.floorPercent !== undefined) fields["FloorPercent"] = data.floorPercent;
+  if (data.pickupAddress !== undefined) fields["PickupAddress"] = data.pickupAddress;
+  if (data.pickupWindowStart !== undefined) fields["PickupWindowStart"] = data.pickupWindowStart;
+  if (data.pickupWindowEnd !== undefined) fields["PickupWindowEnd"] = data.pickupWindowEnd;
+  if (data.shippingAvailable !== undefined) fields["ShippingAvailable"] = data.shippingAvailable;
+  if (data.shippingNotes !== undefined) fields["ShippingNotes"] = data.shippingNotes;
+  if (data.terms !== undefined) fields["Terms"] = data.terms;
+  if (data.contactEmail !== undefined) fields["ContactEmail"] = data.contactEmail;
+  if (data.contactPhone !== undefined) fields["ContactPhone"] = data.contactPhone;
+  if (data.cityRegion !== undefined) fields["CityRegion"] = data.cityRegion;
+  if (data.featuredImageUrl !== undefined) fields["FeaturedImageUrl"] = data.featuredImageUrl;
+  if (data.featuredImagePublicId !== undefined) fields["FeaturedImagePublicId"] = data.featuredImagePublicId;
+  if (data.galleryJson !== undefined) fields["GalleryJson"] = data.galleryJson;
+  const record = await base(AIRTABLE_TABLES.ESTATES).update(id, fields, { typecast: true });
+  return mapEstate(record);
+}
+
+export async function deleteEstate(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.ESTATES).destroy(id);
+}
+
+export async function getEstatesForStorefront(saleType?: string): Promise<Estate[]> {
+  const base = getBase();
+  const typeFilter = saleType ? `{SaleType} = "${saleType}"` : null;
+  const statusFilter = `OR({Status} = "Active", {Status} = "Upcoming", {Status} = "Closed")`;
+  const filterByFormula = typeFilter
+    ? `AND(${typeFilter}, ${statusFilter})`
+    : statusFilter;
+  const records = await base(AIRTABLE_TABLES.ESTATES)
+    .select({
+      filterByFormula,
+      sort: [{ field: "SaleStartDate", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapEstate);
+}
+
+export async function getItemsForEstateSale(estateId: string): Promise<Item[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND({EstateSaleId} = "${estateId}", {StorefrontActive})`,
+      sort: [{ field: "CreatedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapItem);
 }

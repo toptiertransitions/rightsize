@@ -12,6 +12,7 @@ import { AddClientUserButton } from "@/components/AddClientUserButton";
 import { AvailabilitySection } from "./AvailabilitySection";
 import { TodaysPlan } from "./TodaysPlan";
 import type { TodayShift } from "./TodaysPlan";
+import { MyPaySection } from "./MyPaySection";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 const OWNER_ROLES = ["Owner", "TTTAdmin"];
@@ -170,6 +171,11 @@ export default async function DashboardPage({
         {/* Availability — TTTStaff and TTTManager only (not admin-only accounts) */}
         {(systemRole === "TTTStaff" || systemRole === "TTTManager") && (
           <AvailabilitySection />
+        )}
+
+        {/* My Pay — TTTStaff and TTTManager */}
+        {(systemRole === "TTTStaff" || systemRole === "TTTManager") && (
+          <MyPaySection clerkUserId={userId} />
         )}
       </div>
     );

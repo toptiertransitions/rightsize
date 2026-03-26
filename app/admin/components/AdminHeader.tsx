@@ -17,7 +17,9 @@ type AdminTab =
   | "fb"
   | "ebay"
   | "crm"
-  | "ops";
+  | "ops"
+  | "estates"
+  | "pay";
 
 const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "projects", label: "Home", href: "/admin" },
@@ -29,11 +31,13 @@ const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "invoicing", label: "Invoicing", href: "/admin/invoicing" },
   { tab: "expenses", label: "Expenses", href: "/admin/expenses" },
   { tab: "drips", label: "Drips", href: "/admin/drips" },
-  { tab: "pfinventory", label: "PF Inventory", href: "/admin/pfinventory" },
+  { tab: "pfinventory", label: "PF", href: "/admin/pfinventory" },
   { tab: "fb", label: "FB", href: "/admin/fb" },
   { tab: "ebay", label: "eBay", href: "/admin/ebay" },
   { tab: "crm", label: "CRM", href: "/admin/crm" },
   { tab: "ops", label: "Ops", href: "/admin/ops" },
+  { tab: "estates", label: "Estates", href: "/admin/estates" },
+  { tab: "pay", label: "Pay", href: "/admin/pay" },
 ];
 
 interface AdminHeaderProps {

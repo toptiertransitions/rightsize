@@ -51,6 +51,8 @@ export interface StaffMember {
   createdAt: string;
   weeklySchedule?: WeeklySchedule;
   timeOff?: TimeOffEntry[];
+  profileImageUrl?: string;
+  hourlyRate?: number;
 }
 
 // ─── First Visit Intake Form ──────────────────────────────────────────────────
@@ -124,6 +126,8 @@ export interface Tenant {
   payoutCheckAddress?: string;
   clientEmail?: string;
   clientPhone?: string;
+  consignmentExpense?: number;
+  consignmentExpenseNote?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -218,7 +222,8 @@ export type PrimaryRoute =
   | "Online Marketplace"
   | "Other Consignment"
   | "Donate"
-  | "Discard";
+  | "Discard"
+  | "Estate Sale";
 
 export type ItemStatus =
   | "Pending Review"
@@ -305,6 +310,43 @@ export interface Item {
   onlineListingSlug?: string;
   storefrontActive?: boolean;
   pickupLocation?: string;   // e.g. "Lincoln Park", "River North", "Storage - Elk Grove"
+  // Estate Sale
+  estateSaleId?: string;
+  // Pay tracking
+  commissionPaidAt?: string;  // ISO date — set when commission is marked as paid
+}
+
+// ─── Estate Sale ──────────────────────────────────────────────────────────────
+export type EstateStatus = "Upcoming" | "Active" | "Closed";
+export type EstateSaleType = "Online" | "In-Person";
+
+export interface Estate {
+  id: string;
+  airtableId: string;
+  name: string;
+  slug: string;
+  tenantId: string;
+  description: string;
+  status: EstateStatus;
+  saleType: EstateSaleType;
+  saleStartDate: string;
+  saleEndDate: string;
+  dropIntervalHours: number;
+  dropPercent: number;
+  floorPercent: number;
+  pickupAddress: string;
+  pickupWindowStart: string;
+  pickupWindowEnd: string;
+  shippingAvailable: boolean;
+  shippingNotes: string;
+  terms: string;
+  contactEmail: string;
+  contactPhone: string;
+  cityRegion: string;
+  featuredImageUrl: string;
+  featuredImagePublicId: string;
+  galleryJson: string;   // JSON array of { url, publicId }
+  createdAt: string;
 }
 
 // ─── Sold Item Row (for Time Tracking CSV export) ─────────────────────────────
@@ -559,6 +601,8 @@ export interface TimeEntry {
   travelMinutes?: number;
   notes?: string;
   createdAt: string;
+  hoursPaidAt?: string;    // ISO date — set when hours pay is marked as paid
+  mileagePaidAt?: string;  // ISO date — set when mileage pay is marked as paid
 }
 
 // ─── Calculator ───────────────────────────────────────────────────────────────
@@ -655,6 +699,7 @@ export interface ReferralCompany {
   website?: string;
   assignedToClerkId: string;
   createdAt: string;
+  lastActivityDate?: string;
 }
 
 export type ReferralContactStage =
@@ -719,6 +764,10 @@ export interface ClientOpportunity {
   lostReason?: string;
   assignedToClerkId: string;
   createdAt: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 }
 
 export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task";
@@ -944,6 +993,7 @@ export interface Expense {
   tenantId?: string;          // Linked project (optional)
   tenantName?: string;        // Project display name (optional, denormalized)
   reimbursable: boolean;      // Whether TTT should reimburse this expense
+  paidAt?: string;            // ISO date — set when expense reimbursement is paid
 }
 
 // ─── Supply Tracking ──────────────────────────────────────────────────────────

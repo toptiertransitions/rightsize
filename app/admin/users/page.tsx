@@ -15,6 +15,7 @@ export type AdminUser = {
   banned: boolean;
   systemRole?: string;
   staffMemberId?: string; // Airtable record ID for the StaffMember row (if any)
+  hourlyRate?: number;    // Staff hourly pay rate
   isVendor?: boolean;     // Has a LocalVendors record with this ClerkUserId
   memberships: Array<{
     membershipId: string;
@@ -42,6 +43,7 @@ export default async function AdminUsersPage() {
 
   const staffRoleByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.role]));
   const staffIdByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.id]));
+  const staffHourlyRateByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.hourlyRate]));
   const vendorClerkIds = new Set(localVendors.map(v => v.clerkUserId).filter(Boolean));
 
   const tenantMap = new Map(tenants.map(t => [t.id, t.name]));
@@ -68,6 +70,7 @@ export default async function AdminUsersPage() {
     banned: u.banned ?? false,
     systemRole: isTTTAdmin(u.id) ? "TTTAdmin" : (staffRoleByClerkId.get(u.id) ?? undefined),
     staffMemberId: staffIdByClerkId.get(u.id),
+    hourlyRate: staffHourlyRateByClerkId.get(u.id),
     isVendor: vendorClerkIds.has(u.id),
     memberships: membershipsByUser.get(u.id) ?? [],
   }));

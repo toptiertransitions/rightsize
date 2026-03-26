@@ -125,6 +125,7 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [hourlyRateInput, setHourlyRateInput] = useState(user.hourlyRate != null ? String(user.hourlyRate) : "");
 
   const availableTenants = tenants.filter(t => !current.memberships.some(m => m.tenantId === t.id));
   const isHardAdmin = current.systemRole === "TTTAdmin"; // hardcoded via env — can't be changed via API
@@ -253,6 +254,25 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
     finally { setLoading(null); }
   }
 
+  async function handleHourlyRateSave() {
+    if (!current.staffMemberId) return;
+    setLoading("hourlyRate");
+    setError("");
+    try {
+      const parsed = hourlyRateInput === "" ? null : parseFloat(hourlyRateInput);
+      const res = await fetch("/api/admin/staff", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: current.staffMemberId, hourlyRate: parsed }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      const updated = { ...current, hourlyRate: parsed ?? undefined };
+      setCurrent(updated);
+      onUpdate(updated);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setLoading(null); }
+  }
+
   async function handlePasswordReset() {
     setLoading("pwReset");
     setError("");
@@ -347,6 +367,31 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
               </div>
             )}
           </section>
+
+          {/* Hourly Rate — only for TTT staff members */}
+          {current.staffMemberId && !isHardAdmin && (
+            <section>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Hourly Rate ($/hr)</h3>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={hourlyRateInput}
+                  onChange={e => setHourlyRateInput(e.target.value)}
+                  placeholder="e.g. 18.00"
+                  className={`w-36 ${inputClass}`}
+                />
+                <button
+                  onClick={handleHourlyRateSave}
+                  disabled={loading === "hourlyRate"}
+                  className="px-3 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {loading === "hourlyRate" ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* Project memberships */}
           <section>
