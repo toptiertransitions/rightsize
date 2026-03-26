@@ -18,6 +18,9 @@ interface ProjectRow {
   memberCount: number;
   createdAt: string;
   isArchived: boolean;
+  address?: string;
+  city?: string;
+  state?: string;
 }
 
 interface Props {
@@ -41,6 +44,9 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
         memberCount: memberCountByTenant[t.id] ?? 0,
         createdAt: t.createdAt,
         isArchived: t.isArchived ?? false,
+        address: t.address,
+        city: t.city,
+        state: t.state,
       })),
     [tenants, memberCountByTenant]
   );
@@ -147,7 +153,8 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Project</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Members</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Created</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Address</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden xl:table-cell">Created</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -155,7 +162,7 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
             <tbody className="divide-y divide-gray-800/60">
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-500">
+                  <td colSpan={7} className="text-center py-12 text-gray-500">
                     {search
                       ? "No projects match your search."
                       : view === "archived"
@@ -186,7 +193,16 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{r.memberCount}</td>
-                    <td className="px-4 py-3 text-gray-400 hidden lg:table-cell">
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      {r.address || r.city ? (
+                        <span className="text-gray-300 text-sm">
+                          {[r.address, r.city, r.state].filter(Boolean).join(", ")}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 hidden xl:table-cell">
                       {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
