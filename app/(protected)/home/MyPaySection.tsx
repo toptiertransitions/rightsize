@@ -181,61 +181,72 @@ export function MyPaySection({ clerkUserId }: { clerkUserId: string }) {
           {summary.lineItems.length > 0 && (
             <button
               onClick={() => setExpanded(v => !v)}
-              className="mt-3 flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors w-full"
+              className="mt-4 flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors w-full py-1"
             >
               <svg
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+                className={`w-4 h-4 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
-              <span>{expanded ? "Hide" : "Show"} line items</span>
+              <span>{expanded ? "Hide" : "Show"} line items ({summary.lineItems.length})</span>
             </button>
           )}
 
           {/* Accordion detail */}
           {expanded && summary.lineItems.length > 0 && (
-            <div className="mt-3 rounded-xl border border-gray-100 overflow-hidden">
-              {/* Column headers */}
-              <div className="grid grid-cols-[90px_1fr_60px_80px] gap-x-4 px-4 py-2 bg-gray-50 border-b border-gray-100">
-                <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Date</span>
-                <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
-                <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide text-right">Hours</span>
-                <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide text-right">Amount</span>
+            <div className="mt-3 rounded-xl border border-gray-200 overflow-hidden">
+
+              {/* Desktop column headers — hidden on mobile */}
+              <div className="hidden sm:grid sm:grid-cols-[80px_90px_1fr_68px_88px] gap-x-3 px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Date</span>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Type</span>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Project</span>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-right">Hours</span>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-right">Amount</span>
               </div>
 
-              {summary.lineItems.map((item, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-[90px_1fr_60px_80px] gap-x-4 px-4 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
-                >
-                  {/* Date */}
-                  <span className="text-xs text-gray-400 tabular-nums self-center">
-                    {new Date(item.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
+              {summary.lineItems.map((item, i) => {
+                const dateLabel = new Date(item.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                const hasHours = (item.type === "hours" || item.type === "travel") && item.minutes != null;
+                const amountLabel = item.type === "mileage" ? `${item.value.toFixed(1)} mi` : fmt$(item.value);
 
-                  {/* Description + type badge */}
-                  <div className="flex items-center gap-2 min-w-0 self-center">
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLOR[item.type]}`}>
-                      {TYPE_LABEL[item.type]}
-                    </span>
-                    <span className="text-sm text-gray-700 truncate">{item.description}</span>
+                return (
+                  <div key={i} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/70 transition-colors">
+
+                    {/* ── Mobile layout ── */}
+                    <div className="sm:hidden px-4 py-3.5">
+                      <div className="flex items-center justify-between gap-3 mb-1.5">
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_COLOR[item.type]}`}>
+                          {TYPE_LABEL[item.type]}
+                        </span>
+                        <span className="text-base font-bold text-gray-900 tabular-nums">{amountLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-gray-700 truncate">{item.description}</span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{dateLabel}</span>
+                      </div>
+                      {hasHours && (
+                        <p className="text-xs text-gray-400 mt-1">{fmtMinutes(item.minutes!)}</p>
+                      )}
+                    </div>
+
+                    {/* ── Desktop layout ── */}
+                    <div className="hidden sm:grid sm:grid-cols-[80px_90px_1fr_68px_88px] gap-x-3 px-4 py-3 items-center">
+                      <span className="text-sm text-gray-400 tabular-nums">{dateLabel}</span>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full w-fit ${TYPE_COLOR[item.type]}`}>
+                        {TYPE_LABEL[item.type]}
+                      </span>
+                      <span className="text-sm text-gray-800 truncate">{item.description}</span>
+                      <span className="text-sm text-gray-500 text-right tabular-nums">
+                        {hasHours ? fmtMinutes(item.minutes!) : "—"}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900 text-right tabular-nums">{amountLabel}</span>
+                    </div>
+
                   </div>
-
-                  {/* Hours */}
-                  <span className="text-sm text-gray-500 text-right self-center tabular-nums">
-                    {(item.type === "hours" || item.type === "travel") && item.minutes != null ? fmtMinutes(item.minutes) : "—"}
-                  </span>
-
-                  {/* Amount */}
-                  <span className="text-sm font-medium text-gray-900 text-right self-center tabular-nums">
-                    {item.type === "mileage"
-                      ? `${item.value.toFixed(1)} mi`
-                      : fmt$(item.value)
-                    }
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
