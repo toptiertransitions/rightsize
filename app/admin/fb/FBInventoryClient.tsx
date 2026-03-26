@@ -229,7 +229,7 @@ function PhotoCell({ item, onUpload }: { item: Item; onUpload: (url: string, pub
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
-type SortCol = "itemName" | "status" | "client" | "quantity" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate";
+type SortCol = "itemName" | "status" | "client" | "quantity" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate" | "payoutPaidAt";
 
 function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; sortDir: "asc" | "desc" }) {
   const active = col === sortCol;
@@ -446,6 +446,7 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
         return dir * (aC - bC);
       }
       case "soldDate": return dir * ((a.saleDate ?? "").localeCompare(b.saleDate ?? ""));
+      case "payoutPaidAt": return dir * (a.payoutPaidAt ?? "").localeCompare(b.payoutPaidAt ?? "");
       default: return 0;
     }
   });
@@ -569,6 +570,7 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                   <th className="px-3 py-3 text-right w-28">{thBtn("staffCommissionDollars", "Staff Comm $", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-24">{thBtn("staffTime", "Staff Time", "justify-end")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("soldDate", "Sold Date")}</th>
+                  <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
                   <th className="px-3 py-3 text-left w-28"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">FB Listing</span></th>
                 </tr>
               </thead>
@@ -704,6 +706,19 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                           ? <span className="text-gray-300 text-xs">{fmtDate(item.saleDate)}</span>
                           : <span className="text-gray-600 text-xs">—</span>
                         }
+                      </td>
+
+                      {/* Paid Date (editable by TTTAdmin) */}
+                      <td className="px-1 py-1">
+                        <EditCell
+                          value={item.payoutPaidAt ? item.payoutPaidAt.slice(0, 10) : ""}
+                          type="date"
+                          onSave={(v) => patchItem(item.id, item.tenantId, { payoutPaidAt: v || undefined })}
+                          placeholder="—"
+                        />
+                        {item.payoutPaidAt && (
+                          <p className="text-[10px] text-green-400 px-2">{fmtDate(item.payoutPaidAt)}</p>
+                        )}
                       </td>
 
                       {/* Copy for FB */}

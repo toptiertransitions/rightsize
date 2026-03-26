@@ -282,6 +282,7 @@ export interface Item {
   vendorDecision?: VendorDecision;
   vendorNotes?: string;
   payoutPaidAmount?: number;
+  payoutPaidAt?: string;
   vendorPriceApproved?: boolean;
   vendorExpectedPrice?: number;
   vendorRespondedAt?: string;

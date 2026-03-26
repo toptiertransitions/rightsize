@@ -85,6 +85,58 @@ export function buildUnpaidLineItems(
   return result;
 }
 
+// ─── Mark-as-paid data ────────────────────────────────────────────────────────
+
+export interface PayoutMarkData {
+  itemsToMark: { id: string; amount: number }[];
+  eventIdsToMark: string[];
+}
+
+/** Compute which item IDs and event IDs should be marked paid on payout. */
+export function buildPayoutMarkData(
+  items: Item[],
+  pfSaleEvents: ItemSaleEvent[],
+  localVendors: LocalVendor[]
+): PayoutMarkData {
+  const itemsToMark: { id: string; amount: number }[] = [];
+  const eventIdsToMark: string[] = [];
+
+  // PF Square events
+  const unpaidPfEvents = pfSaleEvents.filter(e => !e.payoutPaid && e.clientPayout > 0);
+  eventIdsToMark.push(...unpaidPfEvents.map(e => e.id));
+
+  // PF manually sold items (no Square events)
+  const pfEvItemIds = new Set(pfSaleEvents.map(e => e.itemId));
+  for (const item of items.filter(i => i.primaryRoute === "ProFoundFinds Consignment")) {
+    if (item.status !== "Sold" || pfEvItemIds.has(item.id)) continue;
+    const payout =
+      item.consignorPayout ??
+      (item.valueMid && item.clientSharePercent
+        ? item.valueMid * (item.clientSharePercent / 100)
+        : 0);
+    if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
+      itemsToMark.push({ id: item.id, amount: payout });
+    }
+  }
+
+  // FB / Online Marketplace / Other Consignment sold items
+  const consignmentRoutes = ["FB/Marketplace", "Online Marketplace", "Other Consignment"];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const item of items) {
+    if (!consignmentRoutes.includes(item.primaryRoute) || item.status !== "Sold") continue;
+    const match = localVendors.find(lv => norm(lv.vendorName) === norm(item.primaryRoute));
+    const payout =
+      match && item.salePrice && match.consignmentTake > 0
+        ? item.salePrice * (1 - match.consignmentTake / 100)
+        : (item.consignorPayout ?? 0);
+    if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
+      itemsToMark.push({ id: item.id, amount: payout });
+    }
+  }
+
+  return { itemsToMark, eventIdsToMark };
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 interface PayoutModalProps {
@@ -95,7 +147,7 @@ interface PayoutModalProps {
   pfSaleEvents: ItemSaleEvent[];
   localVendors: LocalVendor[];
   onClose: () => void;
-  onGenerated: (file: ProjectFile) => void;
+  onGenerated: (file: ProjectFile, markData: PayoutMarkData) => void;
 }
 
 export function PayoutModal({
@@ -143,7 +195,28 @@ export function PayoutModal({
         throw new Error(data.error ?? "Failed to generate payout");
       }
       const data = await res.json();
-      onGenerated(data.file);
+
+      // Mark items and events as paid (best-effort; fire in parallel)
+      const markData = buildPayoutMarkData(items, pfSaleEvents, localVendors);
+      const payoutDate = new Date().toISOString().slice(0, 10);
+      await Promise.allSettled([
+        ...markData.itemsToMark.map(({ id, amount }) =>
+          fetch("/api/sales/payout", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ itemId: id, payoutPaidAmount: amount, payoutPaidAt: payoutDate }),
+          })
+        ),
+        ...markData.eventIdsToMark.map(eventId =>
+          fetch("/api/item-sale-events", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: eventId, payoutPaid: true }),
+          })
+        ),
+      ]);
+
+      onGenerated(data.file, markData);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

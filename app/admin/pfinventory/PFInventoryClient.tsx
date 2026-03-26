@@ -287,7 +287,7 @@ function BulkPhotoImport({ items, onClose, onItemUpdated }: {
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
-type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced" | "storefrontActive";
+type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced" | "storefrontActive" | "payoutPaidAt";
 
 function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; sortDir: "asc" | "desc" }) {
   const active = col === sortCol;
@@ -781,6 +781,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
         return dir * (aVal - bVal);
       }
       case "storefrontActive": return dir * ((a.storefrontActive ? 1 : 0) - (b.storefrontActive ? 1 : 0));
+      case "payoutPaidAt": return dir * (a.payoutPaidAt ?? "").localeCompare(b.payoutPaidAt ?? "");
       default: return 0;
     }
   });
@@ -1084,6 +1085,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                   <th className="px-3 py-3 text-left w-28">{thBtn("returnDate", "Return Date")}</th>
                   <th className="px-3 py-3 text-center w-16">{thBtn("storefrontActive", "Site")}</th>
                   <th className="px-3 py-3 text-left w-20">{thBtn("squareSynced", "Square")}</th>
+                  <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1214,6 +1216,19 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                           </span>
                         ) : (
                           <span className="text-[10px] text-gray-600">—</span>
+                        )}
+                      </td>
+
+                      {/* Paid Date (editable by TTTAdmin) */}
+                      <td className="px-1 py-1">
+                        <EditCell
+                          value={item.payoutPaidAt ? item.payoutPaidAt.slice(0, 10) : ""}
+                          type="date"
+                          onSave={(v) => patchItem(item.id, item.tenantId, { payoutPaidAt: v || undefined })}
+                          placeholder="—"
+                        />
+                        {item.payoutPaidAt && (
+                          <p className="text-[10px] text-green-400 px-2">{fmtDate(item.payoutPaidAt)}</p>
                         )}
                       </td>
                     </tr>

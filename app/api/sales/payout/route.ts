@@ -13,18 +13,26 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden — TTT Staff or Manager required" }, { status: 403 });
   }
 
-  const { itemId, payoutPaidAmount, salePrice } = await req.json();
+  const { itemId, payoutPaidAmount, salePrice, payoutPaidAt } = await req.json();
   if (!itemId || (payoutPaidAmount == null && salePrice == null)) {
     return NextResponse.json({ error: "Missing itemId or update fields" }, { status: 400 });
   }
 
-  const updates: Record<string, number> = {};
-  if (payoutPaidAmount != null) updates.payoutPaidAmount = Number(payoutPaidAmount);
+  const updates: Partial<import("@/lib/types").Item> = {};
+  if (payoutPaidAmount != null) {
+    updates.payoutPaidAmount = Number(payoutPaidAmount);
+    // Stamp today as paid date unless explicitly provided; clear if amount is 0
+    if (Number(payoutPaidAmount) > 0) {
+      updates.payoutPaidAt = payoutPaidAt ?? new Date().toISOString().slice(0, 10);
+    } else {
+      updates.payoutPaidAt = undefined;
+    }
+  }
   if (salePrice != null) {
     updates.salePrice = Number(salePrice);
     updates.valueMid = Number(salePrice); // backfill Target Value
   }
 
-  const item = await updateItem(itemId, updates as never);
+  const item = await updateItem(itemId, updates);
   return NextResponse.json({ item });
 }

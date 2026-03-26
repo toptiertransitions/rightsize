@@ -129,7 +129,7 @@ function SalesTableRow({
   canEditPayout: boolean;
   canEdit: boolean;
   calcPayout: CalcPayout | null;
-  onPayoutSaved: (itemId: string, amount: number) => void;
+  onPayoutSaved: (itemId: string, amount: number, paidAt?: string) => void;
   onSalePriceSaved: (itemId: string, price: number) => void;
   onEdit: (item: Item) => void;
 }) {
@@ -147,12 +147,13 @@ function SalesTableRow({
     const amount = parseFloat(payoutInput) || 0;
     setSavingPayout(true);
     try {
+      const paidAt = amount > 0 ? new Date().toISOString().slice(0, 10) : undefined;
       const res = await fetch("/api/sales/payout", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, payoutPaidAmount: amount }),
+        body: JSON.stringify({ itemId: item.id, payoutPaidAmount: amount, payoutPaidAt: paidAt }),
       });
-      if (res.ok) { onPayoutSaved(item.id, amount); setEditingPayout(false); }
+      if (res.ok) { onPayoutSaved(item.id, amount, paidAt); setEditingPayout(false); }
     } finally { setSavingPayout(false); }
   }
 
@@ -268,14 +269,38 @@ function SalesTableRow({
             </div>
           ) : (
             <button onClick={() => { setEditingPayout(true); setPayoutInput(String(item.payoutPaidAmount ?? 0)); }}
-              className="text-sm font-semibold text-forest-700 hover:underline tabular-nums">
-              {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+              className="text-right hover:underline tabular-nums">
+              <div className="text-sm font-semibold text-forest-700">
+                {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+              </div>
+              {item.payoutPaidAt && (
+                <div className="text-[10px] text-green-600 font-normal">
+                  Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </div>
+              )}
             </button>
           )
         ) : (
-          <span className="text-sm font-semibold text-gray-700 tabular-nums">
-            {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+          <div className="text-right tabular-nums">
+            <div className="text-sm font-semibold text-gray-700">
+              {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+            </div>
+            {item.payoutPaidAt && (
+              <div className="text-[10px] text-green-600">
+                Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </div>
+            )}
+          </div>
+        )}
+      </td>
+      {/* Paid Date */}
+      <td className="px-2 py-2.5 text-right hidden sm:table-cell whitespace-nowrap">
+        {item.payoutPaidAt ? (
+          <span className="text-xs text-green-700 font-medium">
+            {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </span>
+        ) : (
+          <span className="text-gray-300 text-xs">—</span>
         )}
       </td>
       {/* Edit */}
@@ -679,11 +704,11 @@ function SalesTable({
   canEditPayout: boolean;
   canEdit: boolean;
   calcPayouts: Map<string, CalcPayout>;
-  onPayoutSaved: (id: string, amount: number) => void;
+  onPayoutSaved: (id: string, amount: number, paidAt?: string) => void;
   onSalePriceSaved: (id: string, price: number) => void;
   onEdit: (item: Item) => void;
 }) {
-  type SortCol = "name" | "category" | "status" | "value" | "salePrice" | "payout" | "paid";
+  type SortCol = "name" | "category" | "status" | "value" | "salePrice" | "payout" | "paid" | "paidDate";
   const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
   const [filterStatus, setFilterStatus] = useState("");
 
@@ -710,6 +735,7 @@ function SalesTable({
       case "salePrice": return d * ((a.salePrice ?? 0) - (b.salePrice ?? 0));
       case "payout": return d * (getClientPayout(a) - getClientPayout(b));
       case "paid": return d * ((a.payoutPaidAmount ?? 0) - (b.payoutPaidAmount ?? 0));
+      case "paidDate": return d * (a.payoutPaidAt ?? "").localeCompare(b.payoutPaidAt ?? "");
       default: return 0;
     }
   });
@@ -764,6 +790,7 @@ function SalesTable({
               <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
               <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>
               <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>
+              <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>
               <th className="pr-3 py-2.5 w-8" />
             </tr>
           </thead>
@@ -981,8 +1008,10 @@ export function SalesClient({
     }
   }
 
-  function handlePayoutSaved(itemId: string, amount: number) {
-    setItems(prev => prev.map(i => i.id === itemId ? { ...i, payoutPaidAmount: amount } : i));
+  function handlePayoutSaved(itemId: string, amount: number, paidAt?: string) {
+    setItems(prev => prev.map(i =>
+      i.id === itemId ? { ...i, payoutPaidAmount: amount, payoutPaidAt: amount > 0 ? (paidAt ?? i.payoutPaidAt) : undefined } : i
+    ));
   }
 
   async function saveExpense() {
@@ -1454,8 +1483,25 @@ export function SalesClient({
           pfSaleEvents={validPfEvents}
           localVendors={localVendors}
           onClose={() => setShowPayoutModal(false)}
-          onGenerated={(file) => {
+          onGenerated={(file, markData) => {
             setProofFiles(prev => [...prev, file]);
+            const payoutDate = new Date().toISOString().slice(0, 10);
+            // Update item payoutPaidAmount + payoutPaidAt so summary cards and dates update live
+            if (markData.itemsToMark.length > 0) {
+              const paidMap = new Map(markData.itemsToMark.map(p => [p.id, p.amount]));
+              setItems(prev => prev.map(item =>
+                paidMap.has(item.id)
+                  ? { ...item, payoutPaidAmount: paidMap.get(item.id)!, payoutPaidAt: payoutDate }
+                  : item
+              ));
+            }
+            // Update pfSaleEvents payoutPaid flag
+            if (markData.eventIdsToMark.length > 0) {
+              const paidSet = new Set(markData.eventIdsToMark);
+              setPfSaleEvents(prev => prev.map(e =>
+                paidSet.has(e.id) ? { ...e, payoutPaid: true } : e
+              ));
+            }
             setShowPayoutModal(false);
           }}
         />

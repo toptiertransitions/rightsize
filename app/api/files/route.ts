@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const uploadResult = await uploadFile(buffer, {
       tenantId,
       mimeType: file.type,
-      resourceType: "auto",
+      // Let uploadFile pick the right resource_type: "raw" for PDFs/docs, "auto" for images/video
     });
 
     const projectFile = await createProjectFile({
