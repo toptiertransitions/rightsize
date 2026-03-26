@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Pagination } from "../components/Pagination";
 
 const PAGE_SIZE = 25;
@@ -8,6 +8,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const FIRST_OF_MONTH = TODAY.slice(0, 8) + "01";
 
 type Tab = "hours" | "commission" | "mileage" | "expenses";
+type SortDir = "asc" | "desc";
 
 interface StaffOption {
   clerkUserId: string;
@@ -63,10 +64,23 @@ interface ExpenseRow {
   paidAt: string | null;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt$(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function sortRows<T>(rows: T[], key: keyof T, dir: SortDir): T[] {
+  return [...rows].sort((a, b) => {
+    const av = a[key], bv = b[key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+// ─── PaidBadge ────────────────────────────────────────────────────────────────
 function PaidBadge({ paidAt }: { paidAt: string | null }) {
   if (paidAt) {
     return (
@@ -82,17 +96,135 @@ function PaidBadge({ paidAt }: { paidAt: string | null }) {
   );
 }
 
+// ─── SortableHeader ───────────────────────────────────────────────────────────
+function SortableHeader({
+  label, col, sortKey, sortDir, onSort, className = "",
+}: {
+  label: string; col: string; sortKey: string; sortDir: SortDir; onSort: (col: string) => void; className?: string;
+}) {
+  const active = sortKey === col;
+  return (
+    <th
+      className={`px-3 py-2.5 font-medium cursor-pointer select-none whitespace-nowrap group ${className}`}
+      onClick={() => onSort(col)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <svg
+          className={`w-3 h-3 transition-opacity ${active ? "opacity-100" : "opacity-0 group-hover:opacity-40"}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+        >
+          {active && sortDir === "asc"
+            ? <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            : <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          }
+        </svg>
+      </span>
+    </th>
+  );
+}
+
+// ─── StaffCombobox ────────────────────────────────────────────────────────────
+function StaffCombobox({
+  staffMembers, value, onChange,
+}: {
+  staffMembers: StaffOption[]; value: string; onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sync display name when value changes externally (e.g. cleared)
+  const selectedName = staffMembers.find(s => s.clerkUserId === value)?.displayName ?? "";
+  const [inputVal, setInputVal] = useState(selectedName);
+  useEffect(() => { setInputVal(selectedName); }, [selectedName]);
+
+  const filtered = query.trim() === ""
+    ? staffMembers
+    : staffMembers.filter(s => s.displayName.toLowerCase().includes(query.toLowerCase()));
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  function select(s: StaffOption) {
+    onChange(s.clerkUserId);
+    setInputVal(s.displayName);
+    setQuery("");
+    setOpen(false);
+  }
+
+  function clear() {
+    onChange("");
+    setInputVal("");
+    setQuery("");
+  }
+
+  const inputCls = "h-8 px-2 text-sm rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-1 focus:ring-forest-500 w-44";
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative flex items-center">
+        <input
+          className={inputCls}
+          placeholder="All Staff"
+          value={open ? query : inputVal}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        />
+        {value && (
+          <button
+            onClick={clear}
+            className="absolute right-2 text-gray-500 hover:text-gray-300"
+            tabIndex={-1}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+          <div className="max-h-56 overflow-y-auto">
+            <button
+              className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-700 transition-colors"
+              onMouseDown={() => { onChange(""); setInputVal(""); setQuery(""); setOpen(false); }}
+            >
+              All Staff
+            </button>
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-gray-500">No matches</p>
+            ) : filtered.map(s => (
+              <button
+                key={s.clerkUserId}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${
+                  s.clerkUserId === value ? "text-white font-medium bg-gray-700/60" : "text-gray-300"
+                }`}
+                onMouseDown={() => select(s)}
+              >
+                {s.displayName}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 interface FilterBarProps {
-  from: string;
-  to: string;
-  staffId: string;
-  paid: string;
+  from: string; to: string; staffId: string; paid: string;
   staffMembers: StaffOption[];
-  onFromChange: (v: string) => void;
-  onToChange: (v: string) => void;
-  onStaffChange: (v: string) => void;
-  onPaidChange: (v: string) => void;
+  onFromChange: (v: string) => void; onToChange: (v: string) => void;
+  onStaffChange: (v: string) => void; onPaidChange: (v: string) => void;
 }
 
 function FilterBar({ from, to, staffId, paid, staffMembers, onFromChange, onToChange, onStaffChange, onPaidChange }: FilterBarProps) {
@@ -102,15 +234,29 @@ function FilterBar({ from, to, staffId, paid, staffMembers, onFromChange, onToCh
       <input type="date" value={from} onChange={e => onFromChange(e.target.value)} className={inputCls} />
       <span className="text-gray-500 text-sm">to</span>
       <input type="date" value={to} onChange={e => onToChange(e.target.value)} className={inputCls} />
-      <select value={staffId} onChange={e => onStaffChange(e.target.value)} className={inputCls}>
-        <option value="">All Staff</option>
-        {staffMembers.map(s => <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>)}
-      </select>
+      <StaffCombobox staffMembers={staffMembers} value={staffId} onChange={onStaffChange} />
       <select value={paid} onChange={e => onPaidChange(e.target.value)} className={inputCls}>
         <option value="all">All</option>
         <option value="false">Unpaid</option>
         <option value="true">Paid</option>
       </select>
+    </div>
+  );
+}
+
+// ─── Mark Paid bar ────────────────────────────────────────────────────────────
+function MarkPaidBar({ total, label, selected, marking, onMark }: {
+  total: number; label: string; selected: number; marking: boolean; onMark: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <p className="text-sm text-gray-400">{total} {label}</p>
+      {selected > 0 && (
+        <button onClick={onMark} disabled={marking}
+          className="px-4 h-8 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors">
+          {marking ? "Marking…" : `Mark ${selected} as Paid`}
+        </button>
+      )}
     </div>
   );
 }
@@ -128,10 +274,11 @@ function HoursTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState<keyof HoursRow>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(PAGE_SIZE) });
       if (staffId) params.set("staffId", staffId);
@@ -139,8 +286,7 @@ function HoursTab({ staffMembers }: { staffMembers: StaffOption[] }) {
       const res = await fetch(`/api/admin/pay/hours?${params}`);
       if (!res.ok) throw new Error((await res.json()).error);
       const data = await res.json();
-      setRows(data.rows);
-      setTotal(data.total);
+      setRows(data.rows); setTotal(data.total);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   }, [from, to, staffId, paid, page]);
@@ -148,50 +294,44 @@ function HoursTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   useEffect(() => { setPage(1); }, [from, to, staffId, paid]);
   useEffect(() => { load(); }, [load]);
 
+  function handleSort(col: string) {
+    const key = col as keyof HoursRow;
+    setSortDir(sortKey === key && sortDir === "asc" ? "desc" : "asc");
+    setSortKey(key);
+  }
+
   async function markPaid() {
     if (!selected.size) return;
-    setMarking(true);
-    setError("");
+    setMarking(true); setError("");
     try {
       const res = await fetch("/api/admin/pay/hours", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: [...selected], hoursPaidAt: TODAY }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      setSelected(new Set());
-      await load();
+      setSelected(new Set()); await load();
     } catch (e) { setError(String(e)); }
     finally { setMarking(false); }
   }
 
+  const sorted = sortRows(rows, sortKey, sortDir);
   const allIds = rows.map(r => r.id);
   const allSelected = allIds.length > 0 && allIds.every(id => selected.has(id));
-
   function toggleAll() {
     if (allSelected) setSelected(prev => { const n = new Set(prev); allIds.forEach(id => n.delete(id)); return n; });
     else setSelected(prev => { const n = new Set(prev); allIds.forEach(id => n.add(id)); return n; });
   }
 
+  const sh = (label: string, col: string, className?: string) => (
+    <SortableHeader label={label} col={col} sortKey={String(sortKey)} sortDir={sortDir} onSort={handleSort} className={className} />
+  );
+
   return (
     <div>
       <FilterBar from={from} to={to} staffId={staffId} paid={paid} staffMembers={staffMembers}
         onFromChange={setFrom} onToChange={setTo} onStaffChange={setStaffId} onPaidChange={setPaid} />
-
       {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
-
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-gray-400">{total} entries</p>
-        {selected.size > 0 && (
-          <button
-            onClick={markPaid}
-            disabled={marking}
-            className="px-4 h-8 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors"
-          >
-            {marking ? "Marking…" : `Mark ${selected.size} as Paid`}
-          </button>
-        )}
-      </div>
+      <MarkPaidBar total={total} label="entries" selected={selected.size} marking={marking} onMark={markPaid} />
 
       <div className="overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-sm">
@@ -200,21 +340,21 @@ function HoursTab({ staffMembers }: { staffMembers: StaffOption[] }) {
               <th className="px-3 py-2.5">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded border-gray-600 bg-gray-700" />
               </th>
-              <th className="px-3 py-2.5 text-left font-medium">Date</th>
-              <th className="px-3 py-2.5 text-left font-medium">Staff</th>
-              <th className="px-3 py-2.5 text-left font-medium">Project</th>
-              <th className="px-3 py-2.5 text-right font-medium">Hours</th>
-              <th className="px-3 py-2.5 text-right font-medium">Rate</th>
-              <th className="px-3 py-2.5 text-right font-medium">Pay</th>
-              <th className="px-3 py-2.5 text-left font-medium">Status</th>
+              {sh("Date", "date")}
+              {sh("Staff", "staffName")}
+              {sh("Project", "projectName")}
+              {sh("Hours", "durationMinutes", "text-right")}
+              {sh("Rate", "hourlyRate", "text-right")}
+              {sh("Pay", "pay", "text-right")}
+              {sh("Status", "hoursPaidAt")}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={8} className="py-8 text-center text-gray-500">Loading…</td></tr>
-            ) : rows.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr><td colSpan={8} className="py-8 text-center text-gray-500">No entries found.</td></tr>
-            ) : rows.map(row => (
+            ) : sorted.map(row => (
               <tr key={row.id} className="border-t border-gray-800 hover:bg-gray-800/40">
                 <td className="px-3 py-2.5 text-center">
                   <input type="checkbox" checked={selected.has(row.id)}
@@ -251,10 +391,11 @@ function CommissionTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState<keyof CommissionRow>("saleDate");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(PAGE_SIZE) });
       if (staffId) params.set("staffId", staffId);
@@ -262,8 +403,7 @@ function CommissionTab({ staffMembers }: { staffMembers: StaffOption[] }) {
       const res = await fetch(`/api/admin/pay/commission?${params}`);
       if (!res.ok) throw new Error((await res.json()).error);
       const data = await res.json();
-      setRows(data.rows);
-      setTotal(data.total);
+      setRows(data.rows); setTotal(data.total);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   }, [from, to, staffId, paid, page]);
@@ -271,23 +411,27 @@ function CommissionTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   useEffect(() => { setPage(1); }, [from, to, staffId, paid]);
   useEffect(() => { load(); }, [load]);
 
+  function handleSort(col: string) {
+    const key = col as keyof CommissionRow;
+    setSortDir(sortKey === key && sortDir === "asc" ? "desc" : "asc");
+    setSortKey(key);
+  }
+
   async function markPaid() {
     if (!selected.size) return;
-    setMarking(true);
-    setError("");
+    setMarking(true); setError("");
     try {
       const res = await fetch("/api/admin/pay/commission", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: [...selected], commissionPaidAt: TODAY }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      setSelected(new Set());
-      await load();
+      setSelected(new Set()); await load();
     } catch (e) { setError(String(e)); }
     finally { setMarking(false); }
   }
 
+  const sorted = sortRows(rows, sortKey, sortDir);
   const allIds = rows.map(r => r.id);
   const allSelected = allIds.length > 0 && allIds.every(id => selected.has(id));
   function toggleAll() {
@@ -295,22 +439,16 @@ function CommissionTab({ staffMembers }: { staffMembers: StaffOption[] }) {
     else setSelected(prev => { const n = new Set(prev); allIds.forEach(id => n.add(id)); return n; });
   }
 
+  const sh = (label: string, col: string, className?: string) => (
+    <SortableHeader label={label} col={col} sortKey={String(sortKey)} sortDir={sortDir} onSort={handleSort} className={className} />
+  );
+
   return (
     <div>
       <FilterBar from={from} to={to} staffId={staffId} paid={paid} staffMembers={staffMembers}
         onFromChange={setFrom} onToChange={setTo} onStaffChange={setStaffId} onPaidChange={setPaid} />
-
       {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
-
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-gray-400">{total} items</p>
-        {selected.size > 0 && (
-          <button onClick={markPaid} disabled={marking}
-            className="px-4 h-8 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors">
-            {marking ? "Marking…" : `Mark ${selected.size} as Paid`}
-          </button>
-        )}
-      </div>
+      <MarkPaidBar total={total} label="items" selected={selected.size} marking={marking} onMark={markPaid} />
 
       <div className="overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-sm">
@@ -319,22 +457,22 @@ function CommissionTab({ staffMembers }: { staffMembers: StaffOption[] }) {
               <th className="px-3 py-2.5">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded border-gray-600 bg-gray-700" />
               </th>
-              <th className="px-3 py-2.5 text-left font-medium">Item</th>
-              <th className="px-3 py-2.5 text-left font-medium">Route</th>
-              <th className="px-3 py-2.5 text-left font-medium">Staff</th>
-              <th className="px-3 py-2.5 text-right font-medium">Sale Date</th>
-              <th className="px-3 py-2.5 text-right font-medium">Sale Price</th>
-              <th className="px-3 py-2.5 text-right font-medium">Comm%</th>
-              <th className="px-3 py-2.5 text-right font-medium">Comm$</th>
-              <th className="px-3 py-2.5 text-left font-medium">Status</th>
+              {sh("Item", "itemName")}
+              {sh("Route", "primaryRoute")}
+              {sh("Staff", "staffSellerName")}
+              {sh("Sale Date", "saleDate", "text-right")}
+              {sh("Sale Price", "salePrice", "text-right")}
+              {sh("Comm%", "staffCommissionPercent", "text-right")}
+              {sh("Comm$", "commissionAmount", "text-right")}
+              {sh("Status", "commissionPaidAt")}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={9} className="py-8 text-center text-gray-500">Loading…</td></tr>
-            ) : rows.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr><td colSpan={9} className="py-8 text-center text-gray-500">No items found.</td></tr>
-            ) : rows.map(row => (
+            ) : sorted.map(row => (
               <tr key={row.id} className="border-t border-gray-800 hover:bg-gray-800/40">
                 <td className="px-3 py-2.5 text-center">
                   <input type="checkbox" checked={selected.has(row.id)}
@@ -369,13 +507,14 @@ function MileageTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [rows, setRows] = useState<MileageRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Set<string>>(new Set()); // key = `clerkUserId::date`
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState<keyof MileageRow>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(PAGE_SIZE) });
       if (staffId) params.set("staffId", staffId);
@@ -383,8 +522,7 @@ function MileageTab({ staffMembers }: { staffMembers: StaffOption[] }) {
       const res = await fetch(`/api/admin/pay/mileage?${params}`);
       if (!res.ok) throw new Error((await res.json()).error);
       const data = await res.json();
-      setRows(data.rows);
-      setTotal(data.total);
+      setRows(data.rows); setTotal(data.total);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   }, [from, to, staffId, paid, page]);
@@ -392,29 +530,32 @@ function MileageTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   useEffect(() => { setPage(1); }, [from, to, staffId, paid]);
   useEffect(() => { load(); }, [load]);
 
+  function handleSort(col: string) {
+    const key = col as keyof MileageRow;
+    setSortDir(sortKey === key && sortDir === "asc" ? "desc" : "asc");
+    setSortKey(key);
+  }
+
   async function markPaid() {
-    // Collect all entryIds for selected rows
     const entryIds: string[] = [];
     for (const row of rows) {
       const key = `${row.clerkUserId}::${row.date}`;
       if (selected.has(key)) entryIds.push(...row.entryIds);
     }
     if (!entryIds.length) return;
-    setMarking(true);
-    setError("");
+    setMarking(true); setError("");
     try {
       const res = await fetch("/api/admin/pay/mileage", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entryIds, mileagePaidAt: TODAY }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      setSelected(new Set());
-      await load();
+      setSelected(new Set()); await load();
     } catch (e) { setError(String(e)); }
     finally { setMarking(false); }
   }
 
+  const sorted = sortRows(rows, sortKey, sortDir);
   const rowKeys = rows.map(r => `${r.clerkUserId}::${r.date}`);
   const allSelected = rowKeys.length > 0 && rowKeys.every(k => selected.has(k));
   function toggleAll() {
@@ -422,22 +563,16 @@ function MileageTab({ staffMembers }: { staffMembers: StaffOption[] }) {
     else setSelected(prev => { const n = new Set(prev); rowKeys.forEach(k => n.add(k)); return n; });
   }
 
+  const sh = (label: string, col: string, className?: string) => (
+    <SortableHeader label={label} col={col} sortKey={String(sortKey)} sortDir={sortDir} onSort={handleSort} className={className} />
+  );
+
   return (
     <div>
       <FilterBar from={from} to={to} staffId={staffId} paid={paid} staffMembers={staffMembers}
         onFromChange={setFrom} onToChange={setTo} onStaffChange={setStaffId} onPaidChange={setPaid} />
-
       {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
-
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-gray-400">{total} days with travel</p>
-        {selected.size > 0 && (
-          <button onClick={markPaid} disabled={marking}
-            className="px-4 h-8 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors">
-            {marking ? "Marking…" : `Mark ${selected.size} day${selected.size !== 1 ? "s" : ""} as Paid`}
-          </button>
-        )}
-      </div>
+      <MarkPaidBar total={total} label="days with travel" selected={selected.size} marking={marking} onMark={markPaid} />
 
       <div className="overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-sm">
@@ -446,20 +581,20 @@ function MileageTab({ staffMembers }: { staffMembers: StaffOption[] }) {
               <th className="px-3 py-2.5">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded border-gray-600 bg-gray-700" />
               </th>
-              <th className="px-3 py-2.5 text-left font-medium">Date</th>
-              <th className="px-3 py-2.5 text-left font-medium">Staff</th>
-              <th className="px-3 py-2.5 text-right font-medium">Total Miles</th>
-              <th className="px-3 py-2.5 text-right font-medium">−20 Deduction</th>
-              <th className="px-3 py-2.5 text-right font-medium">Reimbursable</th>
-              <th className="px-3 py-2.5 text-left font-medium">Status</th>
+              {sh("Date", "date")}
+              {sh("Staff", "staffName")}
+              {sh("Total Miles", "totalMiles", "text-right")}
+              {sh("−20 Deduction", "totalMiles", "text-right")}
+              {sh("Reimbursable", "reimbursableMiles", "text-right")}
+              {sh("Status", "mileagePaidAt")}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className="py-8 text-center text-gray-500">Loading…</td></tr>
-            ) : rows.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr><td colSpan={7} className="py-8 text-center text-gray-500">No mileage entries found.</td></tr>
-            ) : rows.map(row => {
+            ) : sorted.map(row => {
               const key = `${row.clerkUserId}::${row.date}`;
               return (
                 <tr key={key} className="border-t border-gray-800 hover:bg-gray-800/40">
@@ -498,10 +633,11 @@ function ExpensesTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [marking, setMarking] = useState(false);
   const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState<keyof ExpenseRow>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(PAGE_SIZE) });
       if (staffId) params.set("staffId", staffId);
@@ -509,8 +645,7 @@ function ExpensesTab({ staffMembers }: { staffMembers: StaffOption[] }) {
       const res = await fetch(`/api/admin/pay/expenses?${params}`);
       if (!res.ok) throw new Error((await res.json()).error);
       const data = await res.json();
-      setRows(data.rows);
-      setTotal(data.total);
+      setRows(data.rows); setTotal(data.total);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
   }, [from, to, staffId, paid, page]);
@@ -518,23 +653,27 @@ function ExpensesTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   useEffect(() => { setPage(1); }, [from, to, staffId, paid]);
   useEffect(() => { load(); }, [load]);
 
+  function handleSort(col: string) {
+    const key = col as keyof ExpenseRow;
+    setSortDir(sortKey === key && sortDir === "asc" ? "desc" : "asc");
+    setSortKey(key);
+  }
+
   async function markPaid() {
     if (!selected.size) return;
-    setMarking(true);
-    setError("");
+    setMarking(true); setError("");
     try {
       const res = await fetch("/api/admin/pay/expenses", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: [...selected], paidAt: TODAY }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      setSelected(new Set());
-      await load();
+      setSelected(new Set()); await load();
     } catch (e) { setError(String(e)); }
     finally { setMarking(false); }
   }
 
+  const sorted = sortRows(rows, sortKey, sortDir);
   const allIds = rows.map(r => r.id);
   const allSelected = allIds.length > 0 && allIds.every(id => selected.has(id));
   function toggleAll() {
@@ -542,22 +681,16 @@ function ExpensesTab({ staffMembers }: { staffMembers: StaffOption[] }) {
     else setSelected(prev => { const n = new Set(prev); allIds.forEach(id => n.add(id)); return n; });
   }
 
+  const sh = (label: string, col: string, className?: string) => (
+    <SortableHeader label={label} col={col} sortKey={String(sortKey)} sortDir={sortDir} onSort={handleSort} className={className} />
+  );
+
   return (
     <div>
       <FilterBar from={from} to={to} staffId={staffId} paid={paid} staffMembers={staffMembers}
         onFromChange={setFrom} onToChange={setTo} onStaffChange={setStaffId} onPaidChange={setPaid} />
-
       {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
-
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-gray-400">{total} expenses</p>
-        {selected.size > 0 && (
-          <button onClick={markPaid} disabled={marking}
-            className="px-4 h-8 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors">
-            {marking ? "Marking…" : `Mark ${selected.size} as Paid`}
-          </button>
-        )}
-      </div>
+      <MarkPaidBar total={total} label="expenses" selected={selected.size} marking={marking} onMark={markPaid} />
 
       <div className="overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-sm">
@@ -566,20 +699,20 @@ function ExpensesTab({ staffMembers }: { staffMembers: StaffOption[] }) {
               <th className="px-3 py-2.5">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded border-gray-600 bg-gray-700" />
               </th>
-              <th className="px-3 py-2.5 text-left font-medium">Date</th>
-              <th className="px-3 py-2.5 text-left font-medium">Staff</th>
-              <th className="px-3 py-2.5 text-left font-medium">Vendor</th>
-              <th className="px-3 py-2.5 text-left font-medium">Category</th>
-              <th className="px-3 py-2.5 text-right font-medium">Amount</th>
-              <th className="px-3 py-2.5 text-left font-medium">Status</th>
+              {sh("Date", "date")}
+              {sh("Staff", "staffName")}
+              {sh("Vendor", "vendor")}
+              {sh("Category", "category")}
+              {sh("Amount", "total", "text-right")}
+              {sh("Status", "paidAt")}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className="py-8 text-center text-gray-500">Loading…</td></tr>
-            ) : rows.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr><td colSpan={7} className="py-8 text-center text-gray-500">No reimbursable expenses found.</td></tr>
-            ) : rows.map(row => (
+            ) : sorted.map(row => (
               <tr key={row.id} className="border-t border-gray-800 hover:bg-gray-800/40">
                 <td className="px-3 py-2.5 text-center">
                   <input type="checkbox" checked={selected.has(row.id)}
@@ -615,16 +748,12 @@ export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }
 
   return (
     <div>
-      {/* Tab nav */}
       <div className="flex gap-1 mb-6 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
         {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               tab === t.id ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"
-            }`}
-          >
+            }`}>
             {t.label}
           </button>
         ))}
