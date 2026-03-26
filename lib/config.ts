@@ -64,6 +64,7 @@ export const AIRTABLE_TABLES = {
   SUPPLY_INVENTORY: process.env.AIRTABLE_SUPPLY_INVENTORY_TABLE || "SupplyInventory",
   SUBCONTRACTORS: process.env.AIRTABLE_SUBCONTRACTORS_TABLE || "Subcontractors",
   FAILED_SALE_SYNC: process.env.AIRTABLE_FAILED_SALE_SYNC_TABLE || "FailedSaleSync",
+  ESTATES: process.env.AIRTABLE_ESTATES_TABLE || "Estates",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ export const ROUTE_COLORS: Record<string, string> = {
   "Other Consignment": "bg-purple-100 text-purple-800",
   "Donate": "bg-teal-100 text-teal-800",
   "Discard": "bg-gray-100 text-gray-800",
+  "Estate Sale": "bg-amber-100 text-amber-800",
 };
 
 // ─── TTT Admin Check ──────────────────────────────────────────────────────────
