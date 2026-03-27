@@ -3,11 +3,12 @@
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const ACTIVITY_BAR_COLORS: Record<string, string> = {
-  Call:    "#22c55e",
-  Email:   "#3b82f6",
-  Meeting: "#a855f7",
-  Note:    "#9ca3af",
-  Task:    "#f97316",
+  Call:           "#22c55e",
+  Email:          "#3b82f6",
+  Meeting:        "#a855f7",
+  Note:           "#9ca3af",
+  Task:           "#f97316",
+  "Text Message": "#06b6d4",
 };
 
 const REP_LINE_COLORS = ["#16a34a", "#6366f1", "#f59e0b", "#ef4444", "#0ea5e9", "#ec4899"];
@@ -24,6 +25,7 @@ interface WeeklyDataPoint {
   Meeting: number;
   Note: number;
   Task: number;
+  "Text Message": number;
 }
 
 interface Props {
@@ -58,7 +60,7 @@ export default function CRMActivityCharts({ weeklyActivityData, dailyRepData, ac
               cursor={{ fill: "#f9fafb" }}
             />
             <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-            {(["Call", "Email", "Meeting", "Note", "Task"] as const).map(type => (
+            {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as const).map(type => (
               <Bar key={type} dataKey={type} stackId="a" fill={ACTIVITY_BAR_COLORS[type]} />
             ))}
           </BarChart>

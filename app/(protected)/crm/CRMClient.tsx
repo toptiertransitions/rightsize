@@ -2895,6 +2895,7 @@ function DashboardTab({
         Meeting: wkActs.filter(a => a.type === "Meeting").length,
         Note:    wkActs.filter(a => a.type === "Note").length,
         Task:    wkActs.filter(a => a.type === "Task").length,
+        "Text Message": wkActs.filter(a => a.type === "Text Message").length,
       };
     });
   }, [activities, ownerFilter]);
