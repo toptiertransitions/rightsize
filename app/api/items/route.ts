@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
       listingFb: body.listingFb as string,
       listingOfferup: body.listingOfferup as string,
       staffTips: body.staffTips as string,
+      quantity: body.quantity != null ? Math.max(1, Number(body.quantity)) : 1,
       status: "Pending Review",
       clientSharePercent: body.clientSharePercent != null ? Number(body.clientSharePercent) : autoShare,
       barcodeNumber,

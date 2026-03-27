@@ -509,8 +509,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               {(() => {
                 const eligible = (form.primaryRoute === "ProFoundFinds Consignment" || form.primaryRoute === "Estate Sale") && form.status === "Listed";
                 return (
-                  <div className="flex flex-col items-center gap-1 pb-0.5">
-                    <span className={`text-[11px] font-medium uppercase tracking-wide ${eligible ? "text-gray-500" : "text-gray-600"}`}>
+                  <div className="flex flex-col items-center gap-1.5 pb-0.5">
+                    <span className="text-sm font-medium text-gray-700">
                       Site?
                     </span>
                     <button
@@ -574,7 +574,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               <textarea rows={2} value={form.conditionNotes ?? ""} onChange={e => set("conditionNotes", e.target.value)} className={textareaClass} />
             </div>
             {(form.completedDate !== undefined || ["Sold", "Donated", "Discarded"].includes(form.status ?? "")) && (
-              <div>
+              <div className="w-1/2">
                 <label className={labelClass}>Completed Date</label>
                 <input
                   type="date"
@@ -621,7 +621,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
           {/* Route & Value */}
           <section className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Route & Value</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 items-end">
               <Select label="Recommended Route" value={form.primaryRoute ?? "Keep"}
                 onChange={e => {
                   const newRoute = e.target.value as PrimaryRoute;
@@ -657,17 +657,17 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               <textarea rows={2} value={form.routeReasoning ?? ""} onChange={e => set("routeReasoning", e.target.value)} className={textareaClass} />
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Input label="Value Low ($)" type="number" inputMode="decimal"
+              <Input label="Low ($)" type="number" inputMode="decimal"
                 value={form.valueLow || ""}
                 placeholder="0"
                 onFocus={e => e.target.select()}
                 onChange={e => set("valueLow", e.target.value === "" ? undefined : Number(e.target.value))} />
-              <Input label="Target Value ($)" type="number" inputMode="decimal"
+              <Input label="Target ($)" type="number" inputMode="decimal"
                 value={form.valueMid || ""}
                 placeholder="0"
                 onFocus={e => e.target.select()}
                 onChange={e => set("valueMid", e.target.value === "" ? undefined : Number(e.target.value))} />
-              <Input label="Value High ($)" type="number" inputMode="decimal"
+              <Input label="High ($)" type="number" inputMode="decimal"
                 value={form.valueHigh || ""}
                 placeholder="0"
                 onFocus={e => e.target.select()}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
@@ -50,6 +50,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const addMorePhotosRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<Step>("photo");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -64,6 +65,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
   const [uploading, setUploading] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [error, setError] = useState<string>("");
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
   const [removeBg, setRemoveBg] = useState(false);
   const [bgRemoving, setBgRemoving] = useState(false);
 
@@ -705,15 +709,22 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
             </CardContent>
           </Card>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <div ref={errorRef} className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </div>
+          )}
 
           <div className="flex gap-3 pb-8">
-            <Button variant="secondary"
+            <Button type="button" variant="secondary"
               onClick={() => { setStep("photo"); setAnalysis(null); setEditedAnalysis({}); setManualMode(false); setPhotos([]); }}
               className="flex-1">
               Retake Photo
             </Button>
-            <Button onClick={handleSave} className="flex-1">
+            <Button type="button" onClick={handleSave} disabled={uploadingMore} className="flex-1">
               Save to Catalog
             </Button>
           </div>
