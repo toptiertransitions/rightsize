@@ -594,7 +594,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                       ...( isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                       { value: "FB/Marketplace", label: "FB/Marketplace" },
                       { value: "Online Marketplace", label: "Online Marketplace" },
-                      { value: "Other Consignment", label: "Other Consignment" },
+                      { value: "Other Consignment", label: "Other Consignment Store" },
                       { value: "Donate", label: "Donate" },
                       { value: "Discard", label: "Discard" },
                       ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),

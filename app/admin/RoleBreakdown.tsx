@@ -28,7 +28,7 @@ const NON_TTT_CLIENT_ROLES = [
     label: "Non-TTT Owner",
     color: "border-orange-700",
     badge: "bg-orange-900/50 text-orange-300",
-    desc: "Self-managed project owner. Catalogs and routes items independently to FB/Marketplace, Online Marketplace, or Other Consignment. Receives higher client share rates (100% marketplace, 50% consignment). Uses the Free Estimator on Home for self-service hour estimates. No TTT staff, formal contract, or TTT-issued invoices.",
+    desc: "Self-managed project owner. Catalogs and routes items independently to FB/Marketplace, Online Marketplace, or Other Consignment Store. Receives higher client share rates (100% marketplace, 50% consignment). Uses the Free Estimator on Home for self-service hour estimates. No TTT staff, formal contract, or TTT-issued invoices.",
   },
 ] as const;
 
@@ -112,7 +112,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "TTT-managed payout rates (67% PF, 59% FB/Online)", permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Self-service Free Estimator (Home page)",       permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "FB & Online Marketplace at 100% client share",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
-  { label: "Other Consignment at 50% client share (self-managed)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "Other Consignment Store at 50% client share (self-managed)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "Visible to TTT Staff in project views & time tracker", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Invoices" },
   { label: "View invoices & PDF",         permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
@@ -232,7 +232,7 @@ export function RoleBreakdown() {
             <span className="text-xs text-gray-600">legend</span>
           </div>
           <p className="text-xs text-gray-400 leading-relaxed">
-            In the matrix below, <span className="text-amber-500 font-semibold">~</span> means the feature exists but with restrictions — for example, Non-TTT Owners can route items but ProFoundFinds Consignment is replaced by Other Consignment, and client share rates differ from TTT-managed projects.
+            In the matrix below, <span className="text-amber-500 font-semibold">~</span> means the feature exists but with restrictions — for example, Non-TTT Owners can route items but ProFoundFinds Consignment is replaced by Other Consignment Store, and client share rates differ from TTT-managed projects.
           </p>
         </div>
       </div>

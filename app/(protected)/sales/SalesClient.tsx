@@ -1146,7 +1146,7 @@ export function SalesClient({
   const onlinePaid = online.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
 
   const otherVendorBreakdown = [...otherByVendor.entries()].map(([vendorName, vItems]) => ({
-    label: `Other Consignment — ${vendorName}`,
+    label: `Other Consignment Store — ${vendorName}`,
     earned: vItems.filter(i => i.status === "Sold").reduce((s, i) => {
       const calc = calcPayouts.get(i.id);
       return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
@@ -1380,12 +1380,12 @@ export function SalesClient({
         {other.length > 0 && (
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-base font-semibold text-gray-900">Other Consignment</h2>
+              <h2 className="text-base font-semibold text-gray-900">Other Consignment Store</h2>
               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{other.length}</span>
             </div>
             {!isTTT && (
               <p className="text-xs text-gray-500 mb-4">
-                Client share on Other Consignment is set to 50% for self-managed projects.
+                Client share on Other Consignment Store is set to 50% for self-managed projects.
                 This rate may be adjusted if your project transitions to a full TTT service agreement.
               </p>
             )}

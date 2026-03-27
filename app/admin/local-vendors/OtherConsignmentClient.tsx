@@ -507,7 +507,7 @@ export function OtherConsignmentClient({ items: initialItems, tenantInfoMap, ven
 
       {sorted.length === 0 ? (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl py-16 text-center">
-          <p className="text-gray-400 text-sm">No Other Consignment items found.</p>
+          <p className="text-gray-400 text-sm">No Other Consignment Store items found.</p>
         </div>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">

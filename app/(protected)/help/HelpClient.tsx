@@ -16,7 +16,7 @@ const CLIENT_FAQS = [
   },
   {
     q: "How does consignment work?",
-    a: "Items routed to consignment (FB/Marketplace, Online Marketplace, or Other Consignment) are sold on your behalf. Your share of the sale proceeds is tracked on the Sales page. Once an item sells, your payout is calculated automatically and recorded when payment is sent.",
+    a: "Items routed to consignment (FB/Marketplace, Online Marketplace, or Other Consignment Store) are sold on your behalf. Your share of the sale proceeds is tracked on the Sales page. Once an item sells, your payout is calculated automatically and recorded when payment is sent.",
   },
   {
     q: "Where can I see my project plan and timeline?",
@@ -55,7 +55,7 @@ const STAFF_FAQS = [
   },
   {
     q: "How do I assign an item to a local vendor?",
-    a: "Edit the item and set the Route to \"Other Consignment\", then select the vendor from the dropdown. The vendor will appear in the admin local-vendors page and can receive an email notification.",
+    a: "Edit the item and set the Route to \"Other Consignment Store\", then select the vendor from the dropdown. The vendor will appear in the admin local-vendors page and can receive an email notification.",
   },
   {
     q: "How do I send a client their project portal access?",

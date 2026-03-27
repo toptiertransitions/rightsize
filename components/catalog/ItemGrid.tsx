@@ -44,7 +44,7 @@ const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray"
   "ProFoundFinds Consignment":    { variant: "orange", label: "ProFoundFinds" },
   "FB/Marketplace":               { variant: "blue",   label: "FB/Marketplace" },
   "Online Marketplace":           { variant: "blue",   label: "Online" },
-  "Other Consignment":            { variant: "purple", label: "Other Consign" },
+  "Other Consignment":            { variant: "purple", label: "Other Consign Store" },
   "Donate":                       { variant: "teal",   label: "Donate" },
   "Discard":                      { variant: "gray",   label: "Discard" },
   "Estate Sale":                  { variant: "yellow", label: "Estate Sale" },
@@ -643,7 +643,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   ...(isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                   { value: "FB/Marketplace",               label: "FB/Marketplace" },
                   { value: "Online Marketplace",           label: "Online Marketplace" },
-                  { value: "Other Consignment",            label: "Other Consignment" },
+                  { value: "Other Consignment",            label: "Other Consignment Store" },
                   { value: "Donate",                       label: "Donate" },
                   { value: "Discard",                      label: "Discard" },
                   ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
@@ -1143,7 +1143,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
           <option value="FB/Marketplace">FB/Marketplace</option>
           <option value="Online Marketplace">Online Marketplace</option>
-          <option value="Other Consignment">Other Consignment</option>
+          <option value="Other Consignment">Other Consignment Store</option>
           <option value="Donate">Donate</option>
           <option value="Discard">Discard</option>
         </select>

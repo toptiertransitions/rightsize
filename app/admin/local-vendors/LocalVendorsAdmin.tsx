@@ -646,13 +646,13 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
       {/* ─── Other Consignment Items ─────────────────────────────────────── */}
       <div className="mt-12 mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <h2 className="text-xl font-bold text-white">Other Consignment Items</h2>
+          <h2 className="text-xl font-bold text-white">Other Consignment Store Items</h2>
           <span className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">
             {consignmentItems.length} item{consignmentItems.length !== 1 ? "s" : ""}
           </span>
         </div>
         <p className="text-gray-400 text-sm mb-6">
-          All client items routed to Other Consignment. Assign vendors, track responses, and manage payouts inline.
+          All client items routed to Other Consignment Store. Assign vendors, track responses, and manage payouts inline.
         </p>
         <OtherConsignmentClient
           items={consignmentItems}

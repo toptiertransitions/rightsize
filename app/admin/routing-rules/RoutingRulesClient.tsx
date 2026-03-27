@@ -10,6 +10,11 @@ const PRIMARY_ROUTES: PrimaryRoute[] = [
   "Online Marketplace", "Other Consignment", "Donate", "Discard",
 ];
 
+const ROUTE_DISPLAY: Partial<Record<PrimaryRoute, string>> = {
+  "Other Consignment": "Other Consignment Store",
+};
+const routeLabel = (r: PrimaryRoute) => ROUTE_DISPLAY[r] ?? r;
+
 const VENDOR_TYPES: VendorType[] = [
   "Move Manager", "Mover", "Future Home/Community", "Realtor", "Broker",
   "Donation Org", "Consignment Store", "Junk Hauler", "Attorney", "Other",
@@ -173,7 +178,7 @@ function RuleModal({ rule, onClose, onSaved }: RuleModalProps) {
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">Recommended Route</label>
                 <select value={primaryRoute} onChange={e => setPrimaryRoute(e.target.value as PrimaryRoute)} className={sel}>
-                  {PRIMARY_ROUTES.map(r => <option key={r} value={r}>{r}</option>)}
+                  {PRIMARY_ROUTES.map(r => <option key={r} value={r}>{routeLabel(r)}</option>)}
                 </select>
               </div>
               <div>
@@ -388,7 +393,7 @@ export function RoutingRulesClient({ initialRules, vendors: _vendors }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROUTE_COLORS[rule.primaryRoute] ?? "bg-gray-700 text-gray-300"}`}>
-                        {rule.primaryRoute}
+                        {routeLabel(rule.primaryRoute)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs max-w-xs">
