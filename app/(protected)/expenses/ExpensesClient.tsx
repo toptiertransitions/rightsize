@@ -430,7 +430,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 4.5 * 1024 * 1024) {
-      setUploadError("File is too large. Please upload a file under 4.5 MB.");
+      setUploadError(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Receipts must be under 4.5 MB. Try compressing the file or taking a lower-resolution photo.`);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
