@@ -84,6 +84,13 @@ interface Props {
   sysRole: string | null;
 }
 
+// PDFs stored as Cloudinary raw files have no Content-Type; proxy them so the
+// browser receives application/pdf and opens them inline in a new tab.
+function receiptHref(url: string) {
+  const isPdf = url.includes("/raw/") || /\.pdf($|\?)/i.test(url);
+  return isPdf ? `/api/pdf-proxy?url=${encodeURIComponent(url)}` : url;
+}
+
 function fmtDate(d: string) {
   if (!d) return "—";
   const [y, m, day] = d.split("-");
@@ -195,7 +202,12 @@ function EditRow({
       </td>
       <td className="px-3 py-2">
         {expense.receiptUrl && (
-          <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-forest-600 underline">View</a>
+          <a
+            href={receiptHref(expense.receiptUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-forest-600 underline"
+          >View</a>
         )}
       </td>
       <td className="px-3 py-2">
@@ -750,7 +762,7 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
                       </td>
                       <td className="px-3 py-3">
                         {expense.receiptUrl ? (
-                          <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer"
+                          <a href={receiptHref(expense.receiptUrl)} target="_blank" rel="noopener noreferrer"
                             className="text-xs text-forest-600 underline hover:text-forest-800">View</a>
                         ) : <span className="text-gray-300 text-xs">—</span>}
                       </td>

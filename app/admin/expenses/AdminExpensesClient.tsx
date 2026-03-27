@@ -35,8 +35,15 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
 };
 
 // ─── Receipt viewer (handles both images and PDFs) ──────────────────────────
+function pdfProxyUrl(url: string) {
+  return `/api/pdf-proxy?url=${encodeURIComponent(url)}`;
+}
+
 function ReceiptViewer({ url, onClose }: { url: string; onClose: () => void }) {
   const isPdf = url.includes("/raw/") || /\.pdf($|\?)/i.test(url);
+  // Use the proxy for PDFs so the browser receives proper Content-Type headers
+  // and opens the file inline rather than downloading it as an unknown type.
+  const displayUrl = isPdf ? pdfProxyUrl(url) : url;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={onClose}>
       <div
@@ -51,13 +58,13 @@ function ReceiptViewer({ url, onClose }: { url: string; onClose: () => void }) {
           ×
         </button>
         {isPdf ? (
-          <iframe src={url} className="w-full h-full border-0" title="Receipt PDF" />
+          <iframe src={displayUrl} className="w-full h-full border-0" title="Receipt PDF" />
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={url} alt="Receipt" className="w-full h-full object-contain" />
+          <img src={displayUrl} alt="Receipt" className="w-full h-full object-contain" />
         )}
         <a
-          href={url}
+          href={displayUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-3 py-1 rounded-full hover:bg-black/80"
