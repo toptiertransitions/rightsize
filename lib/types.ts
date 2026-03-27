@@ -995,6 +995,7 @@ export interface Expense {
   tenantId?: string;          // Linked project (optional)
   tenantName?: string;        // Project display name (optional, denormalized)
   reimbursable: boolean;      // Whether TTT should reimburse this expense
+  billable?: boolean;         // Whether expense is billable to a client project
   paidAt?: string;            // ISO date — set when expense reimbursement is paid
 }
 

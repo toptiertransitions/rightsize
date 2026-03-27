@@ -3553,6 +3553,7 @@ function mapExpense(record: AirtableRecord): Expense {
     tenantId: toStr(f["TenantId"]) || undefined,
     tenantName: toStr(f["TenantName"]) || undefined,
     reimbursable: f["Reimbursable"] === true,
+    billable: f["Billable"] === true,
     paidAt: toStr(f["PaidAt"]) || undefined,
   };
 }
@@ -3614,7 +3615,7 @@ export async function createExpense(data: {
 
 export async function updateExpense(
   id: string,
-  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes" | "tenantId" | "tenantName" | "reimbursable">>
+  data: Partial<Pick<Expense, "date" | "vendor" | "total" | "category" | "description" | "notes" | "tenantId" | "tenantName" | "reimbursable" | "billable" | "paidAt">>
 ): Promise<Expense> {
   const fields: Record<string, unknown> = {};
   if (data.date !== undefined) fields["Date"] = data.date;
@@ -3626,6 +3627,8 @@ export async function updateExpense(
   if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId || null;
   if (data.tenantName !== undefined) fields["TenantName"] = data.tenantName || null;
   if (data.reimbursable !== undefined) fields["Reimbursable"] = data.reimbursable;
+  if (data.billable !== undefined) fields["Billable"] = data.billable;
+  if (data.paidAt !== undefined) fields["PaidAt"] = data.paidAt || null;
   const res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
   if (!res.ok) throw new Error(await res.text());
   return mapExpense(await res.json() as AirtableRecord);

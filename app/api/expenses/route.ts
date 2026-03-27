@@ -88,34 +88,50 @@ export async function POST(req: NextRequest) {
   if (receiptBase64 || receiptUrl) {
     try {
       const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-      const imageContent = receiptBase64
-        ? {
-            type: "image" as const,
-            source: {
-              type: "base64" as const,
-              media_type: (mimeType || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-              data: receiptBase64,
-            },
-          }
-        : {
-            type: "image" as const,
-            source: {
-              type: "url" as const,
-              url: receiptUrl,
-            },
-          };
 
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 512,
-        messages: [
-          {
-            role: "user",
-            content: [
-              imageContent,
-              {
-                type: "text",
-                text: `Analyze this receipt and extract the following information. Return ONLY valid JSON with no markdown or extra text:
+      // Detect if this is a PDF (Cloudinary raw uploads include /raw/ in the URL)
+      const isPdf = (mimeType === "application/pdf") ||
+        (receiptUrl && (receiptUrl.includes("/raw/") || /\.pdf($|\?)/i.test(receiptUrl)));
+
+      // Build the receipt content block for Claude
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let receiptContent: any;
+      if (isPdf) {
+        // PDFs must be sent as base64 document type
+        let pdfBase64 = receiptBase64;
+        if (!pdfBase64 && receiptUrl) {
+          const pdfRes = await fetch(receiptUrl);
+          const pdfBuf = await pdfRes.arrayBuffer();
+          pdfBase64 = Buffer.from(pdfBuf).toString("base64");
+        }
+        receiptContent = {
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: pdfBase64,
+          },
+        };
+      } else if (receiptBase64) {
+        receiptContent = {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: (mimeType || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+            data: receiptBase64,
+          },
+        };
+      } else {
+        receiptContent = {
+          type: "image",
+          source: {
+            type: "url",
+            url: receiptUrl,
+          },
+        };
+      }
+
+      const promptText = `Analyze this receipt and extract the following information. Return ONLY valid JSON with no markdown or extra text:
 {
   "date": "YYYY-MM-DD",
   "vendor": "merchant or business name",
@@ -123,9 +139,19 @@ export async function POST(req: NextRequest) {
   "category": "one of: Meals & Entertainment | Travel & Transportation | Office Supplies | Technology & Software | Marketing & Advertising | Professional Services | Utilities | Other",
   "description": "one-sentence description of what was purchased"
 }
-If any field is unclear, use sensible defaults (today's date, "Unknown" for vendor, 0 for total, "Other" for category).`,
-              },
-            ],
+If any field is unclear, use sensible defaults (today's date, "Unknown" for vendor, 0 for total, "Other" for category).`;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messageContent: any[] = [receiptContent, { type: "text", text: promptText }];
+
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
+        ...(isPdf ? { betas: ["pdfs-2024-09-25"] } : {}),
+        messages: [
+          {
+            role: "user",
+            content: messageContent,
           },
         ],
       });
