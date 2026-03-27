@@ -128,7 +128,7 @@ function ActivityEditModal({
             onChange={(e) => setType(e.target.value as CRMActivityType)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           >
-            {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+            {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
@@ -958,6 +958,7 @@ function OpportunityPanel({
                         a.type === "Call" ? "bg-green-100 text-green-700" :
                         a.type === "Meeting" ? "bg-purple-100 text-purple-700" :
                         a.type === "Task" ? "bg-orange-100 text-orange-700" :
+                        a.type === "Text Message" ? "bg-cyan-100 text-cyan-700" :
                         "bg-gray-100 text-gray-600"
                       )}>
                         {a.type}
@@ -1131,6 +1132,7 @@ function ContactActivityPanel({
                         a.type === "Call" ? "bg-green-100 text-green-700" :
                         a.type === "Meeting" ? "bg-purple-100 text-purple-700" :
                         a.type === "Task" ? "bg-orange-100 text-orange-700" :
+                        a.type === "Text Message" ? "bg-cyan-100 text-cyan-700" :
                         "bg-gray-100 text-gray-600"
                       )}>
                         {a.type}
@@ -3266,6 +3268,7 @@ const ACTIVITY_TYPE_COLORS: Record<string, string> = {
   Meeting: "bg-purple-100 text-purple-700",
   Note: "bg-gray-100 text-gray-600",
   Task: "bg-orange-100 text-orange-700",
+  "Text Message": "bg-cyan-100 text-cyan-700",
 };
 
 function ActivityLogTab({
@@ -3468,7 +3471,7 @@ function ActivityLogTab({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        {(["All", "Call", "Email", "Meeting", "Note", "Task"] as const).map((t) => (
+        {(["All", "Call", "Email", "Meeting", "Note", "Task", "Text Message"] as const).map((t) => (
           <button
             key={t}
             onClick={() => { setTypeFilter(t); setPage(1); }}

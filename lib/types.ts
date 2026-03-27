@@ -772,7 +772,7 @@ export interface ClientOpportunity {
   zip?: string;
 }
 
-export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task";
+export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task" | "Text Message";
 
 export interface CRMActivity {
   id: string;
