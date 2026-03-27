@@ -309,7 +309,7 @@ function SalesTableRow({
       <td className="pr-3 py-2.5 w-8">
         {canEdit && (
           <button onClick={() => onEdit(item)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
             title="Edit item">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -321,9 +321,9 @@ function SalesTableRow({
   );
 }
 
-// ─── PF Sale Events Timeline ──────────────────────────────────────────────────
+// ─── PF Table Row (table-based, with expandable Square sale events) ───────────
 
-function PFItemCard({
+function PFTableRow({
   item,
   initialEvents,
   canEditPayout,
@@ -346,12 +346,10 @@ function PFItemCard({
 
   const isSold = item.status === "Sold";
   const qty = item.quantity ?? 0;
-  // If manually marked Sold with no Square sales tracked, treat all units as sold
   const qtySold = (isSold && (item.quantitySold ?? 0) === 0 && qty > 0)
     ? qty
     : (item.quantitySold ?? 0);
-  const qtyTotal = qty + (item.quantitySold ?? 0); // original total = remaining + square-sold
-  const hasQtyData = qtyTotal > 0;
+  const qtyTotal = qty + (item.quantitySold ?? 0);
 
   async function loadEvents() {
     if (loaded) return;
@@ -392,186 +390,171 @@ function PFItemCard({
   }
 
   const totalOwed = events.reduce((s, e) => s + (e.payoutPaid ? 0 : e.clientPayout), 0);
-  const totalPaidEvents = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
+  const totalPaidAmt = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
 
   return (
-    <div className={cn(
-      "bg-white rounded-xl border overflow-hidden",
-      isSold ? "border-green-200" : "border-gray-200"
-    )}>
-      {/* Header row */}
-      <div className="flex items-center gap-3 p-3">
+    <>
+      <tr className={cn("group border-b border-gray-50 transition-colors", isSold ? "bg-green-50/20 hover:bg-green-50/40" : "hover:bg-gray-50/60", expanded && "border-b-0")}>
         {/* Thumbnail */}
-        <div className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
-          {item.photoUrl ? (
-            <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="48px" />
-          ) : (
-            <div className="h-full flex items-center justify-center text-gray-300">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-          )}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className={cn(
-              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
-              STATUS_COLORS[item.status]
-            )}>
-              {item.status}
-            </span>
-            {item.barcodeNumber && (
-              <span className="text-[10px] text-gray-400">#{item.barcodeNumber}</span>
+        <td className="pl-3 py-2.5 w-10">
+          <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+            {item.photoUrl ? (
+              <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="36px" />
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-200">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
             )}
           </div>
-        </div>
-
-        {/* Value */}
-        {item.valueMid > 0 && (
-          <div className="text-right flex-shrink-0 hidden sm:block">
-            <div className="text-xs text-gray-400">Value</div>
-            <div className="text-sm font-medium text-gray-700 tabular-nums">{fmtCurrency(item.valueMid)}</div>
+        </td>
+        {/* Name + category + barcode */}
+        <td className="px-3 py-2.5 max-w-[200px]">
+          <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+          <div className="flex items-center gap-2">
+            {item.category && <div className="text-[11px] text-gray-400 truncate">{item.category}</div>}
+            {item.barcodeNumber && <span className="text-[10px] text-gray-300">#{item.barcodeNumber}</span>}
           </div>
-        )}
-
-        {/* Qty progress */}
-        <div className="text-right flex-shrink-0">
-          {hasQtyData ? (
-            <div className="text-sm font-semibold text-gray-900">
-              {qtySold} of {qtyTotal} sold
+        </td>
+        {/* Status */}
+        <td className="px-2 py-2.5 whitespace-nowrap">
+          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", STATUS_COLORS[item.status])}>
+            {item.status}
+          </span>
+        </td>
+        {/* Value */}
+        <td className="px-2 py-2.5 text-right text-sm whitespace-nowrap tabular-nums">
+          <span className="text-gray-600">{item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">—</span>}</span>
+        </td>
+        {/* Progress */}
+        <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
+          {qtyTotal > 0 ? (
+            <div>
+              <div className="text-sm font-semibold text-gray-900 tabular-nums">{qtySold}/{qtyTotal}</div>
+              <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden mt-1 ml-auto">
+                <div
+                  className={cn("h-full rounded-full", isSold ? "bg-green-400" : "bg-purple-400")}
+                  style={{ width: `${Math.min(100, qtyTotal > 0 ? (qtySold / qtyTotal) * 100 : 0)}%` }}
+                />
+              </div>
             </div>
-          ) : (
-            <div className="text-sm text-gray-400">—</div>
-          )}
-          {item.clientSharePercent != null && (
-            <div className="text-[10px] text-gray-400">{item.clientSharePercent}% share</div>
-          )}
-        </div>
-
-        {/* Edit + expand */}
-        <div className="flex items-center gap-1">
-          {canEdit && (
+          ) : <span className="text-gray-300 text-sm">—</span>}
+        </td>
+        {/* Payout summary */}
+        <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
+          {events.length > 0 ? (
+            <div>
+              {totalOwed > 0 && <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(totalOwed)} owed</div>}
+              {totalPaidAmt > 0 && <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(totalPaidAmt)} paid</div>}
+            </div>
+          ) : item.clientSharePercent != null ? (
+            <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
+          ) : <span className="text-gray-300">—</span>}
+        </td>
+        {/* Actions */}
+        <td className="pr-3 py-2.5 w-16">
+          <div className="flex items-center gap-1 justify-end">
+            {canEdit && (
+              <button
+                onClick={() => onEdit(item)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                title="Edit item"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            )}
             <button
-              onClick={() => onEdit(item)}
+              onClick={handleToggle}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              title="Edit item"
+              title={expanded ? "Hide sales" : "Show sales"}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              <svg
+                className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-          )}
-          <button
-            onClick={handleToggle}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            title={expanded ? "Hide sales" : "Show sales"}
-          >
-            <svg
-              className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      {qtyTotal > 0 && (
-        <div className="px-3 pb-2">
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={cn("h-full rounded-full transition-all", isSold ? "bg-green-400" : "bg-purple-400")}
-              style={{ width: `${Math.min(100, (qtySold / qtyTotal) * 100)}%` }}
-            />
           </div>
-        </div>
-      )}
-
-      {/* Sale events accordion */}
+        </td>
+      </tr>
+      {/* Expanded sale events sub-row */}
       {expanded && (
-        <div className="border-t border-gray-100">
-          {loading ? (
-            <div className="px-4 py-5 text-center text-xs text-gray-400">Loading sale events…</div>
-          ) : events.length === 0 ? (
-            <div className="px-4 py-5 text-center text-xs text-gray-400">No Square sales recorded yet</div>
-          ) : (
-            <>
-              {/* Event rows */}
-              <div className="divide-y divide-gray-50">
-                {events.map(evt => (
-                  <div key={evt.id} className="px-4 py-2.5 flex items-center gap-3">
-                    {/* Date */}
-                    <div className="text-[11px] text-gray-400 w-20 flex-shrink-0">
-                      {new Date(evt.saleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </div>
-
-                    {/* Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-700">
-                        <span className="font-medium">{evt.quantitySold} unit{evt.quantitySold !== 1 ? "s" : ""}</span>
-                        {" @ "}
-                        <span>{fmtCurrency(evt.unitPrice)}</span>
-                        {" = "}
-                        <span className="font-medium">{fmtCurrency(evt.totalAmount)}</span>
+        <tr className={cn(isSold ? "bg-green-50/10" : "bg-gray-50/30")}>
+          <td colSpan={7} className="px-0 py-0 border-b border-gray-100">
+            {loading ? (
+              <div className="px-6 py-4 text-center text-xs text-gray-400">Loading sale events…</div>
+            ) : events.length === 0 ? (
+              <div className="px-6 py-4 text-center text-xs text-gray-400">No Square sales recorded yet</div>
+            ) : (
+              <>
+                <div className="divide-y divide-gray-100">
+                  {events.map(evt => (
+                    <div key={evt.id} className="px-6 py-2.5 flex items-center gap-3">
+                      <div className="text-[11px] text-gray-400 w-20 flex-shrink-0">
+                        {new Date(evt.saleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        Client payout: <span className="font-medium text-green-700">{fmtCurrency(evt.clientPayout)}</span>
-                        {evt.payoutPaidAt && (
-                          <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt).toLocaleDateString()}</span>
-                        )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-gray-700">
+                          <span className="font-medium">{evt.quantitySold} unit{evt.quantitySold !== 1 ? "s" : ""}</span>
+                          {" @ "}
+                          <span>{fmtCurrency(evt.unitPrice)}</span>
+                          {" = "}
+                          <span className="font-medium">{fmtCurrency(evt.totalAmount)}</span>
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          Client payout: <span className="font-medium text-green-700">{fmtCurrency(evt.clientPayout)}</span>
+                          {evt.payoutPaidAt && (
+                            <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt).toLocaleDateString()}</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Payout toggle */}
-                    {canEditPayout ? (
-                      <button
-                        onClick={() => togglePayout(evt)}
-                        disabled={togglingId === evt.id}
-                        className={cn(
-                          "text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
+                      {canEditPayout ? (
+                        <button
+                          onClick={() => togglePayout(evt)}
+                          disabled={togglingId === evt.id}
+                          className={cn(
+                            "text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
+                            evt.payoutPaid
+                              ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                              : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
+                            togglingId === evt.id && "opacity-50 cursor-wait"
+                          )}
+                        >
+                          {togglingId === evt.id ? "\u2026" : evt.payoutPaid ? "Paid" : "Unpaid"}
+                        </button>
+                      ) : (
+                        <span className={cn(
+                          "text-[10px] font-semibold px-2 py-1 rounded-full border",
                           evt.payoutPaid
-                            ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                            : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
-                          togglingId === evt.id && "opacity-50 cursor-wait"
-                        )}
-                      >
-                        {togglingId === evt.id ? "…" : evt.payoutPaid ? "Paid" : "Unpaid"}
-                      </button>
-                    ) : (
-                      <span className={cn(
-                        "text-[10px] font-semibold px-2 py-1 rounded-full border",
-                        evt.payoutPaid
-                          ? "bg-green-50 border-green-200 text-green-700"
-                          : "bg-amber-50 border-amber-200 text-amber-700"
-                      )}>
-                        {evt.payoutPaid ? "Paid" : "Unpaid"}
-                      </span>
-                    )}
+                            ? "bg-green-50 border-green-200 text-green-700"
+                            : "bg-amber-50 border-amber-200 text-amber-700"
+                        )}>
+                          {evt.payoutPaid ? "Paid" : "Unpaid"}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="px-6 py-2.5 border-t border-gray-100 flex gap-6 text-xs bg-white/60">
+                  <div>
+                    <span className="text-gray-400">Total owed: </span>
+                    <span className="font-semibold text-amber-700">{fmtCurrency(totalOwed)}</span>
                   </div>
-                ))}
-              </div>
-
-              {/* Totals footer */}
-              <div className="px-4 py-2.5 bg-gray-50 flex gap-6 text-xs">
-                <div>
-                  <span className="text-gray-400">Total owed: </span>
-                  <span className="font-semibold text-amber-700">{fmtCurrency(totalOwed)}</span>
+                  <div>
+                    <span className="text-gray-400">Total paid: </span>
+                    <span className="font-semibold text-green-700">{fmtCurrency(totalPaidAmt)}</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-gray-400">Total paid: </span>
-                  <span className="font-semibold text-green-700">{fmtCurrency(totalPaidEvents)}</span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </td>
+        </tr>
       )}
-    </div>
+    </>
   );
 }
 
@@ -591,6 +574,7 @@ function PFSalesSection({
   onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
   type SortCol = "name" | "value" | "status" | "qty";
+  const [open, setOpen] = useState(true);
   const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
   const [filterStatus, setFilterStatus] = useState("");
 
@@ -599,7 +583,6 @@ function PFSalesSection({
   const totalQty = items.reduce((s, i) => s + ((i.quantity ?? 0) + (i.quantitySold ?? 0)), 0);
   const totalSold = items.reduce((s, i) => s + (i.quantitySold ?? 0), 0);
   const statuses = [...new Set(items.map(i => i.status))].sort();
-
   const hasPartial = items.some(i => (i.quantitySold ?? 0) > 0 && i.status !== "Sold");
 
   const filtered = !filterStatus ? items : items.filter(i => {
@@ -629,14 +612,15 @@ function PFSalesSection({
     setSort(prev => prev.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" });
   }
 
-  function SortBtn({ col, label }: { col: SortCol; label: string }) {
+  function ThBtn({ col, label, right }: { col: SortCol; label: string; right?: boolean }) {
     const active = sort.col === col;
     return (
       <button onClick={() => toggleSort(col)}
-        className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors flex items-center gap-1",
-          active ? "border-forest-400 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+        className={cn("flex items-center gap-0.5 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+          active ? "text-forest-700" : "text-gray-400 hover:text-gray-600",
+          right && "ml-auto")}>
         {label}
-        <span className="text-[9px]">{active ? (sort.dir === "asc" ? "▲" : "▼") : ""}</span>
+        <span className="text-[9px]">{active ? (sort.dir === "asc" ? "\u25b2" : "\u25bc") : "\u21c5"}</span>
       </button>
     );
   }
@@ -644,63 +628,85 @@ function PFSalesSection({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-3">
-        <h2 className="text-base font-semibold text-gray-900">ProFoundFinds Consignment</h2>
-        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-          {items.length} items
-        </span>
-        {totalQty > 0 && (
-          <span className="text-xs text-gray-400">
-            {totalSold} of {totalQty} units sold
-          </span>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <span className="text-[11px] text-gray-400 font-medium">Sort:</span>
-        <SortBtn col="name" label="Name" />
-        <SortBtn col="value" label="Value" />
-        <SortBtn col="status" label="Status" />
-        <SortBtn col="qty" label="Qty Sold" />
-        {(statuses.length > 1 || hasPartial) && (
-          <>
-            <span className="text-[11px] text-gray-400 font-medium ml-2">Filter:</span>
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex items-center gap-2 hover:opacity-75 transition-opacity"
+        >
+          <h2 className="text-base font-semibold text-gray-900">ProFoundFinds Consignment</h2>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length}</span>
+          {totalQty > 0 && (
+            <span className="text-xs text-gray-400">{totalSold} of {totalQty} sold</span>
+          )}
+          <svg
+            className={cn("w-4 h-4 text-gray-400 transition-transform duration-200", !open && "-rotate-90")}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {open && (statuses.length > 1 || hasPartial) && (
+          <div className="flex gap-1.5 ml-1 flex-wrap">
             <button onClick={() => setFilterStatus("")}
-              className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors",
-                filterStatus === "" ? "border-forest-400 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+              className={cn("text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                filterStatus === "" ? "border-forest-500 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
               All
             </button>
             {statuses.map(s => (
               <button key={s} onClick={() => setFilterStatus(s === filterStatus ? "" : s)}
-                className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors",
-                  filterStatus === s ? "border-forest-400 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
+                className={cn("text-xs px-2.5 py-0.5 rounded-full border transition-colors",
+                  filterStatus === s ? "border-forest-500 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
                 {s}
               </button>
             ))}
             {hasPartial && (
               <button onClick={() => setFilterStatus(filterStatus === "__partial__" ? "" : "__partial__")}
-                className={cn("text-xs px-2.5 py-1 rounded-lg border transition-colors",
+                className={cn("text-xs px-2.5 py-0.5 rounded-full border transition-colors",
                   filterStatus === "__partial__" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-gray-200 text-gray-500 hover:border-gray-300")}>
                 Partially Sold
               </button>
             )}
-          </>
+          </div>
         )}
       </div>
-      <div className="space-y-2">
-        {sorted.map(item => (
-          <PFItemCard
-            key={item.id}
-            item={item}
-            initialEvents={allEvents.filter(e => e.itemId === item.id)}
-            canEditPayout={canEditPayout}
-            canEdit={canEdit}
-            onEdit={onEdit}
-            onEventUpdated={onEventUpdated}
-          />
-        ))}
-      </div>
+      {open && (
+        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="pl-3 py-2.5 w-10" />
+                <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
+                <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
+                <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
+                <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="qty" label="Progress" right /></th>
+                <th className="px-2 py-2.5 text-right hidden sm:table-cell">
+                  <span className="flex items-center justify-end text-[11px] font-semibold uppercase tracking-wide text-gray-400">Payout</span>
+                </th>
+                <th className="pr-3 py-2.5 w-16" />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(item => (
+                <PFTableRow
+                  key={item.id}
+                  item={item}
+                  initialEvents={allEvents.filter(e => e.itemId === item.id)}
+                  canEditPayout={canEditPayout}
+                  canEdit={canEdit}
+                  onEdit={onEdit}
+                  onEventUpdated={onEventUpdated}
+                />
+              ))}
+            </tbody>
+          </table>
+          {sorted.length === 0 && (
+            <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ─── Sales Table (FB, Online, Other Consignment) ──────────────────────────────
 
@@ -724,6 +730,7 @@ function SalesTable({
   onEdit: (item: Item) => void;
 }) {
   type SortCol = "name" | "category" | "status" | "value" | "salePrice" | "payout" | "paid" | "paidDate";
+  const [open, setOpen] = useState(true);
   const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
   const [filterStatus, setFilterStatus] = useState("");
 
@@ -775,9 +782,19 @@ function SalesTable({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-3">
-        {title && <h2 className="text-base font-semibold text-gray-900">{title}</h2>}
-        {title && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length}</span>}
-        {statuses.length > 1 && (
+        {title && (
+          <button onClick={() => setOpen(v => !v)} className="flex items-center gap-2 hover:opacity-75 transition-opacity">
+            <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length}</span>
+            <svg
+              className={cn("w-4 h-4 text-gray-400 transition-transform duration-200", !open && "-rotate-90")}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+        {open && statuses.length > 1 && (
           <div className="flex gap-1.5 ml-1">
             <button onClick={() => setFilterStatus("")}
               className={cn("text-xs px-2.5 py-0.5 rounded-full border transition-colors",
@@ -794,40 +811,42 @@ function SalesTable({
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="pl-3 py-2.5 w-10" />
-              <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
-              <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
-              <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
-              <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
-              <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>
-              <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>
-              <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>
-              <th className="pr-3 py-2.5 w-8" />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(item => (
-              <SalesTableRow
-                key={item.id}
-                item={item}
-                canEditPayout={canEditPayout}
-                canEdit={canEdit}
-                calcPayout={calcPayouts.get(item.id) ?? null}
-                onPayoutSaved={onPayoutSaved}
-                onSalePriceSaved={onSalePriceSaved}
-                onEdit={onEdit}
-              />
-            ))}
-          </tbody>
-        </table>
-        {sorted.length === 0 && (
-          <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
-        )}
-      </div>
+      {open && (
+        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="pl-3 py-2.5 w-10" />
+                <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
+                <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
+                <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
+                <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
+                <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>
+                <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>
+                <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>
+                <th className="pr-3 py-2.5 w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(item => (
+                <SalesTableRow
+                  key={item.id}
+                  item={item}
+                  canEditPayout={canEditPayout}
+                  canEdit={canEdit}
+                  calcPayout={calcPayouts.get(item.id) ?? null}
+                  onPayoutSaved={onPayoutSaved}
+                  onSalePriceSaved={onSalePriceSaved}
+                  onEdit={onEdit}
+                />
+              ))}
+            </tbody>
+          </table>
+          {sorted.length === 0 && (
+            <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -988,6 +1007,8 @@ export function SalesClient({
   const [proofFiles, setProofFiles] = useState<ProjectFile[]>(paymentProofFiles);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [openOther, setOpenOther] = useState(true);
 
   // Consignment expense state
   const [expense, setExpense] = useState(initialConsignmentExpense);
@@ -1077,11 +1098,16 @@ export function SalesClient({
     if (calc) calcPayouts.set(item.id, calc);
   }
 
-  // Split by route
-  const profound = items.filter(i => i.primaryRoute === "ProFoundFinds Consignment");
-  const fb = items.filter(i => i.primaryRoute === "FB/Marketplace");
-  const online = items.filter(i => i.primaryRoute === "Online Marketplace");
-  const other = items.filter(i => i.primaryRoute === "Other Consignment");
+  // Global search filter
+  const allItemNames = [...new Set(items.map(i => i.itemName))].sort();
+  const searchNorm = globalSearch.toLowerCase().trim();
+  const matchesSearch = (i: Item) => !searchNorm || i.itemName.toLowerCase().includes(searchNorm);
+
+  // Split by route (with search filter applied)
+  const profound = items.filter(i => i.primaryRoute === "ProFoundFinds Consignment" && matchesSearch(i));
+  const fb = items.filter(i => i.primaryRoute === "FB/Marketplace" && matchesSearch(i));
+  const online = items.filter(i => i.primaryRoute === "Online Marketplace" && matchesSearch(i));
+  const other = items.filter(i => i.primaryRoute === "Other Consignment" && matchesSearch(i));
 
   // Group "Other Consignment" by vendor — assignedVendorId is a LocalVendor ID
   const otherByVendor = new Map<string, Item[]>();
@@ -1349,6 +1375,38 @@ export function SalesClient({
         {expandableCard(2, "Still owed to client", totalOwed, totalOwed > 0 ? "text-amber-600" : "text-gray-400", r => Math.max(0, r.earned - r.paid - expense))}
       </div>
 
+      {/* Global item search */}
+      {items.length > 0 && (
+        <div className="mb-6">
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={globalSearch}
+              onChange={e => setGlobalSearch(e.target.value)}
+              placeholder="Search items across all sections…"
+              list="sales-item-names"
+              className="w-full pl-9 pr-9 h-10 rounded-xl border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 placeholder:text-gray-400"
+            />
+            {globalSearch && (
+              <button
+                onClick={() => setGlobalSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          <datalist id="sales-item-names">
+            {allItemNames.map(name => <option key={name} value={name} />)}
+          </datalist>
+        </div>
+      )}
+
       {/* Sections */}
       <div className="space-y-10">
         <PFSalesSection
@@ -1384,35 +1442,45 @@ export function SalesClient({
         {other.length > 0 && (
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-base font-semibold text-gray-900">Other Consignment Store</h2>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{other.length}</span>
+              <button onClick={() => setOpenOther(v => !v)} className="flex items-center gap-2 hover:opacity-75 transition-opacity">
+                <h2 className="text-base font-semibold text-gray-900">Other Consignment Store</h2>
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{other.length}</span>
+                <svg
+                  className={cn("w-4 h-4 text-gray-400 transition-transform duration-200", !openOther && "-rotate-90")}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
             </div>
-            {!isTTT && (
+            {openOther && !isTTT && (
               <p className="text-xs text-gray-500 mb-4">
                 Client share on Other Consignment Store is set to 50% for self-managed projects.
                 This rate may be adjusted if your project transitions to a full TTT service agreement.
               </p>
             )}
-            <div className="space-y-6">
-              {[...otherByVendor.entries()].map(([vendorName, vendorItems]) => (
-                <div key={vendorName}>
-                  <div className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />
-                    {vendorName}
+            {openOther && (
+              <div className="space-y-6 mt-3">
+                {[...otherByVendor.entries()].map(([vendorName, vendorItems]) => (
+                  <div key={vendorName}>
+                    <div className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />
+                      {vendorName}
+                    </div>
+                    <SalesTable
+                      title=""
+                      items={vendorItems}
+                      canEditPayout={canEditPayout}
+                      canEdit={canEdit}
+                      calcPayouts={calcPayouts}
+                      onPayoutSaved={handlePayoutSaved}
+                      onSalePriceSaved={handleSalePriceSaved}
+                      onEdit={setEditingItem}
+                    />
                   </div>
-                  <SalesTable
-                    title=""
-                    items={vendorItems}
-                    canEditPayout={canEditPayout}
-                    canEdit={canEdit}
-                    calcPayouts={calcPayouts}
-                    onPayoutSaved={handlePayoutSaved}
-                    onSalePriceSaved={handleSalePriceSaved}
-                    onEdit={setEditingItem}
-                  />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -1025,17 +1025,17 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               </div>
             )}
 
-            {/* Start / End — stacked on mobile, side-by-side on sm+ */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
+            {/* Start / End — always side-by-side */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">Start Time</label>
                 <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+                  className="w-full min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">End Time</label>
                 <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+                  className="w-full min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
               </div>
             </div>
 
