@@ -11,6 +11,7 @@ const PRIMARY_ROUTES: PrimaryRoute[] = [
 ];
 
 const ROUTE_DISPLAY: Partial<Record<PrimaryRoute, string>> = {
+  "Online Marketplace": "eBay",
   "Other Consignment": "Other Consignment Store",
 };
 const routeLabel = (r: PrimaryRoute) => ROUTE_DISPLAY[r] ?? r;
@@ -360,7 +361,7 @@ export function RoutingRulesClient({ initialRules, vendors: _vendors }: Props) {
         {/* Hard-constraint notice */}
         <div className="mb-4 p-3 bg-gray-800/60 border border-gray-700 rounded-xl text-xs text-gray-400 space-y-0.5">
           <p className="font-semibold text-gray-300">Hard constraints (always enforced, override all rules):</p>
-          <p>· Fits in Car-SUV and Needs Movers items are <span className="text-red-400">never</span> routed to Online Marketplace</p>
+          <p>· Fits in Car-SUV and Needs Movers items are <span className="text-red-400">never</span> routed to eBay</p>
           <p>· Items in Fair / Poor / For Parts condition are auto-routed to <span className="text-teal-400">Donate</span> (≥$100 target value) or <span className="text-red-400">Discard</span> (&lt;$100)</p>
         </div>
 

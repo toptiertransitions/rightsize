@@ -43,7 +43,7 @@ const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray"
   "Family Keeping":               { variant: "green",  label: "Family" },
   "ProFoundFinds Consignment":    { variant: "orange", label: "ProFoundFinds" },
   "FB/Marketplace":               { variant: "blue",   label: "FB/Marketplace" },
-  "Online Marketplace":           { variant: "blue",   label: "Online" },
+  "Online Marketplace":           { variant: "blue",   label: "eBay" },
   "Other Consignment":            { variant: "purple", label: "Other Consign Store" },
   "Donate":                       { variant: "teal",   label: "Donate" },
   "Discard":                      { variant: "gray",   label: "Discard" },
@@ -642,7 +642,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Family Keeping",               label: "Family Keeping" },
                   ...(isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                   { value: "FB/Marketplace",               label: "FB/Marketplace" },
-                  { value: "Online Marketplace",           label: "Online Marketplace" },
+                  { value: "Online Marketplace",           label: "eBay" },
                   { value: "Other Consignment",            label: "Other Consignment Store" },
                   { value: "Donate",                       label: "Donate" },
                   { value: "Discard",                      label: "Discard" },
@@ -1142,7 +1142,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="Family Keeping">Family Keeping</option>
           {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
           <option value="FB/Marketplace">FB/Marketplace</option>
-          <option value="Online Marketplace">Online Marketplace</option>
+          <option value="Online Marketplace">eBay</option>
           <option value="Other Consignment">Other Consignment Store</option>
           <option value="Donate">Donate</option>
           <option value="Discard">Discard</option>

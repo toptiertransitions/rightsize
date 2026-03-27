@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod } from "@/lib/types";
+import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod, StaffMember } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { PayoutModal } from "./PayoutModal";
 import { ZellePayments } from "./ZellePayments";
@@ -112,6 +112,8 @@ interface SalesClientProps {
   canEditExpense?: boolean;
   initialConsignmentExpense?: number;
   initialConsignmentExpenseNote?: string;
+  staffMembers?: StaffMember[];
+  isTTTUser?: boolean;
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -977,6 +979,8 @@ export function SalesClient({
   canEditExpense = false,
   initialConsignmentExpense = 0,
   initialConsignmentExpenseNote = "",
+  staffMembers = [],
+  isTTTUser = false,
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -1157,7 +1161,7 @@ export function SalesClient({
   const allBreakdownRows = [
     { label: "ProFoundFinds", earned: pfTotalEarned, paid: pfTotalPaid },
     { label: "FB/Marketplace", earned: fbEarned, paid: fbPaid },
-    { label: "Online Marketplace", earned: onlineEarned, paid: onlinePaid },
+    { label: "eBay", earned: onlineEarned, paid: onlinePaid },
     ...otherVendorBreakdown,
   ];
 
@@ -1366,7 +1370,7 @@ export function SalesClient({
           onEdit={setEditingItem}
         />
         <SalesTable
-          title="Online Marketplace"
+          title="eBay"
           items={online}
           canEditPayout={canEditPayout}
           canEdit={canEdit}
@@ -1528,6 +1532,8 @@ export function SalesClient({
           localVendors={localVendors}
           canReassign={canReassign}
           allTenants={allTenants}
+          staffMembers={staffMembers}
+          isTTTUser={isTTTUser}
           onClose={() => setEditingItem(null)}
           onSaved={handleItemSaved}
           onDeleted={handleItemDeleted}

@@ -16,7 +16,7 @@ const CLIENT_FAQS = [
   },
   {
     q: "How does consignment work?",
-    a: "Items routed to consignment (FB/Marketplace, Online Marketplace, or Other Consignment Store) are sold on your behalf. Your share of the sale proceeds is tracked on the Sales page. Once an item sells, your payout is calculated automatically and recorded when payment is sent.",
+    a: "Items routed to consignment (FB/Marketplace, eBay, or Other Consignment Store) are sold on your behalf. Your share of the sale proceeds is tracked on the Sales page. Once an item sells, your payout is calculated automatically and recorded when payment is sent.",
   },
   {
     q: "Where can I see my project plan and timeline?",

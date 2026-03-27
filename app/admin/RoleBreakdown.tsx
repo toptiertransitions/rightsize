@@ -28,7 +28,7 @@ const NON_TTT_CLIENT_ROLES = [
     label: "Non-TTT Owner",
     color: "border-orange-700",
     badge: "bg-orange-900/50 text-orange-300",
-    desc: "Self-managed project owner. Catalogs and routes items independently to FB/Marketplace, Online Marketplace, or Other Consignment Store. Receives higher client share rates (100% marketplace, 50% consignment). Uses the Free Estimator on Home for self-service hour estimates. No TTT staff, formal contract, or TTT-issued invoices.",
+    desc: "Self-managed project owner. Catalogs and routes items independently to FB/Marketplace, eBay, or Other Consignment Store. Receives higher client share rates (100% marketplace, 50% consignment). Uses the Free Estimator on Home for self-service hour estimates. No TTT staff, formal contract, or TTT-issued invoices.",
   },
 ] as const;
 
@@ -38,7 +38,7 @@ const STAFF_ROLES = [
     label: "TTT Staff",
     color: "border-gray-600",
     badge: "bg-gray-700 text-gray-300",
-    desc: "Field staff who log time, access client project data, edit sale prices, view Venmo/Zelle payment QR codes and the real-time Zelle Payment Feed on the Sales page, edit project addresses from /home, assign themselves as Staff Seller on FB/Online Marketplace items, filter the Catalog by staff seller, submit & associate expenses with projects (reimbursable by default), and access the Help tab.",
+    desc: "Field staff who log time, access client project data, edit sale prices, view Venmo/Zelle payment QR codes and the real-time Zelle Payment Feed on the Sales page, edit project addresses from /home, assign themselves as Staff Seller on FB/eBay items, filter the Catalog by staff seller, submit & associate expenses with projects (reimbursable by default), and access the Help tab.",
   },
   {
     key: "TTTManager",
@@ -97,7 +97,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Route & approve items",       permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: "partial", TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite members to project",   permissions: { Owner: true,  Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Archive project",             permissions: { Owner: true,  Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "Assign Staff Seller on FB/Online Marketplace items", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Assign Staff Seller on FB/eBay items", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Filter Catalog by Staff Seller",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Completed Date auto-stamp (status → Sold/Donated/Discarded)", permissions: { Owner: true, Collaborator: true, Viewer: false, NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Completed Date column & sort in Catalog table view", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
@@ -109,9 +109,9 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Formal TTT contract & signed quote",            permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Receives TTT-issued invoices",                  permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "ProFoundFinds Consignment routing available",   permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
-  { label: "TTT-managed payout rates (67% PF, 59% FB/Online)", permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "TTT-managed payout rates (67% PF, 59% FB/eBay)", permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Self-service Free Estimator (Home page)",       permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
-  { label: "FB & Online Marketplace at 100% client share",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "FB & eBay at 100% client share",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "Other Consignment Store at 50% client share (self-managed)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "Visible to TTT Staff in project views & time tracker", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Invoices" },

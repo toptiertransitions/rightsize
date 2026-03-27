@@ -13,6 +13,7 @@ import {
   getItemSaleEventsForTenant,
   getTenants,
   getInvoiceSettings,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { SalesClient } from "./SalesClient";
 import type { PrimaryRoute } from "@/lib/types";
@@ -44,7 +45,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     redirect("/home");
   }
 
-  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants, invoiceSettings] = await Promise.all([
+  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants, invoiceSettings, staffMembers] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getItemsForTenant(tenantId).catch(() => []),
@@ -56,6 +57,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     getItemSaleEventsForTenant(tenantId).catch(() => []),
     getTenants().catch(() => []),
     getInvoiceSettings().catch(() => null),
+    getStaffMembers().catch(() => []),
   ]);
 
   if (!tenant) redirect("/home");
@@ -115,6 +117,8 @@ export default async function SalesPage({ searchParams }: PageProps) {
       canEditExpense={canEditExpense}
       initialConsignmentExpense={tenant.consignmentExpense ?? 0}
       initialConsignmentExpenseNote={tenant.consignmentExpenseNote ?? ""}
+      staffMembers={isStaff ? staffMembers : []}
+      isTTTUser={isStaff}
     />
   );
 }
