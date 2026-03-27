@@ -3629,8 +3629,20 @@ export async function updateExpense(
   if (data.reimbursable !== undefined) fields["Reimbursable"] = data.reimbursable;
   if (data.billable !== undefined) fields["Billable"] = data.billable;
   if (data.paidAt !== undefined) fields["PaidAt"] = data.paidAt || null;
-  const res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
-  if (!res.ok) throw new Error(await res.text());
+  let res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+  if (!res.ok) {
+    const errText = await res.text();
+    // Airtable returns UNKNOWN_FIELD_NAME when optional new fields haven't been added yet —
+    // retry without them so existing saves still work.
+    if (errText.includes("UNKNOWN_FIELD_NAME")) {
+      delete fields["Billable"];
+      delete fields["PaidAt"];
+      res = await expensesFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+      if (!res.ok) throw new Error(await res.text());
+    } else {
+      throw new Error(errText);
+    }
+  }
   return mapExpense(await res.json() as AirtableRecord);
 }
 

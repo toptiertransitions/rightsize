@@ -92,6 +92,7 @@ function EditRow({
   const [tenantId, setTenantId] = useState(expense.tenantId ?? "");
   const [tenantNameInput, setTenantNameInput] = useState(expense.tenantName ?? "");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   // When tenant dropdown changes, also derive tenantName
   const selectedTenant = allTenants.find(t => t.id === tenantId);
@@ -99,27 +100,35 @@ function EditRow({
 
   async function handleSave() {
     setSaving(true);
-    const res = await fetch("/api/expenses", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: expense.id,
-        date,
-        vendor,
-        total: parseFloat(total) || 0,
-        category,
-        description,
-        notes,
-        reimbursable,
-        billable,
-        tenantId: tenantId || null,
-        tenantName: tenantName || null,
-      }),
-    });
-    setSaving(false);
-    if (res.ok) {
+    setSaveError("");
+    try {
+      const res = await fetch("/api/expenses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: expense.id,
+          date,
+          vendor,
+          total: parseFloat(total) || 0,
+          category,
+          description,
+          notes,
+          reimbursable,
+          billable,
+          tenantId: tenantId || null,
+          tenantName: tenantName || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Save failed (${res.status})`);
+      }
       const data = await res.json();
       onSave(data.expense);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -166,14 +175,17 @@ function EditRow({
       <td className="px-3 py-2 text-xs text-gray-500">—</td>
       {/* Actions */}
       <td className="px-3 py-2">
-        <div className="flex gap-1">
-          <button onClick={handleSave} disabled={saving}
-            className="px-2 py-1 text-xs bg-forest-600 text-white rounded hover:bg-forest-700 disabled:opacity-50">
-            {saving ? "…" : "Save"}
-          </button>
-          <button onClick={onCancel} className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600">
-            Cancel
-          </button>
+        <div className="flex flex-col gap-1">
+          <div className="flex gap-1">
+            <button onClick={handleSave} disabled={saving}
+              className="px-2 py-1 text-xs bg-forest-600 text-white rounded hover:bg-forest-700 disabled:opacity-50">
+              {saving ? "…" : "Save"}
+            </button>
+            <button onClick={onCancel} className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600">
+              Cancel
+            </button>
+          </div>
+          {saveError && <p className="text-xs text-red-400 whitespace-nowrap">{saveError}</p>}
         </div>
       </td>
     </tr>

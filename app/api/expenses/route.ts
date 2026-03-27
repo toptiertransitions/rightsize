@@ -144,17 +144,20 @@ If any field is unclear, use sensible defaults (today's date, "Unknown" for vend
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const messageContent: any[] = [receiptContent, { type: "text", text: promptText }];
 
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 512,
-        ...(isPdf ? { betas: ["pdfs-2024-09-25"] } : {}),
-        messages: [
-          {
-            role: "user",
-            content: messageContent,
-          },
-        ],
-      });
+      // PDFs require client.beta.messages.create() with betas in the body;
+      // regular client.messages.create() silently ignores a top-level betas field.
+      const response = isPdf
+        ? await client.beta.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 512,
+            betas: ["pdfs-2024-09-25"],
+            messages: [{ role: "user", content: messageContent }],
+          })
+        : await client.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 512,
+            messages: [{ role: "user", content: messageContent }],
+          });
 
       const raw = response.content[0].type === "text" ? response.content[0].text : "";
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
