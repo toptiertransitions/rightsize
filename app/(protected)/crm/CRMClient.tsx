@@ -923,7 +923,7 @@ function OpportunityPanel({
                   onChange={(e) => setActivityType(e.target.value as CRMActivityType)}
                   className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
                 >
-                  {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+                  {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
@@ -1085,7 +1085,7 @@ function ContactActivityPanel({
                 onChange={(e) => setActivityType(e.target.value as CRMActivityType)}
                 className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
               >
-                {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+                {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
@@ -3744,7 +3744,7 @@ function ActivityLogTab({
                   onChange={(e) => setLogForm((f) => ({ ...f, type: e.target.value as CRMActivityType }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 >
-                  {(["Call", "Email", "Meeting", "Note", "Task"] as CRMActivityType[]).map((t) => (
+                  {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
