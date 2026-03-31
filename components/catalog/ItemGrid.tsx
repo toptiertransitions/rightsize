@@ -1297,11 +1297,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       <span className="text-sm font-bold text-forest-700">
                         {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
                       </span>
-                      {item.primaryRoute === "ProFoundFinds Consignment" && item.deliveryDate && (
-                        <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200 flex-shrink-0">
-                          PF Active
-                        </span>
-                      )}
+
                     </div>
                     <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
                       {route.label}
