@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { revalidateTag } from "next/cache";
 import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole, getTenants } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
 
@@ -117,6 +118,7 @@ export async function PATCH(req: NextRequest) {
     destState: destState !== undefined ? (destState as string | null) : undefined,
     destZip: destZip !== undefined ? (destZip as string | null) : undefined,
   });
+  revalidateTag("tenants");
   return NextResponse.json({ tenant });
 }
 

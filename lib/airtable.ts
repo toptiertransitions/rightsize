@@ -103,7 +103,7 @@ export const getTenants = unstable_cache(
     return records.map(mapTenant);
   },
   ["tenants"],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ["tenants"] }
 );
 
 export async function getTenantById(id: string): Promise<Tenant | null> {
