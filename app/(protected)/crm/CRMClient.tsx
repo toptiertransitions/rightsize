@@ -172,6 +172,7 @@ function OpportunitiesTab({
   clientContacts,
   staffMembers,
   gmailConnected,
+  tenants,
   pendingContactId,
   pendingOppId,
   clearPending,
@@ -181,6 +182,7 @@ function OpportunitiesTab({
   clientContacts: ClientContact[];
   staffMembers: StaffMember[];
   gmailConnected: boolean;
+  tenants: Tenant[];
   pendingContactId?: string | null;
   pendingOppId?: string | null;
   clearPending?: () => void;
@@ -394,6 +396,7 @@ function OpportunitiesTab({
           clientContacts={clientContacts}
           staffMembers={staffMembers}
           gmailConnected={gmailConnected}
+          tenants={tenants}
           onSaved={handleSaved}
           onClose={() => { setPanelOpen(false); clearPending?.(); }}
           initialContactId={panelInitialContactId}
@@ -409,6 +412,7 @@ function OpportunityPanel({
   clientContacts,
   staffMembers,
   gmailConnected,
+  tenants,
   onSaved,
   onClose,
   initialContactId,
@@ -417,6 +421,7 @@ function OpportunityPanel({
   clientContacts: ClientContact[];
   staffMembers: StaffMember[];
   gmailConnected: boolean;
+  tenants: Tenant[];
   onSaved: (opp: ClientOpportunity) => void;
   onClose: () => void;
   initialContactId?: string;
@@ -446,7 +451,10 @@ function OpportunityPanel({
   const [syncingGmail, setSyncingGmail] = useState(false);
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
   const [converting, setConverting] = useState(false);
-  const [convertedProject, setConvertedProject] = useState<{ id: string; name: string } | null>(null);
+  const linkedTenant = opportunity?.tenantId ? tenants.find(t => t.id === opportunity.tenantId) ?? null : null;
+  const [convertedProject, setConvertedProject] = useState<{ id: string; name: string } | null>(
+    linkedTenant ? { id: linkedTenant.id, name: linkedTenant.name } : null
+  );
   const [gmailSyncMsg, setGmailSyncMsg] = useState<string | null>(null);
 
   // Derive owner from the selected contact; fall back to existing opportunity owner
@@ -585,6 +593,7 @@ function OpportunityPanel({
   }
 
   async function handleConvert() {
+    if (convertedProject) return; // already converted — guard against duplicates
     const contact = clientContacts.find((c) => c.id === clientContactId);
     if (!contact) return;
     setConverting(true);
@@ -3993,6 +4002,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           clientContacts={localContacts}
           staffMembers={staffMembers}
           gmailConnected={gmailConnected}
+          tenants={tenants}
           pendingContactId={pendingContactId}
           pendingOppId={pendingOppId}
           clearPending={() => { setPendingContactId(null); setPendingOppId(null); }}
