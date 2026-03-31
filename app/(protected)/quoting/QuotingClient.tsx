@@ -49,7 +49,7 @@ function DepositInvoicePanel({
 
   const useCustomEmail = selectedRecipient === "__custom__";
   const toEmail = useCustomEmail ? editEmail : selectedRecipient;
-  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtD = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   async function sendInvoice() {
     if (!toEmail) return;
@@ -79,7 +79,7 @@ function DepositInvoicePanel({
     try {
       const res = await fetch(`/api/invoices?id=${invoice.id}`, { method: "DELETE" });
       if (res.ok) {
-        setInvoice({ ...invoice, status: "Paid", emailSent: true }); // visually hide (status Paid + emailSent hides the card)
+        setInvoice({ ...invoice, status: "Paid", emailSent: true });
       } else {
         setMsg("Failed to delete invoice. Please try again.");
       }
@@ -103,7 +103,7 @@ function DepositInvoicePanel({
                 {invoice.status}
               </span>
             </div>
-            <div className="text-sm font-bold text-gray-900 mt-0.5">{fmt(invoice.amount)}</div>
+            <div className="text-sm font-bold text-gray-900 mt-0.5">{fmtD(invoice.amount)}</div>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -221,12 +221,230 @@ function makeSyntheticRoom(density: DensityLevel, sqFt: number, index: number): 
   };
 }
 
+// ─── Inline Editor (expands inside QuoteCard) ─────────────────────────────────
+type ServiceRowEdit = {
+  serviceId: string;
+  serviceName: string;
+  hours: number;
+  rate: number;
+  included: boolean;
+};
+
+function QuoteInlineEditor({
+  contract,
+  services,
+  onSaved,
+  onCancel,
+}: {
+  contract: Contract;
+  services: Service[];
+  onSaved: (c: Contract) => void;
+  onCancel: () => void;
+}) {
+  function initRows(): ServiceRowEdit[] {
+    const lineMap = new Map((contract.lineItems ?? []).map((li) => [li.serviceId, li]));
+    const rows: ServiceRowEdit[] = (contract.lineItems ?? []).map((li) => ({
+      serviceId: li.serviceId,
+      serviceName: li.serviceName,
+      hours: li.hours,
+      rate: li.rate,
+      included: true,
+    }));
+    // Append active services not already in line items (unchecked)
+    for (const svc of services.filter((s) => s.isActive)) {
+      if (!lineMap.has(svc.id)) {
+        rows.push({
+          serviceId: svc.id,
+          serviceName: svc.name,
+          hours: 0,
+          rate: svc.hourlyRate,
+          included: false,
+        });
+      }
+    }
+    return rows;
+  }
+
+  const [rows, setRows] = useState<ServiceRowEdit[]>(initRows);
+  const [contractBody, setContractBody] = useState(contract.contractBody ?? "");
+  const [showBody, setShowBody] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const totalCost = rows
+    .filter((r) => r.included && r.hours > 0)
+    .reduce((sum, r) => sum + r.hours * r.rate, 0);
+
+  const includedLineItems = rows
+    .filter((r) => r.included && r.hours > 0)
+    .map((r) => ({ serviceId: r.serviceId, serviceName: r.serviceName, hours: r.hours, rate: r.rate }));
+
+  function setRow(serviceId: string, patch: Partial<ServiceRowEdit>) {
+    setRows((prev) => prev.map((r) => (r.serviceId === serviceId ? { ...r, ...patch } : r)));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/contracts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: contract.id,
+          contractBody,
+          totalCost,
+          lineItems: includedLineItems,
+          rightsizingHours: 0,
+          packingHours: 0,
+          unpackingHours: 0,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Save failed");
+      }
+      const data = await res.json();
+      onSaved(data.contract);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-100 bg-gray-50/40 px-5 py-5">
+      {/* Service rows */}
+      <div className="mb-4 rounded-xl border border-gray-200 overflow-hidden bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="px-3 py-2.5 w-8" />
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Service</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Hours</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Rate</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.serviceId}
+                className={cn(
+                  "border-b border-gray-100 last:border-0 transition-opacity",
+                  !row.included && "opacity-40"
+                )}
+              >
+                <td className="px-3 py-2.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={row.included}
+                    onChange={() => setRow(row.serviceId, { included: !row.included })}
+                    className="rounded border-gray-300 text-forest-600 focus:ring-forest-400 cursor-pointer"
+                  />
+                </td>
+                <td className="px-3 py-2.5 font-medium text-gray-800">{row.serviceName}</td>
+                <td className="px-3 py-2.5 text-right">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={row.hours}
+                    onChange={(e) => setRow(row.serviceId, { hours: Number(e.target.value) })}
+                    className="w-20 h-7 px-2 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                  />
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <div className="inline-flex items-center gap-0.5">
+                    <span className="text-gray-400 text-xs">$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={row.rate}
+                      onChange={(e) => setRow(row.serviceId, { rate: Number(e.target.value) })}
+                      className="w-14 h-7 px-1.5 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                    />
+                    <span className="text-gray-400 text-xs">/hr</span>
+                  </div>
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">
+                  {row.included && row.hours > 0 ? fmt(row.hours * row.rate) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-forest-50/60 border-t border-gray-200">
+              <td colSpan={4} className="px-3 py-3 text-right text-xs font-semibold text-forest-800 uppercase tracking-wide">
+                Total
+              </td>
+              <td className="px-3 py-3 text-right font-bold text-forest-700 text-base tabular-nums">
+                {fmt(totalCost)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Contract body (collapsible) */}
+      <div className="mb-5">
+        <button
+          type="button"
+          onClick={() => setShowBody((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          <svg
+            className={cn("w-3.5 h-3.5 transition-transform", showBody && "rotate-90")}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          {showBody ? "Hide contract text" : "Edit contract text"}
+        </button>
+        {showBody && (
+          <textarea
+            value={contractBody}
+            onChange={(e) => setContractBody(e.target.value)}
+            rows={10}
+            className="mt-2 w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-y font-mono"
+          />
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="h-9 px-5 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 transition-colors disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save Changes"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="h-9 px-4 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        {error && (
+          <span className="text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
+            {error}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Quote Card ───────────────────────────────────────────────────────────────
 function QuoteCard({
-  contract,
+  contract: initialContract,
   tenantId,
-  isEditing,
-  onEdit,
+  services,
+  onSaved,
   onDelete,
   onSetPrimary,
   onArchive,
@@ -234,13 +452,15 @@ function QuoteCard({
 }: {
   contract: Contract;
   tenantId: string;
-  isEditing: boolean;
-  onEdit: () => void;
+  services: Service[];
+  onSaved: (c: Contract) => void;
   onDelete: () => void;
   onSetPrimary: () => void;
   onArchive: () => void;
   onRevertToSent: () => void;
 }) {
+  const [contract, setContract] = useState(initialContract);
+  const [editing, setEditing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [revertToSentConfirm, setRevertToSentConfirm] = useState(false);
@@ -252,6 +472,12 @@ function QuoteCard({
   const style = STATUS_STYLES[contract.status] ?? STATUS_STYLES.Draft;
   const date = new Date(contract.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const lineItems = contract.lineItems ?? [];
+
+  function handleInlineSaved(updated: Contract) {
+    setContract(updated);
+    setEditing(false);
+    onSaved(updated);
+  }
 
   async function handleSetPrimary() {
     setWorking(true);
@@ -310,8 +536,8 @@ function QuoteCard({
   return (
     <div className={cn(
       "rounded-2xl border bg-white shadow-sm overflow-hidden transition-all",
-      isEditing ? "border-forest-400 ring-2 ring-forest-200" : "border-gray-200",
-      isSigned ? "border-green-300" : "",
+      editing ? "border-forest-400 ring-2 ring-forest-200" : "border-gray-200",
+      isSigned && !editing ? "border-green-300" : "",
       isArchived ? "opacity-60" : ""
     )}>
       <div className={cn("px-5 py-4", isArchived && "bg-gray-50/60")}>
@@ -326,7 +552,7 @@ function QuoteCard({
                   ★ Primary Quote
                 </span>
               )}
-              {isEditing && (
+              {editing && (
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-forest-50 text-forest-700 border border-forest-200">
                   Editing
                 </span>
@@ -335,7 +561,7 @@ function QuoteCard({
             <p className="text-xs text-gray-400">{date}</p>
             {lineItems.length > 0 && (
               <p className={cn("text-xs mt-1 truncate", isArchived ? "text-gray-400" : "text-gray-500")}>
-                {lineItems.map(li => li.serviceName).join(" · ")}
+                {lineItems.map((li) => li.serviceName).join(" · ")}
               </p>
             )}
           </div>
@@ -353,13 +579,20 @@ function QuoteCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 mt-3 flex-wrap">
-          {/* Edit — always available */}
-          {!isEditing && (
+          {/* Edit toggle */}
+          {!editing ? (
             <button
-              onClick={onEdit}
+              onClick={() => { setEditing(true); setDeleteConfirm(false); setArchiveConfirm(false); setRevertToSentConfirm(false); }}
               className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
             >
               Edit
+            </button>
+          ) : (
+            <button
+              onClick={() => setEditing(false)}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-forest-200 text-forest-700 bg-forest-50 hover:bg-forest-100 transition-colors"
+            >
+              ✕ Close Editor
             </button>
           )}
 
@@ -424,6 +657,16 @@ function QuoteCard({
           )}
         </div>
       </div>
+
+      {/* ─── Inline Editor ─────────────────────────────────────────────────── */}
+      {editing && (
+        <QuoteInlineEditor
+          contract={contract}
+          services={services}
+          onSaved={handleInlineSaved}
+          onCancel={() => setEditing(false)}
+        />
+      )}
 
       {/* Unsign & Archive confirm */}
       {archiveConfirm && (
@@ -578,7 +821,6 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   const [lowSqFt, setLowSqFt] = useState(0);
   const [quotes, setQuotes] = useState<Contract[]>(existingContracts);
   const [invoices] = useState<Invoice[]>(initialInvoices ?? []);
-  const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [showEstimator, setShowEstimator] = useState(existingContracts.length === 0);
 
   const syntheticRooms: Room[] = [
@@ -590,15 +832,13 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   const estimatorRooms = mode === "rooms" ? rooms : syntheticRooms;
   const hasRooms = mode === "rooms" ? rooms.length > 0 : syntheticRooms.length > 0;
 
-  async function handleSaved(contract: Contract) {
-    const isNew = !quotes.find((q) => q.id === contract.id);
-    const isFirstQuote = isNew && quotes.length === 0;
+  // Called when EstimatorSection saves a NEW quote
+  async function handleNewQuoteSaved(contract: Contract) {
+    const isFirstQuote = !quotes.find((q) => q.id === contract.id) && quotes.length === 0;
 
     let finalContract = contract;
 
     if (isFirstQuote && contract.status !== "Sent") {
-      // Auto-set as primary (Signed) only for saved drafts — NOT for contracts
-      // sent for signature, which must wait for the client to actually sign.
       try {
         const res = await fetch("/api/contracts", {
           method: "PATCH",
@@ -609,7 +849,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
           const data = await res.json();
           finalContract = data.contract ?? { ...contract, status: "Signed" as const };
         }
-      } catch { /* ignore — contract still shows, just not auto-signed */ }
+      } catch { /* ignore */ }
     }
 
     setQuotes((prev) => {
@@ -617,8 +857,12 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
       if (exists) return prev.map((q) => (q.id === finalContract.id ? finalContract : q));
       return [finalContract, ...prev];
     });
-    setEditingContract(null);
     setShowEstimator(false);
+  }
+
+  // Called when QuoteCard inline editor saves an existing quote
+  function handleExistingQuoteSaved(contract: Contract) {
+    setQuotes((prev) => prev.map((q) => (q.id === contract.id ? contract : q)));
   }
 
   function handleDeleted(id: string) {
@@ -626,8 +870,6 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   }
 
   function handleSetPrimary(id: string) {
-    // Mirror API: keep Sent contracts as Sent; promote Draft/Archived to Signed.
-    // Archive any other currently-Signed contract.
     setQuotes((prev) =>
       prev.map((q) =>
         q.id === id
@@ -641,30 +883,17 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
 
   function handleRevertToSent(id: string) {
     setQuotes((prev) =>
-      prev.map((q) => q.id === id ? { ...q, status: "Sent" as const } : q)
+      prev.map((q) => (q.id === id ? { ...q, status: "Sent" as const } : q))
     );
   }
 
   function handleArchived(id: string) {
     setQuotes((prev) =>
-      prev.map((q) => q.id === id ? { ...q, status: "Archived" as const } : q)
+      prev.map((q) => (q.id === id ? { ...q, status: "Archived" as const } : q))
     );
   }
 
-  function handleEdit(contract: Contract) {
-    setEditingContract(contract);
-    setShowEstimator(true);
-    // Scroll to estimator
-    setTimeout(() => document.getElementById("estimator-section")?.scrollIntoView({ behavior: "smooth" }), 50);
-  }
-
-  function handleCancelEdit() {
-    setEditingContract(null);
-    if (quotes.length > 0) setShowEstimator(false);
-  }
-
   function handleNewQuote() {
-    setEditingContract(null);
     setShowEstimator(true);
     setTimeout(() => document.getElementById("estimator-section")?.scrollIntoView({ behavior: "smooth" }), 50);
   }
@@ -684,7 +913,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
             <div>
               <h2 className="text-base font-semibold text-gray-900">Saved Quotes</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                {quotes.filter(q => q.status === "Signed").length > 0
+                {quotes.filter((q) => q.status === "Signed").length > 0
                   ? "★ Signed quote is the primary quote used for invoicing"
                   : "Mark a quote as Signed to use it for invoicing"}
               </p>
@@ -711,8 +940,8 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                   <QuoteCard
                     contract={q}
                     tenantId={tenant.id}
-                    isEditing={editingContract?.id === q.id}
-                    onEdit={() => handleEdit(q)}
+                    services={services}
+                    onSaved={handleExistingQuoteSaved}
                     onDelete={() => handleDeleted(q.id)}
                     onSetPrimary={() => handleSetPrimary(q.id)}
                     onArchive={() => handleArchived(q.id)}
@@ -728,7 +957,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         </div>
       )}
 
-      {/* Hours Tracker — shown when there is a signed contract and time has been logged */}
+      {/* Hours Tracker */}
       {signedContracts && signedContracts.length > 0 && timeEntries && timeEntries.length > 0 && (
         <HoursComparison signedContracts={signedContracts} timeEntries={timeEntries} />
       )}
@@ -834,7 +1063,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         </div>
       )}
 
-      {/* ─── Estimator ─────────────────────────────────────────────────────── */}
+      {/* ─── Estimator (new quote creation only) ───────────────────────────── */}
       {hasRooms && (
         <div>
           {!showEstimator ? (
@@ -856,9 +1085,9 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                 templates={templates}
                 recipients={recipients}
                 services={services}
-                editingContract={editingContract}
-                onSaved={handleSaved}
-                onCancelEdit={handleCancelEdit}
+                editingContract={null}
+                onSaved={handleNewQuoteSaved}
+                onCancelEdit={quotes.length > 0 ? () => setShowEstimator(false) : undefined}
                 invoiceSettings={invoiceSettings}
                 signedContracts={signedContracts}
                 timeEntries={timeEntries}
