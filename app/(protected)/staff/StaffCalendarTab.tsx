@@ -324,11 +324,12 @@ interface ControlsProps {
   setSelectedStaffEmail: (v: string) => void;
   activeMembers: StaffMember[];
   loading: boolean;
+  onRefresh: () => void;
 }
 
 function CalendarControls({
   view, setView, navLabel, navigate, goToday,
-  selectedStaffEmail, setSelectedStaffEmail, activeMembers, loading,
+  selectedStaffEmail, setSelectedStaffEmail, activeMembers, loading, onRefresh,
 }: ControlsProps) {
   const VIEW_LABELS: Record<CalendarView, string> = {
     day: "Day", week5: "Week (5d)", week7: "7-Day", month: "Month",
@@ -368,6 +369,19 @@ function CalendarControls({
         {navLabel}
         {loading && <span className="ml-2 text-xs font-normal text-gray-400">Loading…</span>}
       </span>
+      <button
+        onClick={onRefresh}
+        disabled={loading}
+        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
+        title="Refresh calendar"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </svg>
+      </button>
       <div className="ml-auto">
         <select
           value={selectedStaffEmail}
@@ -424,6 +438,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
   const [entries, setEntries] = useState<PlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const tenantMap = Object.fromEntries(tenants.map(t => [t.id, t.name]));
   const activeMembers = members.filter(m => m.isActive);
@@ -445,7 +460,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [view, toISO(currentDate)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [view, toISO(currentDate), refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Index entries by date
   const entriesByDate: Record<string, PlanEntry[]> = {};
@@ -487,6 +502,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
           navigate={navigate} goToday={goToday}
           selectedStaffEmail={selectedStaffEmail} setSelectedStaffEmail={setSelectedStaffEmail}
           activeMembers={activeMembers} loading={loading}
+          onRefresh={() => setRefreshKey(k => k + 1)}
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="rounded-xl border border-gray-200 overflow-hidden">
@@ -565,6 +581,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
           navigate={navigate} goToday={goToday}
           selectedStaffEmail={selectedStaffEmail} setSelectedStaffEmail={setSelectedStaffEmail}
           activeMembers={activeMembers} loading={loading}
+          onRefresh={() => setRefreshKey(k => k + 1)}
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="space-y-2">
@@ -631,6 +648,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
         navigate={navigate} goToday={goToday}
         selectedStaffEmail={selectedStaffEmail} setSelectedStaffEmail={setSelectedStaffEmail}
         activeMembers={activeMembers} loading={loading}
+        onRefresh={() => setRefreshKey(k => k + 1)}
       />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="overflow-x-auto rounded-xl border border-gray-200">

@@ -835,6 +835,7 @@ function planFetch(path: string, options?: RequestInit) {
   const base = process.env.AIRTABLE_BASE_ID!;
   const table = AIRTABLE_TABLES.PLAN_ENTRIES;
   return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    cache: "no-store",
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1000,7 +1001,7 @@ function mapPlanEntry(record: AirtableRecord): PlanEntry {
     id: record.id,
     airtableId: record.id,
     tenantId: toStr(f["TenantID"]),
-    date: toStr(f["Date"]),
+    date: toStr(f["Date"]).slice(0, 10),
     activity: toStr(f["Activity"]) as PlanActivity,
     roomId: toStr(f["RoomID"]) || undefined,
     roomLabel: toStr(f["RoomLabel"]) || undefined,
