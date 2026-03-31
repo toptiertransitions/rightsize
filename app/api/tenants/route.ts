@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -79,7 +79,7 @@ export async function PATCH(req: NextRequest) {
     getSystemRole(userId),
   ]);
   const role = tenantRole ?? sysRole;
-  if (!role || !["Owner", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
+  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -112,6 +112,10 @@ export async function PATCH(req: NextRequest) {
     // Only TTTManager/TTTAdmin can set consignment expenses
     consignmentExpense: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && consignmentExpense !== undefined ? (consignmentExpense as number | null) : undefined,
     consignmentExpenseNote: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && consignmentExpenseNote !== undefined ? (consignmentExpenseNote as string | null) : undefined,
+    destAddress: destAddress !== undefined ? (destAddress as string | null) : undefined,
+    destCity: destCity !== undefined ? (destCity as string | null) : undefined,
+    destState: destState !== undefined ? (destState as string | null) : undefined,
+    destZip: destZip !== undefined ? (destZip as string | null) : undefined,
   });
   return NextResponse.json({ tenant });
 }

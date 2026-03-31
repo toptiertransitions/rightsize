@@ -21,14 +21,124 @@ interface ProjectRow {
   address?: string;
   city?: string;
   state?: string;
+  destAddress?: string;
+  destCity?: string;
+  destState?: string;
+  destZip?: string;
 }
 
 interface Props {
   tenants: Tenant[];
   memberCountByTenant: Record<string, number>;
+  isAdmin?: boolean;
 }
 
-export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
+function PencilIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    </svg>
+  );
+}
+
+function DestEditCell({ row }: { row: ProjectRow }) {
+  const [open, setOpen] = useState(false);
+  const [destAddress, setDestAddress] = useState(row.destAddress ?? "");
+  const [destCity, setDestCity] = useState(row.destCity ?? "");
+  const [destState, setDestState] = useState(row.destState ?? "");
+  const [destZip, setDestZip] = useState(row.destZip ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const inputCls =
+    "h-7 px-2 rounded border border-gray-600 text-xs bg-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-400 w-full";
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId: row.id,
+          destAddress: destAddress.trim() || null,
+          destCity: destCity.trim() || null,
+          destState: destState.trim() || null,
+          destZip: destZip.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? "Save failed");
+      }
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    setDestAddress(row.destAddress ?? "");
+    setDestCity(row.destCity ?? "");
+    setDestState(row.destState ?? "");
+    setDestZip(row.destZip ?? "");
+    setError(null);
+    setOpen(false);
+  }
+
+  const displayParts = [row.destAddress, row.destCity, row.destState].filter(Boolean);
+
+  if (open) {
+    return (
+      <div className="flex flex-col gap-1.5 py-1">
+        <input type="text" placeholder="Street" value={destAddress} onChange={e => setDestAddress(e.target.value)} className={inputCls} autoFocus />
+        <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />
+        <div className="flex gap-1">
+          <input type="text" placeholder="State" value={destState} onChange={e => setDestState(e.target.value)} className={`${inputCls} w-20`} />
+          <input type="text" placeholder="Zip" value={destZip} onChange={e => setDestZip(e.target.value)} className={inputCls} />
+        </div>
+        <div className="flex gap-1 mt-0.5">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="h-6 px-2.5 rounded text-xs font-medium bg-forest-700 text-white hover:bg-forest-600 disabled:opacity-60 transition-colors"
+          >
+            {saving ? "…" : "Save"}
+          </button>
+          <button
+            onClick={handleCancel}
+            className="h-6 px-2.5 rounded text-xs text-gray-400 border border-gray-600 hover:bg-gray-700 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-400">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 group/dest">
+      {displayParts.length > 0 ? (
+        <span className="text-gray-300 text-sm">{displayParts.join(", ")}</span>
+      ) : (
+        <span className="text-gray-600 text-xs">—</span>
+      )}
+      <button
+        onClick={() => setOpen(true)}
+        className="text-gray-500 hover:text-gray-300 opacity-0 group-hover/dest:opacity-100 transition-all"
+        title="Edit destination address"
+      >
+        <PencilIcon />
+      </button>
+    </div>
+  );
+}
+
+export function AdminProjectsClient({ tenants, memberCountByTenant, isAdmin = false }: Props) {
   const [view, setView] = useState<ViewFilter>("active");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
@@ -47,6 +157,10 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
         address: t.address,
         city: t.city,
         state: t.state,
+        destAddress: t.destAddress,
+        destCity: t.destCity,
+        destState: t.destState,
+        destZip: t.destZip,
       })),
     [tenants, memberCountByTenant]
   );
@@ -154,6 +268,7 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Members</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Address</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden xl:table-cell">Destination</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden xl:table-cell">Created</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Status</th>
                 <th className="px-4 py-3" />
@@ -162,7 +277,7 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
             <tbody className="divide-y divide-gray-800/60">
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-500">
+                  <td colSpan={8} className="text-center py-12 text-gray-500">
                     {search
                       ? "No projects match your search."
                       : view === "archived"
@@ -200,6 +315,19 @@ export function AdminProjectsClient({ tenants, memberCountByTenant }: Props) {
                         </span>
                       ) : (
                         <span className="text-gray-600 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 hidden xl:table-cell min-w-[180px]">
+                      {isAdmin ? (
+                        <DestEditCell row={r} />
+                      ) : (
+                        [r.destAddress, r.destCity, r.destState].filter(Boolean).length > 0 ? (
+                          <span className="text-gray-300 text-sm">
+                            {[r.destAddress, r.destCity, r.destState].filter(Boolean).join(", ")}
+                          </span>
+                        ) : (
+                          <span className="text-gray-600 text-xs">—</span>
+                        )
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-400 hidden xl:table-cell">

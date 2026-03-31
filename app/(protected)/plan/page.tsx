@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
 import { IntakeFormSection } from "./IntakeFormSection";
 import { ClientContactBar } from "./ClientContactBar";
+import { ProjectAddressBar } from "./ProjectAddressBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
 import type { Tenant } from "@/lib/types";
 
@@ -310,6 +311,17 @@ export default async function PlanPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
           <p className="text-gray-500 mt-0.5">Schedule daily focus areas for your project</p>
+          <ProjectAddressBar
+            tenantId={tenantId}
+            initialAddress={tenant.address}
+            initialCity={tenant.city}
+            initialState={tenant.state}
+            initialZip={tenant.zip}
+            initialDestAddress={tenant.destAddress}
+            initialDestCity={tenant.destCity}
+            initialDestState={tenant.destState}
+            initialDestZip={tenant.destZip}
+          />
           {isTTTStaffOrAbove && (
             <ClientContactBar
               tenantId={tenantId}

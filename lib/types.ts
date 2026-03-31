@@ -116,6 +116,10 @@ export interface Tenant {
   city?: string;
   state?: string;
   zip?: string;
+  destAddress?: string;
+  destCity?: string;
+  destState?: string;
+  destZip?: string;
   estimatedHours?: number;
   isArchived?: boolean;
   isTTT?: boolean;

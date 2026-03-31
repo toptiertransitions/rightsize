@@ -39,7 +39,7 @@ export default async function AdminPage() {
           </p>
         </div>
 
-        <AdminProjectsClient tenants={tenants} memberCountByTenant={memberCountByTenant} />
+        <AdminProjectsClient tenants={tenants} memberCountByTenant={memberCountByTenant} isAdmin={isAdmin} />
 
         {/* Staff Management — TTTAdmin only */}
         <section className="mt-10">

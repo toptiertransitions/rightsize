@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getUserRoleForTenant, getItemById, getInvoiceSettings } from "@/lib/airtable";
+import { getSystemRole, getUserRoleForTenant, getItemById, getInvoiceSettings, getTenantById } from "@/lib/airtable";
 import { renderMoversPDF } from "@/lib/movers-pdf";
 import { groupItemsForMovers } from "@/lib/anthropic";
 
@@ -27,11 +27,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Fetch items and settings in parallel
-  const [itemResults, settings] = await Promise.all([
+  // Fetch items, settings, and tenant in parallel
+  const [itemResults, settings, tenant] = await Promise.all([
     Promise.all(itemIds.map((id) => getItemById(id).catch(() => null))),
     getInvoiceSettings().catch(() => null),
+    tenantId ? getTenantById(tenantId).catch(() => null) : Promise.resolve(null),
   ]);
+
+  const originAddress = [tenant?.address, tenant?.city, tenant?.state, tenant?.zip].filter(Boolean).join(", ") || undefined;
+  const destinationAddress = [tenant?.destAddress, tenant?.destCity, tenant?.destState, tenant?.destZip].filter(Boolean).join(", ") || undefined;
 
   const items = itemResults
     .filter(Boolean)
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest) {
   // AI grouping for summary page — fire-and-forget with graceful fallback
   const aiGroups = await groupItemsForMovers(items.map(i => i.itemName)).catch(() => null);
 
-  const pdfBuffer = await renderMoversPDF({ items, settings, aiGroups: aiGroups ?? undefined });
+  const pdfBuffer = await renderMoversPDF({ items, settings, aiGroups: aiGroups ?? undefined, originAddress, destinationAddress });
 
   const date = new Date().toISOString().slice(0, 10);
   return new NextResponse(new Uint8Array(pdfBuffer), {

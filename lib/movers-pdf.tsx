@@ -219,6 +219,26 @@ const styles = StyleSheet.create({
     borderBottom: "1pt solid #e5e7eb",
     marginVertical: 20,
   },
+  addressBlock: {
+    flexDirection: "row",
+    gap: 40,
+    marginBottom: 20,
+  },
+  addressRow: {
+    flexDirection: "column",
+    gap: 2,
+  },
+  addressLabel: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  addressValue: {
+    fontSize: 10,
+    color: "#374151",
+  },
   sizeGrid: {
     flexDirection: "row",
     gap: 10,
@@ -251,6 +271,8 @@ interface MoversPDFProps {
   items: Pick<Item, "id" | "itemName" | "photoUrl" | "category" | "condition" | "sizeClass">[];
   settings: Pick<InvoiceSettings, "logoUrl" | "companyName"> | null;
   aiGroups?: MoverGroup[];
+  originAddress?: string;
+  destinationAddress?: string;
 }
 
 // ─── Summary page helpers ──────────────────────────────────────────────────────
@@ -287,7 +309,7 @@ function buildSizeCounts(
 }
 
 // ─── Summary first page ───────────────────────────────────────────────────────
-function SummaryPage({ items, settings, aiGroups }: MoversPDFProps) {
+function SummaryPage({ items, settings, aiGroups, originAddress, destinationAddress }: MoversPDFProps) {
   const companyName = settings?.companyName || "Top Tier Transitions";
   const logoUrl = settings?.logoUrl || null;
   const date = new Date().toLocaleDateString("en-US", {
@@ -322,6 +344,24 @@ function SummaryPage({ items, settings, aiGroups }: MoversPDFProps) {
         {/* Title */}
         <Text style={styles.summaryTitle}>Moving Summary</Text>
         <Text style={styles.summaryDate}>Generated {date} · {items.length} item{items.length !== 1 ? "s" : ""} total</Text>
+
+        {/* FROM / TO addresses */}
+        {(originAddress || destinationAddress) && (
+          <View style={styles.addressBlock}>
+            {originAddress && (
+              <View style={styles.addressRow}>
+                <Text style={styles.addressLabel}>From</Text>
+                <Text style={styles.addressValue}>{originAddress}</Text>
+              </View>
+            )}
+            {destinationAddress && (
+              <View style={styles.addressRow}>
+                <Text style={styles.addressLabel}>To</Text>
+                <Text style={styles.addressValue}>{destinationAddress}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Item count table */}
         <Text style={styles.sectionLabel}>{useAI ? "Items by Category (AI Grouped)" : "Items"}</Text>
@@ -366,14 +406,14 @@ function SummaryPage({ items, settings, aiGroups }: MoversPDFProps) {
 }
 
 // ─── Main PDF document ────────────────────────────────────────────────────────
-export function MoversPDF({ items, settings, aiGroups }: MoversPDFProps) {
+export function MoversPDF({ items, settings, aiGroups, originAddress, destinationAddress }: MoversPDFProps) {
   const companyName = settings?.companyName || "Top Tier Transitions";
   const logoUrl = settings?.logoUrl || null;
 
   return (
     <Document title="Movers Item List">
       {/* Page 1: Summary */}
-      <SummaryPage items={items} settings={settings} aiGroups={aiGroups} />
+      <SummaryPage items={items} settings={settings} aiGroups={aiGroups} originAddress={originAddress} destinationAddress={destinationAddress} />
 
       {/* Remaining pages: one per item */}
       {items.map((item, idx) => (

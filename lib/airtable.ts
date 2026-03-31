@@ -170,6 +170,10 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     city: toStr(f["City"]) || undefined,
     state: toStr(f["State"]) || undefined,
     zip: toStr(f["Zip"]) || undefined,
+    destAddress: toStr(f["DestAddress"]) || undefined,
+    destCity: toStr(f["DestCity"]) || undefined,
+    destState: toStr(f["DestState"]) || undefined,
+    destZip: toStr(f["DestZip"]) || undefined,
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     isArchived: f["IsArchived"] === true,
     isTTT: f["IsTTT"] === true,
@@ -757,7 +761,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -766,6 +770,10 @@ export async function updateTenant(
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
+  if (data.destAddress !== undefined) fields["DestAddress"] = data.destAddress ?? "";
+  if (data.destCity !== undefined) fields["DestCity"] = data.destCity ?? "";
+  if (data.destState !== undefined) fields["DestState"] = data.destState ?? "";
+  if (data.destZip !== undefined) fields["DestZip"] = data.destZip ?? "";
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
   if (data.isTTT !== undefined) fields["IsTTT"] = data.isTTT;
