@@ -164,22 +164,25 @@ export async function PATCH(req: NextRequest) {
     );
     const contract = await updateContract(id, { status: newStatus });
 
-    // Advance related opportunity to Won and stamp the signed contract amount
-    try {
-      const opps = await getOpportunitiesForTenant(actionTenantId).catch(() => []);
-      const primaryContract = all.find((c) => c.id === id);
-      const signedValue = primaryContract?.totalCost ?? contract.totalCost;
-      const active = opps.filter((o) => o.stage !== "Won" && o.stage !== "Lost");
-      await Promise.all(
-        active.map((o) =>
-          updateOpportunity(o.id, {
-            stage: "Won",
-            wonAt: new Date().toISOString(),
-            estimatedValue: signedValue,
-          }).catch(() => null)
-        )
-      );
-    } catch { /* non-fatal */ }
+    // Only advance opportunity to Won when the contract is actually Signed,
+    // not when it is merely designated as the primary Sent/Draft contract.
+    if (newStatus === "Signed") {
+      try {
+        const opps = await getOpportunitiesForTenant(actionTenantId).catch(() => []);
+        const primaryContract = all.find((c) => c.id === id);
+        const signedValue = primaryContract?.totalCost ?? contract.totalCost;
+        const active = opps.filter((o) => o.stage !== "Won" && o.stage !== "Lost");
+        await Promise.all(
+          active.map((o) =>
+            updateOpportunity(o.id, {
+              stage: "Won",
+              wonAt: new Date().toISOString(),
+              estimatedValue: signedValue,
+            }).catch(() => null)
+          )
+        );
+      } catch { /* non-fatal */ }
+    }
 
     return NextResponse.json({ contract });
   }
