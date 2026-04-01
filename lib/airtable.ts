@@ -176,7 +176,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     destZip: toStr(f["DestZip"]) || undefined,
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     isArchived: f["IsArchived"] === true,
-    isTTT: f["IsTTT"] === true,
+    isTTT: f["IsTTT"] == null ? undefined : f["IsTTT"] === true,
     isConsignmentOnly: f["IsConsignmentOnly"] === true,
     destinationSqFt: f["DestinationSqFt"] != null ? toNum(f["DestinationSqFt"]) : undefined,
     payoutMethod: toStr(f["PayoutMethod"]) as import("./types").PayoutMethod || undefined,

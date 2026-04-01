@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   // TTT staff creating a project → mark it as TTT; self-signup clients → non-TTT
   const sysRoleForCreate = await getSystemRole(userId).catch(() => null);
-  const isTTTCreator = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRoleForCreate ?? "");
+  const isTTTCreator = ["TTTStaff", "TTTManager", "TTTAdmin", "TTTSales"].includes(sysRoleForCreate ?? "");
 
   // Create tenant
   const tenant = await createTenant({ name: name.trim(), slug, ownerUserId: userId, address, city, state, zip, isTTT: isTTTCreator, clientEmail, clientPhone });
