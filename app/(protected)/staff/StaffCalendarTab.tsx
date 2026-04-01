@@ -168,7 +168,7 @@ function CompactMemberRow({
   const status = getStaffDayStatus(member, iso);
   const name = member.displayName || member.email;
   const firstName = name.split(" ")[0];
-  const isScheduled = status.kind === "available" && shifts.length > 0;
+  const isScheduled = shifts.length > 0;
 
   // Color scheme per state
   const rowCls =
@@ -271,13 +271,12 @@ function ScheduledStatusCard({
   tenantMap: Record<string, string>;
 }) {
   const status = getStaffDayStatus(member, iso);
-  // If on time off or day off, show that instead
-  if (status.kind !== "available") return <StatusCard member={member} iso={iso} />;
+  const timeRange = status.kind === "available" ? ` — ${fmt12(status.start)} – ${fmt12(status.end)}` : "";
 
   return (
     <div className="space-y-1.5">
       <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-        <p className="text-xs font-semibold text-sky-800">Scheduled — {fmt12(status.start)} – {fmt12(status.end)}</p>
+        <p className="text-xs font-semibold text-sky-800">Scheduled{timeRange}</p>
       </div>
       {shifts.map(e => (
         <ShiftCard key={e.id} entry={e} projectName={tenantMap[e.tenantId]} />
@@ -295,9 +294,7 @@ function DaySummaryBadge({
   entriesByDate: Record<string, PlanEntry[]>;
 }) {
   const dayEntries = entriesByDate[iso] ?? [];
-  const scheduled = members.filter(m =>
-    getStaffDayStatus(m, iso).kind === "available" && getMemberShifts(m, dayEntries).length > 0
-  ).length;
+  const scheduled = members.filter(m => getMemberShifts(m, dayEntries).length > 0).length;
   const avail = members.filter(m =>
     getStaffDayStatus(m, iso).kind === "available" && getMemberShifts(m, dayEntries).length === 0
   ).length;
@@ -520,7 +517,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
                 const dayEntries = entriesByDate[iso] ?? [];
 
                 const scheduled = filteredMembers.filter(m =>
-                  getStaffDayStatus(m, iso).kind === "available" && getMemberShifts(m, dayEntries).length > 0
+                  getMemberShifts(m, dayEntries).length > 0
                 ).length;
                 const avail = filteredMembers.filter(m =>
                   getStaffDayStatus(m, iso).kind === "available" && getMemberShifts(m, dayEntries).length === 0
@@ -589,7 +586,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
             <p className="text-sm text-gray-400">No staff members to display.</p>
           ) : filteredMembers.map(member => {
             const memberShifts = getMemberShifts(member, dayEntries);
-            const isScheduled = getStaffDayStatus(member, iso).kind === "available" && memberShifts.length > 0;
+            const isScheduled = memberShifts.length > 0;
             return (
               <div
                 key={member.id}
@@ -692,7 +689,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
                   // Single staff: full status card + shift cards
                   filteredMembers.map(member => {
                     const memberShifts = getMemberShifts(member, dayEntries);
-                    const isScheduled = getStaffDayStatus(member, iso).kind === "available" && memberShifts.length > 0;
+                    const isScheduled = memberShifts.length > 0;
                     return (
                       <div key={member.id} className="space-y-1">
                         {isScheduled ? (
