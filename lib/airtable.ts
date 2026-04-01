@@ -1944,6 +1944,7 @@ function staffRolesFetch(path: string, options?: RequestInit) {
   const base = process.env.AIRTABLE_BASE_ID!;
   const table = AIRTABLE_TABLES.STAFF_ROLES;
   return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    cache: "no-store",
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,

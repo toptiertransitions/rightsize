@@ -87,8 +87,9 @@ function getStaffDayStatus(member: StaffMember, iso: string): StaffDayStatus {
 }
 
 function getMemberShifts(member: StaffMember, dayEntries: PlanEntry[]): PlanEntry[] {
+  const memberEmail = member.email.trim().toLowerCase();
   return dayEntries.filter(e =>
-    e.helpers?.some(h => h.email.toLowerCase() === member.email.toLowerCase())
+    e.helpers?.some(h => h.email.trim().toLowerCase() === memberEmail)
   );
 }
 
@@ -322,11 +323,12 @@ interface ControlsProps {
   activeMembers: StaffMember[];
   loading: boolean;
   onRefresh: () => void;
+  entryCount: number;
 }
 
 function CalendarControls({
   view, setView, navLabel, navigate, goToday,
-  selectedStaffEmail, setSelectedStaffEmail, activeMembers, loading, onRefresh,
+  selectedStaffEmail, setSelectedStaffEmail, activeMembers, loading, onRefresh, entryCount,
 }: ControlsProps) {
   const VIEW_LABELS: Record<CalendarView, string> = {
     day: "Day", week5: "Week (5d)", week7: "7-Day", month: "Month",
@@ -364,13 +366,16 @@ function CalendarControls({
       </div>
       <span className="text-sm font-semibold text-gray-700">
         {navLabel}
-        {loading && <span className="ml-2 text-xs font-normal text-gray-400">Loading…</span>}
+        {loading
+          ? <span className="ml-2 text-xs font-normal text-gray-400">Loading…</span>
+          : <span className="ml-2 text-xs font-normal text-gray-400">{entryCount} shift{entryCount !== 1 ? "s" : ""} loaded</span>
+        }
       </span>
       <button
         onClick={onRefresh}
         disabled={loading}
         className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
-        title="Refresh calendar"
+        title={`Refresh calendar`}
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
@@ -500,6 +505,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
           selectedStaffEmail={selectedStaffEmail} setSelectedStaffEmail={setSelectedStaffEmail}
           activeMembers={activeMembers} loading={loading}
           onRefresh={() => setRefreshKey(k => k + 1)}
+          entryCount={entries.length}
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="rounded-xl border border-gray-200 overflow-hidden">
@@ -579,6 +585,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
           selectedStaffEmail={selectedStaffEmail} setSelectedStaffEmail={setSelectedStaffEmail}
           activeMembers={activeMembers} loading={loading}
           onRefresh={() => setRefreshKey(k => k + 1)}
+          entryCount={entries.length}
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="space-y-2">
@@ -646,6 +653,7 @@ export function StaffCalendarTab({ members, tenants }: Props) {
         selectedStaffEmail={selectedStaffEmail} setSelectedStaffEmail={setSelectedStaffEmail}
         activeMembers={activeMembers} loading={loading}
         onRefresh={() => setRefreshKey(k => k + 1)}
+        entryCount={entries.length}
       />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="overflow-x-auto rounded-xl border border-gray-200">
