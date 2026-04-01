@@ -909,7 +909,14 @@ export async function getPlanEntriesForDateRange(
   from: string, // "YYYY-MM-DD"
   to: string
 ): Promise<PlanEntry[]> {
-  const formula = encodeURIComponent(`AND({Date} >= "${from}", {Date} <= "${to}")`);
+  // Use < (to + 1 day) instead of <= to, because if the Airtable Date field
+  // is a DateTime type, entries stored at e.g. "2026-04-03T04:00:00.000Z"
+  // (midnight US Eastern) are technically after "2026-04-03T00:00:00.000Z"
+  // (midnight UTC) and would be excluded by <=. Using < next-day is always safe.
+  const [ty, tm, td] = to.split("-").map(Number);
+  const toNext = new Date(ty, tm - 1, td + 1);
+  const toExclusive = `${toNext.getFullYear()}-${String(toNext.getMonth() + 1).padStart(2, "0")}-${String(toNext.getDate()).padStart(2, "0")}`;
+  const formula = encodeURIComponent(`AND({Date} >= "${from}", {Date} < "${toExclusive}")`);
   const records: AirtableRecord[] = [];
   let offset: string | undefined;
   do {

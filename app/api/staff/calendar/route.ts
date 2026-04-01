@@ -26,11 +26,14 @@ export async function GET(req: NextRequest) {
     getPlanEntriesForDateRange(from, to),
   ]);
 
-  console.log(`[staff/calendar] from=${from} to=${to} entries=${entries.length} dates=${[...new Set(entries.map(e => e.date))].sort().join(",")}`);
-  entries.forEach(e => {
-    if (e.helpers?.length) {
-      console.log(`[staff/calendar] entry ${e.id} date=${e.date} helpers=${e.helpers.map(h => h.email).join(";")}`);
-    }
+  const dateCounts = entries.reduce<Record<string, number>>((acc, e) => {
+    acc[e.date] = (acc[e.date] ?? 0) + 1;
+    return acc;
+  }, {});
+  const withHelpers = entries.filter(e => e.helpers?.length);
+  console.log(`[staff/calendar] from=${from} to=${to} total=${entries.length} withHelpers=${withHelpers.length} dates=${JSON.stringify(dateCounts)}`);
+  withHelpers.forEach(e => {
+    console.log(`[staff/calendar] shift date=${e.date} helpers=[${e.helpers!.map(h => h.email).join(", ")}]`);
   });
 
   return NextResponse.json({ staff, entries });
