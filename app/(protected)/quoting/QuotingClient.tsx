@@ -671,7 +671,7 @@ function QuoteCard({
               className="text-xs font-medium px-3 py-1.5 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50 flex items-center gap-1"
             >
               <span>★</span>
-              <span>{working ? "Saving…" : isArchived ? "Restore as Primary" : "Set as Primary"}</span>
+              <span>{working ? "Saving…" : isArchived ? "Restore as Signed & Primary" : "Mark Signed & Primary"}</span>
             </button>
           )}
 
