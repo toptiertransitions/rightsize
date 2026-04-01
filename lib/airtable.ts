@@ -2361,6 +2361,8 @@ export async function updateContract(
     signedByName: string;
     sentByClerkId: string;
     sentAt: string;
+    signToken: string;
+    recipientEmail: string;
     contractBody: string;
     rightsizingHours: number;
     packingHours: number;
@@ -2378,6 +2380,8 @@ export async function updateContract(
   if (data.signedByName !== undefined) fields["SignedByName"] = data.signedByName;
   if (data.sentByClerkId !== undefined) fields["SentByClerkId"] = data.sentByClerkId;
   if (data.sentAt !== undefined) fields["SentAt"] = data.sentAt;
+  if (data.signToken !== undefined) fields["SignToken"] = data.signToken;
+  if (data.recipientEmail !== undefined) fields["RecipientEmail"] = data.recipientEmail;
   if (data.contractBody !== undefined) fields["ContractBody"] = data.contractBody;
   if (data.rightsizingHours !== undefined) fields["RightsizingHours"] = data.rightsizingHours;
   if (data.packingHours !== undefined) fields["PackingHours"] = data.packingHours;

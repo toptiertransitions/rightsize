@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { getContractByToken, getTenantById } from "@/lib/airtable";
 import { SigningClient } from "./SigningClient";
 
@@ -10,10 +9,58 @@ interface PageProps {
   params: Promise<{ token: string }>;
 }
 
+function MessagePage({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "#F5F0E8" }}>
+      <div className="max-w-md w-full text-center">
+        <p className="text-sm font-medium text-forest-600 mb-4">Top Tier Transitions</p>
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{title}</h1>
+          <p className="text-sm text-gray-500 leading-relaxed">{message}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function SignPage({ params }: PageProps) {
   const { token } = await params;
   const contract = await getContractByToken(token).catch(() => null);
-  if (!contract) notFound();
+
+  // Link is dead (token was rotated on resend)
+  if (!contract) {
+    return (
+      <MessagePage
+        title="This link is no longer active"
+        message="This signing link has expired or been replaced. Please check your email from Top Tier Transitions for the most recent quote."
+      />
+    );
+  }
+
+  // Superseded by a newer resent quote
+  if (contract.status === "Superseded") {
+    return (
+      <MessagePage
+        title="This quote has been updated"
+        message="This is an outdated version of your service agreement. Please check your email from Top Tier Transitions for the updated quote and signing link."
+      />
+    );
+  }
+
+  // Archived by TTT staff
+  if (contract.status === "Archived") {
+    return (
+      <MessagePage
+        title="This quote is no longer available"
+        message="This service agreement has been closed. Please contact your Top Tier Transitions coordinator if you have any questions."
+      />
+    );
+  }
 
   const tenant = await getTenantById(contract.tenantId).catch(() => null);
 
