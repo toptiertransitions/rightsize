@@ -865,6 +865,20 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelLoading, setLabelLoading] = useState(false);
+  const [downloadItem, setDownloadItem] = useState<Item | null>(null);
+
+  const triggerDownload = useCallback((url: string, filename: string) => {
+    const dlUrl = url.includes("/upload/")
+      ? url.replace("/upload/", "/upload/fl_attachment/")
+      : url;
+    const a = document.createElement("a");
+    a.href = dlUrl;
+    a.download = filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, []);
 
   const handleSaved = useCallback((savedItem: Item) => {
     setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i));
@@ -1279,6 +1293,25 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       </svg>
                     </button>
                   )}
+                  {item.photoUrl && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const photoCount = item.photos?.length ?? 1;
+                        if (photoCount <= 1) {
+                          triggerDownload(item.photoUrl!, `${item.itemName || "item"}.jpg`);
+                        } else {
+                          setDownloadItem(item);
+                        }
+                      }}
+                      className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-lg shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                      title="Download image"
+                    >
+                      <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -1607,6 +1640,51 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           onClose={() => setShowLabelModal(false)}
           onPrint={handlePrintLabels}
         />
+      )}
+
+      {downloadItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setDownloadItem(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-gray-900 text-sm">Download Images</h3>
+            <p className="text-xs text-gray-500">{downloadItem.itemName || "Item"} — {downloadItem.photos?.length ?? 1} images</p>
+            <button
+              className="w-full py-2 px-4 rounded-xl border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 transition-colors"
+              onClick={() => {
+                triggerDownload(downloadItem.photoUrl!, `${downloadItem.itemName || "item"}-primary.jpg`);
+                setDownloadItem(null);
+              }}
+            >
+              Download Primary Image
+            </button>
+            <button
+              className="w-full py-2 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
+              onClick={() => {
+                const photos = downloadItem.photos ?? [];
+                const baseName = downloadItem.itemName || "item";
+                photos.forEach((photo, i) => {
+                  setTimeout(() => {
+                    triggerDownload(photo.url, `${baseName}-${i + 1}.jpg`);
+                  }, i * 800);
+                });
+                setDownloadItem(null);
+              }}
+            >
+              Download All Images ({downloadItem.photos?.length ?? 1})
+            </button>
+            <button
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={() => setDownloadItem(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </>
   );
