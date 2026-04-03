@@ -420,7 +420,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
     <div className="mt-10">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-gray-900">Hours</h2>
-        {isAdmin && entries.length > 0 && (
+        {(isAdmin || !!isManager) && entries.length > 0 && (
           <button onClick={exportCSV} className="text-xs text-forest-600 hover:text-forest-700 font-medium">
             Export CSV
           </button>
@@ -664,8 +664,8 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
                   />
                 </div>
 
-                {/* Staff filter pills — only shown to admins (non-admin only see their own entries) */}
-                {isAdmin && uniqueStaffNames.length > 1 && (
+                {/* Staff filter pills — shown to managers and admins */}
+                {(isAdmin || !!isManager) && uniqueStaffNames.length > 1 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Staff</span>
                     {uniqueStaffNames.map(name => (
@@ -721,14 +721,14 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
                           </div>
                           <div className="text-xs text-gray-400 mt-0.5">
                             {fmt12(e.startTime)} – {fmt12(e.endTime)}
-                            {isAdmin && ` · ${e.staffName}`}
+                            {(isAdmin || !!isManager) && ` · ${e.staffName}`}
                             {e.travelMinutes ? ` · ${e.travelMinutes}min travel` : ""}
                             {e.travelMiles ? ` · ${e.travelMiles}mi` : ""}
                             {e.notes ? ` · ${e.notes}` : ""}
                           </div>
                         </div>
                       </div>
-                      {isAdmin && (
+                      {(isAdmin || !!isManager) && (
                         <button onClick={() => setEditingEntry(e)}
                           className="text-xs text-gray-400 hover:text-forest-600 ml-3 flex-shrink-0 font-medium">
                           Edit

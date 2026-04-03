@@ -125,6 +125,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Set time off",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "View Today's Plan (home)",    permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "View all staff time",         permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "View staff name on logged time entries (Plan page)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Edit logged time entries (Plan page)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Export time data",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { group: "Expenses" },
   { label: "Submit own expenses",                      permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
