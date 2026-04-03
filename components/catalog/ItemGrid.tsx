@@ -866,18 +866,76 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelLoading, setLabelLoading] = useState(false);
   const [downloadItem, setDownloadItem] = useState<Item | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadModalLoading, setDownloadModalLoading] = useState(false);
 
-  const triggerDownload = useCallback((url: string, filename: string) => {
-    const dlUrl = url.includes("/upload/")
-      ? url.replace("/upload/", "/upload/fl_attachment/")
-      : url;
-    const a = document.createElement("a");
-    a.href = dlUrl;
-    a.download = filename;
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Fetch image bytes, then share (mobile) or save via blob URL (desktop).
+  // Web Share API is the only reliable path to "Save to Photos" on iOS.
+  const triggerDownload = useCallback(async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const mimeType = blob.type || "image/jpeg";
+
+      // Mobile: Web Share API → iOS shows "Save Image" → saves directly to Photos
+      if (typeof navigator !== "undefined" && navigator.canShare) {
+        const file = new File([blob], filename, { type: mimeType });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          return;
+        }
+      }
+
+      // Desktop: blob URL is same-origin so a.download works correctly
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch {
+      window.open(url, "_blank");
+    }
+  }, []);
+
+  // Download all photos — shares as a batch on mobile, sequential blob downloads on desktop.
+  const triggerDownloadAll = useCallback(async (photos: ItemPhoto[], baseName: string) => {
+    try {
+      const blobs = await Promise.all(
+        photos.map(p => fetch(p.url, { mode: "cors" }).then(r => r.blob()))
+      );
+      const files = blobs.map((blob, i) =>
+        new File([blob], `${baseName}-${i + 1}.jpg`, { type: blob.type || "image/jpeg" })
+      );
+
+      // Mobile: share all files at once
+      if (typeof navigator !== "undefined" && navigator.canShare) {
+        if (navigator.canShare({ files })) {
+          await navigator.share({ files });
+          return;
+        }
+      }
+
+      // Desktop: sequential blob downloads
+      for (let i = 0; i < blobs.length; i++) {
+        await new Promise<void>(resolve => setTimeout(() => {
+          const blobUrl = URL.createObjectURL(blobs[i]);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = files[i].name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          resolve();
+        }, i * 800));
+      }
+    } catch {
+      if (photos.length) window.open(photos[0].url, "_blank");
+    }
   }, []);
 
   const handleSaved = useCallback((savedItem: Item) => {
@@ -1295,21 +1353,31 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   )}
                   {item.photoUrl && (
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
                         const photoCount = item.photos?.length ?? 1;
                         if (photoCount <= 1) {
-                          triggerDownload(item.photoUrl!, `${item.itemName || "item"}.jpg`);
+                          setDownloadingId(item.id);
+                          await triggerDownload(item.photoUrl!, `${item.itemName || "item"}.jpg`);
+                          setDownloadingId(null);
                         } else {
                           setDownloadItem(item);
                         }
                       }}
-                      className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-lg shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                      disabled={downloadingId === item.id}
+                      className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-lg shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white disabled:opacity-60"
                       title="Download image"
                     >
-                      <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
+                      {downloadingId === item.id ? (
+                        <svg className="w-3.5 h-3.5 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      )}
                     </button>
                   )}
                 </div>
@@ -1651,34 +1719,35 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
             className="bg-white rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-semibold text-gray-900 text-sm">Download Images</h3>
+            <h3 className="font-semibold text-gray-900 text-sm">Save Images</h3>
             <p className="text-xs text-gray-500">{downloadItem.itemName || "Item"} — {downloadItem.photos?.length ?? 1} images</p>
             <button
-              className="w-full py-2 px-4 rounded-xl border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 transition-colors"
-              onClick={() => {
-                triggerDownload(downloadItem.photoUrl!, `${downloadItem.itemName || "item"}-primary.jpg`);
+              disabled={downloadModalLoading}
+              className="w-full py-2 px-4 rounded-xl border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 transition-colors disabled:opacity-50"
+              onClick={async () => {
+                setDownloadModalLoading(true);
+                await triggerDownload(downloadItem.photoUrl!, `${downloadItem.itemName || "item"}-primary.jpg`);
+                setDownloadModalLoading(false);
                 setDownloadItem(null);
               }}
             >
-              Download Primary Image
+              {downloadModalLoading ? "Saving…" : "Save Primary Image"}
             </button>
             <button
-              className="w-full py-2 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
-              onClick={() => {
-                const photos = downloadItem.photos ?? [];
-                const baseName = downloadItem.itemName || "item";
-                photos.forEach((photo, i) => {
-                  setTimeout(() => {
-                    triggerDownload(photo.url, `${baseName}-${i + 1}.jpg`);
-                  }, i * 800);
-                });
+              disabled={downloadModalLoading}
+              className="w-full py-2 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors disabled:opacity-50"
+              onClick={async () => {
+                setDownloadModalLoading(true);
+                await triggerDownloadAll(downloadItem.photos ?? [], downloadItem.itemName || "item");
+                setDownloadModalLoading(false);
                 setDownloadItem(null);
               }}
             >
-              Download All Images ({downloadItem.photos?.length ?? 1})
+              {downloadModalLoading ? "Saving…" : `Save All Images (${downloadItem.photos?.length ?? 1})`}
             </button>
             <button
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              disabled={downloadModalLoading}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
               onClick={() => setDownloadItem(null)}
             >
               Cancel
