@@ -1,6 +1,7 @@
 import {
   getGmailToken,
   saveGmailToken,
+  deleteGmailToken,
   getClientContacts,
   getReferralContacts,
   getActivitiesForContact,
@@ -75,7 +76,12 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
       grant_type: "refresh_token",
     }).toString(),
   });
-  if (!res.ok) throw new Error(`Token refresh failed: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await res.text();
+    // invalid_grant = token permanently expired or revoked (e.g. 7-day testing-mode limit)
+    if (body.includes("invalid_grant")) throw new Error("GMAIL_TOKEN_REVOKED");
+    throw new Error(`Token refresh failed: ${body}`);
+  }
   const data = await res.json();
   const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
   return { accessToken: data.access_token, expiresAt };
@@ -83,7 +89,7 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
 
 export async function getValidAccessToken(clerkUserId: string): Promise<string> {
   const token = await getGmailToken(clerkUserId);
-  if (!token) throw new Error("No Gmail token found for user");
+  if (!token) throw new Error("GMAIL_TOKEN_REVOKED");
 
   const expiresAt = new Date(token.expiresAt).getTime();
   const fiveMinutesFromNow = Date.now() + 5 * 60 * 1000;
@@ -93,18 +99,27 @@ export async function getValidAccessToken(clerkUserId: string): Promise<string> 
   }
 
   if (!token.refreshToken) {
-    throw new Error("NO_REFRESH_TOKEN");
+    // No refresh token stored — delete the dead record so UI shows "Reconnect"
+    await deleteGmailToken(token.id).catch(() => {});
+    throw new Error("GMAIL_TOKEN_REVOKED");
   }
 
-  // Refresh
-  const { accessToken, expiresAt: newExpiresAt } = await refreshAccessToken(token.refreshToken);
-  await saveGmailToken(clerkUserId, {
-    accessToken,
-    refreshToken: token.refreshToken,
-    expiresAt: newExpiresAt,
-    email: token.email,
-  });
-  return accessToken;
+  try {
+    const { accessToken, expiresAt: newExpiresAt } = await refreshAccessToken(token.refreshToken);
+    await saveGmailToken(clerkUserId, {
+      accessToken,
+      refreshToken: token.refreshToken,
+      expiresAt: newExpiresAt,
+      email: token.email,
+    });
+    return accessToken;
+  } catch (e) {
+    if (e instanceof Error && e.message === "GMAIL_TOKEN_REVOKED") {
+      // Token is permanently invalid — delete it so the UI shows "Reconnect Gmail"
+      await deleteGmailToken(token.id).catch(() => {});
+    }
+    throw e;
+  }
 }
 
 export interface GmailMessage {

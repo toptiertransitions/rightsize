@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       accessToken = await getValidAccessToken(token.clerkUserId);
     } catch (e) {
       console.error("[zelle] Token error:", String(e));
-      return NextResponse.json({ payments: [], connected: false });
+      return NextResponse.json({ payments: [], connected: false, needs_reconnect: true });
     }
     const payments = await fetchZellePayments(accessToken, days);
     return NextResponse.json({ payments, connected: true });

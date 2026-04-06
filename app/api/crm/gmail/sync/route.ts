@@ -17,7 +17,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing opportunityId or query" }, { status: 400 });
   }
 
-  const accessToken = await getValidAccessToken(userId);
+  let accessToken: string;
+  try {
+    accessToken = await getValidAccessToken(userId);
+  } catch (e) {
+    const revoked = e instanceof Error && e.message === "GMAIL_TOKEN_REVOKED";
+    console.error("[gmail/sync] Token error:", String(e));
+    return NextResponse.json({ error: revoked ? "Gmail reconnection required" : "Gmail token error", needs_reconnect: revoked }, { status: 401 });
+  }
   console.log("[gmail/sync] query:", query);
 
   const messages = await searchGmailMessages(accessToken, query, 20);

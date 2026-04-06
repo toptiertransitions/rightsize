@@ -30,6 +30,7 @@ export function ZellePayments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const load = useCallback(async (silent = false) => {
@@ -40,6 +41,7 @@ export function ZellePayments() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load");
       setConnected(data.connected ?? true);
+      setNeedsReconnect(data.needs_reconnect ?? false);
       setPayments(data.payments ?? []);
       setLastRefreshed(new Date());
     } catch (e) {
@@ -98,12 +100,20 @@ export function ZellePayments() {
         ))}
       </div>
 
-      {/* Not connected warning */}
+      {/* Not connected / needs reconnect warning */}
       {!connected && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Gmail is not connected. Connect an account in{" "}
-          <a href="/crm/settings" className="underline font-medium">CRM Settings</a>{" "}
-          to see Zelle payments.
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center justify-between gap-3">
+          <span>
+            {needsReconnect
+              ? "Gmail connection expired. Reconnect to restore the Zelle feed."
+              : "Gmail is not connected. Connect an account to see Zelle payments."}
+          </span>
+          <a
+            href="/api/crm/gmail/auth"
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-700 text-white text-xs font-medium hover:bg-amber-800 transition-colors"
+          >
+            {needsReconnect ? "Reconnect Gmail" : "Connect Gmail"}
+          </a>
         </div>
       )}
 
