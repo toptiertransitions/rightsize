@@ -5,6 +5,7 @@ import {
   getClientContacts,
   getReferralContacts,
   getActivitiesForContact,
+  getImportedGmailMessageIds,
   createActivity,
 } from "./airtable";
 import type { ZellePayment } from "./types";
@@ -143,9 +144,13 @@ export async function searchGmailMessages(
 }
 
 // Sync one Gmail account against all CRM contacts. Returns counts for that account.
+// globalImportedIds is a cross-contact, cross-run dedup set — any message ID already
+// in this set (imported for any other contact) is skipped to prevent the same email
+// being logged as multiple activities when it was sent to a distribution list.
 async function runGmailSyncForUser(
   clerkUserId: string,
   allContacts: Array<{ id: string; email: string; name: string }>,
+  globalImportedIds: Set<string>,
 ): Promise<{ imported: number; contactsSearched: number }> {
   const accessToken = await getValidAccessToken(clerkUserId);
 
@@ -166,13 +171,16 @@ async function runGmailSyncForUser(
 
     contactsSearched++;
 
+    // Per-contact dedup: skip messages already imported for this specific contact
     const existing = await getActivitiesForContact(contact.id);
-    const importedIds = new Set(
+    const contactImportedIds = new Set(
       existing.filter((a) => a.gmailMessageId).map((a) => a.gmailMessageId!)
     );
 
     for (const msg of messages) {
-      if (importedIds.has(msg.id)) continue;
+      // Global dedup: skip if this message was already imported for any contact
+      if (globalImportedIds.has(msg.id)) continue;
+      if (contactImportedIds.has(msg.id)) continue;
       try {
         const detail = await getGmailMessage(accessToken, msg.id);
         await createActivity({
@@ -188,7 +196,9 @@ async function runGmailSyncForUser(
           createdByClerkId: clerkUserId,
         });
         totalImported++;
-        importedIds.add(msg.id);
+        // Add to both sets so subsequent contacts in this run also skip it
+        globalImportedIds.add(msg.id);
+        contactImportedIds.add(msg.id);
       } catch (err) {
         console.error("[gmail/sync-all] Failed to import message", msg.id, err);
       }
@@ -205,9 +215,10 @@ export async function runGmailSyncAll(
 ): Promise<{ imported: number; contactsSearched: number; accountsSynced: number }> {
   const ids = Array.isArray(clerkUserIds) ? clerkUserIds : [clerkUserIds];
 
-  const [clientContacts, referralContacts] = await Promise.all([
+  const [clientContacts, referralContacts, globalImportedIds] = await Promise.all([
     getClientContacts(),
     getReferralContacts(),
+    getImportedGmailMessageIds(),
   ]);
 
   const allContacts = [
@@ -221,7 +232,7 @@ export async function runGmailSyncAll(
 
   for (const userId of ids) {
     try {
-      const result = await runGmailSyncForUser(userId, allContacts);
+      const result = await runGmailSyncForUser(userId, allContacts, globalImportedIds);
       totalImported += result.imported;
       totalContactsSearched = Math.max(totalContactsSearched, result.contactsSearched);
       accountsSynced++;

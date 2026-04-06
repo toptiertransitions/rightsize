@@ -3035,6 +3035,27 @@ export async function deleteActivity(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+/** Returns all GmailMessageIds already stored as activities (any contact).
+ *  Used at the start of a Gmail sync to skip messages that were already
+ *  imported for a different contact in a previous sync run. */
+export async function getImportedGmailMessageIds(): Promise<Set<string>> {
+  const formula = encodeURIComponent(`LEN({GmailMessageId}) > 0`);
+  const ids = new Set<string>();
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}&fields[]=GmailMessageId${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    for (const record of data.records as AirtableRecord[]) {
+      const id = toStr((record.fields as Record<string, unknown>)["GmailMessageId"]);
+      if (id) ids.add(id);
+    }
+    offset = data.offset;
+  } while (offset);
+  return ids;
+}
+
 // Fetch all activities that have a ClientContactId (paginated)
 export async function getAllActivitiesWithContactId(): Promise<CRMActivity[]> {
   const formula = encodeURIComponent(`{ClientContactId} != ""`);
