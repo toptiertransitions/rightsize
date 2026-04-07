@@ -168,7 +168,10 @@ function CompactMemberRow({
 }) {
   const status = getStaffDayStatus(member, iso);
   const name = member.displayName || member.email;
-  const firstName = name.split(" ")[0];
+  const nameParts = name.split(" ");
+  const firstName = nameParts[0];
+  const lastInitial = nameParts.length > 1 ? ` ${nameParts[nameParts.length - 1][0].toUpperCase()}.` : "";
+  const displayLabel = `${firstName}${lastInitial}`;
   const isScheduled = shifts.length > 0;
 
   // Color scheme per state
@@ -206,7 +209,7 @@ function CompactMemberRow({
   return (
     <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] ${rowCls} ${textCls}`}>
       <MemberAvatar member={member} sizePx={20} className={avatarCls} />
-      <span className="font-medium truncate flex-shrink-0" style={{ maxWidth: 60 }}>{firstName}</span>
+      <span className="font-medium truncate flex-shrink-0" style={{ maxWidth: 68 }}>{displayLabel}</span>
       {rightLabel && (
         <span className="ml-auto whitespace-nowrap opacity-75 text-[10px] truncate" style={{ maxWidth: 100 }}>
           {rightLabel}
