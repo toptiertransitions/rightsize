@@ -861,6 +861,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [staffSellerFilter, setStaffSellerFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
@@ -1037,6 +1038,105 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       // silently ignore — browser will show nothing downloaded
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (selected.size === 0) return;
+    setExportLoading(true);
+    try {
+      const selectedItems = items.filter(i => selected.has(i.id));
+      const roomMap = new Map(rooms.map(r => [r.id, `${r.name} (${r.roomType})`]));
+
+      const getProjectName = (item: Item) =>
+        tenantMap.get(item.tenantId) ??
+        allTenants?.find(t => t.id === item.tenantId)?.name ??
+        item.tenantId;
+
+      // ── CSV ──────────────────────────────────────────────────────────────────
+      const esc = (v: string | number | boolean | undefined | null) => {
+        const s = v === undefined || v === null ? "" : String(v);
+        return s.includes(",") || s.includes('"') || s.includes("\n")
+          ? `"${s.replace(/"/g, '""')}"`
+          : s;
+      };
+
+      const headers = [
+        "Project", "Item Name", "Category", "Condition", "Status", "Site",
+        "Pickup Location", "Estate Sale ID", "Condition Notes", "Completed Date",
+        "Size", "Fragility", "Room", "Recommended Route", "Consignment Category",
+        "Route Reasoning", "Value Low ($)", "Target Value ($)", "Value High ($)",
+        "Quantity", "Barcode #", "eBay Title", "eBay Description",
+        "Facebook Marketplace", "OfferUp", "Staff Notes",
+        "Sale Price", "Consignor Payout", "Sale Date", "Created At", "Photo URLs",
+      ];
+
+      const rows = selectedItems.map(item => [
+        getProjectName(item),
+        item.itemName,
+        item.category,
+        item.condition,
+        item.status,
+        item.storefrontActive ? "Yes" : "No",
+        item.pickupLocation ?? "",
+        item.estateSaleId ?? "",
+        item.conditionNotes ?? "",
+        item.completedDate ?? "",
+        item.sizeClass ?? "",
+        item.fragility ?? "",
+        item.roomId ? (roomMap.get(item.roomId) ?? item.roomId) : "",
+        item.primaryRoute ?? "",
+        item.consignmentCategory ?? "",
+        item.routeReasoning ?? "",
+        item.valueLow ?? "",
+        item.valueMid ?? "",
+        item.valueHigh ?? "",
+        item.quantity ?? 1,
+        item.barcodeNumber ?? "",
+        item.listingTitleEbay ?? "",
+        item.listingDescriptionEbay ?? "",
+        item.listingFb ?? "",
+        item.listingOfferup ?? "",
+        item.staffTips ?? "",
+        item.salePrice ?? "",
+        item.consignorPayout ?? "",
+        item.saleDate ?? "",
+        item.createdAt ?? "",
+        (item.photos?.map(p => p.url) ?? (item.photoUrl ? [item.photoUrl] : [])).join("; "),
+      ].map(esc).join(","));
+
+      const csv = [headers.join(","), ...rows].join("\n");
+      const csvBlob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const csvUrl = URL.createObjectURL(csvBlob);
+      const csvA = document.createElement("a");
+      csvA.href = csvUrl;
+      csvA.download = `catalog-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(csvA);
+      csvA.click();
+      document.body.removeChild(csvA);
+      setTimeout(() => URL.revokeObjectURL(csvUrl), 1000);
+
+      // ── Images ───────────────────────────────────────────────────────────────
+      const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9 \-]/g, "").trim().replace(/\s+/g, " ");
+
+      const allDownloads: { url: string; filename: string }[] = [];
+      for (const item of selectedItems) {
+        const proj = sanitize(getProjectName(item));
+        const name = sanitize(item.itemName || "Item");
+        const photos = item.photos?.length ? item.photos : item.photoUrl ? [{ url: item.photoUrl, publicId: "" }] : [];
+        photos.forEach((p, i) => {
+          allDownloads.push({ url: p.url, filename: `${proj}-${name}-${i + 1}` });
+        });
+      }
+
+      for (let i = 0; i < allDownloads.length; i++) {
+        await new Promise<void>(resolve => setTimeout(async () => {
+          await triggerDownload(allDownloads[i].url, allDownloads[i].filename);
+          resolve();
+        }, i * 800));
+      }
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -1449,7 +1549,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
               disabled={bulkLoading}
               className="h-8 px-3 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
             >
-              {bulkLoading ? "Approving…" : "Approve Recommended Route"}
+              {bulkLoading ? "Approving…" : "Approve Route"}
             </button>
             {localVendors && localVendors.length > 0 && (
               <button
@@ -1485,6 +1585,16 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 Print PF Labels
               </button>
             )}
+            <button
+              onClick={handleExport}
+              disabled={exportLoading}
+              className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {exportLoading ? "Exporting…" : "Export"}
+            </button>
             <button
               onClick={() => setSelected(new Set())}
               className="h-8 px-3 rounded-lg border border-forest-300 text-forest-700 text-sm hover:bg-forest-100 transition-colors"
