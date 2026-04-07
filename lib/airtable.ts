@@ -529,6 +529,7 @@ export async function createItem(data: Partial<Item> & {
     ListingOfferup: data.listingOfferup || "",
     StaffTips: data.staffTips || "",
     Status: data.status || "Pending Review",
+    StorefrontActive: data.storefrontActive ?? false,
     BarcodeNumber: data.barcodeNumber || "",
     Quantity: data.quantity || 1,
     ClientSharePercent: data.clientSharePercent ?? 0,
