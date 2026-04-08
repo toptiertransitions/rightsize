@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, updateItem, createItemSaleEvent, logFailedSaleSync } from "@/lib/airtable";
+import { getItemById, updateItem, createItemSaleEvent, logFailedSaleSync, getEstateById } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -12,7 +12,7 @@ async function attemptRecordSale(data: {
   salePrice: number;
   buyerName: string;
   buyerEmail: string;
-}): Promise<void> {
+}): Promise<{ estateSlug?: string }> {
   const item = await getItemById(data.itemId);
   if (!item) throw new Error(`Item ${data.itemId} not found`);
   if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
@@ -50,6 +50,14 @@ async function attemptRecordSale(data: {
     saleDate,
     payoutPaid: false,
   });
+
+  // Return estate slug so the caller can bust the estate ISR cache
+  let estateSlug: string | undefined;
+  if (item.primaryRoute === "Estate Sale" && item.estateSaleId) {
+    const estate = await getEstateById(item.estateSaleId).catch(() => null);
+    if (estate) estateSlug = estate.slug;
+  }
+  return { estateSlug };
 }
 
 export async function POST(req: NextRequest) {
@@ -81,9 +89,9 @@ export async function POST(req: NextRequest) {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail });
+      const { estateSlug } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail });
 
-      // Ping storefront to invalidate ISR cache
+      // Ping storefront to invalidate ISR cache (item + estate page if applicable)
       const storefrontUrl = process.env.STOREFRONT_URL;
       const webhookSecret = process.env.STOREFRONT_WEBHOOK_SECRET;
       if (storefrontUrl && webhookSecret) {
@@ -93,7 +101,7 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
             "x-webhook-secret": webhookSecret,
           },
-          body: JSON.stringify({ itemId, event: "sale" }),
+          body: JSON.stringify({ itemId, event: "sale", estateSlug }),
         }).catch((e) => console.error("[storefront/sale] Webhook ping failed:", e));
       }
 
