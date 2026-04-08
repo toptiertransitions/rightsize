@@ -8,13 +8,13 @@ export function getQBOBaseUrl(): string {
     : "https://sandbox-quickbooks.api.intuit.com";
 }
 
-export function buildQBOAuthUrl(): string {
+export function buildQBOAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.QBO_CLIENT_ID!,
     scope: "com.intuit.quickbooks.accounting",
     redirect_uri: process.env.QBO_REDIRECT_URI!,
     response_type: "code",
-    state: "qbo_connect",
+    state,
   });
   return `https://appcenter.intuit.com/connect/oauth2?${params.toString()}`;
 }
