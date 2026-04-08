@@ -77,7 +77,7 @@ export function InvoiceCreatorModal({
   // Fetch project expenses when Full tab is opened (once)
   useEffect(() => {
     if (tab !== "Full" || expensesLoaded) return;
-    fetch(`/api/expenses?tenantId=${tenant.id}`)
+    fetch(`/api/expenses?tenantId=${tenant.id}&billable=true`)
       .then(r => r.json())
       .then(d => {
         if (d.expenses) {

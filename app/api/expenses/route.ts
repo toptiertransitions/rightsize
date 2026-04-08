@@ -20,8 +20,10 @@ export async function GET(req: NextRequest) {
   }
 
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const isSalesOrAbove = isManagerOrAdmin || sysRole === "TTTSales";
   const allCompany = req.nextUrl.searchParams.get("allCompany") === "true";
   const tenantId = req.nextUrl.searchParams.get("tenantId");
+  const billableOnly = req.nextUrl.searchParams.get("billable") === "true";
 
   // ?reimbursable=true&from=YYYY-MM-DD&to=YYYY-MM-DD → for CSV payroll export
   const reimbursableOnly = req.nextUrl.searchParams.get("reimbursable") === "true";
@@ -37,8 +39,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ expenses });
   }
 
-  if (isManagerOrAdmin && tenantId) {
-    const expenses = await getExpensesForTenant(tenantId);
+  if (isSalesOrAbove && tenantId) {
+    let expenses = await getExpensesForTenant(tenantId);
+    if (billableOnly) expenses = expenses.filter(e => e.billable === true);
     return NextResponse.json({ expenses });
   }
 

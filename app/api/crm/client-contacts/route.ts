@@ -45,6 +45,9 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  // Never overwrite email/phone with empty string — blank values are ignored
+  if (data.email === "") delete data.email;
+  if (data.phone === "") delete data.phone;
   const contact = await updateClientContact(id, data);
   return NextResponse.json({ contact });
 }

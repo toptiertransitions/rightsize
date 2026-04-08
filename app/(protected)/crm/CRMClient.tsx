@@ -1921,22 +1921,27 @@ function ReferralPartnersTab({
         const name = row["name"] || row["company"] || row["companyname"] || "";
         if (!name) continue;
         try {
-          const res = await fetch("/api/crm/companies", {
+          // Strip empty strings so blank CSV columns never overwrite existing data
+          const payload = Object.fromEntries(Object.entries({
+            name,
+            type: row["type"] || "",
+            address: row["address"] || "",
+            city: row["city"] || "",
+            state: row["state"] || "",
+            zip: row["zip"] || row["zipcode"] || "",
+            notes: row["notes"] || "",
+          }).filter(([, v]) => v !== ""));
+          const res = await fetch("/api/crm/companies?upsert=true", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name,
-              type: row["type"] || "",
-              address: row["address"] || "",
-              city: row["city"] || "",
-              state: row["state"] || "",
-              zip: row["zip"] || row["zipcode"] || "",
-              notes: row["notes"] || "",
-            }),
+            body: JSON.stringify(payload),
           });
           if (res.ok) {
             const data = await res.json();
-            setCompanies(prev => [...prev, data.company]);
+            setCompanies(prev => {
+              const exists = prev.some(c => c.id === data.company.id);
+              return exists ? prev.map(c => c.id === data.company.id ? data.company : c) : [...prev, data.company];
+            });
             imported++;
           } else { errors++; }
         } catch { errors++; }
@@ -1950,25 +1955,33 @@ function ReferralPartnersTab({
         const companyName = (row["company"] || row["companyname"] || "").toLowerCase();
         const referralCompanyId = companyMap.get(companyName) || "";
         try {
-          const res = await fetch("/api/crm/contacts", {
+          // Strip empty strings so blank CSV columns never overwrite existing email/phone/etc
+          const payload = Object.fromEntries(Object.entries({
+            name,
+            title: row["title"] || row["jobtitle"] || "",
+            email: row["email"] || row["emailaddress"] || "",
+            phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
+            notes: row["notes"] || "",
+            referralCompanyId,
+          }).filter(([, v]) => v !== ""));
+          const res = await fetch("/api/crm/contacts?upsert=true", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name,
-              title: row["title"] || row["jobtitle"] || "",
-              email: row["email"] || row["emailaddress"] || "",
-              phone: row["phone"] || row["phonenumber"] || row["mobile"] || "",
-              notes: row["notes"] || "",
-              referralCompanyId,
-            }),
+            body: JSON.stringify(payload),
           });
           if (res.ok) {
             const data = await res.json();
             if (referralCompanyId) {
-              setContacts(prev => ({
-                ...prev,
-                [referralCompanyId]: [...(prev[referralCompanyId] || []), data.contact],
-              }));
+              setContacts(prev => {
+                const existing = prev[referralCompanyId] || [];
+                const exists = existing.some(c => c.id === data.contact.id);
+                return {
+                  ...prev,
+                  [referralCompanyId]: exists
+                    ? existing.map(c => c.id === data.contact.id ? data.contact : c)
+                    : [...existing, data.contact],
+                };
+              });
             }
             imported++;
           } else { errors++; }
