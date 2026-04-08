@@ -224,11 +224,15 @@ function ImportPanel({ type, staffMap }: { type: ImportType; staffMap: Record<st
         const existingId = existingMap.get(payload["name"].toLowerCase());
         let res: Response;
         if (existingId) {
-          // Overwrite existing record
+          // Update existing record — strip empty strings so blank CSV columns
+          // never overwrite existing email/phone/etc with empty values
+          const updatePayload = Object.fromEntries(
+            Object.entries(payload).filter(([, v]) => v !== "" && v !== null && v !== undefined)
+          );
           res = await fetch(cfg.apiPath, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: existingId, ...payload }),
+            body: JSON.stringify({ id: existingId, ...updatePayload }),
           });
         } else {
           // Create new record
