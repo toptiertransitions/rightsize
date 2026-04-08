@@ -4,6 +4,16 @@ import { useState } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant } from "@/lib/types";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
+// Convert any stored date string (UTC ISO or local) to the "YYYY-MM-DDTHH:mm" format
+// that datetime-local inputs require (local time).
+function toLocalDatetimeInput(s: string): string {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s.slice(0, 16);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 interface EstatesClientProps {
   estates: Estate[];
   tenants: Tenant[];
@@ -303,17 +313,12 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                 />
               </Field>
 
-              <Field label="Client (Tenant ID)">
-                <select
-                  className={inputCls}
+              <Field label="Client Project">
+                <TenantCombobox
                   value={form.tenantId}
-                  onChange={e => setForm(f => ({ ...f, tenantId: e.target.value }))}
-                >
-                  <option value="">— none —</option>
-                  {Object.entries(tenantMap).map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
-                  ))}
-                </select>
+                  onChange={id => setForm(f => ({ ...f, tenantId: id }))}
+                  tenants={tenants}
+                />
               </Field>
 
               <Field label="Status">
@@ -344,16 +349,16 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                   <input
                     type="datetime-local"
                     className={inputCls}
-                    value={form.saleStartDate ? form.saleStartDate.slice(0, 16) : ""}
-                    onChange={e => setForm(f => ({ ...f, saleStartDate: e.target.value ? new Date(e.target.value).toISOString() : "" }))}
+                    value={toLocalDatetimeInput(form.saleStartDate)}
+                    onChange={e => setForm(f => ({ ...f, saleStartDate: e.target.value || "" }))}
                   />
                 </Field>
                 <Field label="Sale End Date">
                   <input
                     type="datetime-local"
                     className={inputCls}
-                    value={form.saleEndDate ? form.saleEndDate.slice(0, 16) : ""}
-                    onChange={e => setForm(f => ({ ...f, saleEndDate: e.target.value ? new Date(e.target.value).toISOString() : "" }))}
+                    value={toLocalDatetimeInput(form.saleEndDate)}
+                    onChange={e => setForm(f => ({ ...f, saleEndDate: e.target.value || "" }))}
                   />
                 </Field>
               </div>
@@ -549,6 +554,63 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TenantCombobox({
+  value,
+  onChange,
+  tenants,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  tenants: Tenant[];
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const active = tenants.filter(t => !t.isArchived).sort((a, b) => a.name.localeCompare(b.name));
+  const selected = active.find(t => t.id === value);
+
+  const filtered = query.trim()
+    ? active.filter(t => t.name.toLowerCase().includes(query.toLowerCase()))
+    : active;
+
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        value={open ? query : (selected?.name ?? "")}
+        placeholder="Search projects…"
+        onFocus={() => { setOpen(true); setQuery(""); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={e => setQuery(e.target.value)}
+      />
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-52 overflow-y-auto">
+          <div
+            className="px-3 py-2 text-sm text-gray-400 hover:bg-gray-700 cursor-pointer"
+            onMouseDown={() => { onChange(""); setOpen(false); setQuery(""); }}
+          >
+            — none —
+          </div>
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
+          ) : filtered.map(t => (
+            <div
+              key={t.id}
+              className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-700 flex items-center justify-between gap-2 ${t.id === value ? "text-forest-400" : "text-gray-100"}`}
+              onMouseDown={() => { onChange(t.id); setOpen(false); setQuery(""); }}
+            >
+              <span>{t.name}</span>
+              {t.isConsignmentOnly && (
+                <span className="text-xs text-gray-500 flex-shrink-0">Consignment</span>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
