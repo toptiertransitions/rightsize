@@ -26,7 +26,11 @@ export async function POST(req: NextRequest) {
   if (upsert && body.name) {
     const existing = await findClientContactByName(body.name);
     if (existing) {
-      const contact = await updateClientContact(existing.id, body);
+      // Strip empty strings so CSV import never overwrites existing email/phone with blanks
+      const updateData = Object.fromEntries(
+        Object.entries(body).filter(([, v]) => v !== "" && v !== null && v !== undefined)
+      );
+      const contact = await updateClientContact(existing.id, updateData);
       return NextResponse.json({ contact });
     }
   }
