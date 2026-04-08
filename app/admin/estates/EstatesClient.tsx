@@ -24,7 +24,12 @@ function splitDatetime(s: string): { date: string; time: string } {
 
 function joinDatetime(date: string, time: string): string {
   if (!date) return "";
-  return time ? `${date}T${time}` : date;
+  if (!time) return date;
+  // Build as local time so Airtable receives a UTC ISO string that reflects
+  // the user's local clock (e.g. 8:00 AM CDT → stored as 13:00 UTC).
+  const [y, m, d] = date.split("-").map(Number);
+  const [h, min] = time.split(":").map(Number);
+  return new Date(y, m - 1, d, h, min).toISOString();
 }
 
 interface EstatesClientProps {
