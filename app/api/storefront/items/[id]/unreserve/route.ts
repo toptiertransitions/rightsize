@@ -19,7 +19,7 @@ export async function POST(
     if (!item) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (item.primaryRoute !== "ProFoundFinds Consignment") {
+    if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     // Only revert if still Reserved (don't clobber Sold)
