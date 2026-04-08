@@ -567,6 +567,7 @@ function QBOIntegrationSection({ services }: { services: Service[] }) {
   );
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [savingMapping, setSavingMapping] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -587,10 +588,14 @@ function QBOIntegrationSection({ services }: { services: Service[] }) {
         setStatus(data);
         if (data.connected) {
           setLoadingItems(true);
+          setItemsError(null);
           fetch("/api/qbo/items")
             .then((r) => r.json())
-            .then((d) => setQboItems(d.items || []))
-            .catch(() => {})
+            .then((d) => {
+              if (d.error) setItemsError(d.error);
+              else setQboItems(d.items || []);
+            })
+            .catch((e) => setItemsError(e?.message || "Failed to load QBO items"))
             .finally(() => setLoadingItems(false));
         }
       })
@@ -691,6 +696,10 @@ function QBOIntegrationSection({ services }: { services: Service[] }) {
 
           {loadingItems ? (
             <p className="text-sm text-gray-500">Loading QBO items…</p>
+          ) : itemsError ? (
+            <p className="text-xs text-red-400 bg-red-950/30 border border-red-800 rounded-lg px-3 py-2">
+              Error loading QBO items: {itemsError}
+            </p>
           ) : (
             <div className="space-y-2">
               {activeServices.map((svc) => (
@@ -715,9 +724,9 @@ function QBOIntegrationSection({ services }: { services: Service[] }) {
             </div>
           )}
 
-          {qboItems.length === 0 && !loadingItems && (
+          {qboItems.length === 0 && !loadingItems && !itemsError && (
             <p className="text-xs text-amber-400">
-              No service items found in QBO. Create Service-type items in QuickBooks first, or leave unmapped to auto-create them on invoice generation.
+              No service items found in QBO. Make sure items are Service or NonInventory type and active in QuickBooks, or leave unmapped to auto-create on invoice generation.
             </p>
           )}
 

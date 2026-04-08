@@ -134,14 +134,14 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
 }
 
 export async function getQBOServiceItems(): Promise<Array<{ Id: string; Name: string }>> {
-  const query = "SELECT * FROM Item WHERE Type = 'Service' AND Active = true MAXRESULTS 100";
+  // Include both Service and NonInventory types — QBO accounts commonly use either for services
+  const query = "SELECT * FROM Item WHERE (Type = 'Service' OR Type = 'NonInventory') AND Active = true MAXRESULTS 200";
   const res = await qboFetch(`/query?query=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error(`QBO items query failed: ${await res.text()}`);
   const data = await res.json();
-  return (data.QueryResponse?.Item ?? []).map((item: { Id: string; Name: string }) => ({
-    Id: item.Id,
-    Name: item.Name,
-  }));
+  return (data.QueryResponse?.Item ?? [])
+    .map((item: { Id: string; Name: string }) => ({ Id: item.Id, Name: item.Name }))
+    .sort((a: { Name: string }, b: { Name: string }) => a.Name.localeCompare(b.Name));
 }
 
 async function findOrCreateQBOCustomer(displayName: string): Promise<string> {
