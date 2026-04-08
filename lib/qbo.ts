@@ -191,14 +191,22 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
 }
 
 export async function getQBOServiceItems(): Promise<Array<{ Id: string; Name: string }>> {
-  // Include both Service and NonInventory types — QBO accounts commonly use either for services
-  const query = "SELECT * FROM Item WHERE (Type = 'Service' OR Type = 'NonInventory') AND Active = true MAXRESULTS 200";
-  const res = await qboFetch(`/query?query=${encodeURIComponent(query)}`);
-  if (!res.ok) throw new Error(`QBO items query failed: ${await res.text()}`);
-  const data = await res.json();
-  return (data.QueryResponse?.Item ?? [])
-    .map((item: { Id: string; Name: string }) => ({ Id: item.Id, Name: item.Name }))
-    .sort((a: { Name: string }, b: { Name: string }) => a.Name.localeCompare(b.Name));
+  // QBO query language doesn't support OR with parentheses — run two queries and merge
+  const queries = [
+    "SELECT * FROM Item WHERE Type = 'Service' AND Active = true MAXRESULTS 200",
+    "SELECT * FROM Item WHERE Type = 'NonInventory' AND Active = true MAXRESULTS 200",
+  ];
+  const results = await Promise.all(queries.map(async (query) => {
+    const res = await qboFetch(`/query?query=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error(`QBO items query failed: ${await res.text()}`);
+    const data = await res.json();
+    return (data.QueryResponse?.Item ?? []) as Array<{ Id: string; Name: string }>;
+  }));
+  const all = results.flat().map(item => ({ Id: item.Id, Name: item.Name }));
+  // Deduplicate by Id and sort alphabetically
+  const seen = new Set<string>();
+  return all.filter(item => seen.has(item.Id) ? false : (seen.add(item.Id), true))
+    .sort((a, b) => a.Name.localeCompare(b.Name));
 }
 
 async function findOrCreateQBOCustomer(displayName: string): Promise<string> {
