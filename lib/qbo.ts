@@ -136,6 +136,10 @@ function buildQBOUrl(path: string, realmId: string): string {
   return url.toString();
 }
 
+function logQBOError(context: string, tid: string | null, status: number, body: string) {
+  console.error(`[QBO] ${context} | intuit_tid=${tid ?? "none"} | status=${status} | body=${body}`);
+}
+
 async function doQBOFetch(path: string, accessToken: string, realmId: string, options?: RequestInit): Promise<Response> {
   return fetch(buildQBOUrl(path, realmId), {
     ...options,
@@ -154,10 +158,13 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
   const { accessToken, realmId } = auth;
 
   const res = await doQBOFetch(path, accessToken, realmId, options);
+  const tid = res.headers.get("intuit_tid");
 
   // If we get a 401, the token may have been revoked mid-session.
   // Force a token refresh and retry once before giving up.
   if (res.status === 401) {
+    const body = await res.text();
+    logQBOError(`401 on ${options?.method ?? "GET"} ${path}`, tid, 401, body);
     const record = await getQBOToken();
     if (!record) throw new Error("QuickBooks is not connected");
     try {
@@ -172,6 +179,12 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
       }
       throw e;
     }
+  }
+
+  // Log non-2xx responses for troubleshooting
+  if (!res.ok) {
+    const body = await res.clone().text();
+    logQBOError(`${options?.method ?? "GET"} ${path}`, tid, res.status, body);
   }
 
   return res;
