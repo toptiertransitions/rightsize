@@ -22,11 +22,11 @@ export async function POST(
     if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    // Only revert if still Reserved (don't clobber Sold)
-    if (item.status === "Reserved") {
+    // Only revert if In Cart — never clobber Sold or Listed
+    if (item.status === "In Cart") {
       await updateItem(id, { status: "Listed" });
     }
-    return NextResponse.json({ status: item.status === "Reserved" ? "Listed" : item.status });
+    return NextResponse.json({ status: item.status === "In Cart" ? "Listed" : item.status });
   } catch (e) {
     console.error("[storefront/items/[id]/unreserve] POST error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });

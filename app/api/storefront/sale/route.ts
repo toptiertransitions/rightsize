@@ -15,14 +15,14 @@ async function attemptRecordSale(data: {
 }): Promise<void> {
   const item = await getItemById(data.itemId);
   if (!item) throw new Error(`Item ${data.itemId} not found`);
-  if (item.primaryRoute !== "ProFoundFinds Consignment") {
-    throw new Error(`Item ${data.itemId} is not a ProFoundFinds item`);
+  if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
+    throw new Error(`Item ${data.itemId} has unexpected primaryRoute: ${item.primaryRoute}`);
   }
 
   const saleDate = new Date().toISOString().split("T")[0];
   const consignorPayout =
     item.clientSharePercent != null && item.clientSharePercent > 0
-      ? data.salePrice * (item.clientSharePercent / 100)
+      ? Math.round(data.salePrice * (item.clientSharePercent / 100) * 100) / 100
       : 0;
 
   await updateItem(data.itemId, {

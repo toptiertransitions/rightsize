@@ -66,7 +66,7 @@ const STATUS_COLORS: Record<ItemStatus, string> = {
   "Pending Review": "bg-gray-100 text-gray-600",
   "Approved":       "bg-blue-100 text-blue-700",
   "Listed":         "bg-purple-100 text-purple-700",
-  "Reserved":       "bg-orange-100 text-orange-700",
+  "In Cart":        "bg-orange-100 text-orange-700",
   "Sold":           "bg-green-100 text-green-700",
   "Donated":        "bg-teal-100 text-teal-700",
   "Discarded":      "bg-red-100 text-red-600",

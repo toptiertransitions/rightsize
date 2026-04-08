@@ -233,7 +233,7 @@ export type ItemStatus =
   | "Pending Review"
   | "Approved"
   | "Listed"
-  | "Reserved"
+  | "In Cart"
   | "Sold"
   | "Donated"
   | "Discarded"

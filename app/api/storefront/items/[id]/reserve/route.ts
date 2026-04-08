@@ -30,7 +30,7 @@ export async function POST(
         { status: 409 }
       );
     }
-    await updateItem(id, { status: "Reserved" });
+    await updateItem(id, { status: "In Cart" });
     const reservedUntil = new Date(Date.now() + RESERVATION_TTL_SECONDS * 1000).toISOString();
     return NextResponse.json({ reservedUntil });
   } catch (e) {

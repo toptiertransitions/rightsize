@@ -422,7 +422,7 @@ export async function getReservedStorefrontItems(): Promise<{ id: string; itemNa
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", {Status} = "Reserved")`,
+      filterByFormula: `AND(OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale"), {Status} = "In Cart")`,
       fields: ["ItemName", "UpdatedAt"],
     })
     .all();
@@ -438,7 +438,7 @@ export async function getProFoundFindsStorefrontItems(): Promise<Item[]> {
   const [records, allTenants] = await Promise.all([
     base(AIRTABLE_TABLES.ITEMS)
       .select({
-        filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", {Status} = "Listed", {StorefrontActive})`,
+        filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", OR({Status} = "Listed", {Status} = "In Cart"), {StorefrontActive})`,
         sort: [{ field: "CreatedAt", direction: "desc" }],
       })
       .all(),
@@ -4439,7 +4439,7 @@ export async function getEstateWithItems(
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({EstateSaleId} = "${estate.id}", {Status} = "Listed")`,
+      filterByFormula: `AND({EstateSaleId} = "${estate.id}", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
       sort: [{ field: "CreatedAt", direction: "desc" }],
     })
     .all();
@@ -4545,7 +4545,7 @@ export async function getItemsForEstateSale(estateId: string): Promise<Item[]> {
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({EstateSaleId} = "${estateId}", {Status} = "Listed")`,
+      filterByFormula: `AND({EstateSaleId} = "${estateId}", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
       sort: [{ field: "CreatedAt", direction: "desc" }],
     })
     .all();
