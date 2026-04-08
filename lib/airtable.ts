@@ -460,7 +460,7 @@ export async function getItemByOnlineSlug(slug: string): Promise<Item | null> {
     const base = getBase();
     const records = await base(AIRTABLE_TABLES.ITEMS)
       .select({
-        filterByFormula: `AND({OnlineListingSlug} = "${slug}", {PrimaryRoute} = "ProFoundFinds Consignment")`,
+        filterByFormula: `AND({OnlineListingSlug} = "${slug}", OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale"))`,
         maxRecords: 1,
       })
       .all();
@@ -1554,7 +1554,8 @@ export function applyRoutingRules(
       assignments.push({
         itemId: item.id,
         primaryRoute: rule.primaryRoute,
-        vendorId: candidates[0]?.id,
+        // Donate items stay unassigned — vendor is set manually by staff
+        vendorId: rule.primaryRoute === "Donate" ? undefined : candidates[0]?.id,
       });
       break; // first matching rule wins
     }

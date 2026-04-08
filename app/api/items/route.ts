@@ -196,18 +196,34 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Routes that support a vendor assignment
+  const VENDOR_ROUTES = new Set(["Other Consignment", "Donate"]);
+
   // Fetch existing item if needed for vendor change check, Sold backfill, Sold reversal,
-  // or barcode assignment (to see if one is already set)
+  // barcode assignment, or route-driven vendor clear
   const newVendorId = updates.assignedVendorId as string | undefined;
   const needsExisting = newVendorId !== undefined || updates.status !== undefined
-    || resolvedNewRoute === "ProFoundFinds Consignment";
+    || resolvedNewRoute === "ProFoundFinds Consignment"
+    || (resolvedNewRoute !== undefined && !VENDOR_ROUTES.has(resolvedNewRoute));
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
 
+  // When route changes to one that doesn't support a vendor, auto-clear the assigned vendor
+  const routeClearsVendor = resolvedNewRoute !== undefined && !VENDOR_ROUTES.has(resolvedNewRoute) && !!existing?.assignedVendorId;
+  if (routeClearsVendor) {
+    (updates as Record<string, unknown>).assignedVendorId = "";
+    (updates as Record<string, unknown>).vendorDecision = null;
+  }
+
   let vendorChanged = false;
-  if (newVendorId !== undefined && existing && existing.assignedVendorId !== newVendorId) {
-    vendorChanged = true;
-    // Reset decision on reassignment
-    (updates as Record<string, unknown>).vendorDecision = "Pending";
+  if (!routeClearsVendor && newVendorId !== undefined) {
+    if (newVendorId === "") {
+      // Manual unassign — clear vendorDecision too
+      (updates as Record<string, unknown>).vendorDecision = null;
+    } else if (existing && existing.assignedVendorId !== newVendorId) {
+      vendorChanged = true;
+      // Reset decision on reassignment
+      (updates as Record<string, unknown>).vendorDecision = "Pending";
+    }
   }
 
   const COMPLETED_STATUSES = ["Sold", "Donated", "Discarded"];

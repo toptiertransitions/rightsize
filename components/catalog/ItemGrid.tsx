@@ -634,8 +634,9 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   const newRequiredType = vendorTypeForRoute[newRoute];
                   const currentVendor = localVendors?.find(v => v.id === form.assignedVendorId);
                   // Clear vendor if it doesn't match the new route's required type
+                  // Use "" (not undefined) so JSON.stringify includes it in the PATCH body
                   if (!newRequiredType || currentVendor?.vendorType !== newRequiredType) {
-                    set("assignedVendorId", undefined);
+                    set("assignedVendorId", "");
                   }
                   set("primaryRoute", newRoute);
                 }}
@@ -693,7 +694,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 : [];
               return requiredType && filteredVendors.length > 0 ? (
                 <Select label="Assigned Vendor" value={form.assignedVendorId ?? ""}
-                  onChange={e => set("assignedVendorId", e.target.value || undefined)}
+                  onChange={e => set("assignedVendorId", e.target.value || "")}
                   options={[
                     { value: "", label: "— Unassigned —" },
                     ...filteredVendors.map(v => ({ value: v.id, label: v.vendorName })),
@@ -716,7 +717,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             <Input label="eBay Title" value={form.listingTitleEbay ?? ""}
               onChange={e => set("listingTitleEbay", e.target.value)} />
             <div>
-              <label className={labelClass}>eBay Description</label>
+              <label className={labelClass}>Estate / eBay / Site Description</label>
               <textarea rows={3} value={form.listingDescriptionEbay ?? ""} onChange={e => set("listingDescriptionEbay", e.target.value)} className={textareaClass} />
             </div>
             <div>
@@ -1689,11 +1690,6 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                           <span className="font-semibold text-forest-700">
                             {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
                           </span>
-                          {item.primaryRoute === "ProFoundFinds Consignment" && item.deliveryDate && (
-                            <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">
-                              PF
-                            </span>
-                          )}
                           {(item.quantity ?? 0) > 1 && (
                             <span className="text-[10px] font-medium text-gray-400">×{item.quantity}</span>
                           )}
