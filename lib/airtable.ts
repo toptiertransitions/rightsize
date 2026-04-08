@@ -4390,6 +4390,8 @@ function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
     pickupAddress: toStr(f["PickupAddress"]),
     pickupWindowStart: toStr(f["PickupWindowStart"]),
     pickupWindowEnd: toStr(f["PickupWindowEnd"]),
+    pickupWindowStartTime: toStr(f["PickupWindowStartTime"]) || undefined,
+    pickupWindowEndTime: toStr(f["PickupWindowEndTime"]) || undefined,
     shippingAvailable: f["ShippingAvailable"] === true,
     shippingNotes: toStr(f["ShippingNotes"]),
     terms: toStr(f["Terms"]),
@@ -4465,6 +4467,8 @@ export async function createEstate(
       PickupAddress: data.pickupAddress,
       PickupWindowStart: data.pickupWindowStart,
       PickupWindowEnd: data.pickupWindowEnd,
+      PickupWindowStartTime: data.pickupWindowStartTime || "",
+      PickupWindowEndTime: data.pickupWindowEndTime || "",
       ShippingAvailable: data.shippingAvailable,
       ShippingNotes: data.shippingNotes,
       Terms: data.terms,
@@ -4501,6 +4505,8 @@ export async function updateEstate(
   if (data.pickupAddress !== undefined) fields["PickupAddress"] = data.pickupAddress;
   if (data.pickupWindowStart !== undefined) fields["PickupWindowStart"] = data.pickupWindowStart;
   if (data.pickupWindowEnd !== undefined) fields["PickupWindowEnd"] = data.pickupWindowEnd;
+  if (data.pickupWindowStartTime !== undefined) fields["PickupWindowStartTime"] = data.pickupWindowStartTime;
+  if (data.pickupWindowEndTime !== undefined) fields["PickupWindowEndTime"] = data.pickupWindowEndTime;
   if (data.shippingAvailable !== undefined) fields["ShippingAvailable"] = data.shippingAvailable;
   if (data.shippingNotes !== undefined) fields["ShippingNotes"] = data.shippingNotes;
   if (data.terms !== undefined) fields["Terms"] = data.terms;

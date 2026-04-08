@@ -342,6 +342,8 @@ export interface Estate {
   pickupAddress: string;
   pickupWindowStart: string;
   pickupWindowEnd: string;
+  pickupWindowStartTime?: string;  // e.g. "10:00 AM" — single-line text field in Airtable
+  pickupWindowEndTime?: string;
   shippingAvailable: boolean;
   shippingNotes: string;
   terms: string;

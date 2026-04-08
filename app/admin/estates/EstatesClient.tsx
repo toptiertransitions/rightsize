@@ -4,14 +4,27 @@ import { useState } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant } from "@/lib/types";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
-// Convert any stored date string (UTC ISO or local) to the "YYYY-MM-DDTHH:mm" format
-// that datetime-local inputs require (local time).
-function toLocalDatetimeInput(s: string): string {
-  if (!s) return "";
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return s.slice(0, 16);
+// Split any stored datetime string into { date: "YYYY-MM-DD", time: "HH:mm" }
+// Handles UTC ISO strings (converted to local time) and plain "YYYY-MM-DDTHH:mm" strings.
+function splitDatetime(s: string): { date: string; time: string } {
+  if (!s) return { date: "", time: "" };
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  // UTC ISO string — convert to local time first
+  if (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)) {
+    const d = new Date(s);
+    return {
+      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    };
+  }
+  // Local "YYYY-MM-DDTHH:mm" or "YYYY-MM-DD" format
+  const [date, time = ""] = s.split("T");
+  return { date, time: time.slice(0, 5) };
+}
+
+function joinDatetime(date: string, time: string): string {
+  if (!date) return "";
+  return time ? `${date}T${time}` : date;
 }
 
 interface EstatesClientProps {
@@ -40,6 +53,8 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   pickupAddress: "",
   pickupWindowStart: "",
   pickupWindowEnd: "",
+  pickupWindowStartTime: "",
+  pickupWindowEndTime: "",
   shippingAvailable: false,
   shippingNotes: "",
   terms: "",
@@ -100,6 +115,8 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       pickupAddress: estate.pickupAddress,
       pickupWindowStart: estate.pickupWindowStart,
       pickupWindowEnd: estate.pickupWindowEnd,
+      pickupWindowStartTime: estate.pickupWindowStartTime ?? "",
+      pickupWindowEndTime: estate.pickupWindowEndTime ?? "",
       shippingAvailable: estate.shippingAvailable,
       shippingNotes: estate.shippingNotes,
       terms: estate.terms,
@@ -344,24 +361,38 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                 </select>
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Sale Start Date">
+              <Field label="Sale Start Date & Time">
+                <div className="flex gap-2">
                   <input
-                    type="datetime-local"
+                    type="date"
                     className={inputCls}
-                    value={toLocalDatetimeInput(form.saleStartDate)}
-                    onChange={e => setForm(f => ({ ...f, saleStartDate: e.target.value || "" }))}
+                    value={splitDatetime(form.saleStartDate).date}
+                    onChange={e => setForm(f => ({ ...f, saleStartDate: joinDatetime(e.target.value, splitDatetime(f.saleStartDate).time) }))}
                   />
-                </Field>
-                <Field label="Sale End Date">
                   <input
-                    type="datetime-local"
-                    className={inputCls}
-                    value={toLocalDatetimeInput(form.saleEndDate)}
-                    onChange={e => setForm(f => ({ ...f, saleEndDate: e.target.value || "" }))}
+                    type="time"
+                    className={`${inputCls} w-32 flex-shrink-0`}
+                    value={splitDatetime(form.saleStartDate).time}
+                    onChange={e => setForm(f => ({ ...f, saleStartDate: joinDatetime(splitDatetime(f.saleStartDate).date, e.target.value) }))}
                   />
-                </Field>
-              </div>
+                </div>
+              </Field>
+              <Field label="Sale End Date & Time">
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={splitDatetime(form.saleEndDate).date}
+                    onChange={e => setForm(f => ({ ...f, saleEndDate: joinDatetime(e.target.value, splitDatetime(f.saleEndDate).time) }))}
+                  />
+                  <input
+                    type="time"
+                    className={`${inputCls} w-32 flex-shrink-0`}
+                    value={splitDatetime(form.saleEndDate).time}
+                    onChange={e => setForm(f => ({ ...f, saleEndDate: joinDatetime(splitDatetime(f.saleEndDate).date, e.target.value) }))}
+                  />
+                </div>
+              </Field>
 
               {form.saleType === "Online" && (
                 <div className="grid grid-cols-3 gap-3">
@@ -416,24 +447,40 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Pickup Window Start">
+              <Field label="Pickup Window Start">
+                <div className="flex gap-2">
                   <input
                     type="date"
                     className={inputCls}
                     value={form.pickupWindowStart ? form.pickupWindowStart.slice(0, 10) : ""}
                     onChange={e => setForm(f => ({ ...f, pickupWindowStart: e.target.value }))}
                   />
-                </Field>
-                <Field label="Pickup Window End">
+                  <input
+                    type="text"
+                    className={`${inputCls} w-36 flex-shrink-0`}
+                    value={form.pickupWindowStartTime ?? ""}
+                    onChange={e => setForm(f => ({ ...f, pickupWindowStartTime: e.target.value }))}
+                    placeholder="e.g. 10:00 AM"
+                  />
+                </div>
+              </Field>
+              <Field label="Pickup Window End">
+                <div className="flex gap-2">
                   <input
                     type="date"
                     className={inputCls}
                     value={form.pickupWindowEnd ? form.pickupWindowEnd.slice(0, 10) : ""}
                     onChange={e => setForm(f => ({ ...f, pickupWindowEnd: e.target.value }))}
                   />
-                </Field>
-              </div>
+                  <input
+                    type="text"
+                    className={`${inputCls} w-36 flex-shrink-0`}
+                    value={form.pickupWindowEndTime ?? ""}
+                    onChange={e => setForm(f => ({ ...f, pickupWindowEndTime: e.target.value }))}
+                    placeholder="e.g. 4:00 PM"
+                  />
+                </div>
+              </Field>
 
               <div className="flex items-center gap-3">
                 <input
