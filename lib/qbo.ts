@@ -1,4 +1,4 @@
-import { getQBOToken, saveQBOToken } from "./airtable";
+import { getQBOToken, saveQBOToken, deleteQBOToken } from "./airtable";
 
 const INTUIT_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 
@@ -80,8 +80,16 @@ async function refreshQBOToken(
       refresh_token: refreshToken,
     }).toString(),
   });
-  if (!res.ok) throw new Error(`QBO token refresh failed: ${await res.text()}`);
-  const data = await res.json();
+  const body = await res.text();
+  if (!res.ok) {
+    // Parse the error so callers can detect invalid_grant specifically
+    let parsed: { error?: string } = {};
+    try { parsed = JSON.parse(body); } catch { /* ignore */ }
+    const err = new Error(`QBO token refresh failed: ${body}`) as Error & { code?: string };
+    err.code = parsed.error;
+    throw err;
+  }
+  const data = JSON.parse(body);
   const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
   return { accessToken: data.access_token, expiresAt };
 }
@@ -97,16 +105,26 @@ export async function getValidQBOToken(): Promise<{ accessToken: string; realmId
     return { accessToken: record.accessToken, realmId: record.realmId };
   }
 
-  // Refresh
-  const { accessToken, expiresAt: newExpiresAt } = await refreshQBOToken(record.refreshToken);
-  await saveQBOToken({
-    accessToken,
-    refreshToken: record.refreshToken,
-    expiresAt: newExpiresAt,
-    realmId: record.realmId,
-    companyName: record.companyName,
-  });
-  return { accessToken, realmId: record.realmId };
+  // Refresh — if the token has been revoked, clear it and treat as disconnected
+  try {
+    const { accessToken, expiresAt: newExpiresAt } = await refreshQBOToken(record.refreshToken);
+    await saveQBOToken({
+      accessToken,
+      refreshToken: record.refreshToken,
+      expiresAt: newExpiresAt,
+      realmId: record.realmId,
+      companyName: record.companyName,
+    });
+    return { accessToken, realmId: record.realmId };
+  } catch (e) {
+    const code = (e as Error & { code?: string }).code;
+    if (code === "invalid_grant") {
+      // Refresh token revoked or expired — clear stored credentials
+      await deleteQBOToken().catch(() => {});
+      return null;
+    }
+    throw e;
+  }
 }
 
 function buildQBOUrl(path: string, realmId: string): string {
