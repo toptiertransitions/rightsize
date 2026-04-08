@@ -133,8 +133,11 @@ export async function POST(req: NextRequest) {
     createdByClerkId: userId,
   });
 
-  // Send email with a link back to the platform payment page
-  if (sendEmail && sentToEmail) {
+  // Send email with a link back to the platform payment page.
+  // Trigger when "Send Email" is checked OR when "Push to QBO" succeeded
+  // (invoice should always be emailed to the client when synced to QuickBooks).
+  const shouldSendEmail = (sendEmail || (pushToQBO && !!qboInvoiceId)) && !!sentToEmail;
+  if (shouldSendEmail) {
     try {
       const settings = await getInvoiceSettings().catch(() => null);
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";

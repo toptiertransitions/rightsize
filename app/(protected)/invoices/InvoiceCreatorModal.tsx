@@ -188,8 +188,8 @@ export function InvoiceCreatorModal({
         tenantName: tenant.name,
         pushToQBO,
         sendEmail,
-        sentToEmail: sendEmail ? sentToEmail : undefined,
-        ccEmail: sendEmail ? ccEmail : undefined,
+        sentToEmail: (sendEmail || pushToQBO) ? sentToEmail : undefined,
+        ccEmail: (sendEmail || pushToQBO) ? ccEmail : undefined,
         expenseItems: activeExpenseItems,
       };
 
