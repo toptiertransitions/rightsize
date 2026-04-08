@@ -23,6 +23,7 @@ export async function GET(
     }
     const { estate, items } = result;
     const now = Date.now();
+    console.log(`[estates/${slug}] id=${estate.id} items_found=${items.length} item_ids=${items.map(i => i.id).join(",")}`);
     const itemsWithPrice = items.map((item) => {
       const pricing = computeDutchPrice(item.valueMid, estate, now);
       return { ...item, ...pricing };

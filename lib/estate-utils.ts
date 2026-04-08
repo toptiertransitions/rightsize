@@ -48,8 +48,9 @@ export function computeDutchPrice(
       nextDropAt = new Date(saleStart + (n + 1) * intervalMs).toISOString();
     }
   } else if (nowMs < saleStart) {
-    // Sale hasn't started; first drop is at saleStart
-    nextDropAt = new Date(saleStart).toISOString();
+    // Sale hasn't started yet — price stays at full starting price.
+    // nextDropAt stays null; first drop occurs at saleStart + 1 interval
+    // once the sale is live.
   }
 
   return { currentPrice, startingPrice, nextDropAt, atFloor };
