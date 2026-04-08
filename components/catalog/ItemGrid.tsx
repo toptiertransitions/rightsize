@@ -32,6 +32,7 @@ const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "gr
   "Pending Review":    { variant: "yellow", label: "Pending Review" },
   "Approved":          { variant: "blue",   label: "Approved" },
   "Listed":            { variant: "purple", label: "Listed" },
+  "In Cart":           { variant: "yellow", label: "In Cart" },
   "Sold":              { variant: "green",  label: "Sold" },
   "Donated":           { variant: "teal",   label: "Donated" },
   "Discarded":         { variant: "gray",   label: "Discarded" },
@@ -499,6 +500,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Pending Review",    label: "Pending Review" },
                   { value: "Approved",          label: "Approved" },
                   { value: "Listed",            label: "Listed" },
+                  { value: "In Cart",           label: "In Cart" },
                   { value: "Sold",              label: "Sold" },
                   { value: "Donated",           label: "Donated" },
                   { value: "Discarded",         label: "Discarded" },
@@ -1331,6 +1333,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="Pending Review">Pending Review</option>
           <option value="Approved">Approved</option>
           <option value="Listed">Listed</option>
+          <option value="In Cart">In Cart</option>
           <option value="Sold">Sold</option>
           <option value="Donated">Donated</option>
           <option value="Discarded">Discarded</option>
