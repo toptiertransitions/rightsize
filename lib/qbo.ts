@@ -136,10 +136,7 @@ function buildQBOUrl(path: string, realmId: string): string {
   return url.toString();
 }
 
-export async function qboFetch(path: string, options?: RequestInit): Promise<Response> {
-  const auth = await getValidQBOToken();
-  if (!auth) throw new Error("QuickBooks is not connected");
-  const { accessToken, realmId } = auth;
+async function doQBOFetch(path: string, accessToken: string, realmId: string, options?: RequestInit): Promise<Response> {
   return fetch(buildQBOUrl(path, realmId), {
     ...options,
     headers: {
@@ -149,6 +146,35 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
       ...(options?.headers ?? {}),
     },
   });
+}
+
+export async function qboFetch(path: string, options?: RequestInit): Promise<Response> {
+  const auth = await getValidQBOToken();
+  if (!auth) throw new Error("QuickBooks is not connected");
+  const { accessToken, realmId } = auth;
+
+  const res = await doQBOFetch(path, accessToken, realmId, options);
+
+  // If we get a 401, the token may have been revoked mid-session.
+  // Force a token refresh and retry once before giving up.
+  if (res.status === 401) {
+    const record = await getQBOToken();
+    if (!record) throw new Error("QuickBooks is not connected");
+    try {
+      const { accessToken: newToken, expiresAt } = await refreshQBOToken(record.refreshToken);
+      await saveQBOToken({ ...record, accessToken: newToken, expiresAt });
+      return doQBOFetch(path, newToken, realmId, options);
+    } catch (e) {
+      const code = (e as Error & { code?: string }).code;
+      if (code === "invalid_grant") {
+        await deleteQBOToken().catch(() => {});
+        throw new Error("QuickBooks authorization expired — please reconnect");
+      }
+      throw e;
+    }
+  }
+
+  return res;
 }
 
 export async function getQBOServiceItems(): Promise<Array<{ Id: string; Name: string }>> {
