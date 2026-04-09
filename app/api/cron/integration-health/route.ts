@@ -33,9 +33,10 @@ async function checkCalendarIntegration(): Promise<{
     );
     auth.setCredentials({ refresh_token: refreshToken });
 
-    // Live test: fetch calendar list (lightweight, confirms token works)
+    // Live test: list events on the configured calendar (uses calendar.events scope)
     const calendar = google.calendar({ version: "v3", auth });
-    await calendar.calendarList.list({ maxResults: 1 });
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+    await calendar.events.list({ calendarId, maxResults: 1, singleEvents: true });
 
     return { ok: true, email: stored?.email || "toptiertransitionscalendar@gmail.com" };
   } catch (e) {
