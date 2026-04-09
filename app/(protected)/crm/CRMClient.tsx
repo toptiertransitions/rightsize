@@ -882,8 +882,8 @@ function OpportunityPanel({
             <p className="text-xs text-red-600 mt-1">{saveError}</p>
           )}
 
-          {/* Convert to Project — available in Proposing stage */}
-          {stage === "Proposing" && (
+          {/* Convert to Project — available in Proposing stage; project link persists in Won */}
+          {(stage === "Proposing" || stage === "Won") && (
             convertedProject ? (
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
                 Project created: <strong>{convertedProject.name}</strong>
@@ -892,7 +892,7 @@ function OpportunityPanel({
                   Open Quoting
                 </a>
               </div>
-            ) : (
+            ) : stage === "Proposing" ? (
               <button
                 onClick={handleConvert}
                 disabled={converting || !clientContactId}
@@ -900,7 +900,7 @@ function OpportunityPanel({
               >
                 {converting ? "Saving & creating project…" : "Convert to Project and Update Opp →"}
               </button>
-            )
+            ) : null
           )}
 
           {/* Activities */}
