@@ -98,6 +98,10 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   const canEdit = EDIT_ROLES.includes(resolvedRole);
   const isTTT = ["TTTStaff", "TTTAdmin"].includes(resolvedRole);
 
+  // TTTClient = has a tenant membership role but no system role (Owner/Collaborator/Viewer)
+  const TTT_SYSTEM_ROLES = ["TTTStaff", "TTTAdmin", "TTTManager", "TTTSales"];
+  const isTTTClient = !!role && !TTT_SYSTEM_ROLES.includes(resolvedRole);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
@@ -107,7 +111,15 @@ export default async function VendorsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <VendorsClient vendors={vendors} tenantId={tenantId} canEdit={canEdit} localVendors={localVendors} isTTT={isTTT} initialVendorFiles={vendorFiles} />
+      <VendorsClient
+        vendors={vendors}
+        tenantId={tenantId}
+        canEdit={canEdit}
+        localVendors={localVendors}
+        isTTT={isTTT}
+        isTTTClient={isTTTClient}
+        initialVendorFiles={vendorFiles}
+      />
     </div>
   );
 }

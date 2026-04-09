@@ -546,10 +546,11 @@ interface VendorsClientProps {
   canEdit: boolean;
   localVendors: LocalVendor[];
   isTTT?: boolean;
+  isTTTClient?: boolean;
   initialVendorFiles: ProjectFile[];
 }
 
-export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT, initialVendorFiles }: VendorsClientProps) {
+export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT, isTTTClient, initialVendorFiles }: VendorsClientProps) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | undefined>(undefined);
@@ -699,11 +700,43 @@ export function VendorsClient({ vendors, tenantId, canEdit, localVendors, isTTT,
       )}
 
       {/* Local Vendor Directory */}
-      <LocalVendorDirectory
-        vendors={localVendors}
-        onSelect={canEdit ? openFromDirectory : undefined}
-        showAdminCols={isTTT}
-      />
+      {isTTTClient ? (
+        <div className="mt-10 rounded-2xl border border-green-200 bg-green-50 px-6 py-8 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+            <svg className="h-5 w-5 text-green-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <h3 className="text-base font-semibold text-green-900">Your Team Is Handling This</h3>
+          <p className="mt-1.5 text-sm text-green-800 max-w-sm mx-auto">
+            Your Top Tier Transitions team is managing your vendor directory on your behalf — see the vendors added above. Reach out to your project coordinator with any questions or requests.
+          </p>
+        </div>
+      ) : !isTTT ? (
+        <div className="mt-10 rounded-2xl border border-gray-200 bg-gray-50 px-6 py-8 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-forest-100">
+            <svg className="h-5 w-5 text-forest-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <h3 className="text-base font-semibold text-gray-900">Unlock the TTT Vendor Ecosystem</h3>
+          <p className="mt-1.5 text-sm text-gray-600 max-w-sm mx-auto">
+            Top Tier Transitions maintains a curated directory of trusted local vendors — movers, realtors, donation orgs, and more. Contact us to learn how TTT can support your project and give you access to our full vendor network.
+          </p>
+          <a
+            href="mailto:hello@toptiertransitions.com"
+            className="mt-4 inline-block rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 transition-colors"
+          >
+            Contact Top Tier Transitions
+          </a>
+        </div>
+      ) : (
+        <LocalVendorDirectory
+          vendors={localVendors}
+          onSelect={canEdit ? openFromDirectory : undefined}
+          showAdminCols={isTTT}
+        />
+      )}
 
       {/* Modal */}
       {showModal && (
