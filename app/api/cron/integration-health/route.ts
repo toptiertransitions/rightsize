@@ -304,6 +304,18 @@ export async function GET(req: NextRequest) {
       checkAndRefreshGmailTokens(staffByClerkId),
     ]);
 
+    // Supplement admin email lookup with Gmail token emails for env-var admins
+    // whose Clerk ID may not be in the StaffRoles table (bootstrap admins).
+    if (adminEmails.length === 0 || envAdminIds.length > adminEmails.length) {
+      const gmailEmailByClerkId = new Map(gmailResults.map((r) => [r.clerkUserId, r.email]));
+      for (const id of envAdminIds) {
+        const tokenEmail = gmailEmailByClerkId.get(id);
+        if (tokenEmail && !adminEmails.includes(tokenEmail)) {
+          adminEmails.push(tokenEmail);
+        }
+      }
+    }
+
     // Build and send email
     const now = new Date();
     const checkedAt = now.toLocaleString("en-US", {
