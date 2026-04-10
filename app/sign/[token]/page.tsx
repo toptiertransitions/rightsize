@@ -79,7 +79,7 @@ export default async function SignPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-cream-50" style={{ backgroundColor: "#F5F0E8" }}>
-      <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-8 sm:py-12">
         {/* Header */}
         <div className="mb-8 text-center">
           <p className="text-sm font-medium text-forest-600 mb-2">Top Tier Transitions</p>
@@ -96,29 +96,30 @@ export default async function SignPage({ params }: PageProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Service</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hours</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
+                  <th className="px-3 py-3 sm:px-6 text-left text-xs font-semibold text-gray-500 uppercase">Service</th>
+                  <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Hrs</th>
+                  <th className="hidden sm:table-cell px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
+                  <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
                 </tr>
               </thead>
               <tbody>
                 {contract.lineItems!.map((item) => (
                   <tr key={item.serviceId} className="border-t border-gray-100">
-                    <td className="px-6 py-3 text-gray-700">
+                    <td className="px-3 py-3 sm:px-6 text-gray-700">
                       <span>{item.serviceName}</span>
                       {item.description && (
                         <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
                       )}
                     </td>
-                    <td className="px-6 py-3 text-right text-gray-900">{item.hours}</td>
-                    <td className="px-6 py-3 text-right text-gray-500">{formatCost(item.rate)}/hr</td>
-                    <td className="px-6 py-3 text-right text-gray-900">{formatCost(item.hours * item.rate)}</td>
+                    <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{item.hours}</td>
+                    <td className="hidden sm:table-cell px-6 py-3 text-right text-gray-500">{formatCost(item.rate)}/hr</td>
+                    <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{formatCost(item.hours * item.rate)}</td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-forest-200 bg-forest-50">
-                  <td className="px-6 py-4 font-bold text-forest-700" colSpan={3}>Total</td>
-                  <td className="px-6 py-4 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
+                  <td className="px-3 py-4 sm:px-6 font-bold text-forest-700" colSpan={2}>Total</td>
+                  <td className="hidden sm:table-cell" />
+                  <td className="px-3 py-4 sm:px-6 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
                 </tr>
               </tbody>
             </table>
@@ -126,24 +127,25 @@ export default async function SignPage({ params }: PageProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Phase</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hours</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
+                  <th className="px-3 py-3 sm:px-6 text-left text-xs font-semibold text-gray-500 uppercase">Phase</th>
+                  <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Hrs</th>
+                  <th className="hidden sm:table-cell px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
+                  <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
                 </tr>
               </thead>
               <tbody>
                 {legacyPhases.map(({ label, hours, rate }) => (
                   <tr key={label} className="border-t border-gray-100">
-                    <td className="px-6 py-3 text-gray-700">{label}</td>
-                    <td className="px-6 py-3 text-right text-gray-900">{hours}</td>
-                    <td className="px-6 py-3 text-right text-gray-500">{formatCost(rate)}/hr</td>
-                    <td className="px-6 py-3 text-right text-gray-900">{formatCost(hours * rate)}</td>
+                    <td className="px-3 py-3 sm:px-6 text-gray-700">{label}</td>
+                    <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{hours}</td>
+                    <td className="hidden sm:table-cell px-6 py-3 text-right text-gray-500">{formatCost(rate)}/hr</td>
+                    <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{formatCost(hours * rate)}</td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-forest-200 bg-forest-50">
-                  <td className="px-6 py-4 font-bold text-forest-700" colSpan={3}>Total</td>
-                  <td className="px-6 py-4 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
+                  <td className="px-3 py-4 sm:px-6 font-bold text-forest-700" colSpan={2}>Total</td>
+                  <td className="hidden sm:table-cell" />
+                  <td className="px-3 py-4 sm:px-6 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
                 </tr>
               </tbody>
             </table>
