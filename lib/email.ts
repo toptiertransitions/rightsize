@@ -9,14 +9,16 @@ export function buildContractSentEmail({
   projectName: string;
   signingUrl: string;
   totalCost: number;
-  lineItems: { serviceName: string; hours: number }[];
+  lineItems: { serviceName: string; hours: number; description?: string }[];
 }): string {
   const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const serviceRows = lineItems
     .map(
       (item, i) =>
         `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
-          <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">${item.serviceName}</td>
+          <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">
+            ${item.serviceName}${item.description ? `<br><span style="font-size:12px;color:#9ca3af;">${item.description}</span>` : ""}
+          </td>
           <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;text-align:right;">${item.hours}</td>
         </tr>`
     )

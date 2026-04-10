@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     recipientEmail,
     recipientName,
     autoSendDeposit,
+    includeServiceDescriptions,
   } = body;
 
   if (!tenantId) {
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
       lineItems: Array.isArray(lineItems) && lineItems.length > 0 ? lineItems : undefined,
       recipientEmail: recipientEmail ?? undefined,
       autoSendDeposit: autoSendDeposit ?? false,
+      includeServiceDescriptions: includeServiceDescriptions ?? false,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to create contract";
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
         const emailLineItems: { serviceName: string; hours: number }[] = Array.isArray(lineItems)
-          ? lineItems.map((li: { serviceName: string; hours: number }) => ({ serviceName: li.serviceName, hours: li.hours }))
+          ? lineItems.map((li: { serviceName: string; hours: number; description?: string }) => ({ serviceName: li.serviceName, hours: li.hours, description: li.description }))
           : [];
         await resend.emails.send({
           from: `Top Tier Transitions <${fromEmail}>`,

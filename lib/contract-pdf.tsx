@@ -169,7 +169,9 @@ const styles = StyleSheet.create({
   colHrs: { flex: 1, fontSize: 8, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
   colRate: { flex: 1, fontSize: 8, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
   colAmt: { flex: 1.5, fontSize: 8, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
-  cellSvc: { flex: 3, fontSize: 9, color: "#374151" },
+  cellSvc: { flex: 3 },
+  cellSvcName: { fontSize: 9, color: "#374151" },
+  cellSvcDesc: { fontSize: 8, color: "#9ca3af", marginTop: 2 },
   cellHrs: { flex: 1, fontSize: 9, color: "#374151", textAlign: "right" },
   cellRate: { flex: 1, fontSize: 9, color: "#374151", textAlign: "right" },
   cellAmt: { flex: 1.5, fontSize: 9, color: "#374151", textAlign: "right" },
@@ -320,7 +322,10 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
             </View>
             {lineItems.map((item, i) => (
               <View key={i} style={i % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
-                <Text style={styles.cellSvc}>{item.serviceName}</Text>
+                <View style={styles.cellSvc}>
+                  <Text style={styles.cellSvcName}>{item.serviceName}</Text>
+                  {item.description ? <Text style={styles.cellSvcDesc}>{item.description}</Text> : null}
+                </View>
                 <Text style={styles.cellHrs}>{item.hours}</Text>
                 <Text style={styles.cellRate}>{fmt(item.rate)}</Text>
                 <Text style={styles.cellAmt}>{fmt(item.hours * item.rate)}</Text>

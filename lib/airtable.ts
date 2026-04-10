@@ -2289,6 +2289,7 @@ function mapContract(record: AirtableRecord): Contract {
     sentAt: toStr(f["SentAt"]) || undefined,
     recipientEmail: toStr(f["RecipientEmail"]) || undefined,
     autoSendDeposit: f["AutoSendDeposit"] === true,
+    includeServiceDescriptions: f["IncludeServiceDescriptions"] === true,
     createdAt: toStr(f["CreatedAt"]),
     lineItems,
   };
@@ -2331,6 +2332,7 @@ export async function createContract(data: {
   lineItems?: ContractLineItem[];
   recipientEmail?: string;
   autoSendDeposit?: boolean;
+  includeServiceDescriptions?: boolean;
 }): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const fields: Record<string, unknown> = {
@@ -2353,6 +2355,7 @@ export async function createContract(data: {
   }
   if (data.recipientEmail) fields["RecipientEmail"] = data.recipientEmail;
   if (data.autoSendDeposit) fields["AutoSendDeposit"] = true;
+  if (data.includeServiceDescriptions) fields["IncludeServiceDescriptions"] = true;
   const res = await contractFetch(table, "", {
     method: "POST",
     body: JSON.stringify({ fields }),

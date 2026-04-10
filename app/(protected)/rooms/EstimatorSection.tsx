@@ -162,6 +162,12 @@ export function EstimatorSection({
   // Auto-send deposit invoice toggle
   const [autoSendDeposit, setAutoSendDeposit] = useState(false);
 
+  // Show service descriptions in the quote table (UI-only)
+  const [showDescriptions, setShowDescriptions] = useState(false);
+
+  // Include service descriptions in contract email/PDF/signing page
+  const [includeServiceDescriptions, setIncludeServiceDescriptions] = useState(false);
+
   // When editingContract changes, load its line items into rows
   useEffect(() => {
     if (!editingContract) {
@@ -263,7 +269,17 @@ export function EstimatorSection({
 
   const includedLineItems = rows
     .filter((r) => r.included && r.hours > 0)
-    .map((r) => ({ serviceId: r.serviceId, serviceName: r.serviceName, hours: r.hours, rate: r.rate }));
+    .map((r) => {
+      const svc = services.find((s) => s.id === r.serviceId);
+      const item: { serviceId: string; serviceName: string; hours: number; rate: number; description?: string } = {
+        serviceId: r.serviceId,
+        serviceName: r.serviceName,
+        hours: r.hours,
+        rate: r.rate,
+      };
+      if (includeServiceDescriptions && svc?.description) item.description = svc.description;
+      return item;
+    });
 
   // Keep contract body in sync with selected template + substitutions
   useEffect(() => {
@@ -369,6 +385,7 @@ export function EstimatorSection({
           recipientEmail: recipientEmail.trim(),
           recipientName,
           autoSendDeposit,
+          includeServiceDescriptions,
         }),
       });
       if (!res.ok) {
@@ -521,6 +538,10 @@ export function EstimatorSection({
                           Reset
                         </button>
                       )}
+                      {showDescriptions && (() => {
+                        const desc = services.find((s) => s.id === row.serviceId)?.description;
+                        return desc ? <p className="text-xs text-gray-400 mt-0.5 font-normal">{desc}</p> : null;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <input
@@ -549,6 +570,20 @@ export function EstimatorSection({
         {anyOverridden && (
           <button onClick={resetAll} className="mt-1.5 text-xs text-forest-600 hover:text-forest-700 underline">
             Reset all to calculated hours
+          </button>
+        )}
+        {rows.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDescriptions((v) => !v)}
+            className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <span
+              className={`inline-flex h-4 w-7 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${showDescriptions ? "bg-forest-500" : "bg-gray-300"}`}
+            >
+              <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition duration-200 ${showDescriptions ? "translate-x-3" : "translate-x-0"}`} />
+            </span>
+            Show service descriptions
           </button>
         )}
       </div>
@@ -609,7 +644,7 @@ export function EstimatorSection({
       </div>
 
       {/* Auto-send deposit toggle */}
-      <div className="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+      <div className="mb-3 p-4 rounded-xl border border-gray-200 bg-gray-50">
         <div className="flex items-start gap-3">
           <button
             type="button"
@@ -632,6 +667,35 @@ export function EstimatorSection({
               {autoSendDeposit
                 ? "Once signed, the client will immediately receive a deposit invoice email with the signed agreement attached as a PDF."
                 : "A 40% deposit invoice will be created automatically when signed. You can review and send it manually from the Invoices page."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Include service descriptions in contract toggle */}
+      <div className="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={includeServiceDescriptions}
+            onClick={() => setIncludeServiceDescriptions((v) => !v)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mt-0.5 ${
+              includeServiceDescriptions ? "bg-forest-600" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                includeServiceDescriptions ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <div>
+            <p className="text-sm font-medium text-gray-800">Include service descriptions in contract</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {includeServiceDescriptions
+                ? "Service descriptions will appear in the email, PDF, and signing page sent to the client."
+                : "Service descriptions will not be shown to the client."}
             </p>
           </div>
         </div>

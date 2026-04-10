@@ -105,7 +105,12 @@ export default async function SignPage({ params }: PageProps) {
               <tbody>
                 {contract.lineItems!.map((item) => (
                   <tr key={item.serviceId} className="border-t border-gray-100">
-                    <td className="px-6 py-3 text-gray-700">{item.serviceName}</td>
+                    <td className="px-6 py-3 text-gray-700">
+                      <span>{item.serviceName}</span>
+                      {item.description && (
+                        <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
+                      )}
+                    </td>
                     <td className="px-6 py-3 text-right text-gray-900">{item.hours}</td>
                     <td className="px-6 py-3 text-right text-gray-500">{formatCost(item.rate)}/hr</td>
                     <td className="px-6 py-3 text-right text-gray-900">{formatCost(item.hours * item.rate)}</td>

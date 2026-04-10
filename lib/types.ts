@@ -662,6 +662,7 @@ export interface ContractLineItem {
   serviceName: string;
   hours: number;
   rate: number; // $/hr snapshotted at contract creation
+  description?: string;
 }
 
 export type ContractStatus = "Draft" | "Sent" | "Signed" | "Archived" | "Superseded";
@@ -689,6 +690,7 @@ export interface Contract {
   sentAt?: string;
   recipientEmail?: string;
   autoSendDeposit?: boolean;
+  includeServiceDescriptions?: boolean;
   createdAt: string;
   lineItems?: ContractLineItem[];
 }
