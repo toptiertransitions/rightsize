@@ -4416,6 +4416,17 @@ export async function getEstates(): Promise<Estate[]> {
   return records.map(mapEstate);
 }
 
+export async function getEstatesForTenant(tenantId: string): Promise<Estate[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ESTATES)
+    .select({
+      filterByFormula: `{TenantId} = "${tenantId}"`,
+      sort: [{ field: "SaleStartDate", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapEstate);
+}
+
 export async function getEstateById(id: string): Promise<Estate | null> {
   try {
     const base = getBase();

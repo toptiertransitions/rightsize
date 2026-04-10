@@ -14,9 +14,10 @@ import {
   getTenants,
   getInvoiceSettings,
   getStaffMembers,
+  getEstatesForTenant,
 } from "@/lib/airtable";
 import { SalesClient } from "./SalesClient";
-import type { PrimaryRoute } from "@/lib/types";
+import type { PrimaryRoute, Estate } from "@/lib/types";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
@@ -29,6 +30,7 @@ const CONSIGNMENT_ROUTES: PrimaryRoute[] = [
   "FB/Marketplace",
   "Online Marketplace",
   "Other Consignment",
+  "Estate Sale",
 ];
 
 export default async function SalesPage({ searchParams }: PageProps) {
@@ -45,7 +47,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     redirect("/home");
   }
 
-  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants, invoiceSettings, staffMembers] = await Promise.all([
+  const [tenant, role, allItems, vendors, files, sysRole, rooms, localVendors, pfSaleEvents, allTenants, invoiceSettings, staffMembers, estates] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getItemsForTenant(tenantId).catch(() => []),
@@ -58,6 +60,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
     getTenants().catch(() => []),
     getInvoiceSettings().catch(() => null),
     getStaffMembers().catch(() => []),
+    getEstatesForTenant(tenantId).catch(() => [] as Estate[]),
   ]);
 
   if (!tenant) redirect("/home");
@@ -119,6 +122,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       initialConsignmentExpenseNote={tenant.consignmentExpenseNote ?? ""}
       staffMembers={isStaff ? staffMembers : []}
       isTTTUser={isStaff}
+      estates={estates}
     />
   );
 }

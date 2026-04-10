@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod, StaffMember } from "@/lib/types";
+import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod, StaffMember, Estate } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { PayoutModal } from "./PayoutModal";
 import { ZellePayments } from "./ZellePayments";
@@ -14,6 +14,15 @@ interface CalcPayout { amount: number; vendorName: string; rate: number; }
 
 function computeCalcPayout(item: Item, localVendors: LocalVendor[]): CalcPayout | null {
   if (!item.salePrice || item.salePrice <= 0) return null;
+
+  // Estate Sale: client gets clientSharePercent of sale price (TTT manages the estate)
+  if (item.primaryRoute === "Estate Sale") {
+    const pct = item.clientSharePercent ?? 0;
+    if (pct > 0) return { amount: item.salePrice * (pct / 100), vendorName: "Estate Sale", rate: 100 - pct };
+    if (item.consignorPayout && item.consignorPayout > 0) return { amount: item.consignorPayout, vendorName: "Estate Sale", rate: 0 };
+    return null;
+  }
+
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
   let match: LocalVendor | undefined;
@@ -114,6 +123,7 @@ interface SalesClientProps {
   initialConsignmentExpenseNote?: string;
   staffMembers?: StaffMember[];
   isTTTUser?: boolean;
+  estates?: Estate[];
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -1000,6 +1010,7 @@ export function SalesClient({
   initialConsignmentExpenseNote = "",
   staffMembers = [],
   isTTTUser = false,
+  estates = [],
 }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
@@ -1009,6 +1020,7 @@ export function SalesClient({
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
   const [openOther, setOpenOther] = useState(true);
+  const [openEstate, setOpenEstate] = useState(true);
 
   // Consignment expense state
   const [expense, setExpense] = useState(initialConsignmentExpense);
@@ -1108,6 +1120,20 @@ export function SalesClient({
   const fb = items.filter(i => i.primaryRoute === "FB/Marketplace" && matchesSearch(i));
   const online = items.filter(i => i.primaryRoute === "Online Marketplace" && matchesSearch(i));
   const other = items.filter(i => i.primaryRoute === "Other Consignment" && matchesSearch(i));
+  const estateSaleItems = items.filter(i => i.primaryRoute === "Estate Sale" && matchesSearch(i));
+
+  // Estate lookup map: estateSaleId → estate name
+  const estateNameMap = new Map(estates.map(e => [e.id, e.name]));
+
+  // Group estate items by estate sale
+  const estateItemsByEstate = new Map<string, { name: string; items: Item[] }>();
+  for (const item of estateSaleItems) {
+    const key = item.estateSaleId ?? "__unassigned__";
+    const name = item.estateSaleId ? (estateNameMap.get(item.estateSaleId) ?? "Estate Sale") : "Unassigned";
+    const entry = estateItemsByEstate.get(key) ?? { name, items: [] };
+    entry.items.push(item);
+    estateItemsByEstate.set(key, entry);
+  }
 
   // Group "Other Consignment" by vendor — assignedVendorId is a LocalVendor ID
   const otherByVendor = new Map<string, Item[]>();
@@ -1158,8 +1184,16 @@ export function SalesClient({
     .filter(i => CONSIGNMENT_ROUTES.has(i.primaryRoute))
     .reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
 
-  const totalEarned = pfTotalEarned + nonPfTotalEarned;
-  const totalPaid = pfTotalPaid + nonPfTotalPaid;
+  // Estate Sales totals
+  const estateSoldItems = estateSaleItems.filter(i => i.status === "Sold");
+  const estateTotalEarned = estateSoldItems.reduce((s, i) => {
+    const calc = calcPayouts.get(i.id);
+    return s + (calc ? calc.amount : (i.consignorPayout ?? 0));
+  }, 0);
+  const estateTotalPaid = estateSaleItems.reduce((s, i) => s + (i.payoutPaidAmount ?? 0), 0);
+
+  const totalEarned = pfTotalEarned + nonPfTotalEarned + estateTotalEarned;
+  const totalPaid = pfTotalPaid + nonPfTotalPaid + estateTotalPaid;
   const totalOwed = Math.max(0, totalEarned - totalPaid - expense);
 
   // ── Per-route breakdown for expandable cards ──────────────────────────────
@@ -1189,11 +1223,14 @@ export function SalesClient({
     { label: "FB/Marketplace", earned: fbEarned, paid: fbPaid },
     { label: "eBay", earned: onlineEarned, paid: onlinePaid },
     ...otherVendorBreakdown,
+    ...(estateTotalEarned > 0 || estateTotalPaid > 0
+      ? [{ label: "Estate Sales", earned: estateTotalEarned, paid: estateTotalPaid }]
+      : []),
   ];
 
   // Total inventory value: valueMid × clientSharePercent for all consignment items
   const totalInventoryValue = items
-    .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment"].includes(i.primaryRoute))
+    .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute))
     .reduce((s, i) => (i.valueMid && i.clientSharePercent ? s + i.valueMid * i.clientSharePercent / 100 : s), 0);
 
   const fmt = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1470,6 +1507,46 @@ export function SalesClient({
                     <SalesTable
                       title=""
                       items={vendorItems}
+                      canEditPayout={canEditPayout}
+                      canEdit={canEdit}
+                      calcPayouts={calcPayouts}
+                      onPayoutSaved={handlePayoutSaved}
+                      onSalePriceSaved={handleSalePriceSaved}
+                      onEdit={setEditingItem}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Estate Sales — grouped by estate */}
+        {estateSaleItems.length > 0 && (
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <button onClick={() => setOpenEstate(v => !v)} className="flex items-center gap-2 hover:opacity-75 transition-opacity">
+                <h2 className="text-base font-semibold text-gray-900">Estate Sales</h2>
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{estateSaleItems.length}</span>
+                <svg
+                  className={cn("w-4 h-4 text-gray-400 transition-transform duration-200", !openEstate && "-rotate-90")}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            {openEstate && (
+              <div className="space-y-6 mt-3">
+                {[...estateItemsByEstate.entries()].map(([estateId, { name, items: estateItems }]) => (
+                  <div key={estateId}>
+                    <div className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                      {name}
+                    </div>
+                    <SalesTable
+                      title=""
+                      items={estateItems}
                       canEditPayout={canEditPayout}
                       canEdit={canEdit}
                       calcPayouts={calcPayouts}
