@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     tenantId,
     mimeType: "application/pdf",
     resourceType: "raw",
-    publicId: fileName.replace(/\.pdf$/, ""),
+    publicId: fileName,
   });
 
   // Save as ProjectFile with tag "Payment Proof"
