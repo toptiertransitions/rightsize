@@ -4385,6 +4385,8 @@ function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
     saleType: (toStr(f["SaleType"]) || "Online") as EstateSaleType,
     saleStartDate: toStr(f["SaleStartDate"]),
     saleEndDate: toStr(f["SaleEndDate"]),
+    saleStartTime: toStr(f["SaleStartTime"]) || undefined,
+    saleEndTime: toStr(f["SaleEndTime"]) || undefined,
     dropIntervalHours: f["DropIntervalHours"] != null ? toNum(f["DropIntervalHours"]) : 48,
     dropPercent: f["DropPercent"] != null ? toNum(f["DropPercent"]) : 10,
     floorPercent: f["FloorPercent"] != null ? toNum(f["FloorPercent"]) : 40,

@@ -336,6 +336,8 @@ export interface Estate {
   saleType: EstateSaleType;
   saleStartDate: string;
   saleEndDate: string;
+  saleStartTime?: string;  // e.g. "10:00 AM" — single-line text field in Airtable
+  saleEndTime?: string;
   dropIntervalHours: number;
   dropPercent: number;
   floorPercent: number;
