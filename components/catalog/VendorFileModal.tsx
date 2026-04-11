@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useUser } from "@clerk/nextjs";
 import type { Item, LocalVendor } from "@/lib/types";
@@ -26,6 +26,10 @@ export function VendorFileModal({
 }: VendorFileModalProps) {
   const { user } = useUser();
   const [vendorId, setVendorId] = useState("");
+  const [vendorQuery, setVendorQuery] = useState("");
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
+  const vendorInputRef = useRef<HTMLInputElement>(null);
+  const vendorDropdownRef = useRef<HTMLDivElement>(null);
   const [ccEmail, setCcEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -42,11 +46,34 @@ export function VendorFileModal({
   useEffect(() => {
     if (!isOpen) return;
     const ids = [...new Set(selectedItems.map((i) => i.assignedVendorId).filter(Boolean))];
-    if (ids.length === 1) setVendorId(ids[0]!);
-    else setVendorId("");
+    if (ids.length === 1) {
+      setVendorId(ids[0]!);
+      const preselected = localVendors.find((v) => v.id === ids[0]);
+      setVendorQuery(preselected ? `${preselected.vendorName} (${preselected.vendorType})` : "");
+    } else {
+      setVendorId("");
+      setVendorQuery("");
+    }
+    setVendorDropdownOpen(false);
     setSent(false);
     setError("");
-  }, [isOpen, selectedItems]);
+  }, [isOpen, selectedItems, localVendors]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (
+        vendorDropdownRef.current &&
+        !vendorDropdownRef.current.contains(e.target as Node) &&
+        vendorInputRef.current &&
+        !vendorInputRef.current.contains(e.target as Node)
+      ) {
+        setVendorDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -123,18 +150,55 @@ export function VendorFileModal({
                 {eligibleVendors.length === 0 ? (
                   <p className="text-sm text-gray-400 italic">No active vendors of type Consignment Store, Donation Org, or Junk Hauler found.</p>
                 ) : (
-                  <select
-                    value={vendorId}
-                    onChange={(e) => setVendorId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
-                  >
-                    <option value="">— Select vendor —</option>
-                    {eligibleVendors.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.vendorName} ({v.vendorType})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <input
+                      ref={vendorInputRef}
+                      type="text"
+                      value={vendorQuery}
+                      onChange={(e) => {
+                        setVendorQuery(e.target.value);
+                        setVendorId("");
+                        setVendorDropdownOpen(true);
+                      }}
+                      onFocus={() => setVendorDropdownOpen(true)}
+                      placeholder="Search vendors…"
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                    />
+                    {vendorDropdownOpen && (
+                      <div
+                        ref={vendorDropdownRef}
+                        className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto"
+                      >
+                        {eligibleVendors
+                          .filter((v) =>
+                            vendorQuery.trim() === "" ||
+                            `${v.vendorName} ${v.vendorType}`.toLowerCase().includes(vendorQuery.toLowerCase())
+                          )
+                          .map((v) => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setVendorId(v.id);
+                                setVendorQuery(`${v.vendorName} (${v.vendorType})`);
+                                setVendorDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex items-center justify-between gap-2 ${v.id === vendorId ? "bg-forest-50 text-forest-700 font-medium" : "text-gray-900"}`}
+                            >
+                              <span>{v.vendorName}</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">{v.vendorType}</span>
+                            </button>
+                          ))}
+                        {eligibleVendors.filter((v) =>
+                          vendorQuery.trim() === "" ||
+                          `${v.vendorName} ${v.vendorType}`.toLowerCase().includes(vendorQuery.toLowerCase())
+                        ).length === 0 && (
+                          <p className="px-3 py-2.5 text-sm text-gray-400 italic">No vendors match</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {selectedVendor?.email && (
                   <p className="text-xs text-gray-400 mt-1.5">
