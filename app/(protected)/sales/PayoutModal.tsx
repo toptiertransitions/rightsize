@@ -41,11 +41,25 @@ export function buildUnpaidLineItems(
   // PF: manually-sold items (no Square events, status Sold, not yet paid)
   const pfEvItemIds = new Set(pfSaleEvents.map(e => e.itemId));
   const pfItems = items.filter(i => i.primaryRoute === "ProFoundFinds Consignment");
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const pfVendorMatch = localVendors.find(lv => {
+    const n = norm(lv.vendorName);
+    return n.includes("profoundfind") || n.includes("profound");
+  });
   for (const item of pfItems) {
     if (item.status !== "Sold") continue;
     if (pfEvItemIds.has(item.id)) continue; // covered by Square events above
-    const payout = item.consignorPayout
-      ?? (item.valueMid && item.clientSharePercent ? item.valueMid * (item.clientSharePercent / 100) : 0);
+    let payout = 0;
+    if (pfVendorMatch && pfVendorMatch.consignmentTake > 0 && item.salePrice && item.salePrice > 0) {
+      // Best: LocalVendor rate applied to the actual sale price
+      payout = item.salePrice * (1 - pfVendorMatch.consignmentTake / 100);
+    } else if (item.salePrice && item.salePrice > 0 && item.clientSharePercent) {
+      // Fallback: clientSharePercent of actual sale price
+      payout = item.salePrice * (item.clientSharePercent / 100);
+    } else {
+      // Last resort: stored consignorPayout (may be stale)
+      payout = item.consignorPayout ?? 0;
+    }
     if (payout <= 0) continue;
     const alreadyPaid = (item.payoutPaidAmount ?? 0) >= payout;
     if (alreadyPaid) continue;
@@ -130,13 +144,21 @@ export function buildPayoutMarkData(
 
   // PF manually sold items (no Square events)
   const pfEvItemIds = new Set(pfSaleEvents.map(e => e.itemId));
+  const norm2 = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const pfVendorMatch2 = localVendors.find(lv => {
+    const n = norm2(lv.vendorName);
+    return n.includes("profoundfind") || n.includes("profound");
+  });
   for (const item of items.filter(i => i.primaryRoute === "ProFoundFinds Consignment")) {
     if (item.status !== "Sold" || pfEvItemIds.has(item.id)) continue;
-    const payout =
-      item.consignorPayout ??
-      (item.valueMid && item.clientSharePercent
-        ? item.valueMid * (item.clientSharePercent / 100)
-        : 0);
+    let payout = 0;
+    if (pfVendorMatch2 && pfVendorMatch2.consignmentTake > 0 && item.salePrice && item.salePrice > 0) {
+      payout = item.salePrice * (1 - pfVendorMatch2.consignmentTake / 100);
+    } else if (item.salePrice && item.salePrice > 0 && item.clientSharePercent) {
+      payout = item.salePrice * (item.clientSharePercent / 100);
+    } else {
+      payout = item.consignorPayout ?? 0;
+    }
     if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
       itemsToMark.push({ id: item.id, amount: payout });
     }
