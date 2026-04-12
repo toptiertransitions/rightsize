@@ -338,6 +338,7 @@ function PFTableRow({
   initialEvents,
   canEditPayout,
   canEdit,
+  localVendors,
   onEdit,
   onEventUpdated,
 }: {
@@ -345,6 +346,7 @@ function PFTableRow({
   initialEvents: ItemSaleEvent[];
   canEditPayout: boolean;
   canEdit: boolean;
+  localVendors: LocalVendor[];
   onEdit: (item: Item) => void;
   onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
@@ -458,9 +460,20 @@ function PFTableRow({
               {totalOwed > 0 && <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(totalOwed)} owed</div>}
               {totalPaidAmt > 0 && <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(totalPaidAmt)} paid</div>}
             </div>
-          ) : item.clientSharePercent != null ? (
-            <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
-          ) : <span className="text-gray-300">—</span>}
+          ) : (() => {
+            // No Square events — compute fallback payout for sold items
+            if (!isSold) return item.clientSharePercent != null
+              ? <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
+              : <span className="text-gray-300">—</span>;
+            const calc = computeCalcPayout(item, localVendors);
+            if (calc && calc.amount > 0) return (
+              <div>
+                <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
+                <div className="text-[9px] text-gray-400">{calc.rate}% take</div>
+              </div>
+            );
+            return <span className="text-gray-300">—</span>;
+          })()}
         </td>
         {/* Actions */}
         <td className="pr-3 py-2.5 w-16">
@@ -573,6 +586,7 @@ function PFSalesSection({
   allEvents,
   canEditPayout,
   canEdit,
+  localVendors,
   onEdit,
   onEventUpdated,
 }: {
@@ -580,6 +594,7 @@ function PFSalesSection({
   allEvents: ItemSaleEvent[];
   canEditPayout: boolean;
   canEdit: boolean;
+  localVendors: LocalVendor[];
   onEdit: (item: Item) => void;
   onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
@@ -702,6 +717,7 @@ function PFSalesSection({
                   initialEvents={allEvents.filter(e => e.itemId === item.id)}
                   canEditPayout={canEditPayout}
                   canEdit={canEdit}
+                  localVendors={localVendors}
                   onEdit={onEdit}
                   onEventUpdated={onEventUpdated}
                 />
@@ -1451,6 +1467,7 @@ export function SalesClient({
           allEvents={pfSaleEvents}
           canEditPayout={canEditPayout}
           canEdit={canEdit}
+          localVendors={localVendors}
           onEdit={setEditingItem}
           onEventUpdated={(updated) => setPfSaleEvents(prev => prev.map(e => e.id === updated.id ? updated : e))}
         />
