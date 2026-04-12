@@ -4142,6 +4142,11 @@ export async function updateItemSaleEvent(id: string, data: Partial<Pick<ItemSal
   return mapItemSaleEvent(await res.json() as AirtableRecord);
 }
 
+export async function deleteItemSaleEvent(id: string): Promise<void> {
+  const res = await saleEventsFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 /** Called by the webhook handler: decrement quantity, flip status when qty hits 0. */
 export async function applySquareSaleToItem(opts: {
   itemId: string;

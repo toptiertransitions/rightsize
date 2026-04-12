@@ -286,6 +286,119 @@ function BulkPhotoImport({ items, onClose, onItemUpdated }: {
   );
 }
 
+// ─── Sale Events Modal ────────────────────────────────────────────────────────
+interface SaleEvent {
+  id: string; saleDate: string; quantitySold: number; unitPrice: number;
+  totalAmount: number; clientPayout: number; payoutPaid: boolean; squarePaymentId?: string;
+}
+
+function fmtMoney(n: number) {
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function SaleEventsModal({ item, onClose }: { item: Item; onClose: () => void }) {
+  const [events, setEvents] = useState<SaleEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/item-sale-events?itemId=${item.id}`)
+      .then(r => r.json())
+      .then(d => setEvents(d.events ?? []))
+      .catch(() => setError("Failed to load events"))
+      .finally(() => setLoading(false));
+  }, [item.id]);
+
+  async function handleDelete(eventId: string) {
+    if (!confirm("Delete this sale event? This cannot be undone.")) return;
+    setDeletingId(eventId);
+    setError("");
+    try {
+      const res = await fetch("/api/item-sale-events", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: eventId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Delete failed");
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-800 flex-shrink-0">
+          <div>
+            <h2 className="text-white font-bold text-base">{item.itemName}</h2>
+            <p className="text-gray-400 text-xs mt-0.5">Sale Events — admins can delete erroneous records</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <p className="text-gray-400 text-sm text-center py-8">Loading…</p>
+          ) : events.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-8">No sale events recorded.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-gray-400 text-xs uppercase tracking-wide">
+                  <th className="text-left pb-2 pr-3">Date</th>
+                  <th className="text-right pb-2 pr-3">Qty</th>
+                  <th className="text-right pb-2 pr-3">Unit Price</th>
+                  <th className="text-right pb-2 pr-3">Total</th>
+                  <th className="text-right pb-2 pr-3">Client Payout</th>
+                  <th className="text-center pb-2 pr-3">Paid</th>
+                  <th className="pb-2 w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {events.map(ev => (
+                  <tr key={ev.id} className={`transition-opacity ${deletingId === ev.id ? "opacity-40" : ""}`}>
+                    <td className="py-2.5 pr-3 text-gray-300 whitespace-nowrap">
+                      {new Date(ev.saleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right text-gray-300">{ev.quantitySold}</td>
+                    <td className="py-2.5 pr-3 text-right text-gray-300 tabular-nums">{fmtMoney(ev.unitPrice)}</td>
+                    <td className="py-2.5 pr-3 text-right text-gray-200 font-medium tabular-nums">{fmtMoney(ev.totalAmount)}</td>
+                    <td className="py-2.5 pr-3 text-right text-green-400 font-semibold tabular-nums">{fmtMoney(ev.clientPayout)}</td>
+                    <td className="py-2.5 pr-3 text-center">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${ev.payoutPaid ? "bg-green-900/50 text-green-300 border-green-700" : "bg-amber-900/40 text-amber-300 border-amber-700"}`}>
+                        {ev.payoutPaid ? "Paid" : "Unpaid"}
+                      </span>
+                    </td>
+                    <td className="py-2.5">
+                      <button
+                        onClick={() => handleDelete(ev.id)}
+                        disabled={deletingId === ev.id}
+                        title="Delete this sale event"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-40"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+        </div>
+        <div className="px-6 py-3 border-t border-gray-800 flex-shrink-0">
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sort ─────────────────────────────────────────────────────────────────────
 type SortCol = "itemName" | "status" | "client" | "barcodeNumber" | "quantity" | "quantitySold" | "valueMid" | "clientSharePercent" | "deliveryDate" | "returnDate" | "squareSynced" | "storefrontActive" | "payoutPaidAt";
 
@@ -698,6 +811,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showCleanup, setShowCleanup] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  const [saleEventsItem, setSaleEventsItem] = useState<Item | null>(null);
 
   function handleItemPhotoUpdate(id: string, photoUrl: string, photoPublicId: string) {
     setItems((prev) => prev.map((item) => item.id === id
@@ -1096,6 +1210,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                   <th className="px-3 py-3 text-center w-16">{thBtn("storefrontActive", "Site")}</th>
                   <th className="px-3 py-3 text-left w-20">{thBtn("squareSynced", "Square")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
+                  <th className="px-3 py-3 w-16"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Sales</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -1263,6 +1378,17 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                           <p className="text-[10px] text-green-400 px-2">{fmtDate(item.payoutPaidAt)}</p>
                         )}
                       </td>
+
+                      {/* Sale Events */}
+                      <td className="px-3 py-2.5">
+                        <button
+                          onClick={() => setSaleEventsItem(item)}
+                          title="View / delete sale events"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-forest-400 hover:bg-gray-800 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -1315,6 +1441,10 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
               .catch(() => null);
           }}
         />
+      )}
+
+      {saleEventsItem && (
+        <SaleEventsModal item={saleEventsItem} onClose={() => setSaleEventsItem(null)} />
       )}
     </div>
   );
