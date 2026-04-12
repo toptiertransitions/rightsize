@@ -27,11 +27,11 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!(await requireStaff(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { id, payoutPaid, notes } = await req.json();
+  const { id, payoutPaid, notes, clientPayout } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const payoutPaidAt = payoutPaid ? new Date().toISOString() : undefined;
-  const event = await updateItemSaleEvent(id, { payoutPaid, payoutPaidAt, notes });
+  const event = await updateItemSaleEvent(id, { payoutPaid, payoutPaidAt, notes, ...(clientPayout != null ? { clientPayout: Number(clientPayout) } : {}) });
   return NextResponse.json({ event });
 }
 

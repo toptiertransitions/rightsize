@@ -300,6 +300,9 @@ function SaleEventsModal({ item, onClose }: { item: Item; onClose: () => void })
   const [events, setEvents] = useState<SaleEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingPayoutId, setEditingPayoutId] = useState<string | null>(null);
+  const [payoutDraft, setPayoutDraft] = useState("");
+  const [savingPayoutId, setSavingPayoutId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -329,13 +332,35 @@ function SaleEventsModal({ item, onClose }: { item: Item; onClose: () => void })
     }
   }
 
+  async function saveClientPayout(eventId: string) {
+    const val = parseFloat(payoutDraft);
+    if (isNaN(val) || val < 0) { setEditingPayoutId(null); return; }
+    setSavingPayoutId(eventId);
+    setError("");
+    try {
+      const res = await fetch("/api/item-sale-events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: eventId, clientPayout: val }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
+      const data = await res.json();
+      setEvents(prev => prev.map(e => e.id === eventId ? { ...e, clientPayout: data.event.clientPayout } : e));
+      setEditingPayoutId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingPayoutId(null);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-800 flex-shrink-0">
           <div>
             <h2 className="text-white font-bold text-base">{item.itemName}</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Sale Events — admins can delete erroneous records</p>
+            <p className="text-gray-400 text-xs mt-0.5">Sale Events — click payout to edit, trash to delete</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -368,7 +393,32 @@ function SaleEventsModal({ item, onClose }: { item: Item; onClose: () => void })
                     <td className="py-2.5 pr-3 text-right text-gray-300">{ev.quantitySold}</td>
                     <td className="py-2.5 pr-3 text-right text-gray-300 tabular-nums">{fmtMoney(ev.unitPrice)}</td>
                     <td className="py-2.5 pr-3 text-right text-gray-200 font-medium tabular-nums">{fmtMoney(ev.totalAmount)}</td>
-                    <td className="py-2.5 pr-3 text-right text-green-400 font-semibold tabular-nums">{fmtMoney(ev.clientPayout)}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">
+                      {editingPayoutId === ev.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-gray-400 text-xs">$</span>
+                          <input
+                            type="number" min="0" step="0.01" value={payoutDraft} autoFocus
+                            onChange={e => setPayoutDraft(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") saveClientPayout(ev.id); if (e.key === "Escape") setEditingPayoutId(null); }}
+                            className="w-20 bg-gray-800 border border-forest-500 rounded px-1.5 py-0.5 text-sm text-white focus:outline-none"
+                          />
+                          <button onClick={() => saveClientPayout(ev.id)} disabled={savingPayoutId === ev.id}
+                            className="text-[10px] bg-forest-600 text-white px-1.5 py-0.5 rounded hover:bg-forest-700 disabled:opacity-50">
+                            {savingPayoutId === ev.id ? "…" : "✓"}
+                          </button>
+                          <button onClick={() => setEditingPayoutId(null)} className="text-[10px] text-gray-400 hover:text-gray-200">✕</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingPayoutId(ev.id); setPayoutDraft(String(ev.clientPayout)); }}
+                          className={`hover:underline ${ev.clientPayout > 0 ? "text-green-400 font-semibold" : "text-red-400 font-semibold"}`}
+                          title="Click to edit client payout"
+                        >
+                          {fmtMoney(ev.clientPayout)}
+                        </button>
+                      )}
+                    </td>
                     <td className="py-2.5 pr-3 text-center">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${ev.payoutPaid ? "bg-green-900/50 text-green-300 border-green-700" : "bg-amber-900/40 text-amber-300 border-amber-700"}`}>
                         {ev.payoutPaid ? "Paid" : "Unpaid"}
@@ -1254,8 +1304,11 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                       <td className="px-3 py-2.5">
                         <StatusCell value={item.status as ItemStatus} onSave={(v) => {
                           const updates: Partial<Item> = { status: v };
-                          if (v === "Sold" && item.valueMid && item.clientSharePercent) {
-                            updates.consignorPayout = Math.round(item.valueMid * (item.clientSharePercent / 100) * 100) / 100;
+                          if (v === "Sold" && item.valueMid) {
+                            updates.salePrice = item.valueMid;
+                            if (item.clientSharePercent) {
+                              updates.consignorPayout = Math.round(item.valueMid * (item.clientSharePercent / 100) * 100) / 100;
+                            }
                           }
                           if (v !== "Sold" && item.status === "Sold") updates.consignorPayout = 0;
                           patchItem(item.id, item.tenantId, updates);

@@ -4129,11 +4129,12 @@ export async function createItemSaleEvent(data: Omit<ItemSaleEvent, "id" | "crea
   return mapItemSaleEvent(await res.json() as AirtableRecord);
 }
 
-export async function updateItemSaleEvent(id: string, data: Partial<Pick<ItemSaleEvent, "payoutPaid" | "payoutPaidAt" | "notes">>): Promise<ItemSaleEvent> {
+export async function updateItemSaleEvent(id: string, data: Partial<Pick<ItemSaleEvent, "payoutPaid" | "payoutPaidAt" | "notes" | "clientPayout">>): Promise<ItemSaleEvent> {
   const fields: Record<string, unknown> = {};
   if (data.payoutPaid !== undefined) fields["PayoutPaid"] = data.payoutPaid;
   if (data.payoutPaidAt !== undefined) fields["PayoutPaidAt"] = data.payoutPaidAt;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.clientPayout !== undefined) fields["ClientPayout"] = data.clientPayout;
   const res = await saleEventsFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
