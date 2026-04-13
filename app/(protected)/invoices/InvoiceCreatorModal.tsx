@@ -678,12 +678,17 @@ export function InvoiceCreatorModal({
                         <button onClick={() => setEditingExpenseIdx(null)} className="text-xs text-forest-600 hover:text-forest-800 font-medium">Done</button>
                       </div>
                     ) : (
-                      <div key={idx} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 group">
+                      <div key={idx} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 group ${ei.amount < 0 ? "bg-blue-50/40" : ""}`}>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800 font-medium truncate">{ei.vendor || "—"}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm text-gray-800 font-medium truncate">{ei.vendor || "—"}</p>
+                            {ei.amount < 0 && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 shrink-0">Credit</span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500 truncate">{ei.description}{ei.date ? ` · ${ei.date}` : ""}</p>
                         </div>
-                        <span className="text-sm font-semibold text-gray-900 tabular-nums shrink-0">{fmt(ei.amount)}</span>
+                        <span className={`text-sm font-semibold tabular-nums shrink-0 ${ei.amount < 0 ? "text-blue-600" : "text-gray-900"}`}>{fmt(ei.amount)}</span>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => setEditingExpenseIdx(idx)} className="text-xs text-gray-400 hover:text-forest-600 px-1.5 py-0.5 rounded hover:bg-gray-100">Edit</button>
                           <button onClick={() => { setExpenseItems(prev => prev.filter((_, i) => i !== idx)); if (editingExpenseIdx === idx) setEditingExpenseIdx(null); }}
@@ -741,8 +746,8 @@ export function InvoiceCreatorModal({
                   )}
 
                   {expenseItems.length > 0 && (
-                    <div className="flex justify-between px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-700">
-                      <span>Expenses subtotal</span>
+                    <div className={`flex justify-between px-4 py-2 text-xs font-semibold ${expensesTotal < 0 ? "bg-blue-50 text-blue-700" : "bg-gray-50 text-gray-700"}`}>
+                      <span>{expensesTotal < 0 ? "Credits net" : "Expenses subtotal"}</span>
                       <span>{fmt(expensesTotal)}</span>
                     </div>
                   )}
@@ -753,7 +758,12 @@ export function InvoiceCreatorModal({
 
           {/* Amount summary */}
           <div className="bg-forest-50 border border-forest-200 rounded-xl px-4 py-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-forest-800">Invoice Total</span>
+            <div>
+              <span className="text-sm font-medium text-forest-800">Invoice Total</span>
+              {finalAmount < 0 && (
+                <p className="text-xs text-blue-600 mt-0.5">Credits exceed charges — invoice will be $0.00</p>
+              )}
+            </div>
             <span className="text-xl font-bold text-forest-700">{fmt(Math.max(0, finalAmount))}</span>
           </div>
 
