@@ -23,7 +23,9 @@ type DepositMode = "percent" | "amount";
 type FullSource = "contract" | "logged" | "specific";
 
 function fmt(n: number) {
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n < 0 ? `-$${formatted}` : `$${formatted}`;
 }
 
 export function InvoiceCreatorModal({
@@ -621,7 +623,7 @@ export function InvoiceCreatorModal({
                   />
                   <span className="text-sm font-semibold text-gray-800">
                     Include Project Expenses
-                    {expensesTotal > 0 && <span className="ml-1.5 text-forest-700">(+{fmt(expensesTotal)})</span>}
+                    {expensesTotal !== 0 && <span className="ml-1.5 text-forest-700">({expensesTotal > 0 ? "+" : ""}{fmt(expensesTotal)})</span>}
                   </span>
                 </label>
                 {includeExpenses && (

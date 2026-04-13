@@ -98,7 +98,9 @@ function fmtDate(d: string) {
 }
 
 function fmtCurrency(n: number) {
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n < 0 ? `-$${formatted}` : `$${formatted}`;
 }
 
 function todayISO() {
@@ -717,12 +719,23 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
                       <td className="px-3 py-3 text-gray-700 whitespace-nowrap">{fmtDate(expense.date)}</td>
                       <td className="px-3 py-3 font-medium text-gray-900">{expense.vendor || "—"}</td>
                       <td className="px-3 py-3">
-                        <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", CATEGORY_COLORS[expense.category] || "bg-gray-100 text-gray-600")}>
-                          {expense.category}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", CATEGORY_COLORS[expense.category] || "bg-gray-100 text-gray-600")}>
+                            {expense.category}
+                          </span>
+                          {expense.total < 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Credit</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-3 py-3 text-right font-semibold text-gray-900 tabular-nums">
-                        {expense.total > 0 ? fmtCurrency(expense.total) : "—"}
+                      <td className="px-3 py-3 text-right font-semibold tabular-nums">
+                        {expense.total === 0 ? (
+                          <span className="text-gray-400">—</span>
+                        ) : expense.total < 0 ? (
+                          <span className="text-blue-600">{fmtCurrency(expense.total)}</span>
+                        ) : (
+                          <span className="text-gray-900">{fmtCurrency(expense.total)}</span>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-gray-600 max-w-xs truncate">{expense.description || "—"}</td>
                       <td className="px-3 py-3 text-gray-500 text-xs max-w-[120px] truncate">{expense.notes || "—"}</td>

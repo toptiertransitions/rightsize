@@ -20,7 +20,9 @@ function fmtDate(d: string) {
 }
 
 function fmtCurrency(n: number) {
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n < 0 ? `-$${formatted}` : `$${formatted}`;
 }
 
 const CATEGORY_COLORS: Record<ExpenseCategory, string> = {

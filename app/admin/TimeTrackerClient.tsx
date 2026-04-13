@@ -292,7 +292,7 @@ function ExportModal({ entries, onClose, weekStart }: {
           )}
           {filteredExpenses.length > 0 && (
             <p className="text-xs text-gray-500">
-              {filteredExpenses.length} reimbursable {filteredExpenses.length === 1 ? "expense" : "expenses"} · ${filteredExpenses.reduce((s, e) => s + e.total, 0).toFixed(2)}
+              {filteredExpenses.length} reimbursable {filteredExpenses.length === 1 ? "expense" : "expenses"} · {(() => { const t = filteredExpenses.reduce((s, e) => s + e.total, 0); return t < 0 ? `-$${Math.abs(t).toFixed(2)}` : `$${t.toFixed(2)}`; })()}
             </p>
           )}
         </div>
