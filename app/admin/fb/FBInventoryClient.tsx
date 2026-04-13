@@ -541,7 +541,7 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
             return updates;
           })}
           onBulkShare={(pct) => bulkPatch(selectedIds, () => ({ clientSharePercent: pct }))}
-          onBulkStaffSeller={(id, name) => bulkPatch(selectedIds, () => ({ staffSellerId: id || undefined, staffSellerName: name || undefined }))}
+          onBulkStaffSeller={(id, name) => bulkPatch(selectedIds, () => ({ staffSellerId: id, staffSellerName: name }))}
           onBulkStaffCommission={(pct) => bulkPatch(selectedIds, () => ({ staffCommissionPercent: pct }))}
           onBulkStaffTime={(min) => bulkPatch(selectedIds, () => ({ staffTimeMinutes: min }))}
           onBulkSoldDate={(date) => bulkPatch(selectedIds, () => ({ saleDate: date }))}
@@ -705,8 +705,8 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                           sellerName={item.staffSellerName}
                           staffMembers={staffMembers}
                           onSave={(id, name) => patchItem(item.id, item.tenantId, {
-                            staffSellerId: id || undefined,
-                            staffSellerName: name || undefined,
+                            staffSellerId: id,
+                            staffSellerName: name,
                           })}
                         />
                       </td>
