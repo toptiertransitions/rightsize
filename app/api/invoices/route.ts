@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
 
   let qboInvoiceId: string | undefined;
   let qboDocNumber: string | undefined;
+  let qboError: string | undefined;
 
   // Push to QBO if requested
   if (pushToQBO) {
@@ -91,13 +92,35 @@ export async function POST(req: NextRequest) {
           qboItemId: svc?.qboItemId,
         }];
       } else {
-        // Full: use lineItems array
-        qboLineItems = (lineItems || []).map((item: { serviceId: string; serviceName: string; hours: number; rate: number }) => ({
-          serviceName: item.serviceName,
-          hours: item.hours,
-          rate: item.rate,
-          qboItemId: serviceMap.get(item.serviceId)?.qboItemId,
-        }));
+        // Full: build from explicit lineItems, or fall back to a single line for "specific amount" invoices
+        if (lineItems && lineItems.length > 0) {
+          qboLineItems = lineItems.map((item: { serviceId: string; serviceName: string; hours: number; rate: number }) => ({
+            serviceName: item.serviceName,
+            hours: item.hours,
+            rate: item.rate,
+            qboItemId: serviceMap.get(item.serviceId)?.qboItemId,
+          }));
+        } else {
+          // Specific-amount invoice with no explicit line items — create a single line
+          const svc = serviceMap.get(serviceId);
+          qboLineItems = [{
+            serviceName: serviceName || "Services",
+            hours: 1,
+            rate: amount,
+            qboItemId: svc?.qboItemId,
+          }];
+        }
+
+        // Append expense items as additional line items
+        if (expenseItems && expenseItems.length > 0) {
+          for (const ei of expenseItems as Array<{ vendor: string; description: string; date: string; amount: number }>) {
+            qboLineItems.push({
+              serviceName: ei.vendor || "Expense",
+              hours: 1,
+              rate: ei.amount,
+            });
+          }
+        }
       }
 
       const qboResult = await createQBOInvoice({
@@ -109,6 +132,7 @@ export async function POST(req: NextRequest) {
       qboDocNumber = qboResult.docNumber;
     } catch (e) {
       console.error("QBO invoice creation failed:", e);
+      qboError = e instanceof Error ? e.message : "QBO invoice creation failed";
     }
   }
 
@@ -166,7 +190,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ invoice });
+  return NextResponse.json({ invoice, ...(qboError ? { qboError } : {}) });
 }
 
 export async function PATCH(req: NextRequest) {

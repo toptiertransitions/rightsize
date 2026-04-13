@@ -272,6 +272,9 @@ export function InvoiceCreatorModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create invoice");
+      if (data.qboError) {
+        setError(`Invoice created, but QuickBooks sync failed: ${data.qboError}`);
+      }
       onCreated(data.invoice);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create invoice");
