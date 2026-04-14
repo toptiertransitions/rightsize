@@ -65,9 +65,6 @@ export default async function CatalogPage({ searchParams }: PageProps) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
-            <p className="text-gray-500 mt-0.5">
-              {items.length} item{items.length !== 1 ? "s" : ""} across {selectedTenants.length} project{selectedTenants.length !== 1 ? "s" : ""}
-            </p>
           </div>
         </div>
         <ItemGrid
@@ -112,9 +109,6 @@ export default async function CatalogPage({ searchParams }: PageProps) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
-            <p className="text-gray-500 mt-0.5">
-              {items.length} item{items.length !== 1 ? "s" : ""} cataloged
-            </p>
           </div>
           {canEdit && (
             <Link href={`/catalog/new?tenantId=${tenantId}`}>
@@ -174,9 +168,6 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
-          <p className="text-gray-500 mt-0.5">
-            {items.length} item{items.length !== 1 ? "s" : ""} across {tenants.length} project{tenants.length !== 1 ? "s" : ""}
-          </p>
         </div>
         {canEdit && editableMembership && (
           <Link href={`/catalog/new?tenantId=${editableMembership.tenantId}`}>

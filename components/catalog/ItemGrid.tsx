@@ -1441,6 +1441,13 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Filtered count */}
+        <span className="text-xs text-gray-400 self-center whitespace-nowrap">
+          {filtered.length === items.length
+            ? `${items.length} item${items.length !== 1 ? "s" : ""}`
+            : `${filtered.length} of ${items.length}`}
+        </span>
+
         {/* View toggle */}
         <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden h-10">
           <button
