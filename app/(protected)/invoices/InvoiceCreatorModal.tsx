@@ -65,9 +65,10 @@ export function InvoiceCreatorModal({
   const [specificAmount, setSpecificAmount] = useState("");
   const [specificServiceId, setSpecificServiceId] = useState(services[0]?.id ?? "");
 
-  // Deposit credit state
-  const paidDeposits = invoices.filter((inv) => inv.type === "Deposit" && inv.status === "Paid");
-  const totalPaidDeposit = paidDeposits.reduce((s, inv) => s + (inv.paidAmount ?? inv.amount), 0);
+  // Deposit credit state — include both fully and partially paid deposits
+  const paidDeposits = invoices.filter((inv) => inv.type === "Deposit" && (inv.status === "Paid" || inv.status === "PartiallyPaid"));
+  const totalPaidDeposit = paidDeposits.reduce((s, inv) =>
+    s + (inv.status === "PartiallyPaid" ? (inv.paidAmount ?? 0) : (inv.paidAmount ?? inv.amount)), 0);
   const [applyDeposit, setApplyDeposit] = useState(totalPaidDeposit > 0);
 
   // Expenses state
