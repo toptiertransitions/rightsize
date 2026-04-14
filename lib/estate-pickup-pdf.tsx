@@ -163,10 +163,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: "#eeeeee",
   },
-  itemName: {
+  itemNameCol: {
     flex: 1,
+    flexDirection: "column",
+    gap: 1,
+  },
+  itemName: {
     fontSize: 9,
     color: charcoal,
+  },
+  itemBarcode: {
+    fontSize: 7,
+    color: "#888888",
+    fontFamily: "Helvetica",
   },
   itemPrice: {
     fontFamily: "Helvetica-Bold",
@@ -247,7 +256,8 @@ export function groupBuyers(buyers: StorefrontBuyer[]): BuyerGroup[] {
 interface PickupSheetProps {
   estate: Estate;
   buyerGroups: BuyerGroup[];
-  itemPhotos: Map<string, string>; // itemName → photoUrl
+  itemPhotos: Map<string, string>;    // itemName → photoUrl
+  itemBarcodes: Map<string, string>;  // itemName → barcodeNumber
   printedAt: string;
 }
 
@@ -275,7 +285,7 @@ function Footer() {
   );
 }
 
-function BuyerCard({ group, itemPhotos, isLast }: { group: BuyerGroup; itemPhotos: Map<string, string>; isLast: boolean }) {
+function BuyerCard({ group, itemPhotos, itemBarcodes, isLast }: { group: BuyerGroup; itemPhotos: Map<string, string>; itemBarcodes: Map<string, string>; isLast: boolean }) {
   const total = group.items.reduce((s, i) => s + i.purchaseAmount, 0);
   const [first, ...rest] = group.name.trim().split(/\s+/);
   const last = rest.join(" ") || first;
@@ -299,6 +309,7 @@ function BuyerCard({ group, itemPhotos, isLast }: { group: BuyerGroup; itemPhoto
       <View style={styles.itemsContainer}>
         {group.items.map((item, idx) => {
           const photoUrl = itemPhotos.get(item.itemName);
+          const barcode = itemBarcodes.get(item.itemName);
           const isLastItem = idx === group.items.length - 1;
           return (
             <View key={idx} style={isLastItem ? styles.itemRowLast : styles.itemRow}>
@@ -307,7 +318,10 @@ function BuyerCard({ group, itemPhotos, isLast }: { group: BuyerGroup; itemPhoto
               ) : (
                 <View style={styles.itemPhotoPlaceholder} />
               )}
-              <Text style={styles.itemName}>{item.itemName}</Text>
+              <View style={styles.itemNameCol}>
+                <Text style={styles.itemName}>{item.itemName}</Text>
+                {barcode && <Text style={styles.itemBarcode}>#{barcode}</Text>}
+              </View>
               <Text style={styles.itemPrice}>{fmtMoney(item.purchaseAmount)}</Text>
             </View>
           );
@@ -317,7 +331,7 @@ function BuyerCard({ group, itemPhotos, isLast }: { group: BuyerGroup; itemPhoto
   );
 }
 
-function PickupSheetDoc({ estate, buyerGroups, itemPhotos, printedAt }: PickupSheetProps) {
+function PickupSheetDoc({ estate, buyerGroups, itemPhotos, itemBarcodes, printedAt }: PickupSheetProps) {
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
@@ -334,6 +348,7 @@ function PickupSheetDoc({ estate, buyerGroups, itemPhotos, printedAt }: PickupSh
                 key={group.email}
                 group={group}
                 itemPhotos={itemPhotos}
+                itemBarcodes={itemBarcodes}
                 isLast={idx === buyerGroups.length - 1}
               />
             ))}
@@ -349,15 +364,17 @@ function PickupSheetDoc({ estate, buyerGroups, itemPhotos, printedAt }: PickupSh
 export async function renderPickupSheetPDF(opts: {
   estate: Estate;
   buyers: StorefrontBuyer[];
-  items: { itemName: string; photoUrl?: string }[];
+  items: { itemName: string; photoUrl?: string; barcodeNumber?: string }[];
 }): Promise<Buffer> {
   const { estate, buyers, items } = opts;
 
-  // Build itemName → photoUrl map from the Items table data
+  // Build itemName → photoUrl and itemName → barcodeNumber maps from Items table
   const itemPhotos = new Map<string, string>();
+  const itemBarcodes = new Map<string, string>();
   for (const item of items) {
-    if (item.photoUrl && item.itemName) {
-      itemPhotos.set(item.itemName, item.photoUrl);
+    if (item.itemName) {
+      if (item.photoUrl) itemPhotos.set(item.itemName, item.photoUrl);
+      if (item.barcodeNumber) itemBarcodes.set(item.itemName, item.barcodeNumber);
     }
   }
 
@@ -369,6 +386,7 @@ export async function renderPickupSheetPDF(opts: {
       estate={estate}
       buyerGroups={buyerGroups}
       itemPhotos={itemPhotos}
+      itemBarcodes={itemBarcodes}
       printedAt={printedAt}
     />
   );

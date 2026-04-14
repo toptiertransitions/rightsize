@@ -32,10 +32,11 @@ export async function GET(
 
   if (!estate) return NextResponse.json({ error: "Estate not found" }, { status: 404 });
 
-  // Build item name → primary photo URL map from Items table
+  // Build item name → photo URL + barcode map from Items table
   const itemData = items.map(item => ({
     itemName: item.itemName,
     photoUrl: item.photos?.[0]?.url || undefined,
+    barcodeNumber: item.barcodeNumber,
   }));
 
   const pdfBuffer = await renderPickupSheetPDF({ estate, buyers, items: itemData });

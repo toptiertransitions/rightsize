@@ -1217,7 +1217,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       const q = search.toLowerCase();
       result = result.filter(i =>
         i.itemName.toLowerCase().includes(q) ||
-        i.category.toLowerCase().includes(q)
+        i.category.toLowerCase().includes(q) ||
+        (i.barcodeNumber && i.barcodeNumber.includes(q))
       );
     }
     if (statusFilter) {
