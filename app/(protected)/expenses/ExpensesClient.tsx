@@ -1,9 +1,68 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseCategory, Tenant } from "@/lib/types";
 import { EXPENSE_CATEGORIES } from "@/lib/types";
+
+// ─── Staff combobox ────────────────────────────────────────────────────────────
+function StaffCombobox({ names, value, onChange, inputCls }: {
+  names: string[];
+  value: string;
+  onChange: (name: string) => void;
+  inputCls?: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const filtered = query === ""
+    ? names
+    : names.filter(n => n.toLowerCase().includes(query.toLowerCase()));
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false); setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={open ? query : value}
+          placeholder="Search staff…"
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          className={cn("pr-6", inputCls ?? "border border-gray-300 rounded-lg px-2 py-1 text-sm w-40 focus:outline-none focus:ring-1 focus:ring-forest-400")}
+        />
+        {value && !open && (
+          <button type="button" onMouseDown={e => { e.preventDefault(); onChange(""); }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 leading-none">×</button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-48 max-h-52 overflow-auto bg-white border border-gray-200 rounded-xl shadow-lg">
+          <button type="button" onMouseDown={() => { onChange(""); setOpen(false); setQuery(""); }}
+            className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100">— All staff —</button>
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
+          ) : filtered.map(n => (
+            <button key={n} type="button"
+              onMouseDown={() => { onChange(n); setOpen(false); setQuery(""); }}
+              className={cn("w-full text-left px-3 py-2 text-sm hover:bg-forest-50 transition-colors",
+                value === n ? "bg-forest-50 text-forest-700 font-medium" : "text-gray-700"
+              )}>{n}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Tenant combobox ───────────────────────────────────────────────────────────
 function TenantCombobox({ tenants, value, onChange, inputCls }: {
@@ -393,6 +452,21 @@ function BulkEditBar({
 }
 
 type ReimbursableFilter = "all" | "reimbursable" | "non-reimbursable";
+type TimelineFilter = "7d" | "30d" | "90d" | "month" | "year" | "all";
+type SortDir = "asc" | "desc";
+type SortCol = "date" | "vendor" | "category" | "total" | "project" | "staff";
+
+function timelineStart(filter: TimelineFilter): string | null {
+  if (filter === "all") return null;
+  const now = new Date();
+  const d = new Date(now);
+  if (filter === "7d")    { d.setDate(d.getDate() - 7); }
+  else if (filter === "30d")   { d.setDate(d.getDate() - 30); }
+  else if (filter === "90d")   { d.setDate(d.getDate() - 90); }
+  else if (filter === "month") { d.setDate(1); }
+  else if (filter === "year")  { d.setMonth(0); d.setDate(1); }
+  return d.toISOString().slice(0, 10);
+}
 
 // ─── Main client ───────────────────────────────────────────────────────────────
 export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerOrAdmin, sysRole }: Props) {
@@ -405,13 +479,49 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
   const [allCompanyView, setAllCompanyView] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
   const [reimbursableFilter, setReimbursableFilter] = useState<ReimbursableFilter>("all");
+  const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("7d");
+  const [staffFilter, setStaffFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [sortCol, setSortCol] = useState<SortCol | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredExpenses = expenses.filter(e => {
-    if (reimbursableFilter === "reimbursable") return e.reimbursable;
-    if (reimbursableFilter === "non-reimbursable") return !e.reimbursable;
-    return true;
-  });
+  // Unique staff names from loaded expenses (for the combobox)
+  const staffNames = useMemo(() => {
+    const names = new Set<string>();
+    expenses.forEach(e => { if (e.staffName) names.add(e.staffName); });
+    return [...names].sort();
+  }, [expenses]);
+
+  const filteredExpenses = useMemo(() => {
+    const cutoff = timelineStart(timelineFilter);
+    let result = expenses.filter(e => {
+      if (reimbursableFilter === "reimbursable" && !e.reimbursable) return false;
+      if (reimbursableFilter === "non-reimbursable" && e.reimbursable) return false;
+      if (cutoff && e.date < cutoff) return false;
+      if (staffFilter && e.staffName !== staffFilter) return false;
+      if (projectFilter && e.tenantId !== projectFilter) return false;
+      return true;
+    });
+    if (sortCol) {
+      result = [...result].sort((a, b) => {
+        let av: string | number = "";
+        let bv: string | number = "";
+        switch (sortCol) {
+          case "date":     av = a.date;                           bv = b.date;                           break;
+          case "vendor":   av = (a.vendor ?? "").toLowerCase();  bv = (b.vendor ?? "").toLowerCase();  break;
+          case "category": av = a.category.toLowerCase();        bv = b.category.toLowerCase();        break;
+          case "total":    av = a.total;                         bv = b.total;                         break;
+          case "project":  av = (a.tenantName ?? "").toLowerCase(); bv = (b.tenantName ?? "").toLowerCase(); break;
+          case "staff":    av = (a.staffName ?? "").toLowerCase(); bv = (b.staffName ?? "").toLowerCase(); break;
+        }
+        if (av < bv) return sortDir === "asc" ? -1 : 1;
+        if (av > bv) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [expenses, reimbursableFilter, timelineFilter, staffFilter, projectFilter, sortCol, sortDir]);
 
   const totalSpend = filteredExpenses.reduce((s, e) => s + e.total, 0);
   const reimbursableTotal = filteredExpenses.filter(e => e.reimbursable).reduce((s, e) => s + e.total, 0);
@@ -531,6 +641,29 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
   // colspan for footer: checkbox + date + vendor + category + total = 5, then desc + notes + project + reimbursable + receipt + actions
   const footerTrailingCols = showStaffCol ? 7 : 6;
 
+  function handleSort(col: SortCol) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  }
+
+  function sortTh(col: SortCol, label: string, align?: "right" | "center") {
+    const active = sortCol === col;
+    return (
+      <th
+        onClick={() => handleSort(col)}
+        className={cn(
+          "px-3 py-3 cursor-pointer select-none hover:bg-gray-100 transition-colors",
+          align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"
+        )}
+      >
+        <span className={cn("inline-flex items-center gap-1", align === "right" ? "justify-end w-full" : align === "center" ? "justify-center w-full" : "")}>
+          {label}
+          <span className="text-[9px] text-gray-400">{active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+        </span>
+      </th>
+    );
+  }
+
   return (
     <div>
       {/* Header */}
@@ -616,22 +749,68 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{uploadError}</div>
       )}
 
-      {/* Reimbursable filter */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xs text-gray-500 font-medium">Reimbursable:</span>
-        {(["all", "reimbursable", "non-reimbursable"] as ReimbursableFilter[]).map(f => (
-          <button key={f} onClick={() => setReimbursableFilter(f)}
-            className={cn(
-              "px-3 py-1 rounded-lg text-xs font-medium transition-all border",
-              reimbursableFilter === f
-                ? f === "reimbursable" ? "bg-green-600 text-white border-green-600"
-                : f === "non-reimbursable" ? "bg-gray-600 text-white border-gray-600"
-                : "bg-forest-600 text-white border-forest-600"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-            )}>
-            {f === "all" ? "All" : f === "reimbursable" ? "Reimbursable" : "Non-Reimbursable"}
-          </button>
-        ))}
+      {/* Filters row */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {/* Timeline */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Timeline:</span>
+          <select
+            value={timelineFilter}
+            onChange={e => setTimelineFilter(e.target.value as TimelineFilter)}
+            className="h-8 px-2 rounded-lg border border-gray-300 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-400"
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="month">This month</option>
+            <option value="year">This year</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+
+        {/* Project combobox */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Project:</span>
+          <TenantCombobox
+            tenants={tenants}
+            value={projectFilter}
+            onChange={setProjectFilter}
+            inputCls="border border-gray-300 rounded-lg px-2 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-forest-400 h-8"
+          />
+        </div>
+
+        {/* Staff combobox — only in all-company view */}
+        {allCompanyView && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Staff:</span>
+            <StaffCombobox
+              names={staffNames}
+              value={staffFilter}
+              onChange={setStaffFilter}
+              inputCls="border border-gray-300 rounded-lg px-2 py-1 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-forest-400 h-8"
+            />
+          </div>
+        )}
+
+        <div className="w-px h-5 bg-gray-200" />
+
+        {/* Reimbursable pills */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 font-medium">Reimbursable:</span>
+          {(["all", "reimbursable", "non-reimbursable"] as ReimbursableFilter[]).map(f => (
+            <button key={f} onClick={() => setReimbursableFilter(f)}
+              className={cn(
+                "px-2.5 py-1 rounded-lg text-xs font-medium transition-all border",
+                reimbursableFilter === f
+                  ? f === "reimbursable" ? "bg-green-600 text-white border-green-600"
+                  : f === "non-reimbursable" ? "bg-gray-600 text-white border-gray-600"
+                  : "bg-forest-600 text-white border-forest-600"
+                  : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+              )}>
+              {f === "all" ? "All" : f === "reimbursable" ? "Reimbursable" : "Non-Reimbursable"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bulk edit bar */}
@@ -668,14 +847,14 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
                     <input type="checkbox" checked={selected.size === filteredExpenses.length && filteredExpenses.length > 0}
                       onChange={toggleAll} className="rounded" />
                   </th>
-                  <th className="px-3 py-3 text-left">Date</th>
-                  <th className="px-3 py-3 text-left">Vendor</th>
-                  <th className="px-3 py-3 text-left">Category</th>
-                  <th className="px-3 py-3 text-right">Total</th>
+                  {sortTh("date", "Date")}
+                  {sortTh("vendor", "Vendor")}
+                  {sortTh("category", "Category")}
+                  {sortTh("total", "Total", "right")}
                   <th className="px-3 py-3 text-left">Description</th>
                   <th className="px-3 py-3 text-left">Notes</th>
-                  <th className="px-3 py-3 text-left">Project</th>
-                  {showStaffCol && <th className="px-3 py-3 text-left">Staff</th>}
+                  {sortTh("project", "Project")}
+                  {showStaffCol && sortTh("staff", "Staff")}
                   <th className="px-3 py-3 text-center">Reimbursable</th>
                   <th className="px-3 py-3 text-left">Receipt</th>
                   <th className="px-3 py-3 text-right">Actions</th>
