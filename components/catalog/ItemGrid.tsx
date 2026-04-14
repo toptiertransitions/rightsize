@@ -173,6 +173,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
+  const [reanalyzing, setReanalyzing] = useState(false);
   const [reassignTenantId, setReassignTenantId] = useState(item.tenantId);
 
   // Photo management
@@ -291,6 +292,35 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReanalyze = async () => {
+    const primaryPhoto = photos[0]?.url || item.photoUrl;
+    if (!primaryPhoto) { setError("No photo available for AI analysis."); return; }
+    setReanalyzing(true);
+    setError("");
+    try {
+      const res = await fetch("/api/items/reanalyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoUrl: primaryPhoto }),
+      });
+      if (!res.ok) throw new Error("AI analysis failed");
+      const data = await res.json();
+      setForm(prev => ({
+        ...prev,
+        itemName: data.itemName || prev.itemName,
+        category: data.category || prev.category,
+        conditionNotes: data.conditionNotes ?? prev.conditionNotes,
+        listingTitleEbay: data.listingTitleEbay ?? prev.listingTitleEbay,
+        listingDescriptionEbay: data.listingDescriptionEbay ?? prev.listingDescriptionEbay,
+        staffTips: data.staffTips ?? prev.staffTips,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI analysis failed");
+    } finally {
+      setReanalyzing(false);
     }
   };
 
@@ -465,7 +495,35 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
           <section className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Item Info</h3>
             <Input label="Item Name" value={form.itemName ?? ""} onChange={e => set("itemName", e.target.value)} />
-            <Input label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)} />
+            <div className="flex items-end gap-2">
+              <div className="flex-1 min-w-0">
+                <Input label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)} />
+              </div>
+              <button
+                type="button"
+                onClick={handleReanalyze}
+                disabled={reanalyzing || !!(photos[0]?.url || item.photoUrl) === false}
+                title="Re-analyze with AI using the primary photo"
+                className="flex-shrink-0 h-10 px-3 rounded-xl border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 whitespace-nowrap"
+              >
+                {reanalyzing ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Update with AI
+                  </>
+                )}
+              </button>
+            </div>
             <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
               <Select label="Condition" value={form.condition ?? "Good"}
                 onChange={e => set("condition", e.target.value as ItemCondition)}
