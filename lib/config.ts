@@ -65,6 +65,7 @@ export const AIRTABLE_TABLES = {
   SUBCONTRACTORS: process.env.AIRTABLE_SUBCONTRACTORS_TABLE || "Subcontractors",
   FAILED_SALE_SYNC: process.env.AIRTABLE_FAILED_SALE_SYNC_TABLE || "FailedSaleSync",
   ESTATES: process.env.AIRTABLE_ESTATES_TABLE || "Estates",
+  STOREFRONT_BUYERS: process.env.AIRTABLE_STOREFRONT_BUYERS_TABLE || "StorefrontBuyers",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

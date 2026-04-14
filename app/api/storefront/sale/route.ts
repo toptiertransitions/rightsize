@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, updateItem, createItemSaleEvent, logFailedSaleSync, getEstateById } from "@/lib/airtable";
+import { getItemById, updateItem, createItemSaleEvent, logFailedSaleSync, getEstateById, createStorefrontBuyer } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -12,7 +12,10 @@ async function attemptRecordSale(data: {
   salePrice: number;
   buyerName: string;
   buyerEmail: string;
-}): Promise<{ estateSlug?: string }> {
+  buyerPhone?: string;
+  buyerMarketingConsent?: boolean;
+  buyerConsentAt?: string;
+}): Promise<{ estateSlug?: string; estateSaleId?: string; estateName?: string }> {
   const item = await getItemById(data.itemId);
   if (!item) throw new Error(`Item ${data.itemId} not found`);
   if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
@@ -32,6 +35,9 @@ async function attemptRecordSale(data: {
     saleChannel: "Online",
     buyerName: data.buyerName,
     buyerEmail: data.buyerEmail,
+    buyerPhone: data.buyerPhone,
+    buyerMarketingConsent: data.buyerMarketingConsent,
+    buyerConsentAt: data.buyerConsentAt,
     stripePaymentIntentId: data.stripePaymentIntentId,
     consignorPayout,
     completedDate: saleDate,
@@ -51,13 +57,39 @@ async function attemptRecordSale(data: {
     payoutPaid: false,
   });
 
-  // Return estate slug so the caller can bust the estate ISR cache
+  // Return estate info so the caller can bust the estate ISR cache and log buyer
   let estateSlug: string | undefined;
+  let estateSaleId: string | undefined;
+  let estateName: string | undefined;
   if (item.primaryRoute === "Estate Sale" && item.estateSaleId) {
     const estate = await getEstateById(item.estateSaleId).catch(() => null);
-    if (estate) estateSlug = estate.slug;
+    if (estate) {
+      estateSlug = estate.slug;
+      estateSaleId = item.estateSaleId;
+      estateName = estate.name;
+    }
   }
-  return { estateSlug };
+
+  // Log buyer to StorefrontBuyers table for future outreach
+  try {
+    await createStorefrontBuyer({
+      buyerName: data.buyerName,
+      buyerEmail: data.buyerEmail,
+      buyerPhone: data.buyerPhone,
+      marketingConsent: data.buyerMarketingConsent ?? false,
+      consentAt: data.buyerConsentAt ?? new Date().toISOString(),
+      itemId: data.itemId,
+      itemName: item.itemName,
+      estateSaleId,
+      estateName,
+      estateSlug,
+      purchaseAmount: data.salePrice,
+    });
+  } catch (e) {
+    console.error("[storefront/sale] createStorefrontBuyer failed (non-fatal):", e);
+  }
+
+  return { estateSlug, estateSaleId, estateName };
 }
 
 export async function POST(req: NextRequest) {
@@ -71,6 +103,9 @@ export async function POST(req: NextRequest) {
     salePrice: number;
     buyerName: string;
     buyerEmail: string;
+    buyerPhone?: string;
+    buyerMarketingConsent?: boolean;
+    buyerConsentAt?: string;
   };
 
   try {
@@ -79,7 +114,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail } = body;
+  const { itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt } = body;
   if (!itemId || !stripePaymentIntentId || !salePrice || !buyerName || !buyerEmail) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -89,7 +124,7 @@ export async function POST(req: NextRequest) {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const { estateSlug } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail });
+      const { estateSlug } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt });
 
       // Ping storefront to invalidate ISR cache (item + estate page if applicable)
       const storefrontUrl = process.env.STOREFRONT_URL;

@@ -614,6 +614,9 @@ export async function updateItem(
     saleChannel: "SaleChannel",
     buyerName: "BuyerName",
     buyerEmail: "BuyerEmail",
+    buyerPhone: "BuyerPhone",
+    buyerMarketingConsent: "BuyerMarketingConsent",
+    buyerConsentAt: "BuyerConsentAt",
     stripePaymentIntentId: "StripePaymentIntentId",
     onlineListingSlug: "OnlineListingSlug",
     storefrontActive: "StorefrontActive",
@@ -643,6 +646,37 @@ export async function updateItem(
 export async function deleteItem(id: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.ITEMS).destroy(id);
+}
+
+export async function createStorefrontBuyer(data: {
+  buyerName: string;
+  buyerEmail: string;
+  buyerPhone?: string;
+  marketingConsent: boolean;
+  consentAt: string;
+  itemId: string;
+  itemName: string;
+  estateSaleId?: string;
+  estateName?: string;
+  estateSlug?: string;
+  purchaseAmount: number;
+}): Promise<void> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {
+    BuyerName: data.buyerName,
+    BuyerEmail: data.buyerEmail,
+    MarketingConsent: data.marketingConsent,
+    ConsentAt: data.consentAt,
+    ItemId: data.itemId,
+    ItemName: data.itemName,
+    PurchaseAmount: data.purchaseAmount,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.buyerPhone) fields["BuyerPhone"] = data.buyerPhone;
+  if (data.estateSaleId) fields["EstateSaleId"] = data.estateSaleId;
+  if (data.estateName) fields["EstateName"] = data.estateName;
+  if (data.estateSlug) fields["EstateSlug"] = data.estateSlug;
+  await base(AIRTABLE_TABLES.STOREFRONT_BUYERS).create(fields);
 }
 
 // Returns the next available ProFoundFinds barcode number (8 digits, starts with 1000).

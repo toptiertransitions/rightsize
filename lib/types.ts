@@ -311,6 +311,9 @@ export interface Item {
   saleChannel?: string;
   buyerName?: string;
   buyerEmail?: string;
+  buyerPhone?: string;
+  buyerMarketingConsent?: boolean;
+  buyerConsentAt?: string;
   stripePaymentIntentId?: string;
   onlineListingSlug?: string;
   storefrontActive?: boolean;
