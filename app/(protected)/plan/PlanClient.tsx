@@ -194,6 +194,8 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [helpers, setHelpers] = useState<PlanHelper[]>(entry?.helpers ?? []);
   const [helperInput, setHelperInput] = useState("");
   const [googleEventId, setGoogleEventId] = useState(entry?.googleEventId ?? "");
+  const [addressMode, setAddressMode] = useState<"origin" | "destination" | "custom">("origin");
+  const [addressText, setAddressText] = useState("");
   const [calLoading, setCalLoading] = useState<"send" | "sync" | null>(null);
   const [calError, setCalError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -245,6 +247,30 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       .catch(() => {});
   }, [effectiveTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Compute origin/destination address strings from the selected tenant
+  const selectedTenant = tenantOptions?.find(t => t.id === effectiveTenantId);
+  const originAddress = [selectedTenant?.address, selectedTenant?.city, selectedTenant?.state, selectedTenant?.zip].filter(Boolean).join(", ");
+  const destAddress = [selectedTenant?.destAddress, selectedTenant?.destCity, selectedTenant?.destState, selectedTenant?.destZip].filter(Boolean).join(", ");
+
+  // Initialize addressText on mount (or when tenant changes in all-projects mode)
+  useEffect(() => {
+    if (entry?.address) {
+      // Editing an existing entry — show whatever was saved
+      setAddressText(entry.address);
+    } else {
+      // New entry — pre-fill with origin address
+      setAddressText(originAddress);
+    }
+  }, [effectiveTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the user changes the address mode dropdown, update the text field
+  const handleAddressModeChange = (mode: "origin" | "destination" | "custom") => {
+    setAddressMode(mode);
+    if (mode === "origin") setAddressText(originAddress);
+    else if (mode === "destination") setAddressText(destAddress);
+    else setAddressText("");
+  };
+
   // Core invite-send logic — accepts an explicit helpers array to avoid stale state
   const sendCalendarInvites = async (helpersToSend: PlanHelper[]) => {
     if (!isEdit || !entry?.id) return;
@@ -261,6 +287,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           notes: notes.trim() || undefined,
+          address: addressText.trim() || undefined,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -343,6 +370,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
         roomId: isCustomRoom ? "" : roomId || "",
         roomLabel: isCustomRoom ? customRoom.trim() : "",
         notes: notes.trim(),
+        address: addressText.trim() || undefined,
         startTime: startTime || undefined,
         endTime: endTime || undefined,
         helpers,
@@ -379,6 +407,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
             startTime: startTime || undefined,
             endTime: endTime || undefined,
             notes: notes.trim() || undefined,
+            address: addressText.trim() || undefined,
           }),
         }).catch(() => {});
       }
@@ -520,6 +549,29 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
               placeholder="Any additional context..."
               className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none" />
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Address <span className="text-xs text-gray-400 font-normal">(for calendar invites)</span>
+            </label>
+            <select
+              value={addressMode}
+              onChange={e => handleAddressModeChange(e.target.value as "origin" | "destination" | "custom")}
+              className={`${inputCls} mb-2`}
+            >
+              <option value="origin">Project Origin{originAddress ? ` — ${originAddress}` : ""}</option>
+              <option value="destination" disabled={!destAddress}>Project Destination{destAddress ? ` — ${destAddress}` : " (none set)"}</option>
+              <option value="custom">Custom / Manual</option>
+            </select>
+            <input
+              type="text"
+              value={addressText}
+              onChange={e => setAddressText(e.target.value)}
+              placeholder="123 Main St, Chicago, IL 60601"
+              className={inputCls}
+            />
           </div>
 
           {/* ── Team Members (TTT staff picker) ─────────────────────────────── */}
@@ -839,6 +891,14 @@ interface TenantOption {
   id: string;
   name: string;
   isArchived?: boolean;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  destAddress?: string;
+  destCity?: string;
+  destState?: string;
+  destZip?: string;
 }
 
 interface PlanClientProps {

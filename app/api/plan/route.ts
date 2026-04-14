@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     roomId?: string;
     roomLabel?: string;
     notes?: string;
+    address?: string;
     startTime?: string;
     endTime?: string;
     helpers?: PlanHelper[];
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
       roomId: body.roomId,
       roomLabel: body.roomLabel,
       notes: body.notes,
+      address: body.address,
       startTime: body.startTime,
       endTime: body.endTime,
       helpers: body.helpers,
@@ -91,6 +93,7 @@ export async function PATCH(req: NextRequest) {
     roomId?: string;
     roomLabel?: string;
     notes?: string;
+    address?: string;
     startTime?: string;
     endTime?: string;
     helpers?: PlanHelper[];

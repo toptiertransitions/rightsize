@@ -1008,6 +1008,7 @@ export async function createPlanEntry(data: {
   roomId?: string;
   roomLabel?: string;
   notes?: string;
+  address?: string;
   startTime?: string;
   endTime?: string;
   helpers?: PlanHelper[];
@@ -1022,6 +1023,7 @@ export async function createPlanEntry(data: {
         RoomID: data.roomId || "",
         RoomLabel: data.roomLabel || "",
         Notes: data.notes || "",
+        Address: data.address || "",
         StartTime: data.startTime || "",
         EndTime: data.endTime || "",
         Helpers: data.helpers?.length ? JSON.stringify(data.helpers) : "",
@@ -1042,6 +1044,7 @@ export async function updatePlanEntry(
     roomId: string;
     roomLabel: string;
     notes: string;
+    address: string;
     startTime: string;
     endTime: string;
     helpers: PlanHelper[];
@@ -1054,6 +1057,7 @@ export async function updatePlanEntry(
   if (data.roomId !== undefined) fields["RoomID"] = data.roomId;
   if (data.roomLabel !== undefined) fields["RoomLabel"] = data.roomLabel;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.address !== undefined) fields["Address"] = data.address;
   if (data.startTime !== undefined) fields["StartTime"] = data.startTime;
   if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
   if (data.helpers !== undefined) fields["Helpers"] = data.helpers.length ? JSON.stringify(data.helpers) : "";
@@ -1092,6 +1096,7 @@ function mapPlanEntry(record: AirtableRecord): PlanEntry {
     roomId: toStr(f["RoomID"]) || undefined,
     roomLabel: toStr(f["RoomLabel"]) || undefined,
     notes: toStr(f["Notes"]) || undefined,
+    address: toStr(f["Address"]) || undefined,
     startTime: toStr(f["StartTime"]) || undefined,
     endTime: toStr(f["EndTime"]) || undefined,
     helpers,

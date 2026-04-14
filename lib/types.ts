@@ -467,6 +467,7 @@ export interface PlanEntry {
   roomId?: string;
   roomLabel?: string;
   notes?: string;
+  address?: string;      // Location for calendar invites (origin, destination, or custom)
   startTime?: string;    // "HH:MM" 24-hour
   endTime?: string;      // "HH:MM" 24-hour
   helpers?: PlanHelper[];

@@ -55,7 +55,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
       tenantId === "__all_archived__" ? visibleTenants.filter((t) => t.isArchived) :
       visibleTenants;
 
-    const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+    const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
 
     const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
       getPlanEntriesForTenants(selectedTenants.map(t => t.id)).catch(() => []),
@@ -109,7 +109,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         ? visibleTenants2.filter(t => t.isArchived)
         : visibleTenants2.filter(t => !t.isArchived);
       const currentTenantId = showArchived ? "__all_archived__" : "__all_active__";
-      const tenantOptions = visibleTenants2.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+      const tenantOptions = visibleTenants2.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
 
       // Fetch plan entries, time entries, project files, and services for all tenants in selected group
       const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
@@ -177,7 +177,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         tenantIdsWithEntries.map(id => getTimeEntries({ tenantId: id }).catch(() => []))
       ).then(r => r.flat());
 
-      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }));
+      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
 
       return (
@@ -299,8 +299,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
       : [];
   }
   const tenantOptions = (isManagerOrAdmin || isTTTStaff)
-    ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false }))
-    : undefined;
+    ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }))
+    : [{ id: tenantId, name: tenant.name, isArchived: tenant.isArchived ?? false, address: tenant.address, city: tenant.city, state: tenant.state, zip: tenant.zip, destAddress: tenant.destAddress, destCity: tenant.destCity, destState: tenant.destState, destZip: tenant.destZip }];
   const serviceNames = serviceList.map(s => s.name);
 
   const isTTTStaffOrAbove = sysRole !== null;

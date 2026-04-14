@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     startTime?: string;
     endTime?: string;
     notes?: string;
+    address?: string;
   };
   try {
     body = await req.json();
@@ -49,16 +50,18 @@ export async function POST(req: NextRequest) {
   }
 
   // Resolve project name + room name (shared by send and update)
-  const resolveContext = async () => {
+  // locationOverride: if provided, use it instead of computing from tenant origin
+  const resolveContext = async (locationOverride?: string) => {
     const [tenant, rooms] = await Promise.all([
       getTenantById(entry.tenantId).catch(() => null),
       entry.roomId ? getRoomsForTenant(entry.tenantId).catch(() => []) : Promise.resolve([]),
     ]);
     const projectName = tenant?.name || "";
     const roomName = entry.roomLabel || rooms.find((r) => r.id === entry.roomId)?.name || "";
-    const location = [tenant?.address, tenant?.city, tenant?.state, tenant?.zip]
+    const tenantOrigin = [tenant?.address, tenant?.city, tenant?.state, tenant?.zip]
       .filter(Boolean)
       .join(", ");
+    const location = locationOverride ?? tenantOrigin;
     return { projectName, roomName, location };
   };
 
@@ -70,12 +73,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No helpers to invite" }, { status: 400 });
       }
 
-      // Persist any unsaved modal state (helpers, times, notes) to Airtable
+      // Persist any unsaved modal state (helpers, times, notes, address) to Airtable
       const patch: Parameters<typeof updatePlanEntry>[1] = {};
       if (body.helpers?.length) patch.helpers = body.helpers;
       if (body.startTime !== undefined) patch.startTime = body.startTime;
       if (body.endTime !== undefined) patch.endTime = body.endTime;
       if (body.notes !== undefined) patch.notes = body.notes;
+      if (body.address !== undefined) patch.address = body.address;
       if (Object.keys(patch).length) await updatePlanEntry(planEntryId, patch);
 
       // Merge request-body values into entry so the calendar event uses current modal state
@@ -84,9 +88,11 @@ export async function POST(req: NextRequest) {
         ...(body.startTime !== undefined && { startTime: body.startTime || undefined }),
         ...(body.endTime !== undefined && { endTime: body.endTime || undefined }),
         ...(body.notes !== undefined && { notes: body.notes }),
+        ...(body.address !== undefined && { address: body.address || undefined }),
       };
 
-      const { projectName, roomName, location } = await resolveContext();
+      // Use body.address if provided; fall back to tenant origin
+      const { projectName, roomName, location } = await resolveContext(entryForCalendar.address || undefined);
 
       const eventId = await createOrUpdateCalendarEvent(
         entryForCalendar,
@@ -122,7 +128,7 @@ export async function POST(req: NextRequest) {
     // Pass skipAttendees=true so we don't reset Google RSVP statuses to needsAction.
     if (action === "update") {
       if (!entry.googleEventId) return NextResponse.json({ entry }); // no event yet, no-op
-      const { projectName, roomName, location } = await resolveContext();
+      const { projectName, roomName, location } = await resolveContext(entry.address || undefined);
       await createOrUpdateCalendarEvent(entry, entry.helpers || [], roomName, entry.googleEventId, projectName, location, true);
       return NextResponse.json({ entry });
     }
