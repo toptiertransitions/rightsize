@@ -679,6 +679,32 @@ export async function createStorefrontBuyer(data: {
   await base(AIRTABLE_TABLES.STOREFRONT_BUYERS).create(fields);
 }
 
+export async function getStorefrontBuyersByEstate(estateId: string): Promise<import("./types").StorefrontBuyer[]> {
+  const base = getBase();
+  const records: Airtable.Record<Airtable.FieldSet>[] = [];
+  await base(AIRTABLE_TABLES.STOREFRONT_BUYERS)
+    .select({ filterByFormula: `{EstateSaleId} = "${estateId}"` })
+    .eachPage((page, next) => { records.push(...page); next(); });
+  return records.map(r => {
+    const f = r.fields;
+    return {
+      id: r.id,
+      buyerName: String(f["BuyerName"] || ""),
+      buyerEmail: String(f["BuyerEmail"] || ""),
+      buyerPhone: f["BuyerPhone"] ? String(f["BuyerPhone"]) : undefined,
+      marketingConsent: f["MarketingConsent"] === true,
+      consentAt: f["ConsentAt"] ? String(f["ConsentAt"]) : undefined,
+      itemId: String(f["ItemId"] || ""),
+      itemName: String(f["ItemName"] || ""),
+      estateSaleId: f["EstateSaleId"] ? String(f["EstateSaleId"]) : undefined,
+      estateName: f["EstateName"] ? String(f["EstateName"]) : undefined,
+      estateSlug: f["EstateSlug"] ? String(f["EstateSlug"]) : undefined,
+      purchaseAmount: typeof f["PurchaseAmount"] === "number" ? f["PurchaseAmount"] : 0,
+      createdAt: f["CreatedAt"] ? String(f["CreatedAt"]) : "",
+    };
+  });
+}
+
 // Returns the next available ProFoundFinds barcode number (8 digits, starts with 1000).
 // Scans every item that has ever been assigned a barcode (even if later re-routed) so
 // numbers are permanently consumed and never reused.

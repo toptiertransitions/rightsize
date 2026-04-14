@@ -324,6 +324,23 @@ export interface Item {
   commissionPaidAt?: string;  // ISO date — set when commission is marked as paid
 }
 
+// ─── Storefront Buyer (from StorefrontBuyers Airtable table) ─────────────────
+export interface StorefrontBuyer {
+  id: string;
+  buyerName: string;
+  buyerEmail: string;
+  buyerPhone?: string;
+  marketingConsent: boolean;
+  consentAt?: string;
+  itemId: string;
+  itemName: string;
+  estateSaleId?: string;
+  estateName?: string;
+  estateSlug?: string;
+  purchaseAmount: number;
+  createdAt: string;
+}
+
 // ─── Estate Sale ──────────────────────────────────────────────────────────────
 export type EstateStatus = "Upcoming" | "Active" | "Closed";
 export type EstateSaleType = "Online" | "In-Person";
