@@ -318,6 +318,10 @@ export interface Item {
   onlineListingSlug?: string;
   storefrontActive?: boolean;
   pickupLocation?: string;   // e.g. "Lincoln Park", "River North", "Storage - Elk Grove"
+  // Dimensions (manual-only, not AI-filled)
+  widthInches?: number;
+  heightInches?: number;
+  depthInches?: number;
   // Estate Sale
   estateSaleId?: string;
   // Pay tracking

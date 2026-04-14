@@ -85,10 +85,8 @@ export async function POST(req: NextRequest) {
       ? (isNonTTT && NON_TTT_SHARE[route] !== undefined ? NON_TTT_SHARE[route] : ROUTE_CLIENT_SHARE[route])
       : undefined;
 
-    // Auto-assign a permanent ProFoundFinds barcode if created directly with that route
-    const barcodeNumber = route === "ProFoundFinds Consignment"
-      ? await getNextBarcodeNumber()
-      : undefined;
+    // Auto-assign a permanent barcode for every new item, regardless of route
+    const barcodeNumber = await getNextBarcodeNumber();
 
     const item = await createItem({
       tenantId,
@@ -118,6 +116,9 @@ export async function POST(req: NextRequest) {
       status: "Pending Review",
       clientSharePercent: body.clientSharePercent != null ? Number(body.clientSharePercent) : autoShare,
       barcodeNumber,
+      widthInches: body.widthInches != null ? Number(body.widthInches) : undefined,
+      heightInches: body.heightInches != null ? Number(body.heightInches) : undefined,
+      depthInches: body.depthInches != null ? Number(body.depthInches) : undefined,
     });
     return NextResponse.json({ item });
   } catch (e: unknown) {
@@ -259,12 +260,9 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Auto-assign a permanent ProFoundFinds barcode when routing to PF Consignment.
-  // Only assigned once — if the item already has a barcode (from a previous PF routing),
-  // that number is kept and the slot remains permanently consumed.
-  if (resolvedNewRoute === "ProFoundFinds Consignment"
-    && !(updates as Record<string, unknown>).barcodeNumber
-    && !existing?.barcodeNumber) {
+  // Backfill: assign a permanent barcode to any existing item that doesn't have one yet.
+  // Only assigned once — never changed.
+  if (!existing?.barcodeNumber && !(updates as Record<string, unknown>).barcodeNumber) {
     (updates as Record<string, unknown>).barcodeNumber = await getNextBarcodeNumber();
   }
 

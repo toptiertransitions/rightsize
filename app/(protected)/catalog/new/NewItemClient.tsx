@@ -64,6 +64,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
   const [manualMode, setManualMode] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
+  const [widthInches, setWidthInches] = useState<string>("");
+  const [heightInches, setHeightInches] = useState<string>("");
+  const [depthInches, setDepthInches] = useState<string>("");
   const [error, setError] = useState<string>("");
   useEffect(() => {
     if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -245,6 +248,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
           listingOfferup: merged.listing_offerup,
           staffTips: merged.staff_tips,
           quantity: merged.quantity ?? 1,
+          widthInches: widthInches !== "" ? Number(widthInches) : undefined,
+          heightInches: heightInches !== "" ? Number(heightInches) : undefined,
+          depthInches: depthInches !== "" ? Number(depthInches) : undefined,
         }),
       });
       if (!res.ok) {
@@ -653,6 +659,47 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                       { value: "Very Fragile", label: "Very Fragile" },
                     ]}
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Dimensions (optional, inches)</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="Width"
+                        value={widthInches}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setWidthInches(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">W</p>
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="Height"
+                        value={heightInches}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setHeightInches(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">H</p>
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="Depth"
+                        value={depthInches}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setDepthInches(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">D</p>
+                    </div>
+                  </div>
                 </div>
                 {rooms.length > 0 && (
                   <Select label="Room (optional)" value={selectedRoomId}

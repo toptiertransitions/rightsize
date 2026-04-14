@@ -534,6 +534,9 @@ export async function createItem(data: Partial<Item> & {
     Quantity: data.quantity || 1,
     ClientSharePercent: data.clientSharePercent ?? 0,
     DeliveryDate: data.deliveryDate || "",
+    ...(data.widthInches != null ? { WidthInches: data.widthInches } : {}),
+    ...(data.heightInches != null ? { HeightInches: data.heightInches } : {}),
+    ...(data.depthInches != null ? { DepthInches: data.depthInches } : {}),
     CreatedAt: now,
     UpdatedAt: now,
   }, { typecast: true });
@@ -621,6 +624,10 @@ export async function updateItem(
     onlineListingSlug: "OnlineListingSlug",
     storefrontActive: "StorefrontActive",
     pickupLocation: "PickupLocation",
+    // Dimensions
+    widthInches: "WidthInches",
+    heightInches: "HeightInches",
+    depthInches: "DepthInches",
     estateSaleId: "EstateSaleId",
     // Pay tracking
     commissionPaidAt: "CommissionPaidAt",
@@ -795,6 +802,9 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     onlineListingSlug: toStr(f["OnlineListingSlug"]) || undefined,
     storefrontActive: f["StorefrontActive"] === true ? true : undefined,
     pickupLocation: toStr(f["PickupLocation"]) || undefined,
+    widthInches: f["WidthInches"] != null ? toNum(f["WidthInches"]) : undefined,
+    heightInches: f["HeightInches"] != null ? toNum(f["HeightInches"]) : undefined,
+    depthInches: f["DepthInches"] != null ? toNum(f["DepthInches"]) : undefined,
     estateSaleId: toStr(f["EstateSaleId"]) || undefined,
     commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
   };

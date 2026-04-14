@@ -165,6 +165,9 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     staffSellerId: item.staffSellerId ?? "",
     staffSellerName: item.staffSellerName ?? "",
     completedDate: item.completedDate ?? "",
+    widthInches: item.widthInches,
+    heightInches: item.heightInches,
+    depthInches: item.depthInches,
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -308,6 +311,9 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             <div>
               <h2 className="text-base font-bold text-gray-900 leading-tight">Edit Item</h2>
               <p className="text-xs text-gray-400 truncate max-w-[300px]">{item.itemName}</p>
+              {item.barcodeNumber && (
+                <p className="text-[10px] text-gray-400 font-mono mt-0.5">#{item.barcodeNumber}</p>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400">
@@ -608,6 +614,47 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Very Fragile",      label: "Very Fragile" },
                 ]}
               />
+            </div>
+            <div>
+              <label className={labelClass}>Dimensions (optional, inches)</label>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Width"
+                    value={form.widthInches ?? ""}
+                    onFocus={e => e.target.select()}
+                    onChange={e => set("widthInches", e.target.value === "" ? undefined : Number(e.target.value))}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">W</p>
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Height"
+                    value={form.heightInches ?? ""}
+                    onFocus={e => e.target.select()}
+                    onChange={e => set("heightInches", e.target.value === "" ? undefined : Number(e.target.value))}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">H</p>
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Depth"
+                    value={form.depthInches ?? ""}
+                    onFocus={e => e.target.select()}
+                    onChange={e => set("depthInches", e.target.value === "" ? undefined : Number(e.target.value))}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">D</p>
+                </div>
+              </div>
             </div>
             {itemRooms.length > 0 && (
               <Select label="Room" value={form.roomId ?? ""}
@@ -1510,7 +1557,11 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                     </Badge>
                   </div>
                   <div className="mt-2 text-xs text-gray-500 flex items-center gap-1.5">
-                    <span>{item.condition} · {item.sizeClass}</span>
+                    {item.barcodeNumber ? (
+                      <span className="font-mono text-[10px] text-gray-400">#{item.barcodeNumber}</span>
+                    ) : (
+                      <span>{item.condition} · {item.sizeClass}</span>
+                    )}
                     {(item.quantity ?? 0) > 1 && (
                       <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
                         Qty {item.quantity}
@@ -1677,6 +1728,9 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       {/* Item name */}
                       <td className="px-4 py-2.5">
                         <span className="font-medium text-gray-900">{item.itemName || "Untitled Item"}</span>
+                        {item.barcodeNumber && (
+                          <span className="block font-mono text-[10px] text-gray-400 mt-0.5">#{item.barcodeNumber}</span>
+                        )}
                       </td>
                       {/* Project (multi-tenant only) */}
                       {multiTenant && (
