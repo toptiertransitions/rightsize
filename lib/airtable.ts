@@ -4558,7 +4558,9 @@ export async function createEstate(
       Status: data.status,
       SaleType: data.saleType,
       SaleStartDate: data.saleStartDate,
+      SaleStartTime: data.saleStartTime || "",
       SaleEndDate: data.saleEndDate,
+      SaleEndTime: data.saleEndTime || "",
       DropIntervalHours: data.dropIntervalHours,
       DropPercent: data.dropPercent,
       FloorPercent: data.floorPercent,
@@ -4596,7 +4598,9 @@ export async function updateEstate(
   if (data.status !== undefined) fields["Status"] = data.status;
   if (data.saleType !== undefined) fields["SaleType"] = data.saleType;
   if (data.saleStartDate !== undefined) fields["SaleStartDate"] = data.saleStartDate;
+  if (data.saleStartTime !== undefined) fields["SaleStartTime"] = data.saleStartTime;
   if (data.saleEndDate !== undefined) fields["SaleEndDate"] = data.saleEndDate;
+  if (data.saleEndTime !== undefined) fields["SaleEndTime"] = data.saleEndTime;
   if (data.dropIntervalHours !== undefined) fields["DropIntervalHours"] = data.dropIntervalHours;
   if (data.dropPercent !== undefined) fields["DropPercent"] = data.dropPercent;
   if (data.floorPercent !== undefined) fields["FloorPercent"] = data.floorPercent;
