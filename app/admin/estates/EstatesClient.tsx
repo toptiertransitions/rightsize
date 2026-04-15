@@ -4,32 +4,32 @@ import { useState } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant } from "@/lib/types";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
-// Split any stored datetime string into { date: "YYYY-MM-DD", time: "HH:mm" }
-// Handles UTC ISO strings (converted to local time) and plain "YYYY-MM-DDTHH:mm" strings.
-function splitDatetime(s: string): { date: string; time: string } {
-  if (!s) return { date: "", time: "" };
-  const pad = (n: number) => String(n).padStart(2, "0");
-  // UTC ISO string — convert to local time first
-  if (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)) {
-    const d = new Date(s);
-    return {
-      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-    };
-  }
-  // Local "YYYY-MM-DDTHH:mm" or "YYYY-MM-DD" format
-  const [date, time = ""] = s.split("T");
-  return { date, time: time.slice(0, 5) };
+// Convert 24h "HH:mm" (from <input type="time">) to "H:MM AM/PM" for storage.
+function to12h(h24: string): string {
+  if (!h24) return "";
+  const [h, m] = h24.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-function joinDatetime(date: string, time: string): string {
-  if (!date) return "";
-  if (!time) return date;
-  // Build as local time so Airtable receives a UTC ISO string that reflects
-  // the user's local clock (e.g. 8:00 AM CDT → stored as 13:00 UTC).
-  const [y, m, d] = date.split("-").map(Number);
-  const [h, min] = time.split(":").map(Number);
-  return new Date(y, m - 1, d, h, min).toISOString();
+// Convert stored "H:MM AM/PM" back to 24h "HH:mm" for <input type="time">.
+function to24h(ampm: string): string {
+  if (!ampm) return "";
+  const match = ampm.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return "";
+  let h = parseInt(match[1]);
+  const m = match[2];
+  const isPM = match[3].toUpperCase() === "PM";
+  if (isPM && h !== 12) h += 12;
+  if (!isPM && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${m}`;
+}
+
+// Extract just the YYYY-MM-DD portion from any date/datetime string.
+function toDateOnly(s: string): string {
+  if (!s) return "";
+  return s.slice(0, 10);
 }
 
 interface EstatesClientProps {
@@ -51,7 +51,9 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   status: "Upcoming",
   saleType: "Online",
   saleStartDate: "",
+  saleStartTime: "",
   saleEndDate: "",
+  saleEndTime: "",
   dropIntervalHours: 48,
   dropPercent: 10,
   floorPercent: 40,
@@ -112,8 +114,10 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       description: estate.description,
       status: estate.status,
       saleType: estate.saleType || "Online",
-      saleStartDate: estate.saleStartDate,
-      saleEndDate: estate.saleEndDate,
+      saleStartDate: toDateOnly(estate.saleStartDate),
+      saleStartTime: estate.saleStartTime ?? "",
+      saleEndDate: toDateOnly(estate.saleEndDate),
+      saleEndTime: estate.saleEndTime ?? "",
       dropIntervalHours: estate.dropIntervalHours,
       dropPercent: estate.dropPercent,
       floorPercent: estate.floorPercent,
@@ -381,35 +385,35 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                 </select>
               </Field>
 
-              <Field label="Sale Start Date & Time">
+              <Field label="Sale Start Date & Time (CST)">
                 <div className="flex gap-2">
                   <input
                     type="date"
                     className={inputCls}
-                    value={splitDatetime(form.saleStartDate).date}
-                    onChange={e => setForm(f => ({ ...f, saleStartDate: joinDatetime(e.target.value, splitDatetime(f.saleStartDate).time) }))}
+                    value={form.saleStartDate}
+                    onChange={e => setForm(f => ({ ...f, saleStartDate: e.target.value }))}
                   />
                   <input
                     type="time"
                     className={`${inputCls} w-32 flex-shrink-0`}
-                    value={splitDatetime(form.saleStartDate).time}
-                    onChange={e => setForm(f => ({ ...f, saleStartDate: joinDatetime(splitDatetime(f.saleStartDate).date, e.target.value) }))}
+                    value={to24h(form.saleStartTime ?? "")}
+                    onChange={e => setForm(f => ({ ...f, saleStartTime: to12h(e.target.value) }))}
                   />
                 </div>
               </Field>
-              <Field label="Sale End Date & Time">
+              <Field label="Sale End Date & Time (CST)">
                 <div className="flex gap-2">
                   <input
                     type="date"
                     className={inputCls}
-                    value={splitDatetime(form.saleEndDate).date}
-                    onChange={e => setForm(f => ({ ...f, saleEndDate: joinDatetime(e.target.value, splitDatetime(f.saleEndDate).time) }))}
+                    value={form.saleEndDate}
+                    onChange={e => setForm(f => ({ ...f, saleEndDate: e.target.value }))}
                   />
                   <input
                     type="time"
                     className={`${inputCls} w-32 flex-shrink-0`}
-                    value={splitDatetime(form.saleEndDate).time}
-                    onChange={e => setForm(f => ({ ...f, saleEndDate: joinDatetime(splitDatetime(f.saleEndDate).date, e.target.value) }))}
+                    value={to24h(form.saleEndTime ?? "")}
+                    onChange={e => setForm(f => ({ ...f, saleEndTime: to12h(e.target.value) }))}
                   />
                 </div>
               </Field>

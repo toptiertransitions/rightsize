@@ -19,6 +19,29 @@ export interface DutchPricing {
 }
 
 /**
+ * Parse a sale date (YYYY-MM-DD) + optional CST time string ("H:MM AM/PM") into UTC ms.
+ * All estate times are treated as America/Chicago (CDT = UTC-5 Apr–Oct, CST = UTC-6 Nov–Mar).
+ */
+function parseCSTDateTime(dateStr: string, timeStr?: string): number {
+  if (!dateStr) return 0;
+  const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number);
+  let hours = 0;
+  let minutes = 0;
+  if (timeStr) {
+    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      hours = parseInt(match[1]);
+      minutes = parseInt(match[2]);
+      const isPM = match[3].toUpperCase() === "PM";
+      if (isPM && hours !== 12) hours += 12;
+      if (!isPM && hours === 12) hours = 0;
+    }
+  }
+  const utcOffset = month >= 4 && month <= 10 ? 5 : 6; // CDT or CST
+  return Date.UTC(year, month - 1, day, hours + utcOffset, minutes, 0);
+}
+
+/**
  * Compute the current Dutch auction price for an item.
  * @param startingPrice  item.valueMid
  * @param estate         the estate record
@@ -29,7 +52,7 @@ export function computeDutchPrice(
   estate: Estate,
   nowMs: number
 ): DutchPricing {
-  const saleStart = new Date(estate.saleStartDate).getTime();
+  const saleStart = parseCSTDateTime(estate.saleStartDate, estate.saleStartTime);
   const intervalMs = estate.dropIntervalHours * 3_600_000;
   const dropFactor = 1 - estate.dropPercent / 100;
   const floorPrice = Math.round(startingPrice * (estate.floorPercent / 100) * 100) / 100;
