@@ -96,6 +96,8 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [emailingId, setEmailingId] = useState<string | null>(null);
+  const [emailResult, setEmailResult] = useState<{ id: string; sent: number; total: number } | null>(null);
 
   const tenantMap = Object.fromEntries(tenants.map(t => [t.id, t.name]));
 
@@ -186,6 +188,22 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
     if (res.ok) {
       setEstates(prev => prev.filter(e => e.id !== id));
       if (editing?.id === id) closeForm();
+    }
+  }
+
+  async function handleSendPickupEmails(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm("Send pickup detail emails to all buyers for this estate?")) return;
+    setEmailingId(id);
+    setEmailResult(null);
+    try {
+      const res = await fetch(`/api/admin/estates/${id}/send-pickup-emails`, { method: "POST" });
+      const data = await res.json() as { sent: number; total: number; message?: string };
+      setEmailResult({ id, sent: data.sent, total: data.total ?? data.sent });
+    } catch {
+      alert("Failed to send emails. Check server logs.");
+    } finally {
+      setEmailingId(null);
     }
   }
 
@@ -288,6 +306,28 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                       </svg>
                       Pickup Sheet
                     </a>
+                    <button
+                      onClick={e => handleSendPickupEmails(estate.id, e)}
+                      disabled={emailingId === estate.id}
+                      title="Email pickup details to all buyers"
+                      className="text-gray-500 hover:text-emerald-400 transition-colors text-xs px-2 py-1 rounded border border-gray-700 hover:border-emerald-600 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {emailingId === estate.id ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Sending…
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          {emailResult?.id === estate.id ? `Sent (${emailResult.sent}/${emailResult.total})` : "Email Details"}
+                        </>
+                      )}
+                    </button>
                     <button
                       onClick={e => { e.stopPropagation(); handleDelete(estate.id); }}
                       className="text-gray-600 hover:text-red-400 transition-colors text-sm"

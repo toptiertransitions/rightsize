@@ -868,3 +868,268 @@ export function buildTimeOffEmail({
 </body>
 </html>`;
 }
+
+// ─── Estate Sale Pickup Details Email ────────────────────────────────────────
+// Sent to buyers the morning of (or day prior) with everything they need for pickup.
+
+export interface PickupDetailsEmailParams {
+  buyerName: string;
+  buyerEmail: string;
+  estateName: string;
+  cityRegion?: string;
+  items: Array<{
+    itemName: string;
+    purchaseAmount: number;
+    photoUrl?: string;
+  }>;
+  pickupAddress?: string;
+  pickupWindowStart?: string;
+  pickupWindowEnd?: string;
+  pickupWindowStartTime?: string;
+  pickupWindowEndTime?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  terms?: string;
+}
+
+function fmtCurrency(n: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
+}
+
+function fmtPickupDate(d: string): string {
+  if (!d) return "";
+  const parts = d.slice(0, 10).split("-").map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+}
+
+function buildPickupDateRange(
+  start?: string, end?: string,
+  startTime?: string, endTime?: string
+): string {
+  if (!start && !end) return "";
+  const isMultiDay = !!(start && end && start !== end);
+  let s = "";
+  if (isMultiDay) s = `${fmtPickupDate(start!)} \u2013 ${fmtPickupDate(end!)}`;
+  else s = fmtPickupDate(start || end || "");
+  if (startTime && endTime) s += isMultiDay ? `\n${startTime} \u2013 ${endTime} each day` : `\n${startTime} \u2013 ${endTime}`;
+  else if (startTime) s += isMultiDay ? `\nFrom ${startTime} each day` : `\nFrom ${startTime}`;
+  else if (endTime) s += isMultiDay ? `\nUntil ${endTime} each day` : `\nUntil ${endTime}`;
+  return s;
+}
+
+export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
+  const firstName = p.buyerName.split(" ")[0] || p.buyerName;
+  const pickupRange = buildPickupDateRange(
+    p.pickupWindowStart, p.pickupWindowEnd,
+    p.pickupWindowStartTime, p.pickupWindowEndTime
+  );
+
+  const itemRows = p.items.map(item => {
+    const photo = item.photoUrl
+      ? `<td width="60" style="vertical-align:top;padding-right:14px;">
+           <img src="${item.photoUrl}" alt="${item.itemName}" width="60" height="60"
+             style="display:block;width:60px;height:60px;object-fit:cover;border-radius:6px;border:0;" />
+         </td>`
+      : `<td width="60" style="vertical-align:top;padding-right:14px;">
+           <div style="width:60px;height:60px;background:#EEEBE6;border-radius:6px;"></div>
+         </td>`;
+    return `
+      <tr>
+        ${photo}
+        <td style="vertical-align:middle;">
+          <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:400;color:#2C2C2C;line-height:1.3;">
+            ${item.itemName}
+          </p>
+        </td>
+        <td align="right" style="vertical-align:middle;white-space:nowrap;padding-left:12px;">
+          <span style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#2C2C2C;">${fmtCurrency(item.purchaseAmount)}</span>
+        </td>
+      </tr>
+      <tr><td colspan="3" style="padding:10px 0 0;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+    `;
+  }).join("");
+
+  const total = p.items.reduce((s, i) => s + i.purchaseAmount, 0);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pickup Details \u2014 ProFound Finds</title>
+</head>
+<body style="margin:0;padding:0;background:#F0EDE8;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F0EDE8;padding:32px 16px 48px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;">
+
+          <!-- Brand header -->
+          <tr>
+            <td style="padding:0 0 20px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:#2C2C2C;letter-spacing:0.03em;">ProFound Finds</span>
+                  </td>
+                  <td align="right">
+                    <span style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#B8960C;">
+                      Pickup Details
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Main card -->
+          <tr>
+            <td style="background:#FAF8F5;border-radius:14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.07);">
+              <table width="100%" cellpadding="0" cellspacing="0">
+
+                <!-- Gold accent bar -->
+                <tr>
+                  <td style="padding:0;background:#B8960C;height:5px;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+
+                <!-- Greeting -->
+                <tr>
+                  <td style="padding:32px 36px 8px;">
+                    <p style="margin:0 0 4px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#B8960C;">
+                      Important Pickup Information
+                    </p>
+                    <h1 style="margin:0 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:27px;font-weight:400;color:#2C2C2C;line-height:1.2;">
+                      Hi ${firstName}, you&rsquo;re all set!
+                    </h1>
+                    <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#555;line-height:1.65;">
+                      Your ${p.items.length === 1 ? "item is" : `${p.items.length} items are`} ready for pickup from the <strong style="color:#2C2C2C;">${p.estateName}</strong> estate sale. Here is everything you need.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Divider -->
+                <tr><td style="padding:20px 36px 0;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Your Items -->
+                <tr>
+                  <td style="padding:24px 36px;">
+                    <p style="margin:0 0 16px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#999;">
+                      ${p.items.length === 1 ? "Your Item" : "Your Items"}
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      ${itemRows}
+                      <tr>
+                        <td colspan="2" style="padding-top:12px;">
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#888;">Total Paid</p>
+                        </td>
+                        <td align="right" style="padding-top:12px;white-space:nowrap;padding-left:12px;">
+                          <span style="font-family:Georgia,'Times New Roman',serif;font-size:20px;color:#2C2C2C;">${fmtCurrency(total)}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Divider -->
+                <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Pickup Location -->
+                <tr>
+                  <td style="padding:24px 36px;">
+                    <p style="margin:0 0 14px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#999;">
+                      Pickup Location
+                    </p>
+                    <table cellpadding="0" cellspacing="0" style="background:#FDF9EE;border-radius:10px;overflow:hidden;width:100%;">
+                      <tr>
+                        <td style="width:4px;padding:0;background:#B8960C;border-radius:10px 0 0 10px;font-size:0;">&nbsp;</td>
+                        <td style="padding:18px 22px;">
+                          ${p.pickupAddress ? `
+                          <p style="margin:0 0 ${pickupRange ? "12px" : "0"};font-family:Georgia,'Times New Roman',serif;font-size:16px;color:#2C2C2C;line-height:1.5;">
+                            ${p.pickupAddress.replace(/,\s*/g, "<br/>")}
+                          </p>` : ""}
+                          ${pickupRange ? `
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#666;line-height:1.8;white-space:pre-line;">
+                            ${pickupRange}
+                          </p>` : ""}
+                          ${!p.pickupAddress && !pickupRange ? `
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#555;line-height:1.6;">
+                            Our team will share the full pickup details shortly.
+                          </p>` : ""}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                ${(p.contactEmail || p.contactPhone) ? `
+                <!-- Divider -->
+                <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Day-of Contact -->
+                <tr>
+                  <td style="padding:24px 36px;">
+                    <p style="margin:0 0 14px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#999;">
+                      Day-of Contact
+                    </p>
+                    <table cellpadding="0" cellspacing="0" style="background:#F5F2EE;border-radius:10px;overflow:hidden;width:100%;">
+                      <tr>
+                        <td style="width:4px;padding:0;background:#7A9E7E;border-radius:10px 0 0 10px;font-size:0;">&nbsp;</td>
+                        <td style="padding:16px 22px;">
+                          <p style="margin:0 0 6px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#555;line-height:1.6;">
+                            Have a question or need help on pickup day?
+                          </p>
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#2C2C2C;line-height:1.8;">
+                            ${p.contactEmail ? `<a href="mailto:${p.contactEmail}" style="color:#7A9E7E;text-decoration:none;font-weight:500;">${p.contactEmail}</a>` : ""}
+                            ${p.contactEmail && p.contactPhone ? `<span style="color:#CCC;margin:0 10px;">&middot;</span>` : ""}
+                            ${p.contactPhone ? `<a href="tel:${p.contactPhone.replace(/\D/g, "")}" style="color:#7A9E7E;text-decoration:none;font-weight:500;">${p.contactPhone}</a>` : ""}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>` : ""}
+
+                ${p.terms ? `
+                <!-- Divider -->
+                <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Terms -->
+                <tr>
+                  <td style="padding:22px 36px 32px;">
+                    <p style="margin:0 0 10px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#bbb;">
+                      Sale Terms &amp; Conditions
+                    </p>
+                    <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:12px;color:#aaa;line-height:1.75;white-space:pre-line;">
+                      ${p.terms}
+                    </p>
+                  </td>
+                </tr>` : `
+                <tr><td style="padding-bottom:32px;"></td></tr>`}
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 0 0;">
+              <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;color:#999;text-align:center;line-height:1.7;">
+                All sales are final &nbsp;&middot;&nbsp; Illinois sales tax applied<br/>
+                Questions? <a href="mailto:hello@profoundfinds.com" style="color:#7A9E7E;text-decoration:none;">hello@profoundfinds.com</a>
+                &nbsp;&middot;&nbsp; <a href="tel:3126003016" style="color:#7A9E7E;text-decoration:none;">312-600-3016</a>
+              </p>
+              <p style="margin:10px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:11px;color:#bbb;text-align:center;letter-spacing:0.05em;">
+                ProFound Finds &mdash; Chicago, IL
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
