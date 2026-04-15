@@ -418,18 +418,19 @@ export async function getItemById(id: string): Promise<Item | null> {
 
 // ─── Storefront helpers ───────────────────────────────────────────────────────
 
-export async function getReservedStorefrontItems(): Promise<{ id: string; itemName: string; updatedAt: string }[]> {
+export async function getReservedStorefrontItems(): Promise<{ id: string; itemName: string; updatedAt: string; slug: string }[]> {
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
       filterByFormula: `AND(OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale"), {Status} = "In Cart")`,
-      fields: ["ItemName", "UpdatedAt"],
+      fields: ["ItemName", "UpdatedAt", "OnlineListingSlug"],
     })
     .all();
   return records.map((r) => ({
     id: r.id,
     itemName: String(r.fields["ItemName"] ?? ""),
     updatedAt: String(r.fields["UpdatedAt"] ?? new Date(0).toISOString()),
+    slug: String(r.fields["OnlineListingSlug"] ?? r.id),
   }));
 }
 
