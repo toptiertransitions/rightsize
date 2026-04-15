@@ -26,7 +26,7 @@ export async function GET(
     console.log(`[estates/${slug}] id=${estate.id} items_found=${items.length} item_ids=${items.map(i => i.id).join(",")}`);
     const itemsWithPrice = items.map((item) => {
       const pricing = computeDutchPrice(item.valueMid, estate, now);
-      return { ...item, ...pricing };
+      return { ...item, ...pricing, estateSaleSlug: estate.slug };
     });
     return NextResponse.json({ estate, items: itemsWithPrice });
   } catch (e) {

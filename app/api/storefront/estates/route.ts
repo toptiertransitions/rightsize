@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
           const items = await getItemsForEstateSale(estate.id);
           const itemsWithPrice = items.map((item) => {
             const pricing = computeDutchPrice(item.valueMid, estate, now);
-            return { ...item, ...pricing };
+            return { ...item, ...pricing, estateSaleSlug: estate.slug };
           });
           return { ...estate, items: itemsWithPrice, itemCount: items.length };
         }
