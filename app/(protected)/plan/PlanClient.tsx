@@ -466,8 +466,8 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-          {/* Project selector — only shown in all-projects mode when creating */}
-          {!isEdit && tenantOptions && (
+          {/* Project selector — only shown in all-projects mode (tenantId="") when creating */}
+          {!isEdit && !tenantId && tenantOptions && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Project</label>
               <select
@@ -1474,7 +1474,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
           onSaved={onSaved}
           services={services}
           canManageTTTHelpers={!!(isManager || isAdmin)}
-          tenantOptions={isAllProjectsMode ? tenantOptions : undefined}
+          tenantOptions={tenantOptions}
         />
       )}
     </>
