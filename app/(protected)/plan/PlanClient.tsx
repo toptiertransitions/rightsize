@@ -561,15 +561,15 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
               onChange={e => handleAddressModeChange(e.target.value as "origin" | "destination" | "custom")}
               className={`${inputCls} mb-2`}
             >
-              <option value="origin">Project Origin{originAddress ? ` — ${originAddress}` : ""}</option>
-              <option value="destination" disabled={!destAddress}>Project Destination{destAddress ? ` — ${destAddress}` : " (none set)"}</option>
+              <option value="origin">Project Origin</option>
+              <option value="destination" disabled={!destAddress}>Project Destination{!destAddress ? " (none set)" : ""}</option>
               <option value="custom">Custom / Manual</option>
             </select>
             <input
               type="text"
               value={addressText}
               onChange={e => setAddressText(e.target.value)}
-              placeholder="123 Main St, Chicago, IL 60601"
+              placeholder={addressMode === "custom" ? "Enter address…" : "No address on file for this project"}
               className={inputCls}
             />
           </div>
