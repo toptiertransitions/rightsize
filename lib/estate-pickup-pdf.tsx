@@ -218,15 +218,16 @@ function lastName(fullName: string): string {
 }
 
 function formatPrintTime(): string {
-  return new Date().toLocaleString("en-US", {
+  const formatted = new Date().toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZoneName: "short",
+    timeZone: "America/Chicago",
   });
+  return `${formatted} CST`;
 }
 
 // ─── Group buyers by email ─────────────────────────────────────────────────────

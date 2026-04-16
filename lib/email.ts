@@ -919,6 +919,8 @@ function buildPickupDateRange(
   return s;
 }
 
+const IL_TAX_RATE = 0.1025; // Illinois/Chicago 10.25%
+
 export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
   const firstName = p.buyerName.split(" ")[0] || p.buyerName;
   const pickupRange = buildPickupDateRange(
@@ -951,7 +953,9 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
     `;
   }).join("");
 
-  const total = p.items.reduce((s, i) => s + i.purchaseAmount, 0);
+  const subtotal = p.items.reduce((s, i) => s + i.purchaseAmount, 0);
+  const taxAmount = Math.round(subtotal * IL_TAX_RATE * 100) / 100;
+  const total = Math.round((subtotal + taxAmount) * 100) / 100;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1022,9 +1026,25 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
                       ${itemRows}
                       <tr>
                         <td colspan="2" style="padding-top:12px;">
-                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#888;">Total Paid</p>
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:12px;color:#888;">Subtotal</p>
                         </td>
                         <td align="right" style="padding-top:12px;white-space:nowrap;padding-left:12px;">
+                          <span style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#888;">${fmtCurrency(subtotal)}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top:6px;">
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:12px;color:#888;">Illinois Tax (10.25%)</p>
+                        </td>
+                        <td align="right" style="padding-top:6px;white-space:nowrap;padding-left:12px;">
+                          <span style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#888;">${fmtCurrency(taxAmount)}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colspan="2" style="padding-top:8px;border-top:1px solid #EEEBE6;">
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#555;">Total Paid</p>
+                        </td>
+                        <td align="right" style="padding-top:8px;white-space:nowrap;padding-left:12px;border-top:1px solid #EEEBE6;">
                           <span style="font-family:Georgia,'Times New Roman',serif;font-size:20px;color:#2C2C2C;">${fmtCurrency(total)}</span>
                         </td>
                       </tr>
@@ -1039,7 +1059,7 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
                 <tr>
                   <td style="padding:24px 36px;">
                     <p style="margin:0 0 14px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#999;">
-                      Pickup Location
+                      Pickup Time and Location
                     </p>
                     <table cellpadding="0" cellspacing="0" style="background:#FDF9EE;border-radius:10px;overflow:hidden;width:100%;">
                       <tr>
