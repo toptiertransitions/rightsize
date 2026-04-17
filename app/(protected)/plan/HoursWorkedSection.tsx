@@ -285,9 +285,11 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
   // Scheduled = TTT Staff helper shifts on plan calendar, net of hours already logged
   // for the same date + service so we don't double-count with the Logged card.
 
-  // Step 1: gross scheduled minutes keyed by "date|service"
+  // Step 1: gross scheduled minutes keyed by "date|service" — future entries only
+  const today = new Date().toISOString().slice(0, 10);
   const grossByDateService = new Map<string, number>();
   for (const pe of (planEntries ?? [])) {
+    if (pe.date < today) continue; // skip past shifts
     if (!pe.startTime || !pe.endTime) continue;
     const [sh, sm] = pe.startTime.split(":").map(Number);
     const [eh, em] = pe.endTime.split(":").map(Number);
