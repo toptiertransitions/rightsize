@@ -2993,10 +2993,12 @@ function DashboardTab({
       else if (o.stage === "Lost") row.lost.push(o);
       else row.active.push(o);
     });
-    return Array.from(byRc.values()).sort((a, b) =>
-      b.total - a.total ||
-      (b.won.length + b.active.length + b.lost.length) - (a.won.length + a.active.length + a.lost.length)
-    );
+    return Array.from(byRc.values())
+      .filter(r => r.won.length + r.active.length + r.lost.length > 0)
+      .sort((a, b) =>
+        b.total - a.total ||
+        (b.won.length + b.active.length + b.lost.length) - (a.won.length + a.active.length + a.lost.length)
+      );
   }, [referralContacts, lbOpps, ccToReferralContact]);
 
   const lbMaxValue = Math.max(1, ...leaderboardRows.map(r => r.total));
