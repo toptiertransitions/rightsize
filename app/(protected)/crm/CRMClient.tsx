@@ -2979,15 +2979,16 @@ function DashboardTab({
       rcId: string;
       won: ClientOpportunity[];
       lost: ClientOpportunity[];
+      active: ClientOpportunity[];
       total: number;
     }>();
     lbOpps.forEach(o => {
       const rcId = ccToReferralContact.get(o.clientContactId)!;
-      if (!byRc.has(rcId)) byRc.set(rcId, { rcId, won: [], lost: [], total: 0 });
+      if (!byRc.has(rcId)) byRc.set(rcId, { rcId, won: [], lost: [], active: [], total: 0 });
       const row = byRc.get(rcId)!;
       if (o.stage === "Won") { row.won.push(o); row.total += o.estimatedValue; }
       else if (o.stage === "Lost") row.lost.push(o);
-      else { row.won.push(o); row.total += o.estimatedValue; } // active counts as referred
+      else row.active.push(o);
     });
     return Array.from(byRc.values()).sort((a, b) => b.total - a.total || b.won.length - a.won.length);
   }, [lbOpps, ccToReferralContact]);
@@ -3344,6 +3345,7 @@ function DashboardTab({
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-6">#</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Partner</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Won</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Active</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Lost</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Win %</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-40 hidden md:table-cell">Won Clients</th>
@@ -3360,7 +3362,7 @@ function DashboardTab({
                   const barPct = Math.round((row.total / lbMaxValue) * 100);
                   const wonClients = row.won
                     .map(o => clientContacts.find(cc => cc.id === o.clientContactId)?.name)
-                    .filter(Boolean)
+                    .filter((n): n is string => !!n)
                     .slice(0, 3);
                   return (
                     <tr key={row.rcId} className={cn("hover:bg-gray-50 transition-colors", idx === 0 && "bg-amber-50/40")}>
@@ -3378,7 +3380,10 @@ function DashboardTab({
                         <span className="font-semibold text-forest-700">{row.won.length}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="text-red-500">{row.lost.length}</span>
+                        <span className="text-blue-500">{row.active.length || <span className="text-gray-300">—</span>}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-red-500">{row.lost.length || <span className="text-gray-300">—</span>}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         {wr !== null ? (
