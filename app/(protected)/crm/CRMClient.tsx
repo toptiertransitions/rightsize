@@ -2827,6 +2827,10 @@ function DashboardTab({
   const [dateRange, setDateRange] = useState<DateRange>("all");
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [lbDays, setLbDays] = useState<30 | 60 | 90 | 180 | 365>(90);
+  const [spotlightId, setSpotlightId] = useState<string>("");
+  const [spotlightQuery, setSpotlightQuery] = useState<string>("");
+  const [spotlightOpen, setSpotlightOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/crm/activities")
@@ -2946,6 +2950,103 @@ function DashboardTab({
     { key: "quarter", label: "This Quarter" },
     { key: "year", label: "This Year" },
   ];
+
+  // ── Referral Leaderboard data ───────────────────────────────────────────
+  const lbCutoff = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - lbDays);
+    return d;
+  }, [lbDays]);
+
+  // Build a map: clientContactId → referralContactId (via referralPartnerId)
+  const ccToReferralContact = useMemo(() => {
+    const m = new Map<string, string>();
+    clientContacts.forEach(cc => { if (cc.referralPartnerId) m.set(cc.id, cc.referralPartnerId); });
+    return m;
+  }, [clientContacts]);
+
+  // All opps within the lookback window, attributed to a referral contact
+  const lbOpps = useMemo(() => {
+    return opportunities.filter(o => {
+      const dateStr = o.wonAt || o.lostAt || o.createdAt;
+      return new Date(dateStr) >= lbCutoff && ccToReferralContact.has(o.clientContactId);
+    });
+  }, [opportunities, lbCutoff, ccToReferralContact]);
+
+  // Aggregate per referral contact
+  const leaderboardRows = useMemo(() => {
+    const byRc = new Map<string, {
+      rcId: string;
+      won: ClientOpportunity[];
+      lost: ClientOpportunity[];
+      total: number;
+    }>();
+    lbOpps.forEach(o => {
+      const rcId = ccToReferralContact.get(o.clientContactId)!;
+      if (!byRc.has(rcId)) byRc.set(rcId, { rcId, won: [], lost: [], total: 0 });
+      const row = byRc.get(rcId)!;
+      if (o.stage === "Won") { row.won.push(o); row.total += o.estimatedValue; }
+      else if (o.stage === "Lost") row.lost.push(o);
+      else { row.won.push(o); row.total += o.estimatedValue; } // active counts as referred
+    });
+    return Array.from(byRc.values()).sort((a, b) => b.total - a.total || b.won.length - a.won.length);
+  }, [lbOpps, ccToReferralContact]);
+
+  const lbMaxValue = Math.max(1, ...leaderboardRows.map(r => r.total));
+
+  // ── Partner Spotlight data ──────────────────────────────────────────────
+  const spotlightContact = useMemo(() => referralContacts.find(rc => rc.id === spotlightId) || null, [referralContacts, spotlightId]);
+  const spotlightCompany = useMemo(() => spotlightContact ? companies.find(c => c.id === spotlightContact.referralCompanyId) || null : null, [companies, spotlightContact]);
+
+  // All opps attributed to this referral contact
+  const spotlightOpps = useMemo(() => {
+    if (!spotlightId) return [];
+    const ccIds = new Set(clientContacts.filter(cc => cc.referralPartnerId === spotlightId).map(cc => cc.id));
+    return opportunities.filter(o => ccIds.has(o.clientContactId));
+  }, [spotlightId, clientContacts, opportunities]);
+
+  // Monthly trend — last 12 months
+  const spotlightMonthly = useMemo(() => {
+    const months: { label: string; referred: number; wonValue: number }[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const y = now.getFullYear();
+      const m = now.getMonth() - i;
+      const date = new Date(y, m, 1);
+      const label = date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      const moOpps = spotlightOpps.filter(o => {
+        const d = new Date(o.createdAt);
+        return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth();
+      });
+      months.push({
+        label,
+        referred: moOpps.length,
+        wonValue: moOpps.filter(o => o.stage === "Won").reduce((s, o) => s + o.estimatedValue, 0),
+      });
+    }
+    return months;
+  }, [spotlightOpps]);
+
+  const spotlightMaxWon = Math.max(1, ...spotlightMonthly.map(m => m.wonValue));
+
+  // Spotlight activities (from activities array already loaded)
+  const spotlightActivities = useMemo(() => {
+    if (!spotlightContact) return [];
+    const spotlightClientContactIds = new Set(clientContacts.filter(cc => cc.referralPartnerId === spotlightId).map(cc => cc.id));
+    const spotlightOppIds = new Set(opportunities.filter(o => spotlightClientContactIds.has(o.clientContactId)).map(o => o.id));
+    return activities
+      .filter(a => spotlightOppIds.has(a.opportunityId) || (a.clientContactId && spotlightClientContactIds.has(a.clientContactId)))
+      .sort((a, b) => (b.activityDate || b.createdAt).localeCompare(a.activityDate || a.createdAt))
+      .slice(0, 5);
+  }, [spotlightContact, spotlightId, clientContacts, opportunities, activities]);
+
+  const spotlightFiltered = useMemo(() => {
+    const q = spotlightQuery.toLowerCase();
+    if (!q) return referralContacts.slice().sort((a, b) => a.name.localeCompare(b.name));
+    return referralContacts
+      .filter(rc => rc.name.toLowerCase().includes(q) || (companies.find(c => c.id === rc.referralCompanyId)?.name || "").toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [referralContacts, companies, spotlightQuery]);
 
   return (
     <div className="space-y-8">
@@ -3207,6 +3308,301 @@ function DashboardTab({
                 <p className="text-xs text-forest-600">all partners →</p>
               </div>
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Referral Leaderboard ─────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Referral Leaderboard</h2>
+          <div className="flex items-center gap-1">
+            {([30, 60, 90, 180, 365] as const).map(d => (
+              <button
+                key={d}
+                onClick={() => setLbDays(d)}
+                className={cn(
+                  "px-2.5 py-1 text-xs rounded-md font-medium transition-colors",
+                  lbDays === d ? "bg-forest-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                )}
+              >
+                {d === 365 ? "1y" : `${d}d`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {leaderboardRows.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+            <p className="text-sm text-gray-400">No referral data in the last {lbDays} days.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-6">#</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Partner</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Won</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Lost</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Win %</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-40 hidden md:table-cell">Won Clients</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Value</th>
+                  <th className="px-4 py-3 hidden lg:table-cell w-36"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {leaderboardRows.map((row, idx) => {
+                  const rc = referralContacts.find(r => r.id === row.rcId);
+                  const company = rc ? companies.find(c => c.id === rc.referralCompanyId) : null;
+                  const closed = row.won.length + row.lost.length;
+                  const wr = closed > 0 ? Math.round((row.won.length / closed) * 100) : null;
+                  const barPct = Math.round((row.total / lbMaxValue) * 100);
+                  const wonClients = row.won
+                    .map(o => clientContacts.find(cc => cc.id === o.clientContactId)?.name)
+                    .filter(Boolean)
+                    .slice(0, 3);
+                  return (
+                    <tr key={row.rcId} className={cn("hover:bg-gray-50 transition-colors", idx === 0 && "bg-amber-50/40")}>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold",
+                          idx === 0 ? "bg-amber-400 text-white" : idx === 1 ? "bg-gray-300 text-gray-700" : idx === 2 ? "bg-orange-300 text-white" : "bg-gray-100 text-gray-500"
+                        )}>{idx + 1}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{rc?.name ?? "—"}</p>
+                        {company && <p className="text-xs text-gray-400">{company.name}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-semibold text-forest-700">{row.won.length}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-red-500">{row.lost.length}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {wr !== null ? (
+                          <span className={cn("text-xs font-medium", wr >= 60 ? "text-forest-600" : wr >= 40 ? "text-amber-600" : "text-red-500")}>
+                            {wr}%
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <p className="text-xs text-gray-600 truncate max-w-[160px]">
+                          {wonClients.length > 0 ? wonClients.join(", ") + (row.won.length > 3 ? ` +${row.won.length - 3}` : "") : <span className="text-gray-300">—</span>}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                        {row.total > 0 ? fmt(row.total) : <span className="text-gray-300 font-normal text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <div className="w-full bg-gray-100 rounded-full h-1.5">
+                          <div
+                            className={cn("h-1.5 rounded-full transition-all", idx === 0 ? "bg-amber-400" : "bg-forest-400")}
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Partner Spotlight ─────────────────────────────────────────── */}
+      <div className="pb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Partner Spotlight</h2>
+        </div>
+
+        {/* Combobox */}
+        <div className="relative mb-6 max-w-xs">
+          <input
+            type="text"
+            placeholder="Search referral partner…"
+            value={spotlightQuery}
+            onFocus={() => setSpotlightOpen(true)}
+            onBlur={() => setTimeout(() => setSpotlightOpen(false), 150)}
+            onChange={e => { setSpotlightQuery(e.target.value); setSpotlightId(""); setSpotlightOpen(true); }}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white"
+          />
+          {spotlightOpen && spotlightFiltered.length > 0 && (
+            <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+              {spotlightFiltered.slice(0, 30).map(rc => {
+                const co = companies.find(c => c.id === rc.referralCompanyId);
+                return (
+                  <button
+                    key={rc.id}
+                    onMouseDown={() => { setSpotlightId(rc.id); setSpotlightQuery(rc.name); setSpotlightOpen(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-forest-50 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-900">{rc.name}</p>
+                    {co && <p className="text-xs text-gray-400">{co.name}</p>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {spotlightContact && (
+          <div className="space-y-6">
+            {/* Header card */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{spotlightContact.name}</h3>
+                  {spotlightContact.title && <p className="text-sm text-gray-500">{spotlightContact.title}</p>}
+                  {spotlightCompany && <p className="text-xs text-forest-600 font-medium mt-0.5">{spotlightCompany.name}</p>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {spotlightContact.stage && (
+                    <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", REF_STAGE_COLORS[spotlightContact.stage] || "bg-gray-100 text-gray-600")}>
+                      {spotlightContact.stage}
+                    </span>
+                  )}
+                  {spotlightContact.email && (
+                    <a href={`mailto:${spotlightContact.email}`} className="text-xs text-forest-600 hover:underline">{spotlightContact.email}</a>
+                  )}
+                  {spotlightContact.phone && (
+                    <a href={`tel:${spotlightContact.phone}`} className="text-xs text-gray-500 hover:underline">{spotlightContact.phone}</a>
+                  )}
+                </div>
+              </div>
+
+              {/* Bio details */}
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {spotlightContact.interests && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Interests</p>
+                    <p className="text-sm text-gray-700">{spotlightContact.interests}</p>
+                  </div>
+                )}
+                {spotlightContact.coffeeOrder && (
+                  <div className="bg-amber-50 rounded-lg p-3">
+                    <p className="text-xs text-amber-500 uppercase tracking-wide mb-1">Coffee Order</p>
+                    <p className="text-sm text-amber-900">{spotlightContact.coffeeOrder}</p>
+                  </div>
+                )}
+                {spotlightContact.orgsGroups && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Orgs / Groups</p>
+                    <p className="text-sm text-gray-700">{spotlightContact.orgsGroups}</p>
+                  </div>
+                )}
+                {spotlightContact.notes && (
+                  <div className="bg-blue-50 rounded-lg p-3 sm:col-span-2 lg:col-span-3">
+                    <p className="text-xs text-blue-400 uppercase tracking-wide mb-1">Notes</p>
+                    <p className="text-sm text-blue-900 whitespace-pre-line">{spotlightContact.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Stats + Monthly trend + Lost + Recent Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Stats */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">All-Time Stats</p>
+                <div className="space-y-3">
+                  {[
+                    { label: "Total Referred", value: spotlightOpps.length, color: "text-gray-900" },
+                    { label: "Won", value: spotlightOpps.filter(o => o.stage === "Won").length, color: "text-forest-600" },
+                    { label: "Lost", value: spotlightOpps.filter(o => o.stage === "Lost").length, color: "text-red-500" },
+                    { label: "Active", value: spotlightOpps.filter(o => !["Won","Lost"].includes(o.stage)).length, color: "text-blue-600" },
+                  ].map(stat => (
+                    <div key={stat.label} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">{stat.label}</span>
+                      <span className={cn("text-sm font-bold", stat.color)}>{stat.value}</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Won Value</span>
+                    <span className="text-sm font-bold text-gray-900">
+                      {fmt(spotlightOpps.filter(o => o.stage === "Won").reduce((s, o) => s + o.estimatedValue, 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly bar chart — won value */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 lg:col-span-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Monthly Won Value (last 12 months)</p>
+                <div className="flex items-end gap-1 h-28">
+                  {spotlightMonthly.map(mo => {
+                    const barH = Math.round((mo.wonValue / spotlightMaxWon) * 100);
+                    return (
+                      <div key={mo.label} className="flex-1 flex flex-col items-center gap-1 group">
+                        <div className="relative w-full flex items-end justify-center" style={{ height: "80px" }}>
+                          <div
+                            className="w-full bg-forest-400 rounded-t-sm group-hover:bg-forest-500 transition-colors"
+                            style={{ height: `${Math.max(2, barH)}%` }}
+                            title={`${mo.label}: ${fmt(mo.wonValue)}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-gray-400 rotate-45 origin-left translate-y-1 hidden sm:block">{mo.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Lost opportunities */}
+            {spotlightOpps.filter(o => o.stage === "Lost").length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Lost Opportunities</p>
+                <div className="space-y-2">
+                  {spotlightOpps
+                    .filter(o => o.stage === "Lost")
+                    .sort((a, b) => (b.lostAt || b.createdAt).localeCompare(a.lostAt || a.createdAt))
+                    .map(o => {
+                      const cc = clientContacts.find(c => c.id === o.clientContactId);
+                      return (
+                        <div key={o.id} className="flex items-center justify-between text-sm">
+                          <div>
+                            <span className="font-medium text-gray-800">{cc?.name ?? "—"}</span>
+                            {o.lostReason && <span className="ml-2 text-xs text-gray-400">· {o.lostReason}</span>}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            {o.estimatedValue > 0 && <span>{fmt(o.estimatedValue)}</span>}
+                            {o.lostAt && <span>{new Date(o.lostAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* Recent activity */}
+            {spotlightActivities.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Recent Activity</p>
+                <div className="space-y-3">
+                  {spotlightActivities.map(a => (
+                    <div key={a.id} className="flex gap-3">
+                      <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs">
+                        {a.type === "Call" ? "☎" : a.type === "Email" ? "✉" : a.type === "Meeting" ? "👤" : a.type === "Text Message" ? "💬" : "·"}
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-700">{a.type} · {(a.activityDate || a.createdAt).slice(0, 10)}</p>
+                        {a.note && <p className="text-xs text-gray-500 line-clamp-2">{a.note}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!spotlightContact && !spotlightQuery && (
+          <div className="bg-white rounded-xl border border-dashed border-gray-200 p-8 text-center">
+            <p className="text-sm text-gray-400">Search for a referral partner above to see their spotlight.</p>
           </div>
         )}
       </div>
