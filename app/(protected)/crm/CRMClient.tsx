@@ -2973,7 +2973,7 @@ function DashboardTab({
     });
   }, [opportunities, lbCutoff, ccToReferralContact]);
 
-  // Aggregate per referral contact
+  // Aggregate per referral contact — seed ALL referral contacts so everyone appears
   const leaderboardRows = useMemo(() => {
     const byRc = new Map<string, {
       rcId: string;
@@ -2982,16 +2982,22 @@ function DashboardTab({
       active: ClientOpportunity[];
       total: number;
     }>();
+    // Seed every referral contact with an empty row
+    referralContacts.forEach(rc => byRc.set(rc.id, { rcId: rc.id, won: [], lost: [], active: [], total: 0 }));
+    // Populate from opps in the window
     lbOpps.forEach(o => {
       const rcId = ccToReferralContact.get(o.clientContactId)!;
-      if (!byRc.has(rcId)) byRc.set(rcId, { rcId, won: [], lost: [], active: [], total: 0 });
-      const row = byRc.get(rcId)!;
+      const row = byRc.get(rcId);
+      if (!row) return;
       if (o.stage === "Won") { row.won.push(o); row.total += o.estimatedValue; }
       else if (o.stage === "Lost") row.lost.push(o);
       else row.active.push(o);
     });
-    return Array.from(byRc.values()).sort((a, b) => b.total - a.total || b.won.length - a.won.length);
-  }, [lbOpps, ccToReferralContact]);
+    return Array.from(byRc.values()).sort((a, b) =>
+      b.total - a.total ||
+      (b.won.length + b.active.length + b.lost.length) - (a.won.length + a.active.length + a.lost.length)
+    );
+  }, [referralContacts, lbOpps, ccToReferralContact]);
 
   const lbMaxValue = Math.max(1, ...leaderboardRows.map(r => r.total));
 
@@ -3029,6 +3035,7 @@ function DashboardTab({
   }, [spotlightOpps]);
 
   const spotlightMaxWon = Math.max(1, ...spotlightMonthly.map(m => m.wonValue));
+  const spotlightMaxVolume = Math.max(1, ...spotlightMonthly.map(m => m.referred));
 
   // Spotlight activities (from activities array already loaded)
   const spotlightActivities = useMemo(() => {
@@ -3463,7 +3470,18 @@ function DashboardTab({
                   {spotlightContact.title && <p className="text-sm text-gray-500">{spotlightContact.title}</p>}
                   {spotlightCompany && <p className="text-xs text-forest-600 font-medium mt-0.5">{spotlightCompany.name}</p>}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
+                  {spotlightCompany?.priority && (spotlightCompany.priority as string) !== "" && (
+                    <span className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1",
+                      spotlightCompany.priority === "High" ? "bg-red-100 text-red-700" :
+                      spotlightCompany.priority === "Medium" ? "bg-amber-100 text-amber-700" :
+                      "bg-gray-100 text-gray-600"
+                    )}>
+                      <span>{spotlightCompany.priority === "High" ? "🚩" : spotlightCompany.priority === "Medium" ? "🟡" : "⚪"}</span>
+                      {spotlightCompany.priority} Priority
+                    </span>
+                  )}
                   {spotlightContact.stage && (
                     <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", REF_STAGE_COLORS[spotlightContact.stage] || "bg-gray-100 text-gray-600")}>
                       {spotlightContact.stage}
@@ -3533,8 +3551,30 @@ function DashboardTab({
                 </div>
               </div>
 
+              {/* Monthly referral volume chart */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Referral Volume (last 12 months)</p>
+                <div className="flex items-end gap-1 h-28">
+                  {spotlightMonthly.map(mo => {
+                    const barH = Math.round((mo.referred / spotlightMaxVolume) * 100);
+                    return (
+                      <div key={mo.label} className="flex-1 flex flex-col items-center gap-1 group">
+                        <div className="relative w-full flex items-end justify-center" style={{ height: "80px" }}>
+                          <div
+                            className="w-full bg-blue-400 rounded-t-sm group-hover:bg-blue-500 transition-colors"
+                            style={{ height: `${Math.max(mo.referred > 0 ? 8 : 2, barH)}%` }}
+                            title={`${mo.label}: ${mo.referred} referral${mo.referred !== 1 ? "s" : ""}`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-gray-400 rotate-45 origin-left translate-y-1 hidden sm:block">{mo.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Monthly bar chart — won value */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 lg:col-span-2">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Monthly Won Value (last 12 months)</p>
                 <div className="flex items-end gap-1 h-28">
                   {spotlightMonthly.map(mo => {
@@ -3544,7 +3584,7 @@ function DashboardTab({
                         <div className="relative w-full flex items-end justify-center" style={{ height: "80px" }}>
                           <div
                             className="w-full bg-forest-400 rounded-t-sm group-hover:bg-forest-500 transition-colors"
-                            style={{ height: `${Math.max(2, barH)}%` }}
+                            style={{ height: `${Math.max(mo.wonValue > 0 ? 8 : 2, barH)}%` }}
                             title={`${mo.label}: ${fmt(mo.wonValue)}`}
                           />
                         </div>
