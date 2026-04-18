@@ -8,7 +8,9 @@ import {
   getGmailToken,
   saveGmailToken,
   deleteGmailToken,
+  getQBOToken,
 } from "@/lib/airtable";
+import { getValidQBOToken } from "@/lib/qbo";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -146,14 +148,59 @@ async function checkAndRefreshGmailTokens(
   return results;
 }
 
+// ─── QuickBooks integration check ─────────────────────────────────────────────
+async function checkQuickBooksIntegration(): Promise<{
+  ok: boolean;
+  companyName: string;
+  realmId?: string;
+  wasRefreshed?: boolean;
+  error?: string;
+}> {
+  try {
+    const stored = await getQBOToken().catch(() => null);
+    if (!stored) {
+      return { ok: false, companyName: "", error: "No QuickBooks connection found — reconnect at /admin/invoicing" };
+    }
+
+    // getValidQBOToken attempts a refresh if the access token is near expiry,
+    // and clears the stored token + returns null if the refresh token is revoked.
+    const tokenBefore = stored.expiresAt;
+    const valid = await getValidQBOToken().catch((e: Error) => {
+      throw e;
+    });
+
+    if (!valid) {
+      return {
+        ok: false,
+        companyName: stored.companyName || "",
+        error: "Token revoked — reconnect QuickBooks at /admin/invoicing",
+      };
+    }
+
+    const freshStored = await getQBOToken().catch(() => stored);
+    const wasRefreshed = freshStored?.expiresAt !== tokenBefore;
+
+    return {
+      ok: true,
+      companyName: freshStored?.companyName || stored.companyName || "",
+      realmId: valid.realmId,
+      wasRefreshed,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, companyName: "", error: `QBO error: ${msg}` };
+  }
+}
+
 // ─── HTML email builder ────────────────────────────────────────────────────────
 function buildHealthEmail(
   calResult: { ok: boolean; email: string; error?: string },
   gmailResults: GmailCheckResult[],
+  qboResult: { ok: boolean; companyName: string; realmId?: string; wasRefreshed?: boolean; error?: string },
   checkedAt: string
 ): string {
-  const allOk = calResult.ok && gmailResults.every((r) => r.ok);
-  const failCount = (calResult.ok ? 0 : 1) + gmailResults.filter((r) => !r.ok).length;
+  const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok;
+  const failCount = (calResult.ok ? 0 : 1) + gmailResults.filter((r) => !r.ok).length + (qboResult.ok ? 0 : 1);
 
   const statusBadge = (ok: boolean) =>
     ok
@@ -236,6 +283,27 @@ function buildHealthEmail(
         <tbody>${gmailRows}</tbody>
       </table>` : ""}
 
+      <!-- QuickBooks Integration -->
+      <h2 style="font-family:Georgia,serif;font-size:17px;font-weight:400;color:#1f2937;margin:28px 0 16px;">QuickBooks Online</h2>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Company</th>
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Realm ID</th>
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Status</th>
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:12px 16px;font-family:Inter,sans-serif;font-size:14px;color:#1f2937;">${qboResult.companyName || "—"}</td>
+            <td style="padding:12px 16px;font-family:Inter,sans-serif;font-size:13px;color:#6b7280;">${qboResult.realmId || "—"}</td>
+            <td style="padding:12px 16px;">${statusBadge(qboResult.ok)}${qboResult.wasRefreshed ? `<br><span style="color:#6b7280;font-size:11px;">Token proactively refreshed</span>` : ""}</td>
+            <td style="padding:12px 16px;font-family:Inter,sans-serif;font-size:13px;color:#dc2626;">${qboResult.error || ""}</td>
+          </tr>
+        </tbody>
+      </table>
+
       <!-- Reconnect Instructions -->
       ${failCount > 0 ? `
       <div style="margin-top:24px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 20px;">
@@ -243,6 +311,7 @@ function buildHealthEmail(
         <ul style="margin:0;padding-left:20px;font-family:Inter,sans-serif;font-size:13px;color:#78350f;line-height:1.7;">
           <li><strong>Calendar:</strong> Go to <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/calendar-auth" style="color:#92400e;">/admin/calendar-auth</a> and complete the OAuth flow</li>
           <li><strong>Gmail:</strong> The affected staff member should go to their profile page and click "Connect Gmail"</li>
+          <li><strong>QuickBooks:</strong> Go to <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/invoicing" style="color:#92400e;">/admin/invoicing</a> and click "Connect QuickBooks"</li>
         </ul>
       </div>` : ""}
 
@@ -300,9 +369,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Run checks in parallel
-    const [calResult, gmailResults] = await Promise.all([
+    const [calResult, gmailResults, qboResult] = await Promise.all([
       checkCalendarIntegration(),
       checkAndRefreshGmailTokens(staffByClerkId),
+      checkQuickBooksIntegration(),
     ]);
 
     // Supplement admin email lookup with Gmail token emails for env-var admins
@@ -329,12 +399,12 @@ export async function GET(req: NextRequest) {
       hour12: true,
     });
 
-    const allOk = calResult.ok && gmailResults.every((r) => r.ok);
+    const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok;
     const subject = allOk
       ? `✓ Integrations OK — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
       : `⚠ Integration Alert — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-    const html = buildHealthEmail(calResult, gmailResults, checkedAt);
+    const html = buildHealthEmail(calResult, gmailResults, qboResult, checkedAt);
 
     if (adminEmails.length > 0) {
       await resend.emails.send({
@@ -350,6 +420,7 @@ export async function GET(req: NextRequest) {
     const summary = {
       calendar: { ok: calResult.ok, error: calResult.error },
       gmail: gmailResults.map((r) => ({ displayName: r.displayName, ok: r.ok, wasRefreshed: r.wasRefreshed, error: r.error })),
+      quickbooks: { ok: qboResult.ok, companyName: qboResult.companyName, wasRefreshed: qboResult.wasRefreshed, error: qboResult.error },
       emailsSentTo: adminEmails,
       allOk,
     };
