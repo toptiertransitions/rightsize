@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, updateItem, createItemSaleEvent, logFailedSaleSync, getEstateById, createStorefrontBuyer } from "@/lib/airtable";
+import { getItemById, updateItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -15,7 +15,24 @@ async function attemptRecordSale(data: {
   buyerPhone?: string;
   buyerMarketingConsent?: boolean;
   buyerConsentAt?: string;
-}): Promise<{ estateSlug?: string; estateSaleId?: string; estateName?: string }> {
+}): Promise<{ estateSlug?: string; estateSaleId?: string; estateName?: string; alreadyRecorded?: boolean }> {
+  // ── Idempotency check ───────────────────────────────────────────────────────
+  // Stripe can retry webhooks and our own retry loop can re-enter this function.
+  // If a sale event already exists for this payment intent + item, the sale was
+  // already recorded — return early without creating a duplicate.
+  const existing = await getSaleEventByPaymentAndItem(data.stripePaymentIntentId, data.itemId);
+  if (existing) {
+    console.log(`[storefront/sale] Duplicate suppressed — event already exists for PI ${data.stripePaymentIntentId} item ${data.itemId}`);
+    // Still need to return estate info for cache busting
+    const item = await getItemById(data.itemId).catch(() => null);
+    if (item?.primaryRoute === "Estate Sale" && item.estateSaleId) {
+      const estate = await getEstateById(item.estateSaleId).catch(() => null);
+      if (estate) return { estateSlug: estate.slug, estateSaleId: item.estateSaleId, estateName: estate.name, alreadyRecorded: true };
+    }
+    return { alreadyRecorded: true };
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   const item = await getItemById(data.itemId);
   if (!item) throw new Error(`Item ${data.itemId} not found`);
   if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
@@ -124,7 +141,7 @@ export async function POST(req: NextRequest) {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const { estateSlug } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt });
+      const { estateSlug, alreadyRecorded } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt });
 
       // Ping storefront to invalidate ISR cache (item + estate page if applicable)
       const storefrontUrl = process.env.STOREFRONT_URL;
@@ -140,7 +157,7 @@ export async function POST(req: NextRequest) {
         }).catch((e) => console.error("[storefront/sale] Webhook ping failed:", e));
       }
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, alreadyRecorded: alreadyRecorded ?? false });
     } catch (e) {
       lastError = e;
       console.error(`[storefront/sale] Attempt ${attempt} failed:`, e);

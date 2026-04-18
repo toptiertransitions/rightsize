@@ -4183,6 +4183,16 @@ export async function getSaleEventBySquarePaymentId(paymentId: string): Promise<
   return mapItemSaleEvent(data.records[0] as AirtableRecord);
 }
 
+// Check for an existing sale event for a specific item + payment intent (idempotency check)
+export async function getSaleEventByPaymentAndItem(paymentId: string, itemId: string): Promise<ItemSaleEvent | null> {
+  const formula = encodeURIComponent(`AND({SquarePaymentId} = "${paymentId}", {ItemId} = "${itemId}")`);
+  const res = await saleEventsFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapItemSaleEvent(data.records[0] as AirtableRecord);
+}
+
 export async function createItemSaleEvent(data: Omit<ItemSaleEvent, "id" | "createdAt">): Promise<ItemSaleEvent> {
   const fields: Record<string, unknown> = {
     ItemId: data.itemId,
