@@ -21,7 +21,7 @@ Analyze the photo of this household item and return a JSON object with EXACTLY t
   "route_reasoning": "1-2 sentences explaining why this route is best",
   "consignment_category": "If consignment-worthy, the best shop category (e.g., 'Antique Furniture', 'Vintage Jewelry'), else empty string",
   "listing_title_ebay": "SEO-optimized eBay title under 80 chars with key details",
-  "listing_description_ebay": "2-3 paragraph eBay description — condition, dimensions if visible, history, shipping notes",
+  "listing_description_ebay": "2-3 paragraph description — condition, provenance/history, notable features. Do NOT include dimensions or measurements (those are captured separately). Do NOT include shipping instructions or packaging guidance.",
   "listing_fb": "Short casual Facebook Marketplace post (2-3 sentences)",
   "listing_offerup": "Short OfferUp listing (1-2 sentences, price-focused)",
   "staff_tips": "Practical tip for the TTT helper — how to handle, photograph better, where to list, watch-outs"
