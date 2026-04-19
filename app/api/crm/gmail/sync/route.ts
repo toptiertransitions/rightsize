@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getActivitiesForOpportunity, createActivity } from "@/lib/airtable";
+import { getSystemRole, getActivitiesForOpportunity, createActivity, getAllGmailTokens } from "@/lib/airtable";
 import { getValidAccessToken, searchGmailMessages, getGmailMessage } from "@/lib/gmail";
 
 export async function POST(req: NextRequest) {
@@ -17,44 +17,59 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing opportunityId or query" }, { status: 400 });
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken(userId);
-  } catch (e) {
-    const revoked = e instanceof Error && e.message === "GMAIL_TOKEN_REVOKED";
-    console.error("[gmail/sync] Token error:", String(e));
-    return NextResponse.json({ error: revoked ? "Gmail reconnection required" : "Gmail token error", needs_reconnect: revoked }, { status: 401 });
-  }
   console.log("[gmail/sync] query:", query);
 
-  const messages = await searchGmailMessages(accessToken, query, 20);
-  console.log("[gmail/sync] messages found:", messages.length);
+  // Search ALL connected Gmail accounts so emails sent by any team member are found,
+  // regardless of which user's account is currently logged in.
+  const allTokens = await getAllGmailTokens().catch(() => []);
+  if (allTokens.length === 0) {
+    return NextResponse.json({ error: "No Gmail accounts connected" }, { status: 401 });
+  }
 
   // Get existing activities to skip already-imported messages
   const existing = await getActivitiesForOpportunity(opportunityId);
   const importedIds = new Set(existing.filter((a) => a.gmailMessageId).map((a) => a.gmailMessageId!));
 
+  // Collect all message IDs across accounts to deduplicate (same message can appear in multiple accounts)
+  const seenMessageIds = new Set<string>(importedIds);
+
   let imported = 0;
-  for (const msg of messages) {
-    if (importedIds.has(msg.id)) continue;
+  let totalFound = 0;
+
+  for (const gmailToken of allTokens) {
+    let accessToken: string;
     try {
-      const detail = await getGmailMessage(accessToken, msg.id);
-      await createActivity({
-        opportunityId,
-        type: "Email",
-        note: `Subject: ${detail.subject}\nFrom: ${detail.from}\n\n${detail.snippet}`,
-        isGmailImported: true,
-        gmailMessageId: msg.id,
-        gmailThreadId: detail.threadId,
-        activityDate: detail.date ? new Date(detail.date).toISOString() : new Date().toISOString(),
-        createdByClerkId: userId,
-      });
-      imported++;
-    } catch (err) {
-      console.error("[gmail/sync] Failed to import Gmail message:", msg.id, err);
+      accessToken = await getValidAccessToken(gmailToken.clerkUserId);
+    } catch (e) {
+      console.warn(`[gmail/sync] Skipping token for ${gmailToken.clerkUserId} — ${String(e)}`);
+      continue;
+    }
+
+    const messages = await searchGmailMessages(accessToken, query, 20).catch(() => []);
+    totalFound += messages.length;
+
+    for (const msg of messages) {
+      if (seenMessageIds.has(msg.id)) continue;
+      seenMessageIds.add(msg.id);
+      try {
+        const detail = await getGmailMessage(accessToken, msg.id);
+        await createActivity({
+          opportunityId,
+          type: "Email",
+          note: `Subject: ${detail.subject}\nFrom: ${detail.from}\n\n${detail.snippet}`,
+          isGmailImported: true,
+          gmailMessageId: msg.id,
+          gmailThreadId: detail.threadId,
+          activityDate: detail.date ? new Date(detail.date).toISOString() : new Date().toISOString(),
+          createdByClerkId: userId,
+        });
+        imported++;
+      } catch (err) {
+        console.error("[gmail/sync] Failed to import Gmail message:", msg.id, err);
+      }
     }
   }
 
-  console.log("[gmail/sync] imported:", imported);
-  return NextResponse.json({ imported, messagesFound: messages.length, query });
+  console.log(`[gmail/sync] searched ${allTokens.length} account(s), found ${totalFound} messages, imported ${imported}`);
+  return NextResponse.json({ imported, messagesFound: totalFound, query });
 }

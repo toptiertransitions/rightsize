@@ -405,12 +405,7 @@ export async function getItemById(id: string): Promise<Item | null> {
   try {
     const base = getBase();
     const record = await base(AIRTABLE_TABLES.ITEMS).find(id);
-    const item = mapItem(record);
-    if (!item.pickupLocation) {
-      const tenant = await getTenantById(item.tenantId);
-      if (tenant?.city) item.pickupLocation = tenant.city;
-    }
-    return item;
+    return mapItem(record);
   } catch {
     return null;
   }
@@ -436,24 +431,13 @@ export async function getReservedStorefrontItems(): Promise<{ id: string; itemNa
 
 export async function getProFoundFindsStorefrontItems(): Promise<Item[]> {
   const base = getBase();
-  const [records, allTenants] = await Promise.all([
-    base(AIRTABLE_TABLES.ITEMS)
-      .select({
-        filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", OR({Status} = "Listed", {Status} = "In Cart"), {StorefrontActive})`,
-        sort: [{ field: "CreatedAt", direction: "desc" }],
-      })
-      .all(),
-    getTenants(),
-  ]);
-  const cityByTenant = new Map(allTenants.map(t => [t.id, t.city ?? ""]));
-  return records.map(record => {
-    const item = mapItem(record);
-    if (!item.pickupLocation) {
-      const city = cityByTenant.get(item.tenantId);
-      if (city) item.pickupLocation = city;
-    }
-    return item;
-  });
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND({PrimaryRoute} = "ProFoundFinds Consignment", OR({Status} = "Listed", {Status} = "In Cart"), {StorefrontActive})`,
+      sort: [{ field: "CreatedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(record => mapItem(record));
 }
 
 export async function getItemByOnlineSlug(slug: string): Promise<Item | null> {
@@ -466,12 +450,7 @@ export async function getItemByOnlineSlug(slug: string): Promise<Item | null> {
       })
       .all();
     if (!records.length) return null;
-    const item = mapItem(records[0]);
-    if (!item.pickupLocation) {
-      const tenant = await getTenantById(item.tenantId);
-      if (tenant?.city) item.pickupLocation = tenant.city;
-    }
-    return item;
+    return mapItem(records[0]);
   } catch {
     return null;
   }
