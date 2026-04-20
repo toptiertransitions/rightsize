@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/integration-health",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/token-keepalive",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

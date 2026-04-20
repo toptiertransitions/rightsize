@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
+import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -267,6 +268,39 @@ export async function PATCH(req: NextRequest) {
   }
 
   const item = await updateItem(id as string, updates as never);
+
+  // Auto-sync to Square when item transitions to Listed + ProFoundFinds Consignment
+  const shouldSquareSync = (
+    item.status === "Listed" &&
+    item.primaryRoute === "ProFoundFinds Consignment" &&
+    (newStatus === "Listed" || resolvedNewRoute === "ProFoundFinds Consignment")
+  );
+  if (shouldSquareSync) {
+    const locationId = process.env.SQUARE_LOCATION_ID;
+    if (locationId && item.barcodeNumber) {
+      try {
+        const { catalogItemId, catalogVariationId } = await upsertSquareCatalogItem({
+          existingItemId: item.squareCatalogItemId,
+          existingVariationId: item.squareCatalogVariationId,
+          name: item.itemName,
+          priceCents: Math.round((item.valueMid ?? 0) * 100),
+          sku: item.barcodeNumber,
+          locationId,
+        });
+        await updateItem(item.id, {
+          squareCatalogItemId: catalogItemId,
+          squareCatalogVariationId: catalogVariationId,
+          squareSyncedAt: new Date().toISOString(),
+        });
+        item.squareCatalogItemId = catalogItemId;
+        item.squareCatalogVariationId = catalogVariationId;
+        item.squareSyncedAt = new Date().toISOString();
+        console.log(`[auto-square-sync] Synced item ${item.id} (${item.itemName})`);
+      } catch (e) {
+        console.error(`[auto-square-sync] Failed for item ${item.id}:`, e);
+      }
+    }
+  }
 
   // Vendor assignment email — currently suppressed
   // if (vendorChanged && newVendorId) {
