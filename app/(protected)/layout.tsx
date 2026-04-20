@@ -21,16 +21,16 @@ export default async function ProtectedLayout({
 
   // For non-staff users, build a tenantId→isTTT map server-side so the Header
   // can show/hide the Invoices link without a client-side fetch (avoids timing bugs).
-  let tttTenantIds: Set<string> | undefined;
+  let tttTenantIds: string[] | undefined;
   if (!isStaff) {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
     if (memberships.length > 0) {
       const tenants = await Promise.all(
         memberships.map(m => getTenantById(m.tenantId).catch(() => null))
       );
-      tttTenantIds = new Set(
-        tenants.filter(t => t && t.isTTT !== false).map(t => t!.id)
-      );
+      tttTenantIds = tenants
+        .filter(t => t && t.isTTT !== false)
+        .map(t => t!.id);
     }
   }
 

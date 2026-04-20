@@ -19,7 +19,7 @@ interface HeaderProps {
   isStaff?: boolean;
   isAdmin?: boolean;
   isSales?: boolean;
-  tttTenantIds?: Set<string>; // non-staff only: tenants where isTTT is true
+  tttTenantIds?: string[]; // non-staff only: tenants where isTTT is true
 }
 
 export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds }: HeaderProps) {
@@ -88,7 +88,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     // Quoting — Manager and Admin; carry current project if one is selected
     ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
     // Invoices — TTT clients (non-staff) only; tttTenantIds is server-determined
-    ...(navTenantId && !isStaff && tttTenantIds?.has(navTenantId) ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    ...(navTenantId && !isStaff && tttTenantIds?.includes(navTenantId) ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
     // CRM + Drips — Admin only
     ...(isAdmin ? [
