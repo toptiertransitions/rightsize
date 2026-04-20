@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -102,6 +102,7 @@ export async function PATCH(req: NextRequest) {
     state: typeof state === "string" ? state : undefined,
     zip: typeof zip === "string" ? zip : undefined,
     estimatedHours: typeof estimatedHours === "number" ? estimatedHours : undefined,
+    estimatedServiceHours: Array.isArray(estimatedServiceHours) ? estimatedServiceHours : undefined,
     isArchived: typeof isArchived === "boolean" ? isArchived : undefined,
     isTTT: resolvedIsTTT,
     isConsignmentOnly: resolvedConsignment,

@@ -228,6 +228,7 @@ interface Props {
   isAdmin: boolean;
   isManager?: boolean;
   estimatedHours?: number;
+  estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   tenantId: string;
   canEditEstimate?: boolean; // defaults to isAdmin; pass false in "All Projects" modes
   planEntries?: PlanEntry[];
@@ -235,13 +236,18 @@ interface Props {
   primaryContract?: Contract | null;
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, tenantId, canEditEstimate, planEntries, services, primaryContract }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, primaryContract }: Props) {
   const serviceList = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
 
   // Derive estimated hours from signed primary contract if available
   const contractServiceHours = primaryContract ? getContractServiceHours(primaryContract) : [];
   const contractTotalHours = primaryContract ? getContractTotalHours(primaryContract) : 0;
   const isLockedByContract = contractTotalHours > 0;
+
+  // Per-service breakdown: contract takes precedence; fall back to calculator estimate
+  const estServiceRows: ServiceHours[] = isLockedByContract
+    ? contractServiceHours
+    : (estimatedServiceHours ?? []).map(r => ({ serviceName: r.serviceName, hours: r.hours }));
 
   const showEstimateEdit = !isLockedByContract && (canEditEstimate ?? isAdmin);
 
@@ -358,8 +364,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
     });
 
   // Per-service remaining breakdown (manager accordion on Remaining card)
-  // Matches contract service names to logged focusArea and scheduled activity by name (case-insensitive)
-  const remainingByService = contractServiceHours.map((sh) => {
+  const remainingByService = estServiceRows.map((sh) => {
     const nameLower = sh.serviceName.toLowerCase();
     const loggedMins = Array.from(focusBreakdownMap.entries())
       .filter(([area]) => area.toLowerCase() === nameLower)
@@ -464,8 +469,8 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
               Locked by signed quote
             </p>
           )}
-          {/* Manager accordion */}
-          {isManager && contractServiceHours.length > 0 && (
+          {/* Per-service accordion — managers see contract breakdown, clients see calculator estimate */}
+          {estServiceRows.length > 0 && (
             <>
               <button
                 onClick={() => setEstOpen(p => !p)}
@@ -476,7 +481,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
               </button>
               {estOpen && (
                 <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
-                  {contractServiceHours.map((sh) => (
+                  {estServiceRows.map((sh) => (
                     <div key={sh.serviceName} className="flex justify-between items-center">
                       <span className="text-[11px] text-gray-500 truncate pr-1">{sh.serviceName}</span>
                       <span className="text-[11px] font-semibold text-gray-700 shrink-0">{fmtHours(sh.hours)}</span>

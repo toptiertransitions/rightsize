@@ -175,6 +175,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     destState: toStr(f["DestState"]) || undefined,
     destZip: toStr(f["DestZip"]) || undefined,
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
+    estimatedServiceHours: (() => { try { const s = toStr(f["EstimatedServiceHours"]); return s ? JSON.parse(s) : undefined; } catch { return undefined; } })(),
     isArchived: f["IsArchived"] === true,
     isTTT: f["IsTTT"] == null ? undefined : f["IsTTT"] === true,
     isConsignmentOnly: f["IsConsignmentOnly"] === true,
@@ -812,7 +813,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -826,6 +827,7 @@ export async function updateTenant(
   if (data.destState !== undefined) fields["DestState"] = data.destState ?? "";
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip ?? "";
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
+  if (data.estimatedServiceHours !== undefined) fields["EstimatedServiceHours"] = data.estimatedServiceHours ? JSON.stringify(data.estimatedServiceHours) : "";
   if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
   if (data.isTTT !== undefined) fields["IsTTT"] = data.isTTT;
   if (data.isConsignmentOnly !== undefined) fields["IsConsignmentOnly"] = data.isConsignmentOnly;

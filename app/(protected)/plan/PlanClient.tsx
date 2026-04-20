@@ -913,12 +913,13 @@ interface PlanClientProps {
   timeEntries: TimeEntry[];
   isAdmin: boolean;
   estimatedHours?: number;
+  estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   tenantOptions?: TenantOption[];  // manager/staff: all projects for name lookup
   currentTenantId?: string;        // which project is selected ("" = All)
   services?: string[];             // dynamic service names from Airtable
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -1444,6 +1445,7 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
         timeEntries={timeEntries}
         isAdmin={isAdmin}
         estimatedHours={estimatedHours}
+        estimatedServiceHours={estimatedServiceHours}
         tenantId={tenantId}
         canEditEstimate={!isAllProjectsMode}
         planEntries={liveEntries}

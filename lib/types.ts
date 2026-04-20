@@ -121,6 +121,7 @@ export interface Tenant {
   destState?: string;
   destZip?: string;
   estimatedHours?: number;
+  estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   isArchived?: boolean;
   isTTT?: boolean;
   isConsignmentOnly?: boolean;

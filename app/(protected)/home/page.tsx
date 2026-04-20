@@ -350,6 +350,7 @@ export default async function DashboardPage({
               services={services}
               currentEstimatedHours={tenant.estimatedHours}
               savedDestinationSqFt={tenant.destinationSqFt}
+              estimatedServiceHours={tenant.estimatedServiceHours}
             />
           </div>
         )}

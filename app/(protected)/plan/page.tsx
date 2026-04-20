@@ -344,6 +344,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         timeEntries={timeEntries}
         isAdmin={isAdmin}
         estimatedHours={tenant.estimatedHours}
+        estimatedServiceHours={tenant.estimatedServiceHours}
         tenantOptions={tenantOptions}
         currentTenantId={tenantId}
         services={serviceNames}
