@@ -66,14 +66,25 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   // Arriving from Catalog/Vendors/Sales/etc. with a project pre-selected keeps it.
   const projectTq = (urlTenantId && !isSentinel) ? `?tenantId=${urlTenantId}` : "";
 
-  // Determine if the current tenant is a TTT project (for Invoices nav visibility)
+  // Determine if the current tenant is a TTT project (for Invoices nav visibility).
+  // Default null = hidden; set to true only when confirmed. LocalStorage cache avoids flash on repeat visits.
   const [isTTTTenant, setIsTTTTenant] = useState<boolean | null>(null);
   useEffect(() => {
     if (!navTenantId || isStaff) { setIsTTTTenant(null); return; }
+    // Read cache first so TTT clients don't see the link flash in
+    try {
+      const cached = localStorage.getItem(`rz_isTTT_${navTenantId}`);
+      if (cached !== null) setIsTTTTenant(cached === "1");
+    } catch {}
     fetch(`/api/tenants/${navTenantId}`)
-      .then(r => r.ok ? r.json() : { isTTT: true })
-      .then(d => setIsTTTTenant(d.isTTT ?? true))
-      .catch(() => setIsTTTTenant(true));
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        const val = (d.isTTT ?? true) as boolean;
+        setIsTTTTenant(val);
+        try { localStorage.setItem(`rz_isTTT_${navTenantId}`, val ? "1" : "0"); } catch {}
+      })
+      .catch(() => {});
   }, [navTenantId, isStaff]);
 
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
@@ -96,8 +107,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     // Quoting — Manager and Admin; carry current project if one is selected
     ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
-    // Invoices — TTT clients (non-staff) only; NonTTT clients excluded
-    ...(navTenantId && !isStaff && isTTTTenant !== false ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    // Invoices — TTT clients (non-staff) only; hidden until fetch confirms isTTT=true
+    ...(navTenantId && !isStaff && isTTTTenant === true ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
     // CRM + Drips — Admin only
     ...(isAdmin ? [
