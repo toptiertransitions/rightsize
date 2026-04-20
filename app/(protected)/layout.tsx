@@ -29,7 +29,7 @@ export default async function ProtectedLayout({
         memberships.map(m => getTenantById(m.tenantId).catch(() => null))
       );
       tttTenantIds = tenants
-        .filter(t => t && t.isTTT !== false)
+        .filter(t => t && t.isTTT === true)
         .map(t => t!.id);
     }
   }
