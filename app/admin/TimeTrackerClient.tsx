@@ -82,7 +82,7 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], expenses: Exp
     "Duration (hrs)",
     "Travel Time (min)", "Unpaid Travel Time (min)", "Payable Travel Time (min)", "Total Payable Time (hrs)",
     "Travel Miles", "Non-Reimbursed Travel Miles", "Travel Reimbursement Owed ($)",
-    "Notes", "Commission ($)", "Expense Reimbursement ($)",
+    "Notes", "Commission ($)", "Expense Reimbursement ($)", "Non-Billable",
   ];
 
   const entryRows = entries
@@ -125,6 +125,7 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], expenses: Exp
         e.notes ?? "",
         "",  // Commission (blank for time entries)
         "",  // Expense Reimbursement (blank for time entries)
+        e.nonBillable ? "Yes" : "",
       ];
     });
 
@@ -149,6 +150,7 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], expenses: Exp
         i.itemName,
         commission,
         "",  // Expense Reimbursement (blank for sale rows)
+        "",  // Non-Billable (blank for sale rows)
       ];
     });
 
@@ -165,6 +167,7 @@ function exportCSV(entries: TimeEntry[], soldItems: SoldItemRow[], expenses: Exp
       e.vendor + (e.description ? ` – ${e.description}` : ""),
       "",               // Commission
       e.total.toFixed(2),
+      "",               // Non-Billable (blank for expense rows)
     ]);
 
   const allRows = [...entryRows, ...saleRows, ...expenseRows].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
@@ -728,6 +731,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
     (shiftActivity && focusAreaOptions.includes(shiftActivity) ? shiftActivity : "");
 
   const [date, setDate] = useState(entry?.date ?? todayISO());
+  const [nonBillable, setNonBillable] = useState(entry?.nonBillable ?? false);
   const [tenantId, setTenantId] = useState(defaultTenantId);
   const [splits, setSplits] = useState<{ focusArea: string; durationMinutes: number }[]>([
     {
@@ -821,9 +825,9 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!tenantId) { setError("Select a project"); return; }
+    if (!nonBillable && !tenantId) { setError("Select a project"); return; }
     if (duration <= 0) { setError("End time must be after start time"); return; }
-    if (splits.length > 1) {
+    if (!nonBillable && splits.length > 1) {
       const splitTotal = splits.reduce((s, sp) => s + sp.durationMinutes, 0);
       if (Math.abs(splitTotal - duration) > 1) {
         setError(`Split durations must sum to ${duration} min (currently ${splitTotal} min)`);
@@ -838,8 +842,8 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
     setError("");
     try {
       const sharedFields = {
-        tenantId,
-        projectName: selectedProject?.name ?? entry?.projectName ?? "",
+        ...(nonBillable ? {} : { tenantId, projectName: selectedProject?.name ?? entry?.projectName ?? "" }),
+        nonBillable: nonBillable || undefined,
         date,
         startTime,
         endTime,
@@ -849,9 +853,9 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
         ...(entry ? { id: entry.id } : {}),
         ...(!entry && forUserId !== currentUserId ? { staffUserId: forUserId, staffName: forUserName } : {}),
       };
-      const body = splits.length > 1
+      const body = (!nonBillable && splits.length > 1)
         ? { ...sharedFields, splits: splits.map(sp => ({ focusArea: sp.focusArea, durationMinutes: sp.durationMinutes })), durationMinutes: duration }
-        : { ...sharedFields, focusArea: splits[0].focusArea, durationMinutes: duration };
+        : { ...sharedFields, focusArea: nonBillable ? "Non-Billable" : splits[0].focusArea, durationMinutes: duration };
       const res = await fetch("/api/time-entries", {
         method: entry ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -922,13 +926,24 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               </div>
             )}
 
-            <div className="w-1/2">
-              <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+            <div className="flex items-end gap-4">
+              <div className="w-1/2">
+                <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+              </div>
+              <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={nonBillable}
+                  onChange={e => setNonBillable(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-forest-500 cursor-pointer"
+                />
+                <span className="text-sm text-gray-300 whitespace-nowrap">Non-Billable</span>
+              </label>
             </div>
 
-            <div>
+            <div className={nonBillable ? "opacity-40 pointer-events-none select-none" : ""}>
               <label className="block text-xs font-medium text-gray-400 mb-1">Project</label>
               {tenants.length === 0 ? (
                 <p className="text-sm text-gray-500 py-2">No projects</p>
@@ -943,6 +958,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
             </div>
 
             {/* Focus Area — single or split */}
+            <div className={nonBillable ? "opacity-40 pointer-events-none select-none" : ""}>
             {splits.length === 1 ? (
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">Focus Area</label>
@@ -1024,6 +1040,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
                 </div>
               </div>
             )}
+            </div>
 
             {/* Start / End — always side-by-side */}
             <div className="grid grid-cols-2 gap-3">

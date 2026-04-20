@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
     : "Staff";
 
   let body: {
-    tenantId: string;
-    projectName: string;
+    tenantId?: string;
+    projectName?: string;
     date: string;
     startTime: string;
     endTime: string;
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
     travelMiles?: number;
     travelMinutes?: number;
     notes?: string;
+    nonBillable?: boolean;
     staffUserId?: string;
     staffName?: string;
     splits?: { focusArea: string; durationMinutes: number }[];
@@ -84,12 +85,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { tenantId, projectName, date, startTime, endTime, splits } = body;
-  const focusArea = body.focusArea;
-  if (!tenantId || !projectName || !date || !startTime || !endTime) {
+  const { date, startTime, endTime, splits } = body;
+  const nonBillable = body.nonBillable ?? false;
+  const tenantId = nonBillable ? "" : (body.tenantId ?? "");
+  const projectName = nonBillable ? "Non-Billable" : (body.projectName ?? "");
+  const focusArea = nonBillable ? ("Non-Billable" as FocusArea) : body.focusArea;
+
+  if (!date || !startTime || !endTime) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
-  if (!focusArea && !(splits && splits.length > 1)) {
+  if (!nonBillable && !tenantId) {
+    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+  if (!nonBillable && !focusArea && !(splits && splits.length > 1)) {
     return NextResponse.json({ error: "Missing focusArea" }, { status: 400 });
   }
 
@@ -143,6 +151,7 @@ export async function POST(req: NextRequest) {
       travelMiles: body.travelMiles,
       travelMinutes: body.travelMinutes,
       notes: body.notes,
+      nonBillable: nonBillable || undefined,
     });
     return NextResponse.json({ entry });
   } catch (e) {
@@ -172,6 +181,7 @@ export async function PATCH(req: NextRequest) {
     travelMiles?: number;
     travelMinutes?: number;
     notes?: string;
+    nonBillable?: boolean;
     splits?: { focusArea: string; durationMinutes: number }[];
   };
   try {

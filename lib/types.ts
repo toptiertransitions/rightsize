@@ -635,6 +635,7 @@ export interface TimeEntry {
   travelMinutes?: number;
   notes?: string;
   createdAt: string;
+  nonBillable?: boolean;    // true = internal/training time, not tied to a project
   hoursPaidAt?: string;    // ISO date — set when hours pay is marked as paid
   mileagePaidAt?: string;  // ISO date — set when mileage pay is marked as paid
   travelPaidAt?: string;   // ISO date — set when travel time pay is marked as paid

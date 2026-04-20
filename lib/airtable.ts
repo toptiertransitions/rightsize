@@ -1794,6 +1794,7 @@ function mapTimeEntry(record: AirtableRecord): TimeEntry {
     travelMiles: f["TravelMiles"] != null ? toNum(f["TravelMiles"]) : undefined,
     travelMinutes: f["TravelMinutes"] != null ? toNum(f["TravelMinutes"]) : undefined,
     notes: toStr(f["Notes"]) || undefined,
+    nonBillable: f["NonBillable"] === true ? true : undefined,
     createdAt: toStr(f["CreatedAt"]),
     hoursPaidAt: toStr(f["HoursPaidAt"]) || undefined,
     mileagePaidAt: toStr(f["MileagePaidAt"]) || undefined,
@@ -1828,7 +1829,7 @@ export async function getTimeEntryById(id: string): Promise<TimeEntry | null> {
 // Optional fields that can be silently dropped if the Airtable table doesn't have them.
 // TravelMiles and TravelMinutes are NOT optional — failing loudly if they're missing is
 // preferable to silently discarding user-entered travel data.
-const OPTIONAL_TIME_ENTRY_FIELDS = ["Notes"];
+const OPTIONAL_TIME_ENTRY_FIELDS = ["Notes", "NonBillable"];
 
 async function timeEntryWrite(path: string, method: "POST" | "PATCH", fields: Record<string, unknown>): Promise<AirtableRecord> {
   const current = { ...fields };
@@ -1866,6 +1867,7 @@ export async function createTimeEntry(data: Omit<TimeEntry, "id" | "createdAt">)
   if (data.travelMiles != null && data.travelMiles > 0) fields["TravelMiles"] = data.travelMiles;
   if (data.travelMinutes != null && data.travelMinutes > 0) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes) fields["Notes"] = data.notes;
+  if (data.nonBillable) fields["NonBillable"] = true;
   return mapTimeEntry(await timeEntryWrite("", "POST", fields));
 }
 
@@ -1885,6 +1887,7 @@ export async function updateTimeEntry(
   if (data.travelMiles != null) fields["TravelMiles"] = data.travelMiles;
   if (data.travelMinutes != null) fields["TravelMinutes"] = data.travelMinutes;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
+  if (data.nonBillable !== undefined) fields["NonBillable"] = data.nonBillable;
   return mapTimeEntry(await timeEntryWrite(`/${id}`, "PATCH", fields));
 }
 
