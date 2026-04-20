@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
@@ -19,9 +19,10 @@ interface HeaderProps {
   isStaff?: boolean;
   isAdmin?: boolean;
   isSales?: boolean;
+  tttTenantIds?: Set<string>; // non-staff only: tenants where isTTT is true
 }
 
-export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales }: HeaderProps) {
+export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds }: HeaderProps) {
   const pathname = usePathname();
   const { actor } = useAuth();
   const { signOut } = useClerk();
@@ -66,27 +67,6 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   // Arriving from Catalog/Vendors/Sales/etc. with a project pre-selected keeps it.
   const projectTq = (urlTenantId && !isSentinel) ? `?tenantId=${urlTenantId}` : "";
 
-  // Determine if the current tenant is a TTT project (for Invoices nav visibility).
-  // Default null = hidden; set to true only when confirmed. LocalStorage cache avoids flash on repeat visits.
-  const [isTTTTenant, setIsTTTTenant] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!navTenantId || isStaff) { setIsTTTTenant(null); return; }
-    // Read cache first so TTT clients don't see the link flash in
-    try {
-      const cached = localStorage.getItem(`rz_isTTT_${navTenantId}`);
-      if (cached !== null) setIsTTTTenant(cached === "1");
-    } catch {}
-    fetch(`/api/tenants/${navTenantId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d) return;
-        const val = (d.isTTT ?? true) as boolean;
-        setIsTTTTenant(val);
-        try { localStorage.setItem(`rz_isTTT_${navTenantId}`, val ? "1" : "0"); } catch {}
-      })
-      .catch(() => {});
-  }, [navTenantId, isStaff]);
-
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
   // Sales users see CRM + Drips + Expenses + Quoting + Invoices
@@ -107,8 +87,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     // Quoting — Manager and Admin; carry current project if one is selected
     ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
-    // Invoices — TTT clients (non-staff) only; hidden until fetch confirms isTTT=true
-    ...(navTenantId && !isStaff && isTTTTenant === true ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    // Invoices — TTT clients (non-staff) only; tttTenantIds is server-determined
+    ...(navTenantId && !isStaff && tttTenantIds?.has(navTenantId) ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
     // CRM + Drips — Admin only
     ...(isAdmin ? [
