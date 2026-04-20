@@ -2944,6 +2944,48 @@ function DashboardTab({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activities, salesReps.map(r => r.clerkUserId).join(",")]);
 
+  // Unique contacts reached per rep per Sunday-to-Saturday week — last 8 weeks
+  const uniqueContactsByRepWeekly = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Roll back to this week's Sunday (getDay() === 0 means already Sunday)
+    const thisSunday = new Date(today);
+    thisSunday.setDate(today.getDate() - today.getDay());
+
+    const weeks: Date[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const wk = new Date(thisSunday);
+      wk.setDate(thisSunday.getDate() - i * 7);
+      weeks.push(wk);
+    }
+
+    return weeks.map((weekStart, idx) => {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+
+      // Activities in this week that are linked to a contact
+      const wkActs = activities.filter(a => {
+        if (!a.clientContactId) return false;
+        const d = new Date((a.activityDate || a.createdAt).slice(0, 10) + "T12:00:00");
+        return d >= weekStart && d < weekEnd;
+      });
+
+      const repCounts: Record<string, number> = {};
+      for (const rep of salesReps) {
+        const repActs = wkActs.filter(a => a.createdByClerkId === rep.clerkUserId);
+        repCounts[rep.clerkUserId] = new Set(repActs.map(a => a.clientContactId).filter(Boolean)).size;
+      }
+
+      return {
+        weekLabel: weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        weekStart: weekStart.toISOString().slice(0, 10),
+        isCurrent: idx === weeks.length - 1,
+        repCounts,
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activities, salesReps.map(r => r.clerkUserId).join(",")]);
+
   const dateRangeOptions: { key: DateRange; label: string }[] = [
     { key: "all", label: "All Time" },
     { key: "month", label: "This Month" },
@@ -3269,6 +3311,7 @@ function DashboardTab({
         <CRMActivityCharts
           weeklyActivityData={weeklyActivityData}
           dailyRepData={dailyRepData}
+          uniqueContactsByRepWeekly={uniqueContactsByRepWeekly}
           activitiesLoading={activitiesLoading}
           salesReps={salesReps}
         />
