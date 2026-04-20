@@ -73,7 +73,7 @@ export function CalculatorResults({ result }: CalculatorResultsProps) {
 
       {/* Methodology note */}
       <div className="bg-cream-100 border border-cream-200 rounded-2xl p-4 text-sm text-gray-600">
-        <strong className="text-gray-800">How we estimate:</strong> Each service is calculated per room based on square footage and how full the room is (Low / Average / High). Services like Unpacking and Setup use your new home's square footage instead. A High Touch multiplier (×1.5) is applied across all services to reflect the full-service care of a senior move. Weeks = total hours ÷ helper capacity.
+        <strong className="text-gray-800">How we estimate:</strong> Each service is calculated per room based on square footage and how full the room is (Low / Average / High). Services like Unpacking and Setup use your new home's square footage instead.
       </div>
 
       {/* CTA */}
