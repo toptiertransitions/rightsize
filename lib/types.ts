@@ -993,6 +993,13 @@ export interface CalculatorResult {
   }>;
 }
 
+export interface ServiceCalcResult {
+  serviceRows: { serviceId: string; serviceName: string; hours: number }[];
+  totalHours: number;
+  estimatedWeeks: number;
+  helperType: HelperType;
+}
+
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 export type ExpenseCategory =
   | "Meals & Entertainment"

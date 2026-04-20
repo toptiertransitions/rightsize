@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CalculatorForm } from "@/components/calculator/CalculatorForm";
+import { getServices } from "@/lib/airtable";
 
 export const metadata: Metadata = {
   title: "Rightsizing Calculator — Free Estimate | Rightsize by Top Tier",
@@ -8,7 +9,8 @@ export const metadata: Metadata = {
     "Get a free room-by-room estimate of how many hours your senior downsizing move will take. No account needed.",
 };
 
-export default function CalculatorPage() {
+export default async function CalculatorPage() {
+  const services = await getServices().catch(() => []);
   return (
     <div className="min-h-screen bg-cream-50">
       {/* Header */}
@@ -59,7 +61,7 @@ export default function CalculatorPage() {
           </p>
         </div>
 
-        <CalculatorForm />
+        <CalculatorForm services={services} />
       </main>
     </div>
   );
