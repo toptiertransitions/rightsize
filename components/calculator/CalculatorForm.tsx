@@ -92,7 +92,6 @@ export function CalculatorForm({ services }: Props) {
     const errs: Record<string, string> = {};
     if (rooms.length === 0) errs.rooms = "Add at least one room.";
     rooms.forEach((r, i) => {
-      if (!r.name.trim()) errs[`room-name-${i}`] = "Room name required";
       if (!r.squareFeet || r.squareFeet <= 0) errs[`room-sf-${i}`] = "Enter square footage";
     });
     const destSf = Number(destinationSqFt);
@@ -151,16 +150,7 @@ export function CalculatorForm({ services }: Props) {
                   </div>
 
                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-3">
-                    <div className="sm:col-span-3">
-                      <Input
-                        label="Room Name"
-                        placeholder="e.g. Master Bedroom"
-                        value={room.name}
-                        onChange={e => updateRoom(room.id, { name: e.target.value })}
-                        error={errors[`room-name-${index}`]}
-                      />
-                    </div>
-                    <div className="sm:col-span-3">
+                    <div className="sm:col-span-4">
                       <Select
                         label="Room Type"
                         value={room.roomType}
