@@ -955,29 +955,11 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   const hasRooms = mode === "rooms" ? rooms.length > 0 : syntheticRooms.length > 0;
 
   // Called when EstimatorSection saves a NEW quote
-  async function handleNewQuoteSaved(contract: Contract) {
-    const isFirstQuote = !quotes.find((q) => q.id === contract.id) && quotes.length === 0;
-
-    let finalContract = contract;
-
-    if (isFirstQuote && contract.status !== "Sent") {
-      try {
-        const res = await fetch("/api/contracts", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: contract.id, tenantId: tenant.id, action: "setPrimary" }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          finalContract = data.contract ?? { ...contract, status: "Signed" as const };
-        }
-      } catch { /* ignore */ }
-    }
-
+  function handleNewQuoteSaved(contract: Contract) {
     setQuotes((prev) => {
-      const exists = prev.find((q) => q.id === finalContract.id);
-      if (exists) return prev.map((q) => (q.id === finalContract.id ? finalContract : q));
-      return [finalContract, ...prev];
+      const exists = prev.find((q) => q.id === contract.id);
+      if (exists) return prev.map((q) => (q.id === contract.id ? contract : q));
+      return [contract, ...prev];
     });
     setShowEstimator(false);
   }

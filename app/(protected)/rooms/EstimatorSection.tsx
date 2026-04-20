@@ -113,7 +113,7 @@ interface EstimatorSectionProps {
   recipients: { name: string; email: string; role: string }[];
   services: Service[];
   editingContract?: Contract | null;
-  onSaved?: (contract: Contract) => void;
+  onSaved?: (contract: Contract) => void | Promise<void>;
   onCancelEdit?: () => void;
   // Optional invoice creation props (provided by quoting page, not rooms page)
   invoiceSettings?: InvoiceSettings | null;
@@ -356,7 +356,7 @@ export function EstimatorSection({
       const data = await res.json();
       await saveDestSqFt();
       setSuccessMsg("Quote saved.");
-      onSaved?.(data.contract);
+      await onSaved?.(data.contract);
       if (!editingContract) {
         setRows([]);
         setContractBody("");
@@ -395,7 +395,7 @@ export function EstimatorSection({
       const data = await res.json();
       await saveDestSqFt();
       setSuccessMsg("Agreement sent for signature!");
-      onSaved?.(data.contract);
+      await onSaved?.(data.contract);
       router.refresh();
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Error sending");
