@@ -71,6 +71,9 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
 
   if (!tenant) redirect("/home");
 
+  // NonTTT client users have no business on the Invoices page
+  if (!isTTTStaff && !(tenant.isTTT ?? true)) redirect("/home");
+
   // agreements: Sent (pending signature) + Signed — visible to all project members
   const agreements = allContracts.filter(
     (c) => c.status === "Sent" || c.status === "Signed"

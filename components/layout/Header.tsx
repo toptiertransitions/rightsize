@@ -66,6 +66,16 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   // Arriving from Catalog/Vendors/Sales/etc. with a project pre-selected keeps it.
   const projectTq = (urlTenantId && !isSentinel) ? `?tenantId=${urlTenantId}` : "";
 
+  // Determine if the current tenant is a TTT project (for Invoices nav visibility)
+  const [isTTTTenant, setIsTTTTenant] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!navTenantId || isStaff) { setIsTTTTenant(null); return; }
+    fetch(`/api/tenants/${navTenantId}`)
+      .then(r => r.ok ? r.json() : { isTTT: true })
+      .then(d => setIsTTTTenant(d.isTTT ?? true))
+      .catch(() => setIsTTTTenant(true));
+  }, [navTenantId, isStaff]);
+
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
   // Sales users see CRM + Drips + Expenses + Quoting + Invoices
@@ -86,8 +96,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     // Quoting — Manager and Admin; carry current project if one is selected
     ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
-    // Invoices — clients (non-staff) get tenantId from nav; managers carry current project
-    ...(navTenantId && !isStaff ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
+    // Invoices — TTT clients (non-staff) only; NonTTT clients excluded
+    ...(navTenantId && !isStaff && isTTTTenant !== false ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
     // CRM + Drips — Admin only
     ...(isAdmin ? [

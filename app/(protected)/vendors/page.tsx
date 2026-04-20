@@ -98,9 +98,9 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   const canEdit = EDIT_ROLES.includes(resolvedRole);
   const isTTT = ["TTTStaff", "TTTAdmin"].includes(resolvedRole);
 
-  // TTTClient = has a tenant membership role but no system role (Owner/Collaborator/Viewer)
+  // TTTClient = has a tenant membership role, no system role, and the project IS a TTT project
   const TTT_SYSTEM_ROLES = ["TTTStaff", "TTTAdmin", "TTTManager", "TTTSales"];
-  const isTTTClient = !!role && !TTT_SYSTEM_ROLES.includes(resolvedRole);
+  const isTTTClient = !!role && !TTT_SYSTEM_ROLES.includes(resolvedRole) && (tenant.isTTT ?? false);
 
   return (
     <div>
