@@ -136,6 +136,7 @@ function SalesTableRow({
   onPayoutSaved,
   onSalePriceSaved,
   onEdit,
+  isNonTTT = false,
 }: {
   item: Item;
   canEditPayout: boolean;
@@ -144,6 +145,7 @@ function SalesTableRow({
   onPayoutSaved: (itemId: string, amount: number, paidAt?: string) => void;
   onSalePriceSaved: (itemId: string, price: number) => void;
   onEdit: (item: Item) => void;
+  isNonTTT?: boolean;
 }) {
   const [editingPayout, setEditingPayout] = useState(false);
   const [payoutInput, setPayoutInput] = useState(String(item.payoutPaidAmount ?? 0));
@@ -255,66 +257,72 @@ function SalesTableRow({
           <span className="text-sm text-gray-700 tabular-nums">{item.salePrice ? fmtCurrency(item.salePrice) : <span className="text-gray-300">—</span>}</span>
         )}
       </td>
-      {/* Client Payout */}
-      <td className="px-2 py-2.5 text-right whitespace-nowrap">
-        {clientPayout != null ? (
-          <div>
-            <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
-            {previewCalcPayout && previewCalcPayout.vendorName && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
-          </div>
-        ) : (
-          <span className="text-gray-300">—</span>
-        )}
-      </td>
-      {/* Paid to Client (editable) */}
-      <td className="px-2 py-2.5 text-right whitespace-nowrap">
-        {canEditPayout ? (
-          editingPayout ? (
-            <div className="flex items-center justify-end gap-1">
-              <span className="text-xs text-gray-400">$</span>
-              <input type="number" min="0" step="0.01" value={payoutInput}
-                onChange={e => setPayoutInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") savePayout(); if (e.key === "Escape") setEditingPayout(false); }}
-                className={inlineInput} autoFocus />
-              {confirmBtn(savePayout, savingPayout)}
-              {cancelBtn(() => setEditingPayout(false))}
+      {/* Client Payout — hidden for NonTTT (sale price = full client earnings) */}
+      {!isNonTTT && (
+        <td className="px-2 py-2.5 text-right whitespace-nowrap">
+          {clientPayout != null ? (
+            <div>
+              <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
+              {previewCalcPayout && previewCalcPayout.vendorName && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
             </div>
           ) : (
-            <button onClick={() => { setEditingPayout(true); setPayoutInput(String(item.payoutPaidAmount ?? 0)); }}
-              className="text-right hover:underline tabular-nums">
-              <div className="text-sm font-semibold text-forest-700">
+            <span className="text-gray-300">—</span>
+          )}
+        </td>
+      )}
+      {/* Paid to Client — hidden for NonTTT */}
+      {!isNonTTT && (
+        <td className="px-2 py-2.5 text-right whitespace-nowrap">
+          {canEditPayout ? (
+            editingPayout ? (
+              <div className="flex items-center justify-end gap-1">
+                <span className="text-xs text-gray-400">$</span>
+                <input type="number" min="0" step="0.01" value={payoutInput}
+                  onChange={e => setPayoutInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") savePayout(); if (e.key === "Escape") setEditingPayout(false); }}
+                  className={inlineInput} autoFocus />
+                {confirmBtn(savePayout, savingPayout)}
+                {cancelBtn(() => setEditingPayout(false))}
+              </div>
+            ) : (
+              <button onClick={() => { setEditingPayout(true); setPayoutInput(String(item.payoutPaidAmount ?? 0)); }}
+                className="text-right hover:underline tabular-nums">
+                <div className="text-sm font-semibold text-forest-700">
+                  {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+                </div>
+                {item.payoutPaidAt && (
+                  <div className="text-[10px] text-green-600 font-normal">
+                    Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                )}
+              </button>
+            )
+          ) : (
+            <div className="text-right tabular-nums">
+              <div className="text-sm font-semibold text-gray-700">
                 {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
               </div>
               {item.payoutPaidAt && (
-                <div className="text-[10px] text-green-600 font-normal">
+                <div className="text-[10px] text-green-600">
                   Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </div>
               )}
-            </button>
-          )
-        ) : (
-          <div className="text-right tabular-nums">
-            <div className="text-sm font-semibold text-gray-700">
-              {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
             </div>
-            {item.payoutPaidAt && (
-              <div className="text-[10px] text-green-600">
-                Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              </div>
-            )}
-          </div>
-        )}
-      </td>
-      {/* Paid Date */}
-      <td className="px-2 py-2.5 text-right hidden sm:table-cell whitespace-nowrap">
-        {item.payoutPaidAt ? (
-          <span className="text-xs text-green-700 font-medium">
-            {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-        ) : (
-          <span className="text-gray-300 text-xs">—</span>
-        )}
-      </td>
+          )}
+        </td>
+      )}
+      {/* Paid Date — hidden for NonTTT */}
+      {!isNonTTT && (
+        <td className="px-2 py-2.5 text-right hidden sm:table-cell whitespace-nowrap">
+          {item.payoutPaidAt ? (
+            <span className="text-xs text-green-700 font-medium">
+              {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          ) : (
+            <span className="text-gray-300 text-xs">—</span>
+          )}
+        </td>
+      )}
       {/* Edit */}
       <td className="pr-3 py-2.5 w-8">
         {canEdit && (
@@ -745,6 +753,7 @@ function SalesTable({
   onPayoutSaved,
   onSalePriceSaved,
   onEdit,
+  isNonTTT = false,
 }: {
   title: string;
   items: Item[];
@@ -754,6 +763,7 @@ function SalesTable({
   onPayoutSaved: (id: string, amount: number, paidAt?: string) => void;
   onSalePriceSaved: (id: string, price: number) => void;
   onEdit: (item: Item) => void;
+  isNonTTT?: boolean;
 }) {
   type SortCol = "name" | "category" | "status" | "value" | "salePrice" | "payout" | "paid" | "paidDate";
   const [open, setOpen] = useState(true);
@@ -847,9 +857,9 @@ function SalesTable({
                 <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
                 <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
                 <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
-                <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>
-                <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>
-                <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>
+                {!isNonTTT && <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>}
+                {!isNonTTT && <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>}
+                {!isNonTTT && <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>}
                 <th className="pr-3 py-2.5 w-8" />
               </tr>
             </thead>
@@ -864,6 +874,7 @@ function SalesTable({
                   onPayoutSaved={onPayoutSaved}
                   onSalePriceSaved={onSalePriceSaved}
                   onEdit={onEdit}
+                  isNonTTT={isNonTTT}
                 />
               ))}
             </tbody>
@@ -1028,6 +1039,8 @@ export function SalesClient({
   isTTTUser = false,
   estates = [],
 }: SalesClientProps) {
+  const isNonTTT = !isTTT;
+
   const [items, setItems] = useState(initialItems);
   const [pfSaleEvents, setPfSaleEvents] = useState(initialPfSaleEvents);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -1249,6 +1262,10 @@ export function SalesClient({
     .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute))
     .reduce((s, i) => (i.valueMid && i.clientSharePercent ? s + i.valueMid * i.clientSharePercent / 100 : s), 0);
 
+  // NonTTT: no take rate — full valueMid and full salePrice go to client
+  const nonTTTInventoryValue = items.reduce((s, i) => s + (i.valueMid ?? 0), 0);
+  const nonTTTEarned = items.filter(i => i.status === "Sold").reduce((s, i) => s + (i.salePrice ?? 0), 0);
+
   const fmt = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const expandableCard = (
@@ -1353,7 +1370,19 @@ export function SalesClient({
         )}
       </div>
 
-      {/* Summary */}
+      {/* Summary — NonTTT: 2 boxes only (no take rate, sale price = full earnings) */}
+      {isNonTTT ? (
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+            <div className="text-xl font-bold tabular-nums text-gray-700">{fmt(nonTTTInventoryValue)}</div>
+            <div className="text-xs text-gray-500 mt-0.5">Total value of inventory</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+            <div className="text-xl font-bold tabular-nums text-green-700">{fmt(nonTTTEarned)}</div>
+            <div className="text-xs text-gray-500 mt-0.5">Total client earnings (sold)</div>
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {/* Inventory value — static card, no caret */}
         <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
@@ -1427,6 +1456,7 @@ export function SalesClient({
         {expandableCard(1, "Total paid to client", totalPaid, "text-blue-700", r => r.paid)}
         {expandableCard(2, "Still owed to client", totalOwed, totalOwed > 0 ? "text-amber-600" : "text-gray-400", r => Math.max(0, r.earned - r.paid - expense))}
       </div>
+      )} {/* end NonTTT conditional */}
 
       {/* Global item search */}
       {items.length > 0 && (
@@ -1462,15 +1492,17 @@ export function SalesClient({
 
       {/* Sections */}
       <div className="space-y-10">
-        <PFSalesSection
-          items={profound}
-          allEvents={pfSaleEvents}
-          canEditPayout={canEditPayout}
-          canEdit={canEdit}
-          localVendors={localVendors}
-          onEdit={setEditingItem}
-          onEventUpdated={(updated) => setPfSaleEvents(prev => prev.map(e => e.id === updated.id ? updated : e))}
-        />
+        {!isNonTTT && (
+          <PFSalesSection
+            items={profound}
+            allEvents={pfSaleEvents}
+            canEditPayout={canEditPayout}
+            canEdit={canEdit}
+            localVendors={localVendors}
+            onEdit={setEditingItem}
+            onEventUpdated={(updated) => setPfSaleEvents(prev => prev.map(e => e.id === updated.id ? updated : e))}
+          />
+        )}
         <SalesTable
           title="FB / Marketplace"
           items={fb}
@@ -1480,6 +1512,7 @@ export function SalesClient({
           onPayoutSaved={handlePayoutSaved}
           onSalePriceSaved={handleSalePriceSaved}
           onEdit={setEditingItem}
+          isNonTTT={isNonTTT}
         />
         <SalesTable
           title="eBay"
@@ -1490,6 +1523,7 @@ export function SalesClient({
           onPayoutSaved={handlePayoutSaved}
           onSalePriceSaved={handleSalePriceSaved}
           onEdit={setEditingItem}
+          isNonTTT={isNonTTT}
         />
 
         {/* Other Consignment — grouped by vendor, each as a table */}
@@ -1530,6 +1564,7 @@ export function SalesClient({
                       onPayoutSaved={handlePayoutSaved}
                       onSalePriceSaved={handleSalePriceSaved}
                       onEdit={setEditingItem}
+                      isNonTTT={isNonTTT}
                     />
                   </div>
                 ))}
@@ -1570,6 +1605,7 @@ export function SalesClient({
                       onPayoutSaved={handlePayoutSaved}
                       onSalePriceSaved={handleSalePriceSaved}
                       onEdit={setEditingItem}
+                      isNonTTT={isNonTTT}
                     />
                   </div>
                 ))}
