@@ -45,7 +45,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT ?? true} />
+      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} />
     </div>
   );
 }

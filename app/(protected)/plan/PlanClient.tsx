@@ -908,6 +908,7 @@ interface PlanClientProps {
   entries: PlanEntry[];
   rooms: Room[];
   tenantId: string;
+  tenantName?: string;
   canEdit: boolean;
   projectFiles: ProjectFile[];
   timeEntries: TimeEntry[];
@@ -917,9 +918,10 @@ interface PlanClientProps {
   tenantOptions?: TenantOption[];  // manager/staff: all projects for name lookup
   currentTenantId?: string;        // which project is selected ("" = All)
   services?: string[];             // dynamic service names from Airtable
+  isTTT?: boolean;
 }
 
-export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff, isTTT }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -1452,6 +1454,8 @@ export function PlanClient({ entries, rooms, tenantId, canEdit, projectFiles, ti
         services={services}
         primaryContract={primaryContract}
         isManager={isManager}
+        isTTT={isTTT}
+        tenantName={tenantName}
       />
 
       {/* ── Floorplans & Images ──────────────────────────────────────────────── */}

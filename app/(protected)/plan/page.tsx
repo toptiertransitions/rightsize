@@ -339,6 +339,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         entries={filteredEntries}
         rooms={rooms}
         tenantId={tenantId}
+        tenantName={tenant.name}
         canEdit={canEdit}
         projectFiles={projectFiles}
         timeEntries={timeEntries}
@@ -351,6 +352,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         primaryContract={primaryContract}
         isManager={isManagerOrAdmin}
         isStaff={isTTTStaff}
+        isTTT={tenant.isTTT === true}
       />
 
       {/* First Visit Intake — visible to TTTStaff, TTTManager, TTTAdmin only */}

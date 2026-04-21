@@ -234,9 +234,11 @@ interface Props {
   planEntries?: PlanEntry[];
   services?: string[];
   primaryContract?: Contract | null;
+  isTTT?: boolean;
+  tenantName?: string;
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, primaryContract }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, primaryContract, isTTT, tenantName }: Props) {
   const serviceList = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
 
   // Derive estimated hours from signed primary contract if available
@@ -751,7 +753,20 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
       )}
 
       {entries.length === 0 && (
-        <p className="text-sm text-gray-400">No hours logged for this project yet.</p>
+        !isTTT ? (
+          <div className="mt-6 rounded-2xl border border-forest-200 bg-forest-50 px-6 py-8 text-center">
+            <p className="text-sm font-medium text-gray-700 mb-1">Need help with your move?</p>
+            <p className="text-sm text-gray-500 mb-4">Our professional team can handle sorting, packing, donations, and more — tailored to your timeline.</p>
+            <a
+              href={`mailto:info@toptiertransitions.com?subject=Professional Support Request${tenantName ? ` – ${tenantName}` : ""}&body=Hi Top Tier Transitions team,%0A%0AI'm interested in getting professional support for my project${tenantName ? ` (${tenantName})` : ""}.%0A%0APlease reach out to discuss how you can help!`}
+              className="inline-flex items-center gap-2 rounded-xl bg-forest-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-forest-700 transition-colors"
+            >
+              Get Professional Support
+            </a>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">No hours logged for this project yet.</p>
+        )
       )}
 
       {editingEntry && (

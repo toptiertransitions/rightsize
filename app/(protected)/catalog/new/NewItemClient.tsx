@@ -136,8 +136,12 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
         }
       }
       setPhotos(prev => prev.length ? [primary, ...prev.slice(1)] : [primary]);
-      setAnalysis(data.analysis);
-      setEditedAnalysis(data.analysis);
+      const ai = data.analysis;
+      if (!isTTT && ai?.primary_route === "ProFoundFinds Consignment") {
+        ai.primary_route = "Other Consignment";
+      }
+      setAnalysis(ai);
+      setEditedAnalysis(ai);
       setManualMode(false);
       setStep("review");
     } catch (e) {

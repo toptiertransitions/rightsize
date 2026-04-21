@@ -1619,63 +1619,78 @@ export function SalesClient({
         )}
       </div>
 
-      {/* Client Preferred Payout */}
-      <div className="mt-10 pt-8 border-t border-gray-200">
-        <div className="mb-4">
-          <h2 className="text-base font-semibold text-gray-900">Client Preferred Payout</h2>
-          <p className="text-xs text-gray-500 mt-0.5">How would you like to receive your payout?</p>
-        </div>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Method</label>
-            <select
-              value={payoutMethod}
-              onChange={e => setPayoutMethod(e.target.value as PayoutMethod | "")}
-              className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
+      {/* Client Preferred Payout — hidden for NonTTT (replaced with CTA) */}
+      {isNonTTT ? (
+        <div className="mt-10 pt-8 border-t border-gray-200">
+          <div className="rounded-2xl border border-forest-200 bg-forest-50 px-6 py-8 text-center">
+            <p className="text-sm font-medium text-gray-700 mb-1">Ready to get paid?</p>
+            <p className="text-sm text-gray-500 mb-4">Our team can help coordinate the sale, payout, and everything in between.</p>
+            <a
+              href={`mailto:info@toptiertransitions.com?subject=Professional Support Request${tenantName ? ` – ${tenantName}` : ""}&body=Hi Top Tier Transitions team,%0A%0AI'm interested in getting professional support for my project${tenantName ? ` (${tenantName})` : ""}.%0A%0APlease reach out to discuss how you can help!`}
+              className="inline-flex items-center gap-2 rounded-xl bg-forest-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-forest-700 transition-colors"
             >
-              <option value="">— Select —</option>
-              <option value="Zelle">Zelle</option>
-              <option value="Venmo">Venmo</option>
-              <option value="Check">Check</option>
-              <option value="Other">Other</option>
-            </select>
+              Get Professional Support
+            </a>
           </div>
-          {(payoutMethod === "Zelle" || payoutMethod === "Venmo") && (
+        </div>
+      ) : (
+        <div className="mt-10 pt-8 border-t border-gray-200">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-gray-900">Client Preferred Payout</h2>
+            <p className="text-xs text-gray-500 mt-0.5">How would you like to receive your payout?</p>
+          </div>
+          <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                {payoutMethod} Username / Phone
-              </label>
-              <input
-                type="text"
-                value={payoutUsername}
-                onChange={e => setPayoutUsername(e.target.value)}
-                placeholder={payoutMethod === "Venmo" ? "@username" : "Phone or email"}
-                className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 w-52"
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Method</label>
+              <select
+                value={payoutMethod}
+                onChange={e => setPayoutMethod(e.target.value as PayoutMethod | "")}
+                className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
+              >
+                <option value="">— Select —</option>
+                <option value="Zelle">Zelle</option>
+                <option value="Venmo">Venmo</option>
+                <option value="Check">Check</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            {(payoutMethod === "Zelle" || payoutMethod === "Venmo") && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  {payoutMethod} Username / Phone
+                </label>
+                <input
+                  type="text"
+                  value={payoutUsername}
+                  onChange={e => setPayoutUsername(e.target.value)}
+                  placeholder={payoutMethod === "Venmo" ? "@username" : "Phone or email"}
+                  className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 w-52"
+                />
+              </div>
+            )}
+            <button
+              onClick={savePayoutPreference}
+              disabled={savingPayout || !payoutMethod}
+              className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+            >
+              {savingPayout ? "Saving…" : payoutSaved ? "Saved!" : "Save"}
+            </button>
+          </div>
+          {payoutMethod === "Check" && (
+            <div className="mt-4 max-w-md">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Check Mailing Address</label>
+              <textarea
+                value={payoutCheckAddress}
+                onChange={e => setPayoutCheckAddress(e.target.value)}
+                rows={3}
+                placeholder="Enter mailing address for check delivery"
+                className="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
               />
+              <p className="text-xs text-gray-400 mt-1">This address is for payout only and will not change the project address on file.</p>
             </div>
           )}
-          <button
-            onClick={savePayoutPreference}
-            disabled={savingPayout || !payoutMethod}
-            className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
-          >
-            {savingPayout ? "Saving…" : payoutSaved ? "Saved!" : "Save"}
-          </button>
         </div>
-        {payoutMethod === "Check" && (
-          <div className="mt-4 max-w-md">
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Check Mailing Address</label>
-            <textarea
-              value={payoutCheckAddress}
-              onChange={e => setPayoutCheckAddress(e.target.value)}
-              rows={3}
-              placeholder="Enter mailing address for check delivery"
-              className="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
-            />
-            <p className="text-xs text-gray-400 mt-1">This address is for payout only and will not change the project address on file.</p>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Proof of Payment */}
       <ProofOfPaymentSection
