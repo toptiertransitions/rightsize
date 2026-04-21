@@ -18,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RoomsClient, AddRoomButton } from "./RoomsClient";
 import { EstimatorSection } from "./EstimatorSection";
+import { DestinationSqFtCard } from "./DestinationSqFtCard";
 import type { Room, Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -48,7 +49,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
     const canEdit = EDIT_ROLES.includes(resolvedRole);
     const isManager = ["TTTManager", "TTTAdmin"].includes(resolvedRole ?? sysRole ?? "");
 
-    // Fetch contract data for managers/admins
+    // Fetch contract data for managers/admins; services always (needed for NonTTT estimate)
     const [contractSettings, contractTemplates, existingContracts, tenantMemberships, services] = isManager
       ? await Promise.all([
           getContractSettings().catch(() => null),
@@ -57,7 +58,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
           getMembershipsForTenant(tenantId).catch(() => []),
           getServices().catch(() => []),
         ])
-      : [null, [], [], [], []];
+      : [null, [], [], [], await getServices().catch(() => [])];
 
     // Look up Clerk emails for all project members
     let recipients: { name: string; email: string; role: string }[] = [];
@@ -100,6 +101,16 @@ export default async function RoomsPage({ searchParams }: PageProps) {
         </div>
 
         <RoomsClient rooms={rooms} tenantId={tenantId} canEdit={canEdit} />
+
+        {/* Destination sq ft for NonTTT clients — drives estimated hours on /plan */}
+        {!isManager && tenant.isTTT !== true && (
+          <DestinationSqFtCard
+            tenantId={tenantId}
+            rooms={rooms}
+            services={services}
+            initialDestSqFt={tenant.destinationSqFt}
+          />
+        )}
 
         {isManager && (
           <EstimatorSection
