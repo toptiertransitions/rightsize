@@ -1732,6 +1732,7 @@ export function SalesClient({
           allTenants={allTenants}
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
+          isTTT={isTTT}
           onClose={() => setEditingItem(null)}
           onSaved={handleItemSaved}
           onDeleted={handleItemDeleted}

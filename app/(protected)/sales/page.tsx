@@ -116,7 +116,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       initialPayoutUsername={tenant.payoutUsername}
       initialPayoutCheckAddress={tenant.payoutCheckAddress}
       projectAddress={projectAddress || undefined}
-      isTTT={tenant.isTTT ?? true}
+      isTTT={tenant.isTTT === true}
       canEditExpense={canEditExpense}
       initialConsignmentExpense={tenant.consignmentExpense ?? 0}
       initialConsignmentExpenseNote={tenant.consignmentExpenseNote ?? ""}
