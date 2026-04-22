@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       hourlyRate: rateByClerkId.get(e.clerkUserId) ?? 0,
       pay: (e.durationMinutes / 60) * (rateByClerkId.get(e.clerkUserId) ?? 0),
       hoursPaidAt: e.hoursPaidAt ?? null,
+      nonBillable: e.nonBillable ?? false,
     }));
 
     return NextResponse.json({ rows, total, page, pageSize });

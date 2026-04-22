@@ -27,6 +27,7 @@ interface HoursRow {
   hourlyRate: number;
   pay: number;
   hoursPaidAt: string | null;
+  nonBillable: boolean;
 }
 
 interface CommissionRow {
@@ -377,7 +378,12 @@ function HoursTab({ staffMembers }: { staffMembers: StaffOption[] }) {
                 </td>
                 <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{row.date}</td>
                 <td className="px-3 py-2.5 text-white">{row.staffName}</td>
-                <td className="px-3 py-2.5 text-gray-300 max-w-[200px] truncate">{row.projectName}</td>
+                <td className="px-3 py-2.5 max-w-[200px] truncate">
+                  {row.nonBillable
+                    ? <span className="text-gray-500 italic">NonBillable</span>
+                    : <span className="text-gray-300">{row.projectName}</span>
+                  }
+                </td>
                 <td className="px-3 py-2.5 text-right text-gray-300">{(row.durationMinutes / 60).toFixed(2)}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400">{row.hourlyRate > 0 ? fmt$(row.hourlyRate) : "—"}</td>
                 <td className="px-3 py-2.5 text-right text-white font-medium">{row.hourlyRate > 0 ? fmt$(row.pay) : "—"}</td>

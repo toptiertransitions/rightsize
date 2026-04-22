@@ -1809,13 +1809,20 @@ export async function getTimeEntries(filters?: { clerkUserId?: string; tenantId?
   if (filters?.clerkUserId) parts.push(`{ClerkUserId} = "${filters.clerkUserId}"`);
   if (filters?.tenantId) parts.push(`{TenantId} = "${filters.tenantId}"`);
   const filterStr = parts.length === 1 ? parts[0] : parts.length > 1 ? `AND(${parts.join(", ")})` : "";
-  const qs = filterStr
+  const baseQs = filterStr
     ? `?filterByFormula=${encodeURIComponent(filterStr)}&sort[0][field]=Date&sort[0][direction]=desc`
     : `?sort[0][field]=Date&sort[0][direction]=desc`;
-  const res = await timeFetch(qs);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapTimeEntry);
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = baseQs + (offset ? `&offset=${offset}` : "");
+    const res = await timeFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapTimeEntry);
 }
 
 export async function getTimeEntryById(id: string): Promise<TimeEntry | null> {
@@ -3791,12 +3798,17 @@ export async function getTimeEntriesInRange(
   const parts = [`{Date} >= "${from}"`, `{Date} <= "${to}"`];
   if (clerkUserId) parts.push(`{ClerkUserId} = "${clerkUserId}"`);
   const formula = encodeURIComponent(`AND(${parts.join(", ")})`);
-  const res = await timeFetch(
-    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc&sort[1][field]=CreatedAt&sort[1][direction]=asc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapTimeEntry);
+  const baseQs = `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc&sort[1][field]=CreatedAt&sort[1][direction]=asc`;
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const res = await timeFetch(baseQs + (offset ? `&offset=${offset}` : ""));
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapTimeEntry);
 }
 
 export async function getSoldItemsForCommission(
