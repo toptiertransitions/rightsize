@@ -39,6 +39,9 @@ export async function GET(req: NextRequest) {
     if (paidFilter === "true") filtered = entries.filter(e => !!e.hoursPaidAt);
     if (paidFilter === "false") filtered = entries.filter(e => !e.hoursPaidAt);
 
+    // Sort descending so page 1 shows most recent entries
+    filtered = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || (b.startTime ?? "").localeCompare(a.startTime ?? ""));
+
     const total = filtered.length;
     const start = (page - 1) * pageSize;
     const paged = filtered.slice(start, start + pageSize);
