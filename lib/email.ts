@@ -14,18 +14,46 @@ export function buildContractSentEmail({
   includeServiceHours?: boolean;
 }): string {
   const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtHrs = (h: number) => `${Math.round(h * 10) / 10} hrs`;
   const totalHours = lineItems.reduce((s, i) => s + i.hours, 0);
+
+  // When hours per service are hidden: true single-column table — no ghost right column.
+  // When hours shown: two-column table (Service | Hrs).
   const serviceRows = lineItems
     .map(
-      (item, i) =>
-        `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
-          <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;width:100%;">
-            ${item.serviceName}${item.description ? `<br><span style="font-size:12px;color:#9ca3af;">${item.description}</span>` : ""}
-          </td>
-          ${includeServiceHours ? `<td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${item.hours} hrs</td>` : ""}
-        </tr>`
+      (item, i) => includeServiceHours
+        ? `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
+            <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">
+              ${item.serviceName}${item.description ? `<br><span style="font-size:12px;color:#9ca3af;">${item.description}</span>` : ""}
+            </td>
+            <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${item.hours} hrs</td>
+          </tr>`
+        : `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
+            <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">
+              ${item.serviceName}${item.description ? `<br><span style="font-size:12px;color:#9ca3af;">${item.description}</span>` : ""}
+            </td>
+          </tr>`
     )
     .join("");
+
+  // Totals row: always shows hours + cost in green.
+  // When single-column, nest a table inside the td for left/right alignment (email-safe).
+  const totalsRow = includeServiceHours
+    ? `<tr style="background-color:#f0fdf4;">
+        <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;">Estimated Total</td>
+        <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;text-align:right;white-space:nowrap;">${fmtHrs(totalHours)} &nbsp;&middot;&nbsp; ${fmt(totalCost)}</td>
+      </tr>`
+    : `<tr style="background-color:#f0fdf4;">
+        <td style="padding:0;border-top:2px solid #2E6B4F;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;">Estimated Total</td>
+              <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;text-align:right;white-space:nowrap;">${fmtHrs(totalHours)} &nbsp;&middot;&nbsp; ${fmt(totalCost)}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,15 +79,12 @@ export function buildContractSentEmail({
                 Your service agreement for <strong>${projectName}</strong> is ready for your review and signature.
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
-                <tr style="background-color:#f9fafb;">
-                  <th style="padding:10px 16px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;width:100%;">Service</th>
-                  ${includeServiceHours ? `<th style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;white-space:nowrap;">Hours</th>` : ""}
-                </tr>
+                ${includeServiceHours ? `<tr style="background-color:#f9fafb;">
+                  <th style="padding:10px 16px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Service</th>
+                  <th style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;white-space:nowrap;">Hours</th>
+                </tr>` : ""}
                 ${serviceRows}
-                <tr style="background-color:#f0fdf4;">
-                  <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;">Estimated Total</td>
-                  <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;text-align:right;white-space:nowrap;">${totalHours} hrs &nbsp;&middot;&nbsp; ${fmt(totalCost)}</td>
-                </tr>
+                ${totalsRow}
               </table>
               <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
                 <tr>

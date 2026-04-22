@@ -94,39 +94,58 @@ export default async function SignPage({ params }: PageProps) {
           </div>
           {useLineItems ? (() => {
             const showSvcHours = contract.includeServiceHours === true;
-            const totalHrs = contract.lineItems!.reduce((s, i) => s + i.hours, 0);
-            return (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-3 py-3 sm:px-6 text-left text-xs font-semibold text-gray-500 uppercase">Service</th>
-                  <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">
-                    {showSvcHours ? "Hrs" : ""}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {contract.lineItems!.map((item) => (
-                  <tr key={item.serviceId} className="border-t border-gray-100">
-                    <td className="px-3 py-3 sm:px-6 text-gray-700">
-                      <span>{item.serviceName}</span>
-                      {item.description && (
-                        <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 sm:px-6 text-right text-gray-900 whitespace-nowrap">
-                      {showSvcHours ? `${item.hours} hrs` : ""}
+            const totalHrs = Math.round(contract.lineItems!.reduce((s, i) => s + i.hours, 0) * 10) / 10;
+            return showSvcHours ? (
+              // Two-column layout: Service | Hrs
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-3 py-3 sm:px-6 text-left text-xs font-semibold text-gray-500 uppercase">Service</th>
+                    <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Hrs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contract.lineItems!.map((item) => (
+                    <tr key={item.serviceId} className="border-t border-gray-100">
+                      <td className="px-3 py-3 sm:px-6 text-gray-700">
+                        <span>{item.serviceName}</span>
+                        {item.description && <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>}
+                      </td>
+                      <td className="px-3 py-3 sm:px-6 text-right text-gray-900 whitespace-nowrap">{item.hours} hrs</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-forest-200 bg-forest-50">
+                    <td className="px-3 py-4 sm:px-6 font-bold text-forest-700">Total</td>
+                    <td className="px-3 py-4 sm:px-6 text-right font-bold text-forest-700 whitespace-nowrap">
+                      {totalHrs} hrs &nbsp;·&nbsp; {formatCost(contract.totalCost)}
                     </td>
                   </tr>
-                ))}
-                <tr className="border-t-2 border-forest-200 bg-forest-50">
-                  <td className="px-3 py-4 sm:px-6 font-bold text-forest-700">Total</td>
-                  <td className="px-3 py-4 sm:px-6 text-right font-bold text-forest-700 whitespace-nowrap">
-                    {totalHrs} hrs &nbsp;·&nbsp; {formatCost(contract.totalCost)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            ) : (
+              // Single-column layout: no ghost hrs column
+              <table className="w-full text-sm">
+                <tbody>
+                  {contract.lineItems!.map((item) => (
+                    <tr key={item.serviceId} className="border-t border-gray-100">
+                      <td className="px-3 py-3 sm:px-6 text-gray-700">
+                        <span>{item.serviceName}</span>
+                        {item.description && <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-forest-200 bg-forest-50">
+                    <td className="px-3 py-4 sm:px-6">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-forest-700">Total</span>
+                        <span className="font-bold text-forest-700 whitespace-nowrap">
+                          {totalHrs} hrs &nbsp;·&nbsp; {formatCost(contract.totalCost)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             );
           })() : (
             <table className="w-full text-sm">
