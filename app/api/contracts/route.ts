@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     recipientName,
     autoSendDeposit,
     includeServiceDescriptions,
+    includeServiceHours,
   } = body;
 
   if (!tenantId) {
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
       recipientEmail: recipientEmail ?? undefined,
       autoSendDeposit: autoSendDeposit ?? false,
       includeServiceDescriptions: includeServiceDescriptions ?? false,
+      includeServiceHours: includeServiceHours ?? false,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to create contract";
@@ -129,6 +131,7 @@ export async function POST(req: NextRequest) {
             signingUrl,
             totalCost: totalCost ?? 0,
             lineItems: emailLineItems,
+            includeServiceHours: includeServiceHours ?? false,
           }),
         });
       }

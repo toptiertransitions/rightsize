@@ -166,7 +166,10 @@ export function EstimatorSection({
   const [showDescriptions, setShowDescriptions] = useState(false);
 
   // Include service descriptions in contract email/PDF/signing page
-  const [includeServiceDescriptions, setIncludeServiceDescriptions] = useState(false);
+  const [includeServiceDescriptions, setIncludeServiceDescriptions] = useState(true);
+
+  // Include per-service hours in contract email/PDF/signing page (default OFF — clients see total only)
+  const [includeServiceHours, setIncludeServiceHours] = useState(false);
 
   // When editingContract changes, load its line items into rows
   useEffect(() => {
@@ -321,6 +324,8 @@ export function EstimatorSection({
     unpackingRate: 0,
     totalCost,
     lineItems: includedLineItems,
+    includeServiceDescriptions,
+    includeServiceHours,
   };
 
   const saveDestSqFt = () =>
@@ -385,7 +390,6 @@ export function EstimatorSection({
           recipientEmail: recipientEmail.trim(),
           recipientName,
           autoSendDeposit,
-          includeServiceDescriptions,
         }),
       });
       if (!res.ok) {
@@ -673,7 +677,7 @@ export function EstimatorSection({
       </div>
 
       {/* Include service descriptions in contract toggle */}
-      <div className="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+      <div className="mb-3 p-4 rounded-xl border border-gray-200 bg-gray-50">
         <div className="flex items-start gap-3">
           <button
             type="button"
@@ -696,6 +700,35 @@ export function EstimatorSection({
               {includeServiceDescriptions
                 ? "Service descriptions will appear in the email, PDF, and signing page sent to the client."
                 : "Service descriptions will not be shown to the client."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Include service-level hours in contract toggle */}
+      <div className="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={includeServiceHours}
+            onClick={() => setIncludeServiceHours((v) => !v)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mt-0.5 ${
+              includeServiceHours ? "bg-forest-600" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                includeServiceHours ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <div>
+            <p className="text-sm font-medium text-gray-800">Include service-level hours in contract</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {includeServiceHours
+                ? "Hours per service will appear in the email, PDF, and signing page. The client will see a full breakdown."
+                : "Per-service hours are hidden. The client sees total hours and total cost only."}
             </p>
           </div>
         </div>

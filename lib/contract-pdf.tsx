@@ -256,6 +256,8 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
     : null;
 
   const lineItems = contract.lineItems ?? [];
+  const showServiceHours = contract.includeServiceHours === true;
+  const totalHours = lineItems.reduce((s, i) => s + i.hours, 0);
   const blocks = htmlToBlocks(contract.contractBody || "");
 
   const isDrawnSig =
@@ -316,7 +318,7 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
           <View style={styles.tableWrap}>
             <View style={styles.tableHeader}>
               <Text style={styles.colSvc}>Service</Text>
-              <Text style={styles.colHrs}>Hrs</Text>
+              {showServiceHours && <Text style={styles.colHrs}>Hrs</Text>}
               <Text style={styles.colRate}>Rate</Text>
               <Text style={styles.colAmt}>Amount</Text>
             </View>
@@ -326,13 +328,13 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
                   <Text style={styles.cellSvcName}>{item.serviceName}</Text>
                   {item.description ? <Text style={styles.cellSvcDesc}>{item.description}</Text> : null}
                 </View>
-                <Text style={styles.cellHrs}>{item.hours}</Text>
+                {showServiceHours && <Text style={styles.cellHrs}>{item.hours}</Text>}
                 <Text style={styles.cellRate}>{fmt(item.rate)}</Text>
                 <Text style={styles.cellAmt}>{fmt(item.hours * item.rate)}</Text>
               </View>
             ))}
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Estimate</Text>
+              <Text style={styles.totalLabel}>{showServiceHours ? `${totalHours} hrs — ` : ""}Total Estimate</Text>
               <Text style={styles.totalValue}>{fmt(contract.totalCost)}</Text>
             </View>
           </View>

@@ -718,6 +718,7 @@ export interface Contract {
   recipientEmail?: string;
   autoSendDeposit?: boolean;
   includeServiceDescriptions?: boolean;
+  includeServiceHours?: boolean;
   createdAt: string;
   lineItems?: ContractLineItem[];
 }

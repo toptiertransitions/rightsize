@@ -92,12 +92,15 @@ export default async function SignPage({ params }: PageProps) {
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-base font-semibold text-gray-900">Estimated Services</h2>
           </div>
-          {useLineItems ? (
+          {useLineItems ? (() => {
+            const showSvcHours = contract.includeServiceHours === true;
+            const totalHrs = contract.lineItems!.reduce((s, i) => s + i.hours, 0);
+            return (
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-3 sm:px-6 text-left text-xs font-semibold text-gray-500 uppercase">Service</th>
-                  <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Hrs</th>
+                  {showSvcHours && <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Hrs</th>}
                   <th className="hidden sm:table-cell px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Rate</th>
                   <th className="px-3 py-3 sm:px-6 text-right text-xs font-semibold text-gray-500 uppercase">Cost</th>
                 </tr>
@@ -111,19 +114,23 @@ export default async function SignPage({ params }: PageProps) {
                         <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
                       )}
                     </td>
-                    <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{item.hours}</td>
+                    {showSvcHours && <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{item.hours}</td>}
                     <td className="hidden sm:table-cell px-6 py-3 text-right text-gray-500">{formatCost(item.rate)}/hr</td>
                     <td className="px-3 py-3 sm:px-6 text-right text-gray-900">{formatCost(item.hours * item.rate)}</td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-forest-200 bg-forest-50">
-                  <td className="px-3 py-4 sm:px-6 font-bold text-forest-700" colSpan={2}>Total</td>
+                  <td className="px-3 py-4 sm:px-6 font-bold text-forest-700" colSpan={showSvcHours ? 2 : 1}>
+                    {showSvcHours ? `${totalHrs} hrs — ` : ""}Total
+                  </td>
+                  {!showSvcHours && <td className="hidden sm:table-cell" />}
                   <td className="hidden sm:table-cell" />
                   <td className="px-3 py-4 sm:px-6 text-right font-bold text-forest-700">{formatCost(contract.totalCost)}</td>
                 </tr>
               </tbody>
             </table>
-          ) : (
+            );
+          })() : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50">
