@@ -390,6 +390,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Guard: only run at 6 AM Chicago time (handles CST=UTC-6 and CDT=UTC-5 automatically)
+  const chicagoHour = new Date().toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", hour12: false });
+  if (chicagoHour !== "6") {
+    return NextResponse.json({ skipped: true, reason: `Not 6 AM CST/CDT (current Chicago hour: ${chicagoHour})` });
+  }
+
   try {
     // Gather staff info for display names and TTTAdmin emails
     const staffMembers = await getStaffMembers();
