@@ -33,6 +33,9 @@ export async function GET(req: NextRequest) {
     if (paidFilter === "true") filtered = expenses.filter(e => !!e.paidAt);
     if (paidFilter === "false") filtered = expenses.filter(e => !e.paidAt);
 
+    // Sort descending so page 1 shows most recent entries
+    filtered = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+
     const total = filtered.length;
     const start = (page - 1) * pageSize;
     const paged = filtered.slice(start, start + pageSize);

@@ -3845,12 +3845,17 @@ export async function getReimbursableExpensesInRange(
   ];
   if (clerkUserId) parts.push(`{ClerkUserId} = "${clerkUserId}"`);
   const formula = encodeURIComponent(`AND(${parts.join(", ")})`);
-  const res = await expensesFetch(
-    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapExpense);
+  const baseQs = `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`;
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const res = await expensesFetch(baseQs + (offset ? `&offset=${offset}` : ""));
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapExpense);
 }
 
 // Bulk update time entries in batches of 10
