@@ -57,42 +57,29 @@ export default async function QuotingPage({ searchParams }: PageProps) {
 
   if (!tenant) redirect("/home");
 
-  // Resolve member emails for contract sending + get owner/current-user emails
-  let recipients: { name: string; email: string; role: string }[] = [];
+  // Resolve the project Owner's email only (not all members)
   let ownerEmail = "";
   let currentUserEmail = "";
-  if (memberships.length > 0) {
+  let ownerRecipient: { name: string; email: string; role: string } | null = null;
+  try {
     const clerk = await clerkClient();
-    const results = await Promise.all(
-      memberships.map(async (m) => {
-        const u = await clerk.users.getUser(m.userId).catch(() => null);
-        const email = u?.emailAddresses?.[0]?.emailAddress ?? "";
-        const name = [u?.firstName, u?.lastName].filter(Boolean).join(" ") || email;
-        if (u?.id === tenant.ownerUserId) ownerEmail = email;
-        if (u?.id === userId) currentUserEmail = email;
-        return email ? { name, email, role: m.role } : null;
-      })
-    );
-    recipients = results.filter(Boolean) as { name: string; email: string; role: string }[];
-  }
-  // If not found via memberships, look up directly
-  if (!ownerEmail || !currentUserEmail) {
-    try {
-      const clerk = await clerkClient();
-      if (!ownerEmail) {
-        const ownerUser = await clerk.users.getUser(tenant.ownerUserId).catch(() => null);
-        ownerEmail = ownerUser?.emailAddresses?.[0]?.emailAddress ?? "";
-      }
-      if (!currentUserEmail) {
-        const currentUser = await clerk.users.getUser(userId).catch(() => null);
-        currentUserEmail = currentUser?.emailAddresses?.[0]?.emailAddress ?? "";
-      }
-    } catch { /* ignore */ }
-  }
+    const ownerMembership = memberships.find((m) => m.role === "Owner");
+    if (ownerMembership || tenant.ownerUserId) {
+      const ownerUserId = ownerMembership?.userId ?? tenant.ownerUserId;
+      const ownerUser = await clerk.users.getUser(ownerUserId).catch(() => null);
+      ownerEmail = ownerUser?.emailAddresses?.[0]?.emailAddress ?? "";
+      const ownerName = [ownerUser?.firstName, ownerUser?.lastName].filter(Boolean).join(" ") || ownerEmail;
+      if (ownerEmail) ownerRecipient = { name: ownerName, email: ownerEmail, role: "Owner" };
+    }
+    if (!currentUserEmail) {
+      const currentUser = await clerk.users.getUser(userId).catch(() => null);
+      currentUserEmail = currentUser?.emailAddresses?.[0]?.emailAddress ?? "";
+    }
+  } catch { /* ignore */ }
 
   const signedContracts = existingContracts.filter((c) => c.status === "Signed");
 
-  // Prepend opportunity contact + key people emails to the recipient list
+  // Collect emails from this project's linked opportunities only
   const contactMap = new Map(clientContacts.map((c) => [c.id, c]));
   const opportunityRecipients: { name: string; email: string; role: string }[] = [];
   for (const opp of opportunities) {
@@ -106,21 +93,11 @@ export default async function QuotingPage({ searchParams }: PageProps) {
       }
     }
   }
-  // Deduplicate against membership recipients, then prepend
-  const memberEmails = new Set(recipients.map((r) => r.email));
-  const uniqueOpportunityRecipients = opportunityRecipients.filter((r) => !memberEmails.has(r.email));
 
-  // Also include all CRM client contacts with emails (deduplicated), so the
-  // dropdown is populated even when no CRM opportunity has been created yet.
-  const seenEmails = new Set([
-    ...uniqueOpportunityRecipients.map((r) => r.email),
-    ...recipients.map((r) => r.email),
-  ]);
-  const additionalContacts = clientContacts
-    .filter((c) => c.email && !seenEmails.has(c.email))
-    .map((c) => ({ name: c.name, email: c.email, role: "Contact" }));
-
-  const allRecipients = [...uniqueOpportunityRecipients, ...recipients, ...additionalContacts];
+  // Final list: Owner first, then opp contacts (deduplicated), no global CRM contacts
+  const seenEmails = new Set(ownerRecipient ? [ownerEmail] : []);
+  const uniqueOppRecipients = opportunityRecipients.filter((r) => !seenEmails.has(r.email));
+  const allRecipients = [...(ownerRecipient ? [ownerRecipient] : []), ...uniqueOppRecipients];
 
   return (
     <QuotingClient
