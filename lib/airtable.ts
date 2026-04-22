@@ -3839,7 +3839,6 @@ export async function getReimbursableExpensesInRange(
   clerkUserId?: string
 ): Promise<Expense[]> {
   const parts = [
-    `{Reimbursable} = TRUE()`,
     `{Date} >= "${from}"`,
     `{Date} <= "${to}"`,
   ];
