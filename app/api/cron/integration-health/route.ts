@@ -390,10 +390,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Guard: only run at 6 AM Chicago time (handles CST=UTC-6 and CDT=UTC-5 automatically)
-  const chicagoHour = new Date().toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", hour12: false });
-  if (chicagoHour !== "6") {
-    return NextResponse.json({ skipped: true, reason: `Not 6 AM CST/CDT (current Chicago hour: ${chicagoHour})` });
+  // Guard: only run within ±10 min of 6 AM Chicago time.
+  // Vercel crons can fire a minute or two early/late, so an exact hour comparison
+  // (which was "5" instead of "6" at 10:59 UTC) silently skips the email.
+  // Using formatToParts avoids locale-specific string quirks (e.g. "06" vs "6").
+  const now = new Date();
+  const chicagoParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(now);
+  const chicagoH = parseInt(chicagoParts.find(p => p.type === "hour")?.value ?? "0", 10);
+  const chicagoM = parseInt(chicagoParts.find(p => p.type === "minute")?.value ?? "0", 10);
+  const chicagoMins = chicagoH * 60 + chicagoM; // minutes since midnight
+  // Accept 5:50 AM–6:10 AM (350–370 min) — wide enough for cron drift,
+  // narrow enough that the 12:00 UTC cron (7 AM CDT / 6 AM CST) can't also fire.
+  if (chicagoMins < 350 || chicagoMins > 370) {
+    return NextResponse.json({ skipped: true, reason: `Not near 6 AM CST/CDT (Chicago time: ${chicagoH}:${String(chicagoM).padStart(2, "0")})` });
   }
 
   try {
