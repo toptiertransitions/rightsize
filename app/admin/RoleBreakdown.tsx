@@ -97,6 +97,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { group: "Project Access" },
   { label: "View project & rooms",        permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Add & edit items",            permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Remove background with AI (catalog photo upload)", permissions: { Owner: true, Collaborator: true, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Route & approve items",       permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: "partial", TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite members to project",   permissions: { Owner: true,  Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Archive project",             permissions: { Owner: true,  Collaborator: false, Viewer: false, NonTTTOwner: true,  TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },

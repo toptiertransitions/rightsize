@@ -379,21 +379,23 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
               </Button>
             </div>
 
-            {/* Remove background toggle */}
-            <div className="mt-3 flex items-center gap-2.5">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={removeBg}
-                onClick={() => setRemoveBg(v => !v)}
-                className={`relative inline-flex w-9 h-5 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${removeBg ? "bg-green-500" : "bg-gray-300"}`}
-              >
-                <span
-                  className={`inline-block w-4 h-4 mt-0.5 rounded-full bg-white shadow transform transition-transform duration-200 ${removeBg ? "translate-x-4" : "translate-x-0.5"}`}
-                />
-              </button>
-              <span className="text-sm text-gray-600">Remove background with AI</span>
-            </div>
+            {/* Remove background toggle — TTT users only */}
+            {isTTT && (
+              <div className="mt-3 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={removeBg}
+                  onClick={() => setRemoveBg(v => !v)}
+                  className={`relative inline-flex w-9 h-5 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${removeBg ? "bg-green-500" : "bg-gray-300"}`}
+                >
+                  <span
+                    className={`inline-block w-4 h-4 mt-0.5 rounded-full bg-white shadow transform transition-transform duration-200 ${removeBg ? "translate-x-4" : "translate-x-0.5"}`}
+                  />
+                </button>
+                <span className="text-sm text-gray-600">Remove background with AI</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
