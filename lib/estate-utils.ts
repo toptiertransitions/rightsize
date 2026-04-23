@@ -54,7 +54,6 @@ export function computeDutchPrice(
 ): DutchPricing {
   const saleStart = parseCSTDateTime(estate.saleStartDate, estate.saleStartTime);
   const intervalMs = estate.dropIntervalHours * 3_600_000;
-  const dropFactor = 1 - estate.dropPercent / 100;
   const floorPrice = Math.round(startingPrice * (estate.floorPercent / 100) * 100) / 100;
 
   let currentPrice = startingPrice;
@@ -63,7 +62,9 @@ export function computeDutchPrice(
 
   if (nowMs >= saleStart && intervalMs > 0) {
     const n = Math.floor((nowMs - saleStart) / intervalMs);
-    const raw = startingPrice * Math.pow(dropFactor, n);
+    // Linear decay: each drop reduces price by a fixed % of the ORIGINAL starting price.
+    // e.g. dropPercent=25 → drop1=75%, drop2=50%, drop3=25% (clamped to floor).
+    const raw = startingPrice * (1 - n * estate.dropPercent / 100);
     currentPrice = Math.max(Math.round(raw * 100) / 100, floorPrice);
     atFloor = currentPrice <= floorPrice;
 
@@ -72,8 +73,6 @@ export function computeDutchPrice(
     }
   } else if (nowMs < saleStart) {
     // Sale hasn't started yet — price stays at full starting price.
-    // nextDropAt stays null; first drop occurs at saleStart + 1 interval
-    // once the sale is live.
   }
 
   return { currentPrice, startingPrice, nextDropAt, atFloor };
