@@ -444,7 +444,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
-                    {/* Remove background wand */}
+                    {/* Remove background wand — TTT users only */}
+                    {isTTT && (
                     <button
                       type="button"
                       title="Remove background with AI"
@@ -463,6 +464,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                         </svg>
                       )}
                     </button>
+                    )}
                   </div>
                 ))}
                 {photos.length < 10 && (
