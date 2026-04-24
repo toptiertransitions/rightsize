@@ -4552,7 +4552,7 @@ export async function getEstateWithItems(
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({EstateSaleId} = "${estate.id}", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
+      filterByFormula: `AND({EstateSaleId} = "${estate.id}", {PrimaryRoute} = "Estate Sale", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
       sort: [{ field: "CreatedAt", direction: "desc" }],
     })
     .all();
@@ -4664,7 +4664,7 @@ export async function getItemsForEstateSale(estateId: string): Promise<Item[]> {
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({EstateSaleId} = "${estateId}", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
+      filterByFormula: `AND({EstateSaleId} = "${estateId}", {PrimaryRoute} = "Estate Sale", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
       sort: [{ field: "CreatedAt", direction: "desc" }],
     })
     .all();
