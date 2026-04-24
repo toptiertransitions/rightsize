@@ -7,7 +7,7 @@ const PAGE_SIZE = 25;
 import Image from "next/image";
 import type { Item, ItemStatus } from "@/lib/types";
 
-const PF_STATUSES: ItemStatus[] = ["Listed", "In Cart", "Sold", "Discarded"];
+const PF_STATUSES: ItemStatus[] = ["Pending Review", "Listed", "In Cart", "Sold", "Discarded"];
 
 interface TenantInfo { name: string; ownerEmail: string; }
 interface Props { items: Item[]; tenantInfoMap: Record<string, TenantInfo>; }
