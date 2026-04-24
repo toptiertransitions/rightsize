@@ -66,7 +66,9 @@ export default async function AdminUsersPage() {
     name: (`${u.firstName ?? ""} ${u.lastName ?? ""}`).trim() || (u.emailAddresses[0]?.emailAddress ?? "Unknown"),
     imageUrl: u.imageUrl,
     createdAt: new Date(u.createdAt).toISOString(),
-    lastActiveAt: u.lastSignInAt ? new Date(u.lastSignInAt).toISOString() : undefined,
+    lastActiveAt: (u.lastActiveAt ?? u.lastSignInAt)
+      ? new Date((u.lastActiveAt ?? u.lastSignInAt)!).toISOString()
+      : undefined,
     banned: u.banned ?? false,
     systemRole: isTTTAdmin(u.id) ? "TTTAdmin" : (staffRoleByClerkId.get(u.id) ?? undefined),
     staffMemberId: staffIdByClerkId.get(u.id),
