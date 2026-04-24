@@ -373,6 +373,7 @@ export interface Estate {
   pickupWindowEndTime?: string;
   shippingAvailable: boolean;
   shippingNotes: string;
+  hideSoldItems: boolean;
   terms: string;
   contactEmail: string;
   contactPhone: string;

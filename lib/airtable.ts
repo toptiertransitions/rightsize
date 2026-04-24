@@ -4495,6 +4495,7 @@ function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
     pickupWindowEndTime: toStr(f["PickupWindowEndTime"]) || undefined,
     shippingAvailable: f["ShippingAvailable"] === true,
     shippingNotes: toStr(f["ShippingNotes"]),
+    hideSoldItems: f["HideSoldItems"] === true,
     terms: toStr(f["Terms"]),
     contactEmail: toStr(f["ContactEmail"]),
     contactPhone: toStr(f["ContactPhone"]),
@@ -4585,6 +4586,7 @@ export async function createEstate(
       PickupWindowEndTime: data.pickupWindowEndTime || "",
       ShippingAvailable: data.shippingAvailable,
       ShippingNotes: data.shippingNotes,
+      HideSoldItems: data.hideSoldItems ?? false,
       Terms: data.terms,
       ContactEmail: data.contactEmail,
       ContactPhone: data.contactPhone,
@@ -4625,6 +4627,7 @@ export async function updateEstate(
   if (data.pickupWindowEndTime !== undefined) fields["PickupWindowEndTime"] = data.pickupWindowEndTime;
   if (data.shippingAvailable !== undefined) fields["ShippingAvailable"] = data.shippingAvailable;
   if (data.shippingNotes !== undefined) fields["ShippingNotes"] = data.shippingNotes;
+  if (data.hideSoldItems !== undefined) fields["HideSoldItems"] = data.hideSoldItems;
   if (data.terms !== undefined) fields["Terms"] = data.terms;
   if (data.contactEmail !== undefined) fields["ContactEmail"] = data.contactEmail;
   if (data.contactPhone !== undefined) fields["ContactPhone"] = data.contactPhone;

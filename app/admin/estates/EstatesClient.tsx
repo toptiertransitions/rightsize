@@ -64,6 +64,7 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   pickupWindowEndTime: "",
   shippingAvailable: false,
   shippingNotes: "",
+  hideSoldItems: false,
   terms: "",
   contactEmail: "",
   contactPhone: "",
@@ -130,6 +131,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       pickupWindowEndTime: estate.pickupWindowEndTime ?? "",
       shippingAvailable: estate.shippingAvailable,
       shippingNotes: estate.shippingNotes,
+      hideSoldItems: estate.hideSoldItems,
       terms: estate.terms,
       contactEmail: estate.contactEmail,
       contactPhone: estate.contactPhone,
@@ -568,6 +570,19 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                   />
                 </Field>
               )}
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="hideSoldItems"
+                  checked={form.hideSoldItems}
+                  onChange={e => setForm(f => ({ ...f, hideSoldItems: e.target.checked }))}
+                  className="w-4 h-4 accent-forest-600"
+                />
+                <label htmlFor="hideSoldItems" className="text-sm text-gray-300">
+                  Hide sold items from buyers on ProFound Finds
+                </label>
+              </div>
 
               <Field label="Terms">
                 <textarea

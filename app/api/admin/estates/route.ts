@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       pickupWindowEnd: body.pickupWindowEnd || "",
       shippingAvailable: body.shippingAvailable ?? false,
       shippingNotes: body.shippingNotes || "",
+      hideSoldItems: body.hideSoldItems ?? false,
       terms: body.terms || "",
       contactEmail: body.contactEmail || "",
       contactPhone: body.contactPhone || "",
