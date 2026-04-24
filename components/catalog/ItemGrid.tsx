@@ -499,7 +499,12 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             <Input label="Item Name" value={form.itemName ?? ""} onChange={e => set("itemName", e.target.value)} />
             <div className="flex items-end gap-2">
               <div className="flex-1 min-w-0">
-                <Input label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)} />
+                <Select label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)}
+                  options={[
+                    { value: "", label: "— select —" },
+                    ...["Art & Collectibles","Books","Clothing & Accessories","Decor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
+                  ]}
+                />
               </div>
               <button
                 type="button"
