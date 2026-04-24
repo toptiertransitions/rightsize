@@ -593,7 +593,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                 <Select label="Category" value={merged.category ?? ""} onChange={(e) => update("category", e.target.value)}
                   options={[
                     { value: "", label: "— select —" },
-                    ...["Art & Collectibles","Books","Clothing & Accessories","Decor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
+                    ...["Art & Collectibles","Books & Media","Clothing & Accessories","Decor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
                   ]}
                 />
                 <div className="grid grid-cols-2 gap-3">

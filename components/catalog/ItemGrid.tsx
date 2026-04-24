@@ -502,7 +502,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 <Select label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)}
                   options={[
                     { value: "", label: "— select —" },
-                    ...["Art & Collectibles","Books","Clothing & Accessories","Decor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
+                    ...["Art & Collectibles","Books & Media","Clothing & Accessories","Decor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
                   ]}
                 />
               </div>
