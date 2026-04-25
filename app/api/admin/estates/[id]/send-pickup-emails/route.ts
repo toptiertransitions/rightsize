@@ -80,6 +80,7 @@ export async function POST(
       contactEmail: estate.contactEmail || undefined,
       contactPhone: estate.contactPhone || undefined,
       terms: estate.terms || undefined,
+      pickupNotes: estate.pickupNotes || undefined,
     });
 
     const subject = `Your Pickup Details — ${estate.name}`;

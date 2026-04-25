@@ -64,6 +64,7 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   pickupWindowEndTime: "",
   shippingAvailable: false,
   shippingNotes: "",
+  pickupNotes: "",
   hideSoldItems: false,
   terms: "",
   contactEmail: "",
@@ -131,6 +132,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       pickupWindowEndTime: estate.pickupWindowEndTime ?? "",
       shippingAvailable: estate.shippingAvailable,
       shippingNotes: estate.shippingNotes,
+      pickupNotes: estate.pickupNotes,
       hideSoldItems: estate.hideSoldItems,
       terms: estate.terms,
       contactEmail: estate.contactEmail,
@@ -546,6 +548,16 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                     placeholder="e.g. 4:00 PM"
                   />
                 </div>
+              </Field>
+
+              <Field label="Pickup Notes">
+                <textarea
+                  className={inputCls}
+                  rows={3}
+                  value={form.pickupNotes}
+                  onChange={e => setForm(f => ({ ...f, pickupNotes: e.target.value }))}
+                  placeholder="Parking info, entry instructions, what to bring, etc."
+                />
               </Field>
 
               <div className="flex items-center gap-3">

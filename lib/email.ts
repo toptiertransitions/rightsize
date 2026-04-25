@@ -918,6 +918,7 @@ export interface PickupDetailsEmailParams {
   contactEmail?: string;
   contactPhone?: string;
   terms?: string;
+  pickupNotes?: string;
 }
 
 function fmtCurrency(n: number): string {
@@ -1110,6 +1111,22 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
                     </table>
                   </td>
                 </tr>
+
+                ${p.pickupNotes ? `
+                <!-- Divider -->
+                <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Pickup Notes -->
+                <tr>
+                  <td style="padding:24px 36px;">
+                    <p style="margin:0 0 14px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#999;">
+                      Additional Pickup Notes
+                    </p>
+                    <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#555;line-height:1.75;white-space:pre-line;">
+                      ${p.pickupNotes}
+                    </p>
+                  </td>
+                </tr>` : ""}
 
                 ${(p.contactEmail || p.contactPhone) ? `
                 <!-- Divider -->
