@@ -152,7 +152,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id, action, tenantId: actionTenantId, ...data } = await req.json();
+  const body = await req.json();
+  const { id, action, tenantId: actionTenantId, send: sendFlag, recipientEmail: patchRecipient, recipientName: patchRecipientName, includeServiceHours: patchIncludeHours, tenantId: patchTenantId, ...data } = body;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   // setPrimary: archive all currently-Signed contracts for this tenant, then mark this one.
@@ -187,6 +188,67 @@ export async function PATCH(req: NextRequest) {
           )
         );
       } catch { /* non-fatal */ }
+    }
+
+    return NextResponse.json({ contract });
+  }
+
+  // If send: true, rotate token + mark Sent + email (used when sending an existing Draft)
+  if (sendFlag && patchRecipient) {
+    const newSignToken = crypto.randomUUID();
+    const sentAt = new Date().toISOString();
+
+    // Supersede any other Sent contracts for this tenant
+    if (patchTenantId) {
+      try {
+        const allContracts = await getContractsForTenant(patchTenantId);
+        await Promise.all(
+          allContracts
+            .filter((c) => c.id !== id && c.status === "Sent")
+            .map((c) => updateContract(c.id, { status: "Superseded" }).catch(() => null))
+        );
+      } catch { /* non-fatal */ }
+    }
+
+    const contract = await updateContract(id, {
+      ...data,
+      signToken: newSignToken,
+      status: "Sent",
+      sentAt,
+      sentByClerkId: userId,
+      recipientEmail: patchRecipient,
+    });
+
+    try {
+      const tenantId = patchTenantId ?? contract.tenantId;
+      const tenant = await getTenantById(tenantId).catch(() => null);
+      if (tenant) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+        const signingUrl = `${appUrl}/sign/${newSignToken}`;
+        const clientName = patchRecipientName || patchRecipient;
+        const emailLineItems = (contract.lineItems ?? []).map((li) => ({
+          serviceName: li.serviceName,
+          hours: li.hours,
+          description: li.description,
+        }));
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
+        await resend.emails.send({
+          from: `Top Tier Transitions <${fromEmail}>`,
+          to: patchRecipient,
+          subject: `Your service agreement for ${tenant.name} is ready`,
+          html: buildContractSentEmail({
+            clientName,
+            projectName: tenant.name,
+            signingUrl,
+            totalCost: contract.totalCost,
+            lineItems: emailLineItems,
+            includeServiceHours: patchIncludeHours ?? false,
+          }),
+        });
+      }
+    } catch (e) {
+      console.error("Failed to send draft contract email:", e);
     }
 
     return NextResponse.json({ contract });

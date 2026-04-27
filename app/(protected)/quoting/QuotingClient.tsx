@@ -451,6 +451,7 @@ function QuoteCard({
   onSetPrimary,
   onArchive,
   onRevertToSent,
+  onSendDraft,
 }: {
   contract: Contract;
   tenantId: string;
@@ -461,6 +462,7 @@ function QuoteCard({
   onSetPrimary: () => void;
   onArchive: () => void;
   onRevertToSent: () => void;
+  onSendDraft?: () => void;
 }) {
   const [contract, setContract] = useState(initialContract);
   const [editing, setEditing] = useState(false);
@@ -631,8 +633,25 @@ function QuoteCard({
             </button>
           )}
 
-          {/* Send / Resend to Client — Draft or Sent */}
-          {(isSent || contract.status === "Draft") && !editing && (
+          {/* Send to Client — Draft (opens full EstimatorSection) */}
+          {contract.status === "Draft" && !editing && (
+            <button
+              onClick={() => {
+                setDeleteConfirm(false);
+                setArchiveConfirm(false);
+                onSendDraft?.();
+              }}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              Send to Client
+            </button>
+          )}
+
+          {/* Resend to Client — Sent only (simple panel) */}
+          {isSent && !editing && (
             <button
               onClick={() => {
                 setResendOpen((v) => !v);
@@ -652,7 +671,7 @@ function QuoteCard({
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
-              {resendOpen ? "Close" : isSent ? "Resend to Client" : "Send to Client"}
+              {resendOpen ? "Close" : "Resend to Client"}
             </button>
           )}
 
@@ -944,6 +963,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   const [quotes, setQuotes] = useState<Contract[]>(existingContracts);
   const [invoices] = useState<Invoice[]>(initialInvoices ?? []);
   const [showEstimator, setShowEstimator] = useState(existingContracts.length === 0);
+  const [draftToSend, setDraftToSend] = useState<Contract | null>(null);
 
   const syntheticRooms: Room[] = [
     ...(highSqFt > 0 ? [makeSyntheticRoom("High", highSqFt, 0)] : []),
@@ -998,8 +1018,25 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   }
 
   function handleNewQuote() {
+    setDraftToSend(null);
     setShowEstimator(true);
     setTimeout(() => document.getElementById("estimator-section")?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
+  function handleSendDraft(contract: Contract) {
+    setShowEstimator(false);
+    setDraftToSend(contract);
+    setTimeout(() => document.getElementById("estimator-section")?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
+  function handleDraftSendSaved(contract: Contract) {
+    setQuotes((prev) => prev.map((q) => (q.id === contract.id ? contract : q)));
+    setDraftToSend(null);
+    setShowEstimator(false);
+  }
+
+  function handleCancelDraftSend() {
+    setDraftToSend(null);
   }
 
   return (
@@ -1051,6 +1088,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                     onSetPrimary={() => handleSetPrimary(q.id)}
                     onArchive={() => handleArchived(q.id)}
                     onRevertToSent={() => handleRevertToSent(q.id)}
+                    onSendDraft={() => handleSendDraft(q)}
                   />
                   {depositInvoice && q.status === "Signed" && !depositInvoice.emailSent && (
                     <DepositInvoicePanel invoice={depositInvoice} recipients={recipients} />
@@ -1168,10 +1206,10 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         </div>
       )}
 
-      {/* ─── Estimator (new quote creation only) ───────────────────────────── */}
+      {/* ─── Estimator (new quote creation OR sending a draft) ─────────────── */}
       {hasRooms && (
         <div>
-          {!showEstimator ? (
+          {!showEstimator && !draftToSend ? (
             <button
               onClick={handleNewQuote}
               className="flex items-center gap-2 w-full py-4 px-5 rounded-2xl border-2 border-dashed border-gray-200 text-gray-500 hover:border-forest-300 hover:text-forest-600 hover:bg-forest-50 transition-all text-sm font-medium"
@@ -1190,9 +1228,9 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                 templates={templates}
                 recipients={recipients}
                 services={services}
-                editingContract={null}
-                onSaved={handleNewQuoteSaved}
-                onCancelEdit={quotes.length > 0 ? () => setShowEstimator(false) : undefined}
+                editingContract={draftToSend ?? null}
+                onSaved={draftToSend ? handleDraftSendSaved : handleNewQuoteSaved}
+                onCancelEdit={draftToSend ? handleCancelDraftSend : (quotes.length > 0 ? () => setShowEstimator(false) : undefined)}
                 invoiceSettings={invoiceSettings}
                 signedContracts={signedContracts}
                 timeEntries={timeEntries}

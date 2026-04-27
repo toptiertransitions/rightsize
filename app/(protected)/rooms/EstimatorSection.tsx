@@ -380,18 +380,37 @@ export function EstimatorSection({
       const recipientName = useCustom
         ? undefined
         : recipients.find((r) => r.email === selectedRecipient)?.name;
-      // Always creates a new contract when sending for signature
-      const res = await fetch("/api/contracts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...sharedFields,
-          send: true,
-          recipientEmail: recipientEmail.trim(),
-          recipientName,
-          autoSendDeposit,
-        }),
-      });
+
+      let res: Response;
+      if (editingContract) {
+        // Editing an existing Draft — PATCH to update + send in one step
+        res = await fetch("/api/contracts", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingContract.id,
+            ...sharedFields,
+            send: true,
+            recipientEmail: recipientEmail.trim(),
+            recipientName,
+            tenantId: tenant.id,
+          }),
+        });
+      } else {
+        // New quote — POST to create + send
+        res = await fetch("/api/contracts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...sharedFields,
+            send: true,
+            recipientEmail: recipientEmail.trim(),
+            recipientName,
+            autoSendDeposit,
+          }),
+        });
+      }
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Failed to send");
