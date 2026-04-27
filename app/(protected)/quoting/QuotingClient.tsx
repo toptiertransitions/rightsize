@@ -631,8 +631,8 @@ function QuoteCard({
             </button>
           )}
 
-          {/* Resend to Client — Sent only */}
-          {isSent && !editing && (
+          {/* Send / Resend to Client — Draft or Sent */}
+          {(isSent || contract.status === "Draft") && !editing && (
             <button
               onClick={() => {
                 setResendOpen((v) => !v);
@@ -652,7 +652,7 @@ function QuoteCard({
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
-              {resendOpen ? "Close" : "Resend to Client"}
+              {resendOpen ? "Close" : isSent ? "Resend to Client" : "Send to Client"}
             </button>
           )}
 
