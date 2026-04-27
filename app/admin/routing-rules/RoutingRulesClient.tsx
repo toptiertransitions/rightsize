@@ -7,7 +7,7 @@ import type { RoutingRule, LocalVendor, PrimaryRoute, VendorType } from "@/lib/t
 
 const PRIMARY_ROUTES: PrimaryRoute[] = [
   "Keep", "Family Keeping", "ProFoundFinds Consignment", "FB/Marketplace",
-  "Online Marketplace", "Other Consignment", "Donate", "Discard",
+  "Online Marketplace", "Other Consignment", "Estate Sale", "Donate", "Discard",
 ];
 
 const ROUTE_DISPLAY: Partial<Record<PrimaryRoute, string>> = {
