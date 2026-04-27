@@ -926,13 +926,13 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               </div>
             )}
 
-            <div className="flex items-end gap-4">
-              <div className="w-1/2">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="flex-1">
                 <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
               </div>
-              <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+              <label className="flex items-center gap-2 sm:pb-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={nonBillable}
@@ -1042,8 +1042,8 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
             )}
             </div>
 
-            {/* Start / End — always side-by-side */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Start / End */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">Start Time</label>
                 <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
