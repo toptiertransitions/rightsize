@@ -2841,6 +2841,8 @@ function DashboardTab({
   }, []);
 
   // Date range filter
+  // Won opps: use wonAt (signed date). Lost opps: use lostAt. Active pipeline: use createdAt.
+  // An opp is included if its relevant date falls within the period.
   const dateFilteredOpps = (() => {
     if (dateRange === "all") return opportunities;
     const now = new Date();
@@ -2848,7 +2850,11 @@ function DashboardTab({
     if (dateRange === "month") cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
     else if (dateRange === "quarter") cutoff = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
     else cutoff = new Date(now.getFullYear(), 0, 1);
-    return opportunities.filter(o => new Date(o.createdAt) >= cutoff);
+    return opportunities.filter(o => {
+      if (o.stage === "Won") return o.wonAt ? new Date(o.wonAt) >= cutoff : new Date(o.createdAt) >= cutoff;
+      if (o.stage === "Lost") return o.lostAt ? new Date(o.lostAt) >= cutoff : new Date(o.createdAt) >= cutoff;
+      return new Date(o.createdAt) >= cutoff;
+    });
   })();
 
   // Apply owner filter (multi-select)
@@ -3066,7 +3072,8 @@ function DashboardTab({
       const date = new Date(y, m, 1);
       const label = date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
       const moOpps = spotlightOpps.filter(o => {
-        const d = new Date(o.createdAt);
+        const dateStr = o.stage === "Won" ? (o.wonAt || o.createdAt) : o.stage === "Lost" ? (o.lostAt || o.createdAt) : o.createdAt;
+        const d = new Date(dateStr);
         return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth();
       });
       months.push({
