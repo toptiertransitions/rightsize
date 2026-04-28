@@ -9,6 +9,7 @@ interface TenantOption {
   city?: string;
   state?: string;
   isArchived?: boolean;
+  isConsignmentOnly?: boolean;
 }
 
 const SENTINEL_SHORT: Record<string, string> = {
@@ -79,8 +80,10 @@ export function ProjectSwitcher({
     ? tenants.filter((t) => t.name.toLowerCase().includes(search.toLowerCase().trim()))
     : tenants;
 
-  const activeTenants = filtered.filter((t) => !t.isArchived);
-  const archivedTenants = filtered.filter((t) => t.isArchived);
+  const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
+  const activeTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly));
+  const postMoveTenants = sort(filtered.filter((t) => !t.isArchived && t.isConsignmentOnly));
+  const archivedTenants = sort(filtered.filter((t) => t.isArchived));
 
   function select(id: string) {
     setOpen(false);
@@ -151,7 +154,7 @@ export function ProjectSwitcher({
             )}
 
             {/* Individual tenants */}
-            {activeTenants.length === 0 && archivedTenants.length === 0 && !allowAllProjects ? (
+            {activeTenants.length === 0 && postMoveTenants.length === 0 && archivedTenants.length === 0 && !allowAllProjects ? (
               <p className="text-xs text-gray-400 px-3 py-4 text-center">No projects found</p>
             ) : (
               <>
@@ -183,6 +186,42 @@ export function ProjectSwitcher({
                     </button>
                   );
                 })}
+
+                {postMoveTenants.length > 0 && (
+                  <>
+                    <div className="px-3 pt-2 pb-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">Post-Move</p>
+                    </div>
+                    {postMoveTenants.map((t) => {
+                      const isActive = t.id === currentTenantId;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => select(t.id)}
+                          className={`w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 transition-colors ${
+                            isActive ? "bg-forest-50 text-forest-700" : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium truncate ${isActive ? "text-forest-700" : "text-gray-800"}`}>
+                              {t.name}
+                            </p>
+                            {(t.city || t.state) && (
+                              <p className="text-xs text-gray-400 truncate">
+                                {[t.city, t.state].filter(Boolean).join(", ")}
+                              </p>
+                            )}
+                          </div>
+                          {isActive && (
+                            <svg className="w-4 h-4 flex-shrink-0 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
 
                 {archivedTenants.length > 0 && (
                   <>
