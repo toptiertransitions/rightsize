@@ -1114,11 +1114,11 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
       )}
 
       {/* ─── Create New Quote (only when rooms exist) ────────────────────────── */}
+      {hasRooms && quotes.length > 0 && !draftToSend && (
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Create New Quote</h2>
+      )}
       {hasRooms && !draftToSend && (
         <div>
-          {quotes.length > 0 && (
-            <h2 className="text-base font-semibold text-gray-900 mb-3">Create New Quote</h2>
-          )}
           {!showEstimator ? (
             <button
               onClick={handleNewQuote}
