@@ -1,6 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getSystemRole, getGmailToken, getOutreachTemplates, getOutreachSequences } from "@/lib/airtable";
+import {
+  getSystemRole, getGmailToken, getOutreachTemplates,
+  getReferralCompanies, getStaffMembers,
+} from "@/lib/airtable";
 import OutreachClient from "./OutreachClient";
 
 export default async function OutreachPage() {
@@ -12,10 +15,11 @@ export default async function OutreachPage() {
     redirect("/home");
   }
 
-  const [gmailToken, templates, sequences] = await Promise.all([
+  const [gmailToken, templates, companies, staffMembers] = await Promise.all([
     getGmailToken(userId).catch(() => null),
     getOutreachTemplates(userId).catch(() => []),
-    getOutreachSequences(userId).catch(() => []),
+    getReferralCompanies().catch(() => []),
+    getStaffMembers().catch(() => []),
   ]);
 
   return (
@@ -25,7 +29,8 @@ export default async function OutreachPage() {
       hasSendScope={gmailToken?.hasSendScope ?? false}
       gmailEmail={gmailToken?.email}
       initialTemplates={templates}
-      initialSequences={sequences}
+      companies={companies}
+      staffMembers={staffMembers}
     />
   );
 }

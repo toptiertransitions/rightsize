@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { OutreachTemplate, OutreachSequence, OutreachTemplateChannel } from "@/lib/types";
+import type { OutreachTemplate, OutreachTemplateChannel } from "@/lib/types";
+import type { ReferralCompany, StaffMember } from "@/lib/types";
+import BroadcastsTab from "./BroadcastsTab";
 
 type OutreachTab = "myday" | "broadcasts" | "sequences" | "templates";
 
@@ -12,7 +14,8 @@ interface OutreachClientProps {
   hasSendScope: boolean;
   gmailEmail?: string;
   initialTemplates: OutreachTemplate[];
-  initialSequences: OutreachSequence[];
+  companies: ReferralCompany[];
+  staffMembers: StaffMember[];
 }
 
 // ─── Merge tag reference ──────────────────────────────────────────────────────
@@ -378,7 +381,8 @@ export default function OutreachClient({
   hasSendScope,
   gmailEmail,
   initialTemplates,
-  initialSequences,
+  companies,
+  staffMembers,
 }: OutreachClientProps) {
   const [tab, setTab] = useState<OutreachTab>("myday");
 
@@ -430,9 +434,13 @@ export default function OutreachClient({
         />
       )}
       {tab === "broadcasts" && (
-        <ComingSoonTab
-          title="Broadcasts — coming soon"
-          description="One-time sends to a filtered list of contacts."
+        <BroadcastsTab
+          templates={initialTemplates}
+          companies={companies}
+          staffMembers={staffMembers}
+          currentUserId={currentUserId}
+          hasSendScope={hasSendScope}
+          gmailEmail={gmailEmail}
         />
       )}
       {tab === "sequences" && (

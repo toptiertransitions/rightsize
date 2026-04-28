@@ -5184,3 +5184,99 @@ export async function upsertOutreachNurtureSetting(clerkUserId: string, sequence
   if (!res.ok) throw new Error(await res.text());
   return mapOutreachNurtureSetting(await res.json());
 }
+
+// ─── Outreach Contact Resolution ──────────────────────────────────────────────
+export interface OutreachContactFilter {
+  contactType: OutreachContactType;
+  stages?: string[];
+  tags?: string;
+  companyId?: string;
+  assignedToClerkId?: string;
+  excludeOptout?: boolean;
+}
+
+export interface ResolvedOutreachContact {
+  id: string;
+  name: string;
+  email: string;
+  company?: string;
+}
+
+export async function resolveOutreachContacts(filter: OutreachContactFilter): Promise<ResolvedOutreachContact[]> {
+  if (filter.contactType === "ReferralContacts") {
+    const parts: string[] = [`{Email} != ""`];
+    if (filter.excludeOptout !== false) parts.push(`{EmailOptout} != 1`);
+    if (filter.companyId) parts.push(`{ReferralCompanyId} = "${filter.companyId}"`);
+    if (filter.stages?.length) {
+      const stageOr = filter.stages.map(s => `{Stage} = "${s}"`).join(",");
+      parts.push(`OR(${stageOr})`);
+    }
+    const formula = parts.length > 1 ? `AND(${parts.join(",")})` : parts[0];
+    const all: ResolvedOutreachContact[] = [];
+    let offset: string | undefined;
+    do {
+      const qs = `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Name&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+      const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, qs);
+      if (!res.ok) break;
+      const data = await res.json();
+      for (const r of data.records as AirtableRecord[]) {
+        const c = mapReferralContact(r);
+        if (filter.tags && !(c.tags || "").toLowerCase().includes(filter.tags.toLowerCase())) continue;
+        all.push({ id: c.id, name: c.name, email: c.email });
+      }
+      offset = data.offset;
+    } while (offset);
+    return all;
+  } else {
+    const parts: string[] = [`{Email} != ""`];
+    if (filter.excludeOptout !== false) parts.push(`{EmailOptout} != 1`);
+    if (filter.assignedToClerkId) parts.push(`{AssignedToClerkId} = "${filter.assignedToClerkId}"`);
+    const formula = parts.length > 1 ? `AND(${parts.join(",")})` : parts[0];
+    const all: ResolvedOutreachContact[] = [];
+    let offset: string | undefined;
+    do {
+      const qs = `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Name&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+      const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, qs);
+      if (!res.ok) break;
+      const data = await res.json();
+      for (const r of data.records as AirtableRecord[]) {
+        const c = mapClientContact(r);
+        if (filter.tags && !(c.tags || "").toLowerCase().includes(filter.tags.toLowerCase())) continue;
+        all.push({ id: c.id, name: c.name, email: c.email });
+      }
+      offset = data.offset;
+    } while (offset);
+    return all;
+  }
+}
+
+export async function batchCreateOutreachEnrollments(records: Omit<OutreachEnrollment, "id">[]): Promise<OutreachEnrollment[]> {
+  const results: OutreachEnrollment[] = [];
+  for (let i = 0; i < records.length; i += 10) {
+    const batch = records.slice(i, i + 10);
+    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_ENROLLMENTS, "", {
+      method: "POST",
+      body: JSON.stringify({
+        records: batch.map(data => ({
+          fields: {
+            Sequence: [data.sequenceId],
+            ContactType: data.contactType,
+            ContactId: data.contactId,
+            ContactEmail: data.contactEmail,
+            ContactName: data.contactName,
+            Company: data.company,
+            EnrolledByClerkId: data.enrolledByClerkId,
+            AssignedToClerkId: data.assignedToClerkId,
+            Status: data.status,
+            CurrentStep: data.currentStep,
+            EnrolledAt: data.enrolledAt || new Date().toISOString(),
+          },
+        })),
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    results.push(...(data.records as AirtableRecord[]).map(mapOutreachEnrollment));
+  }
+  return results;
+}
