@@ -1113,13 +1113,13 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         </div>
       )}
 
-      {/* ─── Estimator (new quote creation OR sending a draft) ─────────────── */}
-      {hasRooms && (
+      {/* ─── Create New Quote (only when rooms exist) ────────────────────────── */}
+      {hasRooms && !draftToSend && (
         <div>
           {quotes.length > 0 && (
             <h2 className="text-base font-semibold text-gray-900 mb-3">Create New Quote</h2>
           )}
-          {!showEstimator && !draftToSend ? (
+          {!showEstimator ? (
             <button
               onClick={handleNewQuote}
               className="flex items-center gap-2 w-full py-4 px-5 rounded-2xl border-2 border-dashed border-gray-200 text-gray-500 hover:border-forest-300 hover:text-forest-600 hover:bg-forest-50 transition-all text-sm font-medium"
@@ -1138,9 +1138,9 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                 templates={templates}
                 recipients={recipients}
                 services={services}
-                editingContract={draftToSend ?? null}
-                onSaved={draftToSend ? handleDraftSendSaved : handleNewQuoteSaved}
-                onCancelEdit={draftToSend ? handleCancelDraftSend : (quotes.length > 0 ? () => setShowEstimator(false) : undefined)}
+                editingContract={null}
+                onSaved={handleNewQuoteSaved}
+                onCancelEdit={quotes.length > 0 ? () => setShowEstimator(false) : undefined}
                 invoiceSettings={invoiceSettings}
                 signedContracts={signedContracts}
                 timeEntries={timeEntries}
@@ -1149,6 +1149,28 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
               />
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── Edit existing Draft/Sent quote (always rendered when active) ────── */}
+      {draftToSend && (
+        <div id="estimator-section">
+          <EstimatorSection
+            tenant={tenant}
+            rooms={estimatorRooms}
+            settings={settings}
+            templates={templates}
+            recipients={recipients}
+            services={services}
+            editingContract={draftToSend}
+            onSaved={handleDraftSendSaved}
+            onCancelEdit={handleCancelDraftSend}
+            invoiceSettings={invoiceSettings}
+            signedContracts={signedContracts}
+            timeEntries={timeEntries}
+            ownerEmail={ownerEmail}
+            currentUserEmail={currentUserEmail}
+          />
         </div>
       )}
     </div>
