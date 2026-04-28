@@ -1013,6 +1013,9 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
       )}
 
       {/* Mode tabs */}
+      {quotes.length > 0 && !draftToSend && (
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Create New Quote</h2>
+      )}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit mb-8">
         {([
           { key: "rooms" as Mode, label: "By Rooms" },
@@ -1114,9 +1117,6 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
       )}
 
       {/* ─── Create New Quote (only when rooms exist) ────────────────────────── */}
-      {quotes.length > 0 && !draftToSend && (
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Create New Quote</h2>
-      )}
       {hasRooms && !draftToSend && (
         <div>
           {!showEstimator ? (
