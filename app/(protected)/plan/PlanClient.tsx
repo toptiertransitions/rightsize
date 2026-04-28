@@ -478,8 +478,8 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                 <option value="">— Select project —</option>
                 {(() => {
                   const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
-                  const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isPostMove));
-                  const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isPostMove));
+                  const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isConsignmentOnly));
+                  const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isConsignmentOnly));
                   const archived = sort(tenantOptions.filter(t => t.isArchived));
                   return (
                     <>
@@ -913,7 +913,7 @@ interface TenantOption {
   id: string;
   name: string;
   isArchived?: boolean;
-  isPostMove?: boolean;
+  isConsignmentOnly?: boolean;
   address?: string;
   city?: string;
   state?: string;
@@ -1175,8 +1175,8 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                   {/* Active projects */}
                   {(() => {
                     const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
-                    const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isPostMove));
-                    const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isPostMove));
+                    const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isConsignmentOnly));
+                    const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isConsignmentOnly));
                     const archived = sort(tenantOptions.filter(t => t.isArchived));
 
                     const ProjectBtn = ({ t, dim }: { t: TenantOption; dim?: boolean }) => (
