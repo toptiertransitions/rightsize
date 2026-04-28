@@ -472,12 +472,6 @@ function QuoteCard({
   const [working, setWorking] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Resend state
-  const [resendOpen, setResendOpen] = useState(false);
-  const [resendEmail, setResendEmail] = useState(contract.recipientEmail ?? "");
-  const [resendSending, setResendSending] = useState(false);
-  const [resendMsg, setResendMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
   const isArchived = contract.status === "Archived";
   const isSigned = contract.status === "Signed";
   const isSent = contract.status === "Sent";
@@ -543,31 +537,6 @@ function QuoteCard({
       onDelete();
     } catch { /* ignore */ }
     finally { setDeleting(false); setDeleteConfirm(false); }
-  }
-
-  async function handleResend() {
-    if (!resendEmail.trim()) return;
-    setResendSending(true);
-    setResendMsg(null);
-    try {
-      const res = await fetch(`/api/contracts/${contract.id}/resend`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientEmail: resendEmail.trim() }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setResendMsg({ ok: false, text: d.error ?? "Failed to send. Please try again." });
-        return;
-      }
-      const data = await res.json();
-      setContract(data.contract);
-      onSaved(data.contract);
-      setResendMsg({ ok: true, text: `Quote resent to ${resendEmail.trim()}` });
-      setResendOpen(false);
-    } finally {
-      setResendSending(false);
-    }
   }
 
   return (
@@ -650,36 +619,22 @@ function QuoteCard({
             </button>
           )}
 
-          {/* Resend to Client — Sent only (simple panel) */}
+          {/* Send to Client — Sent (same flow as Draft) */}
           {isSent && !editing && (
             <button
               onClick={() => {
-                setResendOpen((v) => !v);
-                setResendMsg(null);
-                setResendEmail(contract.recipientEmail ?? "");
                 setDeleteConfirm(false);
                 setArchiveConfirm(false);
                 setRevertToSentConfirm(false);
+                onSendDraft?.();
               }}
-              className={cn(
-                "text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1",
-                resendOpen
-                  ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : "border-blue-200 text-blue-600 hover:bg-blue-50"
-              )}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
-              {resendOpen ? "Close" : "Resend to Client"}
+              Send to Client
             </button>
-          )}
-
-          {/* Success message after resend */}
-          {resendMsg?.ok && !resendOpen && (
-            <span className="text-xs text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
-              {resendMsg.text}
-            </span>
           )}
 
           {/* Set as Primary — Draft, Sent, Archived */}
@@ -752,61 +707,6 @@ function QuoteCard({
           onSaved={handleInlineSaved}
           onCancel={() => setEditing(false)}
         />
-      )}
-
-      {/* ─── Resend Panel ───────────────────────────────────────────────────── */}
-      {resendOpen && (
-        <div className="border-t border-blue-100 bg-blue-50/60 px-5 py-4">
-          <p className="text-sm font-semibold text-blue-900 mb-1">Resend updated quote to client</p>
-          <p className="text-xs text-blue-600 mb-3">
-            A fresh signing link will be generated. Any other outstanding quotes for this project will be deactivated.
-          </p>
-          <div className="flex flex-col gap-1.5 mb-3 max-w-sm">
-            <label className="text-xs font-medium text-blue-700">Recipient email</label>
-            {recipients.length > 0 && (
-              <select
-                value={recipients.some((r) => r.email === resendEmail) ? resendEmail : "__custom__"}
-                onChange={(e) => { if (e.target.value !== "__custom__") setResendEmail(e.target.value); }}
-                className="h-8 px-2 rounded-lg border border-blue-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                {recipients.map((r) => (
-                  <option key={r.email} value={r.email}>{r.name} ({r.email})</option>
-                ))}
-                <option value="__custom__">Other…</option>
-              </select>
-            )}
-            <input
-              type="email"
-              value={resendEmail}
-              onChange={(e) => setResendEmail(e.target.value)}
-              placeholder="client@example.com"
-              className="h-8 px-3 rounded-lg border border-blue-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleResend}
-              disabled={resendSending || !resendEmail.trim()}
-              className="h-8 px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-              {resendSending ? "Sending…" : "Send Updated Quote"}
-            </button>
-            <button
-              onClick={() => { setResendOpen(false); setResendMsg(null); }}
-              className="h-8 px-3 rounded-lg border border-blue-200 bg-white text-sm text-blue-600 hover:bg-blue-50 transition-colors"
-            >
-              Cancel
-            </button>
-            {resendMsg && !resendMsg.ok && (
-              <span className="text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
-                {resendMsg.text}
-              </span>
-            )}
-          </div>
-        </div>
       )}
 
       {/* Unsign & Archive confirm */}
