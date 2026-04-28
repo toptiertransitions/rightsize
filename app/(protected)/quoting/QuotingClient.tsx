@@ -236,11 +236,13 @@ function QuoteInlineEditor({
   services,
   onSaved,
   onCancel,
+  onSendDraft,
 }: {
   contract: Contract;
   services: Service[];
   onSaved: (c: Contract) => void;
   onCancel: () => void;
+  onSendDraft?: (c: Contract) => void;
 }) {
   function initRows(): ServiceRowEdit[] {
     const lineMap = new Map((contract.lineItems ?? []).map((li) => [li.serviceId, li]));
@@ -284,7 +286,7 @@ function QuoteInlineEditor({
     setRows((prev) => prev.map((r) => (r.serviceId === serviceId ? { ...r, ...patch } : r)));
   }
 
-  async function handleSave() {
+  async function handleSave(sendAfter?: boolean) {
     setSaving(true);
     setError(null);
     try {
@@ -307,6 +309,7 @@ function QuoteInlineEditor({
       }
       const data = await res.json();
       onSaved(data.contract);
+      if (sendAfter) onSendDraft?.(data.contract);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -417,12 +420,24 @@ function QuoteInlineEditor({
       {/* Actions */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={handleSave}
+          onClick={() => handleSave()}
           disabled={saving}
           className="h-9 px-5 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 transition-colors disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save Changes"}
         </button>
+        {onSendDraft && (
+          <button
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            className="h-9 px-5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            {saving ? "Saving…" : "Save & Send to Client"}
+          </button>
+        )}
         <button
           onClick={onCancel}
           disabled={saving}
@@ -462,7 +477,7 @@ function QuoteCard({
   onSetPrimary: () => void;
   onArchive: () => void;
   onRevertToSent: () => void;
-  onSendDraft?: () => void;
+  onSendDraft?: (c?: Contract) => void;
 }) {
   const [contract, setContract] = useState(initialContract);
   const [editing, setEditing] = useState(false);
@@ -706,6 +721,7 @@ function QuoteCard({
           services={services}
           onSaved={handleInlineSaved}
           onCancel={() => setEditing(false)}
+          onSendDraft={contract.status !== "Signed" && contract.status !== "Archived" ? (saved) => { handleInlineSaved(saved); onSendDraft?.(saved); } : undefined}
         />
       )}
 
@@ -988,7 +1004,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                     onSetPrimary={() => handleSetPrimary(q.id)}
                     onArchive={() => handleArchived(q.id)}
                     onRevertToSent={() => handleRevertToSent(q.id)}
-                    onSendDraft={() => handleSendDraft(q)}
+                    onSendDraft={(c) => handleSendDraft(c ?? q)}
                   />
                   {depositInvoice && q.status === "Signed" && !depositInvoice.emailSent && (
                     <DepositInvoicePanel invoice={depositInvoice} recipients={recipients} />
