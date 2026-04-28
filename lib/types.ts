@@ -123,6 +123,7 @@ export interface Tenant {
   estimatedHours?: number;
   estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   isArchived?: boolean;
+  isPostMove?: boolean;
   isTTT?: boolean;
   isConsignmentOnly?: boolean;
   destinationSqFt?: number;

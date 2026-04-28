@@ -476,9 +476,31 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                 className={inputCls}
               >
                 <option value="">— Select project —</option>
-                {tenantOptions.filter(t => !t.isArchived).map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
+                {(() => {
+                  const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
+                  const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isPostMove));
+                  const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isPostMove));
+                  const archived = sort(tenantOptions.filter(t => t.isArchived));
+                  return (
+                    <>
+                      {active.length > 0 && (
+                        <optgroup label="Active">
+                          {active.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </optgroup>
+                      )}
+                      {postMove.length > 0 && (
+                        <optgroup label="Post-Move">
+                          {postMove.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </optgroup>
+                      )}
+                      {archived.length > 0 && (
+                        <optgroup label="Archived">
+                          {archived.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </optgroup>
+                      )}
+                    </>
+                  );
+                })()}
               </select>
             </div>
           )}
@@ -891,6 +913,7 @@ interface TenantOption {
   id: string;
   name: string;
   isArchived?: boolean;
+  isPostMove?: boolean;
   address?: string;
   city?: string;
   state?: string;
@@ -1149,57 +1172,61 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                     </svg>
                   </button>
 
-                  {/* Divider */}
-                  <div className="px-5 py-2">
-                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Projects</p>
-                  </div>
-
                   {/* Active projects */}
-                  {tenantOptions.filter(t => !t.isArchived).map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => { setShowProjectPicker(false); router.push(`/plan?tenantId=${t.id}`); }}
-                      className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <p className="flex-1 text-sm font-medium text-gray-800 truncate">{t.name}</p>
-                      <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  ))}
+                  {(() => {
+                    const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
+                    const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isPostMove));
+                    const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isPostMove));
+                    const archived = sort(tenantOptions.filter(t => t.isArchived));
 
-                  {/* Archived projects */}
-                  {tenantOptions.some(t => t.isArchived) && (
-                    <>
-                      <div className="px-5 py-2 mt-1">
-                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Archived</p>
-                      </div>
-                      {tenantOptions.filter(t => t.isArchived).map(t => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => { setShowProjectPicker(false); router.push(`/plan?tenantId=${t.id}`); }}
-                          className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                            </svg>
-                          </div>
-                          <p className="flex-1 text-sm font-medium text-gray-500 truncate">{t.name}</p>
-                          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    const ProjectBtn = ({ t, dim }: { t: TenantOption; dim?: boolean }) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => { setShowProjectPicker(false); router.push(`/plan?tenantId=${t.id}`); }}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                        </button>
-                      ))}
-                    </>
-                  )}
+                        </div>
+                        <p className={`flex-1 text-sm font-medium truncate ${dim ? "text-gray-400" : "text-gray-800"}`}>{t.name}</p>
+                        <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    );
+
+                    return (
+                      <>
+                        {active.length > 0 && (
+                          <>
+                            <div className="px-5 py-2">
+                              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Active Projects</p>
+                            </div>
+                            {active.map(t => <ProjectBtn key={t.id} t={t} />)}
+                          </>
+                        )}
+                        {postMove.length > 0 && (
+                          <>
+                            <div className="px-5 py-2 mt-1">
+                              <p className="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">Post-Move</p>
+                            </div>
+                            {postMove.map(t => <ProjectBtn key={t.id} t={t} />)}
+                          </>
+                        )}
+                        {archived.length > 0 && (
+                          <>
+                            <div className="px-5 py-2 mt-1">
+                              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Archived</p>
+                            </div>
+                            {archived.map(t => <ProjectBtn key={t.id} t={t} dim />)}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
