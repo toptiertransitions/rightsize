@@ -66,6 +66,13 @@ export const AIRTABLE_TABLES = {
   FAILED_SALE_SYNC: process.env.AIRTABLE_FAILED_SALE_SYNC_TABLE || "FailedSaleSync",
   ESTATES: process.env.AIRTABLE_ESTATES_TABLE || "Estates",
   STOREFRONT_BUYERS: process.env.AIRTABLE_STOREFRONT_BUYERS_TABLE || "StorefrontBuyers",
+  OUTREACH_TEMPLATES: "OutreachTemplates",
+  OUTREACH_AUDIENCES: "OutreachAudiences",
+  OUTREACH_SEQUENCES: "OutreachSequences",
+  OUTREACH_SEQUENCE_STEPS: "OutreachSequenceSteps",
+  OUTREACH_ENROLLMENTS: "OutreachEnrollments",
+  OUTREACH_SENDS: "OutreachSends",
+  OUTREACH_NURTURE_SETTINGS: "OutreachNurtureSettings",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

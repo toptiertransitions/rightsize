@@ -767,6 +767,8 @@ export interface ReferralContact {
   orgsGroups?: string;
   createdAt: string;
   lastActivityDate?: string;
+  tags?: string;
+  emailOptout?: boolean;
 }
 
 export interface ClientContact {
@@ -780,6 +782,8 @@ export interface ClientContact {
   notes: string;
   assignedToClerkId: string;
   createdAt: string;
+  tags?: string;
+  emailOptout?: boolean;
 }
 
 export type OpportunityStage = "Lead" | "Qualifying" | "Proposing" | "Won" | "Lost";
@@ -835,6 +839,7 @@ export interface GmailToken {
   refreshToken: string;
   expiresAt: string;
   email: string;
+  hasSendScope: boolean;
 }
 
 // ─── Services ─────────────────────────────────────────────────────────────────
@@ -1084,4 +1089,109 @@ export interface Subcontractor {
   tenantId?: string;
   tenantName?: string;
   createdAt: string;
+}
+
+// ─── Outreach ─────────────────────────────────────────────────────────────────
+export type OutreachContactType = "ReferralContacts" | "ClientContacts";
+export type OutreachTemplateChannel = "Email" | "SMS";
+export type OutreachSequenceStatus = "Draft" | "Active" | "Archived";
+export type OutreachTriggerType = "Manual" | "Scheduled" | "Event";
+export type OutreachStepChannel = "Email" | "SMS" | "Task";
+export type OutreachTaskType = "LinkedIn" | "Handwritten Note" | "Custom" | "SMS" | "Drop In";
+export type OutreachEnrollmentStatus =
+  | "Active" | "Paused" | "Completed" | "Bounced"
+  | "Unsubscribed" | "Replied" | "Manually_Stopped";
+export type OutreachSendStatus = "Sent" | "Failed" | "Bounced";
+
+export interface OutreachTemplate {
+  id: string;
+  name: string;
+  channel: OutreachTemplateChannel;
+  subject: string;
+  body: string;
+  ownerClerkId: string;
+  shared: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutreachAudience {
+  id: string;
+  name: string;
+  description: string;
+  contactType: OutreachContactType;
+  filterJson: string;
+  ownerClerkId: string;
+  shared: boolean;
+  contactCountCached: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutreachSequence {
+  id: string;
+  name: string;
+  description: string;
+  status: OutreachSequenceStatus;
+  ownerClerkId: string;
+  triggerType: OutreachTriggerType;
+  triggerConfigJson: string;
+  defaultAudienceId: string;
+  sendWindowJson: string;
+  autoPauseOnReply: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutreachSequenceStep {
+  id: string;
+  sequenceId: string;
+  stepOrder: number;
+  channel: OutreachStepChannel;
+  delayDays: number;
+  delayHours: number;
+  templateId: string;
+  subjectOverride: string;
+  bodyOverride: string;
+  taskTitle: string;
+  taskDescription: string;
+  taskType: OutreachTaskType | "";
+  threadWithPrevious: boolean;
+}
+
+export interface OutreachEnrollment {
+  id: string;
+  sequenceId: string;
+  contactType: OutreachContactType;
+  contactId: string;
+  contactEmail: string;
+  contactName: string;
+  company: string;
+  enrolledByClerkId: string;
+  assignedToClerkId: string;
+  status: OutreachEnrollmentStatus;
+  currentStep: number;
+  enrolledAt: string;
+  lastSentAt: string;
+  nextSendAt: string;
+  lastReplyAt: string;
+  lastReplySnippet: string;
+  repliesAcknowledgedAt: string;
+}
+
+export interface OutreachSend {
+  id: string;
+  enrollmentId: string;
+  stepOrder: number;
+  sentAt: string;
+  gmailMessageId: string;
+  gmailThreadId: string;
+  status: OutreachSendStatus;
+  errorMessage: string;
+}
+
+export interface OutreachNurtureSetting {
+  id: string;
+  clerkUserId: string;
+  sequenceId: string;
 }

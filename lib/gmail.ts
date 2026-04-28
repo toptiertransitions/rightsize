@@ -12,6 +12,7 @@ import type { ZellePayment } from "./types";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
@@ -35,6 +36,7 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   refreshToken: string;
   expiresAt: string;
   email: string;
+  hasSendScope: boolean;
 }> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -58,11 +60,13 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   });
   const userInfo = userRes.ok ? await userRes.json() : {};
 
+  const grantedScopes: string = data.scope || "";
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token || "",
     expiresAt,
     email: userInfo.email || "",
+    hasSendScope: grantedScopes.includes("gmail.send"),
   };
 }
 
@@ -364,4 +368,62 @@ export async function fetchZellePayments(
     return true;
   });
   return deduped.sort((a, b) => b.sentOn.localeCompare(a.sentOn));
+}
+
+// ─── Outreach: Send via Gmail ─────────────────────────────────────────────────
+
+export interface GmailSendOptions {
+  accessToken: string;
+  to: string;
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  htmlBody: string;
+  threadId?: string;   // set to reply in-thread
+  messageId?: string;  // In-Reply-To header for threading
+}
+
+export interface GmailSendResult {
+  messageId: string;
+  threadId: string;
+}
+
+export async function sendGmailMessage(opts: GmailSendOptions): Promise<GmailSendResult> {
+  const headers: Record<string, string> = {
+    From: `${opts.fromName} <${opts.fromEmail}>`,
+    To: opts.to,
+    Subject: opts.subject,
+    "Content-Type": "text/html; charset=utf-8",
+    "MIME-Version": "1.0",
+  };
+  if (opts.messageId) {
+    headers["In-Reply-To"] = opts.messageId;
+    headers["References"] = opts.messageId;
+  }
+
+  const rawHeaders = Object.entries(headers)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\r\n");
+  const raw = `${rawHeaders}\r\n\r\n${opts.htmlBody}`;
+  const encoded = Buffer.from(raw).toString("base64url");
+
+  const body: Record<string, string> = { raw: encoded };
+  if (opts.threadId) (body as Record<string, string>).threadId = opts.threadId;
+
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${opts.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gmail send failed: ${err}`);
+  }
+
+  const data = await res.json();
+  return { messageId: data.id, threadId: data.threadId };
 }

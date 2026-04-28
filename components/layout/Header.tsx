@@ -69,12 +69,12 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
 
   const isVendorPortal = pathname === "/vendor" || pathname.startsWith("/vendor/");
 
-  // Sales users see CRM + Drips + Expenses + Quoting + Invoices
+  // Sales users see CRM + Outreach + Expenses + Quoting + Invoices
   const salesOnlyLinks = [
     { href: "/quoting", base: "/quoting", label: "Quoting" },
     { href: "/invoices", base: "/invoices", label: "Invoices" },
     { href: "/crm", base: "/crm", label: "CRM" },
-    { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
+    { href: "/crm/outreach", base: "/crm/outreach", label: "Outreach" },
     { href: "/expenses", base: "/expenses", label: "Expenses" },
     { href: "/help", base: "/help", label: "Help" },
   ];
@@ -90,10 +90,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     // Invoices — TTT clients (non-staff) only; tttTenantIds is server-determined
     ...(navTenantId && !isStaff && tttTenantIds?.includes(navTenantId) ? [{ href: `/invoices${tq}`, base: "/invoices", label: "Invoices" }] : []),
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
-    // CRM + Drips — Admin only
+    // CRM + Outreach — Admin only
     ...(isAdmin ? [
       { href: "/crm", base: "/crm", label: "CRM" },
-      { href: "/crm/drips", base: "/crm/drips", label: "Drips" },
+      { href: "/crm/outreach", base: "/crm/outreach", label: "Outreach" },
     ] : []),
     // Expenses — Staff, Manager, and Admin
     ...((isManager || isStaff) ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),

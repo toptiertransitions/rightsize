@@ -71,6 +71,21 @@ import type {
   Estate,
   EstateStatus,
   EstateSaleType,
+  OutreachTemplate,
+  OutreachAudience,
+  OutreachSequence,
+  OutreachSequenceStep,
+  OutreachEnrollment,
+  OutreachSend,
+  OutreachNurtureSetting,
+  OutreachContactType,
+  OutreachTemplateChannel,
+  OutreachSequenceStatus,
+  OutreachTriggerType,
+  OutreachStepChannel,
+  OutreachTaskType,
+  OutreachEnrollmentStatus,
+  OutreachSendStatus,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -2617,6 +2632,8 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     orgsGroups: toStr(f["OrgsGroups"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
     lastActivityDate: toStr(f["LastActivityDate"]) || undefined,
+    tags: toStr(f["Tags"]) || undefined,
+    emailOptout: !!f["EmailOptout"],
   };
 }
 
@@ -2725,6 +2742,8 @@ function mapClientContact(record: AirtableRecord): ClientContact {
     notes: toStr(f["Notes"]),
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
+    tags: toStr(f["Tags"]) || undefined,
+    emailOptout: !!f["EmailOptout"],
   };
 }
 
@@ -3195,6 +3214,7 @@ function mapGmailToken(record: AirtableRecord): GmailToken {
     refreshToken: toStr(f["RefreshToken"]),
     expiresAt: toStr(f["ExpiresAt"]),
     email: toStr(f["Email"]),
+    hasSendScope: !!f["HasSendScope"],
   };
 }
 
@@ -3221,16 +3241,17 @@ export async function getGmailToken(clerkUserId: string): Promise<GmailToken | n
 
 export async function saveGmailToken(
   clerkUserId: string,
-  data: { accessToken: string; refreshToken: string; expiresAt: string; email: string }
+  data: { accessToken: string; refreshToken: string; expiresAt: string; email: string; hasSendScope?: boolean }
 ): Promise<GmailToken> {
   const existing = await getGmailToken(clerkUserId);
-  const fields: Record<string, string> = {
+  const fields: Record<string, unknown> = {
     ClerkUserId: clerkUserId,
     AccessToken: data.accessToken,
     ExpiresAt: data.expiresAt,
     Email: data.email,
     UpdatedAt: new Date().toISOString(),
   };
+  if (data.hasSendScope !== undefined) fields.HasSendScope = data.hasSendScope;
   // Only write RefreshToken when we actually have one — never overwrite with empty
   if (data.refreshToken) fields.RefreshToken = data.refreshToken;
   if (existing) {
@@ -4672,4 +4693,494 @@ export async function getItemsForEstateSale(estateId: string): Promise<Item[]> {
     })
     .all();
   return records.map(mapItem);
+}
+
+// ─── Outreach Templates ───────────────────────────────────────────────────────
+function mapOutreachTemplate(record: AirtableRecord): OutreachTemplate {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    channel: (toStr(f["Channel"]) || "Email") as OutreachTemplateChannel,
+    subject: toStr(f["Subject"]),
+    body: toStr(f["Body"]),
+    ownerClerkId: toStr(f["OwnerClerkId"]),
+    shared: !!f["Shared"],
+    createdAt: toStr(f["CreatedAt"]),
+    updatedAt: toStr(f["UpdatedAt"]),
+  };
+}
+
+export async function getOutreachTemplates(clerkUserId?: string): Promise<OutreachTemplate[]> {
+  const formula = clerkUserId
+    ? encodeURIComponent(`OR({Shared} = 1, {OwnerClerkId} = "${clerkUserId}")`)
+    : "";
+  const qs = `?sort[0][field]=Name&sort[0][direction]=asc${formula ? `&filterByFormula=${formula}` : ""}`;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, qs);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOutreachTemplate);
+}
+
+export async function getOutreachTemplateById(id: string): Promise<OutreachTemplate | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, `/${id}`);
+  if (!res.ok) return null;
+  return mapOutreachTemplate(await res.json());
+}
+
+export async function createOutreachTemplate(data: Omit<OutreachTemplate, "id" | "createdAt" | "updatedAt">): Promise<OutreachTemplate> {
+  const now = new Date().toISOString();
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Channel: data.channel,
+        Subject: data.subject,
+        Body: data.body,
+        OwnerClerkId: data.ownerClerkId,
+        Shared: data.shared,
+        CreatedAt: now,
+        UpdatedAt: now,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachTemplate(await res.json());
+}
+
+export async function updateOutreachTemplate(id: string, data: Partial<Omit<OutreachTemplate, "id" | "createdAt">>): Promise<OutreachTemplate> {
+  const fields: Record<string, unknown> = { UpdatedAt: new Date().toISOString() };
+  if (data.name !== undefined) fields.Name = data.name;
+  if (data.channel !== undefined) fields.Channel = data.channel;
+  if (data.subject !== undefined) fields.Subject = data.subject;
+  if (data.body !== undefined) fields.Body = data.body;
+  if (data.shared !== undefined) fields.Shared = data.shared;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachTemplate(await res.json());
+}
+
+export async function deleteOutreachTemplate(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Outreach Audiences ───────────────────────────────────────────────────────
+function mapOutreachAudience(record: AirtableRecord): OutreachAudience {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    description: toStr(f["Description"]),
+    contactType: (toStr(f["ContactType"]) || "ReferralContacts") as OutreachContactType,
+    filterJson: toStr(f["FilterJson"]),
+    ownerClerkId: toStr(f["OwnerClerkId"]),
+    shared: !!f["Shared"],
+    contactCountCached: Number(f["ContactCountCached"] ?? 0),
+    createdAt: toStr(f["CreatedAt"]),
+    updatedAt: toStr(f["UpdatedAt"]),
+  };
+}
+
+export async function getOutreachAudiences(clerkUserId?: string): Promise<OutreachAudience[]> {
+  const formula = clerkUserId
+    ? encodeURIComponent(`OR({Shared} = 1, {OwnerClerkId} = "${clerkUserId}")`)
+    : "";
+  const qs = `?sort[0][field]=Name&sort[0][direction]=asc${formula ? `&filterByFormula=${formula}` : ""}`;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_AUDIENCES, qs);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOutreachAudience);
+}
+
+export async function getOutreachAudienceById(id: string): Promise<OutreachAudience | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_AUDIENCES, `/${id}`);
+  if (!res.ok) return null;
+  return mapOutreachAudience(await res.json());
+}
+
+export async function createOutreachAudience(data: Omit<OutreachAudience, "id" | "createdAt" | "updatedAt">): Promise<OutreachAudience> {
+  const now = new Date().toISOString();
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_AUDIENCES, "", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Description: data.description,
+        ContactType: data.contactType,
+        FilterJson: data.filterJson,
+        OwnerClerkId: data.ownerClerkId,
+        Shared: data.shared,
+        ContactCountCached: data.contactCountCached,
+        CreatedAt: now,
+        UpdatedAt: now,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachAudience(await res.json());
+}
+
+export async function updateOutreachAudience(id: string, data: Partial<Omit<OutreachAudience, "id" | "createdAt">>): Promise<OutreachAudience> {
+  const fields: Record<string, unknown> = { UpdatedAt: new Date().toISOString() };
+  if (data.name !== undefined) fields.Name = data.name;
+  if (data.description !== undefined) fields.Description = data.description;
+  if (data.contactType !== undefined) fields.ContactType = data.contactType;
+  if (data.filterJson !== undefined) fields.FilterJson = data.filterJson;
+  if (data.shared !== undefined) fields.Shared = data.shared;
+  if (data.contactCountCached !== undefined) fields.ContactCountCached = data.contactCountCached;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_AUDIENCES, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachAudience(await res.json());
+}
+
+export async function deleteOutreachAudience(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_AUDIENCES, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Outreach Sequences ───────────────────────────────────────────────────────
+function mapOutreachSequence(record: AirtableRecord): OutreachSequence {
+  const f = record.fields;
+  const defaultAudienceRaw = f["DefaultAudience"];
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    description: toStr(f["Description"]),
+    status: (toStr(f["Status"]) || "Draft") as OutreachSequenceStatus,
+    ownerClerkId: toStr(f["OwnerClerkId"]),
+    triggerType: (toStr(f["TriggerType"]) || "Manual") as OutreachTriggerType,
+    triggerConfigJson: toStr(f["TriggerConfigJson"]),
+    defaultAudienceId: Array.isArray(defaultAudienceRaw) ? toStr(defaultAudienceRaw[0]) : toStr(defaultAudienceRaw),
+    sendWindowJson: toStr(f["SendWindowJson"]),
+    autoPauseOnReply: !!f["AutoPauseOnReply"],
+    createdAt: toStr(f["CreatedAt"]),
+    updatedAt: toStr(f["UpdatedAt"]),
+  };
+}
+
+export async function getOutreachSequences(clerkUserId?: string): Promise<OutreachSequence[]> {
+  const formula = clerkUserId
+    ? encodeURIComponent(`{OwnerClerkId} = "${clerkUserId}"`)
+    : "";
+  const qs = `?sort[0][field]=Name&sort[0][direction]=asc${formula ? `&filterByFormula=${formula}` : ""}`;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, qs);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOutreachSequence);
+}
+
+export async function getAllOutreachSequences(): Promise<OutreachSequence[]> {
+  const qs = `?sort[0][field]=Name&sort[0][direction]=asc`;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, qs);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOutreachSequence);
+}
+
+export async function getOutreachSequenceById(id: string): Promise<OutreachSequence | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, `/${id}`);
+  if (!res.ok) return null;
+  return mapOutreachSequence(await res.json());
+}
+
+export async function createOutreachSequence(data: Omit<OutreachSequence, "id" | "createdAt" | "updatedAt">): Promise<OutreachSequence> {
+  const now = new Date().toISOString();
+  const fields: Record<string, unknown> = {
+    Name: data.name,
+    Description: data.description,
+    Status: data.status,
+    OwnerClerkId: data.ownerClerkId,
+    TriggerType: data.triggerType,
+    TriggerConfigJson: data.triggerConfigJson,
+    SendWindowJson: data.sendWindowJson,
+    AutoPauseOnReply: data.autoPauseOnReply,
+    CreatedAt: now,
+    UpdatedAt: now,
+  };
+  if (data.defaultAudienceId) fields.DefaultAudience = [data.defaultAudienceId];
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, "", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachSequence(await res.json());
+}
+
+export async function updateOutreachSequence(id: string, data: Partial<Omit<OutreachSequence, "id" | "createdAt">>): Promise<OutreachSequence> {
+  const fields: Record<string, unknown> = { UpdatedAt: new Date().toISOString() };
+  if (data.name !== undefined) fields.Name = data.name;
+  if (data.description !== undefined) fields.Description = data.description;
+  if (data.status !== undefined) fields.Status = data.status;
+  if (data.triggerType !== undefined) fields.TriggerType = data.triggerType;
+  if (data.triggerConfigJson !== undefined) fields.TriggerConfigJson = data.triggerConfigJson;
+  if (data.sendWindowJson !== undefined) fields.SendWindowJson = data.sendWindowJson;
+  if (data.autoPauseOnReply !== undefined) fields.AutoPauseOnReply = data.autoPauseOnReply;
+  if (data.defaultAudienceId !== undefined) fields.DefaultAudience = data.defaultAudienceId ? [data.defaultAudienceId] : [];
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachSequence(await res.json());
+}
+
+export async function deleteOutreachSequence(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Outreach Sequence Steps ──────────────────────────────────────────────────
+function mapOutreachSequenceStep(record: AirtableRecord): OutreachSequenceStep {
+  const f = record.fields;
+  const seqRaw = f["Sequence"];
+  const tplRaw = f["Template"];
+  return {
+    id: record.id,
+    sequenceId: Array.isArray(seqRaw) ? toStr(seqRaw[0]) : toStr(seqRaw),
+    stepOrder: Number(f["StepOrder"] ?? 1),
+    channel: (toStr(f["Channel"]) || "Email") as OutreachStepChannel,
+    delayDays: Number(f["DelayDays"] ?? 0),
+    delayHours: Number(f["DelayHours"] ?? 0),
+    templateId: Array.isArray(tplRaw) ? toStr(tplRaw[0]) : toStr(tplRaw),
+    subjectOverride: toStr(f["SubjectOverride"]),
+    bodyOverride: toStr(f["BodyOverride"]),
+    taskTitle: toStr(f["TaskTitle"]),
+    taskDescription: toStr(f["TaskDescription"]),
+    taskType: toStr(f["TaskType"]) as OutreachTaskType | "",
+    threadWithPrevious: !!f["ThreadWithPrevious"],
+  };
+}
+
+export async function getOutreachStepsForSequence(sequenceId: string): Promise<OutreachSequenceStep[]> {
+  const formula = encodeURIComponent(`FIND("${sequenceId}", ARRAYJOIN({Sequence}, ",")) > 0`);
+  const qs = `?filterByFormula=${formula}&sort[0][field]=StepOrder&sort[0][direction]=asc`;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCE_STEPS, qs);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOutreachSequenceStep);
+}
+
+export async function createOutreachSequenceStep(data: Omit<OutreachSequenceStep, "id">): Promise<OutreachSequenceStep> {
+  const fields: Record<string, unknown> = {
+    Sequence: [data.sequenceId],
+    StepOrder: data.stepOrder,
+    Channel: data.channel,
+    DelayDays: data.delayDays,
+    DelayHours: data.delayHours,
+    SubjectOverride: data.subjectOverride,
+    BodyOverride: data.bodyOverride,
+    TaskTitle: data.taskTitle,
+    TaskDescription: data.taskDescription,
+    ThreadWithPrevious: data.threadWithPrevious,
+  };
+  if (data.templateId) fields.Template = [data.templateId];
+  if (data.taskType) fields.TaskType = data.taskType;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCE_STEPS, "", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachSequenceStep(await res.json());
+}
+
+export async function updateOutreachSequenceStep(id: string, data: Partial<Omit<OutreachSequenceStep, "id" | "sequenceId">>): Promise<OutreachSequenceStep> {
+  const fields: Record<string, unknown> = {};
+  if (data.stepOrder !== undefined) fields.StepOrder = data.stepOrder;
+  if (data.channel !== undefined) fields.Channel = data.channel;
+  if (data.delayDays !== undefined) fields.DelayDays = data.delayDays;
+  if (data.delayHours !== undefined) fields.DelayHours = data.delayHours;
+  if (data.templateId !== undefined) fields.Template = data.templateId ? [data.templateId] : [];
+  if (data.subjectOverride !== undefined) fields.SubjectOverride = data.subjectOverride;
+  if (data.bodyOverride !== undefined) fields.BodyOverride = data.bodyOverride;
+  if (data.taskTitle !== undefined) fields.TaskTitle = data.taskTitle;
+  if (data.taskDescription !== undefined) fields.TaskDescription = data.taskDescription;
+  if (data.taskType !== undefined) fields.TaskType = data.taskType;
+  if (data.threadWithPrevious !== undefined) fields.ThreadWithPrevious = data.threadWithPrevious;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCE_STEPS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachSequenceStep(await res.json());
+}
+
+export async function deleteOutreachSequenceStep(id: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCE_STEPS, `/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Outreach Enrollments ─────────────────────────────────────────────────────
+function mapOutreachEnrollment(record: AirtableRecord): OutreachEnrollment {
+  const f = record.fields;
+  const seqRaw = f["Sequence"];
+  return {
+    id: record.id,
+    sequenceId: Array.isArray(seqRaw) ? toStr(seqRaw[0]) : toStr(seqRaw),
+    contactType: (toStr(f["ContactType"]) || "ReferralContacts") as OutreachContactType,
+    contactId: toStr(f["ContactId"]),
+    contactEmail: toStr(f["ContactEmail"]),
+    contactName: toStr(f["ContactName"]),
+    company: toStr(f["Company"]),
+    enrolledByClerkId: toStr(f["EnrolledByClerkId"]),
+    assignedToClerkId: toStr(f["AssignedToClerkId"]),
+    status: (toStr(f["Status"]) || "Active") as OutreachEnrollmentStatus,
+    currentStep: Number(f["CurrentStep"] ?? 1),
+    enrolledAt: toStr(f["EnrolledAt"]),
+    lastSentAt: toStr(f["LastSentAt"]),
+    nextSendAt: toStr(f["NextSendAt"]),
+    lastReplyAt: toStr(f["LastReplyAt"]),
+    lastReplySnippet: toStr(f["LastReplySnippet"]),
+    repliesAcknowledgedAt: toStr(f["RepliesAcknowledgedAt"]),
+  };
+}
+
+export async function getOutreachEnrollments(filters?: {
+  sequenceId?: string;
+  assignedToClerkId?: string;
+  status?: OutreachEnrollmentStatus;
+}): Promise<OutreachEnrollment[]> {
+  const parts: string[] = [];
+  if (filters?.sequenceId) parts.push(`FIND("${filters.sequenceId}", ARRAYJOIN({Sequence}, ",")) > 0`);
+  if (filters?.assignedToClerkId) parts.push(`{AssignedToClerkId} = "${filters.assignedToClerkId}"`);
+  if (filters?.status) parts.push(`{Status} = "${filters.status}"`);
+  const formula = parts.length > 0 ? encodeURIComponent(parts.length === 1 ? parts[0] : `AND(${parts.join(",")})`) : "";
+  const qs = `?sort[0][field]=EnrolledAt&sort[0][direction]=desc${formula ? `&filterByFormula=${formula}` : ""}`;
+  const all: OutreachEnrollment[] = [];
+  let offset: string | undefined;
+  do {
+    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_ENROLLMENTS, `${qs}${offset ? `&offset=${offset}` : ""}`);
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapOutreachEnrollment));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+export async function createOutreachEnrollment(data: Omit<OutreachEnrollment, "id">): Promise<OutreachEnrollment> {
+  const fields: Record<string, unknown> = {
+    Sequence: [data.sequenceId],
+    ContactType: data.contactType,
+    ContactId: data.contactId,
+    ContactEmail: data.contactEmail,
+    ContactName: data.contactName,
+    Company: data.company,
+    EnrolledByClerkId: data.enrolledByClerkId,
+    AssignedToClerkId: data.assignedToClerkId,
+    Status: data.status,
+    CurrentStep: data.currentStep,
+    EnrolledAt: data.enrolledAt || new Date().toISOString(),
+  };
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_ENROLLMENTS, "", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachEnrollment(await res.json());
+}
+
+export async function updateOutreachEnrollment(id: string, data: Partial<Omit<OutreachEnrollment, "id" | "sequenceId" | "contactId">>): Promise<OutreachEnrollment> {
+  const fields: Record<string, unknown> = {};
+  if (data.status !== undefined) fields.Status = data.status;
+  if (data.currentStep !== undefined) fields.CurrentStep = data.currentStep;
+  if (data.lastSentAt !== undefined) fields.LastSentAt = data.lastSentAt;
+  if (data.nextSendAt !== undefined) fields.NextSendAt = data.nextSendAt;
+  if (data.lastReplyAt !== undefined) fields.LastReplyAt = data.lastReplyAt;
+  if (data.lastReplySnippet !== undefined) fields.LastReplySnippet = data.lastReplySnippet;
+  if (data.repliesAcknowledgedAt !== undefined) fields.RepliesAcknowledgedAt = data.repliesAcknowledgedAt;
+  if (data.assignedToClerkId !== undefined) fields.AssignedToClerkId = data.assignedToClerkId;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_ENROLLMENTS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachEnrollment(await res.json());
+}
+
+// ─── Outreach Sends ───────────────────────────────────────────────────────────
+function mapOutreachSend(record: AirtableRecord): OutreachSend {
+  const f = record.fields;
+  const enrollRaw = f["Enrollment"];
+  return {
+    id: record.id,
+    enrollmentId: Array.isArray(enrollRaw) ? toStr(enrollRaw[0]) : toStr(enrollRaw),
+    stepOrder: Number(f["StepOrder"] ?? 1),
+    sentAt: toStr(f["SentAt"]),
+    gmailMessageId: toStr(f["GmailMessageId"]),
+    gmailThreadId: toStr(f["GmailThreadId"]),
+    status: (toStr(f["Status"]) || "Sent") as OutreachSendStatus,
+    errorMessage: toStr(f["ErrorMessage"]),
+  };
+}
+
+export async function getOutreachSendsForEnrollment(enrollmentId: string): Promise<OutreachSend[]> {
+  const formula = encodeURIComponent(`FIND("${enrollmentId}", ARRAYJOIN({Enrollment}, ",")) > 0`);
+  const qs = `?filterByFormula=${formula}&sort[0][field]=SentAt&sort[0][direction]=asc`;
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SENDS, qs);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOutreachSend);
+}
+
+export async function createOutreachSend(data: Omit<OutreachSend, "id">): Promise<OutreachSend> {
+  const fields: Record<string, unknown> = {
+    Enrollment: [data.enrollmentId],
+    StepOrder: data.stepOrder,
+    SentAt: data.sentAt || new Date().toISOString(),
+    GmailMessageId: data.gmailMessageId,
+    GmailThreadId: data.gmailThreadId,
+    Status: data.status,
+    ErrorMessage: data.errorMessage,
+  };
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SENDS, "", {
+    method: "POST",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachSend(await res.json());
+}
+
+// ─── Outreach Nurture Settings ────────────────────────────────────────────────
+function mapOutreachNurtureSetting(record: AirtableRecord): OutreachNurtureSetting {
+  const f = record.fields;
+  return {
+    id: record.id,
+    clerkUserId: toStr(f["ClerkUserId"]),
+    sequenceId: toStr(f["SequenceId"]),
+  };
+}
+
+export async function getOutreachNurtureSetting(clerkUserId: string): Promise<OutreachNurtureSetting | null> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_NURTURE_SETTINGS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapOutreachNurtureSetting(data.records[0]);
+}
+
+export async function upsertOutreachNurtureSetting(clerkUserId: string, sequenceId: string): Promise<OutreachNurtureSetting> {
+  const existing = await getOutreachNurtureSetting(clerkUserId);
+  if (existing) {
+    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_NURTURE_SETTINGS, `/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields: { SequenceId: sequenceId } }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapOutreachNurtureSetting(await res.json());
+  }
+  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_NURTURE_SETTINGS, "", {
+    method: "POST",
+    body: JSON.stringify({ fields: { ClerkUserId: clerkUserId, SequenceId: sequenceId } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapOutreachNurtureSetting(await res.json());
 }

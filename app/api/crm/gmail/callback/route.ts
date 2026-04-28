@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await exchangeCodeForTokens(code);
     console.log(`[gmail/callback] clerkUserId=${clerkUserId} email=${tokens.email} hasRefreshToken=${!!tokens.refreshToken}`);
-    await saveGmailToken(clerkUserId, tokens);
+    await saveGmailToken(clerkUserId, { ...tokens, hasSendScope: tokens.hasSendScope });
 
     // Kick off a full email history sync in the background after redirect
     after(async () => {
