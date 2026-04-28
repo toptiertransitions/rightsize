@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { EstimatorSection } from "@/app/(protected)/rooms/EstimatorSection";
 import { AddRoomButton } from "@/app/(protected)/rooms/RoomsClient";
 import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus } from "@/lib/types";
+import { ROOM_TYPES } from "@/lib/types";
 
 interface Props {
   tenant: Tenant;
@@ -863,7 +864,7 @@ function HoursComparison({ signedContracts, timeEntries }: { signedContracts: Co
 
 // ─── Main Client ──────────────────────────────────────────────────────────────
 export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices }: Props) {
-  const [mode, setMode] = useState<Mode>("rooms");
+  const [mode, setMode] = useState<Mode>("quick");
   const [highSqFt, setHighSqFt] = useState(0);
   const [avgSqFt, setAvgSqFt] = useState(0);
   const [lowSqFt, setLowSqFt] = useState(0);
@@ -871,6 +872,12 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
   const [invoices] = useState<Invoice[]>(initialInvoices ?? []);
   const [showEstimator, setShowEstimator] = useState(existingContracts.length === 0);
   const [draftToSend, setDraftToSend] = useState<Contract | null>(null);
+  const [localRooms, setLocalRooms] = useState<Room[]>(rooms);
+  useEffect(() => { setLocalRooms(rooms); }, [rooms]);
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [editRoomFields, setEditRoomFields] = useState<{ name: string; roomType: RoomType; squareFeet: number; density: DensityLevel }>({ name: "", roomType: "Living Room", squareFeet: 0, density: "Medium" });
+  const [roomSaving, setRoomSaving] = useState(false);
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
 
   const syntheticRooms: Room[] = [
     ...(highSqFt > 0 ? [makeSyntheticRoom("High", highSqFt, 0)] : []),
@@ -878,8 +885,8 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
     ...(lowSqFt > 0 ? [makeSyntheticRoom("Low", lowSqFt, 2)] : []),
   ];
 
-  const estimatorRooms = mode === "rooms" ? rooms : syntheticRooms;
-  const hasRooms = mode === "rooms" ? rooms.length > 0 : syntheticRooms.length > 0;
+  const estimatorRooms = mode === "rooms" ? localRooms : syntheticRooms;
+  const hasRooms = mode === "rooms" ? localRooms.length > 0 : syntheticRooms.length > 0;
 
   // Called when EstimatorSection saves a NEW quote
   function handleNewQuoteSaved(contract: Contract) {
@@ -1018,8 +1025,8 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
       )}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit mb-8">
         {([
-          { key: "rooms" as Mode, label: "By Rooms" },
           { key: "quick" as Mode, label: "Quick Quote" },
+          { key: "rooms" as Mode, label: "By Rooms" },
         ]).map((opt) => (
           <button
             key={opt.key}
@@ -1037,7 +1044,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
       {/* Rooms section */}
       {mode === "rooms" && (
         <div className="mb-6">
-          {rooms.length === 0 ? (
+          {localRooms.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-10 text-center">
               <p className="text-sm font-medium text-gray-700 mb-1">No rooms yet</p>
               <p className="text-xs text-gray-400 mb-5">Add rooms to calculate hours from actual square footage and density.</p>
@@ -1049,7 +1056,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Project Rooms</h2>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {rooms.length} room{rooms.length !== 1 ? "s" : ""} · {rooms.reduce((s, r) => s + r.squareFeet, 0).toLocaleString()} SF total
+                    {localRooms.length} room{localRooms.length !== 1 ? "s" : ""} · {localRooms.reduce((s, r) => s + r.squareFeet, 0).toLocaleString()} SF total
                   </p>
                 </div>
                 <AddRoomButton tenantId={tenant.id} />
@@ -1062,26 +1069,144 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
                       <th className="px-4 py-2.5 text-left">Type</th>
                       <th className="px-4 py-2.5 text-right">Sq Ft</th>
                       <th className="px-4 py-2.5 text-left">Density</th>
+                      <th className="px-4 py-2.5 w-20" />
                     </tr>
                   </thead>
                   <tbody>
-                    {rooms.map((r) => (
-                      <tr key={r.id} className="border-b border-gray-100 last:border-0">
-                        <td className="px-4 py-2.5 font-medium text-gray-900">{r.name}</td>
-                        <td className="px-4 py-2.5 text-gray-500">{r.roomType}</td>
-                        <td className="px-4 py-2.5 text-right text-gray-700 tabular-nums">{r.squareFeet.toLocaleString()}</td>
-                        <td className="px-4 py-2.5">
-                          <span className={cn(
-                            "text-xs font-medium px-2 py-0.5 rounded-full",
-                            r.density === "High" ? "bg-orange-100 text-orange-700" :
-                            r.density === "Medium" ? "bg-forest-100 text-forest-700" :
-                            "bg-blue-100 text-blue-700"
-                          )}>
-                            {r.density === "Medium" ? "Average" : r.density}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {localRooms.map((r) => {
+                      const isEditing = editingRoomId === r.id;
+                      const isDeleting = deletingRoomId === r.id;
+                      return (
+                        <tr key={r.id} className={cn("border-b border-gray-100 last:border-0", isEditing && "bg-forest-50/40")}>
+                          {isEditing ? (
+                            <>
+                              <td className="px-2 py-1.5">
+                                <input
+                                  value={editRoomFields.name}
+                                  onChange={(e) => setEditRoomFields((f) => ({ ...f, name: e.target.value }))}
+                                  className="w-full h-7 px-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <select
+                                  value={editRoomFields.roomType}
+                                  onChange={(e) => setEditRoomFields((f) => ({ ...f, roomType: e.target.value as RoomType }))}
+                                  className="w-full h-7 px-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                                >
+                                  {ROOM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <input
+                                  type="number" min={0}
+                                  value={editRoomFields.squareFeet || ""}
+                                  onChange={(e) => setEditRoomFields((f) => ({ ...f, squareFeet: Number(e.target.value) }))}
+                                  className="w-20 h-7 px-2 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400 ml-auto block"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <select
+                                  value={editRoomFields.density}
+                                  onChange={(e) => setEditRoomFields((f) => ({ ...f, density: e.target.value as DensityLevel }))}
+                                  className="h-7 px-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                                >
+                                  <option value="High">High</option>
+                                  <option value="Medium">Average</option>
+                                  <option value="Low">Low</option>
+                                </select>
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <div className="flex items-center gap-1 justify-end">
+                                  <button
+                                    disabled={roomSaving}
+                                    onClick={async () => {
+                                      setRoomSaving(true);
+                                      try {
+                                        const res = await fetch("/api/rooms", {
+                                          method: "PATCH",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ id: r.id, tenantId: tenant.id, ...editRoomFields }),
+                                        });
+                                        if (!res.ok) throw new Error();
+                                        const data = await res.json();
+                                        setLocalRooms((prev) => prev.map((x) => x.id === r.id ? data.room : x));
+                                        setEditingRoomId(null);
+                                      } catch { /* ignore */ }
+                                      finally { setRoomSaving(false); }
+                                    }}
+                                    className="text-xs font-medium px-2 py-1 rounded-lg bg-forest-600 text-white hover:bg-forest-700 disabled:opacity-50"
+                                  >
+                                    {roomSaving ? "…" : "Save"}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingRoomId(null)}
+                                    className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-4 py-2.5 font-medium text-gray-900">{r.name}</td>
+                              <td className="px-4 py-2.5 text-gray-500">{r.roomType}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-700 tabular-nums">{r.squareFeet.toLocaleString()}</td>
+                              <td className="px-4 py-2.5">
+                                <span className={cn(
+                                  "text-xs font-medium px-2 py-0.5 rounded-full",
+                                  r.density === "High" ? "bg-orange-100 text-orange-700" :
+                                  r.density === "Medium" ? "bg-forest-100 text-forest-700" :
+                                  "bg-blue-100 text-blue-700"
+                                )}>
+                                  {r.density === "Medium" ? "Average" : r.density}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5">
+                                {isDeleting ? (
+                                  <div className="flex items-center gap-1 justify-end">
+                                    <span className="text-xs text-gray-500">Delete?</span>
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          await fetch(`/api/rooms?id=${r.id}&tenantId=${tenant.id}`, { method: "DELETE" });
+                                          setLocalRooms((prev) => prev.filter((x) => x.id !== r.id));
+                                        } catch { /* ignore */ }
+                                        finally { setDeletingRoomId(null); }
+                                      }}
+                                      className="text-xs font-medium px-2 py-0.5 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                                    >
+                                      Yes
+                                    </button>
+                                    <button
+                                      onClick={() => setDeletingRoomId(null)}
+                                      className="text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 justify-end">
+                                    <button
+                                      onClick={() => { setEditingRoomId(r.id); setEditRoomFields({ name: r.name, roomType: r.roomType, squareFeet: r.squareFeet, density: r.density }); setDeletingRoomId(null); }}
+                                      className="text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => { setDeletingRoomId(r.id); setEditingRoomId(null); }}
+                                      className="text-xs font-medium px-2 py-0.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
