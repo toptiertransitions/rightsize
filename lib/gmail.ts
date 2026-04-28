@@ -427,3 +427,27 @@ export async function sendGmailMessage(opts: GmailSendOptions): Promise<GmailSen
   const data = await res.json();
   return { messageId: data.id, threadId: data.threadId };
 }
+
+export async function getGmailThreadMessages(
+  accessToken: string,
+  threadId: string
+): Promise<Array<{ messageId: string; from: string; snippet: string; internalDate: string }>> {
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`Gmail thread fetch failed: ${await res.text()}`);
+  const data = await res.json();
+  const messages: Array<{
+    id: string;
+    snippet?: string;
+    internalDate?: string;
+    payload?: { headers?: Array<{ name: string; value: string }> };
+  }> = data.messages || [];
+  return messages.map(m => ({
+    messageId: m.id,
+    from: m.payload?.headers?.find(h => h.name.toLowerCase() === "from")?.value ?? "",
+    snippet: m.snippet ?? "",
+    internalDate: m.internalDate ?? "",
+  }));
+}

@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import type { OutreachTemplate, OutreachTemplateChannel } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
 import BroadcastsTab from "./BroadcastsTab";
+import MyDayTab from "./MyDayTab";
+import SequencesTab from "./SequencesTab";
 
 type OutreachTab = "myday" | "broadcasts" | "sequences" | "templates";
 
@@ -364,16 +366,6 @@ function TemplatesTab({
   );
 }
 
-// ─── Placeholder tabs ─────────────────────────────────────────────────────────
-function ComingSoonTab({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-gray-300 py-20 text-center">
-      <p className="text-sm font-medium text-gray-600">{title}</p>
-      <p className="mt-1 text-sm text-gray-400">{description}</p>
-    </div>
-  );
-}
-
 // ─── Main client ──────────────────────────────────────────────────────────────
 export default function OutreachClient({
   currentUserId,
@@ -427,12 +419,7 @@ export default function OutreachClient({
         </nav>
       </div>
 
-      {tab === "myday" && (
-        <ComingSoonTab
-          title="My Day — coming soon"
-          description="Your daily dashboard: replies waiting, tasks due today, and emails sending on your behalf."
-        />
-      )}
+      {tab === "myday" && <MyDayTab />}
       {tab === "broadcasts" && (
         <BroadcastsTab
           templates={initialTemplates}
@@ -444,9 +431,9 @@ export default function OutreachClient({
         />
       )}
       {tab === "sequences" && (
-        <ComingSoonTab
-          title="Sequences — coming soon"
-          description="Multi-step, multi-day cadences that auto-pause on reply."
+        <SequencesTab
+          companies={companies}
+          staffMembers={staffMembers}
         />
       )}
       {tab === "templates" && (

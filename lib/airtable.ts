@@ -5280,3 +5280,17 @@ export async function batchCreateOutreachEnrollments(records: Omit<OutreachEnrol
   }
   return results;
 }
+
+export async function getAllOutreachSequenceSteps(): Promise<OutreachSequenceStep[]> {
+  const all: OutreachSequenceStep[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=StepOrder&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCE_STEPS, qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapOutreachSequenceStep));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
