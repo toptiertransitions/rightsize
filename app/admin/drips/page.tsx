@@ -17,7 +17,7 @@ export default async function AdminDripsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <AdminHeader active="drips" />
+      <AdminHeader active="projects" />
       <main className="max-w-5xl mx-auto px-6 py-10">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white">Drip Campaign Settings</h1>

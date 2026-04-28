@@ -12,7 +12,6 @@ type AdminTab =
   | "contract-services"
   | "invoicing"
   | "expenses"
-  | "drips"
   | "pfinventory"
   | "fb"
   | "ebay"
@@ -30,7 +29,6 @@ const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "contract-services", label: "Contracts", href: "/admin/contract-services" },
   { tab: "invoicing", label: "Invoicing", href: "/admin/invoicing" },
   { tab: "expenses", label: "Expenses", href: "/admin/expenses" },
-  { tab: "drips", label: "Drips", href: "/admin/drips" },
   { tab: "pfinventory", label: "PF", href: "/admin/pfinventory" },
   { tab: "fb", label: "FB", href: "/admin/fb" },
   { tab: "ebay", label: "eBay", href: "/admin/ebay" },

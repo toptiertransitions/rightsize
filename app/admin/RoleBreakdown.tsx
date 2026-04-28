@@ -52,7 +52,7 @@ const STAFF_ROLES = [
     label: "TTT Sales",
     color: "border-blue-700",
     badge: "bg-blue-900/50 text-blue-300",
-    desc: "Sales team with access to CRM, quoting, invoicing, drip campaigns, expenses, and the Staff page. Expenses are non-reimbursable by default.",
+    desc: "Sales team with access to CRM, Outreach (sequences, broadcasts, My Day), quoting, invoicing, expenses, and the Staff page. Expenses are non-reimbursable by default.",
   },
   {
     key: "TTTAdmin",
@@ -85,7 +85,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Invoices tab",                permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Expenses tab",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "CRM tab",                     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
-  { label: "Drips tab",                   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Outreach tab (sequences, broadcasts, My Day, templates)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Quoting tab",                 permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Ops tab (/staff)",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true, TTTAdmin: true  } },
   { label: "Help tab",                    permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
