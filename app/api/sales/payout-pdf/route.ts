@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ file });
+  return NextResponse.json({ file, pdfBase64: pdfBuffer.toString("base64") });
   } catch (err) {
     console.error("[payout-pdf] error:", err);
     const msg = err instanceof Error ? err.message : "Internal error";

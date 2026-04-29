@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { v2 as cloudinary } from "cloudinary";
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 // Proxy a Cloudinary raw PDF so browsers receive it with the correct
 // Content-Type (application/pdf) and Content-Disposition (inline),
 // allowing it to open directly in a new browser tab instead of downloading
 // as an unknown file.
-//
-// Uses a Cloudinary-signed URL for the server-to-server fetch so it works
-// even when the account has authenticated delivery enabled for raw resources.
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return new NextResponse("Unauthorized", { status: 401 });
@@ -28,32 +18,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Extract the resource_type and public_id from the URL.
-    // URL format: https://res.cloudinary.com/{cloud}/raw/upload/v{version}/{public_id}
-    const rawMatch = url.match(/\/raw\/upload\/v\d+\/(.+)$/);
-    const imageMatch = url.match(/\/image\/upload\/(?:v\d+\/)?(.+)$/);
+    // Use HTTP Basic Auth to fetch from Cloudinary — this works regardless of
+    // whether the account has authenticated delivery enabled on raw resources.
+    const cloudinaryAuth = Buffer.from(
+      `${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`
+    ).toString("base64");
 
-    let fetchUrl = url;
-
-    if (rawMatch) {
-      const publicId = rawMatch[1];
-      // private_download_url uses the Cloudinary API endpoint with API key
-      // authentication, bypassing CDN delivery restrictions on raw resources.
-      fetchUrl = cloudinary.utils.private_download_url(publicId, "", {
-        resource_type: "raw",
-        attachment: false,
-        expires_at: Math.floor(Date.now() / 1000) + 300,
-      });
-    } else if (imageMatch) {
-      const publicId = imageMatch[1];
-      fetchUrl = cloudinary.utils.private_download_url(publicId, "", {
-        resource_type: "image",
-        attachment: false,
-        expires_at: Math.floor(Date.now() / 1000) + 300,
-      });
-    }
-
-    const upstream = await fetch(fetchUrl);
+    const upstream = await fetch(url, {
+      headers: { Authorization: `Basic ${cloudinaryAuth}` },
+    });
     if (!upstream.ok) {
       return new NextResponse(`Failed to fetch file (${upstream.status})`, { status: 502 });
     }

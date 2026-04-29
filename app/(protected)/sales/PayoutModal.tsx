@@ -293,6 +293,14 @@ export function PayoutModal({
       }
       const data = await res.json();
 
+      // Open the PDF in a new tab using a blob URL (no proxy needed)
+      if (data.pdfBase64) {
+        const bytes = Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+      }
+
       if (!reprint) {
         // Mark items and events as paid (best-effort; fire in parallel)
         const markData = buildPayoutMarkData(items, pfSaleEvents, localVendors);
@@ -316,8 +324,6 @@ export function PayoutModal({
         onGenerated(data.file, markData);
       } else {
         onGenerated(data.file, null);
-        // Auto-open the PDF in a new tab for reprints
-        window.open(`/api/pdf-proxy?url=${encodeURIComponent(data.file.cloudinaryUrl)}`, "_blank");
       }
       onClose();
     } catch (err) {
