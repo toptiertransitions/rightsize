@@ -316,6 +316,8 @@ export function PayoutModal({
         onGenerated(data.file, markData);
       } else {
         onGenerated(data.file, null);
+        // Auto-open the PDF in a new tab for reprints
+        window.open(`/api/pdf-proxy?url=${encodeURIComponent(data.file.cloudinaryUrl)}`, "_blank");
       }
       onClose();
     } catch (err) {

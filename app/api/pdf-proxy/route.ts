@@ -37,20 +37,19 @@ export async function GET(req: NextRequest) {
 
     if (rawMatch) {
       const publicId = rawMatch[1];
-      // Generate a signed URL so server-side fetch is authenticated
-      fetchUrl = cloudinary.url(publicId, {
-        secure: true,
+      // private_download_url uses the Cloudinary API endpoint with API key
+      // authentication, bypassing CDN delivery restrictions on raw resources.
+      fetchUrl = cloudinary.utils.private_download_url(publicId, "", {
         resource_type: "raw",
-        type: "upload",
-        sign_url: true,
+        attachment: false,
+        expires_at: Math.floor(Date.now() / 1000) + 300,
       });
     } else if (imageMatch) {
       const publicId = imageMatch[1];
-      fetchUrl = cloudinary.url(publicId, {
-        secure: true,
+      fetchUrl = cloudinary.utils.private_download_url(publicId, "", {
         resource_type: "image",
-        type: "upload",
-        sign_url: true,
+        attachment: false,
+        expires_at: Math.floor(Date.now() / 1000) + 300,
       });
     }
 
