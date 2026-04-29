@@ -892,18 +892,45 @@ function SalesTable({
 
 function ProofOfPaymentSection({
   tenantId,
+  tenantName,
   files,
   canDeleteProof,
   onFilesChange,
+  items,
+  pfSaleEvents,
+  localVendors,
 }: {
   tenantId: string;
+  tenantName: string;
   files: ProjectFile[];
   canDeleteProof: boolean;
   onFilesChange: (files: ProjectFile[]) => void;
+  items: Item[];
+  pfSaleEvents: ItemSaleEvent[];
+  localVendors: LocalVendor[];
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleViewPdf(e: React.MouseEvent) {
+    e.preventDefault();
+    const { buildPaidLineItems } = await import("./PayoutModal");
+    const lineItems = buildPaidLineItems(items, pfSaleEvents);
+    if (lineItems.length === 0) { alert("No paid items found."); return; }
+    const res = await fetch("/api/sales/payout-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId, clientName: tenantName, companyName: "Top Tier Transitions", items: lineItems, sendEmail: false, viewOnly: true }),
+    });
+    if (!res.ok) { alert("Failed to generate PDF."); return; }
+    const data = await res.json();
+    if (data.pdfBase64) {
+      const bytes = Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      window.open(URL.createObjectURL(blob), "_blank");
+    }
+  }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -978,9 +1005,8 @@ function ProofOfPaymentSection({
                 </a>
               ) : (
                 <a
-                  href={`/api/pdf-proxy?url=${encodeURIComponent(f.cloudinaryUrl)}&publicId=${encodeURIComponent(f.cloudinaryPublicId)}&resourceType=${encodeURIComponent(f.resourceType)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="#"
+                  onClick={handleViewPdf}
                   className="flex flex-col items-center justify-center h-28 gap-1 text-gray-400 hover:text-gray-600"
                 >
                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1704,9 +1730,13 @@ export function SalesClient({
       {/* Proof of Payment */}
       <ProofOfPaymentSection
         tenantId={tenantId}
+        tenantName={tenantName}
         files={proofFiles}
         canDeleteProof={canDeleteProof}
         onFilesChange={setProofFiles}
+        items={items}
+        pfSaleEvents={pfSaleEvents}
+        localVendors={localVendors}
       />
 
       {/* Zelle Payment Feed (TTT staff only) */}

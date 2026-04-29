@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     sendEmail,
     recipientEmail,
     ccEmail,
+    viewOnly = false,
   }: {
     tenantId: string;
     clientName: string;
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     sendEmail: boolean;
     recipientEmail?: string;
     ccEmail?: string;
+    viewOnly?: boolean;
   } = body;
 
   if (!tenantId || !clientName || !items?.length) {
@@ -72,6 +74,11 @@ export async function POST(req: NextRequest) {
     items,
   });
   const pdfBuffer = Buffer.from(rawPdf as unknown as Uint8Array);
+
+  // viewOnly: just return the PDF base64 without uploading or saving
+  if (viewOnly) {
+    return NextResponse.json({ pdfBase64: pdfBuffer.toString("base64") });
+  }
 
   const safeName = clientName.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
   const fileName = `Payout-${safeName}-${date}.pdf`;
