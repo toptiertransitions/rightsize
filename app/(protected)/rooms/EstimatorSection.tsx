@@ -171,6 +171,9 @@ export function EstimatorSection({
   // Include per-service hours in contract email/PDF/signing page (default OFF — clients see total only)
   const [includeServiceHours, setIncludeServiceHours] = useState(false);
 
+  // "Not Included in this Scope" text — defaults to admin-set value
+  const [notInScope, setNotInScope] = useState(settings?.notInScopeDefault ?? "");
+
   // When editingContract changes, load its line items into rows
   useEffect(() => {
     if (!editingContract) {
@@ -195,6 +198,7 @@ export function EstimatorSection({
     }
     setContractBody(editingContract.contractBody ?? "");
     if (editingContract.templateId) setSelectedTemplateId(editingContract.templateId);
+    setNotInScope(editingContract.notInScope ?? settings?.notInScopeDefault ?? "");
   }, [editingContract]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Init on mount + recalc non-overridden rows when rooms, services, destinationSqFt, or touchMultiplier change
@@ -326,6 +330,7 @@ export function EstimatorSection({
     lineItems: includedLineItems,
     includeServiceDescriptions,
     includeServiceHours,
+    notInScope,
   };
 
   const saveDestSqFt = () =>
@@ -609,6 +614,21 @@ export function EstimatorSection({
             Show service descriptions
           </button>
         )}
+      </div>
+
+      {/* Not Included in this Scope */}
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Not Included in this Scope
+          <span className="ml-1 font-normal text-red-500">*</span>
+        </label>
+        <textarea
+          value={notInScope}
+          onChange={(e) => setNotInScope(e.target.value)}
+          rows={4}
+          placeholder="List items or services not covered by this agreement…"
+          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-y"
+        />
       </div>
 
       {/* Template selector */}

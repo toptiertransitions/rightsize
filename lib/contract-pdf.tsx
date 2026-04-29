@@ -199,6 +199,26 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     lineHeight: 1.5,
   },
+  // Not In Scope
+  notInScopeSection: {
+    marginTop: 16,
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 4,
+    borderLeft: "3pt solid #d1d5db",
+  },
+  notInScopeHeading: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#374151",
+    marginBottom: 6,
+  },
+  notInScopeBody: {
+    fontSize: 9,
+    color: "#4b5563",
+    lineHeight: 1.5,
+  },
   // Signature
   sigSection: {
     marginTop: 28,
@@ -357,6 +377,14 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
                 {block.text}
               </Text>
             ))}
+          </View>
+        )}
+
+        {/* ── Not Included in this Scope ── */}
+        {contract.notInScope && (
+          <View style={styles.notInScopeSection}>
+            <Text style={styles.notInScopeHeading}>Not Included in this Scope</Text>
+            <Text style={styles.notInScopeBody}>{contract.notInScope}</Text>
           </View>
         )}
 

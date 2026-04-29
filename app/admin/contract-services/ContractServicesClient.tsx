@@ -768,6 +768,64 @@ function QBOIntegrationSection({ services }: { services: Service[] }) {
   );
 }
 
+// ─── Not In Scope Section ─────────────────────────────────────────────────────
+function NotInScopeSection({ initialSettings }: { initialSettings: ContractSettings | null }) {
+  const [text, setText] = useState(initialSettings?.notInScopeDefault ?? "");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/contract-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notInScopeDefault: text }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setMsg("Saved!");
+    } catch {
+      setMsg("Error saving");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(""), 3000);
+    }
+  };
+
+  return (
+    <section className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+      <div className="mb-4">
+        <h2 className="text-base font-semibold text-white">Not In Scope Text</h2>
+        <p className="text-sm text-gray-400 mt-0.5">
+          Default text for the &quot;Not Included in this Scope&quot; section on all new quotes. Staff can edit this text per-quote.
+        </p>
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={5}
+        placeholder="List items or services not covered by this agreement…"
+        className="w-full px-3 py-2.5 rounded-xl border border-gray-700 bg-gray-800 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-y mb-4"
+      />
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="h-10 px-5 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save Default Text"}
+        </button>
+        {msg && (
+          <span className={`text-sm ${msg.startsWith("Error") ? "text-red-400" : "text-green-400"}`}>
+            {msg}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 interface ContractServicesClientProps {
   initialSettings: ContractSettings | null;
@@ -846,10 +904,13 @@ export function ContractServicesClient({ initialSettings, initialTemplates, init
           )}
         </section>
 
-        {/* Section 3 — Estimator Logic */}
+        {/* Section 3 — Not In Scope Default Text */}
+        <NotInScopeSection initialSettings={initialSettings} />
+
+        {/* Section 4 — Estimator Logic */}
         <ServiceEstimatorCard services={initialServices} />
 
-        {/* Section 4 — QuickBooks Online */}
+        {/* Section 5 — QuickBooks Online */}
         <QBOIntegrationSection services={initialServices} />
       </main>
 

@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     autoSendDeposit,
     includeServiceDescriptions,
     includeServiceHours,
+    notInScope,
   } = body;
 
   if (!tenantId) {
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       autoSendDeposit: autoSendDeposit ?? false,
       includeServiceDescriptions: includeServiceDescriptions ?? false,
       includeServiceHours: includeServiceHours ?? false,
+      notInScope: notInScope ?? undefined,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to create contract";

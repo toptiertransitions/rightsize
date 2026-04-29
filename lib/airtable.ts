@@ -2222,6 +2222,7 @@ function mapContractSettings(record: AirtableRecord): ContractSettings {
     rightsizingHigh: n("RightsizingHigh", 2.0),
     packingPerHundred: n("PackingPerHundred", 1.0),
     unpackingPerHundred: n("UnpackingPerHundred", 1.0),
+    notInScopeDefault: toStr(f["NotInScopeDefault"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
 }
@@ -2244,6 +2245,7 @@ export async function upsertContractSettings(data: {
   rightsizingHigh?: number;
   packingPerHundred?: number;
   unpackingPerHundred?: number;
+  notInScopeDefault?: string;
 }): Promise<ContractSettings> {
   const table = AIRTABLE_TABLES.CONTRACT_SETTINGS;
   const existing = await getContractSettings();
@@ -2256,6 +2258,7 @@ export async function upsertContractSettings(data: {
   if (data.rightsizingHigh !== undefined) fields["RightsizingHigh"] = data.rightsizingHigh;
   if (data.packingPerHundred !== undefined) fields["PackingPerHundred"] = data.packingPerHundred;
   if (data.unpackingPerHundred !== undefined) fields["UnpackingPerHundred"] = data.unpackingPerHundred;
+  if (data.notInScopeDefault !== undefined) fields["NotInScopeDefault"] = data.notInScopeDefault;
   if (existing) {
     const res = await contractFetch(table, `/${existing.id}`, {
       method: "PATCH",
@@ -2373,6 +2376,7 @@ function mapContract(record: AirtableRecord): Contract {
     autoSendDeposit: f["AutoSendDeposit"] === true,
     includeServiceDescriptions: f["IncludeServiceDescriptions"] === true,
     includeServiceHours: f["IncludeServiceHours"] === true,
+    notInScope: toStr(f["NotInScope"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
     lineItems,
   };
@@ -2417,6 +2421,7 @@ export async function createContract(data: {
   autoSendDeposit?: boolean;
   includeServiceDescriptions?: boolean;
   includeServiceHours?: boolean;
+  notInScope?: string;
 }): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const fields: Record<string, unknown> = {
@@ -2441,6 +2446,7 @@ export async function createContract(data: {
   if (data.autoSendDeposit) fields["AutoSendDeposit"] = true;
   if (data.includeServiceDescriptions) fields["IncludeServiceDescriptions"] = true;
   if (data.includeServiceHours) fields["IncludeServiceHours"] = true;
+  if (data.notInScope) fields["NotInScope"] = data.notInScope;
   const res = await contractFetch(table, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -2467,6 +2473,7 @@ export async function updateContract(
     unpackingHours: number;
     totalCost: number;
     lineItems: ContractLineItem[];
+    notInScope: string;
   }>
 ): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
@@ -2486,6 +2493,7 @@ export async function updateContract(
   if (data.unpackingHours !== undefined) fields["UnpackingHours"] = data.unpackingHours;
   if (data.totalCost !== undefined) fields["TotalCost"] = data.totalCost;
   if (data.lineItems !== undefined) fields["ServiceLineItems"] = JSON.stringify(data.lineItems);
+  if (data.notInScope !== undefined) fields["NotInScope"] = data.notInScope;
   const res = await contractFetch(table, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

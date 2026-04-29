@@ -186,6 +186,16 @@ export default async function SignPage({ params }: PageProps) {
           </div>
         )}
 
+        {/* Not Included in this Scope */}
+        {contract.notInScope && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+            <h2 className="text-base font-semibold text-gray-900 mb-3">Not Included in this Scope</h2>
+            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {contract.notInScope}
+            </div>
+          </div>
+        )}
+
         {/* Signed confirmation or signing UI */}
         {alreadySigned ? (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center">

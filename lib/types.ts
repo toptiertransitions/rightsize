@@ -674,6 +674,7 @@ export interface ContractSettings {
   rightsizingHigh: number;
   packingPerHundred: number;
   unpackingPerHundred: number;
+  notInScopeDefault?: string;
   createdAt: string;
 }
 
@@ -721,6 +722,7 @@ export interface Contract {
   autoSendDeposit?: boolean;
   includeServiceDescriptions?: boolean;
   includeServiceHours?: boolean;
+  notInScope?: string;
   createdAt: string;
   lineItems?: ContractLineItem[];
 }
