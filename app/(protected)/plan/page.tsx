@@ -22,6 +22,7 @@ import { IntakeFormSection } from "./IntakeFormSection";
 import { ClientContactBar } from "./ClientContactBar";
 import { ProjectAddressBar } from "./ProjectAddressBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
+import { WeeklyEmailButton } from "./WeeklyEmailButton";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -331,7 +332,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
           )}
         </div>
         {isTTTStaffOrAbove && tenant && (
-          <AddClientUserButton tenantId={tenantId} projectName={tenant.name} />
+          <div className="flex flex-col gap-2 items-end">
+            <AddClientUserButton tenantId={tenantId} projectName={tenant.name} />
+            {isManagerOrAdmin && (
+              <WeeklyEmailButton tenantId={tenantId} />
+            )}
+          </div>
         )}
       </div>
 
