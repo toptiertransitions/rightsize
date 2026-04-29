@@ -103,14 +103,17 @@ interface GmailCheckResult {
 }
 
 async function checkAndRefreshGmailTokens(
-  staffByClerkId: Map<string, { displayName: string; email: string }>
+  staffByClerkId: Map<string, { displayName: string; email: string; role?: string }>,
+  staffMembers: { clerkUserId: string; displayName: string; email: string; role: string; isActive: boolean }[]
 ): Promise<GmailCheckResult[]> {
   const tokens = await getAllGmailTokens();
   const results: GmailCheckResult[] = [];
+  const seenClerkIds = new Set<string>();
 
   for (const token of tokens) {
     const staff = staffByClerkId.get(token.clerkUserId);
     const displayName = staff?.displayName || token.email;
+    seenClerkIds.add(token.clerkUserId);
 
     if (!token.refreshToken) {
       results.push({
@@ -144,6 +147,20 @@ async function checkAndRefreshGmailTokens(
       // Token is fresh enough — assume OK (will be verified next time it's used)
       results.push({ clerkUserId: token.clerkUserId, email: token.email, displayName, ok: true });
     }
+  }
+
+  // Surface active TTTAdmin/TTTManager staff who have no token row at all
+  for (const s of staffMembers) {
+    if (!s.isActive) continue;
+    if (!["TTTAdmin", "TTTManager"].includes(s.role)) continue;
+    if (seenClerkIds.has(s.clerkUserId)) continue;
+    results.push({
+      clerkUserId: s.clerkUserId,
+      email: s.email || "",
+      displayName: s.displayName,
+      ok: false,
+      error: "Not connected — user must connect Gmail at /admin/gmail-auth",
+    });
   }
 
   return results;
@@ -434,7 +451,7 @@ export async function GET(req: NextRequest) {
     // Run checks in parallel
     const [calResult, gmailResults, qboResult, squareResult] = await Promise.all([
       checkCalendarIntegration(),
-      checkAndRefreshGmailTokens(staffByClerkId),
+      checkAndRefreshGmailTokens(staffByClerkId, staffMembers),
       checkQuickBooksIntegration(),
       checkSquareIntegration(),
     ]);
