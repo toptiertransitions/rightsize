@@ -514,13 +514,14 @@ export async function POST(req: NextRequest) {
   let subject: string;
 
   if (type === "client") {
-    const forSaleItems = items.filter((i) => ["Listed", "In Cart", "Approved"].includes(i.status));
-    const allSoldItems = items.filter((i) => i.status === "Sold");
+    const SALE_ROUTES = new Set(["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"]);
+    const forSaleItems = items.filter((i) => SALE_ROUTES.has(i.primaryRoute) && ["Approved", "Listed"].includes(i.status));
+    const allSoldItems = items.filter((i) => i.status === "Sold" && SALE_ROUTES.has(i.primaryRoute));
     const recentSoldItems = allSoldItems.filter((i) => {
       const d = i.saleDate ?? i.completedDate;
       return d ? d >= sevenDaysAgoStr : false;
     });
-    const donatedItems = items.filter((i) => i.status === "Donated");
+    const donatedItems = items.filter((i) => i.primaryRoute === "Donate" && i.status === "Donated");
 
     html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr });
     subject = `[REVIEW & FORWARD TO CLIENT] Weekly Update — ${tenant.name}`;
