@@ -978,7 +978,7 @@ function ProofOfPaymentSection({
                 </a>
               ) : (
                 <a
-                  href={f.cloudinaryUrl}
+                  href={`/api/pdf-proxy?url=${encodeURIComponent(f.cloudinaryUrl)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex flex-col items-center justify-center h-28 gap-1 text-gray-400 hover:text-gray-600"
@@ -1046,6 +1046,7 @@ export function SalesClient({
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [proofFiles, setProofFiles] = useState<ProjectFile[]>(paymentProofFiles);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [showReprintModal, setShowReprintModal] = useState(false);
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
   const [openOther, setOpenOther] = useState(true);
@@ -1361,12 +1362,20 @@ export function SalesClient({
           <p className="text-sm text-gray-500 mt-0.5">{tenantName} — consignment & marketplace tracking</p>
         </div>
         {canPayoutClient && (
-          <button
-            onClick={() => setShowPayoutModal(true)}
-            className="h-9 px-4 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Payout Client
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowReprintModal(true)}
+              className="h-9 px-4 border border-green-600 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
+            >
+              Re-print Payout
+            </button>
+            <button
+              onClick={() => setShowPayoutModal(true)}
+              className="h-9 px-4 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Payout Client
+            </button>
+          </div>
         )}
       </div>
 
@@ -1715,24 +1724,41 @@ export function SalesClient({
           onClose={() => setShowPayoutModal(false)}
           onGenerated={(file, markData) => {
             setProofFiles(prev => [...prev, file]);
-            const payoutDate = new Date().toISOString().slice(0, 10);
-            // Update item payoutPaidAmount + payoutPaidAt so summary cards and dates update live
-            if (markData.itemsToMark.length > 0) {
-              const paidMap = new Map(markData.itemsToMark.map(p => [p.id, p.amount]));
-              setItems(prev => prev.map(item =>
-                paidMap.has(item.id)
-                  ? { ...item, payoutPaidAmount: paidMap.get(item.id)!, payoutPaidAt: payoutDate }
-                  : item
-              ));
-            }
-            // Update pfSaleEvents payoutPaid flag
-            if (markData.eventIdsToMark.length > 0) {
-              const paidSet = new Set(markData.eventIdsToMark);
-              setPfSaleEvents(prev => prev.map(e =>
-                paidSet.has(e.id) ? { ...e, payoutPaid: true } : e
-              ));
+            if (markData) {
+              const payoutDate = new Date().toISOString().slice(0, 10);
+              if (markData.itemsToMark.length > 0) {
+                const paidMap = new Map(markData.itemsToMark.map(p => [p.id, p.amount]));
+                setItems(prev => prev.map(item =>
+                  paidMap.has(item.id)
+                    ? { ...item, payoutPaidAmount: paidMap.get(item.id)!, payoutPaidAt: payoutDate }
+                    : item
+                ));
+              }
+              if (markData.eventIdsToMark.length > 0) {
+                const paidSet = new Set(markData.eventIdsToMark);
+                setPfSaleEvents(prev => prev.map(e =>
+                  paidSet.has(e.id) ? { ...e, payoutPaid: true } : e
+                ));
+              }
             }
             setShowPayoutModal(false);
+          }}
+        />
+      )}
+
+      {showReprintModal && (
+        <PayoutModal
+          tenantId={tenantId}
+          tenantName={tenantName}
+          ownerEmail={ownerEmail}
+          items={items}
+          pfSaleEvents={validPfEvents}
+          localVendors={localVendors}
+          reprint
+          onClose={() => setShowReprintModal(false)}
+          onGenerated={(file) => {
+            setProofFiles(prev => [...prev, file]);
+            setShowReprintModal(false);
           }}
         />
       )}
