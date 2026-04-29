@@ -1504,7 +1504,7 @@ function ContactsTab({
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
@@ -1515,15 +1515,15 @@ function ContactsTab({
                 Name <SortIcon field="name" />
               </th>
               <th
-                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap hidden lg:table-cell"
                 onClick={() => toggleSort("owner")}
               >
                 Owner <SortIcon field="owner" />
               </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Phone</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Email</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden xl:table-cell">Phone</th>
               <th
-                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap hidden xl:table-cell"
                 onClick={() => toggleSort("source")}
               >
                 Source <SortIcon field="source" />
@@ -1534,7 +1534,7 @@ function ContactsTab({
               >
                 Opportunity <SortIcon field="stage" />
               </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Project</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Project</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
             </tr>
           </thead>
@@ -1556,12 +1556,12 @@ function ContactsTab({
               return (
                 <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{c.name}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap hidden lg:table-cell">
                     {staffMembers.find(s => s.clerkUserId === c.assignedToClerkId)?.displayName || <span className="text-gray-400">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{c.email || "—"}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{c.phone || "—"}</td>
-                  <td className="px-4 py-3 text-gray-600">{c.source || "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate hidden md:table-cell">{c.email || "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap hidden xl:table-cell">{c.phone || "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 hidden xl:table-cell">{c.source || "—"}</td>
                   <td className="px-4 py-3">
                     {primaryOpp ? (
                       <button
@@ -1580,7 +1580,7 @@ function ContactsTab({
                       <span className="text-gray-400 text-xs">No opp</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden lg:table-cell">
                     {activeTenant ? (
                       <a
                         href={`/rooms?tenantId=${activeTenant.id}`}
