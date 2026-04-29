@@ -152,7 +152,7 @@ async function checkAndRefreshGmailTokens(
   // Surface active TTTAdmin/TTTManager staff who have no token row at all
   for (const s of staffMembers) {
     if (!s.isActive) continue;
-    if (!["TTTAdmin", "TTTManager"].includes(s.role)) continue;
+    if (!["TTTAdmin", "TTTSales"].includes(s.role)) continue;
     if (seenClerkIds.has(s.clerkUserId)) continue;
     results.push({
       clerkUserId: s.clerkUserId,
