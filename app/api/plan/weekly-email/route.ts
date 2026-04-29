@@ -82,28 +82,23 @@ function buildClientWeeklyEmail({
       </tr>
     </table>`;
 
-  // Upcoming schedule rows
+  // Upcoming schedule rows (client view — 2 columns, no team)
   const scheduleRows = upcomingEntries.length === 0
-    ? `<tr><td colspan="3" style="padding:16px;text-align:center;color:#9ca3af;font-size:14px;">No shifts scheduled in the next two weeks.</td></tr>`
+    ? `<tr><td colspan="2" style="padding:16px;text-align:center;color:#9ca3af;font-size:14px;">No shifts scheduled in the next two weeks.</td></tr>`
     : upcomingEntries.map((e) => {
         const timeStr = e.startTime && e.endTime
           ? `${fmtTime(e.startTime)} – ${fmtTime(e.endTime)}`
           : e.startTime ? fmtTime(e.startTime) : "TBD";
-        const staffNames = (e.helpers ?? [])
-          .map((h) => h.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
-          .join(", ");
         return `
           <tr style="border-bottom:1px solid #f3f4f6;">
-            <td style="padding:12px 16px;vertical-align:top;">
-              <p style="margin:0;font-size:13px;font-weight:600;color:#111827;">${fmtDateShort(e.date)}</p>
-              <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${timeStr}</p>
+            <td width="38%" style="padding:14px 16px;vertical-align:top;">
+              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">${fmtDateShort(e.date)}</p>
+              <p style="margin:3px 0 0;font-size:13px;color:#6b7280;">${timeStr}</p>
             </td>
-            <td style="padding:12px 16px;vertical-align:top;">
-              <p style="margin:0;font-size:13px;font-weight:600;color:#2E6B4F;">${e.activity}</p>
-              ${e.address ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${e.address}</p>` : ""}
-            </td>
-            <td style="padding:12px 16px;vertical-align:top;">
-              <p style="margin:0;font-size:12px;color:#6b7280;">${staffNames || "TBD"}</p>
+            <td style="padding:14px 16px;vertical-align:top;border-left:1px solid #f3f4f6;">
+              <p style="margin:0;font-size:14px;font-weight:600;color:#2E6B4F;">${e.activity}</p>
+              ${e.address ? `<p style="margin:4px 0 0;font-size:12px;color:#6b7280;">${e.address}</p>` : ""}
+              ${e.notes ? `<p style="margin:4px 0 0;font-size:12px;color:#9ca3af;font-style:italic;">${e.notes}</p>` : ""}
             </td>
           </tr>`;
       }).join("");
@@ -191,8 +186,9 @@ function buildClientWeeklyEmail({
                 <!-- Greeting -->
                 <tr>
                   <td style="padding:0 0 24px;">
-                    <p style="margin:0 0 8px;font-size:16px;color:#111827;">Hello ${tenant.name} team,</p>
-                    <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;">Here is your weekly project summary for <strong style="color:#111827;">${tenant.name}</strong>${address ? ` at <strong style="color:#111827;">${address}</strong>` : ""}. This update is prepared for your review — please feel free to forward it to the client or share as appropriate.</p>
+                    <p style="margin:0 0 10px;font-size:16px;color:#111827;">Dear ${tenant.name} family,</p>
+                    <p style="margin:0 0 10px;font-size:14px;color:#374151;line-height:1.7;">We hope this update finds you well. Below is your weekly project progress report as of <strong>${dateLabel}</strong>. We're committed to keeping you fully informed every step of the way, and we encourage you to reach out any time with questions or feedback.</p>
+                    <p style="margin:0;font-size:14px;color:#374151;line-height:1.7;">Your trust means everything to us — thank you for allowing the Top Tier Transitions team to support you through this journey.</p>
                   </td>
                 </tr>
 
@@ -234,9 +230,8 @@ function buildClientWeeklyEmail({
                     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
                       <thead>
                         <tr style="background:#f9fafb;">
-                          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;">Date & Time</th>
-                          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;">Activity</th>
-                          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;">Team</th>
+                          <th width="38%" style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;">Date &amp; Time</th>
+                          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;border-left:1px solid #f3f4f6;">Activity</th>
                         </tr>
                       </thead>
                       <tbody>${scheduleRows}</tbody>
@@ -321,12 +316,13 @@ function buildClientWeeklyEmail({
 
 // ─── Staff Weekly Email ───────────────────────────────────────────────────────
 function buildStaffWeeklyEmail({
-  tenant, upcomingEntries, staffNotes, todayStr,
+  tenant, upcomingEntries, staffNotes, todayStr, staffByEmail,
 }: {
   tenant: Tenant;
   upcomingEntries: PlanEntry[];
   staffNotes: string;
   todayStr: string;
+  staffByEmail: Map<string, { name: string; phone?: string }>;
 }): string {
   const dateLabel = new Date(todayStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const address = [tenant.address, tenant.city, tenant.state].filter(Boolean).join(", ");
@@ -338,10 +334,12 @@ function buildStaffWeeklyEmail({
           ? `${fmtTime(e.startTime)} – ${fmtTime(e.endTime)}`
           : e.startTime ? fmtTime(e.startTime) : "—";
         const staffList = (e.helpers ?? []).map((h) => {
-          const name = h.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          const info = staffByEmail.get(h.email);
+          const name = info?.name ?? h.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          const phone = info?.phone;
           const statusColor = h.status === "accepted" ? "#059669" : h.status === "declined" ? "#dc2626" : "#d97706";
-          return `<span style="display:inline-block;margin:2px 4px 2px 0;font-size:12px;color:${statusColor};">● ${name}</span>`;
-        }).join(" ");
+          return `<span style="display:inline-block;margin:2px 0;font-size:12px;color:${statusColor};">● ${name}${phone ? ` <span style="color:#9ca3af;">${phone}</span>` : ""}</span>`;
+        }).join("<br>");
         const bg = i % 2 === 1 ? "background:#f9fafb;" : "";
         return `
           <tr style="${bg}border-bottom:1px solid #f3f4f6;">
@@ -480,14 +478,15 @@ export async function POST(req: NextRequest) {
   )?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
   if (!userEmail) return NextResponse.json({ error: "Could not determine your email" }, { status: 400 });
 
+  const fmtCT = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(d);
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = fmtCT(today);
   const in14Days = new Date(today);
   in14Days.setDate(in14Days.getDate() + 14);
-  const in14DaysStr = in14Days.toISOString().split("T")[0];
+  const in14DaysStr = fmtCT(in14Days);
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split("T")[0];
+  const sevenDaysAgoStr = fmtCT(sevenDaysAgo);
 
   const [tenant, contracts, timeEntries, allEntries, items] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
@@ -526,7 +525,21 @@ export async function POST(req: NextRequest) {
     html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr });
     subject = `[REVIEW & FORWARD TO CLIENT] Weekly Update — ${tenant.name}`;
   } else {
-    html = buildStaffWeeklyEmail({ tenant, upcomingEntries, staffNotes: staffNotes ?? "", todayStr });
+    // Build staffByEmail map from Clerk for full names + phones
+    const helperEmails = [...new Set(upcomingEntries.flatMap((e) => (e.helpers ?? []).map((h) => h.email)))];
+    const staffByEmail = new Map<string, { name: string; phone?: string }>();
+    if (helperEmails.length > 0) {
+      const clerkUsers = await clerk.users.getUserList({ emailAddress: helperEmails, limit: 100 }).catch(() => ({ data: [] }));
+      for (const u of clerkUsers.data) {
+        const email = u.emailAddresses.find((ea) => ea.id === u.primaryEmailAddressId)?.emailAddress ?? u.emailAddresses[0]?.emailAddress;
+        if (email) {
+          const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || email;
+          const phone = u.phoneNumbers?.[0]?.phoneNumber;
+          staffByEmail.set(email, { name, phone: phone ?? undefined });
+        }
+      }
+    }
+    html = buildStaffWeeklyEmail({ tenant, upcomingEntries, staffNotes: staffNotes ?? "", todayStr, staffByEmail });
     subject = `[REVIEW & FORWARD TO TEAM] Staff Schedule — ${tenant.name}`;
   }
 
