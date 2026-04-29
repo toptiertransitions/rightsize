@@ -978,7 +978,7 @@ function ProofOfPaymentSection({
                 </a>
               ) : (
                 <a
-                  href={`/api/pdf-proxy?url=${encodeURIComponent(f.cloudinaryUrl)}`}
+                  href={`/api/pdf-proxy?url=${encodeURIComponent(f.cloudinaryUrl)}&publicId=${encodeURIComponent(f.cloudinaryPublicId)}&resourceType=${encodeURIComponent(f.resourceType)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex flex-col items-center justify-center h-28 gap-1 text-gray-400 hover:text-gray-600"
