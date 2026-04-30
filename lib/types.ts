@@ -321,6 +321,7 @@ export interface Item {
   storefrontActive?: boolean;
   pickupLocation?: string;   // e.g. "Lincoln Park", "River North", "Storage - Elk Grove"
   brand?: string;
+  boxId?: string;
   // Dimensions (manual-only, not AI-filled)
   widthInches?: number;
   heightInches?: number;

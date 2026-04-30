@@ -159,6 +159,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     storefrontActive: item.storefrontActive ?? false,
     pickupLocation: item.pickupLocation ?? "",
     brand: item.brand ?? "",
+    boxId: item.boxId ?? "",
     estateSaleId: item.estateSaleId ?? "",
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
@@ -644,6 +645,16 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               </div>
             )}
             <div>
+              <label className={labelClass}>Box ID <span className="font-normal text-gray-400">(optional)</span></label>
+              <input
+                type="text"
+                value={form.boxId ?? ""}
+                onChange={e => set("boxId", e.target.value)}
+                placeholder="e.g. A1, Box-12, Living Room Box 3"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent font-mono"
+              />
+            </div>
+            <div>
               <label className={labelClass}>Brand <span className="font-normal text-gray-400">(optional)</span></label>
               <input
                 type="text"
@@ -972,6 +983,74 @@ function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () =>
   );
 }
 
+// ─── BoxId Badge (inline edit on photo) ──────────────────────────────────────
+
+function BoxIdBadge({ item, onSaved }: { item: Item; onSaved: (updated: Item) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(item.boxId ?? "");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (trimmed === (item.boxId ?? "")) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, tenantId: item.tenantId, boxId: trimmed || null }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        onSaved(d.item ?? { ...item, boxId: trimmed || undefined });
+      }
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="absolute bottom-2 left-2 z-10" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-1 bg-white/95 backdrop-blur-sm rounded-lg shadow px-1.5 py-1">
+          <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
+          </svg>
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+            onBlur={save}
+            placeholder="Box ID…"
+            className="w-20 text-[11px] font-mono bg-transparent border-none outline-none text-gray-800 placeholder-gray-400"
+          />
+          {saving && <span className="text-[10px] text-gray-400">…</span>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); setValue(item.boxId ?? ""); setEditing(true); }}
+      className="absolute bottom-2 left-2 z-10 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-lg shadow px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+      title={item.boxId ? `Box: ${item.boxId} — click to edit` : "Assign to a box"}
+    >
+      <svg className="w-3 h-3 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
+      </svg>
+      {item.boxId
+        ? <span className="text-[11px] font-mono font-semibold text-gray-700">{item.boxId}</span>
+        : <span className="text-[10px] text-gray-400">+ Box</span>}
+    </button>
+  );
+}
+
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
 export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false }: ItemGridProps) {
@@ -1295,7 +1374,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         i.itemName.toLowerCase().includes(q) ||
         i.category.toLowerCase().includes(q) ||
         (i.barcodeNumber && i.barcodeNumber.includes(q)) ||
-        (i.estateSaleId && i.estateSaleId.toLowerCase().includes(q))
+        (i.estateSaleId && i.estateSaleId.toLowerCase().includes(q)) ||
+        (i.boxId && i.boxId.toLowerCase().includes(q))
       );
     }
     if (statusFilter) {
@@ -1418,13 +1498,13 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 mb-5">
         {/* Search */}
-        <div className="relative w-full sm:w-44">
+        <div className="relative w-full sm:w-56">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
-            placeholder="Search items…"
+            placeholder="Search items or boxes…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
@@ -1577,6 +1657,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   <div className="absolute top-2 left-2">
                     <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
                   </div>
+                  <BoxIdBadge item={item} onSaved={handleSaved} />
                   {canEdit && (
                     <button
                       onClick={() => setEditingItem(item)}
