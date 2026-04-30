@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip, teamLeadClerkId } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -118,6 +118,7 @@ export async function PATCH(req: NextRequest) {
     destCity: destCity !== undefined ? (destCity as string | null) : undefined,
     destState: destState !== undefined ? (destState as string | null) : undefined,
     destZip: destZip !== undefined ? (destZip as string | null) : undefined,
+    teamLeadClerkId: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && teamLeadClerkId !== undefined ? (teamLeadClerkId as string | null) : undefined,
   });
   revalidateTag("tenants");
   return NextResponse.json({ tenant });

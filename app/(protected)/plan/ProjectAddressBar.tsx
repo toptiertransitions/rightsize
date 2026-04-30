@@ -1,6 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface StaffOption {
+  clerkUserId: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  profileImageUrl?: string | null;
+  role: string;
+}
 
 interface Props {
   tenantId: string;
@@ -12,6 +21,12 @@ interface Props {
   initialDestCity?: string;
   initialDestState?: string;
   initialDestZip?: string;
+  // Team Lead
+  canEditTeamLead?: boolean;
+  initialTeamLeadClerkId?: string;
+  initialTeamLeadName?: string;
+  initialTeamLeadPhoto?: string;
+  initialTeamLeadPhone?: string;
 }
 
 function PencilIcon() {
@@ -40,6 +55,35 @@ function AddressBlock({ label, street, city, state, zip }: { label: string; stre
   );
 }
 
+function TeamLeadBlock({ name, photo, phone }: { name?: string; photo?: string; phone?: string }) {
+  const initials = name
+    ? name.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+  return (
+    <div className="min-w-0">
+      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Team Lead</span>
+      {name ? (
+        <div className="flex items-center gap-2 mt-0.5">
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photo} alt={name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-forest-100 text-forest-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+              {initials}
+            </div>
+          )}
+          <div>
+            <div className="text-sm text-gray-700 leading-snug">{name}</div>
+            {phone && <div className="text-xs text-gray-400">{phone}</div>}
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-gray-400 italic mt-0.5">Not assigned</div>
+      )}
+    </div>
+  );
+}
+
 const inputCls =
   "h-8 px-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 min-w-0 w-full";
 
@@ -53,6 +97,11 @@ export function ProjectAddressBar({
   initialDestCity,
   initialDestState,
   initialDestZip,
+  canEditTeamLead,
+  initialTeamLeadClerkId,
+  initialTeamLeadName,
+  initialTeamLeadPhoto,
+  initialTeamLeadPhone,
 }: Props) {
   const [editing, setEditing] = useState(false);
 
@@ -68,8 +117,26 @@ export function ProjectAddressBar({
   const [destState, setDestState] = useState(initialDestState ?? "");
   const [destZip, setDestZip] = useState(initialDestZip ?? "");
 
+  // Team lead
+  const [teamLeadClerkId, setTeamLeadClerkId] = useState(initialTeamLeadClerkId ?? "");
+  const [teamLeadName, setTeamLeadName] = useState(initialTeamLeadName ?? "");
+  const [teamLeadPhoto, setTeamLeadPhoto] = useState(initialTeamLeadPhoto ?? "");
+  const [teamLeadPhone, setTeamLeadPhone] = useState(initialTeamLeadPhone ?? "");
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load staff list when edit mode opens (only if canEditTeamLead)
+  useEffect(() => {
+    if (!editing || !canEditTeamLead) return;
+    fetch("/api/plan/ttt-users")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.users)) setStaffOptions(d.users);
+      })
+      .catch(() => {});
+  }, [editing, canEditTeamLead]);
 
   async function handleSave() {
     setSaving(true);
@@ -88,6 +155,7 @@ export function ProjectAddressBar({
           destCity: destCity.trim() || null,
           destState: destState.trim() || null,
           destZip: destZip.trim() || null,
+          teamLeadClerkId: canEditTeamLead ? (teamLeadClerkId || null) : undefined,
         }),
       });
       if (!res.ok) {
@@ -111,8 +179,20 @@ export function ProjectAddressBar({
     setDestCity(initialDestCity ?? "");
     setDestState(initialDestState ?? "");
     setDestZip(initialDestZip ?? "");
+    setTeamLeadClerkId(initialTeamLeadClerkId ?? "");
+    setTeamLeadName(initialTeamLeadName ?? "");
+    setTeamLeadPhoto(initialTeamLeadPhoto ?? "");
+    setTeamLeadPhone(initialTeamLeadPhone ?? "");
     setError(null);
     setEditing(false);
+  }
+
+  function handleSelectTeamLead(clerkUserId: string) {
+    const staff = staffOptions.find(s => s.clerkUserId === clerkUserId);
+    setTeamLeadClerkId(clerkUserId);
+    setTeamLeadName(staff?.name ?? "");
+    setTeamLeadPhoto(staff?.profileImageUrl ?? "");
+    setTeamLeadPhone(staff?.phone ?? "");
   }
 
   if (editing) {
@@ -140,6 +220,24 @@ export function ProjectAddressBar({
             </div>
           </div>
         </div>
+
+        {/* Team Lead (manager/admin only) */}
+        {canEditTeamLead && (
+          <div className="mt-3">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Team Lead</p>
+            <select
+              value={teamLeadClerkId}
+              onChange={e => handleSelectTeamLead(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">— Unassigned —</option>
+              {staffOptions.map(s => (
+                <option key={s.clerkUserId} value={s.clerkUserId}>{s.name} ({s.role})</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mt-3">
           <button
             onClick={handleSave}
@@ -176,10 +274,15 @@ export function ProjectAddressBar({
         state={destState || initialDestState}
         zip={destZip || initialDestZip}
       />
+      <TeamLeadBlock
+        name={teamLeadName || initialTeamLeadName}
+        photo={teamLeadPhoto || initialTeamLeadPhoto}
+        phone={teamLeadPhone || initialTeamLeadPhone}
+      />
       <button
         onClick={() => setEditing(true)}
         className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center sm:opacity-0 sm:group-hover:opacity-100"
-        title="Edit addresses"
+        title="Edit addresses and team lead"
       >
         <PencilIcon />
         <span className="sr-only sm:not-sr-only">Edit</span>

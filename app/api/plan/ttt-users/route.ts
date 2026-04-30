@@ -13,6 +13,9 @@ export async function GET(_req: NextRequest) {
       name: m.displayName,
       email: m.email,
       role: m.role,
+      clerkUserId: m.clerkUserId,
+      phone: m.phone ?? null,
+      profileImageUrl: m.profileImageUrl ?? null,
       weeklySchedule: m.weeklySchedule ?? null,
       timeOff: m.timeOff ?? [],
     }));

@@ -8,6 +8,7 @@ import {
   getTimeEntries,
   getPlanEntriesForTenant,
   getItemsForTenant,
+  getStaffMembers,
 } from "@/lib/airtable";
 import type { Tenant, PlanEntry, Item } from "@/lib/types";
 
@@ -54,19 +55,30 @@ function estimatedPayout(item: Item): number | null {
   return null;
 }
 
+const KEY_DATE_EMAIL_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  "Start Date":       { bg: "#d1fae5", border: "#6ee7b7", text: "#065f46" },
+  "Move Date":        { bg: "#fef3c7", border: "#fcd34d", text: "#92400e" },
+  "Pickup Date":      { bg: "#dbeafe", border: "#93c5fd", text: "#1e3a8a" },
+  "Estate Sale Date": { bg: "#ede9fe", border: "#c4b5fd", text: "#4c1d95" },
+  "Close Date":       { bg: "#fee2e2", border: "#fca5a5", text: "#7f1d1d" },
+};
+
 // ─── Client Weekly Email ──────────────────────────────────────────────────────
 function buildClientWeeklyEmail({
-  tenant, contractedHours, workedHours, upcomingEntries, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr,
+  tenant, contractedHours, workedHours, upcomingEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr, teamLeadName, teamLeadPhone,
 }: {
   tenant: Tenant;
   contractedHours: number;
   workedHours: number;
   upcomingEntries: PlanEntry[];
+  keyDates: PlanEntry[];
   forSaleItems: Item[];
   recentSoldItems: Item[];
   allSoldItems: Item[];
   donatedItems: Item[];
   todayStr: string;
+  teamLeadName?: string;
+  teamLeadPhone?: string;
 }): string {
   const pct = progressPct(workedHours, contractedHours);
   const dateLabel = new Date(todayStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -223,6 +235,36 @@ function buildClientWeeklyEmail({
                   </td>
                 </tr>
 
+                <!-- Key Dates -->
+                ${keyDates.length > 0 ? `
+                <tr>
+                  <td style="padding:0 0 28px;">
+                    <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#111827;">🏁 Key Project Dates</p>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 6px;">
+                      ${keyDates.map(e => {
+                        const c = KEY_DATE_EMAIL_COLORS[e.activity] ?? { bg: "#f3f4f6", border: "#d1d5db", text: "#111827" };
+                        const timeStr = e.startTime ? (e.endTime ? `${fmtTime(e.startTime)} – ${fmtTime(e.endTime)}` : fmtTime(e.startTime)) : "";
+                        return `<tr>
+                          <td style="background:${c.bg};border:1px solid ${c.border};border-radius:8px;padding:12px 16px;">
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                              <tr>
+                                <td>
+                                  <span style="display:inline-block;background:${c.bg};border:1px solid ${c.border};color:${c.text};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.5px;">${e.activity}</span>
+                                </td>
+                                <td align="right">
+                                  <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">${fmtDate(e.date)}</p>
+                                  ${timeStr ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${timeStr}</p>` : ""}
+                                </td>
+                              </tr>
+                              ${e.notes ? `<tr><td colspan="2" style="padding-top:6px;"><p style="margin:0;font-size:12px;color:#6b7280;font-style:italic;">${e.notes}</p></td></tr>` : ""}
+                            </table>
+                          </td>
+                        </tr>`;
+                      }).join("")}
+                    </table>
+                  </td>
+                </tr>` : ""}
+
                 <!-- Upcoming Schedule -->
                 <tr>
                   <td style="padding:0 0 28px;">
@@ -238,6 +280,22 @@ function buildClientWeeklyEmail({
                     </table>
                   </td>
                 </tr>
+
+                <!-- Team Lead -->
+                ${teamLeadName ? `
+                <tr>
+                  <td style="padding:0 0 28px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;">
+                      <tr>
+                        <td style="padding:20px 24px;">
+                          <p style="margin:0 0 10px;font-size:15px;font-weight:700;color:#111827;">Your Project Team Lead</p>
+                          <p style="margin:0;font-size:15px;font-weight:600;color:#2E6B4F;">${teamLeadName}</p>
+                          ${teamLeadPhone ? `<p style="margin:4px 0 0;font-size:13px;color:#374151;">${teamLeadPhone}</p>` : ""}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>` : ""}
 
                 <!-- Items Summary -->
                 <tr>
@@ -499,7 +557,11 @@ export async function POST(req: NextRequest) {
   if (!tenant) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
   const upcomingEntries = allEntries
-    .filter((e) => e.date >= todayStr && e.date <= in14DaysStr)
+    .filter((e) => e.entryType !== "keydate" && e.date >= todayStr && e.date <= in14DaysStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const keyDates = allEntries
+    .filter((e) => e.entryType === "keydate" && e.date >= todayStr)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const primaryContract = contracts
@@ -522,7 +584,19 @@ export async function POST(req: NextRequest) {
     });
     const donatedItems = items.filter((i) => i.primaryRoute === "Donate" && i.status === "Donated");
 
-    html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr });
+    // Fetch team lead name/phone if assigned
+    let teamLeadName: string | undefined;
+    let teamLeadPhone: string | undefined;
+    if (tenant.teamLeadClerkId) {
+      const staffMembers = await getStaffMembers().catch(() => []);
+      const lead = staffMembers.find(m => m.clerkUserId === tenant.teamLeadClerkId);
+      if (lead) {
+        teamLeadName = lead.displayName || undefined;
+        teamLeadPhone = lead.phone || undefined;
+      }
+    }
+
+    html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr, teamLeadName, teamLeadPhone });
     subject = `[REVIEW & FORWARD TO CLIENT] Weekly Update — ${tenant.name}`;
   } else {
     // Build staffByEmail map from Clerk for full names + phones

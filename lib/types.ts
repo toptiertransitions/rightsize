@@ -133,6 +133,7 @@ export interface Tenant {
   clientPhone?: string;
   consignmentExpense?: number;
   consignmentExpenseNote?: string;
+  teamLeadClerkId?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -441,6 +442,7 @@ export interface ItemAnalysis {
 
 // ─── Plan / Daily Focus ───────────────────────────────────────────────────────
 export type PlanActivity = string;
+export type PlanEntryType = "focus" | "keydate";
 
 export const PLAN_ACTIVITIES: string[] = [
   "Coordinating",
@@ -453,6 +455,14 @@ export const PLAN_ACTIVITIES: string[] = [
   "Donating/Dispersal",
   "Cleaning",
   "Other Service",
+];
+
+export const KEY_DATE_ACTIVITIES: string[] = [
+  "Start Date",
+  "Move Date",
+  "Pickup Date",
+  "Estate Sale Date",
+  "Close Date",
 ];
 
 export interface PlanHelper {
@@ -475,6 +485,7 @@ export interface PlanEntry {
   endTime?: string;      // "HH:MM" 24-hour
   helpers?: PlanHelper[];
   googleEventId?: string; // Google Calendar event ID once invites are sent
+  entryType?: PlanEntryType; // "focus" (default) or "keydate"
   createdAt: string;
 }
 

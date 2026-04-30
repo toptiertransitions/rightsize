@@ -9,7 +9,7 @@ import {
   getUserRoleForTenant,
   getSystemRole,
 } from "@/lib/airtable";
-import type { PlanActivity, PlanHelper } from "@/lib/types";
+import type { PlanActivity, PlanHelper, PlanEntryType } from "@/lib/types";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTManager", "TTTAdmin"];
 
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     startTime?: string;
     endTime?: string;
     helpers?: PlanHelper[];
+    entryType?: PlanEntryType;
   };
   try {
     body = await req.json();
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       startTime: body.startTime,
       endTime: body.endTime,
       helpers: body.helpers,
+      entryType: body.entryType,
     });
     return NextResponse.json({ entry });
   } catch (e) {
@@ -97,6 +99,7 @@ export async function PATCH(req: NextRequest) {
     startTime?: string;
     endTime?: string;
     helpers?: PlanHelper[];
+    entryType?: PlanEntryType;
   };
   try {
     body = await req.json();

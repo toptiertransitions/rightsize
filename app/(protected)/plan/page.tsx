@@ -14,6 +14,7 @@ import {
   getSystemRole,
   getServices,
   getContractsForTenant,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -297,6 +298,20 @@ export default async function PlanPage({ searchParams }: PageProps) {
     "Staff";
   const currentUserPhoto = clerkUser?.imageUrl || undefined;
 
+  // Fetch team lead info from Airtable staff if assigned
+  let teamLeadName: string | undefined;
+  let teamLeadPhoto: string | undefined;
+  let teamLeadPhone: string | undefined;
+  if (tenant.teamLeadClerkId) {
+    const staffMembers = await getStaffMembers().catch(() => []);
+    const lead = staffMembers.find(m => m.clerkUserId === tenant.teamLeadClerkId);
+    if (lead) {
+      teamLeadName = lead.displayName || undefined;
+      teamLeadPhoto = lead.profileImageUrl || undefined;
+      teamLeadPhone = lead.phone || undefined;
+    }
+  }
+
   // TTTStaff should only see shifts they are personally invited to
   let filteredEntries = entries;
   if (isTTTStaff) {
@@ -330,6 +345,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
             initialDestCity={tenant.destCity}
             initialDestState={tenant.destState}
             initialDestZip={tenant.destZip}
+            canEditTeamLead={isManagerOrAdmin}
+            initialTeamLeadClerkId={tenant.teamLeadClerkId}
+            initialTeamLeadName={teamLeadName}
+            initialTeamLeadPhoto={teamLeadPhoto}
+            initialTeamLeadPhone={teamLeadPhone}
           />
           {isTTTStaffOrAbove && (
             <ClientContactBar

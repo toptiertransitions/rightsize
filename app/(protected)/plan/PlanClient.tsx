@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { PLAN_ACTIVITIES } from "@/lib/types";
-import type { PlanEntry, PlanActivity, PlanHelper, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
+import { PLAN_ACTIVITIES, KEY_DATE_ACTIVITIES } from "@/lib/types";
+import type { PlanEntry, PlanActivity, PlanHelper, PlanEntryType, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
 
@@ -35,7 +35,16 @@ const LEGACY_ACTIVITY_COLORS: Record<string, string> = {
   "Other": "bg-gray-100 text-gray-700",
 };
 
-function getActivityColor(activity: string, serviceList: string[]): string {
+const KEY_DATE_COLORS: Record<string, string> = {
+  "Start Date":       "bg-emerald-50 text-emerald-800 border border-emerald-300",
+  "Move Date":        "bg-amber-50 text-amber-800 border border-amber-300",
+  "Pickup Date":      "bg-blue-50 text-blue-800 border border-blue-300",
+  "Estate Sale Date": "bg-purple-50 text-purple-800 border border-purple-300",
+  "Close Date":       "bg-red-50 text-red-800 border border-red-300",
+};
+
+function getActivityColor(activity: string, serviceList: string[], entryType?: PlanEntryType): string {
+  if (entryType === "keydate" && KEY_DATE_COLORS[activity]) return KEY_DATE_COLORS[activity];
   if (LEGACY_ACTIVITY_COLORS[activity]) return LEGACY_ACTIVITY_COLORS[activity];
   const idx = serviceList.indexOf(activity);
   if (idx >= 0) return ACTIVITY_COLOR_PALETTE[idx % ACTIVITY_COLOR_PALETTE.length];
@@ -180,7 +189,9 @@ interface ModalProps {
 }
 
 function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions }: ModalProps) {
-  const activityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
+  const focusActivityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
+  const [entryType, setEntryType] = useState<PlanEntryType>(entry?.entryType ?? "focus");
+  const activityOptions = entryType === "keydate" ? KEY_DATE_ACTIVITIES : focusActivityOptions;
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));
   const [activity, setActivity] = useState<PlanActivity>(entry?.activity ?? (services?.[0] ?? "Coordinating"));
   // In all-projects mode (tenantId=""), track which project is selected
@@ -367,6 +378,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
         ...(isEdit ? { id: entry.id } : { tenantId: effectiveTenantId }),
         date,
         activity,
+        entryType,
         roomId: isCustomRoom ? "" : roomId || "",
         roomLabel: isCustomRoom ? customRoom.trim() : "",
         notes: notes.trim(),
@@ -455,7 +467,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
         {/* Header */}
         <div className="px-6 py-5 border-b border-cream-100 flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-bold text-gray-900">
-            {isEdit ? "Edit Focus" : "Add Daily Focus"}
+            {isEdit
+              ? entryType === "keydate" ? "Edit Key Date" : "Edit Focus"
+              : entryType === "keydate" ? "Add Key Date" : "Add Daily Focus"}
           </h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -466,6 +480,26 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+          {/* Type toggle */}
+          {!isEdit && (
+            <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => { setEntryType("focus"); setActivity(focusActivityOptions[0] as PlanActivity); }}
+                className={`flex-1 h-9 text-sm font-medium transition-colors ${entryType === "focus" ? "bg-forest-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+              >
+                Daily Focus
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEntryType("keydate"); setActivity(KEY_DATE_ACTIVITIES[0] as PlanActivity); }}
+                className={`flex-1 h-9 text-sm font-medium transition-colors ${entryType === "keydate" ? "bg-amber-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+              >
+                Key Date
+              </button>
+            </div>
+          )}
+
           {/* Project selector — only shown in all-projects mode (tenantId="") when creating */}
           {!isEdit && !tenantId && tenantOptions && (
             <div>
@@ -848,7 +882,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
           </button>
           <button onClick={handleSave} disabled={loading}
             className="flex-1 h-11 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors disabled:opacity-50">
-            {loading ? "Saving…" : isEdit ? "Save Changes" : "Add Focus"}
+            {loading ? "Saving…" : isEdit ? "Save Changes" : entryType === "keydate" ? "Add Key Date" : "Add Focus"}
           </button>
         </div>
       </div>
@@ -860,7 +894,8 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUsers, syncFailed }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[]; tttUsers?: TTTUser[]; syncFailed?: boolean }) {
   const room = entry.roomId ? rooms.find(r => r.id === entry.roomId) : null;
   const roomLabel = room?.name ?? entry.roomLabel ?? "";
-  const colorClass = getActivityColor(entry.activity, serviceList ?? []);
+  const isKeyDate = entry.entryType === "keydate";
+  const colorClass = getActivityColor(entry.activity, serviceList ?? [], entry.entryType);
 
   const timeLabel = entry.startTime
     ? entry.endTime
@@ -869,6 +904,24 @@ function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUser
     : "";
 
   const MAX_VISIBLE = 4;
+
+  if (isKeyDate) {
+    return (
+      <button
+        onClick={onClick}
+        className={`w-full text-left px-2 py-1 rounded-lg text-xs font-semibold leading-snug ${colorClass} ${onClick ? "hover:opacity-80 transition-opacity" : ""}`}
+      >
+        <div className="flex items-center gap-1 truncate">
+          <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+          </svg>
+          <span className="truncate">{entry.activity}</span>
+        </div>
+        {projectName && <div className="truncate font-semibold text-[10px] opacity-80 pl-4">{projectName}</div>}
+        {timeLabel && <div className="truncate opacity-70 text-[10px] pl-4">{timeLabel}</div>}
+      </button>
+    );
+  }
 
   return (
     <button
