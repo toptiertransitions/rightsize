@@ -511,6 +511,7 @@ export async function createItem(data: Partial<Item> & {
     Category: data.category || "",
     Condition: data.condition || "Good",
     ConditionNotes: data.conditionNotes || "",
+    Brand: data.brand || "",
     SizeClass: data.sizeClass || "Fits in Car-SUV",
     Fragility: data.fragility || "Not Fragile",
     ItemType: data.itemType || "Daily Use",
@@ -621,6 +622,7 @@ export async function updateItem(
     onlineListingSlug: "OnlineListingSlug",
     storefrontActive: "StorefrontActive",
     pickupLocation: "PickupLocation",
+    brand: "Brand",
     // Dimensions
     widthInches: "WidthInches",
     heightInches: "HeightInches",
@@ -799,6 +801,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     onlineListingSlug: toStr(f["OnlineListingSlug"]) || undefined,
     storefrontActive: f["StorefrontActive"] === true ? true : undefined,
     pickupLocation: toStr(f["PickupLocation"]) || undefined,
+    brand: toStr(f["Brand"]) || undefined,
     widthInches: f["WidthInches"] != null ? toNum(f["WidthInches"]) : undefined,
     heightInches: f["HeightInches"] != null ? toNum(f["HeightInches"]) : undefined,
     depthInches: f["DepthInches"] != null ? toNum(f["DepthInches"]) : undefined,

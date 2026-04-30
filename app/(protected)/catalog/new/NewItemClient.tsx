@@ -67,6 +67,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
   const [widthInches, setWidthInches] = useState<string>("");
   const [heightInches, setHeightInches] = useState<string>("");
   const [depthInches, setDepthInches] = useState<string>("");
+  const [brand, setBrand] = useState<string>("");
   const [error, setError] = useState<string>("");
   useEffect(() => {
     if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -252,6 +253,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
           listingOfferup: merged.listing_offerup,
           staffTips: merged.staff_tips,
           quantity: merged.quantity ?? 1,
+          brand: brand.trim() || undefined,
           widthInches: widthInches !== "" ? Number(widthInches) : undefined,
           heightInches: heightInches !== "" ? Number(heightInches) : undefined,
           depthInches: depthInches !== "" ? Number(depthInches) : undefined,
@@ -620,6 +622,16 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                       { value: "Discard", label: "Discard" },
                       ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
                     ]}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Brand <span className="font-normal text-gray-400">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    placeholder="e.g. Herman Miller, Le Creuset, Sony"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
                   />
                 </div>
                 <div>

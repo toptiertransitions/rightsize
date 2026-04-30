@@ -158,6 +158,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     status: item.status,
     storefrontActive: item.storefrontActive ?? false,
     pickupLocation: item.pickupLocation ?? "",
+    brand: item.brand ?? "",
     estateSaleId: item.estateSaleId ?? "",
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
@@ -642,6 +643,16 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 <p className="mt-1 text-xs text-gray-400">Copy from the estate card in /admin/estates. Used for Dutch auction pricing.</p>
               </div>
             )}
+            <div>
+              <label className={labelClass}>Brand <span className="font-normal text-gray-400">(optional)</span></label>
+              <input
+                type="text"
+                value={form.brand ?? ""}
+                onChange={e => set("brand", e.target.value)}
+                placeholder="e.g. Herman Miller, Le Creuset, Sony"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+              />
+            </div>
             <div>
               <label className={labelClass}>Condition Notes</label>
               <textarea rows={2} value={form.conditionNotes ?? ""} onChange={e => set("conditionNotes", e.target.value)} className={textareaClass} />
