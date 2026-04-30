@@ -65,17 +65,19 @@ const KEY_DATE_EMAIL_COLORS: Record<string, { bg: string; border: string; text: 
 
 // ─── Client Weekly Email ──────────────────────────────────────────────────────
 function buildClientWeeklyEmail({
-  tenant, contractedHours, workedHours, upcomingEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr, teamLeadName, teamLeadPhone,
+  tenant, contractedHours, workedHours, upcomingEntries, recentEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, pendingReviewCount, todayStr, teamLeadName, teamLeadPhone,
 }: {
   tenant: Tenant;
   contractedHours: number;
   workedHours: number;
   upcomingEntries: PlanEntry[];
+  recentEntries: PlanEntry[];
   keyDates: PlanEntry[];
   forSaleItems: Item[];
   recentSoldItems: Item[];
   allSoldItems: Item[];
   donatedItems: Item[];
+  pendingReviewCount: number;
   todayStr: string;
   teamLeadName?: string;
   teamLeadPhone?: string;
@@ -93,6 +95,32 @@ function buildClientWeeklyEmail({
         </td>
       </tr>
     </table>`;
+
+  const catalogUrl = `https://app.toptiertransitions.com/catalog?tenantId=${tenant.id}`;
+
+  // Last 7 days entries (focus + key dates combined, sorted by date)
+  const recentRows = recentEntries.length === 0
+    ? `<tr><td colspan="2" style="padding:16px;text-align:center;color:#9ca3af;font-size:14px;">No activity recorded in the last 7 days.</td></tr>`
+    : recentEntries.map((e) => {
+        const isKeyDate = e.entryType === "keydate";
+        const timeStr = e.startTime && e.endTime
+          ? `${fmtTime(e.startTime)} – ${fmtTime(e.endTime)}`
+          : e.startTime ? fmtTime(e.startTime) : "";
+        const c = isKeyDate ? (KEY_DATE_EMAIL_COLORS[e.activity] ?? { bg: "#f3f4f6", border: "#d1d5db", text: "#374151" }) : null;
+        return `
+          <tr style="border-bottom:1px solid #f3f4f6;">
+            <td width="38%" style="padding:14px 16px;vertical-align:top;">
+              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">${fmtDateShort(e.date)}</p>
+              ${timeStr ? `<p style="margin:3px 0 0;font-size:13px;color:#6b7280;">${timeStr}</p>` : ""}
+            </td>
+            <td style="padding:14px 16px;vertical-align:top;border-left:1px solid #f3f4f6;">
+              ${isKeyDate && c
+                ? `<span style="display:inline-block;background:${c.bg};border:1px solid ${c.border};color:${c.text};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:4px;">🏁 ${e.activity}</span>`
+                : `<p style="margin:0;font-size:14px;font-weight:600;color:#2E6B4F;">✓ ${e.activity}</p>`}
+              ${e.notes ? `<p style="margin:4px 0 0;font-size:12px;color:#9ca3af;font-style:italic;">${e.notes}</p>` : ""}
+            </td>
+          </tr>`;
+      }).join("");
 
   // Upcoming schedule rows (client view — 2 columns, no team)
   const scheduleRows = upcomingEntries.length === 0
@@ -204,6 +232,22 @@ function buildClientWeeklyEmail({
                   </td>
                 </tr>
 
+                <!-- Pending Review Alert -->
+                ${pendingReviewCount > 0 ? `
+                <tr>
+                  <td style="padding:0 0 24px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;">
+                      <tr>
+                        <td style="padding:18px 24px;">
+                          <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#92400e;">⚠️ Action Needed: ${pendingReviewCount} Item${pendingReviewCount === 1 ? "" : "s"} Awaiting Your Review</p>
+                          <p style="margin:0 0 12px;font-size:14px;color:#78350f;line-height:1.6;">You have <strong>${pendingReviewCount} item${pendingReviewCount === 1 ? "" : "s"}</strong> in your catalog marked <em>Pending Review</em>. Please take a moment to log in and approve the recommended route for each item — or flag any concerns to us — in the next few days.</p>
+                          <a href="${catalogUrl}" style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none;">Review Your Catalog →</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>` : ""}
+
                 <!-- Progress -->
                 <tr>
                   <td style="padding:0 0 28px;">
@@ -231,6 +275,22 @@ function buildClientWeeklyEmail({
                           <p style="margin:6px 0 0;font-size:11px;color:#9ca3af;text-align:right;">${fmtHrs(Math.max(0, contractedHours - workedHours))} hrs remaining as of ${dateLabel}</p>
                         </td>
                       </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Last 7 Days -->
+                <tr>
+                  <td style="padding:0 0 28px;">
+                    <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#111827;">🌟 Progress This Week</p>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                      <thead>
+                        <tr style="background:#f9fafb;">
+                          <th width="38%" style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;">Date</th>
+                          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e5e7eb;border-left:1px solid #f3f4f6;">Activity</th>
+                        </tr>
+                      </thead>
+                      <tbody>${recentRows}</tbody>
                     </table>
                   </td>
                 </tr>
@@ -564,6 +624,10 @@ export async function POST(req: NextRequest) {
     .filter((e) => e.entryType === "keydate" && e.date >= todayStr)
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const recentEntries = allEntries
+    .filter((e) => e.date >= sevenDaysAgoStr && e.date < todayStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   const primaryContract = contracts
     .filter((c) => c.status === "Signed")
     .sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt))[0] ?? null;
@@ -583,6 +647,7 @@ export async function POST(req: NextRequest) {
       return d ? d >= sevenDaysAgoStr : false;
     });
     const donatedItems = items.filter((i) => i.primaryRoute === "Donate" && i.status === "Donated");
+    const pendingReviewCount = items.filter((i) => i.status === "Pending Review").length;
 
     // Fetch team lead name/phone if assigned
     let teamLeadName: string | undefined;
@@ -596,7 +661,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, todayStr, teamLeadName, teamLeadPhone });
+    html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, recentEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, pendingReviewCount, todayStr, teamLeadName, teamLeadPhone });
     subject = `[REVIEW & FORWARD TO CLIENT] Weekly Update — ${tenant.name}`;
   } else {
     // Build staffByEmail map from Clerk for full names + phones
