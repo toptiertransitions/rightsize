@@ -298,18 +298,19 @@ export default async function PlanPage({ searchParams }: PageProps) {
     "Staff";
   const currentUserPhoto = clerkUser?.imageUrl || undefined;
 
-  // Fetch team lead info from Airtable staff if assigned
+  // Fetch team lead info — name/phone from Airtable, photo from Clerk
   let teamLeadName: string | undefined;
   let teamLeadPhoto: string | undefined;
   let teamLeadPhone: string | undefined;
   if (tenant.teamLeadClerkId) {
-    const staffMembers = await getStaffMembers().catch(() => []);
+    const [staffMembers, teamLeadClerkUser] = await Promise.all([
+      getStaffMembers().catch(() => []),
+      clerk.users.getUser(tenant.teamLeadClerkId).catch(() => null),
+    ]);
     const lead = staffMembers.find(m => m.clerkUserId === tenant.teamLeadClerkId);
-    if (lead) {
-      teamLeadName = lead.displayName || undefined;
-      teamLeadPhoto = lead.profileImageUrl || undefined;
-      teamLeadPhone = lead.phone || undefined;
-    }
+    teamLeadName = lead?.displayName || undefined;
+    teamLeadPhone = lead?.phone || undefined;
+    teamLeadPhoto = teamLeadClerkUser?.imageUrl || undefined;
   }
 
   // TTTStaff should only see shifts they are personally invited to

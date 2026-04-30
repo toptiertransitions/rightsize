@@ -65,7 +65,7 @@ const KEY_DATE_EMAIL_COLORS: Record<string, { bg: string; border: string; text: 
 
 // ─── Client Weekly Email ──────────────────────────────────────────────────────
 function buildClientWeeklyEmail({
-  tenant, contractedHours, workedHours, upcomingEntries, recentEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, pendingReviewCount, todayStr, teamLeadName, teamLeadPhone,
+  tenant, contractedHours, workedHours, upcomingEntries, recentEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, pendingReviewCount, todayStr, teamLeadName, teamLeadPhone, teamLeadPhoto,
 }: {
   tenant: Tenant;
   contractedHours: number;
@@ -81,6 +81,7 @@ function buildClientWeeklyEmail({
   todayStr: string;
   teamLeadName?: string;
   teamLeadPhone?: string;
+  teamLeadPhoto?: string;
 }): string {
   const pct = progressPct(workedHours, contractedHours);
   const dateLabel = new Date(todayStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -232,6 +233,29 @@ function buildClientWeeklyEmail({
                   </td>
                 </tr>
 
+                <!-- Team Lead -->
+                ${teamLeadName ? `
+                <tr>
+                  <td style="padding:0 0 24px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;">
+                      <tr>
+                        <td style="padding:18px 20px;">
+                          <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;">Your Project Team Lead</p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              ${teamLeadPhoto ? `<td style="padding-right:14px;vertical-align:middle;"><img src="${teamLeadPhoto}" alt="${teamLeadName}" width="52" height="52" style="border-radius:50%;display:block;object-fit:cover;border:2px solid #bbf7d0;" /></td>` : ""}
+                              <td style="vertical-align:middle;">
+                                <p style="margin:0;font-size:16px;font-weight:700;color:#065f46;">${teamLeadName}</p>
+                                ${teamLeadPhone ? `<p style="margin:3px 0 0;font-size:14px;color:#374151;">${teamLeadPhone}</p>` : ""}
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>` : ""}
+
                 <!-- Pending Review Alert -->
                 ${pendingReviewCount > 0 ? `
                 <tr>
@@ -340,22 +364,6 @@ function buildClientWeeklyEmail({
                     </table>
                   </td>
                 </tr>
-
-                <!-- Team Lead -->
-                ${teamLeadName ? `
-                <tr>
-                  <td style="padding:0 0 28px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;">
-                      <tr>
-                        <td style="padding:20px 24px;">
-                          <p style="margin:0 0 10px;font-size:15px;font-weight:700;color:#111827;">Your Project Team Lead</p>
-                          <p style="margin:0;font-size:15px;font-weight:600;color:#2E6B4F;">${teamLeadName}</p>
-                          ${teamLeadPhone ? `<p style="margin:4px 0 0;font-size:13px;color:#374151;">${teamLeadPhone}</p>` : ""}
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>` : ""}
 
                 <!-- Items Summary -->
                 <tr>
@@ -649,19 +657,22 @@ export async function POST(req: NextRequest) {
     const donatedItems = items.filter((i) => i.primaryRoute === "Donate" && i.status === "Donated");
     const pendingReviewCount = items.filter((i) => i.status === "Pending Review").length;
 
-    // Fetch team lead name/phone if assigned
+    // Fetch team lead name/phone (Airtable) and photo (Clerk) if assigned
     let teamLeadName: string | undefined;
     let teamLeadPhone: string | undefined;
+    let teamLeadPhoto: string | undefined;
     if (tenant.teamLeadClerkId) {
-      const staffMembers = await getStaffMembers().catch(() => []);
+      const [staffMembers, teamLeadClerkUser] = await Promise.all([
+        getStaffMembers().catch(() => []),
+        clerk.users.getUser(tenant.teamLeadClerkId).catch(() => null),
+      ]);
       const lead = staffMembers.find(m => m.clerkUserId === tenant.teamLeadClerkId);
-      if (lead) {
-        teamLeadName = lead.displayName || undefined;
-        teamLeadPhone = lead.phone || undefined;
-      }
+      teamLeadName = lead?.displayName || undefined;
+      teamLeadPhone = lead?.phone || undefined;
+      teamLeadPhoto = teamLeadClerkUser?.imageUrl || undefined;
     }
 
-    html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, recentEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, pendingReviewCount, todayStr, teamLeadName, teamLeadPhone });
+    html = buildClientWeeklyEmail({ tenant, contractedHours, workedHours, upcomingEntries, recentEntries, keyDates, forSaleItems, recentSoldItems, allSoldItems, donatedItems, pendingReviewCount, todayStr, teamLeadName, teamLeadPhone, teamLeadPhoto });
     subject = `[REVIEW & FORWARD TO CLIENT] Weekly Update — ${tenant.name}`;
   } else {
     // Build staffByEmail map from Clerk for full names + phones
