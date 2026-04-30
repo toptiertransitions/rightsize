@@ -19,6 +19,7 @@ import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
 import { IntakeFormSection } from "./IntakeFormSection";
+import { InternalNotesSection } from "./InternalNotesSection";
 import { ClientContactBar } from "./ClientContactBar";
 import { ProjectAddressBar } from "./ProjectAddressBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
@@ -287,11 +288,18 @@ export default async function PlanPage({ searchParams }: PageProps) {
   // TTTStaff can add/edit shifts (non-TTT-helper shifts) just like a client user
   const canEdit = EDIT_ROLES.includes(resolvedRole) || isTTTStaff;
 
+  // Fetch current user's Clerk profile for the notes section
+  const clerk = await clerkClient();
+  const clerkUser = await clerk.users.getUser(userId!).catch(() => null);
+  const currentUserName =
+    [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(" ") ||
+    clerkUser?.emailAddresses?.[0]?.emailAddress ||
+    "Staff";
+  const currentUserPhoto = clerkUser?.imageUrl || undefined;
+
   // TTTStaff should only see shifts they are personally invited to
   let filteredEntries = entries;
   if (isTTTStaff) {
-    const clerk = await clerkClient();
-    const clerkUser = await clerk.users.getUser(userId!).catch(() => null);
     const userEmail = clerkUser?.emailAddresses.find(
       e => e.id === clerkUser.primaryEmailAddressId
     )?.emailAddress;
@@ -363,6 +371,16 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
       {/* First Visit Intake — visible to TTTStaff, TTTManager, TTTAdmin only */}
       {isTTTStaffOrAbove && <IntakeFormSection tenantId={tenantId} />}
+
+      {/* Internal Notes — TTT staff only, never visible to clients */}
+      {isTTTStaffOrAbove && (
+        <InternalNotesSection
+          tenantId={tenantId}
+          currentUserId={userId!}
+          currentUserName={currentUserName}
+          currentUserPhoto={currentUserPhoto}
+        />
+      )}
     </div>
   );
 }
