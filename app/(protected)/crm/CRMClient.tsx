@@ -4303,11 +4303,20 @@ function ActivityLogTab({
 
 // ─── Gmail Settings Tab ───────────────────────────────────────────────────────
 function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: boolean; gmailEmail?: string }) {
+  const searchParams = useSearchParams();
   const [connected, setConnected] = useState(gmailConnected);
   const [email, setEmail] = useState(gmailEmail);
   const [disconnecting, setDisconnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const oauthError = searchParams.get("error");
+  const oauthConnected = searchParams.get("connected");
+
+  const oauthErrorMsg: Record<string, string> = {
+    oauth_failed: "Google authorization failed. This usually means the redirect URI or OAuth credentials are misconfigured in Vercel — check that GOOGLE_REDIRECT_URI is set to https://app.toptiertransitions.com/api/crm/gmail/callback.",
+    missing_params: "OAuth callback received invalid parameters from Google. Try connecting again.",
+  };
 
   async function handleDisconnect() {
     if (!confirm("Disconnect Gmail?")) return;
@@ -4345,6 +4354,18 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
       <p className="text-sm text-gray-600 mb-6">
         Connect your Gmail account to automatically capture email threads as CRM activities on any opportunity.
       </p>
+
+      {oauthError && oauthErrorMsg[oauthError] && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-sm font-semibold text-red-700 mb-1">Connection failed</p>
+          <p className="text-xs text-red-600">{oauthErrorMsg[oauthError]}</p>
+        </div>
+      )}
+      {oauthConnected === "1" && connected && (
+        <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-3">
+          <p className="text-sm font-medium text-green-700">Gmail connected successfully.</p>
+        </div>
+      )}
 
       {connected ? (
         <div className="space-y-3">
