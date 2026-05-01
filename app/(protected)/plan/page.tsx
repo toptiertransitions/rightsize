@@ -347,6 +347,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
             initialDestState={tenant.destState}
             initialDestZip={tenant.destZip}
             canEditTeamLead={isManagerOrAdmin}
+            canEditAddresses={isManagerOrAdmin || role === "Owner" || role === "Collaborator"}
             initialTeamLeadClerkId={tenant.teamLeadClerkId}
             initialTeamLeadName={teamLeadName}
             initialTeamLeadPhoto={teamLeadPhoto}

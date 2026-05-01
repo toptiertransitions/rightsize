@@ -23,6 +23,7 @@ interface Props {
   initialDestZip?: string;
   // Team Lead
   canEditTeamLead?: boolean;
+  canEditAddresses?: boolean;
   initialTeamLeadClerkId?: string;
   initialTeamLeadName?: string;
   initialTeamLeadPhoto?: string;
@@ -98,6 +99,7 @@ export function ProjectAddressBar({
   initialDestState,
   initialDestZip,
   canEditTeamLead,
+  canEditAddresses,
   initialTeamLeadClerkId,
   initialTeamLeadName,
   initialTeamLeadPhoto,
@@ -198,28 +200,30 @@ export function ProjectAddressBar({
   if (editing) {
     return (
       <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Origin */}
-          <div>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Origin</p>
-            <div className="flex flex-col gap-1.5">
-              <input type="text" placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} autoFocus />
-              <input type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} className={inputCls} />
-              <input type="text" placeholder="State" value={state} onChange={e => setState(e.target.value)} className={inputCls} />
-              <input type="text" placeholder="Zip" value={zip} onChange={e => setZip(e.target.value)} className={inputCls} />
+        {canEditAddresses !== false && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Origin */}
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Origin</p>
+              <div className="flex flex-col gap-1.5">
+                <input type="text" placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} autoFocus />
+                <input type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="State" value={state} onChange={e => setState(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="Zip" value={zip} onChange={e => setZip(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+            {/* Destination */}
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Destination</p>
+              <div className="flex flex-col gap-1.5">
+                <input type="text" placeholder="Street address" value={destAddress} onChange={e => setDestAddress(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="State" value={destState} onChange={e => setDestState(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="Zip" value={destZip} onChange={e => setDestZip(e.target.value)} className={inputCls} />
+              </div>
             </div>
           </div>
-          {/* Destination */}
-          <div>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Destination</p>
-            <div className="flex flex-col gap-1.5">
-              <input type="text" placeholder="Street address" value={destAddress} onChange={e => setDestAddress(e.target.value)} className={inputCls} />
-              <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />
-              <input type="text" placeholder="State" value={destState} onChange={e => setDestState(e.target.value)} className={inputCls} />
-              <input type="text" placeholder="Zip" value={destZip} onChange={e => setDestZip(e.target.value)} className={inputCls} />
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Team Lead (manager/admin only) */}
         {canEditTeamLead && (
@@ -279,14 +283,16 @@ export function ProjectAddressBar({
         photo={teamLeadPhoto || initialTeamLeadPhoto}
         phone={teamLeadPhone || initialTeamLeadPhone}
       />
-      <button
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center sm:opacity-0 sm:group-hover:opacity-100"
-        title="Edit addresses and team lead"
-      >
-        <PencilIcon />
-        <span className="sr-only sm:not-sr-only">Edit</span>
-      </button>
+      {(canEditAddresses !== false || canEditTeamLead) && (
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center sm:opacity-0 sm:group-hover:opacity-100"
+          title={canEditAddresses !== false ? "Edit addresses and team lead" : "Edit team lead"}
+        >
+          <PencilIcon />
+          <span className="sr-only sm:not-sr-only">Edit</span>
+        </button>
+      )}
     </div>
   );
 }
