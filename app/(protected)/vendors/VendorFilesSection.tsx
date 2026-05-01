@@ -152,7 +152,7 @@ export function VendorFilesSection({ vendorId, tenantId, initialFiles }: Props) 
                 </div>
               )}
               <a
-                href={file.cloudinaryUrl}
+                href={file.resourceType === "raw" ? `/api/files/download?id=${file.id}` : file.cloudinaryUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 text-xs text-gray-700 hover:text-forest-600 hover:underline truncate"

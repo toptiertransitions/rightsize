@@ -1771,6 +1771,12 @@ export async function getVendorFilesForTenant(tenantId: string): Promise<Project
   return (data.records as AirtableRecord[]).map(mapProjectFile);
 }
 
+export async function getProjectFileById(id: string): Promise<ProjectFile | null> {
+  const res = await fileFetch(`/${id}`);
+  if (!res.ok) return null;
+  return mapProjectFile(await res.json());
+}
+
 export async function deleteProjectFile(id: string): Promise<void> {
   const res = await fileFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
