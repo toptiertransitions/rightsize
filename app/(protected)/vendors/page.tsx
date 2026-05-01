@@ -96,7 +96,7 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   if (!resolvedRole) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
-  const isTTT = ["TTTStaff", "TTTAdmin"].includes(resolvedRole);
+  const isTTT = ["TTTStaff", "TTTAdmin", "TTTManager"].includes(resolvedRole);
 
   // TTTClient = has a tenant membership role, no system role, and the project IS a TTT project
   const TTT_SYSTEM_ROLES = ["TTTStaff", "TTTAdmin", "TTTManager", "TTTSales"];
