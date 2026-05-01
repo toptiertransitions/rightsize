@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
+import { AIRTABLE_TABLES } from "@/lib/config";
 import {
   getSystemRole,
   getTenants,
@@ -9,10 +10,11 @@ import {
   getOpportunities,
   getClientContacts,
   getReferralCompanies,
+  getReferralContacts,
   getStaffMembers,
   getSalesGoals,
 } from "@/lib/airtable";
-import type { Tenant, Contract, Invoice, ClientOpportunity, ClientContact, ReferralCompany } from "@/lib/types";
+import type { Tenant, Contract, Invoice, ClientOpportunity, ClientContact, ReferralCompany, ReferralContact } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -145,10 +147,16 @@ function resolveRefSource(
   opp: ClientOpportunity | undefined,
   contactMap: Map<string, ClientContact>,
   companyMap: Map<string, ReferralCompany>,
+  refContactMap: Map<string, ReferralContact>,
 ): string {
   if (!opp) return "—";
   const contact = contactMap.get(opp.clientContactId);
   if (!contact) return "—";
+  // Show the referring person's name when available
+  if (contact.clientReferralId) {
+    const refPerson = refContactMap.get(contact.clientReferralId);
+    if (refPerson?.name) return refPerson.name;
+  }
   if (contact.referralPartnerId) {
     const co = companyMap.get(contact.referralPartnerId);
     if (co?.name) return co.name;
@@ -179,38 +187,41 @@ async function buildWoWChart(
     i === currentWeekIdx ? "rgba(201,169,110,0.45)" : "#C9A96E"
   );
 
-  const config = {
-    type: "bar",
+  // QuickChart drops JS functions when the config is a JSON object.
+  // Passing the chart as a JS string lets QuickChart evaluate it so
+  // the y-axis callback (dollar formatting) is preserved.
+  const chartJs = `{
+    type: 'bar',
     data: {
-      labels,
+      labels: ${JSON.stringify(labels)},
       datasets: [
-        { label: "Signed", data: signedData, backgroundColor: signedBg },
-        { label: "Billed", data: billedData, backgroundColor: billedBg },
-      ],
+        { label: 'Signed', data: ${JSON.stringify(signedData)}, backgroundColor: ${JSON.stringify(signedBg)} },
+        { label: 'Billed',  data: ${JSON.stringify(billedData)}, backgroundColor: ${JSON.stringify(billedBg)} }
+      ]
     },
     options: {
       plugins: {
-        legend: { position: "top", labels: { font: { size: 11 }, padding: 14 } },
+        legend: { position: 'top', labels: { font: { size: 11 }, padding: 14 } }
       },
       scales: {
         y: {
           beginAtZero: true,
-          grid: { color: "#f0f0f0" },
+          grid: { color: '#f0f0f0' },
           ticks: {
-            callback: (v: number) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${v}`,
-            font: { size: 11 },
-          },
+            callback: function(v) { return v >= 1000 ? '$' + Math.round(v/1000) + 'k' : '$' + v; },
+            font: { size: 11 }
+          }
         },
-        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-      },
-    },
-  };
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  }`;
 
   try {
     const res = await fetch("https://quickchart.io/chart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chart: config, width: 600, height: 260, format: "png", backgroundColor: "white" }),
+      body: JSON.stringify({ chart: chartJs, width: 600, height: 260, format: "png", backgroundColor: "white" }),
     });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
@@ -252,6 +263,13 @@ interface PipelineRow {
   daysInPipeline: number;
 }
 
+interface ActivityRepRow {
+  repName: string;
+  totalActivities: number;
+  uniqueContacts: number;
+  byType: Record<string, number>;
+}
+
 function buildEmail({
   reportDate,
   currentMonthLabel,
@@ -267,6 +285,8 @@ function buildEmail({
   signedRows,
   billedRows,
   pipelineRows,
+  activityRows,
+  weekLabel,
 }: {
   reportDate: string;
   currentMonthLabel: string;
@@ -291,6 +311,8 @@ function buildEmail({
   signedRows: SignedRow[];
   billedRows: BilledRow[];
   pipelineRows: PipelineRow[];
+  activityRows: ActivityRepRow[];
+  weekLabel: string;
 }): string {
   const SAGE  = "#2d4a3e";
   const TINT  = "#f0f4f0";
@@ -589,6 +611,33 @@ function buildEmail({
   ${section(`Open Pipeline — ${pipelineRows.length} Deals · ${fmtMoney(totalPipeline)} Total`, pipelineContent)}
   ${section(`New Signed Contracts — ${currentMonthLabel} (${signedRows.length} deals)`, signedContent)}
   ${section(`Completed Billing — ${currentMonthLabel} (${billedRows.length} projects)`, billedContent)}
+  ${section(`Weekly Outreach Activity — ${weekLabel}`, (() => {
+    if (activityRows.length === 0) {
+      return `<p style="font-size:13px;color:#9ca3af;text-align:center;margin:8px 0;">No activities logged this week.</p>`;
+    }
+    const allTypes = Array.from(new Set(activityRows.flatMap((r) => Object.keys(r.byType)))).sort();
+    const sorted = [...activityRows].sort((a, b) => b.uniqueContacts - a.uniqueContacts || b.totalActivities - a.totalActivities);
+    const headerCells = allTypes.map((t) => `<th ${TH}>${t}</th>`).join("");
+    const rows = sorted.map((r, i) => {
+      const bg = i % 2 === 0 ? "#fff" : TINT;
+      const typeCells = allTypes.map((t) => `<td style="padding:10px 12px;font-size:12px;color:${MUTED};border-bottom:1px solid #f3f4f6;text-align:center;">${r.byType[t] ?? "—"}</td>`).join("");
+      return `<tr style="background:${bg};">
+        <td ${TD}><span style="font-weight:600;">${r.repName}</span></td>
+        <td style="padding:10px 12px;font-size:15px;font-weight:700;color:${SAGE};border-bottom:1px solid #f3f4f6;">${r.uniqueContacts}</td>
+        <td style="padding:10px 12px;font-size:13px;color:${MUTED};border-bottom:1px solid #f3f4f6;">${r.totalActivities}</td>
+        ${typeCells}
+      </tr>`;
+    }).join("");
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <thead><tr>
+        <th ${TH}>Rep</th>
+        <th ${TH} style="color:${SAGE};">Unique Contacts</th>
+        <th ${TH}>Total Activities</th>
+        ${headerCells}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  })())}
 
   <!-- Footer -->
   <tr>
@@ -641,16 +690,18 @@ export async function POST() {
   const priorMonthLabel = priorMonthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   // ── Fetch all reference data in parallel (including sales goals) ──
-  const [allTenants, opps, contacts, refCompanies, staffMembers, allSalesGoals] = await Promise.all([
+  const [allTenants, opps, contacts, refCompanies, refContacts, staffMembers, allSalesGoals] = await Promise.all([
     getTenants().catch(() => [] as Tenant[]),
     getOpportunities().catch(() => [] as ClientOpportunity[]),
     getClientContacts().catch(() => [] as ClientContact[]),
     getReferralCompanies().catch(() => [] as ReferralCompany[]),
+    getReferralContacts().catch(() => [] as ReferralContact[]),
     getStaffMembers().catch(() => []),
     getSalesGoals().catch(() => []),
   ]);
 
-  const salesGoalMap = new Map(allSalesGoals.map((g) => [g.monthKey, g]));
+  const salesGoalMap   = new Map(allSalesGoals.map((g) => [g.monthKey, g]));
+  const refContactMap  = new Map(refContacts.map((c) => [c.id, c]));
 
   // Only TTT-managed client projects (isTTT !== false)
   const clientTenants = allTenants.filter((t) => t.isTTT !== false);
@@ -761,7 +812,7 @@ export async function POST() {
         address: addr,
         stage: o.stage,
         estimatedValue: o.estimatedValue || 0,
-        refSource: resolveRefSource(o, contactMap, companyMap),
+        refSource: resolveRefSource(o, contactMap, companyMap, refContactMap),
         rep: resolveRep(o.assignedToClerkId, staffMap),
         nextStepDate: o.nextStepDate,
         nextStepNote: o.nextStepNote,
@@ -780,7 +831,7 @@ export async function POST() {
         address: tenant ? tenantAddress(tenant) : "",
         signedAt: fmtDate(c.signedAt),
         value: c.totalCost,
-        refSource: resolveRefSource(opp, contactMap, companyMap),
+        refSource: resolveRefSource(opp, contactMap, companyMap, refContactMap),
         rep: resolveRep(opp?.assignedToClerkId, staffMap),
       };
     });
@@ -809,10 +860,63 @@ export async function POST() {
       address: tenant ? tenantAddress(tenant) : "",
       latestPaidAt,
       totalBilled: total,
-      refSource: resolveRefSource(opp, contactMap, companyMap),
+      refSource: resolveRefSource(opp, contactMap, companyMap, refContactMap),
       rep: resolveRep(opp?.assignedToClerkId, staffMap),
     });
   }
+
+  // ── Weekly activity by rep ──
+  // Fetch activities from Monday of current week onward
+  const weekStart = weekBuckets[n - 1].start;
+  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const weekLabel = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+    " – " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const oppContactMap = new Map(opps.map((o) => [o.id, o.clientContactId]));
+
+  let weekActivities: { createdByClerkId: string; contactKey: string; type: string }[] = [];
+  try {
+    const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
+    const AT_HEADERS = {
+      Authorization: `Bearer ${process.env.AIRTABLE_API_TOKEN}`,
+      "Content-Type": "application/json",
+    };
+    const formula = encodeURIComponent(`IS_AFTER({ActivityDate}, '${weekStartStr}')`);
+    const actRes = await fetch(
+      `${BASE_URL}/${encodeURIComponent(AIRTABLE_TABLES.CRM_ACTIVITIES)}?filterByFormula=${formula}&sort[0][field]=ActivityDate&sort[0][direction]=desc&pageSize=200`,
+      { headers: AT_HEADERS }
+    );
+    if (actRes.ok) {
+      const actData = await actRes.json();
+      for (const r of actData.records ?? []) {
+        const f = r.fields as Record<string, unknown>;
+        const clerkId = (f["CreatedByClerkId"] as string) || "";
+        const oppId = (f["OpportunityId"] as string) || "";
+        const directContactId = (f["ClientContactId"] as string) || "";
+        const contactKey = directContactId || oppContactMap.get(oppId) || oppId || "";
+        const type = (f["Type"] as string) || "Note";
+        if (clerkId && contactKey) {
+          weekActivities.push({ createdByClerkId: clerkId, contactKey, type });
+        }
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // Group by rep
+  const repData = new Map<string, { contacts: Set<string>; total: number; byType: Record<string, number> }>();
+  for (const { createdByClerkId, contactKey, type } of weekActivities) {
+    if (!repData.has(createdByClerkId)) repData.set(createdByClerkId, { contacts: new Set(), total: 0, byType: {} });
+    const d = repData.get(createdByClerkId)!;
+    d.contacts.add(contactKey);
+    d.total++;
+    d.byType[type] = (d.byType[type] ?? 0) + 1;
+  }
+  const activityRows: ActivityRepRow[] = Array.from(repData.entries()).map(([clerkId, d]) => ({
+    repName: staffMap.get(clerkId) || clerkId,
+    totalActivities: d.total,
+    uniqueContacts: d.contacts.size,
+    byType: d.byType,
+  }));
 
   // ── Build + send ──
   const html = buildEmail({
@@ -826,6 +930,7 @@ export async function POST() {
     woWSignedCurr, woWSignedPrev,
     woWBilledCurr, woWBilledPrev,
     signedRows, billedRows, pipelineRows,
+    activityRows, weekLabel,
   });
 
   await resend.emails.send({
