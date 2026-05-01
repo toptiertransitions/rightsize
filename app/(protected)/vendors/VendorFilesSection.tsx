@@ -17,6 +17,16 @@ function isPdf(file: ProjectFile) {
   );
 }
 
+// For raw resources (PDFs/docs), Cloudinary serves them as octet-stream with no
+// extension in the URL, causing browsers to fail. fl_attachment tells Cloudinary
+// to add Content-Disposition: attachment so the browser downloads the file instead.
+function fileDownloadUrl(file: ProjectFile): string {
+  if (file.resourceType === "raw") {
+    return file.cloudinaryUrl.replace("/upload/", "/upload/fl_attachment/");
+  }
+  return file.cloudinaryUrl;
+}
+
 function PdfIcon() {
   return (
     <div className="w-8 h-8 flex-shrink-0 rounded bg-red-50 border border-red-100 flex items-center justify-center">
@@ -152,7 +162,7 @@ export function VendorFilesSection({ vendorId, tenantId, initialFiles }: Props) 
                 </div>
               )}
               <a
-                href={file.resourceType === "raw" ? `/api/files/download?id=${file.id}` : file.cloudinaryUrl}
+                href={fileDownloadUrl(file)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 text-xs text-gray-700 hover:text-forest-600 hover:underline truncate"
