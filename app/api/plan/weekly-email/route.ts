@@ -442,10 +442,11 @@ function buildClientWeeklyEmail({
 
 // ─── Staff Weekly Email ───────────────────────────────────────────────────────
 function buildStaffWeeklyEmail({
-  tenant, upcomingEntries, staffNotes, todayStr, staffByEmail,
+  tenant, upcomingEntries, keyDates, staffNotes, todayStr, staffByEmail,
 }: {
   tenant: Tenant;
   upcomingEntries: PlanEntry[];
+  keyDates: PlanEntry[];
   staffNotes: string;
   todayStr: string;
   staffByEmail: Map<string, { name: string; phone?: string }>;
@@ -557,6 +558,77 @@ function buildStaffWeeklyEmail({
                       <tbody>${shiftRows}</tbody>
                     </table>
                     <p style="margin:10px 0 0;font-size:11px;color:#9ca3af;">Staff status: <span style="color:#059669;">● Accepted</span> &nbsp; <span style="color:#d97706;">● Pending</span> &nbsp; <span style="color:#dc2626;">● Declined</span></p>
+                  </td>
+                </tr>
+
+                <!-- Key Dates -->
+                ${keyDates.length > 0 ? `
+                <tr>
+                  <td style="padding:0 0 28px;">
+                    <p style="margin:0 0 12px;font-size:15px;font-weight:700;color:#111827;">🏁 Key Project Dates</p>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 6px;">
+                      ${keyDates.map(e => {
+                        const c = KEY_DATE_EMAIL_COLORS[e.activity] ?? { bg: "#f3f4f6", border: "#d1d5db", text: "#111827" };
+                        const timeStr = e.startTime ? (e.endTime ? `${fmtTime(e.startTime)} – ${fmtTime(e.endTime)}` : fmtTime(e.startTime)) : "";
+                        return `<tr>
+                          <td style="background:${c.bg};border:1px solid ${c.border};border-radius:8px;padding:12px 16px;">
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                              <tr>
+                                <td>
+                                  <span style="display:inline-block;background:${c.bg};border:1px solid ${c.border};color:${c.text};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.5px;">${e.activity}</span>
+                                </td>
+                                <td align="right">
+                                  <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">${fmtDate(e.date)}</p>
+                                  ${timeStr ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${timeStr}</p>` : ""}
+                                </td>
+                              </tr>
+                              ${e.notes ? `<tr><td colspan="2" style="padding-top:6px;"><p style="margin:0;font-size:12px;color:#6b7280;font-style:italic;">${e.notes}</p></td></tr>` : ""}
+                            </table>
+                          </td>
+                        </tr>`;
+                      }).join("")}
+                    </table>
+                  </td>
+                </tr>` : ""}
+
+                <!-- Key Reminders -->
+                <tr>
+                  <td style="padding:0 0 28px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef9f0;border:2px solid #f59e0b;border-radius:12px;">
+                      <tr>
+                        <td style="padding:20px 24px;">
+                          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#92400e;">⭐ Key Reminders</p>
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="padding:0 0 10px;">
+                                <table cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="padding-right:10px;vertical-align:top;font-size:18px;">⏱️</td>
+                                    <td style="vertical-align:top;">
+                                      <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Log &amp; confirm your time after every shift</p>
+                                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;line-height:1.6;">Always log your hours in the app after each shift so client reporting and payroll stay accurate. Unlogged time can't be counted.</p>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <table cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="padding-right:10px;vertical-align:top;font-size:18px;">📸</td>
+                                    <td style="vertical-align:top;">
+                                      <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Photograph &amp; log all items</p>
+                                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;line-height:1.6;">Every item should be photographed and cataloged so we can quickly help the client approve the plan, route items for sale, and move the project forward. When in doubt, log it.</p>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
 
@@ -689,7 +761,7 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    html = buildStaffWeeklyEmail({ tenant, upcomingEntries, staffNotes: staffNotes ?? "", todayStr, staffByEmail });
+    html = buildStaffWeeklyEmail({ tenant, upcomingEntries, keyDates, staffNotes: staffNotes ?? "", todayStr, staffByEmail });
     subject = `[REVIEW & FORWARD TO TEAM] Staff Schedule — ${tenant.name}`;
   }
 
