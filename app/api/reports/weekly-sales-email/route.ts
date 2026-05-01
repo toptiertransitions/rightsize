@@ -174,6 +174,8 @@ function resolveRep(
 
 // ─── QuickChart PNG ───────────────────────────────────────────────────────────
 
+// Returns a QuickChart-hosted image URL (not base64) so email clients can load it.
+// Gmail and most clients block data: URIs but will load external https images.
 async function buildWoWChart(
   labels: string[],
   signedData: number[],
@@ -187,9 +189,6 @@ async function buildWoWChart(
     i === currentWeekIdx ? "rgba(201,169,110,0.45)" : "#C9A96E"
   );
 
-  // QuickChart drops JS functions when the config is a JSON object.
-  // Passing the chart as a JS string lets QuickChart evaluate it so
-  // the y-axis callback (dollar formatting) is preserved.
   const chartJs = `{
     type: 'bar',
     data: {
@@ -218,14 +217,17 @@ async function buildWoWChart(
   }`;
 
   try {
-    const res = await fetch("https://quickchart.io/chart", {
+    // Use QuickChart's /chart/create endpoint which returns a hosted URL,
+    // not a base64 blob. Email clients (Gmail etc.) block data: URIs but
+    // will load regular https:// image URLs.
+    const res = await fetch("https://quickchart.io/chart/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chart: chartJs, width: 600, height: 260, format: "png", backgroundColor: "white" }),
+      body: JSON.stringify({ chart: chartJs, width: 600, height: 260, backgroundColor: "white" }),
     });
     if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    return `data:image/png;base64,${Buffer.from(buf).toString("base64")}`;
+    const data = await res.json();
+    return (data.url as string) || null;
   } catch {
     return null;
   }
@@ -656,17 +658,9 @@ function buildEmail({
 </html>`;
 }
 
-// ─── Route handler ────────────────────────────────────────────────────────────
+// ─── Shared builder (used by both GET preview and POST send) ─────────────────
 
-export async function POST() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const sysRole = await getSystemRole(userId).catch(() => null);
-  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
+async function buildReportHtml(_userId: string): Promise<{ html: string; reportDate: string }> {
   // ── Dates ──
   const now = new Date();
   const ctNow = new Intl.DateTimeFormat("en-US", {
@@ -932,6 +926,33 @@ export async function POST() {
     signedRows, billedRows, pipelineRows,
     activityRows, weekLabel,
   });
+
+  return { html, reportDate };
+}
+
+// ─── Route handlers ───────────────────────────────────────────────────────────
+
+// GET: preview the email HTML in a browser (admin only, no email sent)
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const { html } = await buildReportHtml(userId);
+  return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
+// POST: generate and send the email
+export async function POST() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (sysRole !== "TTTAdmin" && sysRole !== "TTTManager") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const { html, reportDate } = await buildReportHtml(userId);
 
   await resend.emails.send({
     from: "Top Tier Transitions <noreply@toptiertransitions.com>",
