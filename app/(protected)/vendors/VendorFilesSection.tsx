@@ -17,12 +17,13 @@ function isPdf(file: ProjectFile) {
   );
 }
 
-// For raw resources (PDFs/docs), Cloudinary serves them as octet-stream with no
-// extension in the URL, causing browsers to fail. fl_attachment tells Cloudinary
-// to add Content-Disposition: attachment so the browser downloads the file instead.
+// PDFs are proxied through our download API regardless of resource type.
+// - raw-type PDFs: Cloudinary serves as octet-stream (no extension → fails in browser)
+// - image-type PDFs: Cloudinary requires a paid add-on for public delivery → 401
+// The proxy uses a server-signed URL with API credentials, bypassing both issues.
 function fileDownloadUrl(file: ProjectFile): string {
-  if (file.resourceType === "raw") {
-    return file.cloudinaryUrl.replace("/upload/", "/upload/fl_attachment/");
+  if (isPdf(file)) {
+    return `/api/files/download?id=${file.id}`;
   }
   return file.cloudinaryUrl;
 }
