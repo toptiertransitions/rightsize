@@ -151,12 +151,15 @@ export function VendorFilesSection({ vendorId, tenantId, initialFiles }: Props) 
                   />
                 </div>
               )}
-              <span
-                className="flex-1 text-xs text-gray-700 truncate"
+              <a
+                href={file.cloudinaryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-xs text-gray-700 hover:text-forest-600 hover:underline truncate"
                 title={file.fileName}
               >
                 {file.fileName}
-              </span>
+              </a>
               <button
                 onClick={() => handleDelete(file)}
                 disabled={deletingIds.has(file.id)}
