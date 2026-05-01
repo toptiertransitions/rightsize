@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
-import { AIRTABLE_TABLES } from "@/lib/config";
 import {
   getSystemRole,
   getTenants,
@@ -13,6 +12,7 @@ import {
   getReferralContacts,
   getStaffMembers,
   getSalesGoals,
+  getAllActivities,
 } from "@/lib/airtable";
 import type { Tenant, Contract, Invoice, ClientOpportunity, ClientContact, ReferralCompany, ReferralContact } from "@/lib/types";
 
@@ -152,14 +152,18 @@ function resolveRefSource(
   if (!opp) return "—";
   const contact = contactMap.get(opp.clientContactId);
   if (!contact) return "—";
-  // Show the referring person's name when available
-  if (contact.clientReferralId) {
-    const refPerson = refContactMap.get(contact.clientReferralId);
-    if (refPerson?.name) return refPerson.name;
-  }
+  // referralPartnerId stores a ReferralContact.id (the individual person at the referral company)
   if (contact.referralPartnerId) {
+    const refPerson = refContactMap.get(contact.referralPartnerId);
+    if (refPerson?.name) return refPerson.name;
+    // fallback: try company map in case the ID is a company ID for legacy records
     const co = companyMap.get(contact.referralPartnerId);
     if (co?.name) return co.name;
+  }
+  // clientReferralId stores a ClientContact.id (another client who referred them)
+  if (contact.clientReferralId) {
+    const referrer = contactMap.get(contact.clientReferralId);
+    if (referrer?.name) return referrer.name;
   }
   return contact.source || "—";
 }
@@ -870,30 +874,15 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   let weekActivities: { createdByClerkId: string; contactKey: string; type: string }[] = [];
   try {
-    const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
-    const AT_HEADERS = {
-      Authorization: `Bearer ${process.env.AIRTABLE_API_TOKEN}`,
-      "Content-Type": "application/json",
-    };
-    const formula = encodeURIComponent(`IS_AFTER({ActivityDate}, '${weekStartStr}')`);
-    const actRes = await fetch(
-      `${BASE_URL}/${encodeURIComponent(AIRTABLE_TABLES.CRM_ACTIVITIES)}?filterByFormula=${formula}&sort[0][field]=ActivityDate&sort[0][direction]=desc&pageSize=200`,
-      { headers: AT_HEADERS }
-    );
-    if (actRes.ok) {
-      const actData = await actRes.json();
-      for (const r of actData.records ?? []) {
-        const f = r.fields as Record<string, unknown>;
-        const clerkId = (f["CreatedByClerkId"] as string) || "";
-        const oppId = (f["OpportunityId"] as string) || "";
-        const directContactId = (f["ClientContactId"] as string) || "";
-        const contactKey = directContactId || oppContactMap.get(oppId) || oppId || "";
-        const type = (f["Type"] as string) || "Note";
-        if (clerkId && contactKey) {
-          weekActivities.push({ createdByClerkId: clerkId, contactKey, type });
-        }
-      }
-    }
+    const allActivities = await getAllActivities();
+    weekActivities = allActivities
+      .filter((a) => a.activityDate && a.activityDate.slice(0, 10) >= weekStartStr)
+      .map((a) => ({
+        createdByClerkId: a.createdByClerkId,
+        contactKey: a.clientContactId || oppContactMap.get(a.opportunityId) || a.opportunityId || "",
+        type: a.type,
+      }))
+      .filter((a) => a.createdByClerkId && a.contactKey);
   } catch { /* non-fatal */ }
 
   // Group by rep
