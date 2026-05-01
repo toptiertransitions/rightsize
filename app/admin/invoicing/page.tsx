@@ -4,6 +4,7 @@ import { isTTTAdmin } from "@/lib/config";
 import { getInvoiceSettings } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { InvoicingSettingsClient } from "./InvoicingSettingsClient";
+import { WeeklySalesReportButton } from "./WeeklySalesReportButton";
 
 export default async function InvoicingSettingsPage() {
   const { userId } = await auth();
@@ -22,6 +23,7 @@ export default async function InvoicingSettingsPage() {
             Configure company branding, contact info, payment link, and invoice footer.
           </p>
         </div>
+        <WeeklySalesReportButton />
         <InvoicingSettingsClient initialSettings={settings} />
       </main>
     </div>
