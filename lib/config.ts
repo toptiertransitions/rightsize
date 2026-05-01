@@ -73,6 +73,7 @@ export const AIRTABLE_TABLES = {
   OUTREACH_ENROLLMENTS: "OutreachEnrollments",
   OUTREACH_SENDS: "OutreachSends",
   OUTREACH_NURTURE_SETTINGS: "OutreachNurtureSettings",
+  SALES_GOALS: process.env.AIRTABLE_SALES_GOALS_TABLE || "SalesGoals",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

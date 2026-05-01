@@ -10,22 +10,11 @@ import {
   getClientContacts,
   getReferralCompanies,
   getStaffMembers,
+  getSalesGoals,
 } from "@/lib/airtable";
 import type { Tenant, Contract, Invoice, ClientOpportunity, ClientContact, ReferralCompany } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-const MONTHLY_GOALS: Record<string, { signed: number; billed: number }> = {
-  "2026-04": { signed: 80_000,  billed: 60_000  },
-  "2026-05": { signed: 100_000, billed: 80_000  },
-  "2026-06": { signed: 120_000, billed: 100_000 },
-  "2026-07": { signed: 140_000, billed: 120_000 },
-  "2026-08": { signed: 160_000, billed: 140_000 },
-  "2026-09": { signed: 180_000, billed: 160_000 },
-  "2026-10": { signed: 190_000, billed: 180_000 },
-  "2026-11": { signed: 200_000, billed: 190_000 },
-  "2026-12": { signed: 220_000, billed: 200_000 },
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -266,9 +255,12 @@ interface PipelineRow {
 function buildEmail({
   reportDate,
   currentMonthLabel,
-  signedMTD, proratedSignedGoal,
-  billedMTD, proratedBilledGoal,
+  priorMonthLabel,
+  signedMTD, signedMonthGoal, proratedSignedGoal,
+  billedMTD, billedMonthGoal, proratedBilledGoal,
   daysElapsed, totalDays,
+  priorSignedActual, priorSignedGoal,
+  priorBilledActual, priorBilledGoal,
   chartSrc,
   woWSignedCurr, woWSignedPrev,
   woWBilledCurr, woWBilledPrev,
@@ -278,12 +270,19 @@ function buildEmail({
 }: {
   reportDate: string;
   currentMonthLabel: string;
+  priorMonthLabel: string;
   signedMTD: number;
+  signedMonthGoal: number;
   proratedSignedGoal: number;
   billedMTD: number;
+  billedMonthGoal: number;
   proratedBilledGoal: number;
   daysElapsed: number;
   totalDays: number;
+  priorSignedActual: number;
+  priorSignedGoal: number;
+  priorBilledActual: number;
+  priorBilledGoal: number;
   chartSrc: string | null;
   woWSignedCurr: number;
   woWSignedPrev: number;
@@ -497,7 +496,7 @@ function buildEmail({
                 </td></tr>
               </table>
               <p style="margin:0;font-size:12px;color:${sc.text};font-weight:700;">${signedPct}% of pace &nbsp;·&nbsp; Prorated goal: ${fmtMoney(proratedSignedGoal)}</p>
-              <p style="margin:4px 0 0;font-size:11px;color:${MUTED};">Full month goal: ${fmtMoney(proratedSignedGoal / (daysElapsed / totalDays))}</p>
+              <p style="margin:4px 0 0;font-size:11px;color:${MUTED};">Full month goal: ${signedMonthGoal > 0 ? fmtMoney(signedMonthGoal) : "Not set"}</p>
             </td></tr>
           </table>
         </td>
@@ -512,11 +511,33 @@ function buildEmail({
                 </td></tr>
               </table>
               <p style="margin:0;font-size:12px;color:${bc.text};font-weight:700;">${billedPct}% of pace &nbsp;·&nbsp; Prorated goal: ${fmtMoney(proratedBilledGoal)}</p>
-              <p style="margin:4px 0 0;font-size:11px;color:${MUTED};">Full month goal: ${fmtMoney(proratedBilledGoal / (daysElapsed / totalDays))}</p>
+              <p style="margin:4px 0 0;font-size:11px;color:${MUTED};">Full month goal: ${billedMonthGoal > 0 ? fmtMoney(billedMonthGoal) : "Not set"}</p>
             </td></tr>
           </table>
         </td>
       </tr></table>
+      ${(priorSignedGoal > 0 || priorBilledGoal > 0 || priorSignedActual > 0 || priorBilledActual > 0) ? (() => {
+        const priorSPct = priorSignedGoal > 0 ? Math.round((priorSignedActual / priorSignedGoal) * 100) : 0;
+        const priorBPct = priorBilledGoal > 0 ? Math.round((priorBilledActual / priorBilledGoal) * 100) : 0;
+        const priorSColor = priorSPct >= 100 ? "#059669" : priorSPct >= 75 ? "#d97706" : "#dc2626";
+        const priorBColor = priorBPct >= 100 ? "#059669" : priorBPct >= 75 ? "#d97706" : "#dc2626";
+        return `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+        <tr><td style="padding:12px 16px;">
+          <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.7px;">${priorMonthLabel} Final Results</p>
+          <table cellpadding="0" cellspacing="0"><tr>
+            <td style="padding-right:24px;">
+              <p style="margin:0;font-size:11px;color:${MUTED};">Signed</p>
+              <p style="margin:2px 0 0;font-size:15px;font-weight:700;color:${priorSColor};">${fmtMoney(priorSignedActual)} <span style="font-size:11px;font-weight:400;color:#9ca3af;">/ ${priorSignedGoal > 0 ? fmtMoney(priorSignedGoal) : "no goal"} ${priorSignedGoal > 0 ? `(${priorSPct}%)` : ""}</span></p>
+            </td>
+            <td style="border-left:1px solid #e5e7eb;padding-left:24px;">
+              <p style="margin:0;font-size:11px;color:${MUTED};">Earned</p>
+              <p style="margin:2px 0 0;font-size:15px;font-weight:700;color:${priorBColor};">${fmtMoney(priorBilledActual)} <span style="font-size:11px;font-weight:400;color:#9ca3af;">/ ${priorBilledGoal > 0 ? fmtMoney(priorBilledGoal) : "no goal"} ${priorBilledGoal > 0 ? `(${priorBPct}%)` : ""}</span></p>
+            </td>
+          </tr></table>
+        </td></tr>
+      </table>`;
+      })() : ""}
     </td>
   </tr>
 
@@ -614,14 +635,22 @@ export async function POST() {
     timeZone: "America/Chicago", month: "long", year: "numeric",
   });
 
-  // ── Fetch all reference data in parallel ──
-  const [allTenants, opps, contacts, refCompanies, staffMembers] = await Promise.all([
+  // ── Prior month key ──
+  const priorMonthDate = new Date(year, month - 2, 1); // month is 1-indexed, so -2 goes back one month
+  const priorMonthKey  = monthKey(priorMonthDate);
+  const priorMonthLabel = priorMonthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  // ── Fetch all reference data in parallel (including sales goals) ──
+  const [allTenants, opps, contacts, refCompanies, staffMembers, allSalesGoals] = await Promise.all([
     getTenants().catch(() => [] as Tenant[]),
     getOpportunities().catch(() => [] as ClientOpportunity[]),
     getClientContacts().catch(() => [] as ClientContact[]),
     getReferralCompanies().catch(() => [] as ReferralCompany[]),
     getStaffMembers().catch(() => []),
+    getSalesGoals().catch(() => []),
   ]);
+
+  const salesGoalMap = new Map(allSalesGoals.map((g) => [g.monthKey, g]));
 
   // Only TTT-managed client projects (isTTT !== false)
   const clientTenants = allTenants.filter((t) => t.isTTT !== false);
@@ -667,9 +696,22 @@ export async function POST() {
   }
 
   // ── MTD pacing ──
-  const goals = MONTHLY_GOALS[curMonthKey] ?? { signed: 0, billed: 0 };
-  const proratedSignedGoal = goals.signed * (day / daysTotal);
-  const proratedBilledGoal = goals.billed * (day / daysTotal);
+  const curGoal   = salesGoalMap.get(curMonthKey);
+  const signedMonthGoal   = curGoal?.signedGoal ?? 0;
+  const billedMonthGoal   = curGoal?.billedGoal ?? 0;
+  const proratedSignedGoal = signedMonthGoal * (day / daysTotal);
+  const proratedBilledGoal = billedMonthGoal * (day / daysTotal);
+
+  // ── Prior month actuals ──
+  const priorGoal         = salesGoalMap.get(priorMonthKey);
+  const priorSignedGoal   = priorGoal?.signedGoal ?? 0;
+  const priorBilledGoal   = priorGoal?.billedGoal ?? 0;
+  const priorSignedActual = allSignedContracts
+    .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === priorMonthKey)
+    .reduce((s, { c }) => s + c.totalCost, 0);
+  const priorBilledActual = allPaidInvoices
+    .filter(({ inv }) => inv.paidAt && monthKey(new Date(inv.paidAt)) === priorMonthKey)
+    .reduce((s, { inv }) => s + inv.amount, 0);
 
   const signedMTD = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === curMonthKey)
@@ -774,10 +816,12 @@ export async function POST() {
 
   // ── Build + send ──
   const html = buildEmail({
-    reportDate, currentMonthLabel,
-    signedMTD, proratedSignedGoal,
-    billedMTD, proratedBilledGoal,
+    reportDate, currentMonthLabel, priorMonthLabel,
+    signedMTD, signedMonthGoal, proratedSignedGoal,
+    billedMTD, billedMonthGoal, proratedBilledGoal,
     daysElapsed: day, totalDays: daysTotal,
+    priorSignedActual, priorSignedGoal,
+    priorBilledActual, priorBilledGoal,
     chartSrc,
     woWSignedCurr, woWSignedPrev,
     woWBilledCurr, woWBilledPrev,

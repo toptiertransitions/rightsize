@@ -86,6 +86,7 @@ import type {
   OutreachTaskType,
   OutreachEnrollmentStatus,
   OutreachSendStatus,
+  SalesGoal,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -5314,4 +5315,61 @@ export async function getAllOutreachSequenceSteps(): Promise<OutreachSequenceSte
     offset = data.offset;
   } while (offset);
   return all;
+}
+
+// ─── Sales Goals ──────────────────────────────────────────────────────────────
+
+function mapSalesGoal(r: AirtableRecord): SalesGoal {
+  const f = r.fields as Record<string, unknown>;
+  return {
+    id: r.id,
+    monthKey: (f["MonthKey"] as string) || "",
+    signedGoal: (f["SignedGoal"] as number) || 0,
+    billedGoal: (f["BilledGoal"] as number) || 0,
+  };
+}
+
+export async function getSalesGoals(): Promise<SalesGoal[]> {
+  const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
+  const headers = {
+    Authorization: `Bearer ${process.env.AIRTABLE_API_TOKEN}`,
+    "Content-Type": "application/json",
+  };
+  const all: SalesGoal[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=MonthKey&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await fetch(`${BASE_URL}/${encodeURIComponent(AIRTABLE_TABLES.SALES_GOALS)}${qs}`, { headers });
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapSalesGoal));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+export async function upsertSalesGoal(monthKey: string, signedGoal: number, billedGoal: number): Promise<SalesGoal> {
+  const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
+  const headers = {
+    Authorization: `Bearer ${process.env.AIRTABLE_API_TOKEN}`,
+    "Content-Type": "application/json",
+  };
+  const existing = (await getSalesGoals()).find((g) => g.monthKey === monthKey);
+  const fields = { MonthKey: monthKey, SignedGoal: signedGoal, BilledGoal: billedGoal };
+  if (existing?.id) {
+    const res = await fetch(`${BASE_URL}/${encodeURIComponent(AIRTABLE_TABLES.SALES_GOALS)}/${existing.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapSalesGoal(await res.json() as AirtableRecord);
+  }
+  const res = await fetch(`${BASE_URL}/${encodeURIComponent(AIRTABLE_TABLES.SALES_GOALS)}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapSalesGoal(await res.json() as AirtableRecord);
 }

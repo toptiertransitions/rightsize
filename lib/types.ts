@@ -948,6 +948,14 @@ export interface InvoiceSettings {
   zelleQrPublicId?: string;
 }
 
+// ─── Sales Goals ─────────────────────────────────────────────────────────────
+export interface SalesGoal {
+  id?: string;
+  monthKey: string; // "YYYY-MM"
+  signedGoal: number;
+  billedGoal: number;
+}
+
 // ─── Drip Campaigns ───────────────────────────────────────────────────────────
 export type DripAudience = "Referral Partners" | "Client Contacts" | "Both";
 export type DripContactType = "referral" | "client";
