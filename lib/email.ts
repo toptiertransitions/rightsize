@@ -1198,3 +1198,155 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
 </body>
 </html>`;
 }
+
+// ─── New User Admin Notification Email ───────────────────────────────────────
+export function buildNewUserAdminEmail({
+  fullName,
+  email,
+  imageUrl,
+  userType,
+  roleLabel,
+  projectName,
+  projectAddress,
+  createdAt,
+}: {
+  fullName: string;
+  email: string;
+  imageUrl?: string | null;
+  userType: "client" | "staff" | "unknown";
+  roleLabel: string;
+  projectName?: string | null;
+  projectAddress?: string | null;
+  createdAt: string;
+}): string {
+  const typeBadge =
+    userType === "staff"
+      ? { bg: "#dbeafe", border: "#93c5fd", text: "#1e3a8a", label: "TTT Staff" }
+      : userType === "client"
+      ? { bg: "#d1fae5", border: "#6ee7b7", text: "#065f46", label: "Client" }
+      : { bg: "#f3f4f6", border: "#d1d5db", text: "#374151", label: "New User" };
+
+  const initials = fullName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "?";
+
+  const avatarHtml = imageUrl
+    ? `<img src="${imageUrl}" alt="${fullName}" width="64" height="64" style="border-radius:50%;display:block;object-fit:cover;border:3px solid #e5e7eb;" />`
+    : `<table cellpadding="0" cellspacing="0"><tr><td style="width:64px;height:64px;border-radius:50%;background:#2E6B4F;font-size:22px;font-weight:700;color:#ffffff;text-align:center;line-height:64px;">${initials}</td></tr></table>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New User — Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions</p>
+                  <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">New User Account</p>
+                </td>
+                <td align="right" style="vertical-align:top;">
+                  <p style="margin:0;font-size:12px;color:#a8d4bc;">${createdAt}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+              <!-- User card -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                    <tr>
+                      <td style="padding:20px 24px;">
+                        <table cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="padding-right:18px;vertical-align:middle;">${avatarHtml}</td>
+                            <td style="vertical-align:middle;">
+                              <span style="display:inline-block;background:${typeBadge.bg};border:1px solid ${typeBadge.border};color:${typeBadge.text};font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;margin-bottom:6px;">${typeBadge.label}</span>
+                              <p style="margin:0;font-size:19px;font-weight:700;color:#111827;line-height:1.2;">${fullName}</p>
+                              <p style="margin:4px 0 0;font-size:14px;"><a href="mailto:${email}" style="color:#2E6B4F;text-decoration:none;">${email}</a></p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Details rows -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                    <tr style="background:#f9fafb;">
+                      <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Account Details</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #f3f4f6;">
+                      <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;width:38%;">Role</td>
+                      <td style="padding:12px 16px;font-size:13px;color:#111827;">${roleLabel}</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid #f3f4f6;">
+                      <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;">Email</td>
+                      <td style="padding:12px 16px;font-size:13px;color:#111827;">${email}</td>
+                    </tr>
+                    <tr style="${projectAddress ? "border-bottom:1px solid #f3f4f6;" : ""}">
+                      <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;">Project</td>
+                      <td style="padding:12px 16px;font-size:13px;color:${projectName ? "#111827" : "#9ca3af"};${projectName ? "" : "font-style:italic;"}">${projectName ?? "No project yet"}</td>
+                    </tr>
+                    ${projectAddress ? `
+                    <tr>
+                      <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;vertical-align:top;">Address</td>
+                      <td style="padding:12px 16px;font-size:13px;color:#111827;">${projectAddress}</td>
+                    </tr>` : ""}
+                  </table>
+                </td>
+              </tr>
+
+              <!-- CTA -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <a href="https://app.toptiertransitions.com/admin/users"
+                     style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
+                    View Users in Admin →
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+                  <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;line-height:1.6;">Top Tier Transitions &nbsp;·&nbsp; <a href="https://app.toptiertransitions.com" style="color:#2E6B4F;text-decoration:none;">app.toptiertransitions.com</a></p>
+                  <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;text-align:center;">Sent automatically when a new account is created.</p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
