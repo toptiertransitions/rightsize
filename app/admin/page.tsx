@@ -7,6 +7,7 @@ import { StaffClient } from "./StaffClient";
 import { RoleBreakdown } from "./RoleBreakdown";
 import { AdminHeader } from "./components/AdminHeader";
 import { AdminProjectsClient } from "./AdminProjectsClient";
+import { CompanyEmailButton } from "./CompanyEmailButton";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -32,11 +33,14 @@ export default async function AdminPage() {
       <AdminHeader active="projects" />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">All Projects</h1>
-          <p className="text-gray-400 mt-1">
-            {tenants.filter(t => !t.isArchived).length} active · {tenants.filter(t => t.isArchived).length} archived
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white">All Projects</h1>
+            <p className="text-gray-400 mt-1">
+              {tenants.filter(t => !t.isArchived).length} active · {tenants.filter(t => t.isArchived).length} archived
+            </p>
+          </div>
+          <CompanyEmailButton />
         </div>
 
         <AdminProjectsClient tenants={tenants} memberCountByTenant={memberCountByTenant} isAdmin={isAdmin} />
