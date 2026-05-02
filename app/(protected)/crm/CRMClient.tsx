@@ -1222,7 +1222,7 @@ function ContactsTab({
   const [csvResult, setCsvResult] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
-  // Filters & sort
+  // Filters & sort & pagination
   type ViewMode = "active" | "archived" | "all";
   const [viewMode, setViewMode] = useState<ViewMode>("active");
   const [search, setSearch] = useState("");
@@ -1230,6 +1230,8 @@ function ContactsTab({
   const [filterOwner, setFilterOwner] = useState("");
   const [sortField, setSortField] = useState<"name" | "source" | "owner" | "stage">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 30;
 
   const tenantMap = useMemo(() => new Map(tenants.map(t => [t.id, t])), [tenants]);
 
@@ -1262,6 +1264,7 @@ function ContactsTab({
   function toggleSort(field: typeof sortField) {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortField(field); setSortDir("asc"); }
+    setPage(1);
   }
 
   const allSources = useMemo(() => [...new Set(contacts.map(c => c.source).filter(Boolean))].sort(), [contacts]);
@@ -1297,6 +1300,10 @@ function ContactsTab({
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts, viewMode, search, filterSource, filterOwner, sortField, sortDir, opportunities, tenantMap]);
+
+  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = processed.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const SortIcon = ({ field }: { field: typeof sortField }) => (
     <span className="ml-1 inline-block opacity-50">
@@ -1412,7 +1419,7 @@ function ContactsTab({
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search name or email…"
             className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-forest-500"
           />
@@ -1423,7 +1430,7 @@ function ContactsTab({
           {(["active", "all", "archived"] as const).map(m => (
             <button
               key={m}
-              onClick={() => setViewMode(m)}
+              onClick={() => { setViewMode(m); setPage(1); }}
               className={`px-3 py-1.5 capitalize transition-colors ${viewMode === m ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
             >
               {m === "active" ? "Active" : m === "archived" ? "Archived" : "All"}
@@ -1434,7 +1441,7 @@ function ContactsTab({
         {/* Source filter */}
         <select
           value={filterSource}
-          onChange={e => setFilterSource(e.target.value)}
+          onChange={e => { setFilterSource(e.target.value); setPage(1); }}
           className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-forest-500 bg-white"
         >
           <option value="">All Sources</option>
@@ -1444,7 +1451,7 @@ function ContactsTab({
         {/* Owner filter */}
         <select
           value={filterOwner}
-          onChange={e => setFilterOwner(e.target.value)}
+          onChange={e => { setFilterOwner(e.target.value); setPage(1); }}
           className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-forest-500 bg-white"
         >
           <option value="">All Owners</option>
@@ -1550,7 +1557,7 @@ function ContactsTab({
                 </td>
               </tr>
             )}
-            {processed.map((c) => {
+            {paginated.map((c) => {
               const primaryOpp = getPrimaryOpp(c.id);
               const activeTenant = getActiveTenant(c.id);
               return (
@@ -1616,6 +1623,56 @@ function ContactsTab({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+          <p className="text-sm text-gray-500">
+            Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, processed.length)} of {processed.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className="h-8 px-3 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === "…" ? (
+                  <span key={`ellipsis-${i}`} className="px-1 text-gray-400 text-sm">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p as number)}
+                    className={cn(
+                      "h-8 w-8 text-sm rounded-lg border transition-colors",
+                      safePage === p
+                        ? "border-forest-600 bg-forest-50 text-forest-700 font-semibold"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    )}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className="h-8 px-3 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
