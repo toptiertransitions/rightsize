@@ -633,6 +633,9 @@ export async function updateItem(
     estateSaleId: "EstateSaleId",
     // Pay tracking
     commissionPaidAt: "CommissionPaidAt",
+    // Approval tracking (auto-set; safe to write via updateItem)
+    approvedDate: "ApprovedDate",
+    approvedByName: "ApprovedByName",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -796,6 +799,8 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     staffCommissionPercent: f["StaffCommissionPercent"] != null ? toNum(f["StaffCommissionPercent"]) : undefined,
     staffTimeMinutes: f["StaffTimeMinutes"] != null ? toNum(f["StaffTimeMinutes"]) : undefined,
     completedDate: toStr(f["CompletedDate"]) || undefined,
+    approvedDate: toStr(f["ApprovedDate"]) || undefined,
+    approvedByName: toStr(f["ApprovedByName"]) || undefined,
     // Storefront fields
     saleChannel: toStr(f["SaleChannel"]) || undefined,
     buyerName: toStr(f["BuyerName"]) || undefined,

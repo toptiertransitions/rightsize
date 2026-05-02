@@ -309,6 +309,9 @@ export interface Item {
   staffTimeMinutes?: number;
   // Completion tracking
   completedDate?: string;   // ISO date string; auto-set when status → Sold/Donated/Discarded
+  // Approval tracking
+  approvedDate?: string;    // ISO date string; auto-set when status → Approved from Pending Review
+  approvedByName?: string;  // Full name of staff member who approved
   // Storefront / online sale fields
   saleChannel?: string;
   buyerName?: string;

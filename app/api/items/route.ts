@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
@@ -259,6 +259,19 @@ export async function PATCH(req: NextRequest) {
     } else if (newStatus && !COMPLETED_STATUSES.includes(newStatus)) {
       (updates as Record<string, unknown>).completedDate = null;
     }
+  }
+
+  // Auto-set approvedDate + approvedByName when status → Approved (from Pending Review)
+  // Clear both when status reverts to Pending Review
+  if (newStatus === "Approved" && existing?.status === "Pending Review") {
+    (updates as Record<string, unknown>).approvedDate = new Date().toISOString().split("T")[0];
+    // Look up the approving staff member's display name
+    const staffList = await getStaffMembers().catch(() => []);
+    const staff = staffList.find((s) => s.clerkUserId === userId);
+    (updates as Record<string, unknown>).approvedByName = staff?.displayName ?? "";
+  } else if (newStatus === "Pending Review") {
+    (updates as Record<string, unknown>).approvedDate = null;
+    (updates as Record<string, unknown>).approvedByName = null;
   }
 
   // Backfill: assign a permanent barcode to any existing item that doesn't have one yet.
