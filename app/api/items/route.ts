@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
@@ -265,10 +265,20 @@ export async function PATCH(req: NextRequest) {
   // Clear both when status reverts to Pending Review
   if (newStatus === "Approved" && existing?.status === "Pending Review") {
     (updates as Record<string, unknown>).approvedDate = new Date().toISOString().split("T")[0];
-    // Look up the approving staff member's display name
+    // Resolve approver name: check StaffMembers table first, then fall back to Clerk profile
+    let approverName = "";
     const staffList = await getStaffMembers().catch(() => []);
     const staff = staffList.find((s) => s.clerkUserId === userId);
-    (updates as Record<string, unknown>).approvedByName = staff?.displayName ?? "";
+    if (staff?.displayName) {
+      approverName = staff.displayName;
+    } else {
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(userId);
+        approverName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || clerkUser.emailAddresses[0]?.emailAddress || "";
+      } catch { /* non-fatal */ }
+    }
+    (updates as Record<string, unknown>).approvedByName = approverName;
   } else if (newStatus === "Pending Review") {
     (updates as Record<string, unknown>).approvedDate = null;
     (updates as Record<string, unknown>).approvedByName = null;
