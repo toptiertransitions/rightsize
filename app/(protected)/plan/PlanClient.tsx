@@ -203,6 +203,10 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [startTime, setStartTime] = useState(entry?.startTime ?? "");
   const [endTime, setEndTime] = useState(entry?.endTime ?? "");
   const [helpers, setHelpers] = useState<PlanHelper[]>(entry?.helpers ?? []);
+  // Tracks which helpers existed when the modal opened — used to detect newly added ones on save
+  const originalHelperEmailsRef = useRef<Set<string>>(
+    new Set((entry?.helpers ?? []).map(h => h.email.toLowerCase()))
+  );
   const [helperInput, setHelperInput] = useState("");
   const [googleEventId, setGoogleEventId] = useState(entry?.googleEventId ?? "");
   const [addressMode, setAddressMode] = useState<"origin" | "destination" | "custom">("origin");
@@ -311,7 +315,11 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
     }
   };
 
-  const handleSendInvites = () => sendCalendarInvites(helpers);
+  const handleSendInvites = () => {
+    // Only re-invite helpers who haven't already accepted — don't re-notify accepted members
+    const pending = helpers.filter(h => h.status !== "accepted");
+    sendCalendarInvites(pending.length ? pending : helpers);
+  };
 
   const handleSyncRSVPs = async () => {
     if (!entry?.id || !googleEventId) return;
@@ -401,12 +409,32 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       const savedData = await res.json().catch(() => ({}));
 
       if (isEdit && googleEventId) {
-        // Auto-update existing calendar event (covers time/date/notes/helper changes)
+        // Auto-update existing calendar event (covers time/date/notes changes for existing attendees)
         await fetch("/api/plan/calendar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ planEntryId: entry!.id, action: "update" }),
         }).catch(() => {});
+
+        // Send invites to any helpers newly added in this edit session
+        const newHelpers = helpers.filter(
+          h => !originalHelperEmailsRef.current.has(h.email.toLowerCase())
+        );
+        if (newHelpers.length > 0) {
+          await fetch("/api/plan/calendar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              planEntryId: entry!.id,
+              action: "send",
+              helpers,
+              startTime: startTime || undefined,
+              endTime: endTime || undefined,
+              notes: notes.trim() || undefined,
+              address: addressText.trim() || undefined,
+            }),
+          }).catch(() => {});
+        }
       } else if (!isEdit && helpers.length && savedData.entry?.id) {
         // Auto-send invites when creating a new entry with helpers
         await fetch("/api/plan/calendar", {

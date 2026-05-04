@@ -67,15 +67,25 @@ export async function POST(req: NextRequest) {
 
   try {
     if (action === "send") {
-      // Use helpers from request body (unsaved modal state) or fall back to Airtable
-      const helpersToInvite = body.helpers?.length ? body.helpers : entry.helpers;
-      if (!helpersToInvite?.length) {
+      const rawHelpers = body.helpers?.length ? body.helpers : entry.helpers;
+      if (!rawHelpers?.length) {
         return NextResponse.json({ error: "No helpers to invite" }, { status: 400 });
+      }
+
+      // When re-inviting a subset (e.g. pending-only from "Update Invites"), merge with
+      // already-accepted helpers so they stay on the Google Calendar event without being
+      // removed or re-notified. Google only emails attendees whose invitation status changes.
+      let helpersToInvite = rawHelpers;
+      if (entry.googleEventId && body.helpers?.length) {
+        const existingAccepted = (entry.helpers || []).filter(h => h.status === "accepted");
+        const providedEmails = new Set(body.helpers.map((h: PlanHelper) => h.email.toLowerCase()));
+        const acceptedNotProvided = existingAccepted.filter(h => !providedEmails.has(h.email.toLowerCase()));
+        helpersToInvite = [...acceptedNotProvided, ...body.helpers];
       }
 
       // Persist any unsaved modal state (helpers, times, notes, address) to Airtable
       const patch: Parameters<typeof updatePlanEntry>[1] = {};
-      if (body.helpers?.length) patch.helpers = body.helpers;
+      if (body.helpers?.length) patch.helpers = helpersToInvite; // save merged list
       if (body.startTime !== undefined) patch.startTime = body.startTime;
       if (body.endTime !== undefined) patch.endTime = body.endTime;
       if (body.notes !== undefined) patch.notes = body.notes;
