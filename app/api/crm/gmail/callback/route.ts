@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const redirectUri = `${req.nextUrl.origin}/api/crm/gmail/callback`;
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
     console.log(`[gmail/callback] clerkUserId=${clerkUserId} email=${tokens.email} hasRefreshToken=${!!tokens.refreshToken} redirectUri=${process.env.GOOGLE_REDIRECT_URI}`);
     if (!tokens.refreshToken) {
       console.warn(`[gmail/callback] No refresh token returned for ${clerkUserId} — token will be short-lived`);

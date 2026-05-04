@@ -16,12 +16,12 @@ const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
-export function getGmailAuthUrl(state?: string): string {
+export function getGmailAuthUrl(state?: string, redirectUri?: string): string {
   const clientId = process.env.GOOGLE_CRM_CLIENT_ID!;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI!;
+  const uri = redirectUri ?? process.env.GOOGLE_REDIRECT_URI ?? "";
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: redirectUri,
+    redirect_uri: uri,
     response_type: "code",
     scope: GMAIL_SCOPES.join(" "),
     access_type: "offline",
@@ -31,13 +31,14 @@ export function getGmailAuthUrl(state?: string): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-export async function exchangeCodeForTokens(code: string): Promise<{
+export async function exchangeCodeForTokens(code: string, redirectUri?: string): Promise<{
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
   email: string;
   hasSendScope: boolean;
 }> {
+  const uri = redirectUri ?? process.env.GOOGLE_REDIRECT_URI ?? "";
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -45,7 +46,7 @@ export async function exchangeCodeForTokens(code: string): Promise<{
       code,
       client_id: process.env.GOOGLE_CRM_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CRM_CLIENT_SECRET!,
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+      redirect_uri: uri,
       grant_type: "authorization_code",
     }).toString(),
   });
