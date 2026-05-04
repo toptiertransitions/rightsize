@@ -90,7 +90,13 @@ export async function createOrUpdateCalendarEvent(
   if (existingEventId) {
     // Only include attendees when not skipping — skipping preserves Google RSVP statuses
     if (!skipAttendees) {
-      requestBody.attendees = helpers.map((h) => ({ email: h.email }));
+      // Include responseStatus so Google doesn't reset existing RSVPs to needsAction on patch
+      requestBody.attendees = helpers.map((h) => ({
+        email: h.email,
+        responseStatus:
+          h.status === "accepted" ? "accepted" :
+          h.status === "declined" ? "declined" : "needsAction",
+      }));
     }
     const res = await calendar.events.patch({
       calendarId: CALENDAR_ID,
