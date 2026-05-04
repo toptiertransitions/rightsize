@@ -16,6 +16,8 @@ export type AdminUser = {
   systemRole?: string;
   staffMemberId?: string; // Airtable record ID for the StaffMember row (if any)
   hourlyRate?: number;    // Staff hourly pay rate
+  address?: string;       // Home/work address for location map
+  pinColor?: string;      // Hex color for map pin
   isVendor?: boolean;     // Has a LocalVendors record with this ClerkUserId
   memberships: Array<{
     membershipId: string;
@@ -44,6 +46,8 @@ export default async function AdminUsersPage() {
   const staffRoleByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.role]));
   const staffIdByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.id]));
   const staffHourlyRateByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.hourlyRate]));
+  const staffAddressByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.address]));
+  const staffPinColorByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.pinColor]));
   const vendorClerkIds = new Set(localVendors.map(v => v.clerkUserId).filter(Boolean));
 
   const tenantMap = new Map(tenants.map(t => [t.id, t.name]));
@@ -73,6 +77,8 @@ export default async function AdminUsersPage() {
     systemRole: isTTTAdmin(u.id) ? "TTTAdmin" : (staffRoleByClerkId.get(u.id) ?? undefined),
     staffMemberId: staffIdByClerkId.get(u.id),
     hourlyRate: staffHourlyRateByClerkId.get(u.id),
+    address: staffAddressByClerkId.get(u.id),
+    pinColor: staffPinColorByClerkId.get(u.id),
     isVendor: vendorClerkIds.has(u.id),
     memberships: membershipsByUser.get(u.id) ?? [],
   }));

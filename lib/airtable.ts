@@ -2088,6 +2088,8 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
     weeklySchedule,
     timeOff,
     hourlyRate: f["HourlyRate"] != null ? toNum(f["HourlyRate"]) : undefined,
+    address: toStr(f["Address"]) || undefined,
+    pinColor: toStr(f["PinColor"]) || undefined,
   };
 }
 
@@ -2156,7 +2158,7 @@ export async function upsertStaffMember(data: {
 
 export async function updateStaffMember(
   id: string,
-  data: Partial<{ displayName: string; email: string; phone: string; role: "TTTStaff" | "TTTManager"; isActive: boolean; hourlyRate: number | null }>
+  data: Partial<{ displayName: string; email: string; phone: string; role: string; isActive: boolean; hourlyRate: number | null; address: string | null; pinColor: string | null }>
 ): Promise<StaffMember> {
   const fields: Record<string, unknown> = {};
   if (data.displayName !== undefined) fields["DisplayName"] = data.displayName;
@@ -2165,6 +2167,8 @@ export async function updateStaffMember(
   if (data.role !== undefined) fields["Role"] = data.role;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
   if (data.hourlyRate !== undefined) fields["HourlyRate"] = data.hourlyRate;
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.pinColor !== undefined) fields["PinColor"] = data.pinColor;
   const res = await staffRolesFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

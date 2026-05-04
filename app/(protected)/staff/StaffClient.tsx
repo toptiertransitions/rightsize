@@ -4,6 +4,7 @@ import { useState, useCallback, useId, useRef, useEffect } from "react";
 import Image from "next/image";
 import type { StaffMember, WeeklySchedule, TimeOffEntry, CrateLocation, InventoryContainer, InventoryItem, Subcontractor } from "@/lib/types";
 import { StaffCalendarTab } from "./StaffCalendarTab";
+import { LocationMgmtTab } from "./LocationMgmtTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1217,14 +1218,15 @@ function SubcontractorTab({ initialSubs, tenants }: { initialSubs: Subcontractor
 // ─── Main Component ───────────────────────────────────────────────────────────
 interface Props {
   members: StaffMember[];
+  locationMembers: StaffMember[];
   crateLocations: CrateLocation[];
   inventoryContainers: InventoryContainer[];
   tenants: { id: string; name: string }[];
   subcontractors: Subcontractor[];
 }
 
-export function StaffClient({ members, crateLocations, inventoryContainers, tenants, subcontractors }: Props) {
-  const [activeTab, setActiveTab] = useState<"availability" | "calendar" | "supply" | "subcontractors">("availability");
+export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, tenants, subcontractors }: Props) {
+  const [activeTab, setActiveTab] = useState<"availability" | "calendar" | "location" | "supply" | "subcontractors">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
@@ -1241,6 +1243,7 @@ export function StaffClient({ members, crateLocations, inventoryContainers, tena
         {([
           { key: "availability", label: "Staff Availability" },
           { key: "calendar", label: "Staff Calendar" },
+          { key: "location", label: "Location Mgmt" },
           { key: "supply", label: "Supply Tracking" },
           { key: "subcontractors", label: "Subcontractor Management" },
         ] as const).map(tab => (
@@ -1291,6 +1294,11 @@ export function StaffClient({ members, crateLocations, inventoryContainers, tena
       {/* Staff Calendar Tab */}
       {activeTab === "calendar" && (
         <StaffCalendarTab members={members} tenants={tenants} />
+      )}
+
+      {/* Location Management Tab */}
+      {activeTab === "location" && (
+        <LocationMgmtTab members={locationMembers} />
       )}
 
       {/* Supply Tracking Tab */}

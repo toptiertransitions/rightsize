@@ -126,6 +126,8 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [hourlyRateInput, setHourlyRateInput] = useState(user.hourlyRate != null ? String(user.hourlyRate) : "");
+  const [addressInput, setAddressInput] = useState(user.address ?? "");
+  const [pinColorInput, setPinColorInput] = useState(user.pinColor ?? "#16A34A");
 
   const availableTenants = tenants.filter(t => !current.memberships.some(m => m.tenantId === t.id));
   const isHardAdmin = current.systemRole === "TTTAdmin"; // hardcoded via env — can't be changed via API
@@ -273,6 +275,28 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
     finally { setLoading(null); }
   }
 
+  async function handleLocationSave() {
+    if (!current.staffMemberId) return;
+    setLoading("location");
+    setError("");
+    try {
+      const res = await fetch("/api/admin/staff", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: current.staffMemberId,
+          address: addressInput.trim() || null,
+          pinColor: pinColorInput || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      const updated = { ...current, address: addressInput.trim() || undefined, pinColor: pinColorInput || undefined };
+      setCurrent(updated);
+      onUpdate(updated);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setLoading(null); }
+  }
+
   async function handlePasswordReset() {
     setLoading("pwReset");
     setError("");
@@ -388,6 +412,58 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
                   className="px-3 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
                 >
                   {loading === "hourlyRate" ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* Location & Map Pin — only for TTT staff members */}
+          {current.staffMemberId && !isHardAdmin && (
+            <section>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Location &amp; Map Pin</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Home / Work Address</label>
+                  <input
+                    type="text"
+                    value={addressInput}
+                    onChange={e => setAddressInput(e.target.value)}
+                    placeholder="e.g. 123 Main St, Chicago, IL 60601"
+                    className={`w-full ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">Pin Color</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {["#16A34A","#2563EB","#7C3AED","#DC2626","#D97706","#0891B2","#DB2777","#EA580C","#0D9488","#6B7280"].map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setPinColorInput(c)}
+                        className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+                        style={{
+                          backgroundColor: c,
+                          borderColor: pinColorInput === c ? "white" : "transparent",
+                          outline: pinColorInput === c ? `2px solid ${c}` : "none",
+                        }}
+                        title={c}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      value={pinColorInput}
+                      onChange={e => setPinColorInput(e.target.value)}
+                      className="w-7 h-7 rounded-full border border-gray-600 cursor-pointer bg-transparent"
+                      title="Custom color"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleLocationSave}
+                  disabled={loading === "location"}
+                  className="px-3 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {loading === "location" ? "Saving…" : "Save Location"}
                 </button>
               </div>
             </section>

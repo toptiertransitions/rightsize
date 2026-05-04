@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!(await requireStaffManage(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let body: { id: string; role?: "TTTStaff" | "TTTManager"; isActive?: boolean; displayName?: string; email?: string; phone?: string; hourlyRate?: number | null };
+  let body: { id: string; role?: string; isActive?: boolean; displayName?: string; email?: string; phone?: string; hourlyRate?: number | null; address?: string | null; pinColor?: string | null };
   try {
     body = await req.json();
   } catch {

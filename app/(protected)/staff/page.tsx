@@ -19,15 +19,16 @@ export default async function StaffPage() {
   ]);
 
   const active = members.filter((m) => m.isActive && m.role !== "TTTSales");
+  const allActive = members.filter((m) => m.isActive); // includes TTTSales for location map
 
-  // Enrich with Clerk profile images
+  // Enrich both lists with Clerk profile images
   try {
     const clerk = await clerkClient();
-    const clerkUserIds = active.map((m) => m.clerkUserId).filter(Boolean);
+    const clerkUserIds = allActive.map((m) => m.clerkUserId).filter(Boolean);
     if (clerkUserIds.length > 0) {
       const { data: clerkUsers } = await clerk.users.getUserList({ userId: clerkUserIds, limit: 100 });
       const imageMap = new Map(clerkUsers.map((u) => [u.id, u.imageUrl]));
-      active.forEach((m) => { m.profileImageUrl = imageMap.get(m.clerkUserId) || undefined; });
+      allActive.forEach((m) => { m.profileImageUrl = imageMap.get(m.clerkUserId) || undefined; });
     }
   } catch { /* non-fatal — fall back to initials */ }
   const activeTenants = allTenants
@@ -39,6 +40,7 @@ export default async function StaffPage() {
   return (
     <StaffClient
       members={active}
+      locationMembers={allActive}
       crateLocations={crateLocations}
       inventoryContainers={inventoryContainers}
       tenants={activeTenants}

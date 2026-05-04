@@ -53,6 +53,8 @@ export interface StaffMember {
   timeOff?: TimeOffEntry[];
   profileImageUrl?: string;
   hourlyRate?: number;
+  address?: string;      // Home/work address for location map
+  pinColor?: string;     // Hex color for map pin, e.g. "#4F46E5"
 }
 
 // ─── First Visit Intake Form ──────────────────────────────────────────────────
