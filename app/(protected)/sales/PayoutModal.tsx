@@ -242,6 +242,8 @@ interface PayoutModalProps {
   onClose: () => void;
   onGenerated: (file: ProjectFile, markData: PayoutMarkData | null) => void;
   reprint?: boolean;
+  expenseDeduction?: number;
+  expenseNote?: string;
 }
 
 export function PayoutModal({
@@ -254,11 +256,15 @@ export function PayoutModal({
   onClose,
   onGenerated,
   reprint = false,
+  expenseDeduction = 0,
+  expenseNote = "",
 }: PayoutModalProps) {
   const unpaidItems = buildUnpaidLineItems(items, pfSaleEvents, localVendors);
   const paidItems = buildPaidLineItems(items, pfSaleEvents);
   const lineItems = reprint ? paidItems : unpaidItems;
-  const total = lineItems.reduce((s, i) => s + i.clientPayout, 0);
+  const subtotal = lineItems.reduce((s, i) => s + i.clientPayout, 0);
+  const deduction = reprint ? 0 : expenseDeduction; // don't deduct again on reprint
+  const total = Math.max(0, subtotal - deduction);
 
   const [sendEmail, setSendEmail] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState(ownerEmail);
@@ -282,6 +288,8 @@ export function PayoutModal({
           clientName: tenantName,
           companyName: "Top Tier Transitions",
           items: lineItems,
+          expenseDeduction: deduction > 0 ? deduction : undefined,
+          expenseNote: deduction > 0 && expenseNote ? expenseNote : undefined,
           sendEmail,
           recipientEmail: sendEmail ? recipientEmail.trim() : undefined,
           ccEmail: sendEmail && ccEmail.trim() ? ccEmail.trim() : undefined,
@@ -374,8 +382,17 @@ export function PayoutModal({
                     </div>
                   ))}
                 </div>
+                {deduction > 0 && (
+                  <div className="grid grid-cols-[1fr_auto_auto] px-4 py-2.5 gap-3 items-center bg-red-50 border-t border-red-100">
+                    <span className="text-sm text-red-700 truncate">
+                      Expenses Deducted{expenseNote ? ` — ${expenseNote}` : ""}
+                    </span>
+                    <span className="text-xs text-red-400 text-right whitespace-nowrap">Deduction</span>
+                    <span className="text-sm font-medium text-red-700 text-right tabular-nums">-{fmtCurrency(deduction)}</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-[1fr_auto_auto] px-4 py-3 bg-green-50 border-t-2 border-green-600 gap-3 items-center">
-                  <span className="text-sm font-bold text-green-700 col-span-2">Total Payout</span>
+                  <span className="text-sm font-bold text-green-700 col-span-2">Net Payout</span>
                   <span className="text-base font-bold text-green-700 text-right tabular-nums">{fmtCurrency(total)}</span>
                 </div>
               </div>

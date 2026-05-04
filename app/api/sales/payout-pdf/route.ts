@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
     companyPhone,
     companyEmail,
     items,
+    expenseDeduction,
+    expenseNote,
     sendEmail,
     recipientEmail,
     ccEmail,
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
     companyPhone?: string;
     companyEmail?: string;
     items: PayoutLineItem[];
+    expenseDeduction?: number;
+    expenseNote?: string;
     sendEmail: boolean;
     recipientEmail?: string;
     ccEmail?: string;
@@ -58,7 +62,8 @@ export async function POST(req: NextRequest) {
 
   try {
   const date = new Date().toISOString().slice(0, 10);
-  const total = items.reduce((s: number, i: PayoutLineItem) => s + i.clientPayout, 0);
+  const subtotal = items.reduce((s: number, i: PayoutLineItem) => s + i.clientPayout, 0);
+  const total = Math.max(0, subtotal - (expenseDeduction || 0));
 
   // Generate PDF — wrap in Buffer.from() to guarantee a real Node.js Buffer
   // (renderToBuffer can return Uint8Array in some versions of @react-pdf/renderer)
@@ -72,6 +77,8 @@ export async function POST(req: NextRequest) {
     companyEmail,
     date,
     items,
+    expenseDeduction,
+    expenseNote,
   });
   const pdfBuffer = Buffer.from(rawPdf as unknown as Uint8Array);
 

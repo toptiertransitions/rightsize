@@ -1751,6 +1751,8 @@ export function SalesClient({
           items={items}
           pfSaleEvents={validPfEvents}
           localVendors={localVendors}
+          expenseDeduction={expense > 0 ? expense : undefined}
+          expenseNote={expenseNote || undefined}
           onClose={() => setShowPayoutModal(false)}
           onGenerated={(file, markData) => {
             setProofFiles(prev => [...prev, file]);

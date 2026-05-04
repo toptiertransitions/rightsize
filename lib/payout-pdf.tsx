@@ -19,6 +19,8 @@ export interface PayoutPDFProps {
   logoUrl?: string;
   date: string;
   items: PayoutLineItem[];
+  expenseDeduction?: number;
+  expenseNote?: string;
 }
 
 const GREEN = "#2E6B4F";
@@ -48,6 +50,7 @@ const s = StyleSheet.create({
   tableHead: { flexDirection: "row", backgroundColor: LIGHT, padding: "8 12", borderBottom: `1pt solid ${BORDER}` },
   tableRow: { flexDirection: "row", padding: "8 12", borderBottom: `1pt solid #f3f4f6` },
   tableRowAlt: { flexDirection: "row", padding: "8 12", backgroundColor: LIGHT, borderBottom: `1pt solid #f3f4f6` },
+  deductRow: { flexDirection: "row", padding: "8 12", backgroundColor: "#fff7f7", borderBottom: `1pt solid #fee2e2` },
   totalRow: { flexDirection: "row", padding: "10 12", backgroundColor: "#f0fdf4", borderTop: `2pt solid ${GREEN}` },
   colItem: { flex: 3.5, fontSize: 9, color: GRAY, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
   colChannel: { flex: 2, fontSize: 9, color: GRAY, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
@@ -57,6 +60,8 @@ const s = StyleSheet.create({
   cellChannel: { flex: 2, fontSize: 9, color: GRAY },
   cellDate: { flex: 1.5, fontSize: 9, color: MID, textAlign: "right" },
   cellPayout: { flex: 1.5, fontSize: 9, color: MID, textAlign: "right" },
+  deductLabel: { flex: 7, fontSize: 9, color: "#dc2626" },
+  deductValue: { flex: 1.5, fontSize: 9, color: "#dc2626", textAlign: "right" },
   totalLabel: { flex: 7, fontSize: 11, fontFamily: "Helvetica-Bold", color: GREEN },
   totalValue: { flex: 1.5, fontSize: 11, fontFamily: "Helvetica-Bold", color: GREEN, textAlign: "right" },
   note: { marginTop: 20, padding: 12, backgroundColor: LIGHT, borderLeft: `3pt solid ${GREEN}`, borderRadius: 4 },
@@ -77,9 +82,10 @@ function fmtDate(s: string) {
 export function PayoutPDF({
   clientName, clientAddress, clientEmail,
   companyName, companyAddress, companyPhone, companyEmail, logoUrl,
-  date, items,
+  date, items, expenseDeduction = 0, expenseNote,
 }: PayoutPDFProps) {
-  const total = items.reduce((s, i) => s + i.clientPayout, 0);
+  const subtotal = items.reduce((s, i) => s + i.clientPayout, 0);
+  const total = Math.max(0, subtotal - expenseDeduction);
 
   return (
     <Document>
@@ -103,8 +109,14 @@ export function PayoutPDF({
               <Text style={s.metaLabel}>Items</Text>
               <Text style={s.metaValue}>{items.length}</Text>
             </View>
+            {expenseDeduction > 0 && (
+              <View style={s.metaRow}>
+                <Text style={s.metaLabel}>Expenses</Text>
+                <Text style={s.metaValue}>-{fmt(expenseDeduction)}</Text>
+              </View>
+            )}
             <View style={s.metaRow}>
-              <Text style={s.metaLabel}>Total</Text>
+              <Text style={s.metaLabel}>Net Payout</Text>
               <Text style={s.metaValue}>{fmt(total)}</Text>
             </View>
           </View>
@@ -136,8 +148,16 @@ export function PayoutPDF({
               <Text style={s.cellPayout}>{fmt(item.clientPayout)}</Text>
             </View>
           ))}
+          {expenseDeduction > 0 && (
+            <View style={s.deductRow}>
+              <Text style={s.deductLabel}>
+                Expenses Deducted{expenseNote ? ` — ${expenseNote}` : ""}
+              </Text>
+              <Text style={s.deductValue}>-{fmt(expenseDeduction)}</Text>
+            </View>
+          )}
           <View style={s.totalRow}>
-            <Text style={s.totalLabel}>Total Payout</Text>
+            <Text style={s.totalLabel}>Net Payout</Text>
             <Text style={s.totalValue}>{fmt(total)}</Text>
           </View>
         </View>
