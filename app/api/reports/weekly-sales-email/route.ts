@@ -251,7 +251,7 @@ interface SignedRow {
 interface BilledRow {
   clientName: string;
   address: string;
-  latestPaidAt: string;
+  latestCreatedAt: string;
   totalBilled: number;
   refSource: string;
   rep: string;
@@ -463,7 +463,7 @@ function buildEmail({
           return `<tr style="background:${bg};">
             <td ${TD}><span style="font-weight:600;">${r.clientName}</span></td>
             <td ${TDm}>${r.address || "—"}</td>
-            <td ${TDm}>${fmtDate(r.latestPaidAt)}</td>
+            <td ${TDm}>${fmtDate(r.latestCreatedAt)}</td>
             <td style="padding:10px 12px;font-size:13px;font-weight:700;color:${GOLD};border-bottom:1px solid #f3f4f6;">${fmtMoneyFull(r.totalBilled)}</td>
             <td ${TDm}>${r.refSource}</td>
             <td ${TDm}>${r.rep}</td>
@@ -478,7 +478,7 @@ function buildEmail({
   const billedContent = `
     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
       <thead><tr>
-        <th ${TH}>Client</th><th ${TH}>Address</th><th ${TH}>Latest Payment</th>
+        <th ${TH}>Client</th><th ${TH}>Address</th><th ${TH}>Invoice Date</th>
         <th ${TH}>Total Billed</th><th ${TH}>Referral</th><th ${TH}>Rep</th>
       </tr></thead>
       <tbody>${billedTableRows}</tbody>
@@ -731,7 +731,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   // ── Flatten all contracts + invoices for trend calculations ──
   const allSignedContracts: { tenantId: string; c: Contract }[] = [];
-  const allPaidInvoices:    { tenantId: string; inv: Invoice }[] = [];
+  const allInvoices:        { tenantId: string; inv: Invoice }[] = [];
 
   for (const [tid, cs] of contractsByTenant) {
     for (const c of cs) {
@@ -740,7 +740,8 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   }
   for (const [tid, invs] of invoicesByTenant) {
     for (const inv of invs) {
-      if (inv.status === "Paid" && inv.paidAt) allPaidInvoices.push({ tenantId: tid, inv });
+      // All available invoices (Unpaid, PartiallyPaid, Paid) — none are deleted/archived
+      if (inv.createdAt) allInvoices.push({ tenantId: tid, inv });
     }
   }
 
@@ -758,15 +759,15 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const priorSignedActual = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === priorMonthKey)
     .reduce((s, { c }) => s + c.totalCost, 0);
-  const priorBilledActual = allPaidInvoices
-    .filter(({ inv }) => inv.paidAt && monthKey(new Date(inv.paidAt)) === priorMonthKey)
+  const priorBilledActual = allInvoices
+    .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === priorMonthKey)
     .reduce((s, { inv }) => s + inv.amount, 0);
 
   const signedMTD = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === curMonthKey)
     .reduce((s, { c }) => s + c.totalCost, 0);
-  const billedMTD = allPaidInvoices
-    .filter(({ inv }) => inv.paidAt && monthKey(new Date(inv.paidAt)) === curMonthKey)
+  const billedMTD = allInvoices
+    .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === curMonthKey)
     .reduce((s, { inv }) => s + inv.amount, 0);
 
   // ── Week-over-week trend ──
@@ -778,8 +779,8 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
       .reduce((s, { c }) => s + c.totalCost, 0)
   );
   const billedPerWeek = weekBuckets.map((b) =>
-    allPaidInvoices
-      .filter(({ inv }) => inBucket(inv.paidAt, b))
+    allInvoices
+      .filter(({ inv }) => inBucket(inv.createdAt, b))
       .reduce((s, { inv }) => s + inv.amount, 0)
   );
 
@@ -834,29 +835,30 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
       };
     });
 
-  // ── Completed billing this month rows ──
-  // Group paid invoices by tenant, find tenants where latest paidAt is this month
-  const invoiceSumByTenant = new Map<string, { total: number; latestPaidAt: string }>();
-  for (const { tenantId, inv } of allPaidInvoices) {
+  // ── Billed this month rows ──
+  // Group all invoices by tenant using createdAt; include tenants with at least
+  // one invoice created this month. Sum all invoice amounts for that tenant.
+  const invoiceSumByTenant = new Map<string, { total: number; latestCreatedAt: string }>();
+  for (const { tenantId, inv } of allInvoices) {
     const existing = invoiceSumByTenant.get(tenantId);
-    const latestPaidAt = !existing || (inv.paidAt! > existing.latestPaidAt)
-      ? inv.paidAt!
-      : existing.latestPaidAt;
+    const latestCreatedAt = !existing || (inv.createdAt > existing.latestCreatedAt)
+      ? inv.createdAt
+      : existing.latestCreatedAt;
     invoiceSumByTenant.set(tenantId, {
       total: (existing?.total ?? 0) + inv.amount,
-      latestPaidAt,
+      latestCreatedAt,
     });
   }
 
   const billedRows: BilledRow[] = [];
-  for (const [tenantId, { total, latestPaidAt }] of invoiceSumByTenant) {
-    if (monthKey(new Date(latestPaidAt)) !== curMonthKey) continue;
+  for (const [tenantId, { total, latestCreatedAt }] of invoiceSumByTenant) {
+    if (monthKey(new Date(latestCreatedAt)) !== curMonthKey) continue;
     const tenant = tenantMap.get(tenantId);
     const opp    = oppByTenant.get(tenantId);
     billedRows.push({
       clientName: tenant?.name || "Unknown",
       address: tenant ? tenantAddress(tenant) : "",
-      latestPaidAt,
+      latestCreatedAt,
       totalBilled: total,
       refSource: resolveRefSource(opp, contactMap, companyMap, refContactMap),
       rep: resolveRep(opp?.assignedToClerkId, staffMap),

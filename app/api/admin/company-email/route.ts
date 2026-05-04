@@ -95,27 +95,40 @@ export async function POST(req: NextRequest) {
   const contractResults = await fetchAllContracts(clientTenants);
 
   // ── New staff (last 7 days) ──────────────────────────────────────────────────
-  const newStaff = allStaff.filter(
-    (s) =>
-      s.isActive &&
-      s.createdAt?.slice(0, 10) >= ago &&
-      ["TTTStaff", "TTTManager", "TTTSales"].includes(s.role)
+  // Use Clerk as the authoritative source for account creation date.
+  // Airtable's createdAt may be stale or missing if a role was assigned to
+  // an existing Clerk user (upsert path), so we batch-fetch Clerk profiles
+  // for all active TTT staff and filter by Clerk's createdAt.
+  const tttStaff = allStaff.filter(
+    (s) => s.isActive && ["TTTStaff", "TTTManager", "TTTSales"].includes(s.role)
   );
 
-  const newStaffWithImages = await Promise.all(
-    newStaff.map(async (s) => {
-      let imageUrl = "";
-      try {
-        const clerk = await clerkClient();
-        const user = await clerk.users.getUser(s.clerkUserId);
-        imageUrl = user.imageUrl || "";
-      } catch { /* non-fatal */ }
+  let clerkUserMap = new Map<string, { createdAt: number; imageUrl: string }>();
+  try {
+    const clerk = await clerkClient();
+    const { data: clerkUsers } = await clerk.users.getUserList({
+      userId: tttStaff.map((s) => s.clerkUserId).filter(Boolean),
+      limit: 100,
+    });
+    clerkUserMap = new Map(
+      clerkUsers.map((u) => [u.id, { createdAt: u.createdAt, imageUrl: u.imageUrl }])
+    );
+  } catch { /* non-fatal — fall back to no images */ }
+
+  const newStaffWithImages = tttStaff
+    .filter((s) => {
+      const cu = clerkUserMap.get(s.clerkUserId);
+      if (!cu) return false;
+      const clerkDateStr = new Date(cu.createdAt).toISOString().slice(0, 10);
+      return clerkDateStr >= ago;
+    })
+    .map((s) => {
+      const imageUrl = clerkUserMap.get(s.clerkUserId)?.imageUrl ?? "";
       const parts = s.displayName.trim().split(/\s+/);
       const firstName = parts[0] || s.displayName;
       const lastInitial = parts.length > 1 ? `${parts[parts.length - 1][0]}.` : "";
       return { ...s, imageUrl, firstName, lastInitial };
-    })
-  );
+    });
 
   // ── New signed projects (last 7 days) ────────────────────────────────────────
   const newProjects: { clientName: string; city: string }[] = [];
