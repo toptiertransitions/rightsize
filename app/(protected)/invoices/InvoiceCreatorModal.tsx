@@ -789,26 +789,20 @@ export function InvoiceCreatorModal({
               <div className="space-y-2 pl-7">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">To</label>
-                  {recipientOptions.length > 0 ? (
-                    <select
-                      value={sentToEmail}
-                      onChange={(e) => setSentToEmail(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-                    >
+                  <input
+                    type="email"
+                    list="recipient-options"
+                    value={sentToEmail}
+                    onChange={(e) => setSentToEmail(e.target.value)}
+                    placeholder="recipient@example.com"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                  />
+                  {recipientOptions.length > 0 && (
+                    <datalist id="recipient-options">
                       {recipientOptions.map((opt) => (
-                        <option key={opt.email} value={opt.email}>
-                          {opt.label} — {opt.email}
-                        </option>
+                        <option key={opt.email} value={opt.email}>{opt.label}</option>
                       ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="email"
-                      value={sentToEmail}
-                      onChange={(e) => setSentToEmail(e.target.value)}
-                      placeholder="recipient@example.com"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-                    />
+                    </datalist>
                   )}
                 </div>
                 <div>

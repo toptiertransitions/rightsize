@@ -40,29 +40,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to save your signature. Please try again — your information was not lost." }, { status: 500 });
   }
 
-  // Auto-create a 40% deposit invoice
+  // Auto-create a 40% deposit invoice (only when autoSendDeposit is enabled)
   let createdInvoice: Awaited<ReturnType<typeof createInvoice>> | null = null;
-  try {
-    const invoiceCount = await getAllInvoiceCount().catch(() => 0);
-    const depositPct = 40;
-    const depositAmount = Math.round(contract.totalCost * depositPct / 100 * 100) / 100;
-    const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(4, "0")}`;
-    const primaryService = contract.lineItems?.[0];
-    createdInvoice = await createInvoice({
-      tenantId: contract.tenantId,
-      type: "Deposit",
-      invoiceNumber,
-      serviceId: primaryService?.serviceId ?? "",
-      serviceName: primaryService?.serviceName ?? "Services",
-      depositType: "PercentOfEstimate",
-      depositPercent: depositPct,
-      amount: depositAmount,
-      contractId: contract.id,
-      lineItems: contract.lineItems,
-      createdByClerkId: contract.sentByClerkId ?? "system",
-    });
-  } catch (e) {
-    console.error("Failed to auto-create deposit invoice:", e);
+  if (contract.autoSendDeposit) {
+    try {
+      const invoiceCount = await getAllInvoiceCount().catch(() => 0);
+      const depositPct = 40;
+      const depositAmount = Math.round(contract.totalCost * depositPct / 100 * 100) / 100;
+      const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(4, "0")}`;
+      const primaryService = contract.lineItems?.[0];
+      createdInvoice = await createInvoice({
+        tenantId: contract.tenantId,
+        type: "Deposit",
+        invoiceNumber,
+        serviceId: primaryService?.serviceId ?? "",
+        serviceName: primaryService?.serviceName ?? "Services",
+        depositType: "PercentOfEstimate",
+        depositPercent: depositPct,
+        amount: depositAmount,
+        contractId: contract.id,
+        lineItems: contract.lineItems,
+        createdByClerkId: contract.sentByClerkId ?? "system",
+      });
+    } catch (e) {
+      console.error("Failed to auto-create deposit invoice:", e);
+    }
   }
 
   // If autoSendDeposit: email the deposit invoice to the signer with signed contract PDF attached
