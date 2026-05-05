@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getInvoiceById, getTenantById, getInvoiceSettings } from "@/lib/airtable";
+import { PaymentFlow } from "./PaymentFlow";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -22,7 +23,8 @@ export default async function PayPage({ params }: Props) {
 
   const isPaid = invoice.status === "Paid";
   const companyName = settings?.companyName || "Top Tier Transitions";
-  const paymentLinkUrl = settings?.paymentLinkUrl || "";
+  const fluidpayPublicKey = process.env.NEXT_PUBLIC_FLUIDPAY_PUBLIC_KEY ?? "";
+  const fluidpayUrl = process.env.NEXT_PUBLIC_FLUIDPAY_URL ?? "https://sandbox.fluidpay.com";
 
   const lineItems = invoice.lineItems && invoice.lineItems.length > 0 ? invoice.lineItems : null;
   const positiveItems = lineItems?.filter((li) => li.rate >= 0) ?? [];
@@ -111,7 +113,7 @@ export default async function PayPage({ params }: Props) {
             )}
           </div>
 
-          {/* Pay button or paid state */}
+          {/* Payment section */}
           {isPaid ? (
             <div className="text-center py-3">
               <div className="inline-flex items-center gap-2 text-emerald-600 font-semibold">
@@ -121,15 +123,15 @@ export default async function PayPage({ params }: Props) {
                 This invoice has been paid. Thank you!
               </div>
             </div>
-          ) : paymentLinkUrl ? (
-            <a
-              href={paymentLinkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full text-center bg-[#2E6B4F] hover:bg-[#245a40] text-white font-bold text-base py-3.5 rounded-xl transition-colors"
-            >
-              Pay Now
-            </a>
+          ) : fluidpayPublicKey ? (
+            <PaymentFlow
+              invoiceId={invoice.id}
+              invoiceNumber={invoice.invoiceNumber}
+              amount={invoice.amount}
+              companyName={companyName}
+              fluidpayPublicKey={fluidpayPublicKey}
+              fluidpayUrl={fluidpayUrl}
+            />
           ) : (
             <div className="text-center py-2">
               <p className="text-sm text-gray-500">
