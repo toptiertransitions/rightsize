@@ -58,7 +58,14 @@ export async function POST(req: NextRequest) {
 
   // Check if sharp produced a valid JPEG.
   const isJpeg = processedBuffer[0] === 0xff && processedBuffer[1] === 0xd8;
-  const isHeic = isHeicByExtension || mimeType === "image/heic" || mimeType === "image/heif";
+
+  // Detect HEIC by magic bytes (ISO BMFF ftyp box at offset 4) so we catch the
+  // case where iOS labels a HEIC file as image/jpeg or sends it with a .jpg extension.
+  const isHeicMagicBytes =
+    rawBuffer.length >= 12 &&
+    rawBuffer.slice(4, 8).toString("ascii") === "ftyp" &&
+    /^(heic|heix|hevc|hevx|mif1|msf1|miaf|MiHE|MiHB)/i.test(rawBuffer.slice(8, 12).toString("ascii"));
+  const isHeic = isHeicByExtension || mimeType === "image/heic" || mimeType === "image/heif" || isHeicMagicBytes;
 
   try {
     if (isJpeg) {
@@ -70,10 +77,10 @@ export async function POST(req: NextRequest) {
       const result = await uploadImage(rawBuffer, { tenantId: tenantId ?? "admin", mimeType: "image/heic" });
       return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
     } else {
-      return NextResponse.json(
-        { error: "Could not process this image format. Please upload a JPEG, PNG, or HEIC file." },
-        { status: 400 }
-      );
+      // Sharp failed on a non-HEIC image — upload raw and let Cloudinary handle it.
+      // This covers edge cases like malformed JPEGs or formats sharp doesn't support.
+      const result = await uploadImage(rawBuffer, { tenantId: tenantId ?? "admin", mimeType });
+      return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
     }
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
