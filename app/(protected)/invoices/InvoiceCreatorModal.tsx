@@ -168,9 +168,16 @@ export function InvoiceCreatorModal({
       setDepositServiceId(servicesEntry.id);
       setSpecificServiceId(services[0].id);
     }
-    setSentToEmail(recipientOptions[0]?.email ?? "");
-    setCcEmail(currentUserEmail);
-  }, [contracts, services, recipientOptions, currentUserEmail]);
+  }, [contracts, services]);
+
+  // Reset email fields only when the modal opens (not on every render)
+  useEffect(() => {
+    if (isOpen) {
+      setSentToEmail(recipientOptions[0]?.email ?? "");
+      setCcEmail(currentUserEmail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const depositCreditLineItem = {
     serviceId: "",
