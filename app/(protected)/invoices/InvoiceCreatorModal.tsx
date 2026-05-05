@@ -107,8 +107,11 @@ export function InvoiceCreatorModal({
 
   // Shared
   const [sendEmail, setSendEmail] = useState(false);
-  const [sentToEmail, setSentToEmail] = useState(recipientOptions[0]?.email ?? "");
+  const [toRecipient, setToRecipient] = useState(recipientOptions[0]?.email ?? "__custom__");
+  const [customToEmail, setCustomToEmail] = useState("");
   const [ccEmail, setCcEmail] = useState(currentUserEmail);
+  const useCustomTo = toRecipient === "__custom__";
+  const sentToEmail = useCustomTo ? customToEmail : toRecipient;
   const [pushToQBO, setPushToQBO] = useState(false);
 
   // Deposit calc
@@ -173,7 +176,8 @@ export function InvoiceCreatorModal({
   // Reset email fields only when the modal opens (not on every render)
   useEffect(() => {
     if (isOpen) {
-      setSentToEmail(recipientOptions[0]?.email ?? "");
+      setToRecipient(recipientOptions[0]?.email ?? "__custom__");
+      setCustomToEmail("");
       setCcEmail(currentUserEmail);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -796,21 +800,29 @@ export function InvoiceCreatorModal({
               <div className="space-y-2 pl-7">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">To</label>
-                  <input
-                    type="email"
-                    list="recipient-options"
-                    value={sentToEmail}
-                    onChange={(e) => setSentToEmail(e.target.value)}
-                    placeholder="recipient@example.com"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-                  />
-                  {recipientOptions.length > 0 && (
-                    <datalist id="recipient-options">
+                  <div className="flex flex-col gap-1.5">
+                    <select
+                      value={toRecipient}
+                      onChange={(e) => setToRecipient(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 bg-white"
+                    >
                       {recipientOptions.map((opt) => (
-                        <option key={opt.email} value={opt.email}>{opt.label}</option>
+                        <option key={opt.email} value={opt.email}>
+                          {opt.label} — {opt.email}
+                        </option>
                       ))}
-                    </datalist>
-                  )}
+                      <option value="__custom__">Other — enter email…</option>
+                    </select>
+                    {useCustomTo && (
+                      <input
+                        type="email"
+                        value={customToEmail}
+                        onChange={(e) => setCustomToEmail(e.target.value)}
+                        placeholder="recipient@example.com"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                      />
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">CC (optional)</label>
