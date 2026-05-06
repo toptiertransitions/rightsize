@@ -1,7 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isTTTAdmin } from "@/lib/config";
-import { getGmailToken, getCalendarToken } from "@/lib/airtable";
+import { getGmailToken, getAllGmailTokens, getCalendarToken } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { CRMSettingsClient } from "./CRMSettingsClient";
 
@@ -10,10 +10,22 @@ export default async function AdminCRMPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [token, calendarToken] = await Promise.all([
+  const [token, calendarToken, allTokens] = await Promise.all([
     getGmailToken(userId).catch(() => null),
     getCalendarToken().catch(() => null),
+    getAllGmailTokens().catch(() => []),
   ]);
+
+  // Look up Clerk display names for each connected account
+  const clerk = await clerkClient();
+  const connectedAccounts = await Promise.all(
+    allTokens.map(async (t) => {
+      const user = await clerk.users.getUser(t.clerkUserId).catch(() => null);
+      const name = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || t.email;
+      const expired = new Date(t.expiresAt) < new Date();
+      return { email: t.email, name, expired, hasSendScope: t.hasSendScope };
+    })
+  );
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -25,7 +37,13 @@ export default async function AdminCRMPage() {
             Manage Gmail integration and email activity syncing for the CRM.
           </p>
         </div>
-        <CRMSettingsClient gmailConnected={!!token} gmailEmail={token?.email} calendarConnected={!!calendarToken} calendarEmail={calendarToken?.email} />
+        <CRMSettingsClient
+          gmailConnected={!!token}
+          gmailEmail={token?.email}
+          calendarConnected={!!calendarToken}
+          calendarEmail={calendarToken?.email}
+          connectedAccounts={connectedAccounts}
+        />
       </main>
     </div>
   );

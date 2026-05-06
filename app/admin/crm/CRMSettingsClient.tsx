@@ -3,7 +3,14 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnected, calendarEmail }: { gmailConnected: boolean; gmailEmail?: string; calendarConnected: boolean; calendarEmail?: string }) {
+interface ConnectedAccount {
+  email: string;
+  name: string;
+  expired: boolean;
+  hasSendScope: boolean;
+}
+
+export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnected, calendarEmail, connectedAccounts = [] }: { gmailConnected: boolean; gmailEmail?: string; calendarConnected: boolean; calendarEmail?: string; connectedAccounts?: ConnectedAccount[] }) {
   const searchParams = useSearchParams();
   const calendarStatus = searchParams.get("calendar");
   const calendarMsg = searchParams.get("msg");
@@ -67,6 +74,54 @@ export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnecte
           )}
         </div>
 
+        {/* All connected accounts */}
+        {connectedAccounts.length > 0 && (
+          <div className="mb-4 rounded-lg border border-gray-700 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-800 text-gray-400 text-xs uppercase tracking-wide">
+                  <th className="px-4 py-2 text-left font-medium">Staff Member</th>
+                  <th className="px-4 py-2 text-left font-medium">Account</th>
+                  <th className="px-4 py-2 text-left font-medium">Send Scope</th>
+                  <th className="px-4 py-2 text-left font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {connectedAccounts.map((acct) => (
+                  <tr key={acct.email} className="bg-gray-900">
+                    <td className="px-4 py-2.5 text-gray-200 font-medium">{acct.name}</td>
+                    <td className="px-4 py-2.5 text-gray-400">{acct.email}</td>
+                    <td className="px-4 py-2.5">
+                      {acct.hasSendScope ? (
+                        <span className="text-green-400 text-xs">Yes</span>
+                      ) : (
+                        <span className="text-gray-500 text-xs">Read only</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {acct.expired ? (
+                        <span className="inline-flex items-center gap-1 text-amber-400 text-xs font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                          Token expired
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-green-400 text-xs font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                          Connected
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {connectedAccounts.length === 0 && (
+          <p className="text-sm text-gray-500 mb-4">No Gmail accounts connected yet.</p>
+        )}
+
         {gmailConnected ? (
           <div className="space-y-3">
             <button
@@ -100,7 +155,7 @@ export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnecte
         ) : (
           <div>
             <p className="text-sm text-amber-400 mb-3">
-              Gmail is not connected. Connect your account from the CRM settings to enable syncing.
+              Your Gmail account is not connected. Connect it from CRM settings to enable syncing.
             </p>
             <a
               href="/crm?tab=settings"
