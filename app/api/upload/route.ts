@@ -31,12 +31,21 @@ export async function POST(req: NextRequest) {
 
   const rawBuffer = Buffer.from(await file.arrayBuffer());
 
+  // iOS camera roll sends HEIC files labeled as image/jpeg.
+  // Detect the real format via ISO BMFF magic bytes (offset 4 = "ftyp") so
+  // Cloudinary receives the correct MIME type and can decode the file.
+  const isHeicMagicBytes =
+    rawBuffer.length >= 12 &&
+    rawBuffer.slice(4, 8).toString("ascii") === "ftyp" &&
+    /^(heic|heix|hevc|hevx|mif1|msf1|miaf|MiHE|MiHB)/i.test(rawBuffer.slice(8, 12).toString("ascii"));
+  const effectiveMimeType = isHeicMagicBytes ? "image/heic" : mimeType;
+
   // PDFs and other non-image files — upload as raw, skip image processing.
-  if (!mimeType.startsWith("image/")) {
+  if (!effectiveMimeType.startsWith("image/")) {
     try {
       const result = await uploadFile(rawBuffer, {
         tenantId: tenantId ?? "admin",
-        mimeType,
+        mimeType: effectiveMimeType,
         resourceType: "raw",
       });
       return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
@@ -51,7 +60,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await uploadImage(rawBuffer, {
       tenantId: tenantId ?? "admin",
-      mimeType,
+      mimeType: effectiveMimeType,
     });
     return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
   } catch (e) {
