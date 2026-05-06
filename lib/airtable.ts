@@ -3312,6 +3312,15 @@ export async function deleteGmailToken(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+/** Clears the access/refresh tokens on a record (marks it as expired) without deleting it.
+ *  This preserves the email so the UI can show "connection expired — reconnect". */
+export async function revokeGmailToken(id: string): Promise<void> {
+  await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: { AccessToken: null, RefreshToken: null } }),
+  }).catch(() => {});
+}
+
 /** Returns the Gmail token for a specific email address (most recently updated). */
 export async function getGmailTokenByEmail(email: string): Promise<GmailToken | null> {
   const formula = encodeURIComponent(`{Email} = "${email}"`);

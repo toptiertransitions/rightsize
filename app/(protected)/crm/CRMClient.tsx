@@ -51,6 +51,7 @@ interface CRMClientProps {
   staffMembers: StaffMember[];
   gmailConnected: boolean;
   gmailEmail?: string;
+  gmailTokenRevoked?: boolean;
   tenants: Tenant[];
 }
 
@@ -4359,7 +4360,7 @@ function ActivityLogTab({
 }
 
 // ─── Gmail Settings Tab ───────────────────────────────────────────────────────
-function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: boolean; gmailEmail?: string }) {
+function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { gmailConnected: boolean; gmailEmail?: string; gmailTokenRevoked?: boolean }) {
   const searchParams = useSearchParams();
   const [connected, setConnected] = useState(gmailConnected);
   const [email, setEmail] = useState(gmailEmail);
@@ -4371,7 +4372,8 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
   const oauthConnected = searchParams.get("connected");
 
   const oauthErrorMsg: Record<string, string> = {
-    oauth_failed: "Google authorization failed. This usually means the redirect URI or OAuth credentials are misconfigured in Vercel — check that GOOGLE_REDIRECT_URI is set to https://app.toptiertransitions.com/api/crm/gmail/callback.",
+    oauth_failed: "Google authorization failed. Check that GOOGLE_CRM_CLIENT_ID and GOOGLE_CRM_CLIENT_SECRET are set correctly in Vercel.",
+    access_denied: "Google rejected the authorization request. If the OAuth app is in Testing mode, your Google account must be added as a test user in Google Cloud Console — or the app needs to be published.",
     missing_params: "OAuth callback received invalid parameters from Google. Try connecting again.",
   };
 
@@ -4412,6 +4414,15 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
         Connect your Gmail account to automatically capture email threads as CRM activities on any opportunity.
       </p>
 
+      {gmailTokenRevoked && !connected && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-800 mb-1">Gmail connection expired</p>
+          <p className="text-xs text-amber-700">
+            Your Gmail token was revoked or expired (this happens every 7 days if the Google OAuth app is in Testing mode).
+            Reconnect below, and ask your admin to publish the OAuth app in Google Cloud Console to make the connection permanent.
+          </p>
+        </div>
+      )}
       {oauthError && oauthErrorMsg[oauthError] && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
           <p className="text-sm font-semibold text-red-700 mb-1">Connection failed</p>
@@ -4486,7 +4497,7 @@ function GmailSettingsTab({ gmailConnected, gmailEmail }: { gmailConnected: bool
 }
 
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
-export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, tenants }: CRMClientProps) {
+export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants }: CRMClientProps) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -4619,7 +4630,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       {tab === "activity" && (
         <ActivityLogTab opportunities={opportunities} clientContacts={localContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
       )}
-      {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} />}
+      {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} gmailTokenRevoked={gmailTokenRevoked} />}
     </div>
   );
 }

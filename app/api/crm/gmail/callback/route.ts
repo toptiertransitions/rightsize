@@ -8,10 +8,11 @@ export async function GET(req: NextRequest) {
   const clerkUserId = req.nextUrl.searchParams.get("state");
   const googleError = req.nextUrl.searchParams.get("error"); // e.g. "access_denied"
 
-  // Google rejected the auth (user denied, app not published, etc.)
+  // Google rejected the auth (user denied, not a test user, app not published, etc.)
   if (googleError) {
     console.error(`[gmail/callback] Google returned error: ${googleError}`);
-    return NextResponse.redirect(new URL(`/crm?tab=settings&error=oauth_failed`, req.url));
+    const errorCode = googleError === "access_denied" ? "access_denied" : "oauth_failed";
+    return NextResponse.redirect(new URL(`/crm?tab=settings&error=${errorCode}`, req.url));
   }
 
   if (!code || !clerkUserId) {

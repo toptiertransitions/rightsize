@@ -2,6 +2,7 @@ import {
   getGmailToken,
   saveGmailToken,
   deleteGmailToken,
+  revokeGmailToken,
   getClientContacts,
   getReferralContacts,
   getActivitiesForContact,
@@ -105,8 +106,8 @@ export async function getValidAccessToken(clerkUserId: string): Promise<string> 
   }
 
   if (!token.refreshToken) {
-    // No refresh token stored — delete the dead record so UI shows "Reconnect"
-    await deleteGmailToken(token.id).catch(() => {});
+    // No refresh token stored — revoke record so UI shows "connection expired"
+    await revokeGmailToken(token.id);
     throw new Error("GMAIL_TOKEN_REVOKED");
   }
 
@@ -121,8 +122,8 @@ export async function getValidAccessToken(clerkUserId: string): Promise<string> 
     return accessToken;
   } catch (e) {
     if (e instanceof Error && e.message === "GMAIL_TOKEN_REVOKED") {
-      // Token is permanently invalid — delete it so the UI shows "Reconnect Gmail"
-      await deleteGmailToken(token.id).catch(() => {});
+      // Token is permanently invalid (invalid_grant) — revoke so UI shows "connection expired"
+      await revokeGmailToken(token.id);
     }
     throw e;
   }

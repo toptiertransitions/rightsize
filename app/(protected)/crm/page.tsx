@@ -22,6 +22,10 @@ export default async function CRMPage() {
     getTenants().catch(() => []),
   ]);
 
+  // A token record with empty refreshToken means the connection expired (invalid_grant).
+  const gmailConnected = !!token?.refreshToken;
+  const gmailTokenRevoked = !!token && !token.refreshToken;
+
   return (
     <CRMClient
       opportunities={opportunities}
@@ -29,8 +33,9 @@ export default async function CRMPage() {
       companies={companies}
       referralContacts={referralContacts}
       staffMembers={staffMembers}
-      gmailConnected={!!token}
+      gmailConnected={gmailConnected}
       gmailEmail={token?.email}
+      gmailTokenRevoked={gmailTokenRevoked}
       tenants={tenants}
     />
   );
