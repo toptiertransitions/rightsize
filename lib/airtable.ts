@@ -4461,6 +4461,8 @@ function mapSubcontractor(record: Airtable.Record<Airtable.FieldSet>): import(".
     tenantId: toStr(f["TenantId"]) || undefined,
     tenantName: toStr(f["TenantName"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
+    fileUrl: toStr(f["FileUrl"]) || undefined,
+    filePublicId: toStr(f["FilePublicId"]) || undefined,
   };
 }
 
@@ -4480,6 +4482,8 @@ export async function createSubcontractor(data: {
   paidDate?: string;
   tenantId?: string;
   tenantName?: string;
+  fileUrl?: string;
+  filePublicId?: string;
 }): Promise<import("./types").Subcontractor> {
   const base = getBase();
   const fields: Airtable.FieldSet = {
@@ -4492,6 +4496,8 @@ export async function createSubcontractor(data: {
   if (data.paidDate) fields["PaidDate"] = data.paidDate;
   if (data.tenantId) fields["TenantId"] = data.tenantId;
   if (data.tenantName) fields["TenantName"] = data.tenantName;
+  if (data.fileUrl) fields["FileUrl"] = data.fileUrl;
+  if (data.filePublicId) fields["FilePublicId"] = data.filePublicId;
   const record = await base(AIRTABLE_TABLES.SUBCONTRACTORS).create(fields);
   return mapSubcontractor(record);
 }
@@ -4506,6 +4512,8 @@ export async function updateSubcontractor(
     paidDate: string | null;
     tenantId: string | null;
     tenantName: string | null;
+    fileUrl: string | null;
+    filePublicId: string | null;
   }>
 ): Promise<import("./types").Subcontractor> {
   const base = getBase();
@@ -4517,6 +4525,8 @@ export async function updateSubcontractor(
   if (data.paidDate !== undefined) fields["PaidDate"] = data.paidDate ?? "";
   if (data.tenantId !== undefined) fields["TenantId"] = data.tenantId ?? "";
   if (data.tenantName !== undefined) fields["TenantName"] = data.tenantName ?? "";
+  if (data.fileUrl !== undefined) fields["FileUrl"] = data.fileUrl ?? "";
+  if (data.filePublicId !== undefined) fields["FilePublicId"] = data.filePublicId ?? "";
   const record = await base(AIRTABLE_TABLES.SUBCONTRACTORS).update(id, fields);
   return mapSubcontractor(record);
 }

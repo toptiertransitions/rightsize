@@ -1117,6 +1117,8 @@ export interface Subcontractor {
   tenantId?: string;
   tenantName?: string;
   createdAt: string;
+  fileUrl?: string;
+  filePublicId?: string;
 }
 
 // ─── Outreach ─────────────────────────────────────────────────────────────────

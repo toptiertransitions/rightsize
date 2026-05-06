@@ -899,6 +899,8 @@ function SubEditRow({
   const [paidDate, setPaidDate] = useState(sub.paidDate ?? "");
   const [tenantId, setTenantId] = useState(sub.tenantId ?? "");
   const [tenantName, setTenantName] = useState(sub.tenantName ?? "");
+  const [fileUrl, setFileUrl] = useState(sub.fileUrl ?? "");
+  const [filePublicId, setFilePublicId] = useState(sub.filePublicId ?? "");
   const [saving, setSaving] = useState(false);
 
   function handlePaidToggle(val: boolean) {
@@ -909,7 +911,7 @@ function SubEditRow({
 
   async function handleSave() {
     setSaving(true);
-    await onSave({ name, charges: Number(charges) || 0, scope, paid, paidDate: paidDate || undefined, tenantId: tenantId || undefined, tenantName: tenantName || undefined });
+    await onSave({ name, charges: Number(charges) || 0, scope, paid, paidDate: paidDate || undefined, tenantId: tenantId || undefined, tenantName: tenantName || undefined, fileUrl: fileUrl || undefined, filePublicId: filePublicId || undefined });
     setSaving(false);
   }
 
@@ -936,6 +938,9 @@ function SubEditRow({
         <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} disabled={!paid} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 disabled:opacity-40 focus:outline-none focus:border-forest-500" />
       </td>
       <td className="px-4 py-2">
+        <SubFileUpload fileUrl={fileUrl} onUploaded={(url, pid) => { setFileUrl(url); setFilePublicId(pid); }} />
+      </td>
+      <td className="px-4 py-2">
         <div className="flex items-center gap-2">
           <button onClick={handleSave} disabled={saving || !name} className="px-3 py-1 bg-forest-600 hover:bg-forest-500 text-white text-xs rounded-lg disabled:opacity-50 transition-colors">
             {saving ? "Saving…" : "Save"}
@@ -949,8 +954,50 @@ function SubEditRow({
   );
 }
 
-const SUB_EMPTY_FORM = { name: "", charges: "", scope: "", paid: false, paidDate: "", tenantId: "", tenantName: "" };
+const SUB_EMPTY_FORM = { name: "", charges: "", scope: "", paid: false, paidDate: "", tenantId: "", tenantName: "", fileUrl: "", filePublicId: "" };
 type SubFormState = typeof SUB_EMPTY_FORM;
+
+function SubFileUpload({ fileUrl, onUploaded }: { fileUrl: string; onUploaded: (url: string, publicId: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const { photoUrl, photoPublicId } = await res.json();
+      onUploaded(photoUrl, photoPublicId);
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  const isPdf = fileUrl && (fileUrl.includes("/raw/") || /\.pdf($|\?)/i.test(fileUrl));
+
+  return (
+    <div className="flex items-center gap-2 min-w-[120px]">
+      {fileUrl ? (
+        <a href={fileUrl} target="_blank" rel="noopener noreferrer"
+           className="text-xs text-forest-600 hover:underline font-medium truncate max-w-[80px]"
+           title="View file">
+          {isPdf ? "PDF" : "Image"}
+        </a>
+      ) : null}
+      <label className={`cursor-pointer text-xs px-2 py-1 rounded border transition-colors ${uploading ? "opacity-50 pointer-events-none" : "border-gray-300 hover:border-forest-400 text-gray-500 hover:text-forest-600"}`}>
+        {uploading ? "…" : fileUrl ? "Replace" : "Attach"}
+        <input ref={inputRef} type="file" accept="image/*,.pdf,.heic,.heif" className="hidden" onChange={handleChange} disabled={uploading} />
+      </label>
+    </div>
+  );
+}
 
 function SubAddRow({ tenants, onAdd, onCancel }: { tenants: { id: string; name: string }[]; onAdd: (data: SubFormState) => Promise<void>; onCancel: () => void }) {
   const [form, setForm] = useState<SubFormState>(SUB_EMPTY_FORM);
@@ -990,6 +1037,9 @@ function SubAddRow({ tenants, onAdd, onCancel }: { tenants: { id: string; name: 
         <input type="date" value={form.paidDate} onChange={(e) => setForm((f) => ({ ...f, paidDate: e.target.value }))} disabled={!form.paid} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 disabled:opacity-40 focus:outline-none focus:border-forest-500" />
       </td>
       <td className="px-4 py-2">
+        <SubFileUpload fileUrl={form.fileUrl} onUploaded={(url, pid) => setForm((f) => ({ ...f, fileUrl: url, filePublicId: pid }))} />
+      </td>
+      <td className="px-4 py-2">
         <div className="flex items-center gap-2">
           <button onClick={handleSave} disabled={saving || !form.name} className="px-3 py-1 bg-forest-600 hover:bg-forest-500 text-white text-xs rounded-lg disabled:opacity-50 transition-colors">
             {saving ? "Adding…" : "Add"}
@@ -1021,7 +1071,7 @@ function SubcontractorTab({ initialSubs, tenants }: { initialSubs: Subcontractor
       const res = await fetch("/api/subcontractors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, charges: Number(form.charges) || 0, scope: form.scope, paid: form.paid, paidDate: form.paidDate || undefined, tenantId: form.tenantId || undefined, tenantName: form.tenantName || undefined }),
+        body: JSON.stringify({ name: form.name, charges: Number(form.charges) || 0, scope: form.scope, paid: form.paid, paidDate: form.paidDate || undefined, tenantId: form.tenantId || undefined, tenantName: form.tenantName || undefined, fileUrl: form.fileUrl || undefined, filePublicId: form.filePublicId || undefined }),
       });
       if (!res.ok) throw new Error(await res.text());
       const { subcontractor } = await res.json();
@@ -1114,15 +1164,16 @@ function SubcontractorTab({ initialSubs, tenants }: { initialSubs: Subcontractor
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[800px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[18%]">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[20%]">Project</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[28%]">Scope</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[12%]">Charges</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 w-[8%]">Paid</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[16%]">Name</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[17%]">Project</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[24%]">Scope</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[10%]">Charges</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 w-[7%]">Paid</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[10%]">Paid Date</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-[12%]">File</th>
                 <th className="px-4 py-3 w-[4%]" />
               </tr>
             </thead>
@@ -1132,7 +1183,7 @@ function SubcontractorTab({ initialSubs, tenants }: { initialSubs: Subcontractor
               )}
               {paginated.length === 0 && !showAdd && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
                     No subcontractors yet. Click &ldquo;Add Subcontractor&rdquo; to get started.
                   </td>
                 </tr>
@@ -1169,6 +1220,19 @@ function SubcontractorTab({ initialSubs, tenants }: { initialSubs: Subcontractor
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs tabular-nums whitespace-nowrap">
                       {sub.paidDate ? fmtDate(sub.paidDate) : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {sub.fileUrl ? (
+                        <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer"
+                           className="inline-flex items-center gap-1 text-xs text-forest-600 hover:underline font-medium">
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                          {sub.fileUrl.includes("/raw/") || /\.pdf($|\?)/i.test(sub.fileUrl) ? "PDF" : "Image"}
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

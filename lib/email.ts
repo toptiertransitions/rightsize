@@ -1350,3 +1350,76 @@ export function buildNewUserAdminEmail({
 </body>
 </html>`;
 }
+
+// ─── Subcontractor Added Notification ────────────────────────────────────────
+export function buildSubcontractorAddedEmail({
+  addedByName,
+  subName,
+  charges,
+  project,
+  scope,
+  date,
+  fileUrl,
+  appUrl,
+}: {
+  addedByName: string;
+  subName: string;
+  charges: number;
+  project?: string;
+  scope?: string;
+  date: string;
+  fileUrl?: string;
+  appUrl: string;
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const row = (label: string, value: string) => `
+    <tr>
+      <td style="padding:6px 0;font-size:13px;color:#6b7280;width:120px;vertical-align:top;">${label}</td>
+      <td style="padding:6px 0;font-size:13px;color:#111827;font-weight:600;">${value}</td>
+    </tr>`;
+
+  return `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+        <tr>
+          <td style="background:#2E6B4F;border-radius:16px 16px 0 0;padding:28px 32px;">
+            <p style="margin:0;font-size:18px;font-weight:700;color:#F5F0E8;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;font-size:13px;color:#a8d4bc;">New Subcontractor Entry</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;border-radius:0 0 16px 16px;padding:28px 32px;">
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;">
+              <strong>${addedByName}</strong> added a new subcontractor entry on <strong>${date}</strong>.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #e5e7eb;padding-top:16px;">
+              <tbody>
+                ${row("Name", subName)}
+                ${row("Amount", fmt(charges))}
+                ${project ? row("Project", project) : ""}
+                ${scope ? row("Scope", scope) : ""}
+                ${fileUrl ? row("File", `<a href="${fileUrl}" style="color:#2E6B4F;">View attached file</a>`) : ""}
+              </tbody>
+            </table>
+            <div style="margin-top:24px;">
+              <a href="${appUrl}/staff?tab=subcontractors"
+                 style="display:inline-block;background:#2E6B4F;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;text-decoration:none;">
+                View in Rightsize
+              </a>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 0;text-align:center;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
