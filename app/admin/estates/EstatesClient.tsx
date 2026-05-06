@@ -100,6 +100,8 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
   const [uploadingImage, setUploadingImage] = useState(false);
   const [emailingId, setEmailingId] = useState<string | null>(null);
   const [emailResult, setEmailResult] = useState<{ id: string; sent: number; total: number } | null>(null);
+  const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
+  const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
 
   const tenantMap = Object.fromEntries(tenants.map(t => [t.id, t.name]));
 
@@ -208,6 +210,46 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       alert("Failed to send emails. Check server logs.");
     } finally {
       setEmailingId(null);
+    }
+  }
+
+  async function handleDownloadCsv(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDownloadingCsvId(id);
+    try {
+      const res = await fetch(`/api/admin/estates/${id}/download-csv`);
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "items.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to download CSV.");
+    } finally {
+      setDownloadingCsvId(null);
+    }
+  }
+
+  async function handleDownloadImages(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDownloadingZipId(id);
+    try {
+      const res = await fetch(`/api/admin/estates/${id}/download-images`);
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "images.zip";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to download images ZIP.");
+    } finally {
+      setDownloadingZipId(null);
     }
   }
 
@@ -331,6 +373,28 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                           {emailResult?.id === estate.id ? `Sent (${emailResult.sent}/${emailResult.total})` : "Email Details"}
                         </>
                       )}
+                    </button>
+                    <button
+                      onClick={e => handleDownloadCsv(estate.id, e)}
+                      disabled={downloadingCsvId === estate.id}
+                      title="Download item names as CSV"
+                      className="text-gray-500 hover:text-sky-400 transition-colors text-xs px-2 py-1 rounded border border-gray-700 hover:border-sky-600 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      {downloadingCsvId === estate.id ? "Exporting…" : "CSV"}
+                    </button>
+                    <button
+                      onClick={e => handleDownloadImages(estate.id, e)}
+                      disabled={downloadingZipId === estate.id}
+                      title="Download all primary images as ZIP"
+                      className="text-gray-500 hover:text-violet-400 transition-colors text-xs px-2 py-1 rounded border border-gray-700 hover:border-violet-600 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {downloadingZipId === estate.id ? "Zipping…" : "Images ZIP"}
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); handleDelete(estate.id); }}
