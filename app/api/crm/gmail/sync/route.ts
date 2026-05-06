@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getActivitiesForOpportunity, createActivity, getAllGmailTokens } from "@/lib/airtable";
-import { getValidAccessToken, searchGmailMessages, getGmailMessage } from "@/lib/gmail";
+import { getValidAccessToken, searchGmailMessages, getGmailMessage, gmailHeaderToLocalDate } from "@/lib/gmail";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
           isGmailImported: true,
           gmailMessageId: msg.id,
           gmailThreadId: detail.threadId,
-          activityDate: detail.date ? new Date(detail.date).toISOString() : new Date().toISOString(),
+          activityDate: gmailHeaderToLocalDate(detail.date),
           createdByClerkId: userId,
         });
         imported++;

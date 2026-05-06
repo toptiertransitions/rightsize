@@ -17,6 +17,23 @@ const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
+/** Converts a Gmail Date header (RFC 2822) to a YYYY-MM-DD string in the
+ *  sender's local timezone rather than UTC, so dates don't shift backward
+ *  for senders in positive UTC offsets (e.g. "28 Apr 2026 01:00 +0200"
+ *  would otherwise come back as "2026-04-27" in UTC). */
+export function gmailHeaderToLocalDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  const offsetMatch = dateStr.match(/([+-]\d{2}:?\d{2})\s*$/);
+  if (offsetMatch) {
+    const raw = offsetMatch[1].replace(":", "");
+    const sign = raw[0] === "+" ? 1 : -1;
+    const offsetMs = sign * (parseInt(raw.slice(1, 3), 10) * 60 + parseInt(raw.slice(3, 5), 10)) * 60_000;
+    return new Date(d.getTime() + offsetMs).toISOString().slice(0, 10);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 export function getGmailAuthUrl(state?: string, redirectUri?: string): string {
   const clientId = process.env.GOOGLE_CRM_CLIENT_ID!;
   const uri = redirectUri ?? process.env.GOOGLE_REDIRECT_URI ?? "";
@@ -196,9 +213,7 @@ async function runGmailSyncForUser(
           isGmailImported: true,
           gmailMessageId: msg.id,
           gmailThreadId: detail.threadId,
-          activityDate: detail.date
-            ? new Date(detail.date).toISOString()
-            : new Date().toISOString(),
+          activityDate: gmailHeaderToLocalDate(detail.date),
           createdByClerkId: clerkUserId,
         });
         totalImported++;
