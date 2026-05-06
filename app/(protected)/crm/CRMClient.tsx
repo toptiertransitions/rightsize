@@ -4369,6 +4369,7 @@ function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { g
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const oauthError = searchParams.get("error");
+  const oauthDetail = searchParams.get("detail");
   const oauthConnected = searchParams.get("connected");
 
   const oauthErrorMsg: Record<string, string> = {
@@ -4423,10 +4424,11 @@ function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { g
           </p>
         </div>
       )}
-      {oauthError && oauthErrorMsg[oauthError] && (
+      {oauthError && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
           <p className="text-sm font-semibold text-red-700 mb-1">Connection failed</p>
-          <p className="text-xs text-red-600">{oauthErrorMsg[oauthError]}</p>
+          <p className="text-xs text-red-600">{oauthErrorMsg[oauthError] ?? "Google authorization failed."}</p>
+          {oauthDetail && <p className="text-xs text-red-500 mt-1 font-mono">{oauthDetail}</p>}
         </div>
       )}
       {oauthConnected === "1" && connected && (

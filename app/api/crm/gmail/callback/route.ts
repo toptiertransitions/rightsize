@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (googleError) {
     console.error(`[gmail/callback] Google returned error: ${googleError}`);
     const errorCode = googleError === "access_denied" ? "access_denied" : "oauth_failed";
-    return NextResponse.redirect(new URL(`/crm?tab=settings&error=${errorCode}`, req.url));
+    return NextResponse.redirect(new URL(`/crm?tab=settings&error=${errorCode}&detail=${encodeURIComponent(googleError)}`, req.url));
   }
 
   if (!code || !clerkUserId) {
@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.redirect(new URL("/crm?tab=settings&connected=1", req.url));
   } catch (err) {
-    console.error("[gmail/callback] Token exchange or save failed:", err);
-    return NextResponse.redirect(new URL("/crm?tab=settings&error=oauth_failed", req.url));
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[gmail/callback] Token exchange or save failed:", detail);
+    return NextResponse.redirect(new URL(`/crm?tab=settings&error=oauth_failed&detail=${encodeURIComponent(detail)}`, req.url));
   }
 }
