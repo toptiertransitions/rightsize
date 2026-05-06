@@ -3111,21 +3111,35 @@ export async function createActivity(data: {
   // After saving the activity, propagate LastActivityDate to the referral contact and its company.
   // Uses try/catch so a failure here never blocks the activity from being saved.
   // LastActivityDate is a Date field in Airtable — must be YYYY-MM-DD only (no time component).
+  // We compare before writing: only update if the new date is strictly newer than the stored one,
+  // so Gmail sync importing multiple activities in arbitrary order never rolls the date backward.
   if (data.clientContactId) {
     const dateOnly = data.activityDate ? data.activityDate.slice(0, 10) : "";
+    if (!dateOnly) return activity;
     try {
-      const contactPatchRes = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${data.clientContactId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ fields: { LastActivityDate: dateOnly } }),
-      });
-      if (contactPatchRes.ok) {
-        const contactRecord = await contactPatchRes.json();
+      const contactGetRes = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${data.clientContactId}`);
+      if (contactGetRes.ok) {
+        const contactRecord = await contactGetRes.json();
+        const currentContactDate = toStr(contactRecord.fields?.LastActivityDate);
         const companyId = toStr(contactRecord.fields?.ReferralCompanyId);
-        if (companyId) {
-          await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${companyId}`, {
+        if (!currentContactDate || dateOnly > currentContactDate) {
+          await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${data.clientContactId}`, {
             method: "PATCH",
             body: JSON.stringify({ fields: { LastActivityDate: dateOnly } }),
           });
+          if (companyId) {
+            const companyGetRes = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${companyId}`);
+            if (companyGetRes.ok) {
+              const companyRecord = await companyGetRes.json();
+              const currentCompanyDate = toStr(companyRecord.fields?.LastActivityDate);
+              if (!currentCompanyDate || dateOnly > currentCompanyDate) {
+                await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${companyId}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ fields: { LastActivityDate: dateOnly } }),
+                });
+              }
+            }
+          }
         }
       }
     } catch { /* non-fatal — activity is already saved */ }

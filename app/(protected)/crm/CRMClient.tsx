@@ -1884,14 +1884,10 @@ function ReferralPartnersTab({
   // Called by ContactActivityPanel after a new activity is logged
   function handleActivityLogged(contactId: string, date: string) {
     const dateStr = date.slice(0, 10);
-    setLocalActivityDates(prev => {
-      const current = prev.get(contactId);
-      if (!current || dateStr > current) {
-        return new Map(prev).set(contactId, dateStr);
-      }
-      return prev;
-    });
-    // Persist to Airtable in background
+    const storedDate = initialReferralContacts.find(c => c.id === contactId)?.lastActivityDate;
+    const currentBest = localActivityDates.get(contactId) ?? storedDate;
+    if (currentBest && dateStr <= currentBest) return; // date is not newer — skip
+    setLocalActivityDates(prev => new Map(prev).set(contactId, dateStr));
     fetch("/api/crm/contacts", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
