@@ -20,12 +20,12 @@ const OWNER_ROLES = ["Owner", "TTTAdmin"];
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tenantId?: string }>;
+  searchParams: Promise<{ tenantId?: string; all?: string }>;
 }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { tenantId: tenantIdParam } = await searchParams;
+  const { tenantId: tenantIdParam, all: showAll } = await searchParams;
 
   const user = await currentUser();
   const [systemRole, memberships] = await Promise.all([
@@ -221,7 +221,7 @@ export default async function DashboardPage({
     : null;
   const selectedMembership = tenantIdParam
     ? (memberships.find(m => m.tenantId === tenantIdParam) ?? staffSyntheticMembership)
-    : memberships.length === 1 ? memberships[0] : null;
+    : !showAll && memberships.length >= 1 ? memberships[0] : null;
 
   if (selectedMembership) {
     const membership = selectedMembership;
@@ -274,7 +274,7 @@ export default async function DashboardPage({
       <div>
         {/* Back link for multi-project users */}
         {(memberships.length > 1 || isStaff) && (
-          <Link href="/home" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
+          <Link href="/home?all=1" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -594,7 +594,7 @@ export default async function DashboardPage({
           return (
             <Card key={tenant!.id}>
               <CardContent>
-                <Link href={`/rooms?tenantId=${tenant!.id}`} className="block group">
+                <Link href={`/home?tenantId=${tenant!.id}`} className="block group">
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-forest-50 rounded-xl flex items-center justify-center">
                       <svg className="w-5 h-5 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
