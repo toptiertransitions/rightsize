@@ -237,7 +237,9 @@ export default async function DashboardPage({
       isOwnerOrCollab ? getServices().catch(() => []) : Promise.resolve([]),
     ]);
 
-    if (!tenant) redirect("/onboarding");
+    // Tenant not found — if we auto-selected (no explicit tenantId param), fall
+    // back to the grid so other valid memberships are still reachable.
+    if (!tenant) redirect(tenantIdParam ? "/onboarding" : "/home?all=1");
 
     const canEdit = EDIT_ROLES.includes(membership.role);
     const isOwner = OWNER_ROLES.includes(membership.role);
