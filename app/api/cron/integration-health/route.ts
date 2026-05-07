@@ -113,6 +113,8 @@ async function checkAndRefreshGmailTokens(
   for (const token of tokens) {
     const staff = staffByClerkId.get(token.clerkUserId);
     const displayName = staff?.displayName || token.email;
+    // Skip test accounts — not relevant to production integration monitoring
+    if (/test/i.test(displayName)) continue;
     seenClerkIds.add(token.clerkUserId);
 
     if (!token.refreshToken) {
@@ -149,10 +151,11 @@ async function checkAndRefreshGmailTokens(
     }
   }
 
-  // Surface active TTTAdmin/TTTManager staff who have no token row at all
+  // Surface active TTTAdmin/TTTSales staff who have no token row at all
   for (const s of staffMembers) {
     if (!s.isActive) continue;
     if (!["TTTAdmin", "TTTSales"].includes(s.role)) continue;
+    if (/test/i.test(s.displayName)) continue;
     if (seenClerkIds.has(s.clerkUserId)) continue;
     results.push({
       clerkUserId: s.clerkUserId,
