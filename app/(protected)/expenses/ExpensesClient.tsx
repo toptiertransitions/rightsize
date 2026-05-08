@@ -575,7 +575,11 @@ export function ExpensesClient({ initialExpenses, staffName, tenants, isManagerO
       });
       if (!res.ok) throw new Error("Analysis failed");
       const data = await res.json();
+      if (!data.expense) throw new Error("Server error: expense not returned");
       setExpenses(prev => [data.expense, ...prev]);
+      // Widen the filter so the new expense is always visible even if its
+      // receipt date falls outside the current timeline window.
+      setTimelineFilter("all");
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {

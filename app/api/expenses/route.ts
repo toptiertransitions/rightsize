@@ -4,6 +4,8 @@ import { getSystemRole, getExpenses, getExpensesForUser, getExpensesForTenant, g
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExpenseCategory } from "@/lib/types";
 
+export const maxDuration = 60;
+
 const ALLOWED_ROLES = ["TTTStaff", "TTTManager", "TTTSales", "TTTAdmin"];
 
 // ─── GET: fetch expenses ───────────────────────────────────────────────────────
@@ -125,11 +127,22 @@ export async function POST(req: NextRequest) {
           },
         };
       } else {
+        // Fetch the image server-side and send as base64 — more reliable than
+        // asking Claude to fetch the URL itself (avoids CDN/auth/timeout issues).
+        const imgRes = await fetch(receiptUrl);
+        const imgBuf = await imgRes.arrayBuffer();
+        const imgBase64 = Buffer.from(imgBuf).toString("base64");
+        const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+        const safeMime = (["image/jpeg", "image/png", "image/gif", "image/webp"] as string[])
+          .includes(contentType.split(";")[0])
+          ? (contentType.split(";")[0] as "image/jpeg" | "image/png" | "image/gif" | "image/webp")
+          : "image/jpeg";
         receiptContent = {
           type: "image",
           source: {
-            type: "url",
-            url: receiptUrl,
+            type: "base64",
+            media_type: safeMime,
+            data: imgBase64,
           },
         };
       }
