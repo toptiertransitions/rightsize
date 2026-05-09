@@ -4,7 +4,7 @@ const CLIENT_ROLES = [
     label: "Owner",
     color: "border-amber-600",
     badge: "bg-amber-900/50 text-amber-300",
-    desc: "TTT-managed project owner with full visibility. Receives a formal contract, TTT-issued invoices, and has TTT field staff assigned to their project.",
+    desc: "TTT-managed project owner with full visibility. Receives a formal contract, TTT-issued invoices, and has TTT field staff assigned to their project. Can set payout preference and unsold item preferences (standard + per-item special situations) on the Sales page.",
   },
   {
     key: "Collaborator",
@@ -180,6 +180,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Generate client payout PDF",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Re-print client payout PDF (regenerates from current paid items)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Zelle Payment Feed (real-time incoming payments)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Set unsold item standard preference (Donate / Return) on /sales", permissions: { Owner: true, Collaborator: true, Viewer: "view-only", NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Add / remove unsold item special situations (per-item exceptions) on /sales", permissions: { Owner: true, Collaborator: true, Viewer: "view-only", NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Staff Pay" },
   { label: "View My Pay section on Home (hours, commission, mileage, travel time, expenses)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: false } },
   { label: "Admin Pay console (/admin/pay) — Hours tab",         permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },

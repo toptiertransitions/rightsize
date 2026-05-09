@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod, StaffMember, Estate } from "@/lib/types";
@@ -124,6 +124,8 @@ interface SalesClientProps {
   staffMembers?: StaffMember[];
   isTTTUser?: boolean;
   estates?: Estate[];
+  initialUnsoldStandardPreference?: "Donate" | "Return";
+  initialUnsoldSpecialSituations?: { itemId: string; itemName: string }[];
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -1064,6 +1066,8 @@ export function SalesClient({
   staffMembers = [],
   isTTTUser = false,
   estates = [],
+  initialUnsoldStandardPreference,
+  initialUnsoldSpecialSituations = [],
 }: SalesClientProps) {
   const isNonTTT = !isTTT;
 
@@ -1093,6 +1097,15 @@ export function SalesClient({
   const [savingPayout, setSavingPayout] = useState(false);
   const [payoutSaved, setPayoutSaved] = useState(false);
 
+  // Unsold item preference state
+  const [unsoldStandardPreference, setUnsoldStandardPreference] = useState<"Donate" | "Return" | "">(initialUnsoldStandardPreference ?? "");
+  const [unsoldSpecialSituations, setUnsoldSpecialSituations] = useState<{ itemId: string; itemName: string }[]>(initialUnsoldSpecialSituations);
+  const [savingUnsold, setSavingUnsold] = useState(false);
+  const [unsoldSaved, setUnsoldSaved] = useState(false);
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
+  const [itemSearchOpen, setItemSearchOpen] = useState(false);
+  const itemSearchRef = useRef<HTMLDivElement>(null);
+
   async function savePayoutPreference() {
     setSavingPayout(true);
     setPayoutSaved(false);
@@ -1113,6 +1126,56 @@ export function SalesClient({
       setSavingPayout(false);
     }
   }
+
+  async function saveUnsoldPreference() {
+    setSavingUnsold(true);
+    setUnsoldSaved(false);
+    try {
+      await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, unsoldStandardPreference: unsoldStandardPreference || null }),
+      });
+      setUnsoldSaved(true);
+      setTimeout(() => setUnsoldSaved(false), 2000);
+    } finally {
+      setSavingUnsold(false);
+    }
+  }
+
+  async function addSpecialSituation(item: Item) {
+    const newList = [...unsoldSpecialSituations, { itemId: item.id, itemName: item.itemName }];
+    setUnsoldSpecialSituations(newList);
+    setItemSearchQuery("");
+    setItemSearchOpen(false);
+    await fetch("/api/tenants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId, unsoldSpecialSituations: newList }),
+    });
+  }
+
+  async function removeSpecialSituation(itemId: string) {
+    const newList = unsoldSpecialSituations.filter(s => s.itemId !== itemId);
+    setUnsoldSpecialSituations(newList);
+    await fetch("/api/tenants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId, unsoldSpecialSituations: newList }),
+    });
+  }
+
+  // Close item search on outside click
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (itemSearchRef.current && !itemSearchRef.current.contains(e.target as Node)) {
+        setItemSearchOpen(false);
+        setItemSearchQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
   function handlePayoutSaved(itemId: string, amount: number, paidAt?: string) {
     setItems(prev => prev.map(i =>
@@ -1654,7 +1717,7 @@ export function SalesClient({
         )}
       </div>
 
-      {/* Client Preferred Payout — hidden for NonTTT (replaced with CTA) */}
+      {/* Client Preferred Payout + Unsold Item Preference — hidden for NonTTT (replaced with CTA) */}
       {isNonTTT ? (
         <div className="mt-10 pt-8 border-t border-gray-200">
           <div className="rounded-2xl border border-forest-200 bg-forest-50 px-6 py-8 text-center">
@@ -1670,60 +1733,185 @@ export function SalesClient({
         </div>
       ) : (
         <div className="mt-10 pt-8 border-t border-gray-200">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-gray-900">Client Preferred Payout</h2>
-            <p className="text-xs text-gray-500 mt-0.5">How would you like to receive your payout?</p>
-          </div>
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+
+            {/* ── Client Preferred Payout ─────────────────────────────────────── */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Method</label>
-              <select
-                value={payoutMethod}
-                onChange={e => setPayoutMethod(e.target.value as PayoutMethod | "")}
-                className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
-              >
-                <option value="">— Select —</option>
-                <option value="Zelle">Zelle</option>
-                <option value="Venmo">Venmo</option>
-                <option value="Check">Check</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            {(payoutMethod === "Zelle" || payoutMethod === "Venmo") && (
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                  {payoutMethod} Username / Phone
-                </label>
-                <input
-                  type="text"
-                  value={payoutUsername}
-                  onChange={e => setPayoutUsername(e.target.value)}
-                  placeholder={payoutMethod === "Venmo" ? "@username" : "Phone or email"}
-                  className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 w-52"
-                />
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-gray-900">Client Preferred Payout</h2>
+                <p className="text-xs text-gray-500 mt-0.5">How would you like to receive your payout?</p>
               </div>
-            )}
-            <button
-              onClick={savePayoutPreference}
-              disabled={savingPayout || !payoutMethod}
-              className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
-            >
-              {savingPayout ? "Saving…" : payoutSaved ? "Saved!" : "Save"}
-            </button>
-          </div>
-          {payoutMethod === "Check" && (
-            <div className="mt-4 max-w-md">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Check Mailing Address</label>
-              <textarea
-                value={payoutCheckAddress}
-                onChange={e => setPayoutCheckAddress(e.target.value)}
-                rows={3}
-                placeholder="Enter mailing address for check delivery"
-                className="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
-              />
-              <p className="text-xs text-gray-400 mt-1">This address is for payout only and will not change the project address on file.</p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Method</label>
+                  <select
+                    value={payoutMethod}
+                    onChange={e => setPayoutMethod(e.target.value as PayoutMethod | "")}
+                    className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
+                  >
+                    <option value="">— Select —</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Venmo">Venmo</option>
+                    <option value="Check">Check</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                {(payoutMethod === "Zelle" || payoutMethod === "Venmo") && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                      {payoutMethod} Username / Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={payoutUsername}
+                      onChange={e => setPayoutUsername(e.target.value)}
+                      placeholder={payoutMethod === "Venmo" ? "@username" : "Phone or email"}
+                      className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 w-52"
+                    />
+                  </div>
+                )}
+                <button
+                  onClick={savePayoutPreference}
+                  disabled={savingPayout || !payoutMethod}
+                  className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {savingPayout ? "Saving…" : payoutSaved ? "Saved!" : "Save"}
+                </button>
+              </div>
+              {payoutMethod === "Check" && (
+                <div className="mt-4 max-w-md">
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Check Mailing Address</label>
+                  <textarea
+                    value={payoutCheckAddress}
+                    onChange={e => setPayoutCheckAddress(e.target.value)}
+                    rows={3}
+                    placeholder="Enter mailing address for check delivery"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">This address is for payout only and will not change the project address on file.</p>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* ── Unsold Item Preference ──────────────────────────────────────── */}
+            <div>
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-gray-900">Unsold Item Preference</h2>
+                <p className="text-xs text-gray-500 mt-0.5">What should we do with items that don&apos;t sell?</p>
+              </div>
+
+              {/* Disclaimer */}
+              <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-5 leading-relaxed">
+                If after 90 days of discounting, listed items have not sold, they will be donated or returned to you. Note: return requests may incur moving fees.
+              </p>
+
+              {/* Standard Preference */}
+              <div className="mb-6">
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Standard Preference</label>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <select
+                    value={unsoldStandardPreference}
+                    onChange={e => setUnsoldStandardPreference(e.target.value as "Donate" | "Return" | "")}
+                    className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
+                  >
+                    <option value="">— Select —</option>
+                    <option value="Donate">Donate</option>
+                    <option value="Return">Return to me</option>
+                  </select>
+                  <button
+                    onClick={saveUnsoldPreference}
+                    disabled={savingUnsold || !unsoldStandardPreference}
+                    className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                  >
+                    {savingUnsold ? "Saving…" : unsoldSaved ? "Saved!" : "Save"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Special Situations — only shown once a standard preference is set */}
+              {unsoldStandardPreference && (
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-0.5">Special Situations</p>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Mark items that should be{" "}
+                    <span className="font-medium text-gray-600">
+                      {unsoldStandardPreference === "Donate" ? "returned to you" : "donated"}
+                    </span>{" "}
+                    instead of the standard preference above.
+                  </p>
+
+                  {/* Item search combobox */}
+                  {(() => {
+                    const selectedIds = new Set(unsoldSpecialSituations.map(s => s.itemId));
+                    const searchable = items.filter(i => !selectedIds.has(i.id));
+                    const filtered = itemSearchQuery === ""
+                      ? searchable
+                      : searchable.filter(i => i.itemName.toLowerCase().includes(itemSearchQuery.toLowerCase()));
+
+                    return (
+                      <div ref={itemSearchRef} className="relative mb-3">
+                        <input
+                          type="text"
+                          value={itemSearchQuery}
+                          placeholder="Search items to add…"
+                          onFocus={() => setItemSearchOpen(true)}
+                          onChange={e => { setItemSearchQuery(e.target.value); setItemSearchOpen(true); }}
+                          className="h-10 w-full px-3 rounded-xl border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                        />
+                        {itemSearchOpen && (
+                          <div className="absolute z-50 mt-1 w-full max-h-52 overflow-auto bg-white border border-gray-200 rounded-xl shadow-lg">
+                            {filtered.length === 0 ? (
+                              <div className="px-3 py-2 text-sm text-gray-400">
+                                {searchable.length === 0 ? "All items already added" : "No matches"}
+                              </div>
+                            ) : filtered.slice(0, 30).map(item => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onMouseDown={() => addSpecialSituation(item)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-forest-50 transition-colors truncate"
+                              >
+                                {item.itemName}
+                                {item.status && item.status !== "Listed" && (
+                                  <span className="ml-2 text-xs text-gray-400">({item.status})</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Chips */}
+                  {unsoldSpecialSituations.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {unsoldSpecialSituations.map(s => (
+                        <span
+                          key={s.itemId}
+                          className="inline-flex items-center gap-1.5 bg-forest-50 border border-forest-200 text-forest-800 text-xs font-medium px-3 py-1.5 rounded-full"
+                        >
+                          {s.itemName}
+                          <span className="text-forest-500 text-[10px] font-normal">
+                            → {unsoldStandardPreference === "Donate" ? "Return" : "Donate"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeSpecialSituation(s.itemId)}
+                            className="ml-0.5 text-forest-400 hover:text-red-500 transition-colors leading-none font-bold"
+                            aria-label={`Remove ${s.itemName}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+          </div>
         </div>
       )}
 

@@ -123,6 +123,8 @@ export default async function SalesPage({ searchParams }: PageProps) {
       staffMembers={isStaff ? staffMembers : []}
       isTTTUser={isStaff}
       estates={estates}
+      initialUnsoldStandardPreference={tenant.unsoldStandardPreference}
+      initialUnsoldSpecialSituations={tenant.unsoldSpecialSituations}
     />
   );
 }

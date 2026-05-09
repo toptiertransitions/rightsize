@@ -136,6 +136,8 @@ export interface Tenant {
   consignmentExpense?: number;
   consignmentExpenseNote?: string;
   teamLeadClerkId?: string;
+  unsoldStandardPreference?: "Donate" | "Return";
+  unsoldSpecialSituations?: { itemId: string; itemName: string }[];
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
