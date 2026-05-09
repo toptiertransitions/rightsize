@@ -126,6 +126,7 @@ interface SalesClientProps {
   estates?: Estate[];
   initialUnsoldStandardPreference?: "Donate" | "Return";
   initialUnsoldSpecialSituations?: { itemId: string; itemName: string }[];
+  canEditUnsold?: boolean;
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -1068,6 +1069,7 @@ export function SalesClient({
   estates = [],
   initialUnsoldStandardPreference,
   initialUnsoldSpecialSituations = [],
+  canEditUnsold = false,
 }: SalesClientProps) {
   const isNonTTT = !isTTT;
 
@@ -1808,24 +1810,30 @@ export function SalesClient({
               {/* Standard Preference */}
               <div className="mb-6">
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Standard Preference</label>
-                <div className="flex flex-wrap gap-3 items-end">
-                  <select
-                    value={unsoldStandardPreference}
-                    onChange={e => setUnsoldStandardPreference(e.target.value as "Donate" | "Return" | "")}
-                    className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
-                  >
-                    <option value="">— Select —</option>
-                    <option value="Donate">Donate</option>
-                    <option value="Return">Return to me</option>
-                  </select>
-                  <button
-                    onClick={saveUnsoldPreference}
-                    disabled={savingUnsold || !unsoldStandardPreference}
-                    className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
-                  >
-                    {savingUnsold ? "Saving…" : unsoldSaved ? "Saved!" : "Save"}
-                  </button>
-                </div>
+                {canEditUnsold ? (
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <select
+                      value={unsoldStandardPreference}
+                      onChange={e => setUnsoldStandardPreference(e.target.value as "Donate" | "Return" | "")}
+                      className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[140px]"
+                    >
+                      <option value="">— Select —</option>
+                      <option value="Donate">Donate</option>
+                      <option value="Return">Return to me</option>
+                    </select>
+                    <button
+                      onClick={saveUnsoldPreference}
+                      disabled={savingUnsold || !unsoldStandardPreference}
+                      className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                    >
+                      {savingUnsold ? "Saving…" : unsoldSaved ? "Saved!" : "Save"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-900">
+                    {unsoldStandardPreference === "Donate" ? "Donate" : unsoldStandardPreference === "Return" ? "Return to client" : <span className="text-gray-400">Not set</span>}
+                  </p>
+                )}
               </div>
 
               {/* Special Situations — only shown once a standard preference is set */}
@@ -1833,15 +1841,15 @@ export function SalesClient({
                 <div>
                   <p className="text-xs font-medium text-gray-600 mb-0.5">Special Situations</p>
                   <p className="text-xs text-gray-400 mb-3">
-                    Mark items that should be{" "}
+                    Items marked to be{" "}
                     <span className="font-medium text-gray-600">
-                      {unsoldStandardPreference === "Donate" ? "returned to you" : "donated"}
+                      {unsoldStandardPreference === "Donate" ? "returned to client" : "donated"}
                     </span>{" "}
                     instead of the standard preference above.
                   </p>
 
-                  {/* Item search combobox */}
-                  {(() => {
+                  {/* Item search combobox — editable roles only */}
+                  {canEditUnsold && (() => {
                     const selectedIds = new Set(unsoldSpecialSituations.map(s => s.itemId));
                     const searchable = items.filter(i => !selectedIds.has(i.id));
                     const filtered = itemSearchQuery === ""
@@ -1884,7 +1892,7 @@ export function SalesClient({
                   })()}
 
                   {/* Chips */}
-                  {unsoldSpecialSituations.length > 0 && (
+                  {unsoldSpecialSituations.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {unsoldSpecialSituations.map(s => (
                         <span
@@ -1895,17 +1903,21 @@ export function SalesClient({
                           <span className="text-forest-500 text-[10px] font-normal">
                             → {unsoldStandardPreference === "Donate" ? "Return" : "Donate"}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => removeSpecialSituation(s.itemId)}
-                            className="ml-0.5 text-forest-400 hover:text-red-500 transition-colors leading-none font-bold"
-                            aria-label={`Remove ${s.itemName}`}
-                          >
-                            ×
-                          </button>
+                          {canEditUnsold && (
+                            <button
+                              type="button"
+                              onClick={() => removeSpecialSituation(s.itemId)}
+                              className="ml-0.5 text-forest-400 hover:text-red-500 transition-colors leading-none font-bold"
+                              aria-label={`Remove ${s.itemName}`}
+                            >
+                              ×
+                            </button>
+                          )}
                         </span>
                       ))}
                     </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">None added yet.</p>
                   )}
                 </div>
               )}

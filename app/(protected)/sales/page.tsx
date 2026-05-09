@@ -80,6 +80,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
   const canEditPayout = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canEditUnsold = role === "Owner" || role === "Collaborator" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditExpense = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
@@ -125,6 +126,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       estates={estates}
       initialUnsoldStandardPreference={tenant.unsoldStandardPreference}
       initialUnsoldSpecialSituations={tenant.unsoldSpecialSituations}
+      canEditUnsold={canEditUnsold}
     />
   );
 }
