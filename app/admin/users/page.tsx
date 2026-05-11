@@ -73,7 +73,7 @@ export default async function AdminUsersPage() {
     lastActiveAt: (u.lastActiveAt ?? u.lastSignInAt)
       ? new Date((u.lastActiveAt ?? u.lastSignInAt)!).toISOString()
       : undefined,
-    banned: u.banned ?? false,
+    banned: (u.publicMetadata as { suspended?: boolean })?.suspended === true,
     systemRole: isTTTAdmin(u.id) ? "TTTAdmin" : (staffRoleByClerkId.get(u.id) ?? undefined),
     staffMemberId: staffIdByClerkId.get(u.id),
     hourlyRate: staffHourlyRateByClerkId.get(u.id),

@@ -1,11 +1,12 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
   "/calculator(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/invite(.*)",          // invite acceptance page — must be reachable before auth
+  "/invite(.*)",
   "/api/invites/(.*)",
   "/api/mcp",
   "/api/square/webhook",
@@ -14,11 +15,16 @@ const isPublicRoute = createRouteMatcher([
   "/api/cron/(.*)",
   "/sign/(.*)",
   "/pay/(.*)",
+  "/suspended",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect();
+    const { sessionClaims } = await auth();
+    if ((sessionClaims?.public_metadata as { suspended?: boolean })?.suspended === true) {
+      return NextResponse.redirect(new URL("/suspended", req.url));
+    }
   }
 });
 

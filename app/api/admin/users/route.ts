@@ -33,20 +33,20 @@ export async function POST(req: NextRequest) {
 
   if (action === "suspend" && clerkUserId) {
     try {
-      await client.users.banUser(clerkUserId);
+      await client.users.updateUserMetadata(clerkUserId, { publicMetadata: { suspended: true } });
       return NextResponse.json({ success: true });
     } catch (e) {
-      console.error("[suspend] banUser error:", e);
+      console.error("[suspend] error:", e);
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }
   }
 
   if (action === "unsuspend" && clerkUserId) {
     try {
-      await client.users.unbanUser(clerkUserId);
+      await client.users.updateUserMetadata(clerkUserId, { publicMetadata: { suspended: false } });
       return NextResponse.json({ success: true });
     } catch (e) {
-      console.error("[unsuspend] unbanUser error:", e);
+      console.error("[unsuspend] error:", e);
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }
   }
