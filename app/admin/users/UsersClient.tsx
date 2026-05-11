@@ -199,11 +199,12 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
     setLoading("suspend");
     setError("");
     try {
-      await fetch("/api/admin/users", {
+      const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, clerkUserId: current.clerkUserId }),
       });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Request failed");
       const updated = { ...current, banned: !current.banned };
       setCurrent(updated);
       onUpdate(updated);

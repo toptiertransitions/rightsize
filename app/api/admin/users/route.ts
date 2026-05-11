@@ -32,13 +32,23 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "suspend" && clerkUserId) {
-    await client.users.banUser(clerkUserId);
-    return NextResponse.json({ success: true });
+    try {
+      await client.users.banUser(clerkUserId);
+      return NextResponse.json({ success: true });
+    } catch (e) {
+      console.error("[suspend] banUser error:", e);
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
   }
 
   if (action === "unsuspend" && clerkUserId) {
-    await client.users.unbanUser(clerkUserId);
-    return NextResponse.json({ success: true });
+    try {
+      await client.users.unbanUser(clerkUserId);
+      return NextResponse.json({ success: true });
+    } catch (e) {
+      console.error("[unsuspend] unbanUser error:", e);
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
   }
 
   if (action === "passwordReset" && clerkUserId) {
