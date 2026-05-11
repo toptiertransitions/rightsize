@@ -282,6 +282,7 @@ function OpportunitiesTab({
       }
       return [opp, ...prev];
     });
+    clearPending?.();
     setPanelOpen(false);
   }
 
