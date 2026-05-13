@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -121,6 +121,10 @@ export async function PATCH(req: NextRequest) {
     teamLeadClerkId: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && teamLeadClerkId !== undefined ? (teamLeadClerkId as string | null) : undefined,
     unsoldStandardPreference: unsoldStandardPreference !== undefined ? (unsoldStandardPreference as string | null) : undefined,
     unsoldSpecialSituations: unsoldSpecialSituations !== undefined ? (unsoldSpecialSituations as Array<{ itemId: string; itemName: string }> | null) : undefined,
+    priceDrop1Days: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop1Days !== undefined ? (priceDrop1Days as number | null) : undefined,
+    priceDrop1Percent: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop1Percent !== undefined ? (priceDrop1Percent as number | null) : undefined,
+    priceDrop2Days: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop2Days !== undefined ? (priceDrop2Days as number | null) : undefined,
+    priceDrop2Percent: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop2Percent !== undefined ? (priceDrop2Percent as number | null) : undefined,
   });
   revalidateTag("tenants");
   return NextResponse.json({ tenant });

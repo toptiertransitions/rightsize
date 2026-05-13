@@ -127,6 +127,11 @@ interface SalesClientProps {
   initialUnsoldStandardPreference?: "Donate" | "Return";
   initialUnsoldSpecialSituations?: { itemId: string; itemName: string }[];
   canEditUnsold?: boolean;
+  canEditPricing?: boolean;
+  initialPriceDrop1Days?: number;
+  initialPriceDrop1Percent?: number;
+  initialPriceDrop2Days?: number;
+  initialPriceDrop2Percent?: number;
 }
 
 // ─── Sales Table Row ──────────────────────────────────────────────────────────
@@ -1070,6 +1075,11 @@ export function SalesClient({
   initialUnsoldStandardPreference,
   initialUnsoldSpecialSituations = [],
   canEditUnsold = false,
+  canEditPricing = false,
+  initialPriceDrop1Days,
+  initialPriceDrop1Percent,
+  initialPriceDrop2Days,
+  initialPriceDrop2Percent,
 }: SalesClientProps) {
   const isNonTTT = !isTTT;
 
@@ -1108,6 +1118,17 @@ export function SalesClient({
   const [itemSearchOpen, setItemSearchOpen] = useState(false);
   const itemSearchRef = useRef<HTMLDivElement>(null);
 
+  // Consignment pricing expectations state
+  const [drop1Days, setDrop1Days] = useState(initialPriceDrop1Days ?? 30);
+  const [drop1Pct, setDrop1Pct] = useState(initialPriceDrop1Percent ?? 33);
+  const [drop2Days, setDrop2Days] = useState(initialPriceDrop2Days ?? 60);
+  const [drop2Pct, setDrop2Pct] = useState(initialPriceDrop2Percent ?? 66);
+  const [savingPricing, setSavingPricing] = useState(false);
+  const [pricingSaved, setPricingSaved] = useState(false);
+  const [emailingType, setEmailingType] = useState<"drop1" | "drop2" | "unsold" | null>(null);
+  const [emailStatus, setEmailStatus] = useState<Record<string, "sent" | "error">>({});
+  const [emailError, setEmailError] = useState<string | null>(null);
+
   async function savePayoutPreference() {
     setSavingPayout(true);
     setPayoutSaved(false);
@@ -1142,6 +1163,48 @@ export function SalesClient({
       setTimeout(() => setUnsoldSaved(false), 2000);
     } finally {
       setSavingUnsold(false);
+    }
+  }
+
+  async function savePricingExpectations() {
+    setSavingPricing(true);
+    setPricingSaved(false);
+    try {
+      await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          priceDrop1Days: drop1Days,
+          priceDrop1Percent: drop1Pct,
+          priceDrop2Days: drop2Days,
+          priceDrop2Percent: drop2Pct,
+        }),
+      });
+      setPricingSaved(true);
+      setTimeout(() => setPricingSaved(false), 2500);
+    } finally {
+      setSavingPricing(false);
+    }
+  }
+
+  async function sendConsignmentEmail(type: "drop1" | "drop2" | "unsold") {
+    setEmailingType(type);
+    setEmailError(null);
+    try {
+      const res = await fetch("/api/sales/consignment-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, type }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send");
+      setEmailStatus(prev => ({ ...prev, [type]: "sent" }));
+    } catch (e) {
+      setEmailStatus(prev => ({ ...prev, [type]: "error" }));
+      setEmailError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setEmailingType(null);
     }
   }
 
@@ -1229,6 +1292,18 @@ export function SalesClient({
   for (const item of items) {
     const calc = computeCalcPayout(item, localVendors);
     if (calc) calcPayouts.set(item.id, calc);
+  }
+
+  // Earliest delivery date for pricing timeline
+  const earliestDelivery = items
+    .map(i => i.deliveryDate)
+    .filter((d): d is string => !!d)
+    .sort()[0] ?? null;
+
+  function addDaysToDate(dateStr: string, days: number): string {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
   // Global search filter
@@ -1718,6 +1793,154 @@ export function SalesClient({
           <p className="text-center text-gray-400 py-16">No consignment or marketplace items yet</p>
         )}
       </div>
+
+      {/* Consignment Pricing Expectations — shown to all TTT users, editable by Manager/Admin */}
+      {!isNonTTT && (
+        <div className="mt-10 pt-8 border-t border-gray-200">
+          <div className="mb-5">
+            <h2 className="text-base font-semibold text-gray-900">Consignment Pricing Expectations</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Automatic price reductions based on days from first delivery.
+              {earliestDelivery && (
+                <span className="ml-1">Earliest delivery: <strong>{addDaysToDate(earliestDelivery, 0)}</strong></span>
+              )}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {/* Drop 1 */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-forest-700 uppercase tracking-wide mb-3">Price Drop 1</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Days from Delivery</label>
+                  {canEditPricing ? (
+                    <input
+                      type="number" min={1} max={365}
+                      value={drop1Days}
+                      onChange={e => setDrop1Days(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-900">{drop1Days} days</p>
+                  )}
+                  {earliestDelivery && (
+                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, drop1Days)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">% Decrease</label>
+                  {canEditPricing ? (
+                    <input
+                      type="number" min={1} max={99}
+                      value={drop1Pct}
+                      onChange={e => setDrop1Pct(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                      className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-900">{drop1Pct}% off</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Drop 2 */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Price Drop 2</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Days from Delivery</label>
+                  {canEditPricing ? (
+                    <input
+                      type="number" min={1} max={365}
+                      value={drop2Days}
+                      onChange={e => setDrop2Days(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-900">{drop2Days} days</p>
+                  )}
+                  {earliestDelivery && (
+                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, drop2Days)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">% Decrease</label>
+                  {canEditPricing ? (
+                    <input
+                      type="number" min={1} max={99}
+                      value={drop2Pct}
+                      onChange={e => setDrop2Pct(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                      className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-900">{drop2Pct}% off</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Unsold (Day 90 — fixed) */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Unsold Items</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Days from Delivery</label>
+                  <p className="text-sm text-gray-900">90 days</p>
+                  {earliestDelivery && (
+                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, 90)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Action</label>
+                  <p className="text-sm text-gray-500 italic">See Unsold Preference below</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Save button */}
+          {canEditPricing && (
+            <div className="mb-6">
+              <button
+                onClick={savePricingExpectations}
+                disabled={savingPricing}
+                className="h-10 px-5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+              >
+                {savingPricing ? "Saving…" : pricingSaved ? "Saved!" : "Save Pricing"}
+              </button>
+            </div>
+          )}
+
+          {/* Email buttons */}
+          {canEditPricing && (
+            <div className="border-t border-gray-100 pt-5">
+              <p className="text-xs font-medium text-gray-500 mb-3">Send notification emails to yourself</p>
+              <div className="flex flex-wrap gap-3">
+                {(["drop1", "drop2", "unsold"] as const).map(type => {
+                  const labels = { drop1: "Email First Price Drop", drop2: "Email Second Price Drop", unsold: "Email Unsold Items" };
+                  const isSending = emailingType === type;
+                  const status = emailStatus[type];
+                  return (
+                    <div key={type} className="flex flex-col gap-1">
+                      <button
+                        onClick={() => sendConsignmentEmail(type)}
+                        disabled={!!emailingType}
+                        className="h-9 px-4 border border-gray-300 text-sm text-gray-700 rounded-xl hover:border-forest-500 hover:text-forest-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                      >
+                        {isSending ? "Sending…" : labels[type]}
+                      </button>
+                      {status === "sent" && <p className="text-xs text-green-600 text-center">Sent!</p>}
+                      {status === "error" && <p className="text-xs text-red-500 text-center">Failed</p>}
+                    </div>
+                  );
+                })}
+              </div>
+              {emailError && <p className="text-xs text-red-500 mt-2">{emailError}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Client Preferred Payout + Unsold Item Preference — hidden for NonTTT (replaced with CTA) */}
       {isNonTTT ? (

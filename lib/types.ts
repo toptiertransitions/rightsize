@@ -138,6 +138,10 @@ export interface Tenant {
   teamLeadClerkId?: string;
   unsoldStandardPreference?: "Donate" | "Return";
   unsoldSpecialSituations?: { itemId: string; itemName: string }[];
+  priceDrop1Days?: number;
+  priceDrop1Percent?: number;
+  priceDrop2Days?: number;
+  priceDrop2Percent?: number;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

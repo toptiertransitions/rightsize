@@ -206,6 +206,10 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     teamLeadClerkId: toStr(f["TeamLeadClerkId"]) || undefined,
     unsoldStandardPreference: (toStr(f["UnsoldStandardPreference"]) as "Donate" | "Return") || undefined,
     unsoldSpecialSituations: (() => { try { const s = toStr(f["UnsoldSpecialSituations"]); return s ? JSON.parse(s) : undefined; } catch { return undefined; } })(),
+    priceDrop1Days: f["PriceDrop1Days"] != null ? toNum(f["PriceDrop1Days"]) : undefined,
+    priceDrop1Percent: f["PriceDrop1Percent"] != null ? toNum(f["PriceDrop1Percent"]) : undefined,
+    priceDrop2Days: f["PriceDrop2Days"] != null ? toNum(f["PriceDrop2Days"]) : undefined,
+    priceDrop2Percent: f["PriceDrop2Percent"] != null ? toNum(f["PriceDrop2Percent"]) : undefined,
   };
 }
 
@@ -843,7 +847,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -872,6 +876,10 @@ export async function updateTenant(
   if (data.teamLeadClerkId !== undefined) fields["TeamLeadClerkId"] = data.teamLeadClerkId ?? "";
   if (data.unsoldStandardPreference !== undefined) fields["UnsoldStandardPreference"] = data.unsoldStandardPreference ?? "";
   if (data.unsoldSpecialSituations !== undefined) fields["UnsoldSpecialSituations"] = data.unsoldSpecialSituations ? JSON.stringify(data.unsoldSpecialSituations) : "";
+  if (data.priceDrop1Days !== undefined) fields["PriceDrop1Days"] = data.priceDrop1Days ?? 0;
+  if (data.priceDrop1Percent !== undefined) fields["PriceDrop1Percent"] = data.priceDrop1Percent ?? 0;
+  if (data.priceDrop2Days !== undefined) fields["PriceDrop2Days"] = data.priceDrop2Days ?? 0;
+  if (data.priceDrop2Percent !== undefined) fields["PriceDrop2Percent"] = data.priceDrop2Percent ?? 0;
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }

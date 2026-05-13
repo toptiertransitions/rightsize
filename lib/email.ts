@@ -1588,3 +1588,172 @@ export function buildReferralPipelineEmail({
 </body>
 </html>`;
 }
+
+// ─── Consignment Price Drop Email ─────────────────────────────────────────────
+
+export type PriceDropEmailItem = {
+  itemName: string;
+  primaryRoute: string;
+  currentPrice: number;
+  futurePrice: number;
+};
+
+export function buildPriceDropEmail({
+  tenantName,
+  dropNumber,
+  dropDate,
+  dropPercent,
+  items,
+  generatedAt,
+}: {
+  tenantName: string;
+  dropNumber: 1 | 2;
+  dropDate: string;
+  dropPercent: number;
+  items: PriceDropEmailItem[];
+  generatedAt: string;
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+  const itemRows = items.map((item, i) => `
+    <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};border-bottom:1px solid #e5e7eb;">
+      <td style="padding:12px 16px;font-size:13px;color:#111827;font-weight:500;">${item.itemName}</td>
+      <td style="padding:12px 16px;font-size:12px;color:#6b7280;white-space:nowrap;">${item.primaryRoute}</td>
+      <td style="padding:12px 16px;font-size:13px;color:#9ca3af;text-align:right;white-space:nowrap;text-decoration:line-through;">${fmt(item.currentPrice)}</td>
+      <td style="padding:12px 16px;font-size:14px;color:#2d4a3e;font-weight:700;text-align:right;white-space:nowrap;">${fmt(item.futurePrice)}</td>
+    </tr>`).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:680px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions &nbsp;&middot;&nbsp; ${tenantName}</p>
+            <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Price Drop ${dropNumber} Notification</h1>
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.70);">Effective ${dropDate} &nbsp;&middot;&nbsp; ${dropPercent}% reduction from listing price</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px;background:#f0fdf4;border-bottom:1px solid #d1fae5;">
+            <p style="margin:0;font-size:13px;color:#374151;">
+              <strong>${items.length}</strong> item${items.length === 1 ? "" : "s"} will be repriced &nbsp;&middot;&nbsp; Generated ${generatedAt}
+            </p>
+          </td>
+        </tr>
+        <tr><td style="padding:24px 32px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <thead>
+              <tr style="background:#f9fafb;">
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;">Item</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Channel</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:right;white-space:nowrap;">Current Price</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:right;white-space:nowrap;">New Price</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}
+            </tbody>
+          </table>
+        </td></tr>
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions &middot; This report is for internal team use.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ─── Unsold Items Email ───────────────────────────────────────────────────────
+
+export type UnsoldEmailItem = {
+  itemName: string;
+  primaryRoute: string;
+  currentPrice: number;
+  action: string;
+  isSpecialSituation: boolean;
+};
+
+export function buildUnsoldItemsEmail({
+  tenantName,
+  unsoldDate,
+  standardPreference,
+  items,
+  generatedAt,
+}: {
+  tenantName: string;
+  unsoldDate: string;
+  standardPreference: string;
+  items: UnsoldEmailItem[];
+  generatedAt: string;
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const specialCount = items.filter(i => i.isSpecialSituation).length;
+
+  const itemRows = items.map((item, i) => {
+    const actionStyle = item.isSpecialSituation
+      ? "padding:10px 16px;font-size:13px;color:#b45309;font-weight:600;white-space:nowrap;"
+      : "padding:10px 16px;font-size:13px;color:#374151;white-space:nowrap;";
+    return `<tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};border-bottom:1px solid #e5e7eb;">
+      <td style="padding:10px 16px;font-size:13px;color:#111827;font-weight:500;">${item.itemName}${item.isSpecialSituation ? " <span style=\"font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;\">Special</span>" : ""}</td>
+      <td style="padding:10px 16px;font-size:12px;color:#6b7280;white-space:nowrap;">${item.primaryRoute}</td>
+      <td style="padding:10px 16px;font-size:13px;color:#374151;text-align:right;white-space:nowrap;">${fmt(item.currentPrice)}</td>
+      <td style="${actionStyle}">${item.action}</td>
+    </tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:680px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions &nbsp;&middot;&nbsp; ${tenantName}</p>
+            <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Unsold Items Action Summary</h1>
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.70);">90-day cutoff: ${unsoldDate} &nbsp;&middot;&nbsp; Standard preference: <strong style="color:#C9A96E;">${standardPreference || "Not set"}</strong></p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px;background:#fefce8;border-bottom:1px solid #fde68a;">
+            <p style="margin:0;font-size:13px;color:#374151;">
+              <strong>${items.length}</strong> item${items.length === 1 ? "" : "s"} remaining
+              ${specialCount > 0 ? ` &nbsp;&middot;&nbsp; <strong style="color:#b45309;">${specialCount} special situation${specialCount === 1 ? "" : "s"}</strong>` : ""}
+              &nbsp;&middot;&nbsp; Generated ${generatedAt}
+            </p>
+          </td>
+        </tr>
+        <tr><td style="padding:24px 32px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <thead>
+              <tr style="background:#f9fafb;">
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;">Item</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Channel</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:right;white-space:nowrap;">Last Listed Price</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Action</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}
+            </tbody>
+          </table>
+          ${specialCount > 0 ? `<p style="margin:12px 0 0;font-size:12px;color:#b45309;"><strong>Special situations</strong> are items designated for the opposite of the standard preference.</p>` : ""}
+        </td></tr>
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions &middot; This report is for internal team use.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
