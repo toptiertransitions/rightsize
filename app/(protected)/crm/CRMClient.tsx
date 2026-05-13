@@ -1858,7 +1858,7 @@ function ReferralPartnersTab({
   const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", website: "", assignedToClerkId: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
-  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "" });
+  const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "", nextStepDate: "", nextStepNote: "" });
   const [companySearch, setCompanySearch] = useState("");
   const [companySearchOpen, setCompanySearchOpen] = useState(false);
   const [activityContact, setActivityContact] = useState<{ id: string; name: string; email?: string } | null>(null);
@@ -2128,7 +2128,7 @@ function ReferralPartnersTab({
 
   function openAddContact(companyId: string) {
     setEditingContact(null);
-    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "" });
+    setContactForm({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified", dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "", nextStepDate: "", nextStepNote: "" });
     setContactModal(companyId);
   }
 
@@ -2137,7 +2137,7 @@ function ReferralPartnersTab({
     const currentCompany = companies.find(c => c.id === contact.referralCompanyId);
     setCompanySearch(currentCompany?.name || "");
     setCompanySearchOpen(false);
-    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, stage: contact.stage || "Identified", dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "", referralCompanyId: contact.referralCompanyId });
+    setContactForm({ name: contact.name, title: contact.title, email: contact.email, phone: contact.phone, notes: contact.notes, stage: contact.stage || "Identified", dateIntroduced: contact.dateIntroduced || "", interests: contact.interests || "", coffeeOrder: contact.coffeeOrder || "", orgsGroups: contact.orgsGroups || "", referralCompanyId: contact.referralCompanyId, nextStepDate: contact.nextStepDate || "", nextStepNote: contact.nextStepNote || "" });
     setContactModal(contact.referralCompanyId);
   }
 
@@ -2778,6 +2778,20 @@ function ReferralPartnersTab({
               <textarea value={contactForm.notes} onChange={(e) => setContactForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
 
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Next Step</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Next Step Date</label>
+                  <input type="date" value={contactForm.nextStepDate} onChange={(e) => setContactForm((f) => ({ ...f, nextStepDate: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Next Step Note</label>
+                  <input type="text" value={contactForm.nextStepNote} onChange={(e) => setContactForm((f) => ({ ...f, nextStepNote: e.target.value }))} placeholder="e.g. Send intro email, schedule coffee" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setContactModal(null)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
               <button onClick={saveContact} disabled={saving || !contactForm.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
@@ -2886,6 +2900,9 @@ function DashboardTab({
   const [spotlightId, setSpotlightId] = useState<string>("");
   const [spotlightQuery, setSpotlightQuery] = useState<string>("");
   const [spotlightOpen, setSpotlightOpen] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reportStatus, setReportStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [reportError, setReportError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/crm/activities")
@@ -3757,6 +3774,40 @@ function DashboardTab({
             <p className="text-sm text-gray-400">Search for a referral partner above to see their spotlight.</p>
           </div>
         )}
+
+        {/* Pipeline report */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Referral Pipeline Report</p>
+            <p className="text-xs text-gray-500 mt-0.5">Sends a full pipeline snapshot to your email, grouped by stage and sorted by priority.</p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <button
+              onClick={async () => {
+                setSendingReport(true);
+                setReportStatus("idle");
+                setReportError(null);
+                try {
+                  const res = await fetch("/api/crm/referral-pipeline-report", { method: "POST" });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error ?? "Failed to send");
+                  setReportStatus("sent");
+                } catch (e) {
+                  setReportStatus("error");
+                  setReportError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setSendingReport(false);
+                }
+              }}
+              disabled={sendingReport}
+              className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50 whitespace-nowrap"
+            >
+              {sendingReport ? "Sending…" : "Send Pipeline Report"}
+            </button>
+            {reportStatus === "sent" && <p className="text-xs text-green-600">Report sent to your email.</p>}
+            {reportStatus === "error" && <p className="text-xs text-red-500">{reportError ?? "Error sending report."}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );

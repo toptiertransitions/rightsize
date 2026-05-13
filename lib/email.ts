@@ -1423,3 +1423,148 @@ export function buildSubcontractorAddedEmail({
 </body>
 </html>`;
 }
+
+export type ReferralPipelineRow = {
+  priority: string;
+  ownerName: string;
+  companyName: string;
+  contactName: string;
+  contactTitle?: string;
+  stage: string;
+  lastActivityDate?: string;
+  activityCount: number;
+  nextStepDate?: string;
+  nextStepNote?: string;
+};
+
+export function buildReferralPipelineEmail({
+  rows,
+  generatedAt,
+}: {
+  rows: ReferralPipelineRow[];
+  generatedAt: string;
+}): string {
+  const STAGE_ORDER = ["Shared Leads", "Agreed to Refer", "Met", "Identified"];
+  const PRIORITY_ORDER = ["High", "Medium", "Low", ""];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+  const in7Days = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+
+  function rowBg(nextStepDate?: string): string {
+    if (!nextStepDate) return "#ffffff";
+    if (nextStepDate < todayStr) return "#FEF2F2";
+    if (nextStepDate <= in7Days) return "#FFFBEB";
+    return "#ffffff";
+  }
+
+  function fmtDate(d?: string): string {
+    if (!d) return "—";
+    const [y, m, day] = d.slice(0, 10).split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}, ${y}`;
+  }
+
+  const grouped = new Map<string, ReferralPipelineRow[]>();
+  for (const stage of STAGE_ORDER) grouped.set(stage, []);
+  for (const row of rows) {
+    const stage = STAGE_ORDER.includes(row.stage) ? row.stage : "Identified";
+    grouped.get(stage)!.push(row);
+  }
+  for (const stage of STAGE_ORDER) {
+    grouped.get(stage)!.sort((a, b) => {
+      const pa = PRIORITY_ORDER.indexOf(a.priority);
+      const pb = PRIORITY_ORDER.indexOf(b.priority);
+      return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
+    });
+  }
+
+  const stageCounts = STAGE_ORDER.map(s => `${s}: <strong>${grouped.get(s)!.length}</strong>`).join(" &nbsp;&middot;&nbsp; ");
+
+  const PRIORITY_BADGE: Record<string, string> = {
+    High: "background:#fee2e2;color:#b91c1c;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;",
+    Medium: "background:#fef9c3;color:#92400e;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;",
+    Low: "background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;",
+  };
+
+  const stageSections = STAGE_ORDER.map(stage => {
+    const stageRows = grouped.get(stage)!;
+    if (stageRows.length === 0) return "";
+    const dataRows = stageRows.map(r => {
+      const bg = rowBg(r.nextStepDate);
+      const badge = PRIORITY_BADGE[r.priority]
+        ? `<span style="${PRIORITY_BADGE[r.priority]}">${r.priority}</span>`
+        : `<span style="color:#9ca3af;font-size:12px;">${r.priority || "—"}</span>`;
+      return `<tr style="background:${bg};border-bottom:1px solid #e5e7eb;">
+          <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${badge}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#374151;">${r.ownerName || "—"}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#374151;font-weight:500;">${r.companyName}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#374151;">${r.contactName}${r.contactTitle ? `<br><span style="color:#9ca3af;font-size:11px;">${r.contactTitle}</span>` : ""}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#6b7280;white-space:nowrap;">${fmtDate(r.lastActivityDate)}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#6b7280;text-align:center;">${r.activityCount > 0 ? r.activityCount : "—"}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#374151;white-space:nowrap;">${fmtDate(r.nextStepDate)}</td>
+          <td style="padding:8px 10px;font-size:12px;color:#374151;max-width:180px;">${r.nextStepNote || "—"}</td>
+        </tr>`;
+    }).join("");
+
+    return `<tr><td colspan="1" style="padding:20px 0 8px;">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#2d4a3e;border-left:4px solid #C9A96E;padding-left:10px;">${stage} <span style="font-weight:400;color:#9ca3af;font-size:12px;">(${stageRows.length})</span></p>
+      </td></tr>
+      <tr><td>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:#f9fafb;">
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Priority</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Owner</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Company</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Contact</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Last Activity</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;"># Activities</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Next Step</th>
+              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Next Step Note</th>
+            </tr>
+          </thead>
+          <tbody>${dataRows}
+          </tbody>
+        </table>
+      </td></tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:900px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions</p>
+            <h1 style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Referral Pipeline Report</h1>
+            <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.65);">Generated ${generatedAt}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px;background:#f0fdf4;border-bottom:1px solid #d1fae5;">
+            <p style="margin:0;font-size:13px;color:#374151;">${stageCounts}</p>
+          </td>
+        </tr>
+        <tr><td style="padding:16px 32px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${stageSections}
+          </table>
+        </td></tr>
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions &nbsp;&middot;&nbsp;
+            Row tinting: <span style="background:#FEF2F2;padding:1px 4px;border-radius:3px;">red = overdue</span> &nbsp;
+            <span style="background:#FFFBEB;padding:1px 4px;border-radius:3px;">amber = due within 7 days</span>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

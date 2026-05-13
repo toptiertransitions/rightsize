@@ -791,6 +791,8 @@ export interface ReferralContact {
   lastActivityDate?: string;
   tags?: string;
   emailOptout?: boolean;
+  nextStepDate?: string;
+  nextStepNote?: string;
 }
 
 export interface ClientContact {

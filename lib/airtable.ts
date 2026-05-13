@@ -2675,6 +2675,8 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     lastActivityDate: toStr(f["LastActivityDate"]) || undefined,
     tags: toStr(f["Tags"]) || undefined,
     emailOptout: !!f["EmailOptout"],
+    nextStepDate: toStr(f["NextStepDate"]) || undefined,
+    nextStepNote: toStr(f["NextStepNote"]) || undefined,
   };
 }
 
@@ -2715,6 +2717,8 @@ export async function createReferralContact(data: {
   interests?: string;
   coffeeOrder?: string;
   orgsGroups?: string;
+  nextStepDate?: string;
+  nextStepNote?: string;
 }): Promise<ReferralContact> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, "", {
     method: "POST",
@@ -2732,6 +2736,8 @@ export async function createReferralContact(data: {
         CoffeeOrder: data.coffeeOrder || "",
         OrgsGroups: data.orgsGroups || "",
         CreatedAt: new Date().toISOString(),
+        ...(data.nextStepDate !== undefined && { NextStepDate: data.nextStepDate || null }),
+        ...(data.nextStepNote !== undefined && { NextStepNote: data.nextStepNote }),
       },
     }),
   });
@@ -2741,7 +2747,7 @@ export async function createReferralContact(data: {
 
 export async function updateReferralContact(
   id: string,
-  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string }>
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string; nextStepDate: string | null; nextStepNote: string }>
 ): Promise<ReferralContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -2756,6 +2762,8 @@ export async function updateReferralContact(
   if (data.coffeeOrder !== undefined) fields["CoffeeOrder"] = data.coffeeOrder;
   if (data.orgsGroups !== undefined) fields["OrgsGroups"] = data.orgsGroups;
   if (data.lastActivityDate !== undefined) fields["LastActivityDate"] = data.lastActivityDate;
+  if (data.nextStepDate !== undefined) fields["NextStepDate"] = data.nextStepDate || null;
+  if (data.nextStepNote !== undefined) fields["NextStepNote"] = data.nextStepNote;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
