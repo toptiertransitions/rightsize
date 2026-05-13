@@ -39,7 +39,13 @@ export async function POST() {
   const companyMap = new Map(companies.map(c => [c.id, c]));
   const staffNameByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
 
-  const rows: ReferralPipelineRow[] = allContacts.map(contact => {
+  // Exclude all contacts from companies where any contact is already "Active Referral"
+  const activeReferralCompanyIds = new Set(
+    allContacts.filter(c => c.stage === "Active Referral").map(c => c.referralCompanyId)
+  );
+  const reportContacts = allContacts.filter(c => !activeReferralCompanyIds.has(c.referralCompanyId));
+
+  const rows: ReferralPipelineRow[] = reportContacts.map(contact => {
     const company = companyMap.get(contact.referralCompanyId);
     const ownerClerkId = company?.assignedToClerkId;
     const ownerName = ownerClerkId ? (staffNameByClerkId.get(ownerClerkId) ?? ownerClerkId) : "";
