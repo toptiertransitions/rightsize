@@ -43,7 +43,10 @@ export async function POST() {
   const activeReferralCompanyIds = new Set(
     allContacts.filter(c => c.stage === "Active Referral").map(c => c.referralCompanyId)
   );
-  const reportContacts = allContacts.filter(c => !activeReferralCompanyIds.has(c.referralCompanyId));
+  const reportContacts = allContacts.filter(c =>
+    !activeReferralCompanyIds.has(c.referralCompanyId) &&
+    ["High", "Medium", "Low"].includes(companyMap.get(c.referralCompanyId)?.priority ?? "")
+  );
 
   const rows: ReferralPipelineRow[] = reportContacts.map(contact => {
     const company = companyMap.get(contact.referralCompanyId);

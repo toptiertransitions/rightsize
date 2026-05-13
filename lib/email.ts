@@ -1445,7 +1445,6 @@ export function buildReferralPipelineEmail({
   generatedAt: string;
 }): string {
   const STAGE_ORDER = ["Shared Leads", "Agreed to Refer", "Met", "Identified"];
-  const PRIORITY_ORDER = ["High", "Medium", "Low", ""];
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1466,70 +1465,90 @@ export function buildReferralPipelineEmail({
     return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}, ${y}`;
   }
 
-  const grouped = new Map<string, ReferralPipelineRow[]>();
-  for (const stage of STAGE_ORDER) grouped.set(stage, []);
-  for (const row of rows) {
-    const stage = STAGE_ORDER.includes(row.stage) ? row.stage : "Identified";
-    grouped.get(stage)!.push(row);
-  }
-  for (const stage of STAGE_ORDER) {
-    grouped.get(stage)!.sort((a, b) => {
-      const pa = PRIORITY_ORDER.indexOf(a.priority);
-      const pb = PRIORITY_ORDER.indexOf(b.priority);
-      return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
-    });
-  }
-
-  const stageCounts = STAGE_ORDER.map(s => `${s}: <strong>${grouped.get(s)!.length}</strong>`).join(" &nbsp;&middot;&nbsp; ");
-
   const PRIORITY_BADGE: Record<string, string> = {
     High: "background:#fee2e2;color:#b91c1c;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;",
     Medium: "background:#fef9c3;color:#92400e;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;",
     Low: "background:#f3f4f6;color:#6b7280;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;",
   };
 
-  const stageSections = STAGE_ORDER.map(stage => {
-    const stageRows = grouped.get(stage)!;
-    if (stageRows.length === 0) return "";
-    const dataRows = stageRows.map(r => {
-      const bg = rowBg(r.nextStepDate);
-      const badge = PRIORITY_BADGE[r.priority]
-        ? `<span style="${PRIORITY_BADGE[r.priority]}">${r.priority}</span>`
-        : `<span style="color:#9ca3af;font-size:12px;">${r.priority || "—"}</span>`;
-      return `<tr style="background:${bg};border-bottom:1px solid #e5e7eb;">
-          <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${badge}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#374151;">${r.ownerName || "—"}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#374151;font-weight:500;">${r.companyName}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#374151;">${r.contactName}${r.contactTitle ? `<br><span style="color:#9ca3af;font-size:11px;">${r.contactTitle}</span>` : ""}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#6b7280;white-space:nowrap;">${fmtDate(r.lastActivityDate)}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#6b7280;text-align:center;">${r.activityCount > 0 ? r.activityCount : "—"}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#374151;white-space:nowrap;">${fmtDate(r.nextStepDate)}</td>
-          <td style="padding:8px 10px;font-size:12px;color:#374151;max-width:180px;">${r.nextStepNote || "—"}</td>
-        </tr>`;
-    }).join("");
+  // Split into high/medium and low buckets, each grouped by stage
+  const hmByStage = new Map<string, ReferralPipelineRow[]>();
+  const lowByStage = new Map<string, ReferralPipelineRow[]>();
+  for (const stage of STAGE_ORDER) {
+    hmByStage.set(stage, []);
+    lowByStage.set(stage, []);
+  }
+  for (const row of rows) {
+    const stage = STAGE_ORDER.includes(row.stage) ? row.stage : "Identified";
+    if (row.priority === "Low") lowByStage.get(stage)!.push(row);
+    else hmByStage.get(stage)!.push(row);
+  }
+  // Within high/medium groups, High sorts before Medium
+  for (const stage of STAGE_ORDER) {
+    hmByStage.get(stage)!.sort((a, b) => (a.priority === "High" ? 0 : 1) - (b.priority === "High" ? 0 : 1));
+  }
 
-    return `<tr><td colspan="1" style="padding:20px 0 8px;">
-        <p style="margin:0;font-size:14px;font-weight:700;color:#2d4a3e;border-left:4px solid #C9A96E;padding-left:10px;">${stage} <span style="font-weight:400;color:#9ca3af;font-size:12px;">(${stageRows.length})</span></p>
+  const totalHM = STAGE_ORDER.reduce((s, st) => s + hmByStage.get(st)!.length, 0);
+  const totalLow = STAGE_ORDER.reduce((s, st) => s + lowByStage.get(st)!.length, 0);
+  const stageCounts = STAGE_ORDER.map(s => {
+    const total = (hmByStage.get(s)?.length ?? 0) + (lowByStage.get(s)?.length ?? 0);
+    return `${s}: <strong>${total}</strong>`;
+  }).join(" &nbsp;&middot;&nbsp; ");
+
+  function dataRow(r: ReferralPipelineRow): string {
+    const bg = rowBg(r.nextStepDate);
+    const badge = `<span style="${PRIORITY_BADGE[r.priority] ?? ""}">${r.priority}</span>`;
+    return `<tr style="background:${bg};border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${badge}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#374151;">${r.ownerName || "—"}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#374151;font-weight:500;">${r.companyName}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#374151;">${r.contactName}${r.contactTitle ? `<br><span style="color:#9ca3af;font-size:11px;">${r.contactTitle}</span>` : ""}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#6b7280;white-space:nowrap;">${fmtDate(r.lastActivityDate)}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#6b7280;text-align:center;">${r.activityCount > 0 ? r.activityCount : "—"}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#374151;white-space:nowrap;">${fmtDate(r.nextStepDate)}</td>
+        <td style="padding:8px 10px;font-size:12px;color:#374151;max-width:180px;">${r.nextStepNote || "—"}</td>
+      </tr>`;
+  }
+
+  const THEAD = `<thead>
+    <tr style="background:#f9fafb;">
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Priority</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Owner</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Company</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Contact</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Last Activity</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;"># Activities</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Next Step</th>
+      <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Next Step Note</th>
+    </tr>
+  </thead>`;
+
+  function stageBlock(stage: string, stageRows: ReferralPipelineRow[], accentColor: string): string {
+    if (stageRows.length === 0) return "";
+    return `<tr><td style="padding:20px 0 8px;">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#2d4a3e;border-left:4px solid ${accentColor};padding-left:10px;">${stage} <span style="font-weight:400;color:#9ca3af;font-size:12px;">(${stageRows.length})</span></p>
       </td></tr>
       <tr><td>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-          <thead>
-            <tr style="background:#f9fafb;">
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Priority</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Owner</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Company</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Contact</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Last Activity</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;"># Activities</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Next Step</th>
-              <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Next Step Note</th>
-            </tr>
-          </thead>
-          <tbody>${dataRows}
+          ${THEAD}
+          <tbody>${stageRows.map(dataRow).join("")}
           </tbody>
         </table>
       </td></tr>`;
-  }).join("");
+  }
+
+  const hmSections = STAGE_ORDER.map(s => stageBlock(s, hmByStage.get(s)!, "#C9A96E")).join("");
+  const lowSections = STAGE_ORDER.map(s => stageBlock(s, lowByStage.get(s)!, "#d1d5db")).join("");
+
+  const lowDivider = totalLow > 0 ? `
+    <tr><td style="padding:28px 0 4px;">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="border-top:2px dashed #e5e7eb;"></td>
+        <td style="padding:0 12px;white-space:nowrap;font-size:12px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Low Priority Partners (${totalLow})</td>
+        <td style="border-top:2px dashed #e5e7eb;"></td>
+      </tr></table>
+    </td></tr>
+    ${lowSections}` : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -1542,7 +1561,7 @@ export function buildReferralPipelineEmail({
           <td style="padding:28px 32px;">
             <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions</p>
             <h1 style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Referral Pipeline Report</h1>
-            <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.65);">Generated ${generatedAt}</p>
+            <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.65);">Generated ${generatedAt} &nbsp;&middot;&nbsp; ${totalHM} high/medium &nbsp;&middot;&nbsp; ${totalLow} low</p>
           </td>
         </tr>
         <tr>
@@ -1552,7 +1571,8 @@ export function buildReferralPipelineEmail({
         </tr>
         <tr><td style="padding:16px 32px 32px;">
           <table width="100%" cellpadding="0" cellspacing="0">
-            ${stageSections}
+            ${hmSections}
+            ${lowDivider}
           </table>
         </td></tr>
         <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
