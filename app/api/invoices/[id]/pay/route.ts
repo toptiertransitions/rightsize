@@ -135,20 +135,29 @@ export async function POST(
   }
 
   // Parse response per FluidPay spec
+  const topLevelStatus = fpData.status as string | undefined;
+  const topLevelMsg = fpData.msg as string | undefined;
   const txnData = fpData.data as Record<string, unknown> | undefined;
   const response = txnData?.response as string | undefined;
   const responseCode = txnData?.response_code as number | undefined;
   const approved = response === "approved" && responseCode === 100;
 
   if (!approved) {
-    // 200-299: declined by bank; 300-399: gateway/processor error
-    let msg = "Payment was declined. Please check your details or try a different payment method.";
-    if (responseCode && responseCode >= 300) {
-      msg = "A gateway error occurred. Please try again or contact your coordinator.";
+    console.error("[pay] FluidPay declined — full response:", JSON.stringify(fpData));
+
+    // Top-level API/config error (e.g. unauthorized, no processor configured)
+    if (topLevelStatus === "error" || topLevelStatus === "failed" || !txnData) {
+      const msg = topLevelMsg || "Payment processor error. Please contact your coordinator.";
+      return NextResponse.json({ error: msg }, { status: 402 });
     }
-    const gatewayMsg = (txnData?.response_body as Record<string, unknown>)?.response_text as string;
-    if (gatewayMsg) msg = gatewayMsg;
-    console.error("[pay] FluidPay declined:", { responseCode, response, fpData });
+
+    // Card/bank decline — pull the most specific message available
+    const cardBody = (txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown> | undefined;
+    const achBody = (txnData?.response_body as Record<string, unknown>)?.ach as Record<string, unknown> | undefined;
+    const responseText = (cardBody?.response_text || achBody?.response_text || txnData?.response_body) as string | undefined;
+    let msg = responseText || (responseCode && responseCode >= 300
+      ? "A gateway error occurred. Please try again or contact your coordinator."
+      : "Payment was declined. Please check your details or try a different payment method.");
     return NextResponse.json({ error: msg }, { status: 402 });
   }
 
