@@ -341,6 +341,8 @@ export interface Item {
   estateSaleId?: string;
   // Pay tracking
   commissionPaidAt?: string;  // ISO date — set when commission is marked as paid
+  // Bulk price drop tracking
+  priceDropOriginalValue?: number; // Stored before bulk price drop applied; cleared (0) after revert
 }
 
 // ─── Storefront Buyer (from StorefrontBuyers Airtable table) ─────────────────

@@ -642,6 +642,8 @@ export async function updateItem(
     // Approval tracking (auto-set; safe to write via updateItem)
     approvedDate: "ApprovedDate",
     approvedByName: "ApprovedByName",
+    // Bulk price drop tracking
+    priceDropOriginalValue: "PriceDropOriginalValue",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -659,6 +661,26 @@ export async function updateItem(
 
   const record = await base(AIRTABLE_TABLES.ITEMS).update(id, fields, { typecast: true });
   return mapItem(record);
+}
+
+export async function batchUpdateItemPrices(
+  updates: Array<{ id: string; valueMid: number; priceDropOriginalValue: number }>
+): Promise<void> {
+  const base = getBase();
+  const now = new Date().toISOString();
+  for (let i = 0; i < updates.length; i += 10) {
+    const batch = updates.slice(i, i + 10);
+    await base(AIRTABLE_TABLES.ITEMS).update(
+      batch.map(u => ({
+        id: u.id,
+        fields: {
+          ValueMid: u.valueMid,
+          PriceDropOriginalValue: u.priceDropOriginalValue,
+          UpdatedAt: now,
+        } as Airtable.FieldSet,
+      }))
+    );
+  }
 }
 
 export async function deleteItem(id: string): Promise<void> {
@@ -822,6 +844,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     depthInches: f["DepthInches"] != null ? toNum(f["DepthInches"]) : undefined,
     estateSaleId: toStr(f["EstateSaleId"]) || undefined,
     commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
+    priceDropOriginalValue: f["PriceDropOriginalValue"] != null ? (toNum(f["PriceDropOriginalValue"]) || undefined) : undefined,
   };
 }
 

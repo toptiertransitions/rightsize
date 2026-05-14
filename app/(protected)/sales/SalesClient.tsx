@@ -128,6 +128,7 @@ interface SalesClientProps {
   initialUnsoldSpecialSituations?: { itemId: string; itemName: string }[];
   canEditUnsold?: boolean;
   canEditPricing?: boolean;
+  canApplyPriceDrop?: boolean;
   initialPriceDrop1Days?: number;
   initialPriceDrop1Percent?: number;
   initialPriceDrop2Days?: number;
@@ -1076,6 +1077,7 @@ export function SalesClient({
   initialUnsoldSpecialSituations = [],
   canEditUnsold = false,
   canEditPricing = false,
+  canApplyPriceDrop = false,
   initialPriceDrop1Days,
   initialPriceDrop1Percent,
   initialPriceDrop2Days,
@@ -1128,6 +1130,9 @@ export function SalesClient({
   const [emailingType, setEmailingType] = useState<"drop1" | "drop2" | "unsold" | null>(null);
   const [emailStatus, setEmailStatus] = useState<Record<string, "sent" | "error">>({});
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [applyingDrop, setApplyingDrop] = useState<"drop1" | "drop2" | "revert" | null>(null);
+  const [dropResult, setDropResult] = useState<string | null>(null);
+  const [dropError, setDropError] = useState<string | null>(null);
 
   async function savePayoutPreference() {
     setSavingPayout(true);
@@ -1205,6 +1210,43 @@ export function SalesClient({
       setEmailError(e instanceof Error ? e.message : String(e));
     } finally {
       setEmailingType(null);
+    }
+  }
+
+  async function applyPriceDrop(type: "drop1" | "drop2" | "revert") {
+    setApplyingDrop(type);
+    setDropResult(null);
+    setDropError(null);
+    try {
+      const res = await fetch("/api/sales/apply-price-drop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, type }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to apply");
+      const { updated, squareSynced, itemUpdates } = data as {
+        updated: number;
+        squareSynced: number;
+        itemUpdates: Array<{ id: string; valueMid: number; priceDropOriginalValue: number }>;
+      };
+      setItems(prev => prev.map(item => {
+        const u = itemUpdates.find(x => x.id === item.id);
+        if (!u) return item;
+        return {
+          ...item,
+          valueMid: u.valueMid,
+          priceDropOriginalValue: u.priceDropOriginalValue || undefined,
+        };
+      }));
+      const action = type === "revert" ? "Reverted" : `Price Drop ${type === "drop1" ? 1 : 2} applied`;
+      const squareNote = squareSynced > 0 ? ` · ${squareSynced} synced to Square` : "";
+      setDropResult(`${action} for ${updated} item${updated !== 1 ? "s" : ""}${squareNote}`);
+      setTimeout(() => setDropResult(null), 4000);
+    } catch (e) {
+      setDropError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setApplyingDrop(null);
     }
   }
 
@@ -1299,6 +1341,8 @@ export function SalesClient({
     .map(i => i.deliveryDate)
     .filter((d): d is string => !!d)
     .sort()[0] ?? null;
+
+  const hasPriceDropApplied = items.some(i => (i.priceDropOriginalValue ?? 0) > 0);
 
   function addDaysToDate(dateStr: string, days: number): string {
     const d = new Date(dateStr + "T00:00:00");
@@ -1909,6 +1953,40 @@ export function SalesClient({
               >
                 {savingPricing ? "Saving…" : pricingSaved ? "Saved!" : "Save Pricing"}
               </button>
+            </div>
+          )}
+
+          {/* Apply bulk price drops */}
+          {canApplyPriceDrop && (
+            <div className="border-t border-gray-100 pt-5 mb-6">
+              <p className="text-xs font-medium text-gray-500 mb-3">Apply bulk price drops to all Listed items</p>
+              <div className="flex flex-wrap gap-3 items-center">
+                <button
+                  onClick={() => applyPriceDrop("drop1")}
+                  disabled={!!applyingDrop}
+                  className="h-9 px-4 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {applyingDrop === "drop1" ? "Applying…" : `Apply Price Drop 1 (−${drop1Pct}%)`}
+                </button>
+                <button
+                  onClick={() => applyPriceDrop("drop2")}
+                  disabled={!!applyingDrop}
+                  className="h-9 px-4 bg-amber-600 text-white text-sm font-medium rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {applyingDrop === "drop2" ? "Applying…" : `Apply Price Drop 2 (−${drop2Pct}%)`}
+                </button>
+                {hasPriceDropApplied && (
+                  <button
+                    onClick={() => applyPriceDrop("revert")}
+                    disabled={!!applyingDrop}
+                    className="h-9 px-4 border border-gray-300 text-sm text-gray-600 rounded-xl hover:border-red-400 hover:text-red-600 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  >
+                    {applyingDrop === "revert" ? "Reverting…" : "Undo Price Drop"}
+                  </button>
+                )}
+              </div>
+              {dropResult && <p className="text-xs text-green-600 mt-2">{dropResult}</p>}
+              {dropError && <p className="text-xs text-red-500 mt-2">{dropError}</p>}
             </div>
           )}
 

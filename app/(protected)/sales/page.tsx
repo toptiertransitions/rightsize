@@ -86,6 +86,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditPricing = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canApplyPriceDrop = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const isStaff = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
   const paymentHandles = isStaff && invoiceSettings ? {
     venmoHandle: invoiceSettings.venmoHandle,
@@ -129,6 +130,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
       initialUnsoldSpecialSituations={tenant.unsoldSpecialSituations}
       canEditUnsold={canEditUnsold}
       canEditPricing={canEditPricing}
+      canApplyPriceDrop={canApplyPriceDrop}
       initialPriceDrop1Days={tenant.priceDrop1Days}
       initialPriceDrop1Percent={tenant.priceDrop1Percent}
       initialPriceDrop2Days={tenant.priceDrop2Days}
