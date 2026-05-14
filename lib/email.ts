@@ -1720,22 +1720,26 @@ export function buildActiveReferralEmail({
           </td>
         </tr>
 
-        ${(r.nextStepDate || r.nextStepNote) ? `
-        <!-- Next step -->
+        <!-- Next step (always shown) -->
         <tr>
-          <td style="padding:10px 18px;background:${nsBg};border-bottom:1px solid #f3f4f6;">
+          <td style="padding:10px 18px;background:${(r.nextStepDate || r.nextStepNote) ? nsBg : "#f9fafb"};border-bottom:1px solid #f3f4f6;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td>
+                  ${(r.nextStepDate || r.nextStepNote) ? `
                   <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${nsOverdue ? "#dc2626" : nsSoon ? "#b45309" : "#15803d"};">
                     Next Step${nsDateFormatted ? ` — ${nsDateFormatted}` : ""}${nsOverdue ? " (OVERDUE)" : nsSoon ? " (Soon)" : ""}
                   </p>
                   ${r.nextStepNote ? `<p style="margin:3px 0 0;font-size:12px;color:#374151;">${r.nextStepNote}</p>` : ""}
+                  ` : `
+                  <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#9ca3af;">Next Step</p>
+                  <p style="margin:3px 0 0;font-size:12px;color:#9ca3af;font-style:italic;">No next steps documented yet</p>
+                  `}
                 </td>
               </tr>
             </table>
           </td>
-        </tr>` : ""}
+        </tr>
 
         ${detailCells.length > 0 ? `
         <!-- Personal details -->

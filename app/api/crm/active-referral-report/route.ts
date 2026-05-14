@@ -110,13 +110,14 @@ export async function POST() {
     };
   });
 
-  // Sort: priority (High → Medium → Low → other), then by contact name
+  // Sort: priority (High → Medium → Low → other), then Won Value desc, then Referred Count desc
   const priorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
   rows.sort((a, b) => {
     const pa = priorityOrder[a.priority] ?? 3;
     const pb = priorityOrder[b.priority] ?? 3;
     if (pa !== pb) return pa - pb;
-    return a.contactName.localeCompare(b.contactName);
+    if (b.wonValue !== a.wonValue) return b.wonValue - a.wonValue;
+    return b.totalReferred - a.totalReferred;
   });
 
   const generatedAt = new Date().toLocaleString("en-US", {
