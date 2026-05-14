@@ -2903,6 +2903,9 @@ function DashboardTab({
   const [sendingReport, setSendingReport] = useState(false);
   const [reportStatus, setReportStatus] = useState<"idle" | "sent" | "error">("idle");
   const [reportError, setReportError] = useState<string | null>(null);
+  const [sendingActiveReport, setSendingActiveReport] = useState(false);
+  const [activeReportStatus, setActiveReportStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [activeReportError, setActiveReportError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/crm/activities")
@@ -3806,6 +3809,40 @@ function DashboardTab({
             </button>
             {reportStatus === "sent" && <p className="text-xs text-green-600">Report sent to your email.</p>}
             {reportStatus === "error" && <p className="text-xs text-red-500">{reportError ?? "Error sending report."}</p>}
+          </div>
+        </div>
+
+        {/* Active Referral Report */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Active Referral Report</p>
+            <p className="text-xs text-gray-500 mt-0.5">Full digest of all Active Referral partners — contact info, owner, last activity, next steps, personal notes, and referral stats.</p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <button
+              onClick={async () => {
+                setSendingActiveReport(true);
+                setActiveReportStatus("idle");
+                setActiveReportError(null);
+                try {
+                  const res = await fetch("/api/crm/active-referral-report", { method: "POST" });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error ?? "Failed to send");
+                  setActiveReportStatus("sent");
+                } catch (e) {
+                  setActiveReportStatus("error");
+                  setActiveReportError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setSendingActiveReport(false);
+                }
+              }}
+              disabled={sendingActiveReport}
+              className="text-sm bg-green-700 text-white rounded-lg px-4 py-2 hover:bg-green-800 disabled:opacity-50 whitespace-nowrap"
+            >
+              {sendingActiveReport ? "Sending…" : "Send Active Referral Report"}
+            </button>
+            {activeReportStatus === "sent" && <p className="text-xs text-green-600">Report sent to your email.</p>}
+            {activeReportStatus === "error" && <p className="text-xs text-red-500">{activeReportError ?? "Error sending report."}</p>}
           </div>
         </div>
       </div>

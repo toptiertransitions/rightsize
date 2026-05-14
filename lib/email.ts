@@ -1589,6 +1589,227 @@ export function buildReferralPipelineEmail({
 </html>`;
 }
 
+// ─── Active Referral Report Email ─────────────────────────────────────────────
+
+export type ActiveReferralContactRow = {
+  contactName: string;
+  contactTitle?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  companyName: string;
+  companyType?: string;
+  priority: string;
+  ownerName: string;
+  lastActivityDate?: string;
+  activityCount: number;
+  dateIntroduced?: string;
+  nextStepDate?: string;
+  nextStepNote?: string;
+  interests?: string;
+  coffeeOrder?: string;
+  orgsGroups?: string;
+  notes?: string;
+  totalReferred: number;
+  wonCount: number;
+  lostCount: number;
+  activeCount: number;
+  wonValue: number;
+};
+
+function fmtDateShort(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtMoney(n: number): string {
+  if (!n) return "$0";
+  return "$" + n.toLocaleString("en-US");
+}
+
+function nextStepRowBg(dateStr: string | undefined): string {
+  if (!dateStr) return "#f9fafb";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(dateStr + "T00:00:00");
+  if (due < today) return "#fef2f2";
+  const diff = (due.getTime() - today.getTime()) / 86400000;
+  if (diff <= 7) return "#fffbeb";
+  return "#f0fdf4";
+}
+
+function priorityBadge(p: string): string {
+  const styles: Record<string, string> =  {
+    High: "background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;",
+    Medium: "background:#fffbeb;color:#b45309;border:1px solid #fde68a;",
+    Low: "background:#f9fafb;color:#6b7280;border:1px solid #e5e7eb;",
+  };
+  const s = styles[p] || styles.Low;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;${s}">${p} Priority</span>`;
+}
+
+export function buildActiveReferralEmail({
+  rows,
+  generatedAt,
+}: {
+  rows: ActiveReferralContactRow[];
+  generatedAt: string;
+}): string {
+  const cardRows = rows.map(r => {
+    const nsBg = nextStepRowBg(r.nextStepDate);
+    const nsDateFormatted = r.nextStepDate ? fmtDateShort(r.nextStepDate) : null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const nsDate = r.nextStepDate ? new Date(r.nextStepDate + "T00:00:00") : null;
+    const nsOverdue = nsDate && nsDate < today;
+    const nsSoon = nsDate && !nsOverdue && ((nsDate.getTime() - today.getTime()) / 86400000) <= 7;
+
+    const detailCells = [
+      r.interests ? `<td style="padding:8px 12px;background:#f9fafb;border-radius:8px;vertical-align:top;min-width:120px;"><p style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 3px 0;">Interests</p><p style="font-size:12px;color:#374151;margin:0;">${r.interests}</p></td>` : "",
+      r.coffeeOrder ? `<td style="padding:8px 12px;background:#fffbeb;border-radius:8px;vertical-align:top;min-width:120px;"><p style="font-size:10px;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 3px 0;">Coffee Order</p><p style="font-size:12px;color:#92400e;margin:0;">${r.coffeeOrder}</p></td>` : "",
+      r.orgsGroups ? `<td style="padding:8px 12px;background:#f9fafb;border-radius:8px;vertical-align:top;min-width:120px;"><p style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 3px 0;">Orgs / Groups</p><p style="font-size:12px;color:#374151;margin:0;">${r.orgsGroups}</p></td>` : "",
+    ].filter(Boolean);
+
+    const statsItems = [
+      { label: "Referred", val: String(r.totalReferred), color: "#111827" },
+      { label: "Won", val: String(r.wonCount), color: "#15803d" },
+      { label: "Lost", val: String(r.lostCount), color: "#dc2626" },
+      { label: "Active", val: String(r.activeCount), color: "#2563eb" },
+      { label: "Won Value", val: fmtMoney(r.wonValue), color: "#111827" },
+    ];
+
+    return `
+    <tr><td style="padding:0 0 20px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#ffffff;">
+
+        <!-- Card header -->
+        <tr style="background:#2d4a3e;">
+          <td style="padding:14px 18px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:top;">
+                  <p style="margin:0;font-size:16px;font-weight:700;color:#ffffff;">${r.contactName}</p>
+                  ${r.contactTitle ? `<p style="margin:2px 0 0;font-size:12px;color:#a7c4b5;">${r.contactTitle}</p>` : ""}
+                  <p style="margin:4px 0 0;font-size:12px;color:#C9A96E;font-weight:600;">${r.companyName}${r.companyType ? ` <span style="font-weight:400;color:#a7c4b5;">· ${r.companyType}</span>` : ""}</p>
+                </td>
+                <td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;">
+                  ${r.priority ? priorityBadge(r.priority) : ""}
+                  <p style="margin:6px 0 0;font-size:11px;color:#a7c4b5;">Owner: <strong style="color:#e5e7eb;">${r.ownerName || "Unassigned"}</strong></p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Contact info + activity row -->
+        <tr>
+          <td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:top;">
+                  ${r.contactEmail ? `<a href="mailto:${r.contactEmail}" style="font-size:12px;color:#2563eb;text-decoration:none;">${r.contactEmail}</a>` : ""}
+                  ${r.contactEmail && r.contactPhone ? `<span style="color:#d1d5db;margin:0 6px;">·</span>` : ""}
+                  ${r.contactPhone ? `<span style="font-size:12px;color:#6b7280;">${r.contactPhone}</span>` : ""}
+                  ${r.dateIntroduced ? `<p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Introduced ${fmtDateShort(r.dateIntroduced)}</p>` : ""}
+                </td>
+                <td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;">
+                  <p style="margin:0;font-size:11px;color:#9ca3af;">Last Activity</p>
+                  <p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#374151;">${r.lastActivityDate ? fmtDateShort(r.lastActivityDate) : "None recorded"}</p>
+                  <p style="margin:2px 0 0;font-size:11px;color:#9ca3af;">${r.activityCount} activit${r.activityCount === 1 ? "y" : "ies"}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        ${(r.nextStepDate || r.nextStepNote) ? `
+        <!-- Next step -->
+        <tr>
+          <td style="padding:10px 18px;background:${nsBg};border-bottom:1px solid #f3f4f6;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${nsOverdue ? "#dc2626" : nsSoon ? "#b45309" : "#15803d"};">
+                    Next Step${nsDateFormatted ? ` — ${nsDateFormatted}` : ""}${nsOverdue ? " (OVERDUE)" : nsSoon ? " (Soon)" : ""}
+                  </p>
+                  ${r.nextStepNote ? `<p style="margin:3px 0 0;font-size:12px;color:#374151;">${r.nextStepNote}</p>` : ""}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>` : ""}
+
+        ${detailCells.length > 0 ? `
+        <!-- Personal details -->
+        <tr>
+          <td style="padding:10px 18px;border-bottom:1px solid #f3f4f6;">
+            <table cellpadding="0" cellspacing="6">
+              <tr>${detailCells.map(c => c).join('<td style="width:8px;"></td>')}</tr>
+            </table>
+          </td>
+        </tr>` : ""}
+
+        ${r.notes ? `
+        <!-- Notes -->
+        <tr>
+          <td style="padding:10px 18px;background:#eff6ff;border-bottom:1px solid #f3f4f6;">
+            <p style="margin:0;font-size:10px;color:#93c5fd;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Notes</p>
+            <p style="margin:4px 0 0;font-size:12px;color:#1e40af;white-space:pre-line;">${r.notes}</p>
+          </td>
+        </tr>` : ""}
+
+        <!-- Stats bar -->
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 18px;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                ${statsItems.map((s, i) => `
+                  ${i > 0 ? '<td style="width:1px;background:#e5e7eb;margin:0 12px;"></td><td style="width:16px;"></td>' : ""}
+                  <td style="vertical-align:middle;padding-right:4px;">
+                    <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${s.label}</p>
+                    <p style="margin:2px 0 0;font-size:14px;font-weight:700;color:${s.color};">${s.val}</p>
+                  </td>
+                `).join("")}
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;">
+
+        <!-- Header -->
+        <tr><td style="background:#2d4a3e;border-radius:12px 12px 0 0;padding:24px 28px;">
+          <p style="margin:0;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Active Referral Report</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#a7c4b5;">${rows.length} active referral partner${rows.length !== 1 ? "s" : ""} · Generated ${generatedAt}</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="background:#f3f4f6;padding:20px 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${cardRows}
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:12px 0 24px;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#9ca3af;">Rightsize &middot; Top Tier Transitions &nbsp;&middot;&nbsp; Active Referral partners only</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ─── Consignment Price Drop Email ─────────────────────────────────────────────
 
 function cldThumb(url: string | undefined, size = 64): string {
