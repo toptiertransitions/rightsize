@@ -20,6 +20,7 @@ export async function POST(
     cardNumber?: string;
     expirationDate?: string;
     cvc?: string;
+    zipCode?: string;
     // ACH
     routingNumber?: string;
     accountNumber?: string;
@@ -58,6 +59,7 @@ export async function POST(
     last_name: lastName,
     email,
     ...(body.phone ? { phone: body.phone.replace(/\D/g, "") } : {}),
+    ...(body.zipCode ? { postal_code: body.zipCode, country: "US" } : {}),
   };
 
   const description = `Top Tier Transitions - Invoice ${invoice.invoiceNumber}`;

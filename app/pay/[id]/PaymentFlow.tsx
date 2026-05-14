@@ -66,6 +66,7 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
   const [cardNumber, setCardNumber] = useState("");
   const [expiration, setExpiration] = useState("");
   const [cvc, setCvc] = useState("");
+  const [zipCode, setZipCode] = useState("");
 
   // ACH fields
   const [routingNumber, setRoutingNumber] = useState("");
@@ -89,6 +90,7 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
       if (digits.length < 13) { setErrorMsg("Please enter a valid card number."); return; }
       if (!expiration.match(/^\d{2}\/\d{2}$/)) { setErrorMsg("Expiration must be MM/YY."); return; }
       if (!cvc || cvc.length < 3) { setErrorMsg("Please enter the CVC."); return; }
+      if (!zipCode.trim() || zipCode.replace(/\D/g, "").length < 5) { setErrorMsg("Please enter your billing zip code."); return; }
     } else {
       if (routingNumber.length !== 9) { setErrorMsg("Routing number must be 9 digits."); return; }
       if (!accountNumber.trim()) { setErrorMsg("Please enter your account number."); return; }
@@ -105,6 +107,7 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
           lastName: lastName.trim(),
           email: email.trim(),
           phone: phone.trim() || undefined,
+          zipCode: method === "credit_card" ? zipCode.trim() : undefined,
           // Card fields
           cardNumber: method === "credit_card" ? cardNumber.replace(/\s/g, "") : undefined,
           expirationDate: method === "credit_card" ? expiration : undefined,
@@ -215,9 +218,12 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
           <Field label="CVC" value={cvc} onChange={setCvc} placeholder="123" inputMode="numeric" maxLength={4} />
         </div>
 
-        <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="jane@example.com" />
-        <Field label="Phone (optional)" value={phone} onChange={setPhone} type="tel" placeholder="3125551234" />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Billing Zip Code" value={zipCode} onChange={v => setZipCode(v.replace(/\D/g, "").slice(0, 5))} placeholder="60601" inputMode="numeric" maxLength={5} />
+          <Field label="Phone (optional)" value={phone} onChange={setPhone} type="tel" placeholder="3125551234" />
+        </div>
 
+        <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="jane@example.com" />
         {errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
 
         <button
