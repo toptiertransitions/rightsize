@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import VoiceLogTab from "./VoiceLogTab";
 
 const CRMActivityCharts = dynamic(() => import("./CRMActivityCharts"), { ssr: false });
 import { cn } from "@/lib/utils";
@@ -41,7 +42,7 @@ function parseCSV(text: string): Record<string, string>[] {
   }).filter(row => Object.values(row).some(v => v.trim()));
 }
 
-type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "activity" | "settings";
+type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "voice" | "activity" | "settings";
 
 interface CRMClientProps {
   opportunities: ClientOpportunity[];
@@ -4636,6 +4637,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     { key: "opportunities", label: "Opportunities" },
     { key: "contacts", label: "Clients" },
     { key: "referrals", label: "Referral Partners" },
+    { key: "voice", label: "Log with Voice" },
     { key: "activity", label: "Activity Log" },
     { key: "settings", label: "Settings" },
   ];
@@ -4713,6 +4715,9 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           initialContactStage={refInitialContactStage}
           initialType={refInitialType}
         />
+      )}
+      {tab === "voice" && (
+        <VoiceLogTab referralContacts={referralContacts} companies={companies} />
       )}
       {tab === "activity" && (
         <ActivityLogTab opportunities={opportunities} clientContacts={localContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
