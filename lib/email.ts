@@ -1591,11 +1591,27 @@ export function buildReferralPipelineEmail({
 
 // ─── Consignment Price Drop Email ─────────────────────────────────────────────
 
+function cldThumb(url: string | undefined, size = 64): string {
+  if (!url) return "";
+  if (url.includes("/upload/")) return url.replace("/upload/", `/upload/w_${size},h_${size},c_fill,f_auto,q_auto/`);
+  return url;
+}
+
+function thumbCell(url: string | undefined): string {
+  const thumb = cldThumb(url);
+  return `<td style="padding:8px 8px 8px 12px;width:72px;vertical-align:middle;">${
+    thumb
+      ? `<img src="${thumb}" width="56" height="56" alt="" style="border-radius:6px;display:block;">`
+      : `<div style="width:56px;height:56px;background:#f3f4f6;border-radius:6px;"></div>`
+  }</td>`;
+}
+
 export type PriceDropEmailItem = {
   itemName: string;
   primaryRoute: string;
   currentPrice: number;
   futurePrice: number;
+  photoUrl?: string;
 };
 
 export function buildPriceDropEmail({
@@ -1617,6 +1633,7 @@ export function buildPriceDropEmail({
 
   const itemRows = items.map((item, i) => `
     <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};border-bottom:1px solid #e5e7eb;">
+      ${thumbCell(item.photoUrl)}
       <td style="padding:12px 16px;font-size:13px;color:#111827;font-weight:500;">${item.itemName}</td>
       <td style="padding:12px 16px;font-size:12px;color:#6b7280;white-space:nowrap;">${item.primaryRoute}</td>
       <td style="padding:12px 16px;font-size:13px;color:#9ca3af;text-align:right;white-space:nowrap;text-decoration:line-through;">${fmt(item.currentPrice)}</td>
@@ -1648,6 +1665,7 @@ export function buildPriceDropEmail({
           <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
             <thead>
               <tr style="background:#f9fafb;">
+                <th style="padding:10px 12px 10px 12px;width:72px;"></th>
                 <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;">Item</th>
                 <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">Channel</th>
                 <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:right;white-space:nowrap;">Current Price</th>
@@ -1678,6 +1696,7 @@ export type UnsoldEmailItem = {
   currentPrice: number;
   action: string;
   isSpecialSituation: boolean;
+  photoUrl?: string;
 };
 
 export function buildUnsoldItemsEmail({
@@ -1701,6 +1720,7 @@ export function buildUnsoldItemsEmail({
       ? "padding:10px 16px;font-size:13px;color:#b45309;font-weight:600;white-space:nowrap;"
       : "padding:10px 16px;font-size:13px;color:#374151;white-space:nowrap;";
     return `<tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};border-bottom:1px solid #e5e7eb;">
+      ${thumbCell(item.photoUrl)}
       <td style="padding:10px 16px;font-size:13px;color:#111827;font-weight:500;">${item.itemName}${item.isSpecialSituation ? " <span style=\"font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;\">Special</span>" : ""}</td>
       <td style="padding:10px 16px;font-size:12px;color:#6b7280;white-space:nowrap;">${item.primaryRoute}</td>
       <td style="padding:10px 16px;font-size:13px;color:#374151;text-align:right;white-space:nowrap;">${fmt(item.currentPrice)}</td>

@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
         primaryRoute: item.primaryRoute,
         currentPrice,
         futurePrice,
+        photoUrl: item.photoUrl,
       };
     });
 
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
         currentPrice: item.valueMid ?? 0,
         action,
         isSpecialSituation: isSpecial,
+        photoUrl: item.photoUrl,
       };
     });
 
