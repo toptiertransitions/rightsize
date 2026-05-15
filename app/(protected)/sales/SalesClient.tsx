@@ -1121,10 +1121,10 @@ export function SalesClient({
   const itemSearchRef = useRef<HTMLDivElement>(null);
 
   // Consignment pricing expectations state
-  const [drop1Days, setDrop1Days] = useState(initialPriceDrop1Days ?? 30);
-  const [drop1Pct, setDrop1Pct] = useState(initialPriceDrop1Percent ?? 33);
-  const [drop2Days, setDrop2Days] = useState(initialPriceDrop2Days ?? 60);
-  const [drop2Pct, setDrop2Pct] = useState(initialPriceDrop2Percent ?? 66);
+  const [drop1Days, setDrop1Days] = useState(String(initialPriceDrop1Days ?? 30));
+  const [drop1Pct, setDrop1Pct] = useState(String(initialPriceDrop1Percent ?? 33));
+  const [drop2Days, setDrop2Days] = useState(String(initialPriceDrop2Days ?? 60));
+  const [drop2Pct, setDrop2Pct] = useState(String(initialPriceDrop2Percent ?? 66));
   const [savingPricing, setSavingPricing] = useState(false);
   const [pricingSaved, setPricingSaved] = useState(false);
   const [emailingType, setEmailingType] = useState<"drop1" | "drop2" | "unsold" | null>(null);
@@ -1180,10 +1180,10 @@ export function SalesClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tenantId,
-          priceDrop1Days: drop1Days,
-          priceDrop1Percent: drop1Pct,
-          priceDrop2Days: drop2Days,
-          priceDrop2Percent: drop2Pct,
+          priceDrop1Days: Math.max(1, parseInt(drop1Days) || 1),
+          priceDrop1Percent: Math.max(1, Math.min(99, parseInt(drop1Pct) || 1)),
+          priceDrop2Days: Math.max(1, parseInt(drop2Days) || 1),
+          priceDrop2Percent: Math.max(1, Math.min(99, parseInt(drop2Pct) || 1)),
         }),
       });
       setPricingSaved(true);
@@ -1862,14 +1862,15 @@ export function SalesClient({
                     <input
                       type="number" min={1} max={365}
                       value={drop1Days}
-                      onChange={e => setDrop1Days(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={e => setDrop1Days(e.target.value)}
+                      onBlur={e => { const v = parseInt(e.target.value); if (!v || v < 1) setDrop1Days("1"); }}
                       className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
                     />
                   ) : (
                     <p className="text-sm text-gray-900">{drop1Days} days</p>
                   )}
                   {earliestDelivery && (
-                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, drop1Days)}</p>
+                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, parseInt(drop1Days) || 0)}</p>
                   )}
                 </div>
                 <div>
@@ -1878,7 +1879,8 @@ export function SalesClient({
                     <input
                       type="number" min={1} max={99}
                       value={drop1Pct}
-                      onChange={e => setDrop1Pct(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                      onChange={e => setDrop1Pct(e.target.value)}
+                      onBlur={e => { const v = parseInt(e.target.value); if (!v || v < 1) setDrop1Pct("1"); else if (v > 99) setDrop1Pct("99"); }}
                       className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
                     />
                   ) : (
@@ -1898,14 +1900,15 @@ export function SalesClient({
                     <input
                       type="number" min={1} max={365}
                       value={drop2Days}
-                      onChange={e => setDrop2Days(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={e => setDrop2Days(e.target.value)}
+                      onBlur={e => { const v = parseInt(e.target.value); if (!v || v < 1) setDrop2Days("1"); }}
                       className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
                     />
                   ) : (
                     <p className="text-sm text-gray-900">{drop2Days} days</p>
                   )}
                   {earliestDelivery && (
-                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, drop2Days)}</p>
+                    <p className="text-xs text-gray-400 mt-1">{addDaysToDate(earliestDelivery, parseInt(drop2Days) || 0)}</p>
                   )}
                 </div>
                 <div>
@@ -1914,7 +1917,8 @@ export function SalesClient({
                     <input
                       type="number" min={1} max={99}
                       value={drop2Pct}
-                      onChange={e => setDrop2Pct(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                      onChange={e => setDrop2Pct(e.target.value)}
+                      onBlur={e => { const v = parseInt(e.target.value); if (!v || v < 1) setDrop2Pct("1"); else if (v > 99) setDrop2Pct("99"); }}
                       className="h-9 w-24 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
                     />
                   ) : (
