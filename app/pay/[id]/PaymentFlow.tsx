@@ -75,6 +75,7 @@ export function PaymentFlow({
   const [step, setStep] = useState<Step>("select");
   const [errorMsg, setErrorMsg] = useState("");
   const [fpReady, setFpReady] = useState(false);
+  const [fpLoadError, setFpLoadError] = useState("");
   const [isCheckPayment, setIsCheckPayment] = useState(false);
 
   // Shared billing fields
@@ -97,37 +98,64 @@ export function PaymentFlow({
 
   // Load and initialize FluidPay Pay Fields when card form is shown
   useEffect(() => {
-    if (step !== "card_form" || !fluidpayPublicKey) return;
+    if (step !== "card_form") return;
 
     setFpReady(false);
+    setFpLoadError("");
+
+    if (!fluidpayPublicKey) {
+      setFpLoadError("Payment fields are not configured. Please contact your coordinator.");
+      return;
+    }
 
     function initPayFields() {
       const PF = (window as any).PayFields;
-      if (!PF) return;
+      if (!PF) {
+        setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
+        return;
+      }
 
-      PF.config.apiKey = fluidpayPublicKey;
-      PF.config.onSuccess = (resp: any) => {
-        tokenResolveRef.current?.(resp.token ?? resp.data?.token ?? resp);
-        tokenResolveRef.current = null;
-        tokenRejectRef.current = null;
-      };
-      PF.config.onError = (errors: any) => {
-        const msg = Array.isArray(errors)
-          ? errors.map((e: any) => (typeof e === "string" ? e : e?.message || JSON.stringify(e))).join(", ")
-          : (typeof errors === "string" ? errors : "Card tokenization failed. Please check your details.");
-        tokenRejectRef.current?.(new Error(msg));
-        tokenResolveRef.current = null;
-        tokenRejectRef.current = null;
-      };
+      try {
+        PF.config.apiKey = fluidpayPublicKey;
+        PF.config.onSuccess = (resp: any) => {
+          const token = resp?.token ?? resp?.data?.token;
+          if (token) {
+            tokenResolveRef.current?.(token);
+          } else {
+            tokenRejectRef.current?.(new Error("No token returned. Please try again."));
+          }
+          tokenResolveRef.current = null;
+          tokenRejectRef.current = null;
+        };
+        PF.config.onError = (errors: any) => {
+          const msg = Array.isArray(errors)
+            ? errors.map((e: any) => (typeof e === "string" ? e : e?.message || JSON.stringify(e))).join(", ")
+            : (typeof errors === "string" ? errors : "Card tokenization failed. Please check your details.");
+          tokenRejectRef.current?.(new Error(msg));
+          tokenResolveRef.current = null;
+          tokenRejectRef.current = null;
+        };
 
-      PF.appendTo("#fp-card-number", "number");
-      PF.appendTo("#fp-card-expiry", "expiry");
-      PF.appendTo("#fp-card-cvv", "cvv");
-      setFpReady(true);
+        PF.appendTo("#fp-card-number", "number");
+        PF.appendTo("#fp-card-expiry", "expiry");
+        PF.appendTo("#fp-card-cvv", "cvv");
+        setFpReady(true);
+      } catch (e) {
+        console.error("[PayFields] init error:", e);
+        setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
+      }
     }
+
+    // 15-second timeout — if fpReady never fires, surface an error
+    const loadTimeout = setTimeout(() => {
+      if (!(window as any).PayFields) {
+        setFpLoadError("Payment fields timed out loading. Please check your connection and refresh.");
+      }
+    }, 15_000);
 
     const scriptId = "fluidpay-pay-fields-js";
     if (document.getElementById(scriptId)) {
+      clearTimeout(loadTimeout);
       initPayFields();
       return;
     }
@@ -136,9 +164,15 @@ export function PaymentFlow({
     script.id = scriptId;
     script.src = `${fluidpayBaseUrl}/tokenizer/pay-fields.js`;
     script.async = true;
-    script.onload = () => initPayFields();
-    script.onerror = () => setErrorMsg("Failed to load payment fields. Please refresh and try again.");
+    script.onload = () => { clearTimeout(loadTimeout); initPayFields(); };
+    script.onerror = () => {
+      clearTimeout(loadTimeout);
+      console.error("[PayFields] script failed to load from:", script.src);
+      setFpLoadError(`Failed to load payment fields from ${fluidpayBaseUrl}. Please refresh and try again.`);
+    };
     document.head.appendChild(script);
+
+    return () => clearTimeout(loadTimeout);
   }, [step, fluidpayPublicKey, fluidpayBaseUrl]);
 
   function getToken(): Promise<string> {
@@ -274,11 +308,14 @@ export function PaymentFlow({
         </div>
 
         {/* FluidPay tokenizer iframes */}
-        {!fpReady && (
+        {!fpReady && !fpLoadError && (
           <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
             <div className="w-4 h-4 border-2 border-gray-300 border-t-[#2E6B4F] rounded-full animate-spin" />
             Loading secure card fields…
           </div>
+        )}
+        {fpLoadError && (
+          <p className="text-sm text-red-600 py-2">{fpLoadError}</p>
         )}
         <div style={{ display: fpReady ? undefined : "none" }}>
           <IframeField label="Card Number" id="fp-card-number" />
@@ -299,7 +336,7 @@ export function PaymentFlow({
 
         <button
           onClick={() => submit("credit_card")}
-          disabled={!fpReady}
+          disabled={!fpReady || !!fpLoadError}
           className="w-full h-12 bg-[#2E6B4F] hover:bg-[#245a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-base transition-colors mt-2"
         >
           Pay {fmt(amount)}
