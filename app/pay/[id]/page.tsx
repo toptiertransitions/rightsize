@@ -23,7 +23,9 @@ export default async function PayPage({ params }: Props) {
 
   const isPaid = invoice.status === "Paid";
   const companyName = settings?.companyName || "Top Tier Transitions";
-  const fluidpayConfigured = !!process.env.FLUIDPAY_API_KEY;
+  const fluidpayConfigured = !!(process.env.FLUIDPAY_API_KEY && process.env.FLUIDPAY_PUBLIC_KEY);
+  const fluidpayPublicKey = process.env.FLUIDPAY_PUBLIC_KEY ?? "";
+  const fluidpayBaseUrl = process.env.FLUIDPAY_URL ?? "https://sandbox.fluidpay.com";
   // Pre-fill email from invoice sent-to or project client email
   const prefillEmail = invoice.sentToEmail || tenant?.clientEmail || "";
 
@@ -131,6 +133,8 @@ export default async function PayPage({ params }: Props) {
               amount={invoice.amount}
               companyName={companyName}
               prefillEmail={prefillEmail}
+              fluidpayPublicKey={fluidpayPublicKey}
+              fluidpayBaseUrl={fluidpayBaseUrl}
             />
           ) : (
             <div className="text-center py-2">

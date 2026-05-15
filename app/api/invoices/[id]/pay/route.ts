@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getInvoiceById, updateInvoice } from "@/lib/airtable";
 
 // Public route — no auth required. Clients access this from the pay link in their email.
-// Card/ACH data is forwarded directly to FluidPay and never stored.
+// Card data is tokenized client-side by FluidPay; only the token reaches this server.
 
 export async function POST(
   req: NextRequest,
@@ -16,10 +16,8 @@ export async function POST(
     lastName: string;
     email: string;
     phone?: string;
-    // Card
-    cardNumber?: string;
-    expirationDate?: string;
-    cvc?: string;
+    // Card — token from FluidPay tokenizer (never raw card data)
+    token?: string;
     zipCode?: string;
     // ACH
     routingNumber?: string;
@@ -53,7 +51,6 @@ export async function POST(
 
   const amountCents = Math.round(balance * 100);
 
-  // Build FluidPay request body
   const billingAddress = {
     first_name: firstName,
     last_name: lastName,
@@ -64,21 +61,13 @@ export async function POST(
 
   const description = `Top Tier Transitions - Invoice ${invoice.invoiceNumber}`;
 
-  // Idempotency key — prevents double charges on network retries
-  const idempotencyKey = crypto.randomUUID();
-
   let paymentMethodBody: Record<string, unknown>;
   if (paymentMethod === "credit_card") {
-    if (!body.cardNumber || !body.expirationDate || !body.cvc) {
-      return NextResponse.json({ error: "Missing card details" }, { status: 400 });
+    if (!body.token) {
+      return NextResponse.json({ error: "Missing payment token" }, { status: 400 });
     }
     paymentMethodBody = {
-      card: {
-        entry_type: "keyed",
-        number: body.cardNumber.replace(/\s/g, ""),
-        expiration_date: body.expirationDate, // MM/YY
-        cvc: body.cvc,
-      },
+      token: { value: body.token },
     };
   } else {
     if (!body.routingNumber || !body.accountNumber || !body.accountType) {
@@ -103,11 +92,8 @@ export async function POST(
     description,
     email_receipt: true,
     email_address: email,
-    idempotency_key: idempotencyKey,
-    idempotency_time: 300,
   };
 
-  // FluidPay can take up to 3 minutes — set a matching abort timeout
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 180_000);
 
@@ -117,13 +103,12 @@ export async function POST(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${fluidpayApiKey}`,
+        "Authorization": fluidpayApiKey,
       },
       body: JSON.stringify(fpRequestBody),
       signal: controller.signal,
     });
     clearTimeout(timeout);
-
     fpData = await fpRes.json().catch(() => ({}));
   } catch (err) {
     clearTimeout(timeout);
@@ -134,7 +119,6 @@ export async function POST(
     return NextResponse.json({ error: "Could not reach the payment processor. Please try again." }, { status: 502 });
   }
 
-  // Parse response per FluidPay spec
   const topLevelStatus = fpData.status as string | undefined;
   const topLevelMsg = fpData.msg as string | undefined;
   const txnData = fpData.data as Record<string, unknown> | undefined;
@@ -145,23 +129,19 @@ export async function POST(
   if (!approved) {
     console.error("[pay] FluidPay declined — full response:", JSON.stringify(fpData));
 
-    // Top-level API/config error (e.g. unauthorized, no processor configured)
     if (topLevelStatus === "error" || topLevelStatus === "failed" || !txnData) {
-      const msg = topLevelMsg || "Payment processor error. Please contact your coordinator.";
-      return NextResponse.json({ error: msg }, { status: 402 });
+      return NextResponse.json({ error: topLevelMsg || "Payment processor error. Please contact your coordinator." }, { status: 402 });
     }
 
-    // Card/bank decline — pull the most specific message available
     const cardBody = (txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown> | undefined;
     const achBody = (txnData?.response_body as Record<string, unknown>)?.ach as Record<string, unknown> | undefined;
-    const responseText = (cardBody?.response_text || achBody?.response_text || txnData?.response_body) as string | undefined;
-    let msg = responseText || (responseCode && responseCode >= 300
+    const responseText = (cardBody?.response_text || achBody?.response_text) as string | undefined;
+    const msg = responseText || (responseCode && responseCode >= 300
       ? "A gateway error occurred. Please try again or contact your coordinator."
       : "Payment was declined. Please check your details or try a different payment method.");
     return NextResponse.json({ error: msg }, { status: 402 });
   }
 
-  // Store transaction details
   const txnId = txnData?.id as string | undefined;
   const maskedCard = ((txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown>)?.masked_card as string | undefined;
   const authCode = ((txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown>)?.auth_code as string | undefined;
@@ -183,7 +163,6 @@ export async function POST(
       notes: noteLines.trim(),
     });
   } catch (err) {
-    // Payment succeeded — log the failure but don't error the client
     console.error("[pay] Airtable update failed after successful payment — txnId:", txnId, err);
   }
 

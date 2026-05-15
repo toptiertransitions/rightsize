@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type PayMethod = "credit_card" | "ach" | "check";
 type Step = "select" | "check_confirm" | "card_form" | "ach_form" | "processing" | "success";
@@ -11,6 +11,8 @@ interface Props {
   amount: number;
   companyName: string;
   prefillEmail?: string;
+  fluidpayPublicKey?: string;
+  fluidpayBaseUrl?: string;
 }
 
 function fmt(n: number) {
@@ -41,6 +43,20 @@ function Field({
   );
 }
 
+// Wrapper that looks like our Field but contains a FluidPay iframe
+function IframeField({ label, id }: { label: string; id: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
+      <div
+        id={id}
+        className="w-full border border-gray-300 rounded-lg px-3 text-sm"
+        style={{ minHeight: "42px", display: "flex", alignItems: "center" }}
+      />
+    </div>
+  );
+}
+
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 mb-5 transition-colors">
@@ -52,9 +68,14 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, prefillEmail = "" }: Props) {
+export function PaymentFlow({
+  invoiceId, invoiceNumber, amount, companyName, prefillEmail = "",
+  fluidpayPublicKey = "", fluidpayBaseUrl = "https://sandbox.fluidpay.com",
+}: Props) {
   const [step, setStep] = useState<Step>("select");
   const [errorMsg, setErrorMsg] = useState("");
+  const [fpReady, setFpReady] = useState(false);
+  const [isCheckPayment, setIsCheckPayment] = useState(false);
 
   // Shared billing fields
   const [firstName, setFirstName] = useState("");
@@ -62,10 +83,7 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
   const [email, setEmail] = useState(prefillEmail);
   const [phone, setPhone] = useState("");
 
-  // Card fields
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiration, setExpiration] = useState("");
-  const [cvc, setCvc] = useState("");
+  // Card billing
   const [zipCode, setZipCode] = useState("");
 
   // ACH fields
@@ -73,30 +91,94 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
   const [accountNumber, setAccountNumber] = useState("");
   const [accountType, setAccountType] = useState<"checking" | "savings">("checking");
 
+  // Token promise refs — wired up to PayFields callbacks
+  const tokenResolveRef = useRef<((t: string) => void) | null>(null);
+  const tokenRejectRef = useRef<((e: Error) => void) | null>(null);
+
+  // Load and initialize FluidPay Pay Fields when card form is shown
+  useEffect(() => {
+    if (step !== "card_form" || !fluidpayPublicKey) return;
+
+    setFpReady(false);
+
+    function initPayFields() {
+      const PF = (window as any).PayFields;
+      if (!PF) return;
+
+      PF.config.apiKey = fluidpayPublicKey;
+      PF.config.onSuccess = (resp: any) => {
+        tokenResolveRef.current?.(resp.token ?? resp.data?.token ?? resp);
+        tokenResolveRef.current = null;
+        tokenRejectRef.current = null;
+      };
+      PF.config.onError = (errors: any) => {
+        const msg = Array.isArray(errors)
+          ? errors.map((e: any) => (typeof e === "string" ? e : e?.message || JSON.stringify(e))).join(", ")
+          : (typeof errors === "string" ? errors : "Card tokenization failed. Please check your details.");
+        tokenRejectRef.current?.(new Error(msg));
+        tokenResolveRef.current = null;
+        tokenRejectRef.current = null;
+      };
+
+      PF.appendTo("#fp-card-number", "number");
+      PF.appendTo("#fp-card-expiry", "expiry");
+      PF.appendTo("#fp-card-cvv", "cvv");
+      setFpReady(true);
+    }
+
+    const scriptId = "fluidpay-pay-fields-js";
+    if (document.getElementById(scriptId)) {
+      initPayFields();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = `${fluidpayBaseUrl}/tokenizer/pay-fields.js`;
+    script.async = true;
+    script.onload = () => initPayFields();
+    script.onerror = () => setErrorMsg("Failed to load payment fields. Please refresh and try again.");
+    document.head.appendChild(script);
+  }, [step, fluidpayPublicKey, fluidpayBaseUrl]);
+
+  function getToken(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      tokenResolveRef.current = resolve;
+      tokenRejectRef.current = reject;
+      (window as any).PayFields?.getToken();
+    });
+  }
+
   function goBack() {
     setStep("select");
     setErrorMsg("");
+    setFpReady(false);
   }
 
   async function submit(method: "credit_card" | "ach") {
     setErrorMsg("");
 
-    // Basic client-side validation
     if (!firstName.trim() || !lastName.trim()) { setErrorMsg("Please enter your full name."); return; }
     if (!email.trim() || !email.includes("@")) { setErrorMsg("Please enter a valid email address."); return; }
 
-    if (method === "credit_card") {
-      const digits = cardNumber.replace(/\s/g, "");
-      if (digits.length < 13) { setErrorMsg("Please enter a valid card number."); return; }
-      if (!expiration.match(/^\d{2}\/\d{2}$/)) { setErrorMsg("Expiration must be MM/YY."); return; }
-      if (!cvc || cvc.length < 3) { setErrorMsg("Please enter the CVC."); return; }
-      if (!zipCode.trim() || zipCode.replace(/\D/g, "").length < 5) { setErrorMsg("Please enter your billing zip code."); return; }
-    } else {
+    if (method === "ach") {
       if (routingNumber.length !== 9) { setErrorMsg("Routing number must be 9 digits."); return; }
       if (!accountNumber.trim()) { setErrorMsg("Please enter your account number."); return; }
     }
 
     setStep("processing");
+
+    let token: string | undefined;
+    if (method === "credit_card") {
+      try {
+        token = await getToken();
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : "Card tokenization failed. Please check your details.");
+        setStep("card_form");
+        return;
+      }
+    }
+
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/pay`, {
         method: "POST",
@@ -107,12 +189,10 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
           lastName: lastName.trim(),
           email: email.trim(),
           phone: phone.trim() || undefined,
-          zipCode: method === "credit_card" ? zipCode.trim() : undefined,
-          // Card fields
-          cardNumber: method === "credit_card" ? cardNumber.replace(/\s/g, "") : undefined,
-          expirationDate: method === "credit_card" ? expiration : undefined,
-          cvc: method === "credit_card" ? cvc : undefined,
-          // ACH fields
+          // Card: token from FluidPay tokenizer
+          token: method === "credit_card" ? token : undefined,
+          zipCode: method === "credit_card" ? zipCode.trim() || undefined : undefined,
+          // ACH: direct fields
           routingNumber: method === "ach" ? routingNumber : undefined,
           accountNumber: method === "ach" ? accountNumber : undefined,
           accountType: method === "ach" ? accountType : undefined,
@@ -139,7 +219,7 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
         ] as const).map(({ m, label, sub, target }) => (
           <button
             key={m}
-            onClick={() => { setErrorMsg(""); setStep(target); }}
+            onClick={() => { setErrorMsg(""); setIsCheckPayment(m === "check"); setStep(target); }}
             className="w-full flex items-center gap-4 px-5 py-4 bg-white border-2 border-gray-200 hover:border-[#2E6B4F] hover:bg-[#f0fdf4] rounded-xl transition-colors text-left group"
           >
             <span className="text-xl">{m === "credit_card" ? "💳" : m === "ach" ? "🏦" : "📝"}</span>
@@ -181,41 +261,31 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
     );
   }
 
-  // ── Credit / Debit Card form ───────────────────────────────────────────────
+  // ── Credit / Debit Card form (tokenizer) ──────────────────────────────────
   if (step === "card_form") {
     return (
       <div className="space-y-4">
         <BackButton onClick={goBack} />
         <p className="text-sm font-semibold text-gray-700 -mt-2">Credit / Debit Card</p>
 
-        {/* Name row */}
         <div className="grid grid-cols-2 gap-3">
           <Field label="First Name" value={firstName} onChange={setFirstName} placeholder="Jane" />
           <Field label="Last Name" value={lastName} onChange={setLastName} placeholder="Smith" />
         </div>
 
-        <Field
-          label="Card Number"
-          value={cardNumber}
-          onChange={v => setCardNumber(v.replace(/[^\d\s]/g, "").slice(0, 19))}
-          placeholder="4111 1111 1111 1111"
-          inputMode="numeric"
-          maxLength={19}
-        />
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field
-            label="Expiration (MM/YY)"
-            value={expiration}
-            onChange={v => {
-              const digits = v.replace(/\D/g, "").slice(0, 4);
-              setExpiration(digits.length > 2 ? digits.slice(0, 2) + "/" + digits.slice(2) : digits);
-            }}
-            placeholder="12/26"
-            inputMode="numeric"
-            maxLength={5}
-          />
-          <Field label="CVC" value={cvc} onChange={setCvc} placeholder="123" inputMode="numeric" maxLength={4} />
+        {/* FluidPay tokenizer iframes */}
+        {!fpReady && (
+          <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+            <div className="w-4 h-4 border-2 border-gray-300 border-t-[#2E6B4F] rounded-full animate-spin" />
+            Loading secure card fields…
+          </div>
+        )}
+        <div style={{ display: fpReady ? undefined : "none" }}>
+          <IframeField label="Card Number" id="fp-card-number" />
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <IframeField label="Expiration (MM/YY)" id="fp-card-expiry" />
+            <IframeField label="CVC" id="fp-card-cvv" />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -224,15 +294,17 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
         </div>
 
         <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="jane@example.com" />
+
         {errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
 
         <button
           onClick={() => submit("credit_card")}
-          className="w-full h-12 bg-[#2E6B4F] hover:bg-[#245a40] text-white font-bold rounded-xl text-base transition-colors mt-2"
+          disabled={!fpReady}
+          className="w-full h-12 bg-[#2E6B4F] hover:bg-[#245a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-base transition-colors mt-2"
         >
           Pay {fmt(amount)}
         </button>
-        <p className="text-center text-xs text-gray-400">Your card details are encrypted and never stored.</p>
+        <p className="text-center text-xs text-gray-400">Card details are captured securely by FluidPay and never touch our servers.</p>
       </div>
     );
   }
@@ -252,7 +324,6 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
         <Field label="Routing Number" value={routingNumber} onChange={v => setRoutingNumber(v.replace(/\D/g, "").slice(0, 9))} placeholder="021000021" inputMode="numeric" maxLength={9} />
         <Field label="Account Number" value={accountNumber} onChange={setAccountNumber} placeholder="123456789" inputMode="numeric" />
 
-        {/* Account type toggle */}
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1.5">Account Type</label>
           <div className="flex gap-2">
@@ -301,7 +372,6 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
 
   // ── Success ───────────────────────────────────────────────────────────────
   if (step === "success") {
-    const isCheck = step === "success" && !cardNumber && !routingNumber;
     return (
       <div className="flex flex-col items-center text-center py-6 gap-4">
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
@@ -311,10 +381,10 @@ export function PaymentFlow({ invoiceId, invoiceNumber, amount, companyName, pre
         </div>
         <div>
           <p className="text-base font-bold text-gray-900">
-            {isCheck ? "Got it!" : "Payment Received!"}
+            {isCheckPayment ? "Got it!" : "Payment Received!"}
           </p>
           <p className="text-sm text-gray-500 mt-1 leading-relaxed max-w-xs mx-auto">
-            {isCheck
+            {isCheckPayment
               ? `Please bring your check payable to ${companyName} to your next appointment.`
               : `Thank you! Your payment of ${fmt(amount)} has been processed. A receipt has been sent to ${email}.`}
           </p>
