@@ -338,6 +338,9 @@ export interface Item {
   widthInches?: number;
   heightInches?: number;
   depthInches?: number;
+  // Shipping weight (manual-only)
+  weightPounds?: number;
+  weightOunces?: number;
   // Estate Sale
   estateSaleId?: string;
   // Pay tracking

@@ -544,6 +544,8 @@ export async function createItem(data: Partial<Item> & {
     ...(data.widthInches != null ? { WidthInches: data.widthInches } : {}),
     ...(data.heightInches != null ? { HeightInches: data.heightInches } : {}),
     ...(data.depthInches != null ? { DepthInches: data.depthInches } : {}),
+    ...(data.weightPounds != null ? { WeightPounds: data.weightPounds } : {}),
+    ...(data.weightOunces != null ? { WeightOunces: data.weightOunces } : {}),
     CreatedAt: now,
     UpdatedAt: now,
   }, { typecast: true });
@@ -637,6 +639,9 @@ export async function updateItem(
     widthInches: "WidthInches",
     heightInches: "HeightInches",
     depthInches: "DepthInches",
+    // Shipping weight
+    weightPounds: "WeightPounds",
+    weightOunces: "WeightOunces",
     estateSaleId: "EstateSaleId",
     // Pay tracking
     commissionPaidAt: "CommissionPaidAt",
@@ -843,6 +848,8 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     widthInches: f["WidthInches"] != null ? toNum(f["WidthInches"]) : undefined,
     heightInches: f["HeightInches"] != null ? toNum(f["HeightInches"]) : undefined,
     depthInches: f["DepthInches"] != null ? toNum(f["DepthInches"]) : undefined,
+    weightPounds: f["WeightPounds"] != null ? toNum(f["WeightPounds"]) : undefined,
+    weightOunces: f["WeightOunces"] != null ? toNum(f["WeightOunces"]) : undefined,
     estateSaleId: toStr(f["EstateSaleId"]) || undefined,
     commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
     priceDropOriginalValue: f["PriceDropOriginalValue"] != null ? (toNum(f["PriceDropOriginalValue"]) || undefined) : undefined,

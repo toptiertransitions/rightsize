@@ -67,6 +67,8 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
   const [widthInches, setWidthInches] = useState<string>("");
   const [heightInches, setHeightInches] = useState<string>("");
   const [depthInches, setDepthInches] = useState<string>("");
+  const [weightPounds, setWeightPounds] = useState<string>("");
+  const [weightOunces, setWeightOunces] = useState<string>("");
   const [brand, setBrand] = useState<string>("");
   const [error, setError] = useState<string>("");
   useEffect(() => {
@@ -257,6 +259,8 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
           widthInches: widthInches !== "" ? Number(widthInches) : undefined,
           heightInches: heightInches !== "" ? Number(heightInches) : undefined,
           depthInches: depthInches !== "" ? Number(depthInches) : undefined,
+          weightPounds: weightPounds !== "" ? Number(weightPounds) : undefined,
+          weightOunces: weightOunces !== "" ? Number(weightOunces) : undefined,
         }),
       });
       if (!res.ok) {
@@ -684,7 +688,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Dimensions (optional, inches)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Dimensions / Box Size (optional, inches)</label>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <input
@@ -721,6 +725,38 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                         className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
                       />
                       <p className="text-xs text-gray-400 mt-1 text-center">D</p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Shipping Weight (optional)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="0"
+                        min={0}
+                        value={weightPounds}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setWeightPounds(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">Pounds</p>
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="0"
+                        min={0}
+                        max={15}
+                        value={weightOunces}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setWeightOunces(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-400 mt-1 text-center">Ounces</p>
                     </div>
                   </div>
                 </div>

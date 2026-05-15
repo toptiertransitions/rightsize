@@ -120,6 +120,8 @@ export async function POST(req: NextRequest) {
       widthInches: body.widthInches != null ? Number(body.widthInches) : undefined,
       heightInches: body.heightInches != null ? Number(body.heightInches) : undefined,
       depthInches: body.depthInches != null ? Number(body.depthInches) : undefined,
+      weightPounds: body.weightPounds != null ? Number(body.weightPounds) : undefined,
+      weightOunces: body.weightOunces != null ? Number(body.weightOunces) : undefined,
     });
     return NextResponse.json({ item });
   } catch (e: unknown) {
