@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import VoiceLogTab from "./VoiceLogTab";
+import TasksTab from "./TasksTab";
 
 const CRMActivityCharts = dynamic(() => import("./CRMActivityCharts"), { ssr: false });
 import { cn } from "@/lib/utils";
@@ -42,7 +43,7 @@ function parseCSV(text: string): Record<string, string>[] {
   }).filter(row => Object.values(row).some(v => v.trim()));
 }
 
-type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "voice" | "activity" | "settings";
+type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "voice" | "activity" | "settings";
 
 interface CRMClientProps {
   opportunities: ClientOpportunity[];
@@ -172,6 +173,7 @@ function ActivityEditModal({
 function OpportunitiesTab({
   initialOpportunities,
   clientContacts,
+  referralContacts,
   staffMembers,
   gmailConnected,
   tenants,
@@ -182,6 +184,7 @@ function OpportunitiesTab({
 }: {
   initialOpportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
+  referralContacts: ReferralContact[];
   staffMembers: StaffMember[];
   gmailConnected: boolean;
   tenants: Tenant[];
@@ -237,6 +240,15 @@ function OpportunitiesTab({
 
   function getContactName(id: string) {
     return clientContacts.find((c) => c.id === id)?.name || id;
+  }
+
+  function getSourceLabel(opp: ClientOpportunity): string {
+    const cc = clientContacts.find(c => c.id === opp.clientContactId);
+    if (cc?.referralPartnerId) {
+      const rc = referralContacts.find(r => r.id === cc.referralPartnerId);
+      if (rc) return rc.name;
+    }
+    return cc?.source || "—";
   }
 
   function exportCsv() {
@@ -348,6 +360,8 @@ function OpportunitiesTab({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Town</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Source</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Owner</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Stage</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Est. Value</th>
@@ -358,7 +372,7 @@ function OpportunitiesTab({
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center py-10 text-gray-400">
+                <td colSpan={8} className="text-center py-10 text-gray-400">
                   No opportunities found
                 </td>
               </tr>
@@ -368,6 +382,8 @@ function OpportunitiesTab({
               return (
               <tr key={opp.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(opp)}>
                 <td className="px-4 py-3 font-medium text-gray-900">{getContactName(opp.clientContactId)}</td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{opp.city || <span className="text-gray-400">—</span>}</td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{getSourceLabel(opp)}</td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ownerName || <span className="text-gray-400">—</span>}</td>
                 <td className="px-4 py-3">
                   <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", STAGE_COLORS[opp.stage])}>
@@ -4637,6 +4653,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     { key: "opportunities", label: "Opportunities" },
     { key: "contacts", label: "Clients" },
     { key: "referrals", label: "Referral Partners" },
+    { key: "tasks", label: "Tasks" },
     { key: "voice", label: "Log with Voice" },
     { key: "activity", label: "Activity Log" },
     { key: "settings", label: "Settings" },
@@ -4684,6 +4701,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           key={oppTabKey}
           initialOpportunities={opportunities}
           clientContacts={localContacts}
+          referralContacts={referralContacts}
           staffMembers={staffMembers}
           gmailConnected={gmailConnected}
           tenants={tenants}
@@ -4715,6 +4733,9 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           initialContactStage={refInitialContactStage}
           initialType={refInitialType}
         />
+      )}
+      {tab === "tasks" && (
+        <TasksTab referralContacts={referralContacts} companies={companies} />
       )}
       {tab === "voice" && (
         <VoiceLogTab referralContacts={referralContacts} companies={companies} />

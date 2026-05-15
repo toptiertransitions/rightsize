@@ -89,6 +89,7 @@ export async function POST(
       await resend.emails.send({
         from: "ProFound Finds <orders@profoundfinds.com>",
         to: buyerEmail,
+        cc: ["info@profoundfinds.com"],
         subject,
         html,
       });
