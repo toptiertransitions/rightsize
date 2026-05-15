@@ -171,6 +171,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     widthInches: item.widthInches,
     heightInches: item.heightInches,
     depthInches: item.depthInches,
+    weightPounds: item.weightPounds,
+    weightOunces: item.weightOunces,
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -693,7 +695,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               />
             </div>
             <div>
-              <label className={labelClass}>Dimensions (optional, inches)</label>
+              <label className={labelClass}>Dimensions / Box Size (optional, inches)</label>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <input
@@ -730,6 +732,38 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-400 mt-1 text-center">D</p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Shipping Weight (optional)</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0"
+                    min={0}
+                    value={form.weightPounds ?? ""}
+                    onFocus={e => e.target.select()}
+                    onChange={e => set("weightPounds", e.target.value === "" ? undefined : Number(e.target.value))}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">Pounds</p>
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0"
+                    min={0}
+                    max={15}
+                    value={form.weightOunces ?? ""}
+                    onFocus={e => e.target.select()}
+                    onChange={e => set("weightOunces", e.target.value === "" ? undefined : Number(e.target.value))}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">Ounces</p>
                 </div>
               </div>
             </div>
