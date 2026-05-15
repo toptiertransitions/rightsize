@@ -1483,9 +1483,22 @@ export function buildReferralPipelineEmail({
     if (row.priority === "Low") lowByStage.get(stage)!.push(row);
     else hmByStage.get(stage)!.push(row);
   }
-  // Within high/medium groups, High sorts before Medium
+  // Within each stage group: High before Medium, then company name alpha, then contact name alpha
+  const sortRows = (a: ReferralPipelineRow, b: ReferralPipelineRow) => {
+    const pa = a.priority === "High" ? 0 : 1;
+    const pb = b.priority === "High" ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    const cc = a.companyName.localeCompare(b.companyName);
+    if (cc !== 0) return cc;
+    return a.contactName.localeCompare(b.contactName);
+  };
   for (const stage of STAGE_ORDER) {
-    hmByStage.get(stage)!.sort((a, b) => (a.priority === "High" ? 0 : 1) - (b.priority === "High" ? 0 : 1));
+    hmByStage.get(stage)!.sort(sortRows);
+    lowByStage.get(stage)!.sort((a, b) => {
+      const cc = a.companyName.localeCompare(b.companyName);
+      if (cc !== 0) return cc;
+      return a.contactName.localeCompare(b.contactName);
+    });
   }
 
   const totalHM = STAGE_ORDER.reduce((s, st) => s + hmByStage.get(st)!.length, 0);

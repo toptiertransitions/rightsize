@@ -110,14 +110,17 @@ export async function POST() {
     };
   });
 
-  // Sort: priority (High → Medium → Low → other), then Won Value desc, then Referred Count desc
+  // Sort: priority (High → Medium → Low → other), then Won Value desc, then Referred Count desc, then company name alpha, then contact name alpha
   const priorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
   rows.sort((a, b) => {
     const pa = priorityOrder[a.priority] ?? 3;
     const pb = priorityOrder[b.priority] ?? 3;
     if (pa !== pb) return pa - pb;
     if (b.wonValue !== a.wonValue) return b.wonValue - a.wonValue;
-    return b.totalReferred - a.totalReferred;
+    if (b.totalReferred !== a.totalReferred) return b.totalReferred - a.totalReferred;
+    const cc = a.companyName.localeCompare(b.companyName);
+    if (cc !== 0) return cc;
+    return a.contactName.localeCompare(b.contactName);
   });
 
   const generatedAt = new Date().toLocaleString("en-US", {
