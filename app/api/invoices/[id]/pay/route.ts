@@ -39,7 +39,7 @@ export async function POST(
   if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   if (invoice.status === "Paid") return NextResponse.json({ error: "This invoice has already been paid." }, { status: 400 });
 
-  const fluidpayUrl = process.env.FLUIDPAY_URL || "https://sandbox.fluidpay.com";
+  const fluidpayUrl = process.env.FLUIDPAY_URL || "https://app.fluidpay.com";
   const fluidpayApiKey = process.env.FLUIDPAY_API_KEY;
   if (!fluidpayApiKey) {
     console.error("[pay] FLUIDPAY_API_KEY not configured");

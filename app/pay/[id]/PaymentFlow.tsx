@@ -56,7 +56,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 
 export function PaymentFlow({
   invoiceId, invoiceNumber, amount, companyName, prefillEmail = "",
-  fluidpayPublicKey = "", fluidpayBaseUrl = "https://sandbox.fluidpay.com",
+  fluidpayPublicKey = "", fluidpayBaseUrl = "https://app.fluidpay.com",
 }: Props) {
   const [step, setStep] = useState<Step>("select");
   const [errorMsg, setErrorMsg] = useState("");
