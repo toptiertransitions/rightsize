@@ -142,6 +142,7 @@ export interface Tenant {
   priceDrop1Percent?: number;
   priceDrop2Days?: number;
   priceDrop2Percent?: number;
+  quotePhotos?: ItemPhoto[];
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { EstimatorSection } from "@/app/(protected)/rooms/EstimatorSection";
 import { AddRoomButton } from "@/app/(protected)/rooms/RoomsClient";
-import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus } from "@/lib/types";
+import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus, ItemPhoto } from "@/lib/types";
 import { ROOM_TYPES } from "@/lib/types";
 
 interface Props {
@@ -862,6 +862,203 @@ function HoursComparison({ signedContracts, timeEntries }: { signedContracts: Co
   );
 }
 
+// ─── Quote Photos Section ─────────────────────────────────────────────────────
+function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; initialPhotos: ItemPhoto[] }) {
+  const [photos, setPhotos] = useState<ItemPhoto[]>(initialPhotos);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMsg, setEmailMsg] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("tenantId", tenantId);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+        const { photoUrl, photoPublicId } = await uploadRes.json();
+        const saveRes = await fetch(`/api/quoting/${tenantId}/photos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: photoUrl, publicId: photoPublicId }),
+        });
+        if (!saveRes.ok) throw new Error("Failed to save photo");
+        const { photos: updated } = await saveRes.json();
+        setPhotos(updated);
+      }
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function handleDelete(publicId: string) {
+    setDeletingId(publicId);
+    try {
+      const res = await fetch(`/api/quoting/${tenantId}/photos`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicId }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const { photos: updated } = await res.json();
+      setPhotos(updated);
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
+
+  async function handleEmailInfo() {
+    setEmailSending(true);
+    setEmailMsg("");
+    try {
+      const res = await fetch(`/api/quoting/${tenantId}/email-info`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to send email");
+      }
+      setEmailMsg("Email sent to your inbox!");
+    } catch (e) {
+      setEmailMsg(e instanceof Error ? e.message : "Failed to send. Please try again.");
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-12 pb-8">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Pictures from Quote</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Photos from this quoting visit — stored on this project</p>
+        </div>
+        <button
+          onClick={handleEmailInfo}
+          disabled={emailSending}
+          className="flex items-center gap-2 shrink-0 text-sm font-medium px-4 py-2 rounded-xl bg-forest-600 text-white hover:bg-forest-700 transition-colors disabled:opacity-50"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          {emailSending ? "Sending…" : "Email Me Images/Info"}
+        </button>
+      </div>
+
+      {emailMsg && (
+        <div className={cn(
+          "mb-4 text-sm px-3 py-2 rounded-lg border",
+          emailMsg.includes("sent") ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"
+        )}>
+          {emailMsg}
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="mb-4 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-600 border-red-200">
+          {uploadError}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {photos.map((photo) => (
+          <div
+            key={photo.publicId}
+            className="relative group aspect-square rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer shadow-sm hover:shadow-md transition-shadow"
+            onClick={() => setLightbox(photo.url)}
+          >
+            <img
+              src={photo.url}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(photo.publicId); }}
+              disabled={deletingId === photo.publicId}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-sm font-bold disabled:opacity-40"
+              title="Remove photo"
+            >
+              {deletingId === photo.publicId ? (
+                <span className="w-3 h-3 border border-white/60 border-t-transparent rounded-full animate-spin block" />
+              ) : "×"}
+            </button>
+          </div>
+        ))}
+
+        {/* Upload tile */}
+        <label
+          className={cn(
+            "aspect-square rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2 shadow-sm",
+            uploading
+              ? "border-forest-300 bg-forest-50/50 cursor-wait"
+              : "border-gray-200 bg-gray-50/50 hover:border-forest-300 hover:bg-forest-50 hover:shadow-md"
+          )}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,.heic,.heif"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+            disabled={uploading}
+          />
+          {uploading ? (
+            <>
+              <div className="w-6 h-6 border-2 border-forest-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-forest-600 font-medium">Uploading…</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-xs text-gray-500 text-center px-3 leading-tight">
+                Take photo or<br />upload image
+              </span>
+            </>
+          )}
+        </label>
+      </div>
+
+      {photos.length === 0 && !uploading && (
+        <p className="mt-3 text-xs text-gray-400">No photos yet. Tap the tile above to add photos from your camera or library.</p>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <img
+            src={lightbox}
+            alt=""
+            className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xl font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Client ──────────────────────────────────────────────────────────────
 export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices }: Props) {
   const [mode, setMode] = useState<Mode>("quick");
@@ -1298,6 +1495,14 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
           />
         </div>
       )}
+
+      {/* ─── Pictures from Quote ──────────────────────────────────────────────── */}
+      <div className="border-t border-gray-100 mt-12">
+        <QuotePhotosSection
+          tenantId={tenant.id}
+          initialPhotos={tenant.quotePhotos ?? []}
+        />
+      </div>
     </div>
   );
 }
