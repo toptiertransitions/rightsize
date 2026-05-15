@@ -2025,6 +2025,7 @@ export function buildQuoteInfoEmail({
   destinationSqFt,
   totalRoomSqFt,
   opportunityNotes,
+  estimate,
   photos,
 }: {
   recipientName: string;
@@ -2035,16 +2036,22 @@ export function buildQuoteInfoEmail({
   destinationSqFt?: number;
   totalRoomSqFt?: number;
   opportunityNotes?: string;
+  estimate?: {
+    status: string;
+    lineItems: { serviceName: string; hours: number; rate: number }[];
+    totalCost: number;
+  };
   photos: { url: string; publicId: string }[];
 }): string {
+  const fmtDollar = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const cityState = [city, state].filter(Boolean).join(", ");
   const fullLocation = [address, cityState].filter(Boolean).join(", ");
 
-  const sqFtLine = (() => {
-    const parts: string[] = [];
-    if (totalRoomSqFt) parts.push(`${totalRoomSqFt.toLocaleString()} SF across rooms`);
-    if (destinationSqFt) parts.push(`${destinationSqFt.toLocaleString()} SF destination`);
-    return parts.join(" &nbsp;&middot;&nbsp; ");
+  const sqFtRows = (() => {
+    const rows: string[] = [];
+    if (totalRoomSqFt) rows.push(`<tr><td style="padding:3px 0;font-size:13px;color:#6b7280;width:110px;">Origin</td><td style="padding:3px 0;font-size:13px;color:#374151;font-weight:600;">${totalRoomSqFt.toLocaleString()} SF</td></tr>`);
+    if (destinationSqFt) rows.push(`<tr><td style="padding:3px 0;font-size:13px;color:#6b7280;">Destination</td><td style="padding:3px 0;font-size:13px;color:#374151;font-weight:600;">${destinationSqFt.toLocaleString()} SF</td></tr>`);
+    return rows.join("");
   })();
 
   const photoRows = (() => {
@@ -2104,12 +2111,53 @@ export function buildQuoteInfoEmail({
                 </tr>
                 <tr>
                   <td style="padding:16px;">
-                    <p style="margin:0 0 6px;font-size:16px;font-weight:bold;color:#111827;">${tenantName}</p>
-                    ${fullLocation ? `<p style="margin:0 0 6px;font-size:14px;color:#6b7280;">${fullLocation}</p>` : ""}
-                    ${sqFtLine ? `<p style="margin:0;font-size:13px;color:#9ca3af;">${sqFtLine}</p>` : ""}
+                    <p style="margin:0 0 8px;font-size:16px;font-weight:bold;color:#111827;">${tenantName}</p>
+                    ${fullLocation ? `<p style="margin:0 0 10px;font-size:14px;color:#6b7280;">${fullLocation}</p>` : ""}
+                    ${sqFtRows ? `<table cellpadding="0" cellspacing="0" style="margin:0;">${sqFtRows}</table>` : ""}
                   </td>
                 </tr>
               </table>
+
+              ${estimate && estimate.lineItems.length > 0 ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#f9fafb;padding:12px 16px;border-bottom:1px solid #e5e7eb;">
+                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                      <td><p style="margin:0;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Estimate</p></td>
+                      <td style="text-align:right;"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:9999px;${estimate.status === "Signed" ? "background:#dcfce7;color:#166534;" : estimate.status === "Sent" ? "background:#dbeafe;color:#1e40af;" : "background:#f3f4f6;color:#6b7280;"}">${estimate.status}</span></td>
+                    </tr></table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <thead>
+                        <tr style="background-color:#f9fafb;border-bottom:1px solid #e5e7eb;">
+                          <th style="padding:8px 16px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Service</th>
+                          <th style="padding:8px 16px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;white-space:nowrap;">Hours</th>
+                          <th style="padding:8px 16px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;white-space:nowrap;">Rate</th>
+                          <th style="padding:8px 16px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;white-space:nowrap;">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${estimate.lineItems.map((li, i) => `
+                        <tr style="${i % 2 === 1 ? "background-color:#f9fafb;" : ""}border-bottom:1px solid #f3f4f6;">
+                          <td style="padding:10px 16px;font-size:13px;color:#374151;">${li.serviceName}</td>
+                          <td style="padding:10px 16px;font-size:13px;color:#374151;text-align:right;white-space:nowrap;">${li.hours} hrs</td>
+                          <td style="padding:10px 16px;font-size:13px;color:#9ca3af;text-align:right;white-space:nowrap;">${fmtDollar(li.rate)}/hr</td>
+                          <td style="padding:10px 16px;font-size:13px;color:#374151;font-weight:500;text-align:right;white-space:nowrap;">${fmtDollar(li.hours * li.rate)}</td>
+                        </tr>`).join("")}
+                      </tbody>
+                      <tfoot>
+                        <tr style="background-color:#f0fdf4;border-top:2px solid #2E6B4F;">
+                          <td colspan="3" style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;">Total</td>
+                          <td style="padding:12px 16px;font-size:15px;font-weight:bold;color:#2E6B4F;text-align:right;white-space:nowrap;">${fmtDollar(estimate.totalCost)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </td>
+                </tr>
+              </table>` : ""}
 
               ${opportunityNotes ? `
               <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">

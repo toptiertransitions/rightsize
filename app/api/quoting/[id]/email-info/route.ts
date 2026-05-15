@@ -9,6 +9,7 @@ import {
   getTenantById,
   getRoomsForTenant,
   getOpportunitiesForTenant,
+  getContractsForTenant,
 } from "@/lib/airtable";
 import { buildQuoteInfoEmail } from "@/lib/email";
 
@@ -28,10 +29,11 @@ export async function POST(
 
   const { id } = await params;
 
-  const [tenant, rooms, opportunities] = await Promise.all([
+  const [tenant, rooms, opportunities, contracts] = await Promise.all([
     getTenantById(id).catch(() => null),
     getRoomsForTenant(id).catch(() => []),
     getOpportunitiesForTenant(id).catch(() => []),
+    getContractsForTenant(id).catch(() => []),
   ]);
 
   if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -53,6 +55,25 @@ export async function POST(
     .filter(Boolean)
     .join("\n\n");
 
+  // Pick best contract: Signed first, then most recent non-Archived by createdAt
+  const activeContracts = contracts.filter((c) => c.status !== "Archived");
+  const bestContract =
+    activeContracts.find((c) => c.status === "Signed") ??
+    activeContracts.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ??
+    null;
+
+  const estimate = bestContract
+    ? {
+        status: bestContract.status,
+        lineItems: (bestContract.lineItems ?? []).map((li) => ({
+          serviceName: li.serviceName,
+          hours: li.hours,
+          rate: li.rate,
+        })),
+        totalCost: bestContract.totalCost,
+      }
+    : undefined;
+
   const html = buildQuoteInfoEmail({
     recipientName,
     tenantName: tenant.name,
@@ -62,6 +83,7 @@ export async function POST(
     destinationSqFt: tenant.destinationSqFt,
     totalRoomSqFt: totalRoomSqFt > 0 ? totalRoomSqFt : undefined,
     opportunityNotes: oppNotes || undefined,
+    estimate,
     photos: tenant.quotePhotos ?? [],
   });
 
