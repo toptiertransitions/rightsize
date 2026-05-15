@@ -43,20 +43,6 @@ function Field({
   );
 }
 
-// Wrapper that looks like our Field but contains a FluidPay iframe
-function IframeField({ label, id }: { label: string; id: string }) {
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
-      <div
-        id={id}
-        className="w-full border border-gray-300 rounded-lg px-3 text-sm"
-        style={{ minHeight: "42px", display: "flex", alignItems: "center" }}
-      />
-    </div>
-  );
-}
-
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 mb-5 transition-colors">
@@ -83,8 +69,6 @@ export function PaymentFlow({
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState(prefillEmail);
   const [phone, setPhone] = useState("");
-
-  // Card billing
   const [zipCode, setZipCode] = useState("");
 
   // ACH fields
@@ -92,83 +76,97 @@ export function PaymentFlow({
   const [accountNumber, setAccountNumber] = useState("");
   const [accountType, setAccountType] = useState<"checking" | "savings">("checking");
 
-  // Token promise refs — wired up to PayFields callbacks
+  // FluidPay Tokenizer instance + token promise refs
+  const tokenizerRef = useRef<any>(null);
   const tokenResolveRef = useRef<((t: string) => void) | null>(null);
   const tokenRejectRef = useRef<((e: Error) => void) | null>(null);
 
-  // Load and initialize FluidPay Pay Fields when card form is shown
   useEffect(() => {
     if (step !== "card_form") return;
 
     setFpReady(false);
     setFpLoadError("");
+    tokenizerRef.current = null;
 
     if (!fluidpayPublicKey) {
       setFpLoadError("Payment fields are not configured. Please contact your coordinator.");
       return;
     }
 
-    function initPayFields() {
-      const PF = (window as any).PayFields;
-      if (!PF) {
+    function initTokenizer() {
+      const TokClass = (window as any).Tokenizer;
+      if (!TokClass) {
         setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
         return;
       }
 
       try {
-        PF.config.apiKey = fluidpayPublicKey;
-        PF.config.onSuccess = (resp: any) => {
-          const token = resp?.token ?? resp?.data?.token;
-          if (token) {
-            tokenResolveRef.current?.(token);
-          } else {
-            tokenRejectRef.current?.(new Error("No token returned. Please try again."));
-          }
-          tokenResolveRef.current = null;
-          tokenRejectRef.current = null;
-        };
-        PF.config.onError = (errors: any) => {
-          const msg = Array.isArray(errors)
-            ? errors.map((e: any) => (typeof e === "string" ? e : e?.message || JSON.stringify(e))).join(", ")
-            : (typeof errors === "string" ? errors : "Card tokenization failed. Please check your details.");
-          tokenRejectRef.current?.(new Error(msg));
-          tokenResolveRef.current = null;
-          tokenRejectRef.current = null;
-        };
-
-        PF.appendTo("#fp-card-number", "number");
-        PF.appendTo("#fp-card-expiry", "expiry");
-        PF.appendTo("#fp-card-cvv", "cvv");
-        setFpReady(true);
+        tokenizerRef.current = new TokClass({
+          url: fluidpayBaseUrl,
+          apikey: fluidpayPublicKey,
+          container: "#fp-tokenizer-container",
+          onLoad: () => setFpReady(true),
+          submission: (resp: any) => {
+            if (resp.status === "success") {
+              tokenResolveRef.current?.(resp.token);
+            } else if (resp.status === "validation") {
+              const fields = Array.isArray(resp.invalid) ? resp.invalid.join(", ") : "card details";
+              tokenRejectRef.current?.(new Error(`Please check your ${fields}.`));
+            } else {
+              tokenRejectRef.current?.(new Error(resp.msg || "Card tokenization failed. Please try again."));
+            }
+            tokenResolveRef.current = null;
+            tokenRejectRef.current = null;
+          },
+          settings: {
+            payment: {
+              types: ["card"],
+              card: { requireCVV: true, mask_number: true },
+            },
+            styles: {
+              input: {
+                border: "1px solid #d1d5db",
+                "border-radius": "0.5rem",
+                padding: "10px 12px",
+                "font-size": "14px",
+                color: "#111827",
+              },
+              "input:focus": {
+                "border-color": "#2E6B4F",
+                outline: "none",
+                "box-shadow": "0 0 0 2px rgba(46,107,79,0.2)",
+              },
+            },
+          },
+        });
       } catch (e) {
-        console.error("[PayFields] init error:", e);
+        console.error("[Tokenizer] init error:", e);
         setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
       }
     }
 
-    // 15-second timeout — if fpReady never fires, surface an error
     const loadTimeout = setTimeout(() => {
-      if (!(window as any).PayFields) {
-        setFpLoadError("Payment fields timed out loading. Please check your connection and refresh.");
+      if (!(window as any).Tokenizer) {
+        setFpLoadError("Payment fields timed out. Please check your connection and refresh.");
       }
     }, 15_000);
 
-    const scriptId = "fluidpay-pay-fields-js";
+    const scriptId = "fluidpay-tokenizer-js";
     if (document.getElementById(scriptId)) {
       clearTimeout(loadTimeout);
-      initPayFields();
+      initTokenizer();
       return;
     }
 
     const script = document.createElement("script");
     script.id = scriptId;
-    script.src = `${fluidpayBaseUrl}/tokenizer/pay-fields.js`;
+    script.src = `${fluidpayBaseUrl}/tokenizer/tokenizer.js`;
     script.async = true;
-    script.onload = () => { clearTimeout(loadTimeout); initPayFields(); };
+    script.onload = () => { clearTimeout(loadTimeout); initTokenizer(); };
     script.onerror = () => {
       clearTimeout(loadTimeout);
-      console.error("[PayFields] script failed to load from:", script.src);
-      setFpLoadError(`Failed to load payment fields from ${fluidpayBaseUrl}. Please refresh and try again.`);
+      console.error("[Tokenizer] script failed to load:", script.src);
+      setFpLoadError("Failed to load secure payment fields. Please refresh and try again.");
     };
     document.head.appendChild(script);
 
@@ -179,7 +177,7 @@ export function PaymentFlow({
     return new Promise((resolve, reject) => {
       tokenResolveRef.current = resolve;
       tokenRejectRef.current = reject;
-      (window as any).PayFields?.getToken();
+      tokenizerRef.current?.submit();
     });
   }
 
@@ -187,6 +185,7 @@ export function PaymentFlow({
     setStep("select");
     setErrorMsg("");
     setFpReady(false);
+    setFpLoadError("");
   }
 
   async function submit(method: "credit_card" | "ach") {
@@ -223,10 +222,8 @@ export function PaymentFlow({
           lastName: lastName.trim(),
           email: email.trim(),
           phone: phone.trim() || undefined,
-          // Card: token from FluidPay tokenizer
           token: method === "credit_card" ? token : undefined,
           zipCode: method === "credit_card" ? zipCode.trim() || undefined : undefined,
-          // ACH: direct fields
           routingNumber: method === "ach" ? routingNumber : undefined,
           accountNumber: method === "ach" ? accountNumber : undefined,
           accountType: method === "ach" ? accountType : undefined,
@@ -295,7 +292,7 @@ export function PaymentFlow({
     );
   }
 
-  // ── Credit / Debit Card form (tokenizer) ──────────────────────────────────
+  // ── Credit / Debit Card form ──────────────────────────────────────────────
   if (step === "card_form") {
     return (
       <div className="space-y-4">
@@ -307,29 +304,21 @@ export function PaymentFlow({
           <Field label="Last Name" value={lastName} onChange={setLastName} placeholder="Smith" />
         </div>
 
-        {/* FluidPay tokenizer iframes */}
         {!fpReady && !fpLoadError && (
           <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
             <div className="w-4 h-4 border-2 border-gray-300 border-t-[#2E6B4F] rounded-full animate-spin" />
             Loading secure card fields…
           </div>
         )}
-        {fpLoadError && (
-          <p className="text-sm text-red-600 py-2">{fpLoadError}</p>
-        )}
-        <div style={{ display: fpReady ? undefined : "none" }}>
-          <IframeField label="Card Number" id="fp-card-number" />
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            <IframeField label="Expiration (MM/YY)" id="fp-card-expiry" />
-            <IframeField label="CVC" id="fp-card-cvv" />
-          </div>
-        </div>
+        {fpLoadError && <p className="text-sm text-red-600 py-2">{fpLoadError}</p>}
+
+        {/* FluidPay Tokenizer renders card fields here */}
+        <div id="fp-tokenizer-container" style={{ display: fpReady ? undefined : "none" }} />
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Billing Zip Code" value={zipCode} onChange={v => setZipCode(v.replace(/\D/g, "").slice(0, 5))} placeholder="60601" inputMode="numeric" maxLength={5} />
           <Field label="Phone (optional)" value={phone} onChange={setPhone} type="tel" placeholder="3125551234" />
         </div>
-
         <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="jane@example.com" />
 
         {errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
@@ -365,16 +354,10 @@ export function PaymentFlow({
           <label className="block text-xs font-semibold text-gray-600 mb-1.5">Account Type</label>
           <div className="flex gap-2">
             {(["checking", "savings"] as const).map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setAccountType(t)}
+              <button key={t} type="button" onClick={() => setAccountType(t)}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-medium border-2 transition-colors ${
-                  accountType === t
-                    ? "border-[#2E6B4F] bg-[#f0fdf4] text-[#2E6B4F]"
-                    : "border-gray-200 text-gray-500 hover:border-gray-300"
-                }`}
-              >
+                  accountType === t ? "border-[#2E6B4F] bg-[#f0fdf4] text-[#2E6B4F]" : "border-gray-200 text-gray-500 hover:border-gray-300"
+                }`}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
@@ -417,9 +400,7 @@ export function PaymentFlow({
           </svg>
         </div>
         <div>
-          <p className="text-base font-bold text-gray-900">
-            {isCheckPayment ? "Got it!" : "Payment Received!"}
-          </p>
+          <p className="text-base font-bold text-gray-900">{isCheckPayment ? "Got it!" : "Payment Received!"}</p>
           <p className="text-sm text-gray-500 mt-1 leading-relaxed max-w-xs mx-auto">
             {isCheckPayment
               ? `Please bring your check payable to ${companyName} to your next appointment.`

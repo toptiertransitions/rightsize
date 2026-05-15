@@ -67,7 +67,7 @@ export async function POST(
       return NextResponse.json({ error: "Missing payment token" }, { status: 400 });
     }
     paymentMethodBody = {
-      token: { value: body.token },
+      token: body.token,
     };
   } else {
     if (!body.routingNumber || !body.accountNumber || !body.accountType) {
