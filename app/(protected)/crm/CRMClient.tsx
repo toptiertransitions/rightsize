@@ -1879,6 +1879,8 @@ function ReferralPartnersTab({
   const [companySearch, setCompanySearch] = useState("");
   const [companySearchOpen, setCompanySearchOpen] = useState(false);
   const [activityContact, setActivityContact] = useState<{ id: string; name: string; email?: string } | null>(null);
+  const [nextStepContact, setNextStepContact] = useState<{ id: string; name: string; companyId: string; nextStepDate: string; nextStepNote: string } | null>(null);
+  const [nextStepSaving, setNextStepSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [csvType, setCsvType] = useState<"companies" | "contacts" | null>(null);
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[] | null>(null);
@@ -1911,6 +1913,29 @@ function ReferralPartnersTab({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: contactId, lastActivityDate: dateStr }),
     }).catch(() => {});
+  }
+
+  async function saveNextStep() {
+    if (!nextStepContact) return;
+    setNextStepSaving(true);
+    try {
+      const res = await fetch("/api/crm/contacts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: nextStepContact.id, nextStepDate: nextStepContact.nextStepDate, nextStepNote: nextStepContact.nextStepNote }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const { companyId } = nextStepContact;
+        setContacts((prev) => {
+          const base = prev[companyId] ?? initialReferralContacts.filter(rc => rc.referralCompanyId === companyId);
+          return { ...prev, [companyId]: base.map((c) => (c.id === nextStepContact.id ? data.contact : c)) };
+        });
+        setNextStepContact(null);
+      }
+    } finally {
+      setNextStepSaving(false);
+    }
   }
 
   async function handleSyncActivityDates() {
@@ -2528,6 +2553,13 @@ function ReferralPartnersTab({
                           <td className="py-1.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
+                                onClick={() => setNextStepContact({ id: c.id, name: c.name, companyId: company.id, nextStepDate: c.nextStepDate || "", nextStepNote: c.nextStepNote || "" })}
+                                className="text-xs px-2 py-0.5 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
+                                title="Set next step"
+                              >
+                                Next Step
+                              </button>
+                              <button
                                 onClick={() => setActivityContact({ id: c.id, name: c.name, email: c.email || undefined })}
                                 className="text-xs px-2 py-0.5 rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors"
                               >
@@ -2813,6 +2845,57 @@ function ReferralPartnersTab({
               <button onClick={() => setContactModal(null)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
               <button onClick={saveContact} disabled={saving || !contactForm.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
                 {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Next Step modal */}
+      {nextStepContact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setNextStepContact(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Next Step</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{nextStepContact.name}</p>
+              </div>
+              <button onClick={() => setNextStepContact(null)} className="w-7 h-7 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors text-lg">×</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Date</label>
+                <input
+                  type="date"
+                  value={nextStepContact.nextStepDate}
+                  onChange={(e) => setNextStepContact((s) => s ? { ...s, nextStepDate: e.target.value } : s)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Note</label>
+                <textarea
+                  rows={3}
+                  value={nextStepContact.nextStepNote}
+                  onChange={(e) => setNextStepContact((s) => s ? { ...s, nextStepNote: e.target.value } : s)}
+                  placeholder="What's the next step?"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={saveNextStep}
+                disabled={nextStepSaving}
+                className="flex-1 h-9 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {nextStepSaving ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => setNextStepContact(null)}
+                className="h-9 px-4 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
