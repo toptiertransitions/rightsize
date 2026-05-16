@@ -5,6 +5,7 @@ import { getTenants } from "@/lib/airtable";
 import { CircleHandClient } from "./CircleHandClient";
 import { CRMImportClient } from "./CRMImportClient";
 import { ItemImportClient } from "../../items/ItemImportClient";
+import { VendorImportClient } from "./VendorImportClient";
 import { AdminHeader } from "../../components/AdminHeader";
 
 export default async function CircleHandPage() {
@@ -39,6 +40,13 @@ export default async function CircleHandPage() {
           <h2 className="text-lg font-semibold text-white mb-1">CRM Imports</h2>
           <p className="text-gray-500 text-sm mb-5">Import Referral Companies, Referral Contacts, or Client Contacts from CSV.</p>
           <CRMImportClient />
+        </section>
+
+        {/* ── Vendor Directory Import ── */}
+        <section className="mb-12">
+          <h2 className="text-lg font-semibold text-white mb-1">Vendor Directory Import</h2>
+          <p className="text-gray-500 text-sm mb-5">Bulk-import vendors into the Local Vendor Directory. Download the template to see required and optional fields.</p>
+          <VendorImportClient />
         </section>
 
         {/* ── Item Import ── */}
