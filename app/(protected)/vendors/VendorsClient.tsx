@@ -416,15 +416,33 @@ function LocalVendorDirectory({
 }) {
   const [sortCol, setSortCol] = useState<string>("vendorType");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [nameQ, setNameQ] = useState("");
+  const [cityQ, setCityQ] = useState("");
+  const [catQ, setCatQ] = useState("");
+  const [typeQ, setTypeQ] = useState<VendorType | "">("");
 
   if (vendors.length === 0) return null;
+
+  const hasFilters = nameQ || cityQ || catQ || typeQ;
+
+  const clearFilters = () => {
+    setNameQ(""); setCityQ(""); setCatQ(""); setTypeQ("");
+  };
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortCol(col); setSortDir("asc"); }
   };
 
-  const displayVendors = [...vendors].sort((a, b) => {
+  const filtered = vendors.filter(v => {
+    if (nameQ && !v.vendorName.toLowerCase().includes(nameQ.toLowerCase())) return false;
+    if (cityQ && !`${v.city} ${v.state}`.toLowerCase().includes(cityQ.toLowerCase())) return false;
+    if (catQ && !v.itemCategories.toLowerCase().includes(catQ.toLowerCase())) return false;
+    if (typeQ && v.vendorType !== typeQ) return false;
+    return true;
+  });
+
+  const displayVendors = [...filtered].sort((a, b) => {
     let av: string | number = "";
     let bv: string | number = "";
     switch (sortCol) {
@@ -457,28 +475,107 @@ function LocalVendorDirectory({
 
   return (
     <div className="mt-10">
+      {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <h2 className="text-lg font-bold text-gray-900">Local Vendor Directory</h2>
         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">Managed by TTT</span>
+        {hasFilters && (
+          <span className="text-xs text-gray-500 ml-1">
+            {displayVendors.length} of {vendors.length} shown
+          </span>
+        )}
       </div>
+
+      {/* Search / filter bar */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {/* Name */}
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Name"
+            value={nameQ}
+            onChange={e => setNameQ(e.target.value)}
+            className="h-9 pl-8 pr-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent w-44"
+          />
+        </div>
+
+        {/* City */}
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="City or State"
+            value={cityQ}
+            onChange={e => setCityQ(e.target.value)}
+            className="h-9 pl-8 pr-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent w-36"
+          />
+        </div>
+
+        {/* Categories */}
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Category"
+            value={catQ}
+            onChange={e => setCatQ(e.target.value)}
+            className="h-9 pl-8 pr-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent w-36"
+          />
+        </div>
+
+        {/* Type */}
+        <select
+          value={typeQ}
+          onChange={e => setTypeQ(e.target.value as VendorType | "")}
+          className="h-9 px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent"
+        >
+          <option value="">All Types</option>
+          {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        {/* Clear */}
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="h-9 px-3 rounded-xl text-sm text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              {onSelect && <th className="px-3 py-2.5" />}
-              {sortTh("vendorType", "Type")}
-              {sortTh("vendorName", "Name")}
-              {sortTh("location", "City, State")}
-              {sortTh("pocName", "POC")}
-              {sortTh("email", "Email")}
-              {sortTh("phone", "Phone")}
-              {sortTh("itemCategories", "Item Categories", "hidden lg:table-cell")}
-              {showAdminCols && sortTh("consignmentTake", "Take", "hidden lg:table-cell")}
-              {showAdminCols && sortTh("zipCodesServed", "Zips Served", "hidden xl:table-cell")}
-            </tr>
-          </thead>
-          <tbody>
-            {displayVendors.map((v, i) => {
+        {displayVendors.length === 0 ? (
+          <div className="py-12 text-center text-sm text-gray-400">
+            No vendors match your filters.{" "}
+            <button onClick={clearFilters} className="text-forest-600 hover:underline">Clear filters</button>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {onSelect && <th className="px-3 py-2.5" />}
+                {sortTh("vendorType", "Type")}
+                {sortTh("vendorName", "Name")}
+                {sortTh("location", "City, State")}
+                {sortTh("pocName", "POC")}
+                {sortTh("email", "Email")}
+                {sortTh("phone", "Phone")}
+                {sortTh("itemCategories", "Item Categories", "hidden lg:table-cell")}
+                {showAdminCols && sortTh("consignmentTake", "Take", "hidden lg:table-cell")}
+                {showAdminCols && sortTh("zipCodesServed", "Zips Served", "hidden xl:table-cell")}
+              </tr>
+            </thead>
+            <tbody>
+              {displayVendors.map((v, i) => {
                 const typeColor = TYPE_COLORS[v.vendorType] ?? "bg-gray-100 text-gray-700";
                 return (
                   <tr key={v.id} className={`border-b border-gray-100 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
@@ -532,8 +629,9 @@ function LocalVendorDirectory({
                   </tr>
                 );
               })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
