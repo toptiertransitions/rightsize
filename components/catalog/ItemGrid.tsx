@@ -233,8 +233,12 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
         fd.append("file", file);
         fd.append("tenantId", item.tenantId);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
+        if (!res.ok) {
+          if (res.status === 413) throw new Error("Photo is too large to upload. Please use a smaller image.");
+          const errData = await res.json().catch(() => ({})) as Record<string, unknown>;
+          throw new Error((errData.error as string) || "Upload failed");
+        }
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
         uploaded.push({ url: data.photoUrl, publicId: data.photoPublicId });
       }
       setPhotos(prev => [...prev, ...uploaded]);

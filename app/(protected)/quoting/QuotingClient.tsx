@@ -881,7 +881,10 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
         formData.append("file", file);
         formData.append("tenantId", tenantId);
         const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-        if (!uploadRes.ok) throw new Error("Upload failed");
+        if (!uploadRes.ok) {
+          if (uploadRes.status === 413) throw new Error("Photo is too large to upload. Please use a smaller image.");
+          throw new Error("Upload failed");
+        }
         const { photoUrl, photoPublicId } = await uploadRes.json();
         const saveRes = await fetch(`/api/quoting/${tenantId}/photos`, {
           method: "POST",
