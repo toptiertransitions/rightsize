@@ -67,7 +67,7 @@ export async function exchangeQBOCode(code: string, realmId: string): Promise<vo
 
 async function refreshQBOToken(
   refreshToken: string
-): Promise<{ accessToken: string; expiresAt: string }> {
+): Promise<{ accessToken: string; refreshToken: string; expiresAt: string }> {
   const res = await fetch(INTUIT_TOKEN_URL, {
     method: "POST",
     headers: {
@@ -91,7 +91,8 @@ async function refreshQBOToken(
   }
   const data = JSON.parse(body);
   const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
-  return { accessToken: data.access_token, expiresAt };
+  // Intuit rotates refresh tokens on every use — always save the new one.
+  return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresAt };
 }
 
 export async function getValidQBOToken(): Promise<{ accessToken: string; realmId: string } | null> {
@@ -105,12 +106,13 @@ export async function getValidQBOToken(): Promise<{ accessToken: string; realmId
     return { accessToken: record.accessToken, realmId: record.realmId };
   }
 
-  // Refresh — if the token has been revoked, clear it and treat as disconnected
+  // Refresh — if the token has been revoked, clear it and treat as disconnected.
+  // Intuit rotates refresh tokens on every use, so we must save the new refresh token.
   try {
-    const { accessToken, expiresAt: newExpiresAt } = await refreshQBOToken(record.refreshToken);
+    const { accessToken, refreshToken: newRefreshToken, expiresAt: newExpiresAt } = await refreshQBOToken(record.refreshToken);
     await saveQBOToken({
       accessToken,
-      refreshToken: record.refreshToken,
+      refreshToken: newRefreshToken,
       expiresAt: newExpiresAt,
       realmId: record.realmId,
       companyName: record.companyName,
@@ -168,8 +170,8 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
     const record = await getQBOToken();
     if (!record) throw new Error("QuickBooks is not connected");
     try {
-      const { accessToken: newToken, expiresAt } = await refreshQBOToken(record.refreshToken);
-      await saveQBOToken({ ...record, accessToken: newToken, expiresAt });
+      const { accessToken: newToken, refreshToken: newRefreshToken, expiresAt } = await refreshQBOToken(record.refreshToken);
+      await saveQBOToken({ ...record, accessToken: newToken, refreshToken: newRefreshToken, expiresAt });
       return doQBOFetch(path, newToken, realmId, options);
     } catch (e) {
       const code = (e as Error & { code?: string }).code;
