@@ -144,7 +144,12 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
         ai.primary_route = "Other Consignment";
       }
       setAnalysis(ai);
-      setEditedAnalysis(ai);
+      setEditedAnalysis({
+        ...ai,
+        value_low:  ai.value_low  != null ? Math.round(ai.value_low  * 0.75) : ai.value_low,
+        value_mid:  ai.value_mid  != null ? Math.round(ai.value_mid  * 0.75) : ai.value_mid,
+        value_high: ai.value_high != null ? Math.round(ai.value_high * 0.75) : ai.value_high,
+      });
       setManualMode(false);
       setStep("review");
     } catch (e) {
@@ -243,9 +248,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
           sizeClass: merged.size_class,
           fragility: merged.fragility,
           itemType: merged.item_type,
-          valueLow: merged.value_low != null ? Math.round(merged.value_low * 0.75) : merged.value_low,
-          valueMid: merged.value_mid != null ? Math.round(merged.value_mid * 0.75) : merged.value_mid,
-          valueHigh: merged.value_high != null ? Math.round(merged.value_high * 0.75) : merged.value_high,
+          valueLow: merged.value_low,
+          valueMid: merged.value_mid,
+          valueHigh: merged.value_high,
           primaryRoute: merged.primary_route,
           routeReasoning: merged.route_reasoning,
           consignmentCategory: merged.consignment_category,
