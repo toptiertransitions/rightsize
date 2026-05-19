@@ -2190,3 +2190,105 @@ export function buildQuoteInfoEmail({
 </body>
 </html>`;
 }
+
+// ─── Applied Price Drop Reference Email ───────────────────────────────────────
+
+export type AppliedDropEmailItem = {
+  displayId: string;
+  itemName: string;
+  photoUrl?: string;
+  prevPrice: number;
+  newPrice: number;
+  dropPct: number;
+};
+
+export function buildAppliedPriceDropEmail({
+  tenantName,
+  dropNumber,
+  dropPercent,
+  appliedAt,
+  items,
+}: {
+  tenantName: string;
+  dropNumber: 1 | 2;
+  dropPercent: number;
+  appliedAt: string;
+  items: AppliedDropEmailItem[];
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+  const itemRows = items.map((item, i) => {
+    const thumb = cldThumb(item.photoUrl, 80);
+    return `
+    <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};border-bottom:1px solid #e5e7eb;">
+      <td style="padding:10px 8px 10px 12px;width:88px;vertical-align:middle;">
+        ${thumb
+          ? `<img src="${thumb}" width="72" height="72" alt="" style="border-radius:8px;display:block;object-fit:cover;">`
+          : `<div style="width:72px;height:72px;background:#f3f4f6;border-radius:8px;"></div>`}
+      </td>
+      <td style="padding:10px 12px;font-size:11px;color:#6b7280;vertical-align:middle;white-space:nowrap;">${item.displayId}</td>
+      <td style="padding:10px 16px;font-size:13px;color:#111827;font-weight:500;vertical-align:middle;">${item.itemName}</td>
+      <td style="padding:10px 16px;font-size:13px;color:#9ca3af;text-align:right;vertical-align:middle;white-space:nowrap;text-decoration:line-through;">${fmt(item.prevPrice)}</td>
+      <td style="padding:10px 16px;font-size:15px;color:#2d4a3e;font-weight:700;text-align:right;vertical-align:middle;white-space:nowrap;">${fmt(item.newPrice)}</td>
+      <td style="padding:10px 16px;text-align:center;vertical-align:middle;">
+        <span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap;">−${item.dropPct}%</span>
+      </td>
+    </tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:720px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+
+        <!-- Header -->
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions &nbsp;&middot;&nbsp; ${tenantName}</p>
+            <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Price Drop ${dropNumber} Applied</h1>
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.70);">&#8722;${dropPercent}% reduction applied &nbsp;&middot;&nbsp; ${appliedAt}</p>
+          </td>
+        </tr>
+
+        <!-- Summary bar -->
+        <tr>
+          <td style="padding:14px 32px;background:#f0fdf4;border-bottom:1px solid #d1fae5;">
+            <p style="margin:0;font-size:13px;color:#374151;">
+              <strong>${items.length}</strong> item${items.length === 1 ? "" : "s"} repriced &nbsp;&middot;&nbsp; Use this list to locate items and apply new sale stickers.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Table -->
+        <tr><td style="padding:24px 32px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <thead>
+              <tr style="background:#f9fafb;">
+                <th style="padding:10px 8px 10px 12px;width:88px;"></th>
+                <th style="padding:10px 12px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;">ID #</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;">Item Name</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:right;white-space:nowrap;">Prev Price</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:right;white-space:nowrap;">New Price</th>
+                <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;">Drop</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}
+            </tbody>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions &middot; Internal use only.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

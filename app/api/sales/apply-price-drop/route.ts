@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { Resend } from "resend";
 import { getSystemRole, getTenantById, getItemsForTenant, batchUpdateItemPrices, updateItem } from "@/lib/airtable";
 import { upsertSquareCatalogItem } from "@/lib/square";
+import { buildAppliedPriceDropEmail, type AppliedDropEmailItem } from "@/lib/email";
 import type { PrimaryRoute } from "@/lib/types";
 
 const CONSIGNMENT_ROUTES: PrimaryRoute[] = [
@@ -107,6 +109,62 @@ export async function POST(req: NextRequest) {
         squareFailed++;
       }
       await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
+  // Send reference email to the user who applied the drop (drop1 / drop2 only, not revert)
+  if (type !== "revert" && priceUpdates.length > 0) {
+    try {
+      const dropPct = type === "drop1" ? drop1Pct : drop2Pct;
+      const dropNumber: 1 | 2 = type === "drop1" ? 1 : 2;
+
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId);
+      const userEmail = clerkUser.emailAddresses[0]?.emailAddress;
+
+      if (userEmail) {
+        const itemMap = new Map(listedItems.map(i => [i.id, i]));
+        const emailItems: AppliedDropEmailItem[] = priceUpdates.map(u => {
+          const item = itemMap.get(u.id);
+          const displayId = item?.barcodeNumber || u.id.slice(-6).toUpperCase();
+          return {
+            displayId,
+            itemName: item?.itemName ?? u.id,
+            photoUrl: item?.photoUrl,
+            prevPrice: u.priceDropOriginalValue,
+            newPrice: u.valueMid,
+            dropPct,
+          };
+        });
+
+        const appliedAt = new Date().toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        });
+
+        const html = buildAppliedPriceDropEmail({
+          tenantName: tenant.name,
+          dropNumber,
+          dropPercent: dropPct,
+          appliedAt,
+          items: emailItems,
+        });
+
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: "hello@toptiertransitions.com",
+          to: userEmail,
+          subject: `Price Drop ${dropNumber} Applied — ${tenant.name} (${priceUpdates.length} item${priceUpdates.length !== 1 ? "s" : ""})`,
+          html,
+        });
+      }
+    } catch (e) {
+      console.error("[apply-price-drop] email send failed:", e);
     }
   }
 
