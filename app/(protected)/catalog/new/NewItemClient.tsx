@@ -16,7 +16,15 @@ interface NewItemClientProps {
   tenantId: string;
   rooms: Room[];
   isTTT?: boolean;
+  estateMode?: boolean;
 }
+
+const ESTATE_OVERRIDE_ROUTES = new Set([
+  "ProFoundFinds Consignment",
+  "Other Consignment",
+  "Online Marketplace",
+  "FB/Marketplace",
+]);
 
 type Step = "photo" | "analyzing" | "review" | "saving" | "done";
 
@@ -45,7 +53,7 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
 };
 
 
-export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientProps) {
+export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = false }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -142,6 +150,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
       const ai = data.analysis;
       if (!isTTT && ai?.primary_route === "ProFoundFinds Consignment") {
         ai.primary_route = "Other Consignment";
+      }
+      if (estateMode && ai?.primary_route && ESTATE_OVERRIDE_ROUTES.has(ai.primary_route)) {
+        ai.primary_route = "Estate Sale";
       }
       setAnalysis(ai);
       setEditedAnalysis({
@@ -442,10 +453,18 @@ export function NewItemClient({ tenantId, rooms, isTTT = true }: NewItemClientPr
                           ({formatCurrency(merged.value_low)} – {formatCurrency(merged.value_high)})
                         </span>
                       </div>
-                      <div className="mt-1">
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-forest-700 bg-forest-50 px-2 py-0.5 rounded-full">
                           → {merged.primary_route}
                         </span>
+                        {estateMode && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10.707 2.293a1 1 0 0 0-1.414 0l-7 7a1 1 0 0 0 1.414 1.414L4 10.414V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-3h2v3a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6.586l.293.293a1 1 0 0 0 1.414-1.414l-7-7z" />
+                            </svg>
+                            Estate Sale Mode
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

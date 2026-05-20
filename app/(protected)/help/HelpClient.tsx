@@ -69,6 +69,10 @@ const STAFF_FAQS = [
     q: "What do I do if I can't edit an item or page?",
     a: "Check that you're viewing the correct project (use the Project Switcher in the top nav). If the issue persists, submit a Help Ticket below — include the item/page name and describe what you expected vs. what happened.",
   },
+  {
+    q: "What is the \"Estate Sale?\" toggle on the Catalog page? (TTTAdmin / TTTManager only)",
+    a: "The \"Estate Sale?\" flag appears next to the Item Catalog title and is visible only to TTTAdmins and TTTManagers. When toggled ON (amber highlight), any new item added to the catalog will have its AI-recommended route automatically overridden to \"Estate Sale\" if the AI would otherwise have suggested ProFoundFinds Consignment, Other Consignment, eBay (Online Marketplace), or FB/Marketplace. Routes like Keep, Donate, Family, and Trash are not affected. The mode stays active as long as the URL contains estateMode=1 — it resets when you navigate away or turn it off. An \"Estate Sale Mode\" badge appears on the review screen so staff know the override is active.",
+  },
 ];
 
 // ─── Accordion ────────────────────────────────────────────────────────────────

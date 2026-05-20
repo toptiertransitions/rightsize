@@ -5,15 +5,16 @@ import { getRoomsForTenant, getUserRoleForTenant, getTenantById, getSystemRole }
 import { NewItemClient } from "./NewItemClient";
 
 interface PageProps {
-  searchParams: Promise<{ tenantId?: string }>;
+  searchParams: Promise<{ tenantId?: string; estateMode?: string }>;
 }
 
 export default async function NewItemPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { tenantId } = await searchParams;
+  const { tenantId, estateMode: estateModeParam } = await searchParams;
   if (!tenantId) redirect("/home");
+  const estateMode = estateModeParam === "1";
 
   const [tenant, role, rooms, sysRole] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
@@ -45,7 +46,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} />
+      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} estateMode={estateMode} />
     </div>
   );
 }

@@ -14,10 +14,11 @@ import {
 } from "@/lib/airtable";
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
+import { CatalogHeader } from "./CatalogHeader";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
-  searchParams: Promise<{ tenantId?: string }>;
+  searchParams: Promise<{ tenantId?: string; estateMode?: string }>;
 }
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
@@ -26,7 +27,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { tenantId } = await searchParams;
+  const { tenantId, estateMode: estateModeParam } = await searchParams;
+  const estateMode = estateModeParam === "1";
 
   // ── All-projects sentinel mode (TTT staff only) ───────────────────────────────
   const SENTINEL_VIEWS = ["__all_active__", "__all_archived__", "__all_time__"];
@@ -103,25 +105,16 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     const canEdit = EDIT_ROLES.includes(resolvedRole);
     const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
     const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+    const canSeeEstateMode = sysRole === "TTTManager" || sysRole === "TTTAdmin";
 
     return (
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
-          </div>
-          {canEdit && (
-            <Link href={`/catalog/new?tenantId=${tenantId}`}>
-              <Button>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Add Item
-              </Button>
-            </Link>
-          )}
-        </div>
+        <CatalogHeader
+          tenantId={tenantId}
+          canEdit={canEdit}
+          canSeeEstateMode={canSeeEstateMode}
+          estateMode={estateMode}
+        />
 
         <ItemGrid
           items={items}
