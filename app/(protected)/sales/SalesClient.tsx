@@ -274,7 +274,7 @@ function SalesTableRow({
           {clientPayout != null ? (
             <div>
               <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
-              {previewCalcPayout && previewCalcPayout.vendorName && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
+              {previewCalcPayout && previewCalcPayout.vendorName && previewCalcPayout.rate > 0 && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
             </div>
           ) : (
             <span className="text-gray-300">—</span>
@@ -488,7 +488,7 @@ function PFTableRow({
             if (calc && calc.amount > 0) return (
               <div>
                 <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
-                <div className="text-[9px] text-gray-400">{calc.rate}% take</div>
+                {calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
               </div>
             );
             return <span className="text-gray-300">—</span>;
@@ -1813,7 +1813,7 @@ export function SalesClient({
           </div>
         )}
 
-        {/* Estate Sales — grouped by estate */}
+        {/* Estate Sales — single flat table */}
         {estateSaleItems.length > 0 && (
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -1829,26 +1829,18 @@ export function SalesClient({
               </button>
             </div>
             {openEstate && (
-              <div className="space-y-6 mt-3">
-                {[...estateItemsByEstate.entries()].map(([estateId, { name, items: estateItems }]) => (
-                  <div key={estateId}>
-                    <div className="text-sm font-medium text-gray-600 mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                      {name}
-                    </div>
-                    <SalesTable
-                      title=""
-                      items={estateItems}
-                      canEditPayout={canEditPayout}
-                      canEdit={canEdit}
-                      calcPayouts={calcPayouts}
-                      onPayoutSaved={handlePayoutSaved}
-                      onSalePriceSaved={handleSalePriceSaved}
-                      onEdit={setEditingItem}
-                      isNonTTT={isNonTTT}
-                    />
-                  </div>
-                ))}
+              <div className="mt-3">
+                <SalesTable
+                  title=""
+                  items={estateSaleItems}
+                  canEditPayout={canEditPayout}
+                  canEdit={canEdit}
+                  calcPayouts={calcPayouts}
+                  onPayoutSaved={handlePayoutSaved}
+                  onSalePriceSaved={handleSalePriceSaved}
+                  onEdit={setEditingItem}
+                  isNonTTT={isNonTTT}
+                />
               </div>
             )}
           </div>
