@@ -12,6 +12,7 @@ const ROUTE_CLIENT_SHARE: Record<string, number> = {
   "ProFoundFinds Consignment": 67,
   "FB/Marketplace": 59,
   "Online Marketplace": 59,
+  "Estate Sale": 67,
 };
 
 // Non-TTT projects use different client share rates

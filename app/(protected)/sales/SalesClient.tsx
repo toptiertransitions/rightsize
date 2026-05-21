@@ -16,11 +16,13 @@ function computeCalcPayout(item: Item, localVendors: LocalVendor[]): CalcPayout 
   if (!item.salePrice || item.salePrice <= 0) return null;
 
   // Estate Sale: client gets clientSharePercent of sale price (TTT manages the estate)
+  // Default to 67% if clientSharePercent was never set on older items.
   if (item.primaryRoute === "Estate Sale") {
-    const pct = item.clientSharePercent ?? 0;
-    if (pct > 0) return { amount: item.salePrice * (pct / 100), vendorName: "Estate Sale", rate: 100 - pct };
-    if (item.consignorPayout && item.consignorPayout > 0) return { amount: item.consignorPayout, vendorName: "Estate Sale", rate: 0 };
-    return null;
+    if (item.consignorPayout && item.consignorPayout > 0) {
+      return { amount: item.consignorPayout, vendorName: "Estate Sale", rate: 0 };
+    }
+    const pct = item.clientSharePercent ?? 67;
+    return { amount: item.salePrice * (pct / 100), vendorName: "Estate Sale", rate: 100 - pct };
   }
 
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -1469,15 +1471,16 @@ export function SalesClient({
   ];
 
   // Total inventory value: valueMid × clientSharePercent for all consignment items.
-  // Estate Sale items without clientSharePercent fall back to full valueMid
-  // (consistent with the table, which shows valueMid directly).
+  // Estate Sale items fall back to salePrice when valueMid is unset, and default to 67% client share.
   const totalInventoryValue = items
     .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute))
     .reduce((s, i) => {
-      if (!i.valueMid) return s;
       if (i.primaryRoute === "Estate Sale") {
-        return s + i.valueMid * ((i.clientSharePercent ?? 100) / 100);
+        const base = i.valueMid || i.salePrice || 0;
+        if (!base) return s;
+        return s + base * ((i.clientSharePercent ?? 67) / 100);
       }
+      if (!i.valueMid) return s;
       return i.clientSharePercent ? s + i.valueMid * (i.clientSharePercent / 100) : s;
     }, 0);
 
