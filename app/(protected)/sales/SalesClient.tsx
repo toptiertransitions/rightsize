@@ -1468,10 +1468,18 @@ export function SalesClient({
       : []),
   ];
 
-  // Total inventory value: valueMid × clientSharePercent for all consignment items
+  // Total inventory value: valueMid × clientSharePercent for all consignment items.
+  // Estate Sale items without clientSharePercent fall back to full valueMid
+  // (consistent with the table, which shows valueMid directly).
   const totalInventoryValue = items
     .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute))
-    .reduce((s, i) => (i.valueMid && i.clientSharePercent ? s + i.valueMid * i.clientSharePercent / 100 : s), 0);
+    .reduce((s, i) => {
+      if (!i.valueMid) return s;
+      if (i.primaryRoute === "Estate Sale") {
+        return s + i.valueMid * ((i.clientSharePercent ?? 100) / 100);
+      }
+      return i.clientSharePercent ? s + i.valueMid * (i.clientSharePercent / 100) : s;
+    }, 0);
 
   // NonTTT: no take rate — full valueMid and full salePrice go to client
   const nonTTTInventoryValue = items.reduce((s, i) => s + (i.valueMid ?? 0), 0);
