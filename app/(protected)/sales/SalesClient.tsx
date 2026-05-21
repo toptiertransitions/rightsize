@@ -16,12 +16,12 @@ function computeCalcPayout(item: Item, localVendors: LocalVendor[]): CalcPayout 
   if (!item.salePrice || item.salePrice <= 0) return null;
 
   // Estate Sale: client gets clientSharePercent of sale price (TTT manages the estate)
-  // Default to 67% if clientSharePercent was never set on older items.
+  // Use || so clientSharePercent = 0 (never properly set) also falls back to 67.
   if (item.primaryRoute === "Estate Sale") {
     if (item.consignorPayout && item.consignorPayout > 0) {
       return { amount: item.consignorPayout, vendorName: "Estate Sale", rate: 0 };
     }
-    const pct = item.clientSharePercent ?? 67;
+    const pct = item.clientSharePercent || 67;
     return { amount: item.salePrice * (pct / 100), vendorName: "Estate Sale", rate: 100 - pct };
   }
 
@@ -1470,18 +1470,28 @@ export function SalesClient({
       : []),
   ];
 
-  // Total inventory value: valueMid × clientSharePercent for all consignment items.
-  // Estate Sale items fall back to salePrice when valueMid is unset, and default to 67% client share.
+  // Route-level default client share % — used when clientSharePercent isn't stored on the item.
+  // "Other Consignment" has no default (varies per vendor) so items without it are skipped.
+  const ROUTE_SHARE_DEFAULTS: Record<string, number> = {
+    "ProFoundFinds Consignment": 67,
+    "FB/Marketplace": 59,
+    "Online Marketplace": 59,
+    "Estate Sale": 67,
+  };
+
+  // Total inventory value: base × clientSharePercent for all consignment items.
+  // Estate Sale: base = valueMid if set, else salePrice (items priced at the sale with no prior valuation).
+  // All routes: fall back to ROUTE_SHARE_DEFAULTS when clientSharePercent is missing or 0 (never set).
   const totalInventoryValue = items
     .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute))
     .reduce((s, i) => {
-      if (i.primaryRoute === "Estate Sale") {
-        const base = i.valueMid || i.salePrice || 0;
-        if (!base) return s;
-        return s + base * ((i.clientSharePercent ?? 67) / 100);
-      }
-      if (!i.valueMid) return s;
-      return i.clientSharePercent ? s + i.valueMid * (i.clientSharePercent / 100) : s;
+      const base = i.primaryRoute === "Estate Sale"
+        ? (i.valueMid || i.salePrice || 0)
+        : (i.valueMid || 0);
+      if (!base) return s;
+      const pct = i.clientSharePercent || ROUTE_SHARE_DEFAULTS[i.primaryRoute];
+      if (!pct) return s;
+      return s + base * (pct / 100);
     }, 0);
 
   // NonTTT: no take rate — full valueMid and full salePrice go to client
