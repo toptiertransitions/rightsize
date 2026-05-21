@@ -1634,6 +1634,7 @@ export type ActiveReferralContactRow = {
   thisMonthValue: number;
   lastMonthCount: number;
   lastMonthValue: number;
+  companyId: string;
 };
 
 function fmtDateShort(iso: string | undefined): string {
@@ -1678,166 +1679,197 @@ export function buildActiveReferralEmail({
   thisMonthLabel: string;
   lastMonthLabel: string;
 }): string {
-  const cardRows = rows.map(r => {
-    const nsBg = nextStepRowBg(r.nextStepDate);
-    const nsDateFormatted = r.nextStepDate ? fmtDateShort(r.nextStepDate) : null;
-    const today = new Date(); today.setHours(0,0,0,0);
-    const nsDate = r.nextStepDate ? new Date(r.nextStepDate + "T00:00:00") : null;
-    const nsOverdue = nsDate && nsDate < today;
-    const nsSoon = nsDate && !nsOverdue && ((nsDate.getTime() - today.getTime()) / 86400000) <= 7;
 
-    const detailCells = [
-      r.interests ? `<td style="padding:8px 12px;background:#f9fafb;border-radius:8px;vertical-align:top;min-width:120px;"><p style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 3px 0;">Interests</p><p style="font-size:12px;color:#374151;margin:0;">${r.interests}</p></td>` : "",
-      r.coffeeOrder ? `<td style="padding:8px 12px;background:#fffbeb;border-radius:8px;vertical-align:top;min-width:120px;"><p style="font-size:10px;color:#d97706;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 3px 0;">Coffee Order</p><p style="font-size:12px;color:#92400e;margin:0;">${r.coffeeOrder}</p></td>` : "",
-      r.orgsGroups ? `<td style="padding:8px 12px;background:#f9fafb;border-radius:8px;vertical-align:top;min-width:120px;"><p style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 3px 0;">Orgs / Groups</p><p style="font-size:12px;color:#374151;margin:0;">${r.orgsGroups}</p></td>` : "",
-    ].filter(Boolean);
+  // ── Group contacts by company, sort companies, sort contacts within each ──────
+  const companyGroups = new Map<string, ActiveReferralContactRow[]>();
+  for (const r of rows) {
+    const arr = companyGroups.get(r.companyId) ?? [];
+    arr.push(r);
+    companyGroups.set(r.companyId, arr);
+  }
+  const priorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+  const sortedCompanies = [...companyGroups.values()].sort((a, b) => {
+    const pa = priorityOrder[a[0].priority] ?? 3;
+    const pb = priorityOrder[b[0].priority] ?? 3;
+    if (pa !== pb) return pa - pb;
+    const aWon = a.reduce((s, c) => s + c.wonValue, 0);
+    const bWon = b.reduce((s, c) => s + c.wonValue, 0);
+    if (aWon !== bWon) return bWon - aWon;
+    return a[0].companyName.localeCompare(b[0].companyName);
+  });
+  for (const contacts of sortedCompanies) {
+    contacts.sort((a, b) => b.activityCount - a.activityCount || a.contactName.localeCompare(b.contactName));
+  }
 
-    const statsItems = [
-      { label: "Referred", val: String(r.totalReferred), color: "#111827" },
-      { label: "Won", val: String(r.wonCount), color: "#15803d" },
-      { label: "Lost", val: String(r.lostCount), color: "#dc2626" },
-      { label: "Active", val: String(r.activeCount), color: "#2563eb" },
-      { label: "Won Value", val: fmtMoney(r.wonValue), color: "#111827" },
-    ];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    return `
-    <tr><td style="padding:0 0 20px 0;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#ffffff;">
+  // ── Build one card per company ─────────────────────────────────────────────────
+  const companyCards = sortedCompanies.map(contacts => {
+    const first = contacts[0];
+    const { companyName, companyType, priority, ownerName,
+            monthlyGoal, pacingGoal, thisMonthCount, thisMonthValue,
+            lastMonthCount, lastMonthValue } = first;
 
-        <!-- Card header -->
-        <tr style="background:#2d4a3e;">
-          <td style="padding:14px 18px;">
+    // Company aggregate lifetime stats (sum across all contacts)
+    const totalReferred = contacts.reduce((s, c) => s + c.totalReferred, 0);
+    const wonCount     = contacts.reduce((s, c) => s + c.wonCount, 0);
+    const lostCount    = contacts.reduce((s, c) => s + c.lostCount, 0);
+    const activeCount  = contacts.reduce((s, c) => s + c.activeCount, 0);
+    const wonValue     = contacts.reduce((s, c) => s + c.wonValue, 0);
+
+    // Goal performance helpers
+    const goal = monthlyGoal;
+    const goalLabel  = goal === 0 ? "Low — no monthly goal" : `${goal}/month goal`;
+    const lastMet    = goal > 0 && lastMonthCount >= goal;
+    const lastColor  = goal === 0 ? "#9ca3af" : (lastMet ? "#15803d" : "#dc2626");
+    const lastLabel  = goal === 0 ? `${lastMonthCount} referred` : `${lastMonthCount} of ${goal}`;
+    const thisMet    = goal > 0 && thisMonthCount >= pacingGoal;
+    const thisColor  = goal === 0 ? "#9ca3af" : (thisMet ? "#15803d" : "#b45309");
+    const thisLabel  = goal === 0 ? `${thisMonthCount} referred` : `${thisMonthCount} of ${pacingGoal} pace`;
+
+    // ── Contact sub-sections ────────────────────────────────────────────────────
+    const contactSections = contacts.map((r, idx) => {
+      const nsBg = nextStepRowBg(r.nextStepDate);
+      const nsDateFormatted = r.nextStepDate ? fmtDateShort(r.nextStepDate) : null;
+      const nsDate   = r.nextStepDate ? new Date(r.nextStepDate + "T00:00:00") : null;
+      const nsOverdue = nsDate && nsDate < today;
+      const nsSoon   = nsDate && !nsOverdue && ((nsDate.getTime() - today.getTime()) / 86400000) <= 7;
+
+      const personalParts = [
+        r.interests   ? `<span style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">Interests</span>&nbsp;<span style="font-size:12px;color:#374151;">${r.interests}</span>` : "",
+        r.coffeeOrder ? `<span style="color:#d97706;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">Coffee</span>&nbsp;<span style="font-size:12px;color:#92400e;">${r.coffeeOrder}</span>` : "",
+        r.orgsGroups  ? `<span style="color:#9ca3af;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">Orgs</span>&nbsp;<span style="font-size:12px;color:#374151;">${r.orgsGroups}</span>` : "",
+      ].filter(Boolean);
+
+      const miniStats = [
+        { label: "Referred", val: String(r.totalReferred), color: "#111827" },
+        { label: "Won",      val: String(r.wonCount),      color: "#15803d" },
+        { label: "Lost",     val: String(r.lostCount),     color: "#dc2626" },
+        { label: "Active",   val: String(r.activeCount),   color: "#2563eb" },
+        { label: "Won $",    val: fmtMoney(r.wonValue),    color: "#111827" },
+      ];
+
+      return `
+        <!-- ── Contact ${idx + 1}: ${r.contactName} ── -->
+        <tr style="border-top:${idx === 0 ? "2px" : "1px"} solid #d1d5db;">
+          <td style="padding:11px 18px 6px;background:#ffffff;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td style="vertical-align:top;">
-                  <p style="margin:0;font-size:16px;font-weight:700;color:#ffffff;">${r.contactName}</p>
-                  ${r.contactTitle ? `<p style="margin:2px 0 0;font-size:12px;color:#a7c4b5;">${r.contactTitle}</p>` : ""}
-                  <p style="margin:4px 0 0;font-size:12px;color:#C9A96E;font-weight:600;">${r.companyName}${r.companyType ? ` <span style="font-weight:400;color:#a7c4b5;">· ${r.companyType}</span>` : ""}</p>
-                </td>
-                <td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;">
-                  ${r.priority ? priorityBadge(r.priority) : ""}
-                  <p style="margin:6px 0 0;font-size:11px;color:#a7c4b5;">Owner: <strong style="color:#e5e7eb;">${r.ownerName || "Unassigned"}</strong></p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- Contact info + activity row -->
-        <tr>
-          <td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="vertical-align:top;">
-                  ${r.contactEmail ? `<a href="mailto:${r.contactEmail}" style="font-size:12px;color:#2563eb;text-decoration:none;">${r.contactEmail}</a>` : ""}
-                  ${r.contactEmail && r.contactPhone ? `<span style="color:#d1d5db;margin:0 6px;">·</span>` : ""}
-                  ${r.contactPhone ? `<span style="font-size:12px;color:#6b7280;">${r.contactPhone}</span>` : ""}
-                  ${r.dateIntroduced ? `<p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Introduced ${fmtDateShort(r.dateIntroduced)}</p>` : ""}
-                </td>
-                <td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;">
-                  <p style="margin:0;font-size:11px;color:#9ca3af;">Last Activity</p>
-                  <p style="margin:2px 0 0;font-size:13px;font-weight:600;color:#374151;">${r.lastActivityDate ? fmtDateShort(r.lastActivityDate) : "None recorded"}</p>
-                  <p style="margin:2px 0 0;font-size:11px;color:#9ca3af;">${r.activityCount} activit${r.activityCount === 1 ? "y" : "ies"}</p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- Next step (always shown) -->
-        <tr>
-          <td style="padding:10px 18px;background:${(r.nextStepDate || r.nextStepNote) ? nsBg : "#f9fafb"};border-bottom:1px solid #f3f4f6;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td>
-                  ${(r.nextStepDate || r.nextStepNote) ? `
-                  <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${nsOverdue ? "#dc2626" : nsSoon ? "#b45309" : "#15803d"};">
-                    Next Step${nsDateFormatted ? ` — ${nsDateFormatted}` : ""}${nsOverdue ? " (OVERDUE)" : nsSoon ? " (Soon)" : ""}
+                  <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">${r.contactName}${r.contactTitle ? `<span style="font-weight:400;font-size:12px;color:#6b7280;"> · ${r.contactTitle}</span>` : ""}</p>
+                  <p style="margin:3px 0 0;font-size:12px;color:#6b7280;">
+                    ${r.contactEmail ? `<a href="mailto:${r.contactEmail}" style="color:#2563eb;text-decoration:none;">${r.contactEmail}</a>` : ""}${r.contactEmail && r.contactPhone ? ` <span style="color:#d1d5db;">·</span> ` : ""}${r.contactPhone ? r.contactPhone : ""}${r.dateIntroduced ? ` <span style="color:#d1d5db;">·</span> <span style="color:#9ca3af;">Intro ${fmtDateShort(r.dateIntroduced)}</span>` : ""}
                   </p>
-                  ${r.nextStepNote ? `<p style="margin:3px 0 0;font-size:12px;color:#374151;">${r.nextStepNote}</p>` : ""}
-                  ` : `
-                  <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#9ca3af;">Next Step</p>
-                  <p style="margin:3px 0 0;font-size:12px;color:#9ca3af;font-style:italic;">No next steps documented yet</p>
-                  `}
+                </td>
+                <td style="text-align:right;vertical-align:top;white-space:nowrap;padding-left:12px;">
+                  <p style="margin:0;font-size:10px;color:#9ca3af;">Last Activity</p>
+                  <p style="margin:1px 0 0;font-size:12px;font-weight:600;color:#374151;">${r.lastActivityDate ? fmtDateShort(r.lastActivityDate) : "None"}</p>
+                  <p style="margin:1px 0 0;font-size:11px;color:#9ca3af;">${r.activityCount} activit${r.activityCount === 1 ? "y" : "ies"}</p>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
-
-        ${detailCells.length > 0 ? `
-        <!-- Personal details -->
+        <!-- Next step -->
         <tr>
-          <td style="padding:10px 18px;border-bottom:1px solid #f3f4f6;">
-            <table cellpadding="0" cellspacing="6">
-              <tr>${detailCells.map(c => c).join('<td style="width:8px;"></td>')}</tr>
-            </table>
+          <td style="padding:8px 18px;background:${(r.nextStepDate || r.nextStepNote) ? nsBg : "#fafafa"};border-bottom:1px solid #f3f4f6;">
+            ${(r.nextStepDate || r.nextStepNote) ? `
+              <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${nsOverdue ? "#dc2626" : nsSoon ? "#b45309" : "#15803d"};">Next Step${nsDateFormatted ? ` — ${nsDateFormatted}` : ""}${nsOverdue ? " (OVERDUE)" : nsSoon ? " (Soon)" : ""}</p>
+              ${r.nextStepNote ? `<p style="margin:3px 0 0;font-size:12px;color:#374151;">${r.nextStepNote}</p>` : ""}
+            ` : `
+              <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#d1d5db;">No next step</p>
+            `}
+          </td>
+        </tr>
+        <!-- Personal details + notes -->
+        ${personalParts.length > 0 || r.notes ? `
+        <tr>
+          <td style="padding:8px 18px;border-bottom:1px solid #f3f4f6;background:#ffffff;">
+            ${personalParts.length > 0 ? `<p style="margin:0;font-size:12px;line-height:1.7;">${personalParts.join(' <span style="color:#e5e7eb;margin:0 2px;">·</span> ')}</p>` : ""}
+            ${r.notes ? `<p style="margin:${personalParts.length > 0 ? "5px" : "0"} 0 0;font-size:12px;color:#1e40af;background:#eff6ff;padding:5px 8px;border-radius:4px;white-space:pre-line;">${r.notes}</p>` : ""}
           </td>
         </tr>` : ""}
-
-        ${r.notes ? `
-        <!-- Notes -->
-        <tr>
-          <td style="padding:10px 18px;background:#eff6ff;border-bottom:1px solid #f3f4f6;">
-            <p style="margin:0;font-size:10px;color:#93c5fd;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Notes</p>
-            <p style="margin:4px 0 0;font-size:12px;color:#1e40af;white-space:pre-line;">${r.notes}</p>
-          </td>
-        </tr>` : ""}
-
-        <!-- Stats bar -->
+        <!-- Mini stats bar -->
         <tr style="background:#f9fafb;">
-          <td style="padding:10px 18px;">
+          <td style="padding:8px 18px;">
             <table cellpadding="0" cellspacing="0">
               <tr>
-                ${statsItems.map((s, i) => `
-                  ${i > 0 ? '<td style="width:1px;background:#e5e7eb;margin:0 12px;"></td><td style="width:16px;"></td>' : ""}
-                  <td style="vertical-align:middle;padding-right:4px;">
-                    <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${s.label}</p>
-                    <p style="margin:2px 0 0;font-size:14px;font-weight:700;color:${s.color};">${s.val}</p>
-                  </td>
-                `).join("")}
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- Monthly referral goal performance -->
-        ${(() => {
-          const goal = r.monthlyGoal;
-          const lastMet = r.lastMonthCount >= goal;
-          const lastColor = goal === 0 ? "#9ca3af" : (lastMet ? "#15803d" : "#dc2626");
-          const lastLabel = goal === 0 ? `${r.lastMonthCount} referred` : `${r.lastMonthCount} of ${goal}`;
-          const thisMet = r.thisMonthCount >= r.pacingGoal;
-          const thisColor = goal === 0 ? "#9ca3af" : (thisMet ? "#15803d" : "#b45309");
-          const thisLabel = goal === 0 ? `${r.thisMonthCount} referred` : `${r.thisMonthCount} of ${r.pacingGoal} pace`;
-          const goalLabel = goal === 0 ? "No monthly goal (Low)" : `${goal}/month goal`;
-          return `
-        <tr style="border-top:1px solid #e5e7eb;">
-          <td style="padding:10px 18px;background:#f9fafb;">
-            <p style="margin:0 0 7px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6b7280;">Referral Goal — ${goalLabel}</p>
-            <table cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="vertical-align:top;padding-right:20px;">
-                  <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${lastMonthLabel}</p>
-                  <p style="margin:2px 0 0;font-size:15px;font-weight:800;color:${lastColor};">${lastLabel}</p>
-                  ${r.lastMonthValue > 0 ? `<p style="margin:1px 0 0;font-size:11px;color:#6b7280;">${fmtMoney(r.lastMonthValue)} value</p>` : `<p style="margin:1px 0 0;font-size:11px;color:#d1d5db;">No value tracked</p>`}
-                </td>
-                <td style="width:1px;background:#e5e7eb;"></td>
-                <td style="width:16px;"></td>
-                <td style="vertical-align:top;">
-                  <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${thisMonthLabel} (so far)</p>
-                  <p style="margin:2px 0 0;font-size:15px;font-weight:800;color:${thisColor};">${thisLabel}</p>
-                  ${r.thisMonthValue > 0 ? `<p style="margin:1px 0 0;font-size:11px;color:#6b7280;">${fmtMoney(r.thisMonthValue)} value</p>` : `<p style="margin:1px 0 0;font-size:11px;color:#d1d5db;">No value tracked</p>`}
-                </td>
+                ${miniStats.map((s, i) => `${i > 0 ? '<td style="width:1px;background:#e5e7eb;"></td><td style="width:14px;"></td>' : ""}<td style="vertical-align:middle;"><p style="margin:0;font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${s.label}</p><p style="margin:1px 0 0;font-size:13px;font-weight:700;color:${s.color};">${s.val}</p></td>`).join("")}
               </tr>
             </table>
           </td>
         </tr>`;
-        })()}
+    }).join("");
+
+    return `
+    <tr><td style="padding:0 0 24px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #d1d5db;border-radius:12px;overflow:hidden;background:#ffffff;">
+
+        <!-- ── Company header ── -->
+        <tr style="background:#2d4a3e;">
+          <td style="padding:16px 18px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:top;">
+                  <p style="margin:0;font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.2px;">${companyName}</p>
+                  <p style="margin:3px 0 0;font-size:12px;color:#a7c4b5;">${[companyType, contacts.length > 1 ? `${contacts.length} contacts` : "1 contact"].filter(Boolean).join(" · ")}</p>
+                </td>
+                <td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;">
+                  ${priority ? priorityBadge(priority) : ""}
+                  <p style="margin:6px 0 0;font-size:11px;color:#a7c4b5;">Owner: <strong style="color:#e5e7eb;">${ownerName || "Unassigned"}</strong></p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── Monthly referral goal ── -->
+        <tr>
+          <td style="padding:12px 18px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;">
+            <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#15803d;">Referral Goal — ${goalLabel}</p>
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:top;padding-right:24px;">
+                  <p style="margin:0;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">${lastMonthLabel}</p>
+                  <p style="margin:2px 0 0;font-size:17px;font-weight:800;color:${lastColor};">${lastLabel}</p>
+                  <p style="margin:1px 0 0;font-size:11px;color:${lastMonthValue > 0 ? "#6b7280" : "#d1d5db"};">${lastMonthValue > 0 ? `${fmtMoney(lastMonthValue)} value` : "No value tracked"}</p>
+                </td>
+                <td style="width:1px;background:#bbf7d0;"></td>
+                <td style="width:18px;"></td>
+                <td style="vertical-align:top;">
+                  <p style="margin:0;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">${thisMonthLabel} · pacing ${pacingGoal}</p>
+                  <p style="margin:2px 0 0;font-size:17px;font-weight:800;color:${thisColor};">${thisLabel}</p>
+                  <p style="margin:1px 0 0;font-size:11px;color:${thisMonthValue > 0 ? "#6b7280" : "#d1d5db"};">${thisMonthValue > 0 ? `${fmtMoney(thisMonthValue)} value` : "No value tracked"}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ── Company lifetime aggregate stats ── -->
+        <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">
+          <td style="padding:9px 18px;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                ${[
+                  { label: "Total Referred", val: String(totalReferred), color: "#111827" },
+                  { label: "Won",            val: String(wonCount),      color: "#15803d" },
+                  { label: "Lost",           val: String(lostCount),     color: "#dc2626" },
+                  { label: "Active",         val: String(activeCount),   color: "#2563eb" },
+                  { label: "Won Value",      val: fmtMoney(wonValue),    color: "#111827" },
+                ].map((s, i) => `${i > 0 ? '<td style="width:1px;background:#e5e7eb;"></td><td style="width:14px;"></td>' : ""}<td style="vertical-align:middle;"><p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${s.label}</p><p style="margin:2px 0 0;font-size:14px;font-weight:700;color:${s.color};">${s.val}</p></td>`).join("")}
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        ${contactSections}
 
       </table>
     </td></tr>`;
   }).join("");
+
+  const uniqueCompanies = sortedCompanies.length;
 
   return `<!DOCTYPE html>
 <html>
@@ -1850,13 +1882,13 @@ export function buildActiveReferralEmail({
         <!-- Header -->
         <tr><td style="background:#2d4a3e;border-radius:12px 12px 0 0;padding:24px 28px;">
           <p style="margin:0;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Active Referral Report</p>
-          <p style="margin:6px 0 0;font-size:12px;color:#a7c4b5;">${rows.length} active referral partner${rows.length !== 1 ? "s" : ""} · Generated ${generatedAt}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#a7c4b5;">${uniqueCompanies} compan${uniqueCompanies !== 1 ? "ies" : "y"} · ${rows.length} active contact${rows.length !== 1 ? "s" : ""} · Generated ${generatedAt}</p>
         </td></tr>
 
         <!-- Body -->
         <tr><td style="background:#f3f4f6;padding:20px 0 0;">
           <table width="100%" cellpadding="0" cellspacing="0">
-            ${cardRows}
+            ${companyCards}
           </table>
         </td></tr>
 

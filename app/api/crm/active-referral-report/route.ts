@@ -172,6 +172,7 @@ export async function POST() {
       thisMonthValue: goalStats?.thisMonthValue ?? 0,
       lastMonthCount: goalStats?.lastMonthCount ?? 0,
       lastMonthValue: goalStats?.lastMonthValue ?? 0,
+      companyId: contact.referralCompanyId,
     };
   });
 
