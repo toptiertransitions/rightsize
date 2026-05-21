@@ -1627,6 +1627,13 @@ export type ActiveReferralContactRow = {
   lostCount: number;
   activeCount: number;
   wonValue: number;
+  // Company-level monthly goal performance
+  monthlyGoal: number;
+  pacingGoal: number;
+  thisMonthCount: number;
+  thisMonthValue: number;
+  lastMonthCount: number;
+  lastMonthValue: number;
 };
 
 function fmtDateShort(iso: string | undefined): string {
@@ -1663,9 +1670,13 @@ function priorityBadge(p: string): string {
 export function buildActiveReferralEmail({
   rows,
   generatedAt,
+  thisMonthLabel,
+  lastMonthLabel,
 }: {
   rows: ActiveReferralContactRow[];
   generatedAt: string;
+  thisMonthLabel: string;
+  lastMonthLabel: string;
 }): string {
   const cardRows = rows.map(r => {
     const nsBg = nextStepRowBg(r.nextStepDate);
@@ -1789,6 +1800,40 @@ export function buildActiveReferralEmail({
             </table>
           </td>
         </tr>
+
+        <!-- Monthly referral goal performance -->
+        ${(() => {
+          const goal = r.monthlyGoal;
+          const lastMet = r.lastMonthCount >= goal;
+          const lastColor = goal === 0 ? "#9ca3af" : (lastMet ? "#15803d" : "#dc2626");
+          const lastLabel = goal === 0 ? `${r.lastMonthCount} referred` : `${r.lastMonthCount} of ${goal}`;
+          const thisMet = r.thisMonthCount >= r.pacingGoal;
+          const thisColor = goal === 0 ? "#9ca3af" : (thisMet ? "#15803d" : "#b45309");
+          const thisLabel = goal === 0 ? `${r.thisMonthCount} referred` : `${r.thisMonthCount} of ${r.pacingGoal} pace`;
+          const goalLabel = goal === 0 ? "No monthly goal (Low)" : `${goal}/month goal`;
+          return `
+        <tr style="border-top:1px solid #e5e7eb;">
+          <td style="padding:10px 18px;background:#f9fafb;">
+            <p style="margin:0 0 7px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#6b7280;">Referral Goal — ${goalLabel}</p>
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:top;padding-right:20px;">
+                  <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${lastMonthLabel}</p>
+                  <p style="margin:2px 0 0;font-size:15px;font-weight:800;color:${lastColor};">${lastLabel}</p>
+                  ${r.lastMonthValue > 0 ? `<p style="margin:1px 0 0;font-size:11px;color:#6b7280;">${fmtMoney(r.lastMonthValue)} value</p>` : `<p style="margin:1px 0 0;font-size:11px;color:#d1d5db;">No value tracked</p>`}
+                </td>
+                <td style="width:1px;background:#e5e7eb;"></td>
+                <td style="width:16px;"></td>
+                <td style="vertical-align:top;">
+                  <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em;">${thisMonthLabel} (so far)</p>
+                  <p style="margin:2px 0 0;font-size:15px;font-weight:800;color:${thisColor};">${thisLabel}</p>
+                  ${r.thisMonthValue > 0 ? `<p style="margin:1px 0 0;font-size:11px;color:#6b7280;">${fmtMoney(r.thisMonthValue)} value</p>` : `<p style="margin:1px 0 0;font-size:11px;color:#d1d5db;">No value tracked</p>`}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`;
+        })()}
 
       </table>
     </td></tr>`;

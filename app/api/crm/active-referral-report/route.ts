@@ -71,6 +71,63 @@ export async function POST() {
     refContactToClientContacts.set(cc.referralPartnerId, arr);
   }
 
+  // ── Monthly referral goal calculations ────────────────────────────────────────
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const thisMonth = now.getMonth(); // 0-indexed
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(thisYear, thisMonth + 1, 0).getDate();
+
+  const lastMonthDate = new Date(thisYear, thisMonth - 1, 1);
+  const lastMonthYear = lastMonthDate.getFullYear();
+  const lastMonthMonth = lastMonthDate.getMonth();
+
+  const thisMonthLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+  const lastMonthLabel = lastMonthDate.toLocaleString("en-US", { month: "short", year: "numeric" });
+
+  const MONTHLY_GOALS: Record<string, number> = { High: 3, Medium: 1, Low: 0 };
+
+  // Company-level referral stats: count client contacts (=referrals) created this/last month
+  // group all contacts by company so we can aggregate across all referral contacts at a firm
+  const contactIdsByCompany = new Map<string, Set<string>>();
+  for (const contact of allContacts) {
+    const s = contactIdsByCompany.get(contact.referralCompanyId) ?? new Set();
+    s.add(contact.id);
+    contactIdsByCompany.set(contact.referralCompanyId, s);
+  }
+
+  const companyGoalStats = new Map<string, {
+    monthlyGoal: number;
+    pacingGoal: number;
+    thisMonthCount: number;
+    thisMonthValue: number;
+    lastMonthCount: number;
+    lastMonthValue: number;
+  }>();
+
+  for (const company of companies) {
+    const refContactIds = contactIdsByCompany.get(company.id) ?? new Set();
+    const goal = MONTHLY_GOALS[company.priority ?? ""] ?? 0;
+    const pacing = goal === 0 ? 0 : Math.ceil(goal * dayOfMonth / daysInMonth);
+
+    let thisMonthCount = 0, thisMonthValue = 0, lastMonthCount = 0, lastMonthValue = 0;
+
+    for (const cc of clientContacts) {
+      if (!cc.referralPartnerId || !refContactIds.has(cc.referralPartnerId)) continue;
+      const d = new Date(cc.createdAt);
+      const oppsValue = (oppsByClientContactId.get(cc.id) ?? []).reduce((s, o) => s + o.estimatedValue, 0);
+      if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) {
+        thisMonthCount++;
+        thisMonthValue += oppsValue;
+      } else if (d.getFullYear() === lastMonthYear && d.getMonth() === lastMonthMonth) {
+        lastMonthCount++;
+        lastMonthValue += oppsValue;
+      }
+    }
+
+    companyGoalStats.set(company.id, { monthlyGoal: goal, pacingGoal: pacing, thisMonthCount, thisMonthValue, lastMonthCount, lastMonthValue });
+  }
+
   const rows: ActiveReferralContactRow[] = activeContacts.map(contact => {
     const company = companyMap.get(contact.referralCompanyId);
     const ownerClerkId = company?.assignedToClerkId;
@@ -83,6 +140,8 @@ export async function POST() {
     const lostCount = contactOpps.filter(o => o.stage === "Lost").length;
     const activeCount = contactOpps.filter(o => !["Won", "Lost"].includes(o.stage)).length;
     const wonValue = wonOpps.reduce((s, o) => s + o.estimatedValue, 0);
+
+    const goalStats = companyGoalStats.get(contact.referralCompanyId);
 
     return {
       contactName: contact.name,
@@ -107,6 +166,12 @@ export async function POST() {
       lostCount,
       activeCount,
       wonValue,
+      monthlyGoal: goalStats?.monthlyGoal ?? 0,
+      pacingGoal: goalStats?.pacingGoal ?? 0,
+      thisMonthCount: goalStats?.thisMonthCount ?? 0,
+      thisMonthValue: goalStats?.thisMonthValue ?? 0,
+      lastMonthCount: goalStats?.lastMonthCount ?? 0,
+      lastMonthValue: goalStats?.lastMonthValue ?? 0,
     };
   });
 
@@ -133,7 +198,7 @@ export async function POST() {
     timeZoneName: "short",
   });
 
-  const html = buildActiveReferralEmail({ rows, generatedAt });
+  const html = buildActiveReferralEmail({ rows, generatedAt, thisMonthLabel, lastMonthLabel });
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const { error } = await resend.emails.send({
