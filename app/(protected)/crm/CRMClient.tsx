@@ -55,6 +55,7 @@ interface CRMClientProps {
   gmailEmail?: string;
   gmailTokenRevoked?: boolean;
   tenants: Tenant[];
+  currentUserId: string;
 }
 
 const STAGES: OpportunityStage[] = ["Lead", "Qualifying", "Proposing", "Won", "Lost"];
@@ -4684,11 +4685,12 @@ function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { g
 }
 
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
-export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants }: CRMClientProps) {
+export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants, currentUserId }: CRMClientProps) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
   const [localContacts, setLocalContacts] = useState(clientContacts);
+  const [localReferralContacts, setLocalReferralContacts] = useState(referralContacts);
   const [pendingContactId, setPendingContactId] = useState<string | null>(null);
   const [pendingOppId, setPendingOppId] = useState<string | null>(null);
   const [oppInitialStage, setOppInitialStage] = useState<OpportunityStage | "All">("All");
@@ -4703,6 +4705,10 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       if (idx >= 0) return prev.map(c => c.id === contact.id ? contact : c);
       return [contact, ...prev];
     });
+  }
+
+  function handleReferralContactUpdated(id: string, updates: Partial<ReferralContact>) {
+    setLocalReferralContacts(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
   }
 
   function handleCreateOpportunity(contactId: string) {
@@ -4818,7 +4824,13 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         />
       )}
       {tab === "tasks" && (
-        <TasksTab referralContacts={referralContacts} companies={companies} />
+        <TasksTab
+          referralContacts={localReferralContacts}
+          companies={companies}
+          currentUserId={currentUserId}
+          staffMembers={staffMembers}
+          onContactUpdated={handleReferralContactUpdated}
+        />
       )}
       {tab === "voice" && (
         <VoiceLogTab referralContacts={referralContacts} companies={companies} />

@@ -1,19 +1,23 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { ReferralContact, ReferralCompany } from "@/lib/types";
+import type { ReferralContact, ReferralCompany, StaffMember } from "@/lib/types";
 
 interface Props {
   referralContacts: ReferralContact[];
   companies: ReferralCompany[];
+  currentUserId: string;
+  staffMembers: StaffMember[];
+  onContactUpdated: (id: string, updates: Partial<ReferralContact>) => void;
 }
 
 interface Task {
   contactId: string;
   contactName: string;
   companyName: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   note: string;
+  ownerClerkId: string;
 }
 
 type ViewMode = "week" | "day" | "month";
@@ -27,7 +31,7 @@ function addDays(dateStr: string, n: number): string {
 
 function startOfWeek(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay(); // 0=Sun
+  const day = d.getDay();
   d.setDate(d.getDate() - day);
   return d.toISOString().slice(0, 10);
 }
@@ -58,7 +62,7 @@ function fmtWeekRange(start: string): string {
   return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-const ACTIVITY_TYPES = ["Call", "Meeting", "Email", "Text Message", "Note"] as const;
+const ACTIVITY_TYPES = ["Call", "Meeting", "Email", "Text Message", "Note", "Task"] as const;
 type ActivityType = typeof ACTIVITY_TYPES[number];
 
 interface ConfirmState {
@@ -68,11 +72,11 @@ interface ConfirmState {
   activityNote: string;
 }
 
-export default function TasksTab({ referralContacts, companies }: Props) {
+export default function TasksTab({ referralContacts, companies, currentUserId, staffMembers, onContactUpdated }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
-  const [anchor, setAnchor] = useState(today); // start of current period
-  const [selected, setSelected] = useState<Set<string>>(new Set()); // contactId keys
+  const [anchor, setAnchor] = useState(today);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortCol, setSortCol] = useState<SortCol>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filterSearch, setFilterSearch] = useState("");
@@ -80,10 +84,18 @@ export default function TasksTab({ referralContacts, companies }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  // "all" or a clerkUserId — defaults to the logged-in user
+  const [userFilter, setUserFilter] = useState<string>(currentUserId);
 
   const companyMap = useMemo(() => new Map(companies.map(c => [c.id, c])), [companies]);
 
-  // Build task list from referral contacts with next steps
+  // Sales staff who can own contacts (for the filter bar)
+  const salesStaff = useMemo(
+    () => staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin" || s.role === "TTTManager"),
+    [staffMembers]
+  );
+
+  // All tasks across every contact with a next step (excluding already-completed this session)
   const allTasks = useMemo<Task[]>(() => {
     return referralContacts
       .filter(rc => rc.nextStepDate || rc.nextStepNote)
@@ -94,8 +106,15 @@ export default function TasksTab({ referralContacts, companies }: Props) {
         companyName: companyMap.get(rc.referralCompanyId)?.name ?? "—",
         date: rc.nextStepDate ?? today,
         note: rc.nextStepNote ?? "",
+        ownerClerkId: companyMap.get(rc.referralCompanyId)?.assignedToClerkId ?? "",
       }));
   }, [referralContacts, companyMap, completedIds, today]);
+
+  // Apply owner filter
+  const visibleTasks = useMemo(
+    () => userFilter === "all" ? allTasks : allTasks.filter(t => t.ownerClerkId === userFilter),
+    [allTasks, userFilter]
+  );
 
   // Calendar period bounds
   const periodStart = useMemo(() => {
@@ -129,17 +148,17 @@ export default function TasksTab({ referralContacts, companies }: Props) {
 
   const tasksByDay = useMemo(() => {
     const map = new Map<string, Task[]>();
-    for (const t of allTasks) {
+    for (const t of visibleTasks) {
       const list = map.get(t.date) ?? [];
       list.push(t);
       map.set(t.date, list);
     }
     return map;
-  }, [allTasks]);
+  }, [visibleTasks]);
 
-  // Sorted/filtered table
+  // Sorted/filtered table rows
   const tableRows = useMemo(() => {
-    let rows = allTasks.filter(t =>
+    let rows = visibleTasks.filter(t =>
       !filterSearch ||
       t.contactName.toLowerCase().includes(filterSearch.toLowerCase()) ||
       t.companyName.toLowerCase().includes(filterSearch.toLowerCase()) ||
@@ -153,7 +172,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
       return sortDir === "asc" ? v : -v;
     });
     return rows;
-  }, [allTasks, filterSearch, sortCol, sortDir]);
+  }, [visibleTasks, filterSearch, sortCol, sortDir]);
 
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -168,10 +187,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
     });
   }
 
-  function selectAll() {
-    setSelected(new Set(tableRows.map(t => t.contactId)));
-  }
-
+  function selectAll() { setSelected(new Set(tableRows.map(t => t.contactId))); }
   function clearAll() { setSelected(new Set()); }
 
   function openConfirm(tasks: Task[]) {
@@ -180,7 +196,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
     setConfirm({
       tasks,
       activityType: "Call",
-      activityDate: firstTask.date,
+      activityDate: firstTask.date <= today ? today : firstTask.date,
       activityNote: tasks.length === 1 ? firstTask.note : `Completed ${tasks.length} tasks`,
     });
     setSaveError("");
@@ -193,27 +209,42 @@ export default function TasksTab({ referralContacts, companies }: Props) {
     try {
       for (const task of confirm.tasks) {
         // 1. Log activity on referral contact
-        await fetch("/api/crm/activities", {
+        const actRes = await fetch("/api/crm/activities", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             clientContactId: task.contactId,
             type: confirm.activityType,
             activityDate: confirm.activityDate,
-            note: confirm.activityNote || task.note || `Completed task`,
+            note: confirm.activityNote || task.note || "Completed task",
           }),
         });
+        if (!actRes.ok) {
+          const err = await actRes.text().catch(() => actRes.statusText);
+          throw new Error(`Failed to log activity: ${err}`);
+        }
 
-        // 2. Clear next step + update lastActivityDate on contact
-        await fetch("/api/crm/contacts", {
+        // 2. Clear next step fields + update lastActivityDate on the referral contact
+        const contactRes = await fetch("/api/crm/contacts", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: task.contactId,
-            nextStepDate: "",
+            nextStepDate: null,
             nextStepNote: "",
             lastActivityDate: confirm.activityDate,
           }),
+        });
+        if (!contactRes.ok) {
+          const err = await contactRes.text().catch(() => contactRes.statusText);
+          throw new Error(`Failed to update contact: ${err}`);
+        }
+
+        // 3. Optimistically update parent state — no page refresh needed
+        onContactUpdated(task.contactId, {
+          lastActivityDate: confirm.activityDate,
+          nextStepDate: undefined,
+          nextStepNote: undefined,
         });
       }
 
@@ -251,17 +282,28 @@ export default function TasksTab({ referralContacts, companies }: Props) {
     </span>
   );
 
+  // Count tasks per owner for filter pills
+  const taskCountByOwner = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of allTasks) {
+      m.set(t.ownerClerkId, (m.get(t.ownerClerkId) ?? 0) + 1);
+    }
+    return m;
+  }, [allTasks]);
+
+  const currentUserName = salesStaff.find(s => s.clerkUserId === currentUserId)?.displayName ?? "Me";
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Next steps across all referral contacts</p>
+          <p className="text-sm text-gray-500 mt-0.5">Next steps across referral contacts</p>
         </div>
         {selected.size > 0 && (
           <button
-            onClick={() => openConfirm(allTasks.filter(t => selected.has(t.contactId)))}
+            onClick={() => openConfirm(visibleTasks.filter(t => selected.has(t.contactId)))}
             className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -270,6 +312,62 @@ export default function TasksTab({ referralContacts, companies }: Props) {
             Complete {selected.size} selected
           </button>
         )}
+      </div>
+
+      {/* Owner filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* My Tasks pill */}
+        <button
+          onClick={() => setUserFilter(currentUserId)}
+          className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+            userFilter === currentUserId
+              ? "bg-forest-600 text-white border-forest-600"
+              : "border-gray-300 text-gray-600 hover:border-forest-400"
+          }`}
+        >
+          My Tasks
+          {taskCountByOwner.get(currentUserId) != null && (
+            <span className={`ml-1.5 ${userFilter === currentUserId ? "opacity-75" : "text-gray-400"}`}>
+              {taskCountByOwner.get(currentUserId)}
+            </span>
+          )}
+        </button>
+
+        {/* Other staff pills */}
+        {salesStaff
+          .filter(s => s.clerkUserId !== currentUserId)
+          .filter(s => (taskCountByOwner.get(s.clerkUserId) ?? 0) > 0)
+          .map(s => (
+            <button
+              key={s.clerkUserId}
+              onClick={() => setUserFilter(s.clerkUserId)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                userFilter === s.clerkUserId
+                  ? "bg-forest-600 text-white border-forest-600"
+                  : "border-gray-300 text-gray-600 hover:border-forest-400"
+              }`}
+            >
+              {s.displayName}
+              <span className={`ml-1.5 ${userFilter === s.clerkUserId ? "opacity-75" : "text-gray-400"}`}>
+                {taskCountByOwner.get(s.clerkUserId)}
+              </span>
+            </button>
+          ))}
+
+        {/* All Tasks pill */}
+        <button
+          onClick={() => setUserFilter("all")}
+          className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+            userFilter === "all"
+              ? "bg-forest-600 text-white border-forest-600"
+              : "border-gray-300 text-gray-600 hover:border-forest-400"
+          }`}
+        >
+          All Tasks
+          <span className={`ml-1.5 ${userFilter === "all" ? "opacity-75" : "text-gray-400"}`}>
+            {allTasks.length}
+          </span>
+        </button>
       </div>
 
       {/* Calendar */}
@@ -284,7 +382,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
             <button onClick={() => navigate(1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-500">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
             </button>
-            <button onClick={() => { setAnchor(today); }} className="ml-2 text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">Today</button>
+            <button onClick={() => setAnchor(today)} className="ml-2 text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600">Today</button>
           </div>
           <div className="flex gap-1">
             {(["day", "week", "month"] as ViewMode[]).map(m => (
@@ -296,7 +394,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
           </div>
         </div>
 
-        {/* Calendar grid */}
+        {/* Week view */}
         {viewMode === "week" && (
           <div className="grid grid-cols-7 divide-x divide-gray-100">
             {periodDays.map(day => {
@@ -322,6 +420,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
           </div>
         )}
 
+        {/* Day view */}
         {viewMode === "day" && (
           <div className="p-4">
             {(tasksByDay.get(anchor) ?? []).length === 0 ? (
@@ -346,15 +445,14 @@ export default function TasksTab({ referralContacts, companies }: Props) {
           </div>
         )}
 
+        {/* Month view */}
         {viewMode === "month" && (
           <div>
-            {/* Day-of-week headers */}
             <div className="grid grid-cols-7 border-b border-gray-100">
               {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
                 <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500">{d}</div>
               ))}
             </div>
-            {/* Offset + days */}
             {(() => {
               const firstDay = new Date(periodStart + "T00:00:00").getDay();
               const cells: (string | null)[] = [...Array(firstDay).fill(null), ...periodDays];
@@ -410,7 +508,10 @@ export default function TasksTab({ referralContacts, companies }: Props) {
                 : <button onClick={selectAll} className="text-xs text-gray-500 hover:text-gray-700">Select all</button>
             )}
           </div>
-          <p className="text-xs text-gray-400">{tableRows.length} task{tableRows.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-gray-400">
+            {tableRows.length} task{tableRows.length !== 1 ? "s" : ""}
+            {userFilter !== "all" && userFilter === currentUserId ? " · My Tasks" : userFilter !== "all" ? ` · ${salesStaff.find(s => s.clerkUserId === userFilter)?.displayName ?? ""}` : ""}
+          </p>
         </div>
 
         <table className="w-full text-sm">
@@ -440,7 +541,11 @@ export default function TasksTab({ referralContacts, companies }: Props) {
             {tableRows.length === 0 && (
               <tr>
                 <td colSpan={6} className="text-center py-10 text-gray-400">
-                  {allTasks.length === 0 ? "No open tasks — all next steps are clear!" : "No tasks match your search"}
+                  {visibleTasks.length === 0
+                    ? userFilter === currentUserId
+                      ? "No open tasks for you — all your next steps are clear!"
+                      : "No open tasks for this filter"
+                    : "No tasks match your search"}
                 </td>
               </tr>
             )}
@@ -475,7 +580,7 @@ export default function TasksTab({ referralContacts, companies }: Props) {
         </table>
       </div>
 
-      {/* Confirm / Log Activity modal */}
+      {/* Log Activity modal */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
