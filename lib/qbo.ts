@@ -159,7 +159,16 @@ export async function qboFetch(path: string, options?: RequestInit): Promise<Res
   if (!auth) throw new Error("QuickBooks is not connected");
   const { accessToken, realmId } = auth;
 
-  const res = await doQBOFetch(path, accessToken, realmId, options);
+  let res = await doQBOFetch(path, accessToken, realmId, options);
+
+  // Retry once on 429 (ThrottleExceeded) after a short back-off.
+  if (res.status === 429) {
+    const retryAfterHeader = res.headers.get("Retry-After");
+    const waitMs = retryAfterHeader ? parseInt(retryAfterHeader, 10) * 1000 : 2000;
+    await new Promise(r => setTimeout(r, waitMs));
+    res = await doQBOFetch(path, accessToken, realmId, options);
+  }
+
   const tid = res.headers.get("intuit_tid");
 
   // If we get a 401, the token may have been revoked mid-session.
@@ -280,21 +289,21 @@ export async function createQBOInvoice(opts: {
 }): Promise<{ id: string; docNumber: string }> {
   const customerId = await findOrCreateQBOCustomer(opts.customerName);
 
-  const lines = await Promise.all(
-    opts.lineItems.map(async (item) => {
-      const itemId = item.qboItemId || (await findOrCreateQBOItem(item.serviceName));
-      return {
-        Amount: Math.round(item.hours * item.rate * 100) / 100,
-        DetailType: "SalesItemLineDetail",
-        Description: `${item.serviceName} (${item.hours} hrs @ $${item.rate}/hr)`,
-        SalesItemLineDetail: {
-          ItemRef: { value: itemId },
-          Qty: item.hours,
-          UnitPrice: item.rate,
-        },
-      };
-    })
-  );
+  // Serialize item lookups — parallel calls burst QBO's rate limit (429).
+  const lines: object[] = [];
+  for (const item of opts.lineItems) {
+    const itemId = item.qboItemId || (await findOrCreateQBOItem(item.serviceName));
+    lines.push({
+      Amount: Math.round(item.hours * item.rate * 100) / 100,
+      DetailType: "SalesItemLineDetail",
+      Description: `${item.serviceName} (${item.hours} hrs @ $${item.rate}/hr)`,
+      SalesItemLineDetail: {
+        ItemRef: { value: itemId },
+        Qty: item.hours,
+        UnitPrice: item.rate,
+      },
+    });
+  }
 
   const invoicePayload: Record<string, unknown> = {
     CustomerRef: { value: customerId },
