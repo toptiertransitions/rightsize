@@ -238,14 +238,22 @@ async function findOrCreateQBOItem(serviceName: string): Promise<string> {
   const items = data.QueryResponse?.Item;
   if (items?.length > 0) return items[0].Id;
 
-  // Need an income account to create a service item
-  const acctRes = await qboFetch(
-    `/query?query=${encodeURIComponent("SELECT * FROM Account WHERE AccountType = 'Income' AND Active = true MAXRESULTS 1")}`
-  );
-  if (!acctRes.ok) throw new Error("QBO income account query failed");
-  const acctData = await acctRes.json();
-  const account = acctData.QueryResponse?.Account?.[0];
-  if (!account) throw new Error("No income account found in QBO — please create one first");
+  // Need an income account to create a service item.
+  // Try 'Income' first, then 'Other Income' as a fallback (some QBO companies only have the latter).
+  let account: { Id: string } | undefined;
+  for (const accountType of ["Income", "Other Income"]) {
+    const acctRes = await qboFetch(
+      `/query?query=${encodeURIComponent(`SELECT * FROM Account WHERE AccountType = '${accountType}' AND Active = true MAXRESULTS 1`)}`
+    );
+    if (!acctRes.ok) {
+      const body = await acctRes.text();
+      throw new Error(`QBO income account query failed (${acctRes.status}): ${body}`);
+    }
+    const acctData = await acctRes.json();
+    account = acctData.QueryResponse?.Account?.[0];
+    if (account) break;
+  }
+  if (!account) throw new Error("No income account found in QBO — please create an Income or Other Income account in QuickBooks first");
 
   const createRes = await qboFetch("/item", {
     method: "POST",
