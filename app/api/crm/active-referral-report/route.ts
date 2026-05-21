@@ -103,6 +103,7 @@ export async function POST() {
     thisMonthValue: number;
     lastMonthCount: number;
     lastMonthValue: number;
+    thisMonthReferrals: { clientName: string; city?: string; state?: string; value: number }[];
   }>();
 
   for (const company of companies) {
@@ -111,21 +112,25 @@ export async function POST() {
     const pacing = goal === 0 ? 0 : Math.ceil(goal * dayOfMonth / daysInMonth);
 
     let thisMonthCount = 0, thisMonthValue = 0, lastMonthCount = 0, lastMonthValue = 0;
+    const thisMonthReferrals: { clientName: string; city?: string; state?: string; value: number }[] = [];
 
     for (const cc of clientContacts) {
       if (!cc.referralPartnerId || !refContactIds.has(cc.referralPartnerId)) continue;
       const d = new Date(cc.createdAt);
-      const oppsValue = (oppsByClientContactId.get(cc.id) ?? []).reduce((s, o) => s + o.estimatedValue, 0);
+      const ccOpps = oppsByClientContactId.get(cc.id) ?? [];
+      const oppsValue = ccOpps.reduce((s, o) => s + o.estimatedValue, 0);
       if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) {
         thisMonthCount++;
         thisMonthValue += oppsValue;
+        const oppWithCity = ccOpps.find(o => o.city);
+        thisMonthReferrals.push({ clientName: cc.name, city: oppWithCity?.city, state: oppWithCity?.state, value: oppsValue });
       } else if (d.getFullYear() === lastMonthYear && d.getMonth() === lastMonthMonth) {
         lastMonthCount++;
         lastMonthValue += oppsValue;
       }
     }
 
-    companyGoalStats.set(company.id, { monthlyGoal: goal, pacingGoal: pacing, thisMonthCount, thisMonthValue, lastMonthCount, lastMonthValue });
+    companyGoalStats.set(company.id, { monthlyGoal: goal, pacingGoal: pacing, thisMonthCount, thisMonthValue, lastMonthCount, lastMonthValue, thisMonthReferrals });
   }
 
   const rows: ActiveReferralContactRow[] = activeContacts.map(contact => {
@@ -172,6 +177,7 @@ export async function POST() {
       thisMonthValue: goalStats?.thisMonthValue ?? 0,
       lastMonthCount: goalStats?.lastMonthCount ?? 0,
       lastMonthValue: goalStats?.lastMonthValue ?? 0,
+      thisMonthReferrals: goalStats?.thisMonthReferrals ?? [],
       companyId: contact.referralCompanyId,
     };
   });

@@ -1634,6 +1634,7 @@ export type ActiveReferralContactRow = {
   thisMonthValue: number;
   lastMonthCount: number;
   lastMonthValue: number;
+  thisMonthReferrals: { clientName: string; city?: string; state?: string; value: number }[];
   companyId: string;
 };
 
@@ -1864,6 +1865,22 @@ export function buildActiveReferralEmail({
         </tr>
 
         ${contactSections}
+
+        ${first.thisMonthReferrals.length > 0 ? `
+        <!-- ── This month's referrals ── -->
+        <tr style="border-top:2px solid #e5e7eb;">
+          <td style="padding:10px 18px 12px;background:#fffbeb;">
+            <p style="margin:0 0 7px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#b45309;">${thisMonthLabel} Referrals (${first.thisMonthReferrals.length})</p>
+            <table cellpadding="0" cellspacing="0" width="100%">
+              ${first.thisMonthReferrals.map(ref => `
+              <tr>
+                <td style="padding:2px 0;font-size:12px;color:#111827;font-weight:600;">${ref.clientName}</td>
+                <td style="padding:2px 0 2px 12px;font-size:12px;color:#6b7280;white-space:nowrap;">${[ref.city, ref.state].filter(Boolean).join(", ") || "—"}</td>
+                <td style="padding:2px 0 2px 12px;font-size:12px;color:#374151;text-align:right;white-space:nowrap;font-weight:600;">${ref.value > 0 ? fmtMoney(ref.value) : "—"}</td>
+              </tr>`).join("")}
+            </table>
+          </td>
+        </tr>` : ""}
 
       </table>
     </td></tr>`;
