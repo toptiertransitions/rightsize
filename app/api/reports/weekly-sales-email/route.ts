@@ -20,14 +20,19 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Returns the gross billed amount for a Full invoice — adds back any deposit
-// credit line items (negative rate) so the number reflects the full service value
-// rather than the balance-due after deposit deduction.
+// Returns the gross service value for a Full invoice.
+// inv.amount = service lines + expenses − deposit credit applied.
+// Summing only positive-rate line items gives pure service value,
+// correctly excluding both deposit credits (negative rate) and
+// pass-through expense items (stored in expenseItems, not lineItems).
+// Falls back to inv.amount for invoices with no stored line items.
 function grossInvoiceAmount(inv: Invoice): number {
-  const depositCredit = (inv.lineItems ?? [])
-    .filter(li => li.rate < 0)
-    .reduce((s, li) => s + Math.abs(li.rate * li.hours), 0);
-  return inv.amount + depositCredit;
+  if (inv.lineItems && inv.lineItems.length > 0) {
+    return inv.lineItems
+      .filter(li => li.rate > 0)
+      .reduce((s, li) => s + li.rate * li.hours, 0);
+  }
+  return inv.amount;
 }
 
 function fmtMoney(n: number): string {
