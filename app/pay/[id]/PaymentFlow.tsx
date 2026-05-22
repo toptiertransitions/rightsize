@@ -133,26 +133,6 @@ export function PaymentFlow({
             tokenResolveRef.current = null;
             tokenRejectRef.current = null;
           },
-          settings: {
-            payment: {
-              types: ["card"],
-              card: { requireCVV: true, mask_number: true },
-            },
-            styles: {
-              input: {
-                border: "1px solid #d1d5db",
-                "border-radius": "0.5rem",
-                padding: "10px 12px",
-                "font-size": "14px",
-                color: "#111827",
-              },
-              "input:focus": {
-                "border-color": "#2E6B4F",
-                outline: "none",
-                "box-shadow": "0 0 0 2px rgba(46,107,79,0.2)",
-              },
-            },
-          },
         });
       } catch (e) {
         console.error("[Tokenizer] init error:", e);
@@ -374,8 +354,9 @@ export function PaymentFlow({
         )}
         {fpLoadError && <p className="text-sm text-red-600 py-2">{fpLoadError}</p>}
 
-        {/* FluidPay Tokenizer renders card fields here */}
-        <div id="fp-tokenizer-container" style={{ display: fpReady ? undefined : "none" }} />
+        {/* FluidPay Tokenizer renders card fields here — use height:0/overflow:hidden instead of
+            display:none so the iframe initializes at the correct container width */}
+        <div id="fp-tokenizer-container" style={fpReady ? {} : { height: 0, overflow: "hidden" }} />
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Billing Zip Code" value={zipCode} onChange={v => setZipCode(v.replace(/\D/g, "").slice(0, 5))} placeholder="60601" inputMode="numeric" maxLength={5} />
