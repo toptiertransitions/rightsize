@@ -273,7 +273,7 @@ export function PaymentFlow({
             sub: "Visa, Mastercard, Amex, Discover",
             target: "card_form" as Step,
             displayAmount: fmt(cardAmount),
-            feeNote: `+3.99% fee`,
+            feeNote: `+3.99%`,
           },
           {
             m: "ach" as PayMethod,
@@ -351,7 +351,7 @@ export function PaymentFlow({
         <div className="bg-[#f0fdf4] border border-green-100 rounded-xl px-5 py-4 text-center">
           <p className="text-xs text-[#2E6B4F] uppercase tracking-wide font-semibold mb-1">Card Payment Amount</p>
           <p className="text-4xl font-bold text-[#2E6B4F]">{fmt(cardAmount)}</p>
-          <p className="text-xs text-gray-400 mt-1">Includes {fmt(surchargeDelta)} (3.99%) card processing fee</p>
+          <p className="text-xs text-gray-400 mt-1">Excludes 3.99% ACH/Check Discount</p>
         </div>
 
         {/* Disclaimer */}
