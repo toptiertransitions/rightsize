@@ -20,6 +20,16 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Returns the gross billed amount for a Full invoice — adds back any deposit
+// credit line items (negative rate) so the number reflects the full service value
+// rather than the balance-due after deposit deduction.
+function grossInvoiceAmount(inv: Invoice): number {
+  const depositCredit = (inv.lineItems ?? [])
+    .filter(li => li.rate < 0)
+    .reduce((s, li) => s + Math.abs(li.rate * li.hours), 0);
+  return inv.amount + depositCredit;
+}
+
 function fmtMoney(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `$${Math.round(n / 1_000)}k`;
@@ -761,14 +771,14 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     .reduce((s, { c }) => s + c.totalCost, 0);
   const priorBilledActual = allInvoices
     .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === priorMonthKey)
-    .reduce((s, { inv }) => s + inv.amount, 0);
+    .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0);
 
   const signedMTD = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === curMonthKey)
     .reduce((s, { c }) => s + c.totalCost, 0);
   const billedMTD = allInvoices
     .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === curMonthKey)
-    .reduce((s, { inv }) => s + inv.amount, 0);
+    .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0);
 
   // ── Week-over-week trend ──
   const weekBuckets = buildWeekBuckets(8);
@@ -781,7 +791,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const billedPerWeek = weekBuckets.map((b) =>
     allInvoices
       .filter(({ inv }) => inBucket(inv.createdAt, b))
-      .reduce((s, { inv }) => s + inv.amount, 0)
+      .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0)
   );
 
   const n = weekBuckets.length;
@@ -845,7 +855,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
       ? inv.createdAt
       : existing.latestCreatedAt;
     invoiceSumByTenant.set(tenantId, {
-      total: (existing?.total ?? 0) + inv.amount,
+      total: (existing?.total ?? 0) + grossInvoiceAmount(inv),
       latestCreatedAt,
     });
   }
