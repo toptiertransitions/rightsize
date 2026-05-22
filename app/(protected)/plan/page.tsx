@@ -55,10 +55,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
     const visibleTenants = isAdminCaller ? allTenants : allTenants.filter(t => t.isTTT ?? true);
     const selectedTenants =
       tenantId === "__all_active__" ? visibleTenants.filter((t) => !t.isArchived) :
-      tenantId === "__all_archived__" ? visibleTenants.filter((t) => t.isArchived) :
+      tenantId === "__all_archived__" ? visibleTenants.filter((t) => t.isArchived && !t.isLostDeal) :
       visibleTenants;
 
-    const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+    const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
 
     const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
       getPlanEntriesForTenants(selectedTenants.map(t => t.id)).catch(() => []),
@@ -109,10 +109,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const visibleTenants2 = isAdminCaller2 ? allTenants : allTenants.filter(t => t.isTTT ?? true);
       const showArchived = view === "archived";
       const selectedTenants = showArchived
-        ? visibleTenants2.filter(t => t.isArchived)
+        ? visibleTenants2.filter(t => t.isArchived && !t.isLostDeal)
         : visibleTenants2.filter(t => !t.isArchived);
       const currentTenantId = showArchived ? "__all_archived__" : "__all_active__";
-      const tenantOptions = visibleTenants2.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      const tenantOptions = visibleTenants2.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
 
       // Fetch plan entries, time entries, project files, and services for all tenants in selected group
       const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
@@ -180,7 +180,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         tenantIdsWithEntries.map(id => getTimeEntries({ tenantId: id }).catch(() => []))
       ).then(r => r.flat());
 
-      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
 
       return (
@@ -324,8 +324,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
       : [];
   }
   const tenantOptions = (isManagerOrAdmin || isTTTStaff)
-    ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }))
-    : [{ id: tenantId, name: tenant.name, isArchived: tenant.isArchived ?? false, address: tenant.address, city: tenant.city, state: tenant.state, zip: tenant.zip, destAddress: tenant.destAddress, destCity: tenant.destCity, destState: tenant.destState, destZip: tenant.destZip }];
+    ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }))
+    : [{ id: tenantId, name: tenant.name, isArchived: tenant.isArchived ?? false, isLostDeal: tenant.isLostDeal ?? false, address: tenant.address, city: tenant.city, state: tenant.state, zip: tenant.zip, destAddress: tenant.destAddress, destCity: tenant.destCity, destState: tenant.destState, destZip: tenant.destZip }];
   const serviceNames = serviceList.map(s => s.name);
 
   const isTTTStaffOrAbove = sysRole !== null;

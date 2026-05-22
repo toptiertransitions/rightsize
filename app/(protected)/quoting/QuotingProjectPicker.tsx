@@ -24,6 +24,7 @@ export function QuotingProjectPicker({
   const [viewMode, setViewMode] = useState<ViewMode>("active");
 
   const filtered = tenants.filter(t => {
+    if (t.isLostDeal) return false;
     if (viewMode === "active" && t.isArchived) return false;
     if (viewMode === "archived" && !t.isArchived) return false;
     const q = search.toLowerCase();

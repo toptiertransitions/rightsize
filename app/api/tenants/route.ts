@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const includeArchived = req.nextUrl.searchParams.get("includeArchived") === "true";
   const all = await getTenants().catch(() => []);
   const tenants = all
+    .filter(t => !t.isLostDeal) // Lost deals never appear in pickers
     .filter(t => includeArchived || !t.isArchived)
     .filter(t => isTTTAdminCaller || (t.isTTT ?? true)) // Non-TTT invisible to staff/manager
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -72,7 +73,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
+  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -83,6 +84,10 @@ export async function PATCH(req: NextRequest) {
   if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // Only TTTAdmin can set Lost Deal; when marking lost, also force archived
+  const resolvedIsLostDeal = (typeof isLostDeal === "boolean" && sysRole === "TTTAdmin") ? isLostDeal : undefined;
+  const resolvedIsArchived = resolvedIsLostDeal === true ? true : (typeof isArchived === "boolean" ? isArchived : undefined);
 
   // Only TTTAdmin can flip isTTT
   const resolvedIsTTT = (typeof isTTT === "boolean" && sysRole === "TTTAdmin") ? isTTT : undefined;
@@ -103,7 +108,8 @@ export async function PATCH(req: NextRequest) {
     zip: typeof zip === "string" ? zip : undefined,
     estimatedHours: typeof estimatedHours === "number" ? estimatedHours : undefined,
     estimatedServiceHours: Array.isArray(estimatedServiceHours) ? estimatedServiceHours : undefined,
-    isArchived: typeof isArchived === "boolean" ? isArchived : undefined,
+    isArchived: resolvedIsArchived,
+    isLostDeal: resolvedIsLostDeal,
     isTTT: resolvedIsTTT,
     isConsignmentOnly: resolvedConsignment,
     destinationSqFt: typeof destinationSqFt === "number" ? destinationSqFt : undefined,

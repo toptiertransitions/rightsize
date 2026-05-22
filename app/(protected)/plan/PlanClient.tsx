@@ -542,7 +542,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                   const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
                   const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isConsignmentOnly));
                   const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isConsignmentOnly));
-                  const archived = sort(tenantOptions.filter(t => t.isArchived));
+                  const archived = sort(tenantOptions.filter(t => t.isArchived && !t.isLostDeal));
                   return (
                     <>
                       {active.length > 0 && (
@@ -994,6 +994,7 @@ interface TenantOption {
   id: string;
   name: string;
   isArchived?: boolean;
+  isLostDeal?: boolean;
   isConsignmentOnly?: boolean;
   address?: string;
   city?: string;
@@ -1258,7 +1259,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                     const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
                     const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isConsignmentOnly));
                     const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isConsignmentOnly));
-                    const archived = sort(tenantOptions.filter(t => t.isArchived));
+                    const archived = sort(tenantOptions.filter(t => t.isArchived && !t.isLostDeal));
 
                     const ProjectBtn = ({ t, dim }: { t: TenantOption; dim?: boolean }) => (
                       <button

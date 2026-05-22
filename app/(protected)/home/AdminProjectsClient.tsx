@@ -30,7 +30,9 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const [archiving, setArchiving] = useState<string | null>(null);
   const [togglingTTT, setTogglingTTT] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [showLostDeal, setShowLostDeal] = useState(false);
   const [archivedFilter, setArchivedFilter] = useState("");
+  const [lostDealFilter, setLostDealFilter] = useState("");
   const [archivedSortField, setArchivedSortField] = useState<SortField>("name");
   const [archivedSortDir, setArchivedSortDir] = useState<SortDir>("asc");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   }, [tenants, activeSearch, activeSortField, activeSortDir]);
 
   const sortedArchivedTenants = useMemo(() => {
-    const filtered = tenants.filter(t => t.isArchived).filter(t => {
+    const filtered = tenants.filter(t => t.isArchived && !t.isLostDeal).filter(t => {
       if (!archivedFilter) return true;
       const q = archivedFilter.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -129,7 +131,18 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
     else { setArchivedSortField(field); setArchivedSortDir("asc"); }
   }
 
-  const archivedCount = tenants.filter(t => t.isArchived).length;
+  const sortedLostDealTenants = useMemo(() => {
+    const filtered = tenants.filter(t => t.isLostDeal).filter(t => {
+      if (!lostDealFilter) return true;
+      const q = lostDealFilter.toLowerCase();
+      const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
+      return t.name.toLowerCase().includes(q) || loc.includes(q);
+    });
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [tenants, lostDealFilter]);
+
+  const archivedCount = tenants.filter(t => t.isArchived && !t.isLostDeal).length;
+  const lostDealCount = tenants.filter(t => t.isLostDeal).length;
   const consignmentCount = tenants.filter(t => !t.isArchived && (t.isConsignmentOnly ?? false)).length;
 
   function toggleConsignmentSort(field: SortField) {
@@ -223,6 +236,36 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
       });
       if (!res.ok) return;
       setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isArchived } : t));
+    } finally {
+      setArchiving(null);
+    }
+  }
+
+  async function setLostDeal(tenantId: string) {
+    setArchiving(tenantId);
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, isLostDeal: true, isArchived: true }),
+      });
+      if (!res.ok) return;
+      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isLostDeal: true, isArchived: true } : t));
+    } finally {
+      setArchiving(null);
+    }
+  }
+
+  async function restoreFromLostDeal(tenantId: string) {
+    setArchiving(tenantId);
+    try {
+      const res = await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, isLostDeal: false }),
+      });
+      if (!res.ok) return;
+      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isLostDeal: false } : t));
     } finally {
       setArchiving(null);
     }
@@ -814,12 +857,103 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
                           <td className="px-4 py-3 text-gray-400">{location || "—"}</td>
                           <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
                           <td className="px-4 py-3 text-right">
+                            <div className="flex items-center gap-3 justify-end">
+                              {isAdmin && (
+                                <button
+                                  onClick={() => requestConfirm(`Mark "${tenant.name}" as Lost Deal? It will be hidden from all project dropdowns and can only be restored to Archived.`, () => setLostDeal(tenant.id))}
+                                  disabled={archiving === tenant.id}
+                                  className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                                >
+                                  Lost Deal
+                                </button>
+                              )}
+                              <button
+                                onClick={() => requestConfirm(`Unarchive "${tenant.name}"?`, () => setArchived(tenant.id, false))}
+                                disabled={archiving === tenant.id}
+                                className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
+                              >
+                                {archiving === tenant.id ? "Restoring…" : "Unarchive"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Lost Deal accordion (Admin only) ── */}
+      {isAdmin && lostDealCount > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowLostDeal(v => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-red-400 hover:text-red-600 transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${showLostDeal ? "rotate-90" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Lost Deals ({lostDealCount})
+          </button>
+
+          {showLostDeal && (
+            <div className="mt-4 opacity-70">
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={lostDealFilter}
+                  onChange={e => setLostDealFilter(e.target.value)}
+                  placeholder="Filter by name or location…"
+                  className="w-full sm:w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-red-200"
+                />
+              </div>
+
+              <div className="border border-red-100 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-red-50/60 border-b border-red-100">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium text-red-400">Project</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-red-400">Location</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-red-400">Created</th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-red-50 bg-white">
+                    {sortedLostDealTenants.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-gray-400 text-sm">
+                          No lost deal projects match your filter.
+                        </td>
+                      </tr>
+                    ) : sortedLostDealTenants.map(tenant => {
+                      const location = [tenant.city, tenant.state].filter(Boolean).join(", ");
+                      const createdDisplay = tenant.createdAt
+                        ? new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—";
+                      return (
+                        <tr key={tenant.id} className="hover:bg-red-50/40 transition-colors">
+                          <td className="px-4 py-3">
+                            <Link href={`/catalog?tenantId=${tenant.id}`}
+                              className="font-medium text-gray-500 hover:text-gray-700 transition-colors">
+                              {tenant.name}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-gray-400">{location || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
+                          <td className="px-4 py-3 text-right">
                             <button
-                              onClick={() => requestConfirm(`Unarchive "${tenant.name}"?`, () => setArchived(tenant.id, false))}
+                              onClick={() => requestConfirm(`Restore "${tenant.name}" to Archived? It will remain archived but become visible again in the archived list.`, () => restoreFromLostDeal(tenant.id))}
                               disabled={archiving === tenant.id}
                               className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
                             >
-                              {archiving === tenant.id ? "Restoring…" : "Unarchive"}
+                              {archiving === tenant.id ? "Restoring…" : "Restore to Archived"}
                             </button>
                           </td>
                         </tr>

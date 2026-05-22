@@ -19,7 +19,7 @@ export function WeeklySalesReportButton() {
   }
 
   const label = {
-    idle:    "Send Weekly Sales Report",
+    idle:    "Send Weekly Revenue Report",
     loading: "Generating report…",
     success: "Report sent to matt@toptiertransitions.com ✓",
     error:   "Failed — try again",

@@ -486,7 +486,7 @@ function buildEmail({
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Weekly Sales Report</title></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Weekly Revenue Report</title></head>
 <body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:28px 16px;">
 <tr><td align="center">
@@ -498,7 +498,7 @@ function buildEmail({
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
         <td>
           <p style="margin:0;font-size:11px;font-weight:700;color:${SAGE};text-transform:uppercase;letter-spacing:1.5px;">Top Tier Transitions</p>
-          <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:${DARK};letter-spacing:-0.5px;">Weekly Sales Report</p>
+          <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:${DARK};letter-spacing:-0.5px;">Weekly Revenue Report</p>
           <p style="margin:4px 0 0;font-size:14px;color:${MUTED};">${reportDate}</p>
         </td>
         <td align="right" style="vertical-align:middle;">
@@ -740,8 +740,8 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   }
   for (const [tid, invs] of invoicesByTenant) {
     for (const inv of invs) {
-      // All available invoices (Unpaid, PartiallyPaid, Paid) — none are deleted/archived
-      if (inv.createdAt) allInvoices.push({ tenantId: tid, inv });
+      // Exclude deposit invoices — only count final/full billing
+      if (inv.createdAt && inv.type !== "Deposit") allInvoices.push({ tenantId: tid, inv });
     }
   }
 
@@ -948,7 +948,7 @@ export async function POST() {
   await resend.emails.send({
     from: "Top Tier Transitions <noreply@toptiertransitions.com>",
     to: "matt@toptiertransitions.com",
-    subject: `Weekly Sales Report — ${reportDate}`,
+    subject: `Weekly Revenue Report — ${reportDate}`,
     html,
   });
 
