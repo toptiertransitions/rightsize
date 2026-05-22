@@ -49,10 +49,7 @@ export async function POST(
   const balance = invoice.amount - (invoice.paidAmount ?? 0);
   if (balance <= 0) return NextResponse.json({ error: "This invoice has already been paid." }, { status: 400 });
 
-  // Credit card carries a 3.99% processing surcharge; ACH/check do not
-  const surchargeRate = paymentMethod === "credit_card" ? 0.0399 : 0;
-  const chargeAmount = balance * (1 + surchargeRate);
-  const amountCents = Math.round(chargeAmount * 100);
+  const amountCents = Math.round(balance * 100);
 
   const billingAddress = {
     first_name: firstName,
@@ -149,16 +146,13 @@ export async function POST(
   const maskedCard = ((txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown>)?.masked_card as string | undefined;
   const authCode = ((txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown>)?.auth_code as string | undefined;
 
-  const surchargeNote = surchargeRate > 0
-    ? ` | surcharge: $${((chargeAmount - balance)).toFixed(2)} (3.99%)`
-    : "";
   const noteLines = [
     invoice.notes,
     [
       `FluidPay (${paymentMethod === "credit_card" ? "card" : "ACH"}): ${txnId ?? ""}`,
       maskedCard ? `card: ${maskedCard}` : "",
       authCode ? `auth: ${authCode}` : "",
-    ].filter(Boolean).join(" | ") + surchargeNote,
+    ].filter(Boolean).join(" | "),
   ].filter(Boolean).join(" | ");
 
   try {

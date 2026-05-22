@@ -105,18 +105,16 @@ export default async function PayPage({ params }: Props) {
             </div>
           )}
 
-          {/* Amount — shown statically when paid or when FluidPay not configured; otherwise PaymentFlow owns it */}
-          {(isPaid || !fluidpayConfigured) && (
-            <div className="bg-[#f0fdf4] border border-green-100 rounded-xl px-5 py-4 mb-6 text-center">
-              <p className="text-xs text-[#2E6B4F] uppercase tracking-wide font-semibold mb-1">
-                {hasCredits ? "Balance Owed" : "Amount Due"}
-              </p>
-              <p className="text-4xl font-bold text-[#2E6B4F]">{fmt(invoice.amount)}</p>
-              {isPaid && (
-                <p className="text-sm font-semibold text-emerald-600 mt-2">Paid</p>
-              )}
-            </div>
-          )}
+          {/* Amount */}
+          <div className="bg-[#f0fdf4] border border-green-100 rounded-xl px-5 py-4 mb-6 text-center">
+            <p className="text-xs text-[#2E6B4F] uppercase tracking-wide font-semibold mb-1">
+              {hasCredits ? "Balance Owed" : "Amount Due"}
+            </p>
+            <p className="text-4xl font-bold text-[#2E6B4F]">{fmt(invoice.amount)}</p>
+            {isPaid && (
+              <p className="text-sm font-semibold text-emerald-600 mt-2">Paid</p>
+            )}
+          </div>
 
           {/* Payment section */}
           {isPaid ? (

@@ -63,21 +63,15 @@ function AmountHeader({ amount }: { amount: number }) {
   );
 }
 
-const CARD_SURCHARGE = 0.0399;
-
 export function PaymentFlow({
   invoiceId, invoiceNumber, amount, companyName, prefillEmail = "",
   fluidpayPublicKey = "", fluidpayBaseUrl = "https://app.fluidpay.com",
 }: Props) {
-  const cardAmount = Math.round(amount * (1 + CARD_SURCHARGE) * 100) / 100;
-  const surchargeDelta = cardAmount - amount;
-
   const [step, setStep] = useState<Step>("select");
   const [errorMsg, setErrorMsg] = useState("");
   const [fpReady, setFpReady] = useState(false);
   const [fpLoadError, setFpLoadError] = useState("");
   const [isCheckPayment, setIsCheckPayment] = useState(false);
-  const [paidByCard, setPaidByCard] = useState(false);
 
   // Shared billing fields
   const [firstName, setFirstName] = useState("");
@@ -246,7 +240,6 @@ export function PaymentFlow({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Payment failed. Please try again.");
-      setPaidByCard(method === "credit_card");
       setStep("success");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Payment failed. Please try again.");
@@ -258,13 +251,6 @@ export function PaymentFlow({
   if (step === "select") {
     return (
       <div className="space-y-3">
-        {/* Dynamic amount display */}
-        <div className="bg-[#f0fdf4] border border-green-100 rounded-xl px-5 py-4 mb-2 text-center">
-          <p className="text-xs text-[#2E6B4F] uppercase tracking-wide font-semibold mb-1">Amount Due</p>
-          <p className="text-4xl font-bold text-[#2E6B4F]">{fmt(amount)}</p>
-          <p className="text-xs text-gray-400 mt-1">ACH / Cash / Check price</p>
-        </div>
-
         <p className="text-sm font-semibold text-gray-700 mb-1">How would you like to pay?</p>
         {([
           {
@@ -272,26 +258,20 @@ export function PaymentFlow({
             label: "Credit / Debit Card",
             sub: "Visa, Mastercard, Amex, Discover",
             target: "card_form" as Step,
-            displayAmount: fmt(cardAmount),
-            feeNote: `+3.99%`,
           },
           {
             m: "ach" as PayMethod,
             label: "ACH / Bank Transfer",
             sub: "Direct from your checking or savings account",
             target: "ach_form" as Step,
-            displayAmount: fmt(amount),
-            feeNote: null,
           },
           {
             m: "check" as PayMethod,
             label: "Check",
             sub: "Hand to your TTT coordinator",
             target: "check_confirm" as Step,
-            displayAmount: fmt(amount),
-            feeNote: null,
           },
-        ] as const).map(({ m, label, sub, target, displayAmount, feeNote }) => (
+        ] as const).map(({ m, label, sub, target }) => (
           <button
             key={m}
             onClick={() => { setErrorMsg(""); setIsCheckPayment(m === "check"); setStep(target); }}
@@ -301,10 +281,6 @@ export function PaymentFlow({
             <span className="flex-1">
               <span className="block text-sm font-semibold text-gray-800 group-hover:text-[#2E6B4F]">{label}</span>
               <span className="block text-xs text-gray-400 mt-0.5">{sub}</span>
-            </span>
-            <span className="text-right flex-shrink-0">
-              <span className="block text-sm font-bold text-gray-800 group-hover:text-[#2E6B4F]">{displayAmount}</span>
-              {feeNote && <span className="block text-xs text-amber-600 mt-0.5">{feeNote}</span>}
             </span>
             <svg className="w-4 h-4 text-gray-300 group-hover:text-[#2E6B4F] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -346,19 +322,7 @@ export function PaymentFlow({
     return (
       <div className="space-y-4">
         <BackButton onClick={goBack} />
-
-        {/* Toggled-up amount */}
-        <div className="bg-[#f0fdf4] border border-green-100 rounded-xl px-5 py-4 text-center">
-          <p className="text-xs text-[#2E6B4F] uppercase tracking-wide font-semibold mb-1">Card Payment Amount</p>
-          <p className="text-4xl font-bold text-[#2E6B4F]">{fmt(cardAmount)}</p>
-          <p className="text-xs text-gray-400 mt-1">Excludes 3.99% ACH/Check Discount</p>
-        </div>
-
-        {/* Disclaimer */}
-        <p className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 leading-relaxed">
-          <span className="font-semibold text-amber-700">Disclaimer:</span> Please note that all invoices are presented as the ACH, Cash, or discounted price. The credit card amount is the full price of our services.
-        </p>
-
+        <AmountHeader amount={amount} />
         <p className="text-sm font-semibold text-gray-700">Credit / Debit Card</p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -390,7 +354,7 @@ export function PaymentFlow({
           disabled={!fpReady || !!fpLoadError}
           className="w-full h-12 bg-[#2E6B4F] hover:bg-[#245a40] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-base transition-colors mt-2"
         >
-          Pay {fmt(cardAmount)}
+          Pay {fmt(amount)}
         </button>
         <p className="text-center text-xs text-gray-400">Card details are captured securely by FluidPay and never touch our servers.</p>
       </div>
@@ -467,7 +431,7 @@ export function PaymentFlow({
           <p className="text-sm text-gray-500 mt-1 leading-relaxed max-w-xs mx-auto">
             {isCheckPayment
               ? `Please bring your check payable to ${companyName} to your next appointment.`
-              : `Thank you! Your payment of ${fmt(paidByCard ? cardAmount : amount)} has been processed. A receipt has been sent to ${email}.`}
+              : `Thank you! Your payment of ${fmt(amount)} has been processed. A receipt has been sent to ${email}.`}
           </p>
         </div>
       </div>
