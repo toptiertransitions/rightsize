@@ -59,7 +59,7 @@ const STAFF_ROLES = [
     label: "TTT Admin",
     color: "border-red-700",
     badge: "bg-red-900/50 text-red-300",
-    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, generate and re-print client payout PDFs, and post and comment on internal project notes on /plan. Expenses are non-reimbursable by default.",
+    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, generate and re-print client payout PDFs, and post and comment on internal project notes on /plan. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Expenses are non-reimbursable by default.",
   },
 ] as const;
 
@@ -115,6 +115,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Assign BoxID to catalog items (inline badge on photo)",  permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Search catalog by BoxID",          permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Brand field on catalog items (add/edit)",               permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Edit items from All Active Projects view (no project filter required)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Reassign item to another project", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },

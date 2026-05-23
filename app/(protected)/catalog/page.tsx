@@ -61,6 +61,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
     const canReassign = ["TTTManager", "TTTAdmin"].includes(sysRole ?? "");
     const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+    const canEdit = sysRole === "TTTAdmin" && tenantId === "__all_active__";
 
     return (
       <div>
@@ -71,7 +72,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
         </div>
         <ItemGrid
           items={items}
-          canEdit={false}
+          canEdit={canEdit}
           rooms={rooms}
           tenants={selectedTenants}
           localVendors={localVendors}
