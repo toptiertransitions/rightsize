@@ -98,7 +98,7 @@ export default async function PartnerHomePage() {
       {/* Points Hero */}
       <div className="bg-[#2d4a3e] rounded-2xl p-6 text-white">
         <p className="text-sm font-medium text-white/60 mb-3">
-          {companyName} Premier Partner Points
+          {companyName} Preferred Partner Points
         </p>
         <div className="grid grid-cols-3 gap-4">
           <div>
