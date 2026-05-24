@@ -45,7 +45,7 @@ const STAFF_ROLES = [
     label: "TTT Manager",
     color: "border-purple-700",
     badge: "bg-purple-900/50 text-purple-300",
-    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, and access the Ops console. Expenses are reimbursable by default.",
+    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, and access the Ops console. Expenses are reimbursable by default.",
   },
   {
     key: "TTTSales",
@@ -98,6 +98,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "View Team Lead name, photo & phone on /plan",     permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Send client weekly email (key dates, team lead, progress, pending review alert)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Internal Notes board — post notes & threaded comments (TTT staff only, never visible to clients)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: true, TTTAdmin: true } },
+  { label: "View Google Reviews on /plan (star rating + review text)",  permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Add / delete Google Reviews on /plan",                      permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite TTT Team Members via staff name picker",   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite Helpers via email (family / friends)",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { group: "Project Access" },
