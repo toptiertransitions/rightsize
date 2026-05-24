@@ -5710,6 +5710,27 @@ export async function getPartnerTenantIdsByCompany(referralCompanyId: string): P
   return tenantIds;
 }
 
+// Returns emails of all clients directly referred by a single referral contact
+export async function getClientContactEmailsForPartner(referralContactId: string): Promise<string[]> {
+  const formula = encodeURIComponent(`{ReferralPartnerId} = "${referralContactId}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula}&fields[]=Email`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records ?? []).map((r: AirtableRecord) => toStr(r.fields["Email"])).filter(Boolean);
+}
+
+// Returns emails of all clients referred by any contact at a company
+export async function getCompanyClientContactEmails(referralCompanyId: string): Promise<string[]> {
+  const contactIds = await getCompanyContactIds(referralCompanyId);
+  if (contactIds.length === 0) return [];
+  const cc1 = contactIds.map(id => `{ReferralPartnerId} = "${id}"`).join(", ");
+  const formula = encodeURIComponent(contactIds.length === 1 ? cc1 : `OR(${cc1})`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula}&fields[]=Email`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records ?? []).map((r: AirtableRecord) => toStr(r.fields["Email"])).filter(Boolean);
+}
+
 export async function getPartnerPointsByCompany(referralCompanyId: string): Promise<import("./types").PartnerPoint[]> {
   const contactIds = await getCompanyContactIds(referralCompanyId);
   if (contactIds.length === 0) return [];

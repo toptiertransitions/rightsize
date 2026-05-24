@@ -1,10 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getPartnerContact } from "@/lib/partner";
+import { getPartnerContact, getPartnerTenantIdsFull } from "@/lib/partner";
 import {
-  getPartnerTenantIdsByCompany,
-  getPartnerTenantIds,
   getTenantById,
   getPartnerPointsByCompany,
   getPartnerPoints,
@@ -23,9 +21,7 @@ export default async function PartnerHomePage() {
   const companyId = contact.referralCompanyId || null;
 
   const [tenantIds, points, company] = await Promise.all([
-    companyId
-      ? getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[])
-      : getPartnerTenantIds(contact.id).catch(() => [] as string[]),
+    getPartnerTenantIdsFull(contact).catch(() => [] as string[]),
     companyId
       ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
       : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
