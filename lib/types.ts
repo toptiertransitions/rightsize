@@ -1240,3 +1240,11 @@ export interface OutreachNurtureSetting {
   clerkUserId: string;
   sequenceId: string;
 }
+
+export interface GoogleReview {
+  id: string;
+  tenantId: string;
+  stars: 1 | 2 | 3 | 4 | 5;
+  text: string;
+  createdAt: string;
+}

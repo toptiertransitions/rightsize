@@ -6,6 +6,7 @@ import { PLAN_ACTIVITIES, KEY_DATE_ACTIVITIES } from "@/lib/types";
 import type { PlanEntry, PlanActivity, PlanHelper, PlanEntryType, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
+import { GoogleReviewsSection } from "./GoogleReviewsSection";
 
 // ─── Activity chip colors ──────────────────────────────────────────────────────
 const ACTIVITY_COLOR_PALETTE = [
@@ -1577,6 +1578,15 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           projectNames={isAllProjectsMode ? projectNamesMap : undefined}
         />
       </div>
+
+      {/* ── Google Reviews ──────────────────────────────────────────────────── */}
+      {!isAllProjectsMode && tenantId && (
+        <GoogleReviewsSection
+          key={`reviews-${currentTenantId ?? tenantId}`}
+          tenantId={tenantId}
+          canEdit={!!(isManager || isAdmin)}
+        />
+      )}
 
       {/* ── Modal ───────────────────────────────────────────────────────────── */}
       {showModal && (

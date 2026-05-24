@@ -5475,3 +5475,43 @@ export async function upsertSalesGoal(monthKey: string, signedGoal: number, bill
   if (!res.ok) throw new Error(await res.text());
   return mapSalesGoal(await res.json() as AirtableRecord);
 }
+
+// ─── Google Reviews ───────────────────────────────────────────────────────────
+
+function mapGoogleReview(r: AirtableRecord): import("./types").GoogleReview {
+  const f = r.fields;
+  return {
+    id: r.id,
+    tenantId: toStr(f["TenantId"]),
+    stars: (toNum(f["Stars"]) || 5) as import("./types").GoogleReview["stars"],
+    text: toStr(f["ReviewText"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getReviewsForTenant(tenantId: string): Promise<import("./types").GoogleReview[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.GOOGLE_REVIEWS)
+    .select({
+      filterByFormula: `{TenantId} = "${tenantId}"`,
+      sort: [{ field: "CreatedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapGoogleReview);
+}
+
+export async function createGoogleReview(tenantId: string, stars: number, text: string): Promise<import("./types").GoogleReview> {
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.GOOGLE_REVIEWS).create({
+    TenantId: tenantId,
+    Stars: stars,
+    ReviewText: text,
+    CreatedAt: new Date().toISOString().slice(0, 10),
+  });
+  return mapGoogleReview(record);
+}
+
+export async function deleteGoogleReview(reviewId: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.GOOGLE_REVIEWS).destroy(reviewId);
+}
