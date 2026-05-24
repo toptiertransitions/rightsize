@@ -94,28 +94,33 @@ async function sendAdminNotification(params: {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
 
-  // Get all TTTAdmin Clerk IDs from env var, fetch their emails via Clerk API
-  const adminClerkIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
+  // Prefer ADMIN_NOTIFICATION_EMAIL env var (comma-separated).
+  // Fall back to looking up emails via Clerk API from TTT_ADMIN_USER_IDS.
+  let adminEmails: string[] = (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (adminClerkIds.length === 0) return;
 
-  const clerkSecret = process.env.CLERK_SECRET_KEY;
-  if (!clerkSecret) return;
-
-  const adminEmails: string[] = [];
-  for (const id of adminClerkIds) {
-    const r = await fetch(`https://api.clerk.com/v1/users/${id}`, {
-      headers: { Authorization: `Bearer ${clerkSecret}` },
-    });
-    if (!r.ok) continue;
-    const u = await r.json();
-    const primaryId = u.primary_email_address_id as string | null;
-    const email = (u.email_addresses as Array<{ id: string; email_address: string }>)
-      ?.find((e) => e.id === primaryId)?.email_address
-      ?? (u.email_addresses as Array<{ email_address: string }>)?.[0]?.email_address;
-    if (email) adminEmails.push(email);
+  if (adminEmails.length === 0) {
+    const adminClerkIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    if (adminClerkIds.length > 0 && clerkSecret) {
+      for (const id of adminClerkIds) {
+        const r = await fetch(`https://api.clerk.com/v1/users/${id}`, {
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (!r.ok) continue;
+        const u = await r.json();
+        const primaryId = u.primary_email_address_id as string | null;
+        const email = (u.email_addresses as Array<{ id: string; email_address: string }>)
+          ?.find((e) => e.id === primaryId)?.email_address
+          ?? (u.email_addresses as Array<{ email_address: string }>)?.[0]?.email_address;
+        if (email) adminEmails.push(email);
+      }
+    }
   }
 
   if (adminEmails.length === 0) return;
