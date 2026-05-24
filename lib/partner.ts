@@ -1,6 +1,7 @@
 import {
   findReferralContactByClerkUserId,
   getPartnerTenantIdsByCompany,
+  getPartnerTenantIds,
 } from "./airtable";
 import type { ReferralContact } from "./types";
 
@@ -13,9 +14,11 @@ export async function getPartnerContact(clerkUserId: string): Promise<ReferralCo
   return findReferralContactByClerkUserId(clerkUserId).catch(() => null);
 }
 
-// Access is company-wide: a partner sees all tenants referred by anyone at their company.
+// Access is company-wide when a company is set; falls back to individual contact's referrals.
 export async function partnerHasAccessToTenant(contact: ReferralContact, tenantId: string): Promise<boolean> {
-  if (!contact.referralCompanyId) return false;
-  const tenantIds = await getPartnerTenantIdsByCompany(contact.referralCompanyId).catch(() => [] as string[]);
+  const companyId = contact.referralCompanyId || null;
+  const tenantIds = companyId
+    ? await getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[])
+    : await getPartnerTenantIds(contact.id).catch(() => [] as string[]);
   return tenantIds.includes(tenantId);
 }

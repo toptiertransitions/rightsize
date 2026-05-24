@@ -4,8 +4,10 @@ import Link from "next/link";
 import { getPartnerContact } from "@/lib/partner";
 import {
   getPartnerTenantIdsByCompany,
+  getPartnerTenantIds,
   getTenantById,
   getPartnerPointsByCompany,
+  getPartnerPoints,
   getReviewsForTenant,
   getReferralCompanyById,
 } from "@/lib/airtable";
@@ -18,11 +20,15 @@ export default async function PartnerHomePage() {
   const contact = await getPartnerContact(userId);
   if (!contact) redirect("/home");
 
-  const companyId = contact.referralCompanyId;
+  const companyId = contact.referralCompanyId || null;
 
   const [tenantIds, points, company] = await Promise.all([
-    companyId ? getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[]) : Promise.resolve([] as string[]),
-    companyId ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[]) : Promise.resolve([] as PartnerPoint[]),
+    companyId
+      ? getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[])
+      : getPartnerTenantIds(contact.id).catch(() => [] as string[]),
+    companyId
+      ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
+      : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
     companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
   ]);
 
