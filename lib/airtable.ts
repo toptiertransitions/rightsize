@@ -5646,7 +5646,7 @@ export async function markInvoicePartnerPointAwarded(invoiceId: string): Promise
 export async function getPartnerTenantIds(referralContactId: string): Promise<string[]> {
   // Step 1: find ClientContacts where ReferralPartnerId = referralContactId
   const formula1 = encodeURIComponent(`{ReferralPartnerId} = "${referralContactId}"`);
-  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=id`);
+  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
   if (!ccRes.ok) return [];
   const ccData = await ccRes.json();
   const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
@@ -5673,7 +5673,7 @@ export async function getCompanyContactIds(referralCompanyId: string): Promise<s
   let offset: string | undefined;
   const ids: string[] = [];
   do {
-    const qs = `?filterByFormula=${formula}&fields[]=id${offset ? `&offset=${offset}` : ""}`;
+    const qs = `?filterByFormula=${formula}&fields[]=Name${offset ? `&offset=${offset}` : ""}`;
     const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, qs);
     if (!res.ok) break;
     const data = await res.json();
@@ -5690,7 +5690,7 @@ export async function getPartnerTenantIdsByCompany(referralCompanyId: string): P
   // Find all ClientContacts referred by any contact in this company
   const cc1 = contactIds.map(id => `{ReferralPartnerId} = "${id}"`).join(", ");
   const formula1 = encodeURIComponent(contactIds.length === 1 ? cc1 : `OR(${cc1})`);
-  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=id`);
+  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
   if (!ccRes.ok) return [];
   const ccData = await ccRes.json();
   const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
