@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getPartnerContact, getPartnerTenantIdsFull } from "@/lib/partner";
+import { getPartnerContact, getPartnerProjectsByStage } from "@/lib/partner";
 import {
   getTenantById,
   getPartnerPointsByCompany,
@@ -9,7 +9,17 @@ import {
   getReviewsForTenant,
   getReferralCompanyById,
 } from "@/lib/airtable";
-import type { PartnerProject, PartnerPoint, GoogleReview } from "@/lib/types";
+import type { PartnerPoint, GoogleReview } from "@/lib/types";
+
+interface ProjectInfo {
+  tenantId: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  isArchived: boolean;
+  stage: string;
+}
 
 export default async function PartnerHomePage() {
   const { userId } = await auth();
@@ -20,40 +30,51 @@ export default async function PartnerHomePage() {
 
   const companyId = contact.referralCompanyId || null;
 
-  const [tenantIds, points, company] = await Promise.all([
-    getPartnerTenantIdsFull(contact).catch(() => [] as string[]),
+  const [projectsByStage, points, company] = await Promise.all([
+    getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string; stage: string }[]),
     companyId
       ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
       : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
     companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const tenants = await Promise.all(tenantIds.map((id) => getTenantById(id).catch(() => null)));
+  const tenants = await Promise.all(
+    projectsByStage.map(({ tenantId }) => getTenantById(tenantId).catch(() => null))
+  );
 
   const reviewArrays = await Promise.all(
-    tenantIds.map((id) => getReviewsForTenant(id).catch(() => []))
+    projectsByStage
+      .filter(p => p.stage === "Won")
+      .map(({ tenantId }) => getReviewsForTenant(tenantId).catch(() => []))
   );
   const recentReviews: GoogleReview[] = reviewArrays
     .flat()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
 
-  const projects: PartnerProject[] = tenants
-    .filter(Boolean)
-    .map((t) => ({
-      tenantId: t!.id,
-      name: t!.name,
-      address: t!.address,
-      city: t!.city,
-      state: t!.state,
-      status: t!.isArchived ? ("previous" as const) : ("active" as const),
-    }));
+  // Merge stage + tenant data
+  const enriched = projectsByStage
+    .map(({ tenantId, stage }, i) => {
+      const t = tenants[i];
+      if (!t) return null;
+      return {
+        tenantId: t.id,
+        name: t.name,
+        address: t.address,
+        city: t.city,
+        state: t.state,
+        isArchived: t.isArchived,
+        stage,
+      };
+    })
+    .filter(Boolean) as ProjectInfo[];
 
-  const activeProjects = projects.filter((p) => p.status === "active");
-  const previousProjects = projects.filter((p) => p.status === "previous");
+  const potentialProjects = enriched.filter(p => p.stage === "Proposing" && !p.isArchived);
+  const currentProjects   = enriched.filter(p => p.stage === "Won" && !p.isArchived);
+  const previousProjects  = enriched.filter(p => p.stage === "Won" && p.isArchived);
 
-  const earned = points.length;
-  const redeemed = points.filter((p) => p.redeemedAt).length;
+  const earned    = points.length;
+  const redeemed  = points.filter((p) => p.redeemedAt).length;
   const available = earned - redeemed;
 
   const companyName = company?.name || contact.name.split(" ").slice(-1)[0];
@@ -69,7 +90,7 @@ export default async function PartnerHomePage() {
           {company ? (
             <>Viewing all referral activity for <strong>{company.name}</strong>.</>
           ) : (
-            "Here’s a snapshot of your referred projects and points."
+            "Here's a snapshot of your referred projects and points."
           )}
         </p>
       </div>
@@ -77,7 +98,7 @@ export default async function PartnerHomePage() {
       {/* Points Hero */}
       <div className="bg-[#2d4a3e] rounded-2xl p-6 text-white">
         <p className="text-sm font-medium text-white/60 mb-3">
-          {companyName} Referral Points
+          {companyName} Premier Partner Points
         </p>
         <div className="grid grid-cols-3 gap-4">
           <div>
@@ -120,22 +141,37 @@ export default async function PartnerHomePage() {
         )}
       </div>
 
-      {/* Active Projects */}
+      {/* Current Projects */}
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-3">
           Current Projects
-          <span className="ml-2 text-sm font-normal text-gray-400">({activeProjects.length})</span>
+          <span className="ml-2 text-sm font-normal text-gray-400">({currentProjects.length})</span>
         </h2>
-        {activeProjects.length === 0 ? (
+        {currentProjects.length === 0 ? (
           <p className="text-sm text-gray-400">No active referred projects yet.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {activeProjects.map((p) => (
+            {currentProjects.map((p) => (
               <ProjectCard key={p.tenantId} project={p} />
             ))}
           </div>
         )}
       </section>
+
+      {/* Potential Projects */}
+      {potentialProjects.length > 0 && (
+        <section>
+          <h2 className="text-base font-semibold text-gray-900 mb-3">
+            Potential Projects
+            <span className="ml-2 text-sm font-normal text-gray-400">({potentialProjects.length})</span>
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {potentialProjects.map((p) => (
+              <ProjectCard key={p.tenantId} project={p} potential />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Recent Reviews */}
       {recentReviews.length > 0 && (
@@ -177,16 +213,31 @@ export default async function PartnerHomePage() {
   );
 }
 
-function ProjectCard({ project, dimmed }: { project: PartnerProject; dimmed?: boolean }) {
+function ProjectCard({
+  project,
+  dimmed,
+  potential,
+}: {
+  project: ProjectInfo;
+  dimmed?: boolean;
+  potential?: boolean;
+}) {
   const locationParts = [project.city, project.state].filter(Boolean);
   return (
     <Link
-      href={`/partner/plan/${project.tenantId}`}
+      href={`/partner/plans?t=${project.tenantId}`}
       className={`block bg-white border rounded-xl px-4 py-3 hover:shadow-sm transition-shadow ${
         dimmed ? "border-gray-100 opacity-60" : "border-gray-200"
       }`}
     >
-      <p className="text-sm font-medium text-gray-900">{project.name}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-gray-900">{project.name}</p>
+        {potential && (
+          <span className="flex-shrink-0 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            In Progress
+          </span>
+        )}
+      </div>
       {project.address && (
         <p className="text-xs text-gray-400 mt-0.5 truncate">{project.address}</p>
       )}

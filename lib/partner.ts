@@ -6,6 +6,8 @@ import {
   getClientContactEmailsForPartner,
   getCompanyClientContactEmails,
   getMembershipsForUser,
+  getPartnerOpportunitiesInfo,
+  getCompanyOpportunitiesInfo,
 } from "./airtable";
 import type { ReferralContact } from "./types";
 
@@ -19,7 +21,6 @@ export async function getPartnerContact(clerkUserId: string): Promise<ReferralCo
 }
 
 // Resolve client emails → Clerk user IDs → memberships → tenant IDs
-// Fallback for when CRM Opportunity.TenantId isn't set yet
 async function getTenantIdsByClientEmails(emails: string[]): Promise<string[]> {
   if (emails.length === 0) return [];
   const clerk = await clerkClient();
@@ -60,8 +61,31 @@ export async function getPartnerTenantIdsFull(contact: ReferralContact): Promise
   return all;
 }
 
-// Access is company-wide when a company is set; falls back to individual contact's referrals.
-// Uses full lookup so projects without TenantId on the Opportunity are still found via email.
+// Returns {tenantId, stage} for all referred projects, including email-fallback ones marked Won
+export async function getPartnerProjectsByStage(
+  contact: ReferralContact
+): Promise<{ tenantId: string; stage: string }[]> {
+  const companyId = contact.referralCompanyId || null;
+
+  const [fromOpp, emails] = await Promise.all([
+    companyId
+      ? getCompanyOpportunitiesInfo(companyId).catch(() => [] as { tenantId: string; stage: string }[])
+      : getPartnerOpportunitiesInfo(contact.id).catch(() => [] as { tenantId: string; stage: string }[]),
+    companyId
+      ? getCompanyClientContactEmails(companyId).catch(() => [] as string[])
+      : getClientContactEmailsForPartner(contact.id).catch(() => [] as string[]),
+  ]);
+
+  const viaEmail = await getTenantIdsByClientEmails(emails).catch(() => [] as string[]);
+  const oppTenantIds = fromOpp.map(x => x.tenantId);
+  const extra = viaEmail
+    .filter(id => !oppTenantIds.includes(id))
+    .map(id => ({ tenantId: id, stage: "Won" }));
+
+  return [...fromOpp, ...extra];
+}
+
+// Access check uses full lookup so projects without TenantId on the Opportunity are found via email
 export async function partnerHasAccessToTenant(contact: ReferralContact, tenantId: string): Promise<boolean> {
   const tenantIds = await getPartnerTenantIdsFull(contact).catch(() => [] as string[]);
   return tenantIds.includes(tenantId);

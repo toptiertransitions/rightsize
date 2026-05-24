@@ -5710,6 +5710,56 @@ export async function getPartnerTenantIdsByCompany(referralCompanyId: string): P
   return tenantIds;
 }
 
+// Returns {tenantId, stage} for all opportunities linked to a single referral contact
+export async function getPartnerOpportunitiesInfo(referralContactId: string): Promise<{ tenantId: string; stage: string }[]> {
+  const formula1 = encodeURIComponent(`{ReferralPartnerId} = "${referralContactId}"`);
+  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
+  if (!ccRes.ok) return [];
+  const ccData = await ccRes.json();
+  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+  if (clientContactIds.length === 0) return [];
+
+  const orClauses = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
+  const formula2 = encodeURIComponent(clientContactIds.length === 1 ? orClauses : `OR(${orClauses})`);
+  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId&fields[]=Stage`);
+  if (!oppRes.ok) return [];
+  const oppData = await oppRes.json();
+  const results: { tenantId: string; stage: string }[] = [];
+  for (const r of (oppData.records ?? []) as AirtableRecord[]) {
+    const tid = toStr(r.fields["TenantId"]);
+    const stage = toStr(r.fields["Stage"]);
+    if (tid && !results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
+  }
+  return results;
+}
+
+// Returns {tenantId, stage} for all opportunities linked to any contact at a company
+export async function getCompanyOpportunitiesInfo(referralCompanyId: string): Promise<{ tenantId: string; stage: string }[]> {
+  const contactIds = await getCompanyContactIds(referralCompanyId);
+  if (contactIds.length === 0) return [];
+
+  const cc1 = contactIds.map(id => `{ReferralPartnerId} = "${id}"`).join(", ");
+  const formula1 = encodeURIComponent(contactIds.length === 1 ? cc1 : `OR(${cc1})`);
+  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
+  if (!ccRes.ok) return [];
+  const ccData = await ccRes.json();
+  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+  if (clientContactIds.length === 0) return [];
+
+  const cc2 = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
+  const formula2 = encodeURIComponent(clientContactIds.length === 1 ? cc2 : `OR(${cc2})`);
+  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId&fields[]=Stage`);
+  if (!oppRes.ok) return [];
+  const oppData = await oppRes.json();
+  const results: { tenantId: string; stage: string }[] = [];
+  for (const r of (oppData.records ?? []) as AirtableRecord[]) {
+    const tid = toStr(r.fields["TenantId"]);
+    const stage = toStr(r.fields["Stage"]);
+    if (tid && !results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
+  }
+  return results;
+}
+
 // Returns emails of all clients directly referred by a single referral contact
 export async function getClientContactEmailsForPartner(referralContactId: string): Promise<string[]> {
   const formula = encodeURIComponent(`{ReferralPartnerId} = "${referralContactId}"`);

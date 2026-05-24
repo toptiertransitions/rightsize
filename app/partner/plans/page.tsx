@@ -1,16 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getPartnerContact, getPartnerTenantIdsFull } from "@/lib/partner";
+import { getPartnerContact, getPartnerProjectsByStage } from "@/lib/partner";
 import { getTenantById, getPlanEntriesForTenant, getProjectFiles } from "@/lib/airtable";
 import type { PlanEntry, ProjectFile } from "@/lib/types";
 import { ProjectSelector } from "./ProjectSelector";
-
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function formatDate(iso: string): string {
-  const [, m, d] = iso.split("-");
-  return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
-}
+import { PartnerCalendar } from "./PartnerCalendar";
 
 export default async function PartnerPlansPage({
   searchParams,
@@ -25,11 +19,21 @@ export default async function PartnerPlansPage({
 
   const { t } = await searchParams;
 
-  const tenantIds = await getPartnerTenantIdsFull(contact).catch(() => [] as string[]);
-  const allTenants = (await Promise.all(tenantIds.map((id) => getTenantById(id).catch(() => null)))).filter(Boolean);
+  // Get all referred projects with stage info
+  const projectsByStage = await getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string; stage: string }[]);
+
+  // Filter to active (Won or Proposing, not archived)
+  const eligibleTenantIds = projectsByStage
+    .filter(p => p.stage !== "Lost" && p.stage !== "Lead" && p.stage !== "Qualifying")
+    .map(p => p.tenantId);
+
+  const allTenants = (
+    await Promise.all(eligibleTenantIds.map((id) => getTenantById(id).catch(() => null)))
+  ).filter(Boolean);
+
   const activeProjects = allTenants
     .filter((ten) => !ten!.isArchived)
-    .map((ten) => ({ tenantId: ten!.id, name: ten!.name, address: ten!.address, city: ten!.city, state: ten!.state }));
+    .map((ten) => ({ tenantId: ten!.id, name: ten!.name }));
 
   if (activeProjects.length === 0) {
     return (
@@ -40,92 +44,51 @@ export default async function PartnerPlansPage({
     );
   }
 
-  const selectedId = (t && activeProjects.some((p) => p.tenantId === t)) ? t : activeProjects[0].tenantId;
-  const selected = activeProjects.find((p) => p.tenantId === selectedId)!;
+  // Determine selected project (default to "all")
+  const selectedId = (t && (t === "all" || activeProjects.some((p) => p.tenantId === t))) ? t : "all";
+  const isAllMode = selectedId === "all";
 
-  const [entries, files] = await Promise.all([
-    getPlanEntriesForTenant(selectedId).catch(() => [] as PlanEntry[]),
-    getProjectFiles(selectedId).catch(() => [] as ProjectFile[]),
+  // Fetch entries for selected project(s)
+  const [entries, files]: [PlanEntry[], ProjectFile[]] = await Promise.all([
+    isAllMode
+      ? Promise.all(activeProjects.map((p) => getPlanEntriesForTenant(p.tenantId).catch(() => [] as PlanEntry[])))
+          .then((arrays) => arrays.flat())
+      : getPlanEntriesForTenant(selectedId).catch(() => [] as PlanEntry[]),
+    isAllMode
+      ? Promise.all(activeProjects.map((p) => getProjectFiles(p.tenantId).catch(() => [] as ProjectFile[])))
+          .then((arrays) => arrays.flat())
+      : getProjectFiles(selectedId).catch(() => [] as ProjectFile[]),
   ]);
 
   const floorplans = files.filter((f) => f.fileTag === "Floorplan");
-  const focusEntries = entries.filter((e) => e.entryType !== "keydate");
-  const keyDates = entries.filter((e) => e.entryType === "keydate");
 
-  const byDate = new Map<string, PlanEntry[]>();
-  for (const e of focusEntries) {
-    if (!byDate.has(e.date)) byDate.set(e.date, []);
-    byDate.get(e.date)!.push(e);
-  }
-  const sortedDates = [...byDate.keys()].sort();
-
-  const locationParts = [selected.address, selected.city, selected.state].filter(Boolean);
+  // Header label
+  const selectedProject = isAllMode ? null : activeProjects.find((p) => p.tenantId === selectedId);
 
   return (
     <div className="space-y-8">
       {/* Header with project selector */}
       <div className="flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-[#2d4a3e]">{selected.name}</h1>
-          {locationParts.length > 0 && (
-            <p className="text-sm text-gray-500 mt-1">{locationParts.join(", ")}</p>
+          <h1 className="text-2xl font-semibold text-[#2d4a3e]">
+            {selectedProject ? selectedProject.name : "Project Plans"}
+          </h1>
+          {isAllMode && (
+            <p className="text-sm text-gray-500 mt-1">Showing all {activeProjects.length} active referred project{activeProjects.length !== 1 ? "s" : ""}</p>
           )}
         </div>
-        {activeProjects.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 hidden sm:block">Switch project:</span>
-            <ProjectSelector projects={activeProjects} selectedId={selectedId} />
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 hidden sm:block">Filter by project:</span>
+          <ProjectSelector projects={activeProjects} selectedId={selectedId} />
+        </div>
       </div>
 
-      {/* Key Dates */}
-      {keyDates.length > 0 && (
-        <section>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Key Dates</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {keyDates.sort((a, b) => a.date.localeCompare(b.date)).map((e) => (
-              <div key={e.id} className="bg-[#2d4a3e]/5 border border-[#2d4a3e]/10 rounded-xl px-4 py-3">
-                <p className="text-xs font-medium text-[#2d4a3e]">{e.activity}</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{formatDate(e.date)}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Schedule */}
-      <section>
-        <h2 className="text-base font-semibold text-gray-900 mb-3">
-          Schedule
-          <span className="ml-2 text-sm font-normal text-gray-400">({sortedDates.length} days)</span>
-        </h2>
-        {sortedDates.length === 0 ? (
-          <p className="text-sm text-gray-400">No schedule entries yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {sortedDates.map((date) => {
-              const dayEntries = byDate.get(date)!;
-              return (
-                <div key={date} className="bg-white border border-gray-200 rounded-xl px-4 py-3">
-                  <p className="text-xs font-semibold text-gray-500 mb-1.5">{formatDate(date)}</p>
-                  <div className="space-y-1">
-                    {dayEntries.map((e) => (
-                      <div key={e.id} className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#2d4a3e] flex-shrink-0" />
-                        <span className="text-sm text-gray-800">{e.activity}</span>
-                        {e.roomLabel && (
-                          <span className="text-xs text-gray-400">— {e.roomLabel}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      {/* Calendar */}
+      <PartnerCalendar
+        entries={entries}
+        projects={activeProjects}
+        selectedTenantId={selectedId}
+      />
 
       {/* Floorplans */}
       {floorplans.length > 0 && (
@@ -152,6 +115,11 @@ export default async function PartnerPlansPage({
                 )}
                 <div className="px-3 py-2">
                   <p className="text-xs text-gray-600 truncate">{f.fileName}</p>
+                  {isAllMode && (
+                    <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                      {activeProjects.find(p => p.tenantId === f.tenantId)?.name ?? ""}
+                    </p>
+                  )}
                 </div>
               </a>
             ))}
