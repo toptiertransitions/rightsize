@@ -3,6 +3,7 @@ import { Webhook } from "svix";
 import { Resend } from "resend";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { buildNewUserAdminEmail } from "@/lib/email";
+import { findReferralContactByEmail, setReferralContactClerkUserId } from "@/lib/airtable";
 
 const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
 const AT_HEADERS = {
@@ -161,6 +162,17 @@ export async function POST(req: NextRequest) {
     const imageUrl = (d.image_url as string | null) ?? null;
 
     await updateStaffDisplayName(clerkUserId, firstName, lastName, primaryEmail);
+
+    // Link Clerk ID to referral contact if email matches (enables Partner Portal access)
+    if (event.type === "user.created" && primaryEmail) {
+      findReferralContactByEmail(primaryEmail)
+        .then((contact) => {
+          if (contact && !contact.clerkUserId) {
+            return setReferralContactClerkUserId(contact.id, clerkUserId);
+          }
+        })
+        .catch(() => {}); // non-blocking
+    }
 
     // Send admin notification only for new accounts
     if (event.type === "user.created" && primaryEmail) {

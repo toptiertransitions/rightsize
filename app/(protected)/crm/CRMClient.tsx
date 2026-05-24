@@ -1901,6 +1901,25 @@ function ReferralPartnersTab({
   const [localActivityDates, setLocalActivityDates] = useState<Map<string, string>>(new Map());
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [invitingSendId, setInvitingSendId] = useState<string | null>(null);
+  const [inviteResults, setInviteResults] = useState<Map<string, "sent" | "error">>(new Map());
+
+  async function inviteToPortal(contact: ReferralContact) {
+    if (!contact.email) return;
+    setInvitingSendId(contact.id);
+    try {
+      const res = await fetch("/api/partner/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: contact.email, name: contact.name }),
+      });
+      setInviteResults((prev) => new Map(prev).set(contact.id, res.ok ? "sent" : "error"));
+    } catch {
+      setInviteResults((prev) => new Map(prev).set(contact.id, "error"));
+    } finally {
+      setInvitingSendId(null);
+    }
+  }
 
   // Called by ContactActivityPanel after a new activity is logged
   function handleActivityLogged(contactId: string, date: string) {
@@ -2553,6 +2572,37 @@ function ReferralPartnersTab({
                           <td className="py-1.5 text-gray-600">{c.phone || "—"}</td>
                           <td className="py-1.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {c.clerkUserId && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#2d4a3e]/10 text-[#2d4a3e] font-medium" title="Has Partner Portal access">
+                                  Partner
+                                </span>
+                              )}
+                              {c.email && (
+                                <button
+                                  onClick={() => inviteToPortal(c)}
+                                  disabled={invitingSendId === c.id}
+                                  className={cn(
+                                    "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                                    inviteResults.get(c.id) === "sent"
+                                      ? "border-green-200 text-green-600 bg-green-50"
+                                      : inviteResults.get(c.id) === "error"
+                                      ? "border-red-200 text-red-500"
+                                      : "border-[#2d4a3e]/30 text-[#2d4a3e] hover:bg-[#2d4a3e]/5",
+                                    invitingSendId === c.id && "opacity-50 cursor-wait"
+                                  )}
+                                  title="Send Partner Portal invitation"
+                                >
+                                  {inviteResults.get(c.id) === "sent"
+                                    ? "Invited!"
+                                    : inviteResults.get(c.id) === "error"
+                                    ? "Failed"
+                                    : invitingSendId === c.id
+                                    ? "Sending…"
+                                    : c.clerkUserId
+                                    ? "Re-invite"
+                                    : "Invite"}
+                                </button>
+                              )}
                               <button
                                 onClick={() => setNextStepContact({ id: c.id, name: c.name, companyId: company.id, nextStepDate: c.nextStepDate || "", nextStepNote: c.nextStepNote || "" })}
                                 className="text-xs px-2 py-0.5 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"

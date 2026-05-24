@@ -285,6 +285,46 @@ export function RoleBreakdown() {
         ))}
       </div>
 
+      {/* Partner role card */}
+      <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E] mb-2">Partner Role (Referral Portal)</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div className="bg-gray-900 border border-[#C9A96E]/30 rounded-xl p-4">
+          <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mb-2 bg-[#C9A96E]/10 text-[#C9A96E]">
+            Partner
+          </span>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Referral contacts from the CRM who are invited to the Partner Portal at <strong className="text-gray-300">/partner/home</strong>.
+            Partners authenticate via standard Clerk sign-in. Their Clerk account is linked to a CRMReferralContacts record by email.
+            Access is read-only and scoped to projects they referred (via CRMClientContacts &rarr; CRMOpportunities &rarr; Tenants).
+            Partners can view project schedules and floorplans, track referral points, and see Google reviews from their referred projects.
+            They cannot access any TTT internal tooling, time entries, payroll, invoices, or catalog edit features.
+          </p>
+        </div>
+        <div className="bg-gray-900 border border-[#C9A96E]/20 rounded-xl p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mb-2">Partner Portal Features</p>
+          <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
+            <li><span className="text-[#C9A96E]">&#10003;</span> Points dashboard — earned / redeemed / available</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Current &amp; previous referred projects list</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Read-only project plan: schedule + key dates + floorplans</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Google Reviews (view only — for sharing with their network)</li>
+            <li><span className="text-gray-600">&#10005;</span> Cannot see time entries, payroll, or invoice amounts</li>
+            <li><span className="text-gray-600">&#10005;</span> Cannot edit any project data</li>
+          </ul>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Admin Controls (TTTManager/TTTAdmin)</p>
+          <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
+            <li><span className="text-[#C9A96E]">&#10003;</span> Invite button on CRM Referral Partners tab (sends portal invite email)</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Award / redeem points via <code className="text-gray-500">/api/partner/points/award</code> and <code className="text-gray-500">/redeem</code></li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Points auto-awarded when invoice is first marked Paid (via PartnerPointAwarded checkbox on Invoices)</li>
+          </ul>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Airtable Setup Required</p>
+          <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
+            <li>CRMReferralContacts &rarr; add <code className="text-gray-500">ClerkUserId</code> (Text) field</li>
+            <li>New <code className="text-gray-500">PartnerPoints</code> table (ReferralContactId, TenantId, TenantName, OpportunityId, EarnedAt, RedeemedAt, RedeemedBy, RedemptionNote, CreatedAt)</li>
+            <li>Invoices &rarr; add <code className="text-gray-500">PartnerPointAwarded</code> (Checkbox) field</li>
+          </ul>
+        </div>
+      </div>
+
       {/* Feature matrix */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">

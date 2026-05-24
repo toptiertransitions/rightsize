@@ -2697,6 +2697,12 @@ export async function deleteReferralCompany(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export async function getReferralCompanyById(id: string): Promise<ReferralCompany | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`);
+  if (!res.ok) return null;
+  return mapReferralCompany(await res.json());
+}
+
 // ─── CRM Referral Contacts ────────────────────────────────────────────────────
 function mapReferralContact(record: AirtableRecord): ReferralContact {
   const f = record.fields;
@@ -2719,6 +2725,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     emailOptout: !!f["EmailOptout"],
     nextStepDate: toStr(f["NextStepDate"]) || undefined,
     nextStepNote: toStr(f["NextStepNote"]) || undefined,
+    clerkUserId: toStr(f["ClerkUserId"]) || undefined,
   };
 }
 
@@ -5514,4 +5521,210 @@ export async function createGoogleReview(tenantId: string, stars: number, text: 
 export async function deleteGoogleReview(reviewId: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.GOOGLE_REVIEWS).destroy(reviewId);
+}
+
+// ─── Partner Portal Helpers ───────────────────────────────────────────────────
+
+export async function findReferralContactByClerkUserId(clerkUserId: string): Promise<ReferralContact | null> {
+  const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length > 0 ? mapReferralContact(data.records[0]) : null;
+}
+
+export async function findReferralContactByEmail(email: string): Promise<ReferralContact | null> {
+  const formula = encodeURIComponent(`LOWER({Email}) = LOWER("${email.replace(/"/g, '\\"')}")`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length > 0 ? mapReferralContact(data.records[0]) : null;
+}
+
+export async function setReferralContactClerkUserId(contactId: string, clerkUserId: string): Promise<void> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${contactId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: { ClerkUserId: clerkUserId } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Partner Points ───────────────────────────────────────────────────────────
+
+function mapPartnerPoint(r: AirtableRecord): import("./types").PartnerPoint {
+  const f = r.fields;
+  return {
+    id: r.id,
+    referralContactId: toStr(f["ReferralContactId"]),
+    tenantId: toStr(f["TenantId"]),
+    tenantName: toStr(f["TenantName"]) || undefined,
+    opportunityId: toStr(f["OpportunityId"]) || undefined,
+    earnedAt: toStr(f["EarnedAt"]),
+    redeemedAt: toStr(f["RedeemedAt"]) || undefined,
+    redeemedBy: toStr(f["RedeemedBy"]) || undefined,
+    redemptionNote: toStr(f["RedemptionNote"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+function partnerPointsFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  return fetch(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(AIRTABLE_TABLES.PARTNER_POINTS)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export async function getPartnerPoints(referralContactId: string): Promise<import("./types").PartnerPoint[]> {
+  const formula = encodeURIComponent(`{ReferralContactId} = "${referralContactId}"`);
+  let offset: string | undefined;
+  const all: import("./types").PartnerPoint[] = [];
+  do {
+    const qs = `?filterByFormula=${formula}&sort[0][field]=EarnedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await partnerPointsFetch(qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapPartnerPoint));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+export async function createPartnerPoint(params: {
+  referralContactId: string;
+  tenantId: string;
+  tenantName?: string;
+  opportunityId?: string;
+}): Promise<import("./types").PartnerPoint> {
+  const res = await partnerPointsFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        ReferralContactId: params.referralContactId,
+        TenantId: params.tenantId,
+        TenantName: params.tenantName || "",
+        OpportunityId: params.opportunityId || "",
+        EarnedAt: new Date().toISOString().slice(0, 10),
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerPoint(await res.json() as AirtableRecord);
+}
+
+export async function redeemPartnerPoint(pointId: string, redeemedBy: string, note: string): Promise<import("./types").PartnerPoint> {
+  const res = await partnerPointsFetch(`/${pointId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      fields: {
+        RedeemedAt: new Date().toISOString().slice(0, 10),
+        RedeemedBy: redeemedBy,
+        RedemptionNote: note,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerPoint(await res.json() as AirtableRecord);
+}
+
+export async function markInvoicePartnerPointAwarded(invoiceId: string): Promise<void> {
+  const res = await invoicesFetch(`/${invoiceId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: { PartnerPointAwarded: true } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Partner Project Lookup ───────────────────────────────────────────────────
+
+export async function getPartnerTenantIds(referralContactId: string): Promise<string[]> {
+  // Step 1: find ClientContacts where ReferralPartnerId = referralContactId
+  const formula1 = encodeURIComponent(`{ReferralPartnerId} = "${referralContactId}"`);
+  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=id`);
+  if (!ccRes.ok) return [];
+  const ccData = await ccRes.json();
+  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+  if (clientContactIds.length === 0) return [];
+
+  // Step 2: find Opportunities for those client contacts
+  const orClauses = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
+  const formula2 = encodeURIComponent(`OR(${orClauses})`);
+  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId`);
+  if (!oppRes.ok) return [];
+  const oppData = await oppRes.json();
+  const tenantIds: string[] = [];
+  for (const r of (oppData.records ?? []) as AirtableRecord[]) {
+    const tid = toStr(r.fields["TenantId"]);
+    if (tid && !tenantIds.includes(tid)) tenantIds.push(tid);
+  }
+  return tenantIds;
+}
+
+// Company-level versions: aggregate across ALL contacts at the same ReferralCompany
+
+export async function getCompanyContactIds(referralCompanyId: string): Promise<string[]> {
+  const formula = encodeURIComponent(`{ReferralCompanyId} = "${referralCompanyId}"`);
+  let offset: string | undefined;
+  const ids: string[] = [];
+  do {
+    const qs = `?filterByFormula=${formula}&fields[]=id${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    for (const r of (data.records ?? []) as AirtableRecord[]) ids.push(r.id);
+    offset = data.offset;
+  } while (offset);
+  return ids;
+}
+
+export async function getPartnerTenantIdsByCompany(referralCompanyId: string): Promise<string[]> {
+  const contactIds = await getCompanyContactIds(referralCompanyId);
+  if (contactIds.length === 0) return [];
+
+  // Find all ClientContacts referred by any contact in this company
+  const cc1 = contactIds.map(id => `{ReferralPartnerId} = "${id}"`).join(", ");
+  const formula1 = encodeURIComponent(contactIds.length === 1 ? cc1 : `OR(${cc1})`);
+  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=id`);
+  if (!ccRes.ok) return [];
+  const ccData = await ccRes.json();
+  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+  if (clientContactIds.length === 0) return [];
+
+  // Find all Opportunities for those client contacts
+  const cc2 = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
+  const formula2 = encodeURIComponent(clientContactIds.length === 1 ? cc2 : `OR(${cc2})`);
+  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId`);
+  if (!oppRes.ok) return [];
+  const oppData = await oppRes.json();
+  const tenantIds: string[] = [];
+  for (const r of (oppData.records ?? []) as AirtableRecord[]) {
+    const tid = toStr(r.fields["TenantId"]);
+    if (tid && !tenantIds.includes(tid)) tenantIds.push(tid);
+  }
+  return tenantIds;
+}
+
+export async function getPartnerPointsByCompany(referralCompanyId: string): Promise<import("./types").PartnerPoint[]> {
+  const contactIds = await getCompanyContactIds(referralCompanyId);
+  if (contactIds.length === 0) return [];
+
+  const clauses = contactIds.map(id => `{ReferralContactId} = "${id}"`).join(", ");
+  const formula = encodeURIComponent(contactIds.length === 1 ? clauses : `OR(${clauses})`);
+  let offset: string | undefined;
+  const all: import("./types").PartnerPoint[] = [];
+  do {
+    const qs = `?filterByFormula=${formula}&sort[0][field]=EarnedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await partnerPointsFetch(qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapPartnerPoint));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }

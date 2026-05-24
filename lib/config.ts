@@ -75,6 +75,7 @@ export const AIRTABLE_TABLES = {
   OUTREACH_NURTURE_SETTINGS: "OutreachNurtureSettings",
   SALES_GOALS: process.env.AIRTABLE_SALES_GOALS_TABLE || "SalesGoals",
   GOOGLE_REVIEWS: process.env.AIRTABLE_GOOGLE_REVIEWS_TABLE || "GoogleReviews",
+  PARTNER_POINTS: process.env.AIRTABLE_PARTNER_POINTS_TABLE || "PartnerPoints",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

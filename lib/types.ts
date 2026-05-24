@@ -804,6 +804,7 @@ export interface ReferralContact {
   emailOptout?: boolean;
   nextStepDate?: string;
   nextStepNote?: string;
+  clerkUserId?: string;
 }
 
 export interface ClientContact {
@@ -1247,4 +1248,28 @@ export interface GoogleReview {
   stars: 1 | 2 | 3 | 4 | 5;
   text: string;
   createdAt: string;
+}
+
+// ─── Partner Portal ───────────────────────────────────────────────────────────
+export interface PartnerPoint {
+  id: string;
+  referralContactId: string;
+  tenantId: string;
+  tenantName?: string;
+  opportunityId?: string;
+  earnedAt: string;
+  redeemedAt?: string;
+  redeemedBy?: string;
+  redemptionNote?: string;
+  createdAt: string;
+}
+
+export interface PartnerProject {
+  tenantId: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  status: "active" | "previous";
+  wonAt?: string;
 }

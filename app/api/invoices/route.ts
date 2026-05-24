@@ -10,7 +10,12 @@ import {
   deleteInvoice,
   getAllServices,
   getInvoiceSettings,
+  getOpportunitiesForTenant,
+  createPartnerPoint,
+  markInvoicePartnerPointAwarded,
+  getClientContactById,
 } from "@/lib/airtable";
+import { AIRTABLE_TABLES } from "@/lib/config";
 import { createQBOInvoice } from "@/lib/qbo";
 import { buildInvoiceEmail } from "@/lib/email";
 import { Resend } from "resend";
@@ -208,6 +213,11 @@ export async function PATCH(req: NextRequest) {
 
   let invoice = await updateInvoice(id, { status, paidAmount, paidAt, notes, sentToEmail, ccEmail });
 
+  // Auto-award partner point when invoice is first marked Paid (idempotent via PartnerPointAwarded flag)
+  if (status === "Paid" && invoice.tenantId) {
+    autoAwardPartnerPoint(invoice.id, invoice.tenantId).catch(() => {});
+  }
+
   // Send email for existing invoice if requested
   if (sendEmail && sentToEmail) {
     try {
@@ -256,4 +266,39 @@ export async function DELETE(req: NextRequest) {
 
   await deleteInvoice(id);
   return NextResponse.json({ ok: true });
+}
+
+// ─── Partner Point Auto-Award ─────────────────────────────────────────────────
+// Looks up the referring partner for this tenant's opportunity and awards a point.
+// The PartnerPointAwarded flag on the invoice prevents double-awarding.
+async function autoAwardPartnerPoint(invoiceId: string, tenantId: string): Promise<void> {
+  // Check if already awarded (re-read the invoice raw to avoid stale cache)
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  const checkRes = await fetch(
+    `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(AIRTABLE_TABLES.INVOICES)}/${invoiceId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!checkRes.ok) return;
+  const invoiceRecord = await checkRes.json();
+  if (invoiceRecord.fields?.PartnerPointAwarded) return;
+
+  // Find the won opportunity for this tenant to get the referral partner
+  const opps = await getOpportunitiesForTenant(tenantId).catch(() => []);
+  const wonOpp = opps.find((o) => o.stage === "Won");
+  if (!wonOpp) return;
+
+  // Get the client contact to find the referral partner
+  const clientContact = await getClientContactById(wonOpp.clientContactId).catch(() => null);
+  if (!clientContact?.referralPartnerId) return;
+
+  // Award the point
+  await createPartnerPoint({
+    referralContactId: clientContact.referralPartnerId,
+    tenantId,
+    opportunityId: wonOpp.id,
+  });
+
+  // Mark invoice so this doesn't happen again
+  await markInvoicePartnerPointAwarded(invoiceId);
 }
