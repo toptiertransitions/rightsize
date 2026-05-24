@@ -22,8 +22,20 @@ export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect();
     const { sessionClaims } = await auth();
-    if ((sessionClaims?.public_metadata as { suspended?: boolean })?.suspended === true) {
+    const meta = sessionClaims?.public_metadata as { suspended?: boolean; userType?: string } | undefined;
+
+    if (meta?.suspended === true) {
       return NextResponse.redirect(new URL("/suspended", req.url));
+    }
+
+    // Partner users belong exclusively in the partner portal
+    const path = req.nextUrl.pathname;
+    if (
+      meta?.userType === "partner" &&
+      !path.startsWith("/partner") &&
+      !path.startsWith("/api/")
+    ) {
+      return NextResponse.redirect(new URL("/partner/home", req.url));
     }
   }
 });
