@@ -19,6 +19,7 @@ export type AdminUser = {
   address?: string;       // Home/work address for location map
   pinColor?: string;      // Hex color for map pin
   isVendor?: boolean;     // Has a LocalVendors record with this ClerkUserId
+  isPartner?: boolean;    // publicMetadata.userType === "partner"
   memberships: Array<{
     membershipId: string;
     tenantId: string;
@@ -80,6 +81,7 @@ export default async function AdminUsersPage() {
     address: staffAddressByClerkId.get(u.id),
     pinColor: staffPinColorByClerkId.get(u.id),
     isVendor: vendorClerkIds.has(u.id),
+    isPartner: (u.publicMetadata as { userType?: string })?.userType === "partner",
     memberships: membershipsByUser.get(u.id) ?? [],
   }));
 

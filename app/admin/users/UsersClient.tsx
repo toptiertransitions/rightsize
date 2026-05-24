@@ -69,6 +69,10 @@ function userTypeBadges(user: AdminUser, tenantMap: Map<string, { isTTT?: boolea
         : "bg-gray-700 text-gray-300 border border-gray-600";
     return [<span key="sys" className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>];
   }
+  // Partner (CRM referral contact linked to this Clerk user)
+  if (user.isPartner) {
+    return [<span key="partner" className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-900/50 text-amber-300 border border-amber-700">Partner</span>];
+  }
   // Vendor (LocalVendors table record)
   if (user.isVendor) {
     return [<span key="vendor" className="text-xs px-2 py-0.5 rounded-full font-medium bg-teal-900/50 text-teal-300 border border-teal-800">Vendor</span>];
@@ -128,6 +132,7 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
   const [hourlyRateInput, setHourlyRateInput] = useState(user.hourlyRate != null ? String(user.hourlyRate) : "");
   const [addressInput, setAddressInput] = useState(user.address ?? "");
   const [pinColorInput, setPinColorInput] = useState(user.pinColor ?? "#16A34A");
+  const [partnerLoading, setPartnerLoading] = useState(false);
 
   const availableTenants = tenants.filter(t => !current.memberships.some(m => m.tenantId === t.id));
   const isHardAdmin = current.systemRole === "TTTAdmin"; // hardcoded via env — can't be changed via API
@@ -296,6 +301,42 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
       onUpdate(updated);
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(null); }
+  }
+
+  async function handleLinkPartner() {
+    setPartnerLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "linkPartner", clerkUserId: current.clerkUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      const updated = { ...current, isPartner: true };
+      setCurrent(updated);
+      onUpdate(updated);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setPartnerLoading(false); }
+  }
+
+  async function handleUnlinkPartner() {
+    if (!confirm(`Remove partner portal access for ${current.name}?`)) return;
+    setPartnerLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unlinkPartner", clerkUserId: current.clerkUserId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      const updated = { ...current, isPartner: false };
+      setCurrent(updated);
+      onUpdate(updated);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setPartnerLoading(false); }
   }
 
   async function handlePasswordReset() {
@@ -550,6 +591,36 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
                   </button>
                 </div>
               </div>
+            )}
+          </section>
+
+          {/* Partner Portal Access */}
+          <section>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Partner Portal Access</h3>
+            <div className="flex items-center gap-3">
+              <span className={`text-xs px-2 py-1 rounded-lg font-medium ${current.isPartner ? "bg-amber-900/30 text-amber-300 border border-amber-700" : "bg-gray-800 text-gray-500 border border-gray-700"}`}>
+                {current.isPartner ? "Linked as Partner" : "No partner access"}
+              </span>
+              {current.isPartner ? (
+                <button
+                  onClick={handleUnlinkPartner}
+                  disabled={partnerLoading}
+                  className="h-8 px-3 rounded-lg border border-gray-700 text-gray-400 text-sm hover:border-red-700 hover:text-red-400 disabled:opacity-40 transition-colors"
+                >
+                  {partnerLoading ? "…" : "Unlink"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleLinkPartner}
+                  disabled={partnerLoading}
+                  className="h-8 px-3 rounded-lg border border-amber-700 text-amber-400 text-sm hover:bg-amber-900/20 disabled:opacity-40 transition-colors"
+                >
+                  {partnerLoading ? "…" : "Link as Partner"}
+                </button>
+              )}
+            </div>
+            {!current.isPartner && (
+              <p className="mt-1.5 text-xs text-gray-600">Requires a CRM Referral Contact with a matching email address.</p>
             )}
           </section>
 

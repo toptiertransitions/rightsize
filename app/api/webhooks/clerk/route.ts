@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
+import { clerkClient } from "@clerk/nextjs/server";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { buildNewUserAdminEmail } from "@/lib/email";
 import { findReferralContactByEmail, setReferralContactClerkUserId } from "@/lib/airtable";
@@ -171,9 +172,14 @@ export async function POST(req: NextRequest) {
     // Link Clerk ID to referral contact if email matches (enables Partner Portal access)
     if (event.type === "user.created" && primaryEmail) {
       findReferralContactByEmail(primaryEmail)
-        .then((contact) => {
+        .then(async (contact) => {
           if (contact && !contact.clerkUserId) {
-            return setReferralContactClerkUserId(contact.id, clerkUserId);
+            await setReferralContactClerkUserId(contact.id, clerkUserId);
+            // Stamp the Clerk user so admins can see they're a Partner
+            const clerk = await clerkClient();
+            await clerk.users.updateUserMetadata(clerkUserId, {
+              publicMetadata: { userType: "partner" },
+            });
           }
         })
         .catch(() => {}); // non-blocking

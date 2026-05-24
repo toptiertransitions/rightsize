@@ -5541,10 +5541,10 @@ export async function findReferralContactByEmail(email: string): Promise<Referra
   return data.records?.length > 0 ? mapReferralContact(data.records[0]) : null;
 }
 
-export async function setReferralContactClerkUserId(contactId: string, clerkUserId: string): Promise<void> {
+export async function setReferralContactClerkUserId(contactId: string, clerkUserId: string | null): Promise<void> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${contactId}`, {
     method: "PATCH",
-    body: JSON.stringify({ fields: { ClerkUserId: clerkUserId } }),
+    body: JSON.stringify({ fields: { ClerkUserId: clerkUserId ?? null } }),
   });
   if (!res.ok) throw new Error(await res.text());
 }

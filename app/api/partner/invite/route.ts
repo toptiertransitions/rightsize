@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
-  const portalUrl = `${appUrl}/partner/home`;
+  // Send to sign-up with a redirect back to the partner portal after account creation
+  const portalUrl = `${appUrl}/sign-up?redirect_url=%2Fpartner%2Fhome`;
 
   // Send invite email via Resend (no Clerk invitation — partner uses standard sign-up)
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -71,11 +72,11 @@ function buildPartnerInviteEmail({
           <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
             <tr><td style="background:#2d4a3e;border-radius:10px;">
               <a href="${portalUrl}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
-                Access Partner Portal &rarr;
+                Create Your Account &rarr;
               </a>
             </td></tr>
           </table>
-          <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Sign up or sign in at:</p>
+          <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Create a free account at:</p>
           <p style="margin:0;font-size:12px;color:#6B7280;word-break:break-all;">${portalUrl}</p>
         </td></tr>
         <tr><td style="padding:16px 32px;border-top:1px solid #F3F4F6;">

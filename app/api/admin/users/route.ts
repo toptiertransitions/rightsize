@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { isTTTAdmin } from "@/lib/config";
-import { upsertStaffMember, getMembershipsForUser, deleteMembership, getStaffMember, deleteStaffMember } from "@/lib/airtable";
+import { upsertStaffMember, getMembershipsForUser, deleteMembership, getStaffMember, deleteStaffMember, findReferralContactByEmail, findReferralContactByClerkUserId, setReferralContactClerkUserId } from "@/lib/airtable";
 import { buildStaffWelcomeEmail } from "@/lib/email";
 
 async function checkAdmin() {
@@ -124,6 +124,35 @@ export async function POST(req: NextRequest) {
       const url = `${appUrl}/home?__clerk_ticket=${actorToken.token}`;
       return NextResponse.json({ token: actorToken.token, url });
     } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  if (action === "linkPartner" && clerkUserId) {
+    try {
+      const clerkUser = await client.users.getUser(clerkUserId);
+      const email = clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress
+        ?? clerkUser.emailAddresses[0]?.emailAddress;
+      if (!email) return NextResponse.json({ error: "User has no email address" }, { status: 400 });
+      const contact = await findReferralContactByEmail(email);
+      if (!contact) return NextResponse.json({ error: `No CRM Referral Contact found for ${email}` }, { status: 404 });
+      await setReferralContactClerkUserId(contact.id, clerkUserId);
+      await client.users.updateUserMetadata(clerkUserId, { publicMetadata: { userType: "partner" } });
+      return NextResponse.json({ success: true });
+    } catch (e) {
+      console.error("[linkPartner] error:", e);
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  if (action === "unlinkPartner" && clerkUserId) {
+    try {
+      const contact = await findReferralContactByClerkUserId(clerkUserId);
+      if (contact) await setReferralContactClerkUserId(contact.id, null);
+      await client.users.updateUserMetadata(clerkUserId, { publicMetadata: { userType: null } });
+      return NextResponse.json({ success: true });
+    } catch (e) {
+      console.error("[unlinkPartner] error:", e);
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }
   }
