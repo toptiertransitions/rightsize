@@ -5896,7 +5896,6 @@ export async function createTrainingCompletion(data: {
         Score: data.score,
         IncludesChicago: data.includesChicago,
         CertificateSent: false,
-        CreatedAt: new Date().toISOString(),
       },
     }),
   });
