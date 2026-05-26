@@ -1288,3 +1288,17 @@ export interface PartnerProject {
   status: "active" | "previous";
   wonAt?: string;
 }
+
+// ─── Training ─────────────────────────────────────────────────────────────────
+export interface TrainingCompletion {
+  id: string;
+  clerkUserId: string;
+  userName: string;
+  userEmail: string;
+  trainingType: string;
+  completedAt: string;
+  score: number;
+  includesChicago: boolean;
+  certificateSent: boolean;
+  createdAt: string;
+}

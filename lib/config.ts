@@ -77,6 +77,7 @@ export const AIRTABLE_TABLES = {
   SALES_GOALS: process.env.AIRTABLE_SALES_GOALS_TABLE || "SalesGoals",
   GOOGLE_REVIEWS: process.env.AIRTABLE_GOOGLE_REVIEWS_TABLE || "GoogleReviews",
   PARTNER_POINTS: process.env.AIRTABLE_PARTNER_POINTS_TABLE || "PartnerPoints",
+  TRAINING_COMPLETIONS: process.env.AIRTABLE_TRAINING_COMPLETIONS_TABLE || "TrainingCompletions",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

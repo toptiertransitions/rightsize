@@ -5858,3 +5858,59 @@ export async function getPartnerPointsByCompany(referralCompanyId: string): Prom
   } while (offset);
   return all;
 }
+
+// ─── Training Completions ─────────────────────────────────────────────────────
+function trainingFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = encodeURIComponent(AIRTABLE_TABLES.TRAINING_COMPLETIONS);
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    cache: "no-store",
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export async function createTrainingCompletion(data: {
+  clerkUserId: string;
+  userName: string;
+  userEmail: string;
+  trainingType: string;
+  completedAt: string;
+  score: number;
+  includesChicago: boolean;
+}): Promise<string> {
+  const res = await trainingFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        ClerkUserId: data.clerkUserId,
+        UserName: data.userName,
+        UserEmail: data.userEmail,
+        TrainingType: data.trainingType,
+        CompletedAt: data.completedAt,
+        Score: data.score,
+        IncludesChicago: data.includesChicago,
+        CertificateSent: false,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const record = await res.json();
+  return record.id as string;
+}
+
+export async function getAdminStaffEmails(): Promise<string[]> {
+  const formula = encodeURIComponent(`AND({Role} = "TTTAdmin", {IsActive} = TRUE())`);
+  const res = await staffRolesFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ records: [] }));
+  return (data.records as AirtableRecord[])
+    .map(r => toStr(r.fields["Email"]))
+    .filter(Boolean);
+}

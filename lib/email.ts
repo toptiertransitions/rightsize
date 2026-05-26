@@ -2386,3 +2386,104 @@ export function buildAppliedPriceDropEmail({
 </body>
 </html>`;
 }
+
+export function buildTrainingCertificateEmail(params: {
+  userName: string;
+  userEmail: string;
+  trainingType: string;
+  completedAt: string;
+  score: string;
+  includesChicago: boolean;
+  isAdminCopy: boolean;
+}): { subject: string; html: string } {
+  const { userName, userEmail, trainingType, completedAt, score, includesChicago, isAdminCopy } = params;
+
+  const subject = isAdminCopy
+    ? `HR Copy: ${userName} completed ${trainingType}`
+    : `${trainingType} — Certificate of Completion`;
+
+  const legalNote = trainingType.toLowerCase().includes("bystander")
+    ? "This training satisfies the Chicago Sexual Harassment Ordinance annual bystander intervention training requirement."
+    : "This training satisfies Illinois Human Rights Act annual training requirements.";
+
+  const chicagoRow = includesChicago
+    ? `<tr>
+        <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Chicago Supplement</td>
+        <td style="padding:10px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">Acknowledged (employee works in Chicago)</td>
+      </tr>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${trainingType} &#x2014; Certificate of Completion</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f4f0;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f0;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#2d4a3e;padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+              <p style="margin:6px 0 0;color:#a8c4b8;font-size:13px;">Certificate of Completion</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+                This confirms that <strong>${userName}</strong> (${userEmail}) has completed
+                <strong>${trainingType}</strong> on ${completedAt}.
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#374151;">
+                <strong>Quiz Score:</strong> ${score}
+              </p>
+              <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.6;">
+                ${legalNote}
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:2px solid #C9A96E;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+                <tr style="background-color:#faf7f0;">
+                  <td colspan="2" style="padding:12px 16px;font-size:12px;font-weight:bold;color:#2d4a3e;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e5d9c0;">Certificate Details</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;width:40%;">Employee</td>
+                  <td style="padding:10px 16px;font-size:13px;color:#374151;font-weight:600;">${userName}</td>
+                </tr>
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Email</td>
+                  <td style="padding:10px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${userEmail}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Training</td>
+                  <td style="padding:10px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${trainingType}</td>
+                </tr>
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Date Completed</td>
+                  <td style="padding:10px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${completedAt}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Score</td>
+                  <td style="padding:10px 16px;font-size:13px;font-weight:600;color:#2d4a3e;border-top:1px solid #e5e7eb;">${score}</td>
+                </tr>
+                ${chicagoRow}
+              </table>
+              <p style="margin:0 0 24px;font-size:13px;color:#6b7280;line-height:1.6;font-style:italic;">
+                By completing this training, the employee has acknowledged understanding of Illinois workplace harassment law and agreed to comply with Top Tier Transitions LLC&#x2019;s anti-harassment policy.
+              </p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 16px;" />
+              <p style="margin:0;font-size:12px;color:#9ca3af;">
+                Top Tier Transitions LLC &nbsp;&middot;&nbsp; 312-600-3016 &nbsp;&middot;&nbsp; toptiertransitions.com
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html };
+}
