@@ -348,6 +348,21 @@ export interface Item {
   commissionPaidAt?: string;  // ISO date — set when commission is marked as paid
   // Bulk price drop tracking
   priceDropOriginalValue?: number; // Stored before bulk price drop applied; cleared (0) after revert
+  originalValue?: number;
+}
+
+export type PriceChangeType = "Listed" | "Manual Edit" | "Price Drop 1" | "Price Drop 2" | "Reverted" | "Sale Price";
+
+export interface ItemPriceHistory {
+  id: string;
+  itemId: string;
+  itemName: string;
+  tenantId: string;
+  oldValue: number;
+  newValue: number;
+  changedBy: string;
+  changedAt: string;  // ISO datetime string
+  changeType: PriceChangeType;
 }
 
 // ─── Storefront Buyer (from StorefrontBuyers Airtable table) ─────────────────

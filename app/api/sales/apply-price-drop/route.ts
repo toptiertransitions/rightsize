@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
-import { getSystemRole, getTenantById, getItemsForTenant, batchUpdateItemPrices, updateItem } from "@/lib/airtable";
+import { getSystemRole, getTenantById, getItemsForTenant, batchUpdateItemPrices, updateItem, logItemPriceChange } from "@/lib/airtable";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { buildAppliedPriceDropEmail, type AppliedDropEmailItem } from "@/lib/email";
 import type { PrimaryRoute } from "@/lib/types";
@@ -76,6 +76,33 @@ export async function POST(req: NextRequest) {
   }
 
   await batchUpdateItemPrices(priceUpdates);
+
+  // Log price changes to history
+  const changerName = await (async () => {
+    try {
+      const cl = await clerkClient();
+      const u = await cl.users.getUser(userId);
+      return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
+    } catch { return userId; }
+  })();
+  const itemMap2 = new Map(listedItems.map(i => [i.id, i]));
+  const changeType: import("@/lib/types").PriceChangeType =
+    type === "revert" ? "Reverted" : type === "drop1" ? "Price Drop 1" : "Price Drop 2";
+  await Promise.allSettled(priceUpdates.map(u => {
+    const item = itemMap2.get(u.id);
+    if (!item) return Promise.resolve();
+    const oldVal = type === "revert" ? item.valueMid : u.priceDropOriginalValue;
+    const newVal = u.valueMid;
+    return logItemPriceChange({
+      itemId: u.id,
+      itemName: item.itemName,
+      tenantId,
+      oldValue: oldVal,
+      newValue: newVal,
+      changedBy: changerName,
+      changeType,
+    });
+  }));
 
   // Square sync for ProFoundFinds Consignment items with barcodes
   let squareSynced = 0;

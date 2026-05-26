@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
@@ -209,7 +209,8 @@ export async function PATCH(req: NextRequest) {
   const newVendorId = updates.assignedVendorId as string | undefined;
   const needsExisting = newVendorId !== undefined || updates.status !== undefined
     || resolvedNewRoute === "ProFoundFinds Consignment"
-    || (resolvedNewRoute !== undefined && !VENDOR_ROUTES.has(resolvedNewRoute));
+    || (resolvedNewRoute !== undefined && !VENDOR_ROUTES.has(resolvedNewRoute))
+    || updates.valueMid !== undefined;
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
 
   // When route changes to one that doesn't support a vendor, auto-clear the assigned vendor
@@ -293,6 +294,11 @@ export async function PATCH(req: NextRequest) {
     (updates as Record<string, unknown>).barcodeNumber = await getNextBarcodeNumber();
   }
 
+  // Snapshot originalValue when item first transitions to Listed
+  if (newStatus === "Listed" && existing?.status !== "Listed" && !(existing as import("@/lib/types").Item | null)?.originalValue) {
+    (updates as Record<string, unknown>).originalValue = existing?.valueMid || (updates as Record<string, unknown>).valueMid;
+  }
+
   const item = await updateItem(id as string, updates as never);
 
   // Auto-sync to Square when item transitions to Listed + ProFoundFinds Consignment
@@ -345,6 +351,49 @@ export async function PATCH(req: NextRequest) {
   //     }
   //   }
   // }
+
+  // Resolve display name for price change logging
+  const resolveChangerName = async (): Promise<string> => {
+    const staffList = await getStaffMembers().catch(() => []);
+    const staff = staffList.find((s) => s.clerkUserId === userId);
+    if (staff?.displayName) return staff.displayName;
+    try {
+      const client = await clerkClient();
+      const u = await client.users.getUser(userId);
+      return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
+    } catch { return userId; }
+  };
+
+  // Log price change when status → Listed (OriginalValue snapshot)
+  if (newStatus === "Listed" && existing?.status !== "Listed") {
+    const changedBy = await resolveChangerName();
+    logItemPriceChange({
+      itemId: item.id,
+      itemName: item.itemName,
+      tenantId: item.tenantId,
+      oldValue: existing?.valueMid ?? 0,
+      newValue: item.valueMid,
+      changedBy,
+      changeType: "Listed",
+    }).catch(() => {});
+  }
+  // Log price change when valueMid is manually edited on an already-Listed item
+  else if (
+    (updates as Record<string, unknown>).valueMid !== undefined &&
+    existing?.status === "Listed" &&
+    existing.valueMid !== item.valueMid
+  ) {
+    const changedBy = await resolveChangerName();
+    logItemPriceChange({
+      itemId: item.id,
+      itemName: item.itemName,
+      tenantId: item.tenantId,
+      oldValue: existing.valueMid,
+      newValue: item.valueMid,
+      changedBy,
+      changeType: "Manual Edit",
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ item });
 }

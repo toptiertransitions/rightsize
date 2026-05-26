@@ -651,6 +651,7 @@ export async function updateItem(
     approvedByName: "ApprovedByName",
     // Bulk price drop tracking
     priceDropOriginalValue: "PriceDropOriginalValue",
+    originalValue: "OriginalValue",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -693,6 +694,63 @@ export async function batchUpdateItemPrices(
 export async function deleteItem(id: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.ITEMS).destroy(id);
+}
+
+export async function logItemPriceChange(data: {
+  itemId: string;
+  itemName: string;
+  tenantId: string;
+  oldValue: number;
+  newValue: number;
+  changedBy: string;
+  changeType: import("./types").PriceChangeType;
+}): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.ITEM_PRICE_HISTORY).create({
+    ItemId: data.itemId,
+    ItemName: data.itemName,
+    TenantId: data.tenantId,
+    OldValue: data.oldValue,
+    NewValue: data.newValue,
+    ChangedBy: data.changedBy,
+    ChangedAt: new Date().toISOString(),
+    ChangeType: data.changeType,
+  }, { typecast: true });
+}
+
+export async function getItemPriceHistory(options?: {
+  itemId?: string;
+  tenantId?: string;
+  limit?: number;
+}): Promise<import("./types").ItemPriceHistory[]> {
+  const base = getBase();
+  const filterParts: string[] = [];
+  if (options?.itemId) filterParts.push(`{ItemId} = "${options.itemId}"`);
+  if (options?.tenantId) filterParts.push(`{TenantId} = "${options.tenantId}"`);
+  const filterByFormula = filterParts.length === 1
+    ? filterParts[0]
+    : filterParts.length > 1 ? `AND(${filterParts.join(", ")})` : undefined;
+
+  const selectOpts: Record<string, unknown> = {
+    sort: [{ field: "ChangedAt", direction: "desc" }],
+    maxRecords: options?.limit ?? 500,
+  };
+  if (filterByFormula) selectOpts.filterByFormula = filterByFormula;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const records = await base(AIRTABLE_TABLES.ITEM_PRICE_HISTORY).select(selectOpts as any).all();
+
+  return records.map(r => ({
+    id: r.id,
+    itemId: toStr(r.fields["ItemId"]),
+    itemName: toStr(r.fields["ItemName"]),
+    tenantId: toStr(r.fields["TenantId"]),
+    oldValue: toNum(r.fields["OldValue"]),
+    newValue: toNum(r.fields["NewValue"]),
+    changedBy: toStr(r.fields["ChangedBy"]),
+    changedAt: toStr(r.fields["ChangedAt"]),
+    changeType: (toStr(r.fields["ChangeType"]) || "Manual Edit") as import("./types").PriceChangeType,
+  }));
 }
 
 export async function createStorefrontBuyer(data: {
@@ -854,6 +912,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     estateSaleId: toStr(f["EstateSaleId"]) || undefined,
     commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
     priceDropOriginalValue: f["PriceDropOriginalValue"] != null ? (toNum(f["PriceDropOriginalValue"]) || undefined) : undefined,
+    originalValue: f["OriginalValue"] != null ? (toNum(f["OriginalValue"]) || undefined) : undefined,
   };
 }
 

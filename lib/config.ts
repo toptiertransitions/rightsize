@@ -66,6 +66,7 @@ export const AIRTABLE_TABLES = {
   FAILED_SALE_SYNC: process.env.AIRTABLE_FAILED_SALE_SYNC_TABLE || "FailedSaleSync",
   ESTATES: process.env.AIRTABLE_ESTATES_TABLE || "Estates",
   STOREFRONT_BUYERS: process.env.AIRTABLE_STOREFRONT_BUYERS_TABLE || "StorefrontBuyers",
+  ITEM_PRICE_HISTORY: process.env.AIRTABLE_ITEM_PRICE_HISTORY_TABLE || "ItemPriceHistory",
   OUTREACH_TEMPLATES: "OutreachTemplates",
   OUTREACH_AUDIENCES: "OutreachAudiences",
   OUTREACH_SEQUENCES: "OutreachSequences",

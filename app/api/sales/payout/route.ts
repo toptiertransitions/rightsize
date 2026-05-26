@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, updateItem } from "@/lib/airtable";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getSystemRole, updateItem, getItemById, logItemPriceChange } from "@/lib/airtable";
 
 const PAYOUT_ROLES = ["TTTStaff", "TTTManager", "TTTAdmin"];
 
@@ -33,6 +33,28 @@ export async function PATCH(req: NextRequest) {
     updates.valueMid = Number(salePrice); // backfill Target Value
   }
 
+  const existingItem = salePrice != null ? await getItemById(itemId).catch(() => null) : null;
+
   const item = await updateItem(itemId, updates);
+
+  if (salePrice != null) {
+    const oldVal = existingItem?.valueMid ?? 0;
+    let changedBy = userId;
+    try {
+      const cl = await clerkClient();
+      const u = await cl.users.getUser(userId);
+      changedBy = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
+    } catch { /* non-fatal */ }
+    logItemPriceChange({
+      itemId,
+      itemName: item.itemName,
+      tenantId: item.tenantId,
+      oldValue: oldVal,
+      newValue: Number(salePrice),
+      changedBy,
+      changeType: "Sale Price",
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ item });
 }
