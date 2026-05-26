@@ -244,6 +244,11 @@ function SalesTableRow({
       {/* Value (appraisal estimate) */}
       <td className="px-2 py-2.5 text-right text-sm whitespace-nowrap tabular-nums">
         <span className="text-gray-600">{item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">—</span>}</span>
+        {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
+          <div className="text-[10px] text-red-400 tabular-nums leading-tight mt-0.5">
+            orig {fmtCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
+          </div>
+        )}
       </td>
       {/* Sale Price (editable) */}
       <td className="px-2 py-2.5 text-right whitespace-nowrap">
@@ -457,6 +462,11 @@ function PFTableRow({
         {/* Value */}
         <td className="px-2 py-2.5 text-right text-sm whitespace-nowrap tabular-nums">
           <span className="text-gray-600">{item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">—</span>}</span>
+          {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
+            <div className="text-[10px] text-red-400 tabular-nums leading-tight mt-0.5">
+              orig {fmtCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
+            </div>
+          )}
         </td>
         {/* Progress */}
         <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
