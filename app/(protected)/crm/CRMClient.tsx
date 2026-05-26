@@ -1903,9 +1903,11 @@ function ReferralPartnersTab({
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [invitingSendId, setInvitingSendId] = useState<string | null>(null);
   const [inviteResults, setInviteResults] = useState<Map<string, "sent" | "error">>(new Map());
+  const [pendingInviteContact, setPendingInviteContact] = useState<ReferralContact | null>(null);
 
   async function inviteToPortal(contact: ReferralContact) {
     if (!contact.email) return;
+    setPendingInviteContact(null);
     setInvitingSendId(contact.id);
     try {
       const res = await fetch("/api/partner/invite", {
@@ -2579,7 +2581,10 @@ function ReferralPartnersTab({
                               )}
                               {c.email && (
                                 <button
-                                  onClick={() => inviteToPortal(c)}
+                                  onClick={() => {
+                                    if (inviteResults.get(c.id) === "sent") return;
+                                    setPendingInviteContact(c);
+                                  }}
                                   disabled={invitingSendId === c.id}
                                   className={cn(
                                     "text-xs px-2 py-0.5 rounded-full border transition-colors",
@@ -2959,6 +2964,42 @@ function ReferralPartnersTab({
           onClose={() => setActivityContact(null)}
           afterLog={handleActivityLogged}
         />
+      )}
+
+      {/* ── Partner Portal Invite Confirmation ────────────────────────────── */}
+      {pendingInviteContact && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#2d4a3e]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg className="w-5 h-5 text-[#2d4a3e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Send Partner Portal Invite?</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  This will email <strong>{pendingInviteContact.name}</strong> at{" "}
+                  <span className="font-medium text-gray-700">{pendingInviteContact.email}</span> with a link to create their own login for the Top Tier Partner Portal.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setPendingInviteContact(null)}
+                className="flex-1 h-10 rounded-xl border border-gray-200 text-sm text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => inviteToPortal(pendingInviteContact)}
+                className="flex-1 h-10 rounded-xl bg-[#2d4a3e] text-white text-sm font-medium hover:bg-[#1e3329] transition-colors"
+              >
+                Yes, Send Invite
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
