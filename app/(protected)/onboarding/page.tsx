@@ -7,7 +7,7 @@ export default async function OnboardingPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const user = await currentUser();
+  const user = await currentUser().catch(() => null);
   const email = user?.emailAddresses?.[0]?.emailAddress || "";
   const displayName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || email;
 

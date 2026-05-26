@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const user = await currentUser();
+  const user = await currentUser().catch(() => null);
   const staffName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
     user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ||

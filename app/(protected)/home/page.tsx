@@ -27,7 +27,7 @@ export default async function DashboardPage({
 
   const { tenantId: tenantIdParam, all: showAll } = await searchParams;
 
-  const user = await currentUser();
+  const user = await currentUser().catch(() => null);
   const [systemRole, memberships] = await Promise.all([
     getSystemRole(userId),
     getMembershipsForUser(userId).catch(() => []),

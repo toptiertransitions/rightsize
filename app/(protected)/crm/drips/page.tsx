@@ -20,7 +20,7 @@ export default async function CRMDripsPage() {
     redirect("/home");
   }
 
-  const user = await currentUser();
+  const user = await currentUser().catch(() => null);
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || "";
   const userFullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
 

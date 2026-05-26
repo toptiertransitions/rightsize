@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   const canEditAll = hasPermission(systemRole, PERMISSIONS.TIME_EDIT_ALL);
 
-  const user = await currentUser();
+  const user = await currentUser().catch(() => null);
   const authenticatedStaffName = user
     ? (`${user.firstName ?? ""} ${user.lastName ?? ""}`).trim() ||
       user.emailAddresses?.[0]?.emailAddress ||
