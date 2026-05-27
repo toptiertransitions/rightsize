@@ -15,6 +15,12 @@ const ROUTE_CLIENT_SHARE: Record<string, number> = {
   "Estate Sale": 67,
 };
 
+// Auto-apply staff commission when marking Sold on these routes (if not already set)
+const ROUTE_STAFF_COMMISSION: Record<string, number> = {
+  "FB/Marketplace": 15,
+  "Online Marketplace": 15,
+};
+
 // Non-TTT projects use different client share rates
 const NON_TTT_SHARE: Record<string, number> = {
   "FB/Marketplace": 100,
@@ -242,6 +248,12 @@ export async function PATCH(req: NextRequest) {
     if (!(updates as Record<string, unknown>).salePrice) {
       const price = (updates as Record<string, unknown>).valueMid ?? existing?.valueMid;
       if (price) (updates as Record<string, unknown>).salePrice = price;
+    }
+    // Auto-set staff commission % for FB/eBay routes if not already filled in
+    const soldRoute = (updates as Record<string, unknown>).primaryRoute as string | undefined ?? existing?.primaryRoute;
+    const autoCommission = soldRoute ? ROUTE_STAFF_COMMISSION[soldRoute] : undefined;
+    if (autoCommission !== undefined && !(updates as Record<string, unknown>).staffCommissionPercent && !existing?.staffCommissionPercent) {
+      (updates as Record<string, unknown>).staffCommissionPercent = autoCommission;
     }
   }
   // When reverting from Sold → clear sale fields
