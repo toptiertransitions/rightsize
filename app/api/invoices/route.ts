@@ -313,25 +313,25 @@ async function autoAwardPartnerPoint(invoiceId: string, tenantId: string): Promi
 async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: string): Promise<void> {
   const { getLoyaltyRecord, createLoyaltyRecord, updateLoyaltyRecord, createLedgerEntry } = await import("@/lib/airtable-loyalty");
   const { getTierForPoints, getTierIndex, getCurrentProgramYear, isProgramYearReset, TIERS } = await import("@/lib/loyalty");
-  const { findReferralContactByClerkUserId, getReferralCompanyById } = await import("@/lib/airtable");
+  const { getReferralCompanyById } = await import("@/lib/airtable");
 
   const referralContact = await getReferralContactById(referralContactAirtableId).catch(() => null);
   if (!referralContact?.clerkUserId) return;
 
-  const partnerId = referralContact.clerkUserId;
   const programYear = getCurrentProgramYear();
   const now = new Date().toISOString();
 
-  const byClerk = await findReferralContactByClerkUserId(partnerId).catch(() => null);
-  const companyId = byClerk?.referralCompanyId || null;
+  // Resolve to company-level key so all contacts at the same firm share one record
+  const companyId = referralContact.referralCompanyId || null;
   const company = companyId ? await getReferralCompanyById(companyId).catch(() => null) : null;
-  const companyName = company?.name || referralContact.name || partnerId;
+  const loyaltyKey = companyId || referralContact.clerkUserId;
+  const companyName = company?.name || referralContact.name || loyaltyKey;
 
-  let record = await getLoyaltyRecord(partnerId);
+  let record = await getLoyaltyRecord(loyaltyKey);
 
   if (!record) {
     record = await createLoyaltyRecord({
-      partnerId,
+      partnerId: loyaltyKey,
       partnerName: referralContact.name,
       partnerEmail: referralContact.email,
       companyName,
@@ -346,7 +346,7 @@ async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: st
 
   if (isProgramYearReset(record.currentProgramYear)) {
     await createLedgerEntry({
-      partnerId, companyName: record.companyName,
+      partnerId: loyaltyKey, companyName: record.companyName,
       eventType: "year_reset",
       pointsDelta: -record.currentYearPoints,
       pointsBalanceAfter: record.lifetimePoints - record.currentYearPoints,
@@ -382,7 +382,7 @@ async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: st
       newMultiplier = bonusTier.multiplier;
     }
     await createLedgerEntry({
-      partnerId, companyName, eventType: "silver_one_time_bonus",
+      partnerId: loyaltyKey, companyName, eventType: "silver_one_time_bonus",
       pointsDelta: 5, pointsBalanceAfter: balanceAfterBonus,
       tierBefore, tierAfter: newTier,
       note: "One-time Silver milestone bonus", createdAt: now, programYear,
@@ -390,7 +390,7 @@ async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: st
   }
 
   await createLedgerEntry({
-    partnerId, companyName, eventType: "project_completed",
+    partnerId: loyaltyKey, companyName, eventType: "project_completed",
     pointsDelta: pointsToAward, pointsBalanceAfter: newLifetimePoints,
     tierBefore, tierAfter: newTier,
     relatedProjectId: tenantId,

@@ -30,20 +30,23 @@ export async function POST(req: NextRequest) {
   const programYear = getCurrentProgramYear();
   const now = new Date().toISOString();
 
-  // ── Resolve partner info from CRM ─────────────────────────────────────────
+  // ── Resolve to company-level key ──────────────────────────────────────────
+  // loyaltyKey = referralCompanyId when the partner belongs to a company,
+  // so all contacts at the same firm share one tier record.
   const contact = await findReferralContactByClerkUserId(partnerId).catch(() => null);
   const companyId = contact?.referralCompanyId || null;
   const company = companyId ? await getReferralCompanyById(companyId).catch(() => null) : null;
+  const loyaltyKey = companyId || partnerId;
   const companyName = company?.name || contact?.name || partnerId;
   const partnerName = contact?.name || "";
   const partnerEmail = contact?.email || "";
 
   // ── Get or create loyalty record ──────────────────────────────────────────
-  let record = await getLoyaltyRecord(partnerId);
+  let record = await getLoyaltyRecord(loyaltyKey);
 
   if (!record) {
     record = await createLoyaltyRecord({
-      partnerId,
+      partnerId: loyaltyKey,
       partnerName,
       partnerEmail,
       companyName,
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest) {
   if (isProgramYearReset(record.currentProgramYear)) {
     const resetDelta = -record.currentYearPoints;
     await createLedgerEntry({
-      partnerId,
+      partnerId: loyaltyKey,
       companyName: record.companyName,
       eventType: "year_reset",
       pointsDelta: resetDelta,
@@ -83,7 +86,6 @@ export async function POST(req: NextRequest) {
   let newYearPoints = record.currentYearPoints + pointsToAward;
   let newLifetimePoints = record.lifetimePoints + pointsToAward;
 
-  // Tier upgrades only go up during the year (no mid-year downgrades)
   let newTier = record.currentTier;
   let newMultiplier = record.currentMultiplier;
   const newTierData = getTierForPoints(newYearPoints);
@@ -100,7 +102,6 @@ export async function POST(req: NextRequest) {
     newYearPoints += bonusAwarded;
     newLifetimePoints += bonusAwarded;
 
-    // Re-evaluate tier after bonus
     const bonusTier = getTierForPoints(newYearPoints);
     if (getTierIndex(bonusTier.name) > getTierIndex(newTier)) {
       newTier = bonusTier.name;
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
     }
 
     await createLedgerEntry({
-      partnerId,
+      partnerId: loyaltyKey,
       companyName,
       eventType: "silver_one_time_bonus",
       pointsDelta: bonusAwarded,
@@ -124,9 +125,8 @@ export async function POST(req: NextRequest) {
   const tieredUp = newTier !== tierBefore;
   const statusEarnedYear = tieredUp ? programYear : record.statusEarnedYear;
 
-  // ── Write main ledger entry ───────────────────────────────────────────────
   await createLedgerEntry({
-    partnerId,
+    partnerId: loyaltyKey,
     companyName,
     eventType: "project_completed",
     pointsDelta: pointsToAward,
@@ -139,7 +139,6 @@ export async function POST(req: NextRequest) {
     programYear,
   });
 
-  // ── Persist updated loyalty record ────────────────────────────────────────
   record = await updateLoyaltyRecord(record.id, {
     partnerName,
     partnerEmail,

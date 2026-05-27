@@ -162,7 +162,7 @@ function ResetPasswordModal({
       const res = await fetch("/api/partner-loyalty/reset-partner-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partnerId: partner.partnerId }),
+        body: JSON.stringify({ partnerEmail: partner.partnerEmail }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
