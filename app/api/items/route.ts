@@ -294,8 +294,8 @@ export async function PATCH(req: NextRequest) {
     (updates as Record<string, unknown>).barcodeNumber = await getNextBarcodeNumber();
   }
 
-  // Snapshot originalValue when item first transitions to Listed
-  if (newStatus === "Listed" && existing?.status !== "Listed" && !(existing as import("@/lib/types").Item | null)?.originalValue) {
+  // Snapshot originalValue the first time an item is in Listed status (transition or backfill for already-listed items)
+  if (newStatus === "Listed" && !(existing as import("@/lib/types").Item | null)?.originalValue) {
     (updates as Record<string, unknown>).originalValue = existing?.valueMid || (updates as Record<string, unknown>).valueMid;
   }
 

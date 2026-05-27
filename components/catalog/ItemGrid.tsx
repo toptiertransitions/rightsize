@@ -1786,10 +1786,16 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   <p className="text-xs text-gray-400 mt-0.5 truncate">{item.category}</p>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm font-bold text-forest-700">
-                        {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
-                      </span>
-
+                      <div>
+                        <span className="text-sm font-bold text-forest-700">
+                          {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
+                        </span>
+                        {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
+                          <div className="text-[10px] text-red-400 tabular-nums leading-tight mt-0.5">
+                            orig {formatCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
                       {route.label}
@@ -1979,12 +1985,19 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       <td className="px-4 py-2.5 text-gray-500">{item.category || "—"}</td>
                       {/* Value */}
                       <td className="px-4 py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <span className="font-semibold text-forest-700">
-                            {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
-                          </span>
-                          {(item.quantity ?? 0) > 1 && (
-                            <span className="text-[10px] font-medium text-gray-400">×{item.quantity}</span>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-forest-700">
+                              {item.salePrice && item.salePrice > 0 ? formatCurrency(item.salePrice) : item.valueMid > 0 ? formatCurrency(item.valueMid) : "—"}
+                            </span>
+                            {(item.quantity ?? 0) > 1 && (
+                              <span className="text-[10px] font-medium text-gray-400">×{item.quantity}</span>
+                            )}
+                          </div>
+                          {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
+                            <div className="text-[10px] text-red-400 tabular-nums leading-tight">
+                              orig {formatCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
+                            </div>
                           )}
                         </div>
                       </td>
