@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getPartnerContact, getPartnerProjectsByStage } from "@/lib/partner";
+import { PartnerLoyaltyStatus } from "@/components/partner/PartnerLoyaltyStatus";
 import {
   getTenantById,
   getPartnerPointsByCompany,
@@ -86,9 +87,16 @@ export default async function PartnerHomePage() {
         <h1 className="text-2xl font-semibold text-[#2d4a3e]">
           Welcome back, {contact.name.split(" ")[0]}
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
+      </div>
+
+      {/* Loyalty status card */}
+      <PartnerLoyaltyStatus partnerId={userId} />
+
+      {/* original welcome subtitle moved inline */}
+      <div className="-mt-4">
+        <p className="text-sm text-gray-500">
           {company ? (
-            <>Viewing all referral activity for <strong>{company.name}</strong>.</>
+            <>Referral activity for <strong>{company.name}</strong>.</>
           ) : (
             "Here's a snapshot of your referred projects and points."
           )}

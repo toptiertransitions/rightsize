@@ -33,6 +33,7 @@ if (!AT_TOKEN || !AT_BASE) {
 // ── Table names — respect env overrides so they match the app's config ────────
 const T = {
   TENANTS:             process.env.AIRTABLE_TENANTS_TABLE             ?? "Tenants",
+  ITEMS:               process.env.AIRTABLE_ITEMS_TABLE               ?? "Items",
   CRM_COMPANIES:       process.env.AIRTABLE_CRM_COMPANIES_TABLE       ?? "CRMReferralCompanies",
   CRM_CONTACTS:        process.env.AIRTABLE_CRM_CONTACTS_TABLE        ?? "CRMReferralContacts",
   CRM_CLIENT_CONTACTS: process.env.AIRTABLE_CRM_CLIENT_CONTACTS_TABLE ?? "CRMClientContacts",
@@ -650,6 +651,182 @@ async function deleteActivity(args: Fields): Promise<string> {
   }, null, 2);
 }
 
+// ── mapCatalogItem — shared item shape for catalog/sales tools ────────────────
+function mapCatalogItem(r: ARecord): Record<string, unknown> {
+  const f = r.fields;
+  let photos: Array<{ url: string; publicId: string }> | undefined;
+  const photosJson = s(f["PhotosJson"]);
+  if (photosJson) {
+    try { photos = JSON.parse(photosJson as string); } catch { /* ignore */ }
+  }
+  if (!photos?.length && s(f["PhotoUrl"])) {
+    photos = [{ url: s(f["PhotoUrl"]), publicId: s(f["PhotoPublicId"]) }];
+  }
+  return {
+    id:                   r.id,
+    tenantId:             s(f["TenantId"]),
+    itemName:             s(f["ItemName"]),
+    category:             s(f["Category"]),
+    condition:            s(f["Condition"]),
+    conditionNotes:       s(f["ConditionNotes"])        || undefined,
+    sizeClass:            s(f["SizeClass"]),
+    fragility:            s(f["Fragility"]),
+    itemType:             s(f["ItemType"]),
+    valueLow:             n(f["ValueLow"]),
+    valueMid:             n(f["ValueMid"]),
+    valueHigh:            n(f["ValueHigh"]),
+    primaryRoute:         s(f["PrimaryRoute"]),
+    routeReasoning:       s(f["RouteReasoning"])        || undefined,
+    consignmentCategory:  s(f["ConsignmentCategory"])   || undefined,
+    listingFb:            s(f["ListingFb"])              || undefined,
+    listingTitleEbay:     s(f["ListingTitleEbay"])       || undefined,
+    listingDescriptionEbay: s(f["ListingDescriptionEbay"]) || undefined,
+    listingOfferup:       s(f["ListingOfferup"])         || undefined,
+    staffTips:            s(f["StaffTips"])              || undefined,
+    status:               s(f["Status"]),
+    barcodeNumber:        s(f["BarcodeNumber"])          || undefined,
+    quantity:             f["Quantity"]          != null ? n(f["Quantity"])          : undefined,
+    clientSharePercent:   f["ClientSharePercent"] != null ? n(f["ClientSharePercent"]) : undefined,
+    salePrice:            f["SalePrice"]         != null ? n(f["SalePrice"])         : undefined,
+    saleDate:             s(f["SaleDate"])               || undefined,
+    completedDate:        s(f["CompletedDate"])          || undefined,
+    staffSellerName:      s(f["StaffSellerName"])        || undefined,
+    photos:               photos?.length ? photos : undefined,
+    createdAt:            s(f["CreatedAt"]),
+    updatedAt:            s(f["UpdatedAt"]),
+  };
+}
+
+// ── get_catalog_items ─────────────────────────────────────────────────────────
+async function getCatalogItems(args: Fields): Promise<string> {
+  const projectId      = s(args.project_id).trim();
+  const projectName    = s(args.project_name).trim().toLowerCase();
+  const statusFilter   = s(args.status).trim();
+  const routeFilter    = s(args.route).trim();
+  const categoryFilter = s(args.category).trim().toLowerCase();
+  const limit = typeof args.limit === "number" ? Math.min(args.limit, 500) : 200;
+
+  let tenantId = projectId;
+  if (!tenantId && projectName) {
+    const tenants = await fetchAll(T.TENANTS);
+    const match = tenants.find(t => s(t.fields.Name).toLowerCase() === projectName)
+      ?? tenants.find(t => s(t.fields.Name).toLowerCase().includes(projectName));
+    if (!match) {
+      const suggestions = tenants
+        .filter(t => s(t.fields.Name).toLowerCase().includes(projectName.slice(0, 4)))
+        .slice(0, 5)
+        .map(t => ({ id: t.id, name: s(t.fields.Name) }));
+      return JSON.stringify({ error: `Project "${args.project_name}" not found.`, suggestions }, null, 2);
+    }
+    tenantId = match.id;
+  }
+  if (!tenantId) throw new Error("Either project_id or project_name is required");
+
+  const filters: string[] = [`{TenantId} = "${tenantId}"`];
+  if (statusFilter) filters.push(`{Status} = "${statusFilter}"`);
+  if (routeFilter)  filters.push(`{PrimaryRoute} = "${routeFilter}"`);
+  const formula = filters.length === 1 ? filters[0] : `AND(${filters.join(", ")})`;
+
+  const records = await fetchAll(T.ITEMS, {
+    filterByFormula: formula,
+    "sort[0][field]":     "CreatedAt",
+    "sort[0][direction]": "desc",
+  });
+
+  let items = records.map(mapCatalogItem);
+  if (categoryFilter) {
+    items = items.filter(i => s(i["category"]).toLowerCase().includes(categoryFilter));
+  }
+  items = items.slice(0, limit);
+
+  const statusCounts: Record<string, number> = {};
+  const routeCounts:  Record<string, number> = {};
+  for (const item of items) {
+    const st = s(item["status"])       || "Unknown";
+    const rt = s(item["primaryRoute"]) || "Unknown";
+    statusCounts[st] = (statusCounts[st] ?? 0) + 1;
+    routeCounts[rt]  = (routeCounts[rt]  ?? 0) + 1;
+  }
+
+  return JSON.stringify({ projectId: tenantId, count: items.length, summary: { byStatus: statusCounts, byRoute: routeCounts }, items }, null, 2);
+}
+
+// ── get_sales_summary ─────────────────────────────────────────────────────────
+async function getSalesSummary(args: Fields): Promise<string> {
+  const projectId   = s(args.project_id).trim();
+  const projectName = s(args.project_name).trim().toLowerCase();
+  const dateFrom    = s(args.date_from).trim();
+  const routeFilter = s(args.route).trim();
+
+  let tenantId = projectId;
+  if (!tenantId && projectName) {
+    const tenants = await fetchAll(T.TENANTS);
+    const match = tenants.find(t => s(t.fields.Name).toLowerCase() === projectName)
+      ?? tenants.find(t => s(t.fields.Name).toLowerCase().includes(projectName));
+    if (!match) return JSON.stringify({ error: `Project "${args.project_name}" not found.` }, null, 2);
+    tenantId = match.id;
+  }
+
+  const filters: string[] = ['{Status} = "Sold"'];
+  if (tenantId)    filters.push(`{TenantId} = "${tenantId}"`);
+  if (routeFilter) filters.push(`{PrimaryRoute} = "${routeFilter}"`);
+  if (dateFrom)    filters.push(`{SaleDate} >= "${dateFrom}"`);
+
+  const records = await fetchAll(T.ITEMS, {
+    filterByFormula:      `AND(${filters.join(", ")})`,
+    "sort[0][field]":     "SaleDate",
+    "sort[0][direction]": "desc",
+  });
+
+  const soldItems = records.map(r => {
+    const f          = r.fields;
+    const salePrice  = n(f["SalePrice"]);
+    const clientShare = n(f["ClientSharePercent"]) / 100;
+    return {
+      id: r.id, itemName: s(f["ItemName"]), category: s(f["Category"]),
+      primaryRoute: s(f["PrimaryRoute"]), saleDate: s(f["SaleDate"]),
+      salePrice, valueMid: n(f["ValueMid"]),
+      clientSharePercent: n(f["ClientSharePercent"]),
+      clientPayout:       Math.round(salePrice * clientShare * 100) / 100,
+      staffSellerName:    s(f["StaffSellerName"]) || undefined,
+      barcodeNumber:      s(f["BarcodeNumber"])   || undefined,
+    };
+  });
+
+  const totalRevenue      = soldItems.reduce((sum, i) => sum + i.salePrice,    0);
+  const totalClientPayout = soldItems.reduce((sum, i) => sum + i.clientPayout, 0);
+  const byRoute: Record<string, { count: number; revenue: number }> = {};
+  for (const item of soldItems) {
+    const rt = item.primaryRoute || "Unknown";
+    if (!byRoute[rt]) byRoute[rt] = { count: 0, revenue: 0 };
+    byRoute[rt].count++;
+    byRoute[rt].revenue += item.salePrice;
+  }
+
+  return JSON.stringify({
+    projectId: tenantId || "all",
+    soldItemCount:     soldItems.length,
+    totalRevenue:      Math.round(totalRevenue      * 100) / 100,
+    totalClientPayout: Math.round(totalClientPayout * 100) / 100,
+    byRoute,
+    items: soldItems,
+  }, null, 2);
+}
+
+// ── get_item_detail ───────────────────────────────────────────────────────────
+async function getItemDetail(args: Fields): Promise<string> {
+  const itemId = s(args.item_id).trim();
+  if (!itemId) throw new Error("item_id is required");
+
+  const res = await atFetch(`/${encodeURIComponent(T.ITEMS)}/${encodeURIComponent(itemId)}`);
+  if (!res.ok) {
+    if (res.status === 404) return JSON.stringify({ error: `Item ${itemId} not found.` }, null, 2);
+    throw new Error(`Airtable: ${await res.text()}`);
+  }
+  const record = await res.json() as ARecord;
+  return JSON.stringify(mapCatalogItem(record), null, 2);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // TOOL DEFINITIONS
 // ═════════════════════════════════════════════════════════════════════════════
@@ -854,6 +1031,62 @@ const TOOLS = [
       required: ["activity_id"],
     },
   },
+  {
+    name: "get_catalog_items",
+    description:
+      "Read all catalog items for a client project, with optional filters. Returns item names, categories, " +
+      "conditions, routes, statuses, prices, listing descriptions (FB, eBay, OfferUp), photos, and barcodes. " +
+      "Filter by status (e.g. 'Listed'), route (e.g. 'FB/Marketplace'), or category.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        project_id:   { type: "string", description: "Airtable record ID of the project (preferred — use get_projects to find IDs)" },
+        project_name: { type: "string", description: "Project name (e.g. 'Janet Jordan') — used to look up project_id if not provided" },
+        status: {
+          type: "string",
+          description: "Filter by item status",
+          enum: ["Pending Review", "Approved", "Listed", "In Cart", "Sold", "Donated", "Discarded", "Rejected / Revisit"],
+        },
+        route: {
+          type: "string",
+          description: "Filter by sales route",
+          enum: ["Keep", "Family Keeping", "ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Donate", "Discard", "Estate Sale"],
+        },
+        category: { type: "string", description: "Filter by item category (partial match, e.g. 'furniture', 'jewelry')" },
+        limit:    { type: "number", description: "Max items to return (default 200, max 500)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_sales_summary",
+    description:
+      "Sales summary for a client project: total sold items, total revenue, client payout, and breakdown by route. " +
+      "Optionally filter by project, route, or start date. Use for payout calculations and project wrap-ups.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        project_id:   { type: "string", description: "Airtable record ID of the project (use get_projects to find IDs)" },
+        project_name: { type: "string", description: "Project name — used if project_id not provided" },
+        route:        { type: "string", description: "Filter by sales route (e.g. 'FB/Marketplace')" },
+        date_from:    { type: "string", description: "Only include sales on or after this date (YYYY-MM-DD)" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_item_detail",
+    description:
+      "Full details for a single catalog item — all fields including photos, listing descriptions for all channels, " +
+      "pricing, condition notes, sale info, vendor assignment, and barcode.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        item_id: { type: "string", description: "Airtable record ID of the item (required)" },
+      },
+      required: ["item_id"],
+    },
+  },
 ];
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -884,6 +1117,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "create_client_lead":     result = await createClientLead(a);           break;
       case "log_activity":           result = await logActivity(a);                break;
       case "delete_activity":        result = await deleteActivity(a);             break;
+      case "get_catalog_items":      result = await getCatalogItems(a);           break;
+      case "get_sales_summary":      result = await getSalesSummary(a);           break;
+      case "get_item_detail":        result = await getItemDetail(a);             break;
       default:
         return { content: [{ type: "text" as const, text: `Unknown tool: ${name}` }], isError: true };
     }

@@ -1302,3 +1302,55 @@ export interface TrainingCompletion {
   certificateSent: boolean;
   createdAt: string;
 }
+
+// ─── Partner Loyalty ──────────────────────────────────────────────────────────
+
+export interface PartnerLoyaltyRecord {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  partnerEmail: string;
+  companyName: string;
+  currentTier: import("./loyalty").TierName;
+  currentYearPoints: number;
+  lifetimePoints: number;
+  currentProgramYear: number;
+  currentMultiplier: number;
+  statusEarnedYear?: number;
+  silverBonusApplied: boolean;
+  lastUpdated?: string;
+  notes?: string;
+}
+
+export interface PartnerLedgerEntry {
+  id: string;
+  partnerId: string;
+  companyName: string;
+  eventType: import("./loyalty").LedgerEventType;
+  pointsDelta: number;
+  pointsBalanceAfter: number;
+  tierBefore: import("./loyalty").TierName;
+  tierAfter: import("./loyalty").TierName;
+  relatedProjectId?: string;
+  adminUserId?: string;
+  note?: string;
+  createdAt: string;
+  programYear: number;
+}
+
+export interface LoyaltyStatusResponse {
+  partnerId: string;
+  companyName: string;
+  partnerName: string;
+  currentTier: import("./loyalty").TierName;
+  currentYearPoints: number;
+  currentMultiplier: number;
+  lifetimePoints: number;
+  programYear: number;
+  programYearStartDate: string;
+  programYearEndDate: string;
+  nextTier: import("./loyalty").TierName | null;
+  pointsToNextTier: number | null;
+  percentToNextTier: number | null;
+  recentActivity: PartnerLedgerEntry[];
+}

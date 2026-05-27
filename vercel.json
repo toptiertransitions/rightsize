@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/outreach-replies",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/partner-loyalty/cron-year-reset",
+      "schedule": "0 6 1 6 *"
     }
   ]
 }

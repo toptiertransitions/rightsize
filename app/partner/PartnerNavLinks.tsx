@@ -14,6 +14,9 @@ export function PartnerNavLinks() {
       <Link href="/partner/plans" className={cls(pathname.startsWith("/partner/plan"))}>
         Plans
       </Link>
+      <Link href="/partner/loyalty" className={cls(pathname === "/partner/loyalty")}>
+        Rewards
+      </Link>
     </>
   );
 }

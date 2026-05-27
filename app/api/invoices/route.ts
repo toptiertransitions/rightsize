@@ -14,6 +14,7 @@ import {
   createPartnerPoint,
   markInvoicePartnerPointAwarded,
   getClientContactById,
+  getReferralContactById,
 } from "@/lib/airtable";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { createQBOInvoice } from "@/lib/qbo";
@@ -292,13 +293,120 @@ async function autoAwardPartnerPoint(invoiceId: string, tenantId: string): Promi
   const clientContact = await getClientContactById(wonOpp.clientContactId).catch(() => null);
   if (!clientContact?.referralPartnerId) return;
 
-  // Award the point
+  // Award the legacy point
   await createPartnerPoint({
     referralContactId: clientContact.referralPartnerId,
     tenantId,
     opportunityId: wonOpp.id,
   });
 
+  // Also award loyalty program point (non-blocking)
+  awardLoyaltyPoint(clientContact.referralPartnerId, tenantId).catch(
+    e => console.error("[loyalty] award failed:", e)
+  );
+
   // Mark invoice so this doesn't happen again
   await markInvoicePartnerPointAwarded(invoiceId);
+}
+
+// ─── Loyalty point award (called inline, non-blocking) ────────────────────────
+async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: string): Promise<void> {
+  const { getLoyaltyRecord, createLoyaltyRecord, updateLoyaltyRecord, createLedgerEntry } = await import("@/lib/airtable-loyalty");
+  const { getTierForPoints, getTierIndex, getCurrentProgramYear, isProgramYearReset, TIERS } = await import("@/lib/loyalty");
+  const { findReferralContactByClerkUserId, getReferralCompanyById } = await import("@/lib/airtable");
+
+  const referralContact = await getReferralContactById(referralContactAirtableId).catch(() => null);
+  if (!referralContact?.clerkUserId) return;
+
+  const partnerId = referralContact.clerkUserId;
+  const programYear = getCurrentProgramYear();
+  const now = new Date().toISOString();
+
+  const byClerk = await findReferralContactByClerkUserId(partnerId).catch(() => null);
+  const companyId = byClerk?.referralCompanyId || null;
+  const company = companyId ? await getReferralCompanyById(companyId).catch(() => null) : null;
+  const companyName = company?.name || referralContact.name || partnerId;
+
+  let record = await getLoyaltyRecord(partnerId);
+
+  if (!record) {
+    record = await createLoyaltyRecord({
+      partnerId,
+      partnerName: referralContact.name,
+      partnerEmail: referralContact.email,
+      companyName,
+      currentTier: "None",
+      currentYearPoints: 0,
+      lifetimePoints: 0,
+      currentProgramYear: programYear,
+      currentMultiplier: 1,
+      silverBonusApplied: false,
+    });
+  }
+
+  if (isProgramYearReset(record.currentProgramYear)) {
+    await createLedgerEntry({
+      partnerId, companyName: record.companyName,
+      eventType: "year_reset",
+      pointsDelta: -record.currentYearPoints,
+      pointsBalanceAfter: record.lifetimePoints - record.currentYearPoints,
+      tierBefore: record.currentTier, tierAfter: record.currentTier,
+      note: `Year reset: ${record.currentProgramYear} → ${programYear}`,
+      createdAt: now, programYear,
+    });
+    record = await updateLoyaltyRecord(record.id, { currentYearPoints: 0, currentProgramYear: programYear });
+  }
+
+  const tierBefore = record.currentTier;
+  const pointsToAward = 1 * record.currentMultiplier;
+  let newYearPoints = record.currentYearPoints + pointsToAward;
+  let newLifetimePoints = record.lifetimePoints + pointsToAward;
+  let newTier = record.currentTier;
+  let newMultiplier = record.currentMultiplier;
+
+  const newTierData = getTierForPoints(newYearPoints);
+  if (getTierIndex(newTierData.name) > getTierIndex(record.currentTier)) {
+    newTier = newTierData.name;
+    newMultiplier = newTierData.multiplier;
+  }
+
+  let silverBonusApplied = record.silverBonusApplied;
+  if (!silverBonusApplied && newYearPoints >= TIERS[1].threshold) {
+    const balanceAfterBonus = newLifetimePoints + 5;
+    newYearPoints += 5;
+    newLifetimePoints += 5;
+    silverBonusApplied = true;
+    const bonusTier = getTierForPoints(newYearPoints);
+    if (getTierIndex(bonusTier.name) > getTierIndex(newTier)) {
+      newTier = bonusTier.name;
+      newMultiplier = bonusTier.multiplier;
+    }
+    await createLedgerEntry({
+      partnerId, companyName, eventType: "silver_one_time_bonus",
+      pointsDelta: 5, pointsBalanceAfter: balanceAfterBonus,
+      tierBefore, tierAfter: newTier,
+      note: "One-time Silver milestone bonus", createdAt: now, programYear,
+    });
+  }
+
+  await createLedgerEntry({
+    partnerId, companyName, eventType: "project_completed",
+    pointsDelta: pointsToAward, pointsBalanceAfter: newLifetimePoints,
+    tierBefore, tierAfter: newTier,
+    relatedProjectId: tenantId,
+    note: "Completed project referral", createdAt: now, programYear,
+  });
+
+  const statusEarnedYear = newTier !== tierBefore ? programYear : record.statusEarnedYear;
+  await updateLoyaltyRecord(record.id, {
+    partnerName: referralContact.name,
+    partnerEmail: referralContact.email,
+    companyName,
+    currentTier: newTier,
+    currentYearPoints: newYearPoints,
+    lifetimePoints: newLifetimePoints,
+    currentMultiplier: newMultiplier,
+    silverBonusApplied,
+    statusEarnedYear,
+  });
 }

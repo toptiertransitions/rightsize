@@ -2788,6 +2788,12 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
   };
 }
 
+export async function getReferralContactById(id: string): Promise<ReferralContact | null> {
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`);
+  if (!res.ok) return null;
+  return mapReferralContact(await res.json());
+}
+
 export async function getReferralContacts(companyId?: string): Promise<ReferralContact[]> {
   const baseFilter = companyId
     ? `?filterByFormula=${encodeURIComponent(`{ReferralCompanyId} = "${companyId}"`)}&sort[0][field]=Name&sort[0][direction]=asc`
