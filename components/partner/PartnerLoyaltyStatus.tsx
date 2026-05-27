@@ -57,9 +57,10 @@ function fmtDate(iso: string): string {
 
 interface Props {
   partnerId: string;
+  compact?: boolean;
 }
 
-export function PartnerLoyaltyStatus({ partnerId }: Props) {
+export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
   const [data, setData] = useState<LoyaltyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEarn, setShowEarn] = useState(false);
@@ -105,6 +106,28 @@ export function PartnerLoyaltyStatus({ partnerId }: Props) {
 
   // ── Onboarding: no points yet ─────────────────────────────────────────────
   if (isNew) {
+    if (compact) {
+      return (
+        <div className="rounded-2xl border border-[#C9A96E]/30 bg-gradient-to-br from-[#fdfaf5] to-white px-5 py-4">
+          <p className="text-xs font-semibold text-[#2d4a3e] uppercase tracking-wider mb-2">
+            Premier Partner Rewards
+          </p>
+          <p className="text-sm text-gray-600">
+            Every completed project referral earns points toward higher tiers.{" "}
+            <span className="font-semibold text-gray-800">10 referrals</span> reaches{" "}
+            <span className="font-semibold" style={{ color: TIER_COLORS.Silver }}>Silver</span> and unlocks a
+            one-time <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>+5 bonus</span>.{" "}
+            <span className="font-semibold text-gray-800">20 referrals</span> reaches{" "}
+            <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>Gold</span> — every referral
+            earns <span className="font-semibold">2× points</span> from there.
+          </p>
+          <a href="/partner/loyalty" className="inline-block mt-3 text-xs font-medium text-[#2d4a3e] hover:underline">
+            View full tier details &rarr;
+          </a>
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-2xl border border-[#C9A96E]/30 bg-gradient-to-br from-[#fdfaf5] to-white overflow-hidden">
         <div className="px-6 py-5">
@@ -131,10 +154,11 @@ export function PartnerLoyaltyStatus({ partnerId }: Props) {
                 First goal: <span style={{ color: TIER_COLORS.Silver }}>Silver status</span>
               </p>
               <p className="text-sm text-gray-500 mt-0.5">
-                Earn 10 points — that&apos;s 10 completed project referrals at your current 1× rate.
-                Hit Silver and unlock a one-time{" "}
-                <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>+5 point bonus</span>,
-                putting you on the fast track to Gold&apos;s 2× earning rate.
+                Complete 10 referrals to reach Silver and unlock a one-time{" "}
+                <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>+5 point bonus</span>.
+                At 20 referrals you hit{" "}
+                <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>Gold</span> — every
+                referral earns <span className="font-semibold">2× points</span> from there.
               </p>
             </div>
           </div>

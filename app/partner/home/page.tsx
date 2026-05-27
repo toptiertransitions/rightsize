@@ -90,7 +90,7 @@ export default async function PartnerHomePage() {
       </div>
 
       {/* Loyalty status card */}
-      <PartnerLoyaltyStatus partnerId={userId} />
+      <PartnerLoyaltyStatus partnerId={userId} compact />
 
       {/* original welcome subtitle moved inline */}
       <div className="-mt-4">
