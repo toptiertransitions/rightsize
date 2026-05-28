@@ -4722,6 +4722,7 @@ function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
     featuredImageUrl: toStr(f["FeaturedImageUrl"]),
     featuredImagePublicId: toStr(f["FeaturedImagePublicId"]),
     galleryJson: toStr(f["GalleryJson"]),
+    pickeryUrl: toStr(f["PickeryUrl"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
 }
@@ -4814,6 +4815,7 @@ export async function createEstate(
       FeaturedImageUrl: data.featuredImageUrl,
       FeaturedImagePublicId: data.featuredImagePublicId,
       GalleryJson: data.galleryJson || "",
+      PickeryUrl: data.pickeryUrl || "",
       CreatedAt: new Date().toISOString(),
     },
     { typecast: true }
@@ -4856,6 +4858,7 @@ export async function updateEstate(
   if (data.featuredImageUrl !== undefined) fields["FeaturedImageUrl"] = data.featuredImageUrl;
   if (data.featuredImagePublicId !== undefined) fields["FeaturedImagePublicId"] = data.featuredImagePublicId;
   if (data.galleryJson !== undefined) fields["GalleryJson"] = data.galleryJson;
+  if (data.pickeryUrl !== undefined) fields["PickeryUrl"] = data.pickeryUrl;
   const record = await base(AIRTABLE_TABLES.ESTATES).update(id, fields, { typecast: true });
   return mapEstate(record);
 }

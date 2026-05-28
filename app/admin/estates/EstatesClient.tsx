@@ -73,6 +73,7 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   featuredImageUrl: "",
   featuredImagePublicId: "",
   galleryJson: "",
+  pickeryUrl: "",
 };
 
 function slugify(s: string) {
@@ -143,6 +144,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       featuredImageUrl: estate.featuredImageUrl,
       featuredImagePublicId: estate.featuredImagePublicId,
       galleryJson: estate.galleryJson || "",
+      pickeryUrl: estate.pickeryUrl || "",
     });
     setEditing(estate);
     setCreating(false);
@@ -687,6 +689,21 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                   />
                 </Field>
               </div>
+
+              {form.saleType === "In-Person" && (
+                <Field label="Pickery Signup URL">
+                  <input
+                    className={inputCls}
+                    type="url"
+                    value={form.pickeryUrl ?? ""}
+                    onChange={e => setForm(f => ({ ...f, pickeryUrl: e.target.value }))}
+                    placeholder="https://pickery.com/..."
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Shown as a &quot;Secure a Spot on Pickery&quot; button on ProFoundFinds item listings.
+                  </p>
+                </Field>
+              )}
 
               {/* Featured Image */}
               <Field label="Featured Image">

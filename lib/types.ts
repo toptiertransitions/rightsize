@@ -418,6 +418,7 @@ export interface Estate {
   featuredImageUrl: string;
   featuredImagePublicId: string;
   galleryJson: string;   // JSON array of { url, publicId }
+  pickeryUrl?: string;  // Pickery signup URL for in-person estate sales
   createdAt: string;
 }
 
