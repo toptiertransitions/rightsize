@@ -15,12 +15,10 @@ interface CalcPayout { amount: number; vendorName: string; rate: number; }
 function computeCalcPayout(item: Item, localVendors: LocalVendor[]): CalcPayout | null {
   if (!item.salePrice || item.salePrice <= 0) return null;
 
-  // Estate Sale: client gets clientSharePercent of sale price (TTT manages the estate)
-  // Use || so clientSharePercent = 0 (never properly set) also falls back to 67.
+  // Estate Sale: TTT takes 33%, client gets 67% (or clientSharePercent if set).
+  // Always derive from the rate — never return rate:0, which causes the preview
+  // formula to recalculate payout as 100% of salePrice.
   if (item.primaryRoute === "Estate Sale") {
-    if (item.consignorPayout && item.consignorPayout > 0) {
-      return { amount: item.consignorPayout, vendorName: "Estate Sale", rate: 0 };
-    }
     const pct = item.clientSharePercent || 67;
     return { amount: item.salePrice * (pct / 100), vendorName: "Estate Sale", rate: 100 - pct };
   }

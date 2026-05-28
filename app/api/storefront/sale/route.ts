@@ -40,10 +40,11 @@ async function attemptRecordSale(data: {
   }
 
   const saleDate = new Date().toISOString().split("T")[0];
-  const consignorPayout =
-    item.clientSharePercent != null && item.clientSharePercent > 0
-      ? Math.round(data.salePrice * (item.clientSharePercent / 100) * 100) / 100
-      : 0;
+  // Estate Sale defaults to 67% client payout (33% TTT take) when clientSharePercent is unset.
+  const clientPct = item.clientSharePercent || (item.primaryRoute === "Estate Sale" ? 67 : 0);
+  const consignorPayout = clientPct > 0
+    ? Math.round(data.salePrice * (clientPct / 100) * 100) / 100
+    : 0;
 
   await updateItem(data.itemId, {
     status: "Sold",
