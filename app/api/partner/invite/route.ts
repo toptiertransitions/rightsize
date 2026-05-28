@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
-  // Send to sign-up with a redirect back to the partner portal after account creation
-  const portalUrl = `${appUrl}/sign-up?redirect_url=%2Fpartner%2Fhome`;
+  // After sign-up, hit /api/partner/activate which links the Clerk account to the
+  // referral contact record, sends admin notification, then redirects to /partner/home
+  const portalUrl = `${appUrl}/sign-up?redirect_url=%2Fapi%2Fpartner%2Factivate`;
 
   // Send invite email via Resend (no Clerk invitation — partner uses standard sign-up)
   const resend = new Resend(process.env.RESEND_API_KEY);

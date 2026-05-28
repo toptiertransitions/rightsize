@@ -169,24 +169,29 @@ export async function POST(req: NextRequest) {
 
     await updateStaffDisplayName(clerkUserId, firstName, lastName, primaryEmail);
 
-    // Link Clerk ID to referral contact if email matches (enables Partner Portal access)
+    // Link Clerk ID to referral contact if email matches (enables Partner Portal access).
+    // Linking is also handled by /api/partner/activate (the post-signup redirect).
+    // We still do it here as a fallback for edge cases.
+    let isPartner = false;
     if (event.type === "user.created" && primaryEmail) {
-      findReferralContactByEmail(primaryEmail)
-        .then(async (contact) => {
-          if (contact && !contact.clerkUserId) {
+      try {
+        const contact = await findReferralContactByEmail(primaryEmail);
+        if (contact) {
+          isPartner = true;
+          if (!contact.clerkUserId) {
             await setReferralContactClerkUserId(contact.id, clerkUserId);
-            // Stamp the Clerk user so admins can see they're a Partner
             const clerk = await clerkClient();
             await clerk.users.updateUserMetadata(clerkUserId, {
               publicMetadata: { userType: "partner" },
             });
           }
-        })
-        .catch(() => {}); // non-blocking
+        }
+      } catch { /* non-fatal */ }
     }
 
-    // Send admin notification only for new accounts
-    if (event.type === "user.created" && primaryEmail) {
+    // Send admin notification only for new non-partner accounts.
+    // Partner sign-ups are notified by /api/partner/activate instead.
+    if (event.type === "user.created" && primaryEmail && !isPartner) {
       const fullName = [firstName, lastName].filter(Boolean).join(" ") || primaryEmail;
       const createdAtMs = (d.created_at as number | null) ?? Date.now();
       const createdAt = new Date(createdAtMs).toLocaleDateString("en-US", {
