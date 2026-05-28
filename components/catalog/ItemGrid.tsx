@@ -1148,6 +1148,68 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadModalLoading, setDownloadModalLoading] = useState(false);
 
+  // ── Bulk Assign to Estate Sale ────────────────────────────────────────────
+  const [estateSaleModalOpen, setEstateSaleModalOpen] = useState(false);
+  const [estates, setEstates] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [estatesLoading, setEstatesLoading] = useState(false);
+  const [selectedEstateId, setSelectedEstateId] = useState("");
+  const [estateSearch, setEstateSearch] = useState("");
+  const [bulkEstateLoading, setBulkEstateLoading] = useState(false);
+  const [bulkEstateMsg, setBulkEstateMsg] = useState("");
+
+  const openEstateSaleModal = async () => {
+    setEstateSaleModalOpen(true);
+    setBulkEstateMsg("");
+    setSelectedEstateId("");
+    setEstateSearch("");
+    setEstatesLoading(true);
+    try {
+      const res = await fetch("/api/admin/estates");
+      const d = await res.json();
+      setEstates((d.estates ?? []).sort((a: { status: string; name: string }, b: { status: string; name: string }) => {
+        // Active first, then Upcoming, then Closed
+        const order: Record<string, number> = { Active: 0, Upcoming: 1, Closed: 2 };
+        return (order[a.status] ?? 3) - (order[b.status] ?? 3) || a.name.localeCompare(b.name);
+      }));
+    } catch { /* non-fatal */ }
+    setEstatesLoading(false);
+  };
+
+  const handleBulkAssignEstate = async () => {
+    if (!selectedEstateId || selected.size === 0) return;
+    setBulkEstateLoading(true);
+    setBulkEstateMsg("");
+    const ids = [...selected];
+    const results = await Promise.allSettled(
+      ids.map(id =>
+        fetch("/api/items", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            estateSaleId: selectedEstateId,
+            primaryRoute: "Estate Sale",
+            status: "Listed",
+          }),
+        }).then(r => r.ok ? r.json() : Promise.reject())
+      )
+    );
+    const succeeded = results.filter(r => r.status === "fulfilled");
+    const failed = results.filter(r => r.status === "rejected").length;
+    // Update local state for successful items
+    succeeded.forEach(r => {
+      if (r.status === "fulfilled") {
+        const updated = (r.value as { item: Item }).item;
+        if (updated) setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+      }
+    });
+    setBulkEstateMsg(
+      `${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} assigned${failed > 0 ? ` · ${failed} failed` : ""}`
+    );
+    setBulkEstateLoading(false);
+    if (succeeded.length > 0) setSelected(new Set());
+  };
+
   // Fetch image bytes, then share (mobile) or save via blob URL (desktop).
   // Web Share API is the only reliable path to "Save to Photos" on iOS.
   const triggerDownload = useCallback(async (url: string, filename: string) => {
@@ -1568,6 +1630,79 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         }}
       />
 
+      {/* Bulk Assign Estate Sale Modal */}
+      {estateSaleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Assign to Estate Sale</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {selected.size} item{selected.size !== 1 ? "s" : ""} will be set to{" "}
+                <span className="font-medium">Estate Sale</span> route and{" "}
+                <span className="font-medium">Listed</span> status.
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              {estatesLoading ? (
+                <p className="text-sm text-gray-400 text-center py-4">Loading estate sales…</p>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Search estates…"
+                    value={estateSearch}
+                    onChange={e => setEstateSearch(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    autoFocus
+                  />
+                  <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
+                    {estates
+                      .filter(e => e.name.toLowerCase().includes(estateSearch.toLowerCase()))
+                      .map(e => (
+                        <button
+                          key={e.id}
+                          onClick={() => setSelectedEstateId(e.id)}
+                          className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-forest-50 transition-colors ${selectedEstateId === e.id ? "bg-forest-50 font-semibold" : ""}`}
+                        >
+                          <span className="text-gray-900">{e.name}</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                            e.status === "Active"   ? "bg-green-100 text-green-700" :
+                            e.status === "Upcoming" ? "bg-blue-100 text-blue-700" :
+                                                      "bg-gray-100 text-gray-500"
+                          }`}>{e.status}</span>
+                        </button>
+                      ))}
+                    {estates.filter(e => e.name.toLowerCase().includes(estateSearch.toLowerCase())).length === 0 && (
+                      <p className="text-sm text-gray-400 text-center py-4">No matching estates</p>
+                    )}
+                  </div>
+                </>
+              )}
+              {bulkEstateMsg && (
+                <p className="text-sm text-forest-700 font-medium">{bulkEstateMsg}</p>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex items-center gap-3 justify-end">
+              <button
+                onClick={() => { setEstateSaleModalOpen(false); setBulkEstateMsg(""); }}
+                className="h-9 px-4 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-colors"
+              >
+                {bulkEstateMsg ? "Close" : "Cancel"}
+              </button>
+              {!bulkEstateMsg && (
+                <button
+                  onClick={handleBulkAssignEstate}
+                  disabled={!selectedEstateId || bulkEstateLoading}
+                  className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {bulkEstateLoading ? "Assigning…" : `Assign ${selected.size} Item${selected.size !== 1 ? "s" : ""}`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 mb-5">
         {/* Search */}
@@ -1883,6 +2018,18 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5l4.586 4.586a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-4-4a2 2 0 010-2.828L7 3z" />
                 </svg>
                 Print PF Labels
+              </button>
+            )}
+            {isTTTUser && (
+              <button
+                onClick={openEstateSaleModal}
+                disabled={bulkLoading}
+                className="h-8 px-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-sm font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Assign Estate Sale
               </button>
             )}
             <button
