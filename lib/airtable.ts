@@ -5753,29 +5753,44 @@ export async function getCompanyContactIds(referralCompanyId: string): Promise<s
 }
 
 export async function getPartnerTenantIdsByCompany(referralCompanyId: string): Promise<string[]> {
-  const contactIds = await getCompanyContactIds(referralCompanyId);
-  if (contactIds.length === 0) return [];
-
-  // Find all ClientContacts referred by any contact in this company
-  const cc1 = contactIds.map(id => `{ReferralPartnerId} = "${id}"`).join(", ");
-  const formula1 = encodeURIComponent(contactIds.length === 1 ? cc1 : `OR(${cc1})`);
-  const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
-  if (!ccRes.ok) return [];
-  const ccData = await ccRes.json();
-  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
-  if (clientContactIds.length === 0) return [];
-
-  // Find all Opportunities for those client contacts
-  const cc2 = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
-  const formula2 = encodeURIComponent(clientContactIds.length === 1 ? cc2 : `OR(${cc2})`);
-  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId`);
-  if (!oppRes.ok) return [];
-  const oppData = await oppRes.json();
   const tenantIds: string[] = [];
-  for (const r of (oppData.records ?? []) as AirtableRecord[]) {
-    const tid = toStr(r.fields["TenantId"]);
-    if (tid && !tenantIds.includes(tid)) tenantIds.push(tid);
+
+  // CRM path: ReferralCompany → ReferralContacts → ClientContacts → Opportunities → TenantId
+  const contactIds = await getCompanyContactIds(referralCompanyId);
+  if (contactIds.length > 0) {
+    const cc1 = contactIds.map(id => `{ReferralPartnerId} = "${id}"`).join(", ");
+    const formula1 = encodeURIComponent(contactIds.length === 1 ? cc1 : `OR(${cc1})`);
+    const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
+    if (ccRes.ok) {
+      const ccData = await ccRes.json();
+      const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+      if (clientContactIds.length > 0) {
+        const cc2 = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
+        const formula2 = encodeURIComponent(clientContactIds.length === 1 ? cc2 : `OR(${cc2})`);
+        const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId`);
+        if (oppRes.ok) {
+          const oppData = await oppRes.json();
+          for (const r of (oppData.records ?? []) as AirtableRecord[]) {
+            const tid = toStr(r.fields["TenantId"]);
+            if (tid && !tenantIds.includes(tid)) tenantIds.push(tid);
+          }
+        }
+      }
+    }
   }
+
+  // Direct backfill path: Tenants with ReferralCompanyId set (pre-CRM projects)
+  const base = getBase();
+  const directTenants = await base(AIRTABLE_TABLES.TENANTS)
+    .select({
+      filterByFormula: `{ReferralCompanyId} = "${referralCompanyId}"`,
+      fields: ["Name"],
+    })
+    .all();
+  for (const r of directTenants) {
+    if (!tenantIds.includes(r.id)) tenantIds.push(r.id);
+  }
+
   return tenantIds;
 }
 
