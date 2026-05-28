@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   const drop1Pct = tenant.priceDrop1Percent ?? 33;
   const drop2Pct = tenant.priceDrop2Percent ?? 66;
 
-  type ItemUpdate = { id: string; valueMid: number; priceDropOriginalValue: number };
+  type ItemUpdate = { id: string; valueMid: number; priceDropOriginalValue: number; originalValue?: number };
   let priceUpdates: ItemUpdate[];
 
   if (type === "revert") {
@@ -61,12 +61,14 @@ export async function POST(req: NextRequest) {
   } else {
     const dropPct = type === "drop1" ? drop1Pct : drop2Pct;
     priceUpdates = listedItems.map(i => {
-      const originalValue = i.priceDropOriginalValue || i.valueMid;
-      const newPrice = Math.max(1, Math.round(originalValue * (1 - dropPct / 100)));
+      const preDropValue = i.priceDropOriginalValue || i.valueMid;
+      const newPrice = Math.max(1, Math.round(preDropValue * (1 - dropPct / 100)));
       return {
         id: i.id,
         valueMid: newPrice,
-        priceDropOriginalValue: originalValue,
+        priceDropOriginalValue: preDropValue,
+        // Stamp originalValue the first time only — never overwrite an existing snapshot
+        ...(!i.originalValue ? { originalValue: preDropValue } : {}),
       };
     });
   }

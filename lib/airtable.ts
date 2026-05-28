@@ -672,7 +672,7 @@ export async function updateItem(
 }
 
 export async function batchUpdateItemPrices(
-  updates: Array<{ id: string; valueMid: number; priceDropOriginalValue: number }>
+  updates: Array<{ id: string; valueMid: number; priceDropOriginalValue: number; originalValue?: number }>
 ): Promise<void> {
   const base = getBase();
   const now = new Date().toISOString();
@@ -685,6 +685,7 @@ export async function batchUpdateItemPrices(
           ValueMid: u.valueMid,
           PriceDropOriginalValue: u.priceDropOriginalValue,
           UpdatedAt: now,
+          ...(u.originalValue !== undefined ? { OriginalValue: u.originalValue } : {}),
         } as Airtable.FieldSet,
       }))
     );
