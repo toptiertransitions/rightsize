@@ -117,7 +117,7 @@ export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
             <span className="font-semibold text-gray-800">10 referrals</span> reaches{" "}
             <span className="font-semibold" style={{ color: TIER_COLORS.Silver }}>Silver</span> and unlocks a
             one-time <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>+5 bonus</span>.{" "}
-            <span className="font-semibold text-gray-800">20 referrals</span> reaches{" "}
+            <span className="font-semibold text-gray-800">25 points</span> reaches{" "}
             <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>Gold</span> — every referral
             earns <span className="font-semibold">2× points</span> from there.
           </p>
@@ -156,7 +156,7 @@ export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
               <p className="text-sm text-gray-500 mt-0.5">
                 Complete 10 referrals to reach Silver and unlock a one-time{" "}
                 <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>+5 point bonus</span>.
-                At 20 referrals you hit{" "}
+                At 25 points you hit{" "}
                 <span className="font-semibold" style={{ color: TIER_COLORS.Gold }}>Gold</span> — every
                 referral earns <span className="font-semibold">2× points</span> from there.
               </p>
