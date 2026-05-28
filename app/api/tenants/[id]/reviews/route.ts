@@ -39,6 +39,11 @@ export async function POST(
     return NextResponse.json({ error: "stars (1–5) and text are required" }, { status: 400 });
   }
 
-  const review = await createGoogleReview(id, stars, body.text.trim());
-  return NextResponse.json({ review }, { status: 201 });
+  try {
+    const review = await createGoogleReview(id, stars, body.text.trim());
+    return NextResponse.json({ review }, { status: 201 });
+  } catch (e) {
+    console.error("[reviews POST] Airtable error:", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }
