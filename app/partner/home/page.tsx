@@ -9,6 +9,7 @@ import {
   getPartnerPoints,
   getReviewsForTenant,
   getReferralCompanyById,
+  getPartnerTenantIdsByCompany,
 } from "@/lib/airtable";
 import type { PartnerPoint, GoogleReview } from "@/lib/types";
 
@@ -43,10 +44,15 @@ export default async function PartnerHomePage() {
     projectsByStage.map(({ tenantId }) => getTenantById(tenantId).catch(() => null))
   );
 
+  // Gather tenant IDs from both CRM-chain projects AND direct ReferralCompanyId backfill
+  const wonTenantIds = projectsByStage.filter(p => p.stage === "Won").map(p => p.tenantId);
+  const allLinkedTenantIds = companyId
+    ? await getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[])
+    : wonTenantIds;
+  const reviewTenantIds = Array.from(new Set([...wonTenantIds, ...allLinkedTenantIds]));
+
   const reviewArrays = await Promise.all(
-    projectsByStage
-      .filter(p => p.stage === "Won")
-      .map(({ tenantId }) => getReviewsForTenant(tenantId).catch(() => []))
+    reviewTenantIds.map(tenantId => getReviewsForTenant(tenantId).catch(() => []))
   );
   const recentReviews: GoogleReview[] = reviewArrays
     .flat()
