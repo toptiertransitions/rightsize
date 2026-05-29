@@ -117,6 +117,7 @@ export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) 
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   const isAllMode = selectedTenantId === "all";
 
@@ -308,6 +309,8 @@ export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) 
               const dayEntries = entriesByDate[iso] ?? [];
               const isToday = iso === todayISO;
               const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+              const isExpanded = expandedDay === iso;
+              const visible = isExpanded ? dayEntries : dayEntries.slice(0, 2);
               const overflow = dayEntries.length > 2 ? dayEntries.length - 2 : 0;
               return (
                 <div key={iso} className={`min-h-[100px] border-b border-gray-100 p-1.5 flex flex-col ${!isCurrentMonth ? "bg-gray-50/30" : ""}`}>
@@ -317,8 +320,15 @@ export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) 
                     {day.getDate()}
                   </div>
                   <div className="space-y-0.5 flex-1">
-                    {dayEntries.slice(0, 2).map(e => renderChip(e))}
-                    {overflow > 0 && <div className="text-[10px] text-gray-400 px-1">+{overflow} more</div>}
+                    {visible.map(e => renderChip(e))}
+                    {overflow > 0 && (
+                      <button
+                        onClick={() => setExpandedDay(isExpanded ? null : iso)}
+                        className="text-[10px] text-[#2d4a3e] font-medium px-1 hover:underline text-left"
+                      >
+                        {isExpanded ? "show less" : `+${overflow} more`}
+                      </button>
+                    )}
                   </div>
                 </div>
               );

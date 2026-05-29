@@ -44,18 +44,37 @@ function DayCell({ day, schedule }: { day: Day; schedule: WeeklySchedule }) {
 }
 
 function TimeOffPills({ entries }: { entries: TimeOffEntry[] }) {
+  const [showAll, setShowAll] = useState(false);
   const today = todayStr();
-  const upcoming = entries.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  const upcoming = entries.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date));
   if (!upcoming.length) return <span className="text-xs text-gray-300">None scheduled</span>;
+  const visible = showAll ? upcoming : upcoming.slice(0, 3);
+  const hidden = upcoming.length - 3;
   return (
     <div className="flex flex-wrap gap-1">
-      {upcoming.map(e => (
+      {visible.map(e => (
         <span key={e.id} className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium"
           title={e.allDay ? "All day" : `${fmt12(e.startTime ?? "")}–${fmt12(e.endTime ?? "")}`}>
           {fmtDate(e.date)}
           {!e.allDay && <span className="opacity-70 ml-0.5">{fmt12(e.startTime ?? "")}</span>}
         </span>
       ))}
+      {hidden > 0 && !showAll && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="text-[10px] text-amber-700 font-medium hover:underline px-1"
+        >
+          +{hidden} more
+        </button>
+      )}
+      {showAll && upcoming.length > 3 && (
+        <button
+          onClick={() => setShowAll(false)}
+          className="text-[10px] text-gray-400 font-medium hover:underline px-1"
+        >
+          show less
+        </button>
+      )}
     </div>
   );
 }

@@ -1032,6 +1032,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
@@ -1512,6 +1513,8 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
               const dayEntries = entriesByDate[iso] ?? [];
               const isToday = iso === todayISO;
               const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+              const isExpanded = expandedDay === iso;
+              const visible = isExpanded ? dayEntries : dayEntries.slice(0, 2);
               const overflow = dayEntries.length > 2 ? dayEntries.length - 2 : 0;
 
               return (
@@ -1528,7 +1531,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                     {day.getDate()}
                   </div>
                   <div className="space-y-0.5 flex-1">
-                    {dayEntries.slice(0, 2).map(entry => (
+                    {visible.map(entry => (
                       <div key={entry.id} onClick={e => { e.stopPropagation(); if (effectiveCanEdit) openEdit(entry); }}>
                         <ActivityChip
                           entry={entry}
@@ -1541,7 +1544,12 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                       </div>
                     ))}
                     {overflow > 0 && (
-                      <div className="text-[10px] text-gray-400 px-1">+{overflow} more</div>
+                      <button
+                        onClick={e => { e.stopPropagation(); setExpandedDay(isExpanded ? null : iso); }}
+                        className="text-[10px] text-forest-600 font-medium px-1 hover:underline text-left"
+                      >
+                        {isExpanded ? "show less" : `+${overflow} more`}
+                      </button>
                     )}
                   </div>
                 </div>
