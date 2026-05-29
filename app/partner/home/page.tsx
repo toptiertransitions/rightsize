@@ -1,6 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { getPartnerContact, getPartnerProjectsByStage } from "@/lib/partner";
 import { PartnerLoyaltyStatus } from "@/components/partner/PartnerLoyaltyStatus";
 import {
@@ -10,8 +11,9 @@ import {
   getReviewsForTenant,
   getReferralCompanyById,
   getPartnerTenantIdsByCompany,
+  getStaffMember,
 } from "@/lib/airtable";
-import type { PartnerPoint, GoogleReview } from "@/lib/types";
+import type { PartnerPoint, GoogleReview, StaffMember } from "@/lib/types";
 
 interface ProjectInfo {
   tenantId: string;
@@ -21,7 +23,16 @@ interface ProjectInfo {
   state?: string;
   isArchived: boolean;
   stage: string;
+  teamLeadName?: string;
+  teamLeadPhone?: string;
 }
+
+const OPS_LEAD = {
+  name: "Julie Johnstone",
+  title: "Operations Lead",
+  email: "julie@toptiertransitions.com",
+  phone: "708-337-1494",
+};
 
 export default async function PartnerHomePage() {
   const { userId } = await auth();
@@ -64,11 +75,20 @@ export default async function PartnerHomePage() {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
 
-  // Merge stage + tenant data
+  // Fetch team lead info for all projects that have one
+  const uniqueLeadIds = Array.from(new Set(
+    tenants.filter(Boolean).map(t => t!.teamLeadClerkId).filter(Boolean) as string[]
+  ));
+  const leadMembers = await Promise.all(uniqueLeadIds.map(id => getStaffMember(id).catch(() => null)));
+  const leadById: Record<string, StaffMember> = {};
+  uniqueLeadIds.forEach((id, i) => { if (leadMembers[i]) leadById[id] = leadMembers[i]!; });
+
+  // Merge stage + tenant data + team lead
   const enriched = projectsByStage
     .map(({ tenantId, stage }, i) => {
       const t = tenants[i];
       if (!t) return null;
+      const lead = t.teamLeadClerkId ? leadById[t.teamLeadClerkId] : undefined;
       return {
         tenantId: t.id,
         name: t.name,
@@ -77,6 +97,8 @@ export default async function PartnerHomePage() {
         state: t.state,
         isArchived: t.isArchived,
         stage,
+        teamLeadName: lead?.displayName || undefined,
+        teamLeadPhone: lead?.phone || undefined,
       };
     })
     .filter(Boolean) as ProjectInfo[];
@@ -91,6 +113,20 @@ export default async function PartnerHomePage() {
 
   const companyName = company?.name || contact.name.split(" ").slice(-1)[0];
 
+  // Fetch company owner for Your Top Tier Team section
+  let ownerStaff: StaffMember | null = null;
+  let ownerImageUrl: string | null = null;
+  if (company?.assignedToClerkId) {
+    [ownerStaff] = await Promise.all([
+      getStaffMember(company.assignedToClerkId).catch(() => null),
+    ]);
+    if (ownerStaff) {
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(company.assignedToClerkId).catch(() => null);
+      ownerImageUrl = clerkUser?.imageUrl ?? null;
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Welcome */}
@@ -103,7 +139,6 @@ export default async function PartnerHomePage() {
       {/* Loyalty status card */}
       <PartnerLoyaltyStatus partnerId={userId} compact />
 
-      {/* original welcome subtitle moved inline */}
       <div className="-mt-4">
         <p className="text-sm text-gray-500">
           {company ? (
@@ -140,9 +175,7 @@ export default async function PartnerHomePage() {
                 <span
                   key={p.id}
                   className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full ${
-                    p.redeemedAt
-                      ? "bg-white/10 text-white/40"
-                      : "bg-[#C9A96E]/20 text-[#C9A96E]"
+                    p.redeemedAt ? "bg-white/10 text-white/40" : "bg-[#C9A96E]/20 text-[#C9A96E]"
                   }`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-current inline-block" />
@@ -151,14 +184,37 @@ export default async function PartnerHomePage() {
                 </span>
               ))}
               {points.length > 5 && (
-                <span className="text-xs text-white/40 px-2.5 py-1">
-                  +{points.length - 5} more
-                </span>
+                <span className="text-xs text-white/40 px-2.5 py-1">+{points.length - 5} more</span>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Your Top Tier Team */}
+      <section>
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Your Top Tier Team</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {/* Company owner / assigned rep */}
+          {ownerStaff && (
+            <TeamMemberCard
+              name={ownerStaff.displayName}
+              title="Your TTT Representative"
+              email={ownerStaff.email}
+              phone={ownerStaff.phone}
+              imageUrl={ownerImageUrl}
+            />
+          )}
+          {/* Hardcoded operations lead */}
+          <TeamMemberCard
+            name={OPS_LEAD.name}
+            title={OPS_LEAD.title}
+            email={OPS_LEAD.email}
+            phone={OPS_LEAD.phone}
+            imageUrl={null}
+          />
+        </div>
+      </section>
 
       {/* Current Projects */}
       <section>
@@ -235,10 +291,39 @@ export default async function PartnerHomePage() {
   );
 }
 
+function TeamMemberCard({
+  name, title, email, phone, imageUrl,
+}: {
+  name: string;
+  title: string;
+  email: string;
+  phone?: string | null;
+  imageUrl?: string | null;
+}) {
+  const initials = name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-3">
+      <div className="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-[#2d4a3e]/10 flex items-center justify-center">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={name} width={48} height={48} className="object-cover w-full h-full" />
+        ) : (
+          <span className="text-sm font-semibold text-[#2d4a3e]">{initials}</span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-gray-900">{name}</p>
+        <p className="text-xs text-gray-400 mb-1.5">{title}</p>
+        <a href={`mailto:${email}`} className="block text-xs text-[#2d4a3e] hover:underline truncate">{email}</a>
+        {phone && (
+          <a href={`tel:${phone.replace(/\D/g, "")}`} className="block text-xs text-gray-500 hover:underline mt-0.5">{phone}</a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ProjectCard({
-  project,
-  dimmed,
-  potential,
+  project, dimmed, potential,
 }: {
   project: ProjectInfo;
   dimmed?: boolean;
@@ -265,6 +350,17 @@ function ProjectCard({
       )}
       {locationParts.length > 0 && (
         <p className="text-xs text-gray-400 mt-0.5">{locationParts.join(", ")}</p>
+      )}
+      {project.teamLeadName && (
+        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5">
+          <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span className="text-xs text-gray-600">{project.teamLeadName}</span>
+          {project.teamLeadPhone && (
+            <span className="text-xs text-gray-400">&middot; {project.teamLeadPhone}</span>
+          )}
+        </div>
       )}
       <p className="text-xs text-[#2d4a3e] mt-2 font-medium">View plan &rarr;</p>
     </Link>

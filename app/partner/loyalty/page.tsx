@@ -5,24 +5,24 @@ import { PartnerLoyaltyStatus } from "@/components/partner/PartnerLoyaltyStatus"
 
 const REDEMPTION_EXAMPLES = [
   {
-    points: 1,
-    label: "Client downsizing consultation",
-    description: "A one-hour in-home session to help a client plan their next move — at no cost to them.",
+    points: 5,
+    label: "Donation Coordination",
+    description: "5 hours of donation logistics — scheduling pickups, coordinating with charities, and handling removal from a client's home.",
   },
   {
-    points: 3,
-    label: "Estate sale preparation",
-    description: "Three hours of professional staging, cataloging, or pricing for an upcoming estate sale.",
+    points: 10,
+    label: "Quick Packing or Unpacking Support",
+    description: "A focused 10-hour packing or unpacking session to help a client settle in or prepare for a move.",
   },
   {
-    points: 8,
-    label: "Full transition coordination day",
-    description: "A full day of hands-on support for a client's move, cleanout, or estate liquidation.",
+    points: 20,
+    label: "Staging or Internal Transfer Help",
+    description: "20 hours of professional staging support or an internal room-to-room transfer to prepare a home for sale or reorganize a space.",
   },
   {
-    points: 15,
-    label: "Complete estate sale package",
-    description: "End-to-end management of a client's estate sale — setup, marketing, and sale day.",
+    points: 50,
+    label: "Entire Transitions Management — Free",
+    description: "Full end-to-end transition management for a client — consultation, packing, coordination, and move support at no cost.",
   },
 ];
 
@@ -64,39 +64,6 @@ export default async function PartnerLoyaltyPage() {
       {/* Status widget (full, with tier ladder) */}
       <PartnerLoyaltyStatus partnerId={userId} />
 
-      {/* Redemption value section */}
-      <section>
-        <div className="flex items-baseline gap-3 mb-1">
-          <h2 className="text-base font-semibold text-gray-900">What your points are worth</h2>
-        </div>
-        <p className="text-sm text-gray-500 mb-5">
-          Each point redeems for <span className="font-semibold text-gray-800">1 hour of Top Tier Transitions service</span> — applied to your organization or gifted to any client.
-        </p>
-
-        {/* Examples grid */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          {REDEMPTION_EXAMPLES.map(ex => (
-            <div
-              key={ex.points}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-4"
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#2d4a3e]/8 text-[#2d4a3e]">
-                  {ex.points} pt{ex.points !== 1 ? "s" : ""}
-                </span>
-                <span className="text-sm font-semibold text-gray-900">{ex.label}</span>
-              </div>
-              <p className="text-xs text-gray-500 leading-relaxed">{ex.description}</p>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-gray-400 mt-3">
-          Points don&apos;t expire and can be combined for larger projects.
-          Contact your TTT representative to redeem.
-        </p>
-      </section>
-
       {/* How it works */}
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-4">How it works</h2>
@@ -126,16 +93,16 @@ export default async function PartnerLoyaltyPage() {
                 <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Tier</th>
                 <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Reached at</th>
                 <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Points per referral</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500 text-xs hidden sm:table-cell">Service hours per 10 referrals</th>
+                <th className="px-4 py-2.5 font-medium text-gray-500 text-xs hidden sm:table-cell">Bonus Points</th>
               </tr>
             </thead>
             <tbody>
               {[
-                { name: "Starting", color: "#6B7280", threshold: "—",    mult: 1, hrs: 10  },
-                { name: "Silver",   color: "#9CA3AF", threshold: "10 pts", mult: 1, hrs: 10  },
-                { name: "Gold",     color: "#C9A96E", threshold: "25 pts", mult: 2, hrs: 20  },
-                { name: "Platinum", color: "#378ADD", threshold: "75 pts", mult: 3, hrs: 30  },
-                { name: "Diamond",  color: "#7F77DD", threshold: "150 pts",mult: 4, hrs: 40  },
+                { name: "Starting", color: "#6B7280", threshold: "—",      mult: 1, bonus: "—"            },
+                { name: "Silver",   color: "#9CA3AF", threshold: "10 pts", mult: 1, bonus: "5 Bonus Points" },
+                { name: "Gold",     color: "#C9A96E", threshold: "25 pts", mult: 2, bonus: "—"            },
+                { name: "Platinum", color: "#378ADD", threshold: "75 pts", mult: 3, bonus: "—"            },
+                { name: "Diamond",  color: "#7F77DD", threshold: "150 pts",mult: 4, bonus: "—"            },
               ].map((row, i) => (
                 <tr key={row.name} className={i > 0 ? "border-t border-gray-100" : ""}>
                   <td className="px-4 py-3">
@@ -145,16 +112,44 @@ export default async function PartnerLoyaltyPage() {
                   <td className="px-4 py-3">
                     <span className="font-semibold text-sm" style={{ color: row.color }}>{row.mult}×</span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">
-                    {row.hrs} hrs
+                  <td className="px-4 py-3 text-xs hidden sm:table-cell" style={{ color: row.bonus !== "—" ? row.color : undefined }}>
+                    <span className={row.bonus !== "—" ? "font-semibold" : "text-gray-400"}>{row.bonus}</span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-2">
-          Silver milestone: one-time +5 bonus when you first reach 10 points. Multiplier upgrades apply immediately. Points reset June 1; status carries into the next year.
+      </section>
+
+      {/* Redemption value section */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-1">
+          <h2 className="text-base font-semibold text-gray-900">What your points are worth</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-5">
+          Each point redeems for <span className="font-semibold text-gray-800">1 hour of Top Tier Transitions service</span> — applied to your organization or gifted to any client.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {REDEMPTION_EXAMPLES.map(ex => (
+            <div
+              key={ex.points}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-4"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#2d4a3e]/8 text-[#2d4a3e]">
+                  {ex.points} pts
+                </span>
+                <span className="text-sm font-semibold text-gray-900">{ex.label}</span>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">{ex.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-gray-400 mt-3">
+          Redemption examples above are illustrative and depend on exact service needs.
         </p>
       </section>
 

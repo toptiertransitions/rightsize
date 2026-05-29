@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getPartnerContact, getPartnerProjectsByStage } from "@/lib/partner";
-import { getTenantById, getPlanEntriesForTenant, getProjectFiles } from "@/lib/airtable";
+import { getTenantById, getPlanEntriesForTenant, getProjectFiles, getPartnerTenantIdsByCompany } from "@/lib/airtable";
 import type { PlanEntry, ProjectFile } from "@/lib/types";
 import { ProjectSelector } from "./ProjectSelector";
 import { PartnerCalendar } from "./PartnerCalendar";
@@ -19,16 +19,21 @@ export default async function PartnerPlansPage({
 
   const { t } = await searchParams;
 
-  // Get all referred projects with stage info
+  // CRM-chain projects
   const projectsByStage = await getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string; stage: string }[]);
-
-  // Filter to active (Won or Proposing, not archived)
-  const eligibleTenantIds = projectsByStage
+  const crmTenantIds = projectsByStage
     .filter(p => p.stage !== "Lost" && p.stage !== "Lead" && p.stage !== "Qualifying")
     .map(p => p.tenantId);
 
+  // Backfill path: tenants with ReferralCompanyId set directly
+  const backfillTenantIds = contact.referralCompanyId
+    ? await getPartnerTenantIdsByCompany(contact.referralCompanyId).catch(() => [] as string[])
+    : [];
+
+  const allTenantIds = Array.from(new Set([...crmTenantIds, ...backfillTenantIds]));
+
   const allTenants = (
-    await Promise.all(eligibleTenantIds.map((id) => getTenantById(id).catch(() => null)))
+    await Promise.all(allTenantIds.map((id) => getTenantById(id).catch(() => null)))
   ).filter(Boolean);
 
   const activeProjects = allTenants
@@ -48,7 +53,7 @@ export default async function PartnerPlansPage({
   const selectedId = (t && (t === "all" || activeProjects.some((p) => p.tenantId === t))) ? t : "all";
   const isAllMode = selectedId === "all";
 
-  // Fetch entries for selected project(s)
+  // Fetch plan entries + files for selected project(s)
   const [entries, files]: [PlanEntry[], ProjectFile[]] = await Promise.all([
     isAllMode
       ? Promise.all(activeProjects.map((p) => getPlanEntriesForTenant(p.tenantId).catch(() => [] as PlanEntry[])))
@@ -61,8 +66,6 @@ export default async function PartnerPlansPage({
   ]);
 
   const floorplans = files.filter((f) => f.fileTag === "Floorplan");
-
-  // Header label
   const selectedProject = isAllMode ? null : activeProjects.find((p) => p.tenantId === selectedId);
 
   return (
