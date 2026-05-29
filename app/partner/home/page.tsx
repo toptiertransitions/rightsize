@@ -51,11 +51,16 @@ export default async function PartnerHomePage() {
     : wonTenantIds;
   const reviewTenantIds = Array.from(new Set([...wonTenantIds, ...allLinkedTenantIds]));
 
-  const reviewArrays = await Promise.all(
-    reviewTenantIds.map(tenantId => getReviewsForTenant(tenantId).catch(() => []))
-  );
-  const recentReviews: GoogleReview[] = reviewArrays
-    .flat()
+  const [reviewArrays, reviewTenants] = await Promise.all([
+    Promise.all(reviewTenantIds.map(id => getReviewsForTenant(id).catch(() => []))),
+    Promise.all(reviewTenantIds.map(id => getTenantById(id).catch(() => null))),
+  ]);
+  const tenantNameById: Record<string, string> = {};
+  reviewTenants.forEach((t, i) => {
+    if (t) tenantNameById[reviewTenantIds[i]] = t.name;
+  });
+  const recentReviews: (GoogleReview & { tenantName: string })[] = reviewArrays
+    .flatMap((arr, i) => arr.map(r => ({ ...r, tenantName: tenantNameById[reviewTenantIds[i]] ?? "" })))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
 
@@ -202,6 +207,9 @@ export default async function PartnerHomePage() {
                   </span>
                   <span className="text-xs text-gray-400">{r.createdAt}</span>
                 </div>
+                {r.tenantName && (
+                  <p className="text-xs font-medium text-[#2d4a3e] mb-1">{r.tenantName}</p>
+                )}
                 <p className="text-sm text-gray-700 leading-relaxed">{r.text}</p>
               </div>
             ))}
