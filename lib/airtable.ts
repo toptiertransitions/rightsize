@@ -2772,7 +2772,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     title: toStr(f["Title"]),
     email: toStr(f["Email"]),
     phone: toStr(f["Phone"]),
-    referralCompanyId: toStr(f["ReferralCompanyId"]),
+    referralCompanyId: Array.isArray(f["ReferralCompanyId"]) ? toStr((f["ReferralCompanyId"] as unknown[])[0]) : toStr(f["ReferralCompanyId"]),
     notes: toStr(f["Notes"]),
     stage: (toStr(f["Stage"]) || "Identified") as ReferralContactStage,
     dateIntroduced: toStr(f["DateIntroduced"]) || undefined,
