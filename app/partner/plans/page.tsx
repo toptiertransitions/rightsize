@@ -65,6 +65,7 @@ export default async function PartnerPlansPage({
       : getProjectFiles(selectedId).catch(() => [] as ProjectFile[]),
   ]);
 
+  const keyDateEntries = entries.filter((e) => e.entryType === "keydate");
   const floorplans = files.filter((f) => f.fileTag === "Floorplan");
   const selectedProject = isAllMode ? null : activeProjects.find((p) => p.tenantId === selectedId);
 
@@ -88,7 +89,7 @@ export default async function PartnerPlansPage({
 
       {/* Calendar */}
       <PartnerCalendar
-        entries={entries}
+        entries={keyDateEntries}
         projects={activeProjects}
         selectedTenantId={selectedId}
       />
