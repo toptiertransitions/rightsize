@@ -64,8 +64,33 @@ function groupByCategory(skills: Skill[]) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function StaffSkillsTab({ members: initialMembers, skills: initialSkills, canEdit }: StaffSkillsTabProps) {
   const [members, setMembers] = useState<StaffMemberWithSkills[]>(initialMembers);
-  const [skills] = useState<Skill[]>(initialSkills);
-  const [loading] = useState(false);
+  const [skills, setSkills] = useState<Skill[]>(initialSkills);
+  const [loading, setLoading] = useState(true);
+
+  // Self-fetch staff (with skillIds) and available skills on mount
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch("/api/staff/goals").then(r => r.ok ? r.json() : null),
+      fetch("/api/skills").then(r => r.ok ? r.json() : null),
+    ]).then(([goalsData, skillsData]) => {
+      if (cancelled) return;
+      if (goalsData?.staff) {
+        setMembers(goalsData.staff.map((m: { id: string; displayName: string; email: string; role: string; hireDate?: string; roleType?: "Staff" | "Team Lead"; skillIds?: string[] }) => ({
+          id: m.id,
+          displayName: m.displayName,
+          email: m.email,
+          role: m.role,
+          hireDate: m.hireDate,
+          roleType: m.roleType,
+          skillIds: m.skillIds ?? [],
+        })));
+      }
+      if (skillsData?.skills) setSkills(skillsData.skills);
+    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [search, setSearch] = useState("");
   const [filterSkillIds, setFilterSkillIds] = useState<string[]>([]);

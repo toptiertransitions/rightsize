@@ -24,6 +24,36 @@ interface HistoryEntry {
   output: string;
 }
 
+interface ProjectTenant {
+  id: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+}
+
+interface ScheduleEntry {
+  date: string;
+  activity: string;
+  notes?: string;
+  address?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+interface ProjectContext {
+  id: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  fullAddress?: string;
+  upcomingKeyDates: ScheduleEntry[];
+  upcomingShifts: (ScheduleEntry & { helpers?: Array<{ role: string }> })[];
+  teamLeadsNeeded: number;
+  staffNeeded: number;
+}
+
 interface AIStaffMappingTabProps {
   members?: (StaffMemberWithGoals & { skills?: string[]; scheduledHoursThisWeek?: number })[];
   skills?: Skill[];
@@ -187,6 +217,104 @@ function SkillMultiSelect({
   );
 }
 
+// ─── Project Autocomplete ─────────────────────────────────────────────────────
+function ProjectAutocomplete({ onSelect, onClear }: {
+  onSelect: (ctx: ProjectContext) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ProjectTenant[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function h(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const q = e.target.value;
+    setQuery(q);
+    if (selectedName) { setSelectedName(null); onClear(); }
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setSearching(true);
+      fetch(`/api/staff/project-context?q=${encodeURIComponent(q)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.tenants) { setResults(data.tenants); setOpen(true); } })
+        .catch(() => {})
+        .finally(() => setSearching(false));
+    }, 250);
+  }
+
+  function handleSelect(tenant: ProjectTenant) {
+    setQuery(tenant.name);
+    setSelectedName(tenant.name);
+    setOpen(false);
+    setResults([]);
+    fetch(`/api/staff/project-context?tenantId=${encodeURIComponent(tenant.id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.project) onSelect(data.project as ProjectContext); })
+      .catch(() => {});
+  }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+      <div className="relative" ref={ref}>
+        <input
+          type="text"
+          value={query}
+          onChange={handleChange}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Search active projects..."
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-forest-600/30 focus:border-forest-600 pr-8"
+        />
+        {searching && (
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+            <svg className="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </div>
+        )}
+        {selectedName && !searching && (
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+            <svg className="h-4 w-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )}
+        {open && results.length > 0 && (
+          <div className="absolute z-20 top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+            {results.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => handleSelect(t)}
+                className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
+              >
+                <p className="text-sm font-medium text-gray-800">{t.name}</p>
+                {(t.city || t.state) && (
+                  <p className="text-xs text-gray-400 mt-0.5">{[t.city, t.state].filter(Boolean).join(", ")}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Voice Input ──────────────────────────────────────────────────────────────
 type VoiceState = "idle" | "recording" | "processing";
 
@@ -305,6 +433,7 @@ export function AIStaffMappingTab({ members: initialMembers, skills: initialSkil
     originAddress: "", destinationAddress: "", projectDate: "",
     teamLeadsNeeded: 1, staffNeeded: 2, requiredSkills: [], maxDriveMiles: "", notes: "",
   });
+  const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
   const [freetext, setFreetext] = useState("");
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [output, setOutput] = useState("");
@@ -361,6 +490,13 @@ export function AIStaffMappingTab({ members: initialMembers, skills: initialSkil
         requiredSkills: structured.requiredSkills,
         maxDriveMiles: structured.maxDriveMiles ? Number(structured.maxDriveMiles) : undefined,
         notes: structured.notes || undefined,
+        ...(projectContext ? {
+          projectSchedule: {
+            projectName: projectContext.name,
+            keyDates: projectContext.upcomingKeyDates,
+            focusShifts: projectContext.upcomingShifts,
+          },
+        } : {}),
       } : undefined,
       freetextInput: mode === "freetext" ? freetext : mode === "voice" ? voiceTranscript : undefined,
       members: members.map(m => ({
@@ -432,6 +568,24 @@ export function AIStaffMappingTab({ members: initialMembers, skills: initialSkil
     abortRef.current?.abort();
   }
 
+  function handleProjectSelect(project: ProjectContext) {
+    setProjectContext(project);
+    const allEntries = [...project.upcomingKeyDates, ...project.upcomingShifts]
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const firstDate = allEntries[0]?.date ?? "";
+    setStructured(s => ({
+      ...s,
+      originAddress: project.fullAddress || project.address || s.originAddress,
+      projectDate: firstDate || s.projectDate,
+      teamLeadsNeeded: project.teamLeadsNeeded,
+      staffNeeded: project.staffNeeded,
+    }));
+  }
+
+  function handleProjectClear() {
+    setProjectContext(null);
+  }
+
   function loadFromHistory(entry: HistoryEntry) {
     setOutput(entry.output);
     setViewingHistory(true);
@@ -462,6 +616,44 @@ export function AIStaffMappingTab({ members: initialMembers, skills: initialSkil
             {/* Mode 1: Structured Form */}
             {mode === "structured" && (
               <div className="space-y-4">
+                <ProjectAutocomplete
+                  onSelect={handleProjectSelect}
+                  onClear={handleProjectClear}
+                />
+                {projectContext && (
+                  <div className="bg-forest-50/60 border border-forest-200/60 rounded-xl p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-forest-800">{projectContext.name}</p>
+                    {projectContext.upcomingKeyDates.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-forest-700 mb-0.5">Key Dates</p>
+                        {projectContext.upcomingKeyDates.slice(0, 3).map((d, i) => (
+                          <p key={i} className="text-xs text-forest-600">
+                            {d.date}: {d.activity}{d.startTime ? ` · ${d.startTime}` : ""}
+                          </p>
+                        ))}
+                        {projectContext.upcomingKeyDates.length > 3 && (
+                          <p className="text-xs text-gray-400">+{projectContext.upcomingKeyDates.length - 3} more</p>
+                        )}
+                      </div>
+                    )}
+                    {projectContext.upcomingShifts.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-forest-700 mb-0.5">Focus Shifts</p>
+                        {projectContext.upcomingShifts.slice(0, 3).map((s, i) => (
+                          <p key={i} className="text-xs text-forest-600">
+                            {s.date}: {s.activity}{s.startTime ? ` · ${s.startTime}` : ""}
+                          </p>
+                        ))}
+                        {projectContext.upcomingShifts.length > 3 && (
+                          <p className="text-xs text-gray-400">+{projectContext.upcomingShifts.length - 3} more</p>
+                        )}
+                      </div>
+                    )}
+                    {projectContext.upcomingKeyDates.length === 0 && projectContext.upcomingShifts.length === 0 && (
+                      <p className="text-xs text-gray-400">No upcoming scheduled entries found.</p>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Project Origin Address</label>
                   <input

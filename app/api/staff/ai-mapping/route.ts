@@ -55,6 +55,21 @@ interface StaffForMapping {
   scheduledHoursThisWeek: number;
 }
 
+interface ScheduleEntry {
+  date: string;
+  activity: string;
+  notes?: string;
+  address?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+interface ProjectSchedule {
+  projectName?: string;
+  keyDates?: ScheduleEntry[];
+  focusShifts?: ScheduleEntry[];
+}
+
 interface StructuredInput {
   originAddress: string;
   destinationAddress?: string;
@@ -64,6 +79,7 @@ interface StructuredInput {
   requiredSkills: string[];
   maxDriveMiles?: number;
   notes?: string;
+  projectSchedule?: ProjectSchedule;
 }
 
 interface RequestBody {
@@ -105,6 +121,7 @@ function buildProjectDescription(body: RequestBody): string {
   if (!s) return "(no input provided)";
 
   const parts: string[] = [];
+  if (s.projectSchedule?.projectName) parts.push(`Project: ${s.projectSchedule.projectName}`);
   parts.push(`Origin: ${s.originAddress}`);
   if (s.destinationAddress) parts.push(`Destination: ${s.destinationAddress}`);
   if (s.projectDate) parts.push(`Date: ${s.projectDate}`);
@@ -114,6 +131,21 @@ function buildProjectDescription(body: RequestBody): string {
   }
   if (s.maxDriveMiles) parts.push(`Max drive distance: ${s.maxDriveMiles} miles`);
   if (s.notes) parts.push(`Notes: ${s.notes}`);
+  if (s.projectSchedule) {
+    const { keyDates, focusShifts } = s.projectSchedule;
+    if (keyDates?.length) {
+      const lines = keyDates.map(d =>
+        `  - ${d.date}: ${d.activity}${d.startTime ? ` (${d.startTime}${d.endTime ? `–${d.endTime}` : ""})` : ""}${d.notes ? ` — ${d.notes}` : ""}${d.address ? ` @ ${d.address}` : ""}`
+      );
+      parts.push(`Upcoming Key Dates:\n${lines.join("\n")}`);
+    }
+    if (focusShifts?.length) {
+      const lines = focusShifts.map(d =>
+        `  - ${d.date}: ${d.activity}${d.startTime ? ` (${d.startTime}${d.endTime ? `–${d.endTime}` : ""})` : ""}${d.notes ? ` — ${d.notes}` : ""}${d.address ? ` @ ${d.address}` : ""}`
+      );
+      parts.push(`Upcoming Focus Shifts:\n${lines.join("\n")}`);
+    }
+  }
 
   return `Project Details:\n${parts.join("\n")}`;
 }

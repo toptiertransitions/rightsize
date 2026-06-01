@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 
 const STAFF_ROLES_TABLE = process.env.STAFF_ROLES_TABLE_ID || "StaffRoles";
-const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(STAFF_ROLES_TABLE)}`;
+const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${STAFF_ROLES_TABLE}`;
 
 function staffFetch(path: string, init?: RequestInit) {
   return fetch(`${BASE_URL}${path}`, {
@@ -19,13 +19,12 @@ function staffFetch(path: string, init?: RequestInit) {
 
 const ALLOWED_ROLES = ["TTTManager", "TTTAdmin"] as const;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface AirtableRecord {
   id: string;
   fields: Record<string, unknown>;
 }
 
-interface StaffGoalRow {
+export interface StaffGoalRow {
   id: string;
   displayName: string;
   email: string;
@@ -35,36 +34,41 @@ interface StaffGoalRow {
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
   maxWeeklyHours?: number;
+  skillIds: string[];
   updatedAt?: string;
+}
+
+function toStr(v: unknown): string {
+  if (typeof v === "string") return v;
+  return "";
 }
 
 function mapRecord(record: AirtableRecord): StaffGoalRow {
   const f = record.fields;
+  // Skills is a linked record field — Airtable returns an array of record IDs
+  let skillIds: string[] = [];
+  if (Array.isArray(f["Skills"])) {
+    skillIds = (f["Skills"] as unknown[]).filter((v): v is string => typeof v === "string");
+  }
   return {
     id: record.id,
-    displayName: typeof f["DisplayName"] === "string" ? f["DisplayName"] : "",
-    email: typeof f["Email"] === "string" ? f["Email"] : "",
-    role: typeof f["Role"] === "string" ? f["Role"] : "TTTStaff",
-    hireDate: typeof f["HireDate"] === "string" ? f["HireDate"] : undefined,
+    displayName: toStr(f["DisplayName"]),
+    email: toStr(f["Email"]),
+    role: toStr(f["Role"]) || "TTTStaff",
+    hireDate: toStr(f["HireDate"]) || undefined,
     roleType:
       f["RoleType"] === "Staff" || f["RoleType"] === "Team Lead"
         ? (f["RoleType"] as "Staff" | "Team Lead")
         : undefined,
     minWeeklyHours: typeof f["MinWeeklyHours"] === "number" ? f["MinWeeklyHours"] : undefined,
-    targetWeeklyHours:
-      typeof f["TargetWeeklyHours"] === "number" ? f["TargetWeeklyHours"] : undefined,
-    maxWeeklyHours:
-      typeof f["MaxWeeklyHours"] === "number" ? f["MaxWeeklyHours"] : undefined,
-    updatedAt:
-      typeof f["LastModifiedAt"] === "string"
-        ? f["LastModifiedAt"]
-        : typeof f["UpdatedAt"] === "string"
-        ? f["UpdatedAt"]
-        : undefined,
+    targetWeeklyHours: typeof f["TargetWeeklyHours"] === "number" ? f["TargetWeeklyHours"] : undefined,
+    maxWeeklyHours: typeof f["MaxWeeklyHours"] === "number" ? f["MaxWeeklyHours"] : undefined,
+    skillIds,
+    updatedAt: toStr(f["LastModifiedTime"]) || toStr(f["LastModifiedAt"]) || undefined,
   };
 }
 
-// ─── GET ──────────────────────────────────────────────────────────────────────
+// ─── GET — fetch all active TTTStaff + TTTManager with goals fields ────────────
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -75,24 +79,12 @@ export async function GET() {
   }
 
   try {
-    const fields = [
-      "DisplayName",
-      "Email",
-      "Role",
-      "HireDate",
-      "RoleType",
-      "MinWeeklyHours",
-      "TargetWeeklyHours",
-      "MaxWeeklyHours",
-      "IsActive",
-      "LastModifiedAt",
-      "UpdatedAt",
-    ]
-      .map(f => `fields[]=${encodeURIComponent(f)}`)
-      .join("&");
-
-    const formula = encodeURIComponent("{IsActive} = TRUE()");
-    const qs = `?filterByFormula=${formula}&sort[0][field]=DisplayName&sort[0][direction]=asc&${fields}`;
+    // Fetch all active staff (TTTStaff and TTTManager) — no fields[] restriction
+    // so all fields including newly added ones come back gracefully
+    const formula = encodeURIComponent(
+      `AND({IsActive}=TRUE(),OR({Role}="TTTStaff",{Role}="TTTManager"))`
+    );
+    const qs = `?filterByFormula=${formula}&sort[0][field]=DisplayName&sort[0][direction]=asc`;
 
     const records: AirtableRecord[] = [];
     let offset: string | undefined;
@@ -100,7 +92,11 @@ export async function GET() {
     do {
       const url = qs + (offset ? `&offset=${offset}` : "");
       const res = await staffFetch(url);
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[staff/goals GET] Airtable error:", text);
+        throw new Error(text);
+      }
       const data = await res.json();
       records.push(...(data.records as AirtableRecord[]));
       offset = data.offset;
@@ -114,7 +110,7 @@ export async function GET() {
   }
 }
 
-// ─── PATCH ────────────────────────────────────────────────────────────────────
+// ─── PATCH — update goals fields for a single staff member ────────────────────
 export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -143,14 +139,11 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const fields: Record<string, unknown> = {};
-  if (rest.hireDate !== undefined) fields["HireDate"] = rest.hireDate;
-  if (rest.roleType !== undefined) fields["RoleType"] = rest.roleType;
-  if (rest.minWeeklyHours !== undefined)
-    fields["MinWeeklyHours"] = rest.minWeeklyHours ?? null;
-  if (rest.targetWeeklyHours !== undefined)
-    fields["TargetWeeklyHours"] = rest.targetWeeklyHours ?? null;
-  if (rest.maxWeeklyHours !== undefined)
-    fields["MaxWeeklyHours"] = rest.maxWeeklyHours ?? null;
+  if (rest.hireDate !== undefined) fields["HireDate"] = rest.hireDate || null;
+  if (rest.roleType !== undefined) fields["RoleType"] = rest.roleType || null;
+  if (rest.minWeeklyHours !== undefined) fields["MinWeeklyHours"] = rest.minWeeklyHours ?? null;
+  if (rest.targetWeeklyHours !== undefined) fields["TargetWeeklyHours"] = rest.targetWeeklyHours ?? null;
+  if (rest.maxWeeklyHours !== undefined) fields["MaxWeeklyHours"] = rest.maxWeeklyHours ?? null;
 
   if (Object.keys(fields).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
