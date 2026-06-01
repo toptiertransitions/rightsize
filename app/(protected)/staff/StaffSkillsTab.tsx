@@ -152,26 +152,36 @@ export function StaffSkillsTab({ members: initialMembers, skills: initialSkills,
     });
   }, []);
 
-  // Bulk patch
+  // Bulk patch — compute new skillIds on the client and send full lists to the route
   const bulkPatch = useCallback(async (action: "assign" | "remove", skillId: string) => {
     const ids = Array.from(selectedIds);
-    // Optimistic
+
+    // Build per-member patches using current members state
+    const patches = ids.flatMap(id => {
+      const member = members.find(m => m.id === id);
+      if (!member) return [];
+      const skillIds = action === "assign"
+        ? [...new Set([...member.skillIds, skillId])]
+        : member.skillIds.filter(s => s !== skillId);
+      return [{ staffId: id, skillIds }];
+    });
+
+    // Optimistic update
     setMembers(prev => prev.map(m => {
-      if (!ids.includes(m.id)) return m;
-      const next = action === "assign"
-        ? [...new Set([...m.skillIds, skillId])]
-        : m.skillIds.filter(s => s !== skillId);
-      return { ...m, skillIds: next };
+      const patch = patches.find(p => p.staffId === m.id);
+      return patch ? { ...m, skillIds: patch.skillIds } : m;
     }));
+
     await fetch("/api/staff/skills/bulk", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, skillId, staffIds: ids }),
+      body: JSON.stringify({ patches }),
     });
+
     setBulkSkillPopoverOpen(false);
     setBulkAction(null);
     setSelectedIds(new Set());
-  }, [selectedIds]);
+  }, [selectedIds, members]);
 
   const groupedSkills = groupByCategory(skills.filter(s => s.isActive));
   const filteredSkillDropdown = skills.filter(s =>

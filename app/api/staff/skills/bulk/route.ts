@@ -27,7 +27,9 @@ interface AirtableRecord {
 
 const ALLOWED_ROLES = ["TTTManager", "TTTAdmin"] as const;
 
-// ─── PATCH — bulk assign or remove a skill from multiple staff ────────────────
+// ─── PATCH — bulk set skill lists for multiple staff members ─────────────────
+// Accepts pre-computed skillIds per staff member from the client (no server-side
+// GET required). The client holds current state and computes the delta itself.
 export async function PATCH(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,59 +39,30 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { action: "assign" | "remove"; skillId: string; staffIds: string[] };
+  let body: { patches: Array<{ staffId: string; skillIds: string[] }> };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { action, skillId, staffIds } = body;
-  if (!action || !skillId || !Array.isArray(staffIds) || staffIds.length === 0) {
-    return NextResponse.json(
-      { error: "action, skillId, and non-empty staffIds are required" },
-      { status: 400 }
-    );
-  }
-  if (action !== "assign" && action !== "remove") {
-    return NextResponse.json({ error: "action must be 'assign' or 'remove'" }, { status: 400 });
+  const { patches } = body;
+  if (!Array.isArray(patches) || patches.length === 0) {
+    return NextResponse.json({ error: "patches must be a non-empty array" }, { status: 400 });
   }
 
   const errors: string[] = [];
   let updated = 0;
 
-  // Process sequentially to avoid Airtable rate limits
-  for (const staffId of staffIds) {
+  for (const { staffId, skillIds } of patches) {
+    if (!staffId || !Array.isArray(skillIds)) {
+      errors.push(`Invalid patch entry for staffId=${staffId}`);
+      continue;
+    }
     try {
-      // GET current skills
-      const getRes = await staffFetch(`/${staffId}?fields[]=Skills`);
-      if (!getRes.ok) {
-        errors.push(`Failed to fetch staff ${staffId}: ${await getRes.text()}`);
-        continue;
-      }
-      const record = (await getRes.json()) as AirtableRecord;
-      const currentSkills: string[] = Array.isArray(record.fields["Skills"])
-        ? (record.fields["Skills"] as string[])
-        : [];
-
-      let nextSkills: string[];
-      if (action === "assign") {
-        nextSkills = currentSkills.includes(skillId)
-          ? currentSkills
-          : [...currentSkills, skillId];
-      } else {
-        nextSkills = currentSkills.filter(s => s !== skillId);
-      }
-
-      // Only patch if changed
-      if (JSON.stringify(nextSkills.sort()) === JSON.stringify(currentSkills.slice().sort())) {
-        updated++;
-        continue;
-      }
-
       const patchRes = await staffFetch(`/${staffId}`, {
         method: "PATCH",
-        body: JSON.stringify({ fields: { Skills: nextSkills } }),
+        body: JSON.stringify({ fields: { Skills: skillIds } }),
       });
       if (!patchRes.ok) {
         errors.push(`Failed to update staff ${staffId}: ${await patchRes.text()}`);
