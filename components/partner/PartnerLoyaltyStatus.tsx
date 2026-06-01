@@ -112,6 +112,9 @@ export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
           <p className="text-xs font-semibold text-[#2d4a3e] uppercase tracking-wider mb-2">
             Premier Partner Rewards
           </p>
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/70 rounded-lg px-2.5 py-1.5 mb-2.5 font-medium">
+            Annual program &middot; Tiers and points reset <strong>June 1</strong> each year
+          </p>
           <p className="text-sm text-gray-600">
             Every completed project referral earns points toward higher tiers.{" "}
             <span className="font-semibold text-gray-800">10 referrals</span> reaches{" "}
@@ -137,6 +140,9 @@ export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
           <h3 className="text-lg font-bold text-gray-900">Start your journey to Diamond</h3>
           <p className="text-sm text-gray-500 mt-1">
             Every completed project referral earns points. Higher tiers unlock faster earning rates.
+          </p>
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/70 rounded-lg px-2.5 py-1.5 mt-3 font-medium">
+            Annual program &middot; Tiers and points reset <strong>June 1</strong> each year
           </p>
         </div>
 

@@ -2,6 +2,12 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getPartnerContact } from "@/lib/partner";
 import { PartnerLoyaltyStatus } from "@/components/partner/PartnerLoyaltyStatus";
+import {
+  getPartnerPointsByCompany,
+  getPartnerPoints,
+  getReferralCompanyById,
+} from "@/lib/airtable";
+import type { PartnerPoint } from "@/lib/types";
 
 const REDEMPTION_EXAMPLES = [
   {
@@ -44,12 +50,40 @@ const HOW_IT_WORKS = [
   },
 ];
 
+const TIER_ROWS = [
+  { name: "Starting", color: "#6B7280", threshold: "—",       mult: 1, bonus: "—",               sponsorships: "—"             },
+  { name: "Silver",   color: "#9CA3AF", threshold: "10 pts",  mult: 1, bonus: "5 Bonus Points",   sponsorships: "1 Annual Event" },
+  { name: "Gold",     color: "#C9A96E", threshold: "25 pts",  mult: 2, bonus: "—",               sponsorships: "2 Annual Events"},
+  { name: "Platinum", color: "#378ADD", threshold: "75 pts",  mult: 3, bonus: "—",               sponsorships: "3 Annual Events"},
+  { name: "Diamond",  color: "#7F77DD", threshold: "150 pts", mult: 4, bonus: "—",               sponsorships: "4 Annual Events"},
+];
+
+function fmtDate(d?: string | null): string {
+  if (!d) return "—";
+  try {
+    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return d; }
+}
+
 export default async function PartnerLoyaltyPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const contact = await getPartnerContact(userId);
   if (!contact) redirect("/home");
+
+  const companyId = contact.referralCompanyId || null;
+
+  const [points, company] = await Promise.all([
+    companyId
+      ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
+      : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
+    companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
+  ]);
+
+  const earned   = points.length;
+  const redeemed = points.filter(p => p.redeemedAt).length;
+  const companyName = company?.name || null;
 
   return (
     <div className="space-y-10 pb-12">
@@ -58,6 +92,9 @@ export default async function PartnerLoyaltyPage() {
         <h1 className="text-xl font-bold text-[#2d4a3e]">Premier Partner Rewards</h1>
         <p className="text-sm text-gray-500 mt-1">
           Earn points for every completed referral. Redeem them as real service hours — for your clients or your own organization.
+        </p>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200/70 rounded-lg px-3 py-2 mt-3 font-medium inline-block">
+          Annual program &middot; Tiers and points reset <strong>June 1</strong> each year
         </p>
       </div>
 
@@ -80,46 +117,47 @@ export default async function PartnerLoyaltyPage() {
         </div>
       </section>
 
-      {/* Tier benefits recap */}
+      {/* Tier benefits table */}
       <section>
         <h2 className="text-base font-semibold text-gray-900 mb-1">Earn faster as you grow</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Higher tiers multiply your points — the more you refer, the faster you accumulate service hours.
+          Higher tiers multiply your points and unlock exclusive annual benefits.
         </p>
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left">
-                <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Tier</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Reached at</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Points per referral</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500 text-xs hidden sm:table-cell">Bonus Points</th>
+                <th className="px-3 py-2.5 font-medium text-gray-500 text-xs">Tier</th>
+                <th className="px-3 py-2.5 font-medium text-gray-500 text-xs">Reached at</th>
+                <th className="px-3 py-2.5 font-medium text-gray-500 text-xs">Pts / referral</th>
+                <th className="px-3 py-2.5 font-medium text-gray-500 text-xs hidden sm:table-cell">Bonus Points</th>
+                <th className="px-3 py-2.5 font-medium text-gray-500 text-xs">Annual Sponsorships</th>
               </tr>
             </thead>
             <tbody>
-              {[
-                { name: "Starting", color: "#6B7280", threshold: "—",      mult: 1, bonus: "—"            },
-                { name: "Silver",   color: "#9CA3AF", threshold: "10 pts", mult: 1, bonus: "5 Bonus Points" },
-                { name: "Gold",     color: "#C9A96E", threshold: "25 pts", mult: 2, bonus: "—"            },
-                { name: "Platinum", color: "#378ADD", threshold: "75 pts", mult: 3, bonus: "—"            },
-                { name: "Diamond",  color: "#7F77DD", threshold: "150 pts",mult: 4, bonus: "—"            },
-              ].map((row, i) => (
+              {TIER_ROWS.map((row, i) => (
                 <tr key={row.name} className={i > 0 ? "border-t border-gray-100" : ""}>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <span className="font-semibold text-sm" style={{ color: row.color }}>{row.name}</span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{row.threshold}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 text-xs text-gray-500">{row.threshold}</td>
+                  <td className="px-3 py-3">
                     <span className="font-semibold text-sm" style={{ color: row.color }}>{row.mult}×</span>
                   </td>
-                  <td className="px-4 py-3 text-xs hidden sm:table-cell" style={{ color: row.bonus !== "—" ? row.color : undefined }}>
+                  <td className="px-3 py-3 text-xs hidden sm:table-cell" style={{ color: row.bonus !== "—" ? row.color : undefined }}>
                     <span className={row.bonus !== "—" ? "font-semibold" : "text-gray-400"}>{row.bonus}</span>
+                  </td>
+                  <td className="px-3 py-3 text-xs" style={{ color: row.sponsorships !== "—" ? row.color : undefined }}>
+                    <span className={row.sponsorships !== "—" ? "font-semibold" : "text-gray-400"}>{row.sponsorships}</span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Points and tier status reset June 1 annually. Annual Sponsorships are awarded at the start of each program year based on tier achieved.
+        </p>
       </section>
 
       {/* Redemption value section */}
@@ -166,6 +204,51 @@ export default async function PartnerLoyaltyPage() {
           Contact your TTT rep
         </a>
       </section>
+
+      {/* Points Earning Log */}
+      {points.length > 0 && (
+        <section>
+          <h2 className="text-base font-semibold text-gray-900 mb-1">Points Earning Log</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            {companyName ? `All points earned by ${companyName}.` : "Your complete points history."}{" "}
+            {earned} earned · {redeemed} redeemed · {earned - redeemed} available.
+          </p>
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-left">
+                  <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Project</th>
+                  <th className="px-4 py-2.5 font-medium text-gray-500 text-xs">Date Earned</th>
+                  <th className="px-4 py-2.5 font-medium text-gray-500 text-xs text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {points.map((p, i) => (
+                  <tr key={p.id} className={`${i > 0 ? "border-t border-gray-100" : ""} hover:bg-gray-50/50 transition-colors`}>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-gray-900">
+                        {p.tenantName || "Project"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                      {fmtDate(p.earnedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {p.redeemedAt ? (
+                        <span className="text-xs text-gray-400">
+                          Redeemed {fmtDate(p.redeemedAt)}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-[#2d4a3e]">Available</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -161,34 +161,19 @@ export default async function PartnerHomePage() {
           </div>
           <div>
             <p className="text-3xl font-bold">{earned}</p>
-            <p className="text-xs text-white/60 mt-1">Total Earned</p>
+            <p className="text-xs text-white/60 mt-1">Total Earned This Year</p>
           </div>
           <div>
             <p className="text-3xl font-bold">{redeemed}</p>
             <p className="text-xs text-white/60 mt-1">Redeemed</p>
           </div>
         </div>
-        {earned > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/10">
-            <div className="flex flex-wrap gap-2">
-              {points.slice(0, 5).map((p) => (
-                <span
-                  key={p.id}
-                  className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full ${
-                    p.redeemedAt ? "bg-white/10 text-white/40" : "bg-[#C9A96E]/20 text-[#C9A96E]"
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-current inline-block" />
-                  {p.tenantName || "Project"} &middot; {p.earnedAt}
-                  {p.redeemedAt ? " (redeemed)" : ""}
-                </span>
-              ))}
-              {points.length > 5 && (
-                <span className="text-xs text-white/40 px-2.5 py-1">+{points.length - 5} more</span>
-              )}
-            </div>
-          </div>
-        )}
+        <div className="mt-4 pt-4 border-t border-white/10">
+          <p className="text-[11px] text-white/40">
+            Annual program &middot; Points and tier status reset June 1 each year.{" "}
+            <a href="/partner/loyalty" className="underline hover:text-white/60 transition-colors">View full history &rarr;</a>
+          </p>
+        </div>
       </div>
 
       {/* Your Top Tier Team */}
