@@ -108,9 +108,6 @@ export default async function PartnerLoyaltyPage() {
         <p className="text-sm text-gray-500 mt-1">
           Earn points for every completed referral. Redeem them as real service hours — for your clients or your own organization.
         </p>
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200/70 rounded-lg px-3 py-2 mt-3 font-medium inline-block">
-          Annual program &middot; Tiers and points reset <strong>June 1</strong> each year
-        </p>
       </div>
 
       {/* Status widget (full, with tier ladder) */}
