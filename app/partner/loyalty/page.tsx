@@ -6,6 +6,7 @@ import {
   getPartnerPointsByCompany,
   getPartnerPoints,
   getReferralCompanyById,
+  getTenantById,
 } from "@/lib/airtable";
 import type { PartnerPoint } from "@/lib/types";
 
@@ -61,7 +62,7 @@ const TIER_ROWS = [
 function fmtDate(d?: string | null): string {
   if (!d) return "—";
   try {
-    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   } catch { return d; }
 }
 
@@ -80,6 +81,20 @@ export default async function PartnerLoyaltyPage() {
       : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
     companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
   ]);
+
+  // Resolve tenant names for any points that are missing one
+  const missingNameIds = Array.from(new Set(
+    points.filter(p => !p.tenantName && p.tenantId).map(p => p.tenantId)
+  ));
+  const tenantNameMap: Record<string, string> = {};
+  if (missingNameIds.length > 0) {
+    const tenants = await Promise.all(missingNameIds.map(id => getTenantById(id).catch(() => null)));
+    missingNameIds.forEach((id, i) => { if (tenants[i]?.name) tenantNameMap[id] = tenants[i]!.name; });
+  }
+  const enrichedPoints = points.map(p => ({
+    ...p,
+    tenantName: p.tenantName || tenantNameMap[p.tenantId] || undefined,
+  }));
 
   const earned   = points.length;
   const redeemed = points.filter(p => p.redeemedAt).length;
@@ -205,10 +220,10 @@ export default async function PartnerLoyaltyPage() {
         </a>
       </section>
 
-      {/* Points Earning Log */}
-      {points.length > 0 && (
+      {/* Loyalty Point Details */}
+      {enrichedPoints.length > 0 && (
         <section>
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Points Earning Log</h2>
+          <h2 className="text-base font-semibold text-gray-900 mb-1">Loyalty Point Details</h2>
           <p className="text-sm text-gray-500 mb-4">
             {companyName ? `All points earned by ${companyName}.` : "Your complete points history."}{" "}
             {earned} earned · {redeemed} redeemed · {earned - redeemed} available.
@@ -223,11 +238,11 @@ export default async function PartnerLoyaltyPage() {
                 </tr>
               </thead>
               <tbody>
-                {points.map((p, i) => (
+                {enrichedPoints.map((p, i) => (
                   <tr key={p.id} className={`${i > 0 ? "border-t border-gray-100" : ""} hover:bg-gray-50/50 transition-colors`}>
                     <td className="px-4 py-3">
                       <span className="font-medium text-gray-900">
-                        {p.tenantName || "Project"}
+                        {p.tenantName || "—"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">

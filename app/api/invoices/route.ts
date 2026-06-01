@@ -15,6 +15,7 @@ import {
   markInvoicePartnerPointAwarded,
   getClientContactById,
   getReferralContactById,
+  getTenantById,
 } from "@/lib/airtable";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { createQBOInvoice } from "@/lib/qbo";
@@ -290,13 +291,17 @@ async function autoAwardPartnerPoint(invoiceId: string, tenantId: string): Promi
   if (!wonOpp) return;
 
   // Get the client contact to find the referral partner
-  const clientContact = await getClientContactById(wonOpp.clientContactId).catch(() => null);
+  const [clientContact, tenant] = await Promise.all([
+    getClientContactById(wonOpp.clientContactId).catch(() => null),
+    getTenantById(tenantId).catch(() => null),
+  ]);
   if (!clientContact?.referralPartnerId) return;
 
   // Award the legacy point
   await createPartnerPoint({
     referralContactId: clientContact.referralPartnerId,
     tenantId,
+    tenantName: tenant?.name,
     opportunityId: wonOpp.id,
   });
 
