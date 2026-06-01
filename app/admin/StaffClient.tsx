@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { StaffMember, SystemRole } from "@/lib/types";
 import { Pagination } from "./components/Pagination";
+
+interface GoalsRow { id: string; minWeeklyHours?: number; targetWeeklyHours?: number; }
+interface SkillRow { id: string; skillName: string; skillCategory: string; }
+interface MemberSkills { staffId: string; skills: SkillRow[]; }
 
 const PAGE_SIZE = 25;
 
@@ -312,6 +316,18 @@ export function StaffClient({ initialStaff }: Props) {
   const [removing, setRemoving] = useState<string | null>(null);
   const [resending, setResending] = useState<string | null>(null);
   const [resendSent, setResendSent] = useState<string | null>(null);
+  const [goalsMap, setGoalsMap] = useState<Record<string, GoalsRow>>({});
+  const [expandedSkills, setExpandedSkills] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/staff/goals").then(r => r.ok ? r.json() : null).then(data => {
+      if (data?.staff) {
+        const map: Record<string, GoalsRow> = {};
+        for (const row of data.staff) map[row.id] = row;
+        setGoalsMap(map);
+      }
+    }).catch(() => {});
+  }, []);
 
   function openNew() { setEditMember(undefined); setShowModal(true); }
   function openEdit(m: StaffMember) { setEditMember(m); setShowModal(true); }
@@ -392,6 +408,10 @@ export function StaffClient({ initialStaff }: Props) {
                 <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Email</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Role</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">
+                  Weekly Goal
+                  <span className="ml-1 cursor-help" title="Edit in Ops → Staff Goals">ⓘ</span>
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -420,6 +440,16 @@ export function StaffClient({ initialStaff }: Props) {
                     }`}>
                       {m.isActive ? "Active" : "Inactive"}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const g = goalsMap[m.id];
+                      if (!g) return <span className="text-gray-600 text-xs">—</span>;
+                      const min = g.minWeeklyHours ?? null;
+                      const target = g.targetWeeklyHours ?? null;
+                      if (min == null && target == null) return <span className="text-gray-600 text-xs">—</span>;
+                      return <span className="text-gray-300 text-xs">{min ?? "?"}–{target ?? "?"} hrs</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end">

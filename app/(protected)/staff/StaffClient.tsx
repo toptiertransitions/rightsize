@@ -5,6 +5,9 @@ import Image from "next/image";
 import type { StaffMember, WeeklySchedule, TimeOffEntry, CrateLocation, InventoryContainer, InventoryItem, Subcontractor } from "@/lib/types";
 import { StaffCalendarTab } from "./StaffCalendarTab";
 import { LocationMgmtTab } from "./LocationMgmtTab";
+import { StaffGoalsTab } from "./StaffGoalsTab";
+import { StaffSkillsTab } from "./StaffSkillsTab";
+import { AIStaffMappingTab } from "./AIStaffMappingTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1306,10 +1309,11 @@ interface Props {
   inventoryContainers: InventoryContainer[];
   tenants: { id: string; name: string }[];
   subcontractors: Subcontractor[];
+  canEdit?: boolean; // true for TTTManager and TTTAdmin
 }
 
-export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, tenants, subcontractors }: Props) {
-  const [activeTab, setActiveTab] = useState<"availability" | "calendar" | "location" | "supply" | "subcontractors">("availability");
+export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, tenants, subcontractors, canEdit = false }: Props) {
+  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
@@ -1324,8 +1328,11 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-gray-200 mb-8">
         {([
+          { key: "ai-mapping", label: "AI Staff Mapping" },
           { key: "availability", label: "Staff Availability" },
           { key: "calendar", label: "Staff Calendar" },
+          { key: "goals", label: "Staff Goals" },
+          { key: "skills", label: "Staff Skills" },
           { key: "location", label: "Location Mgmt" },
           { key: "supply", label: "Supply Tracking" },
           { key: "subcontractors", label: "Subcontractor Management" },
@@ -1343,6 +1350,21 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
           </button>
         ))}
       </div>
+
+      {/* AI Staff Mapping Tab */}
+      {activeTab === "ai-mapping" && (
+        <AIStaffMappingTab />
+      )}
+
+      {/* Staff Goals Tab */}
+      {activeTab === "goals" && (
+        <StaffGoalsTab members={[]} canEdit={canEdit} />
+      )}
+
+      {/* Staff Skills Tab */}
+      {activeTab === "skills" && (
+        <StaffSkillsTab members={[]} skills={[]} canEdit={canEdit} />
+      )}
 
       {/* Staff Availability Tab */}
       {activeTab === "availability" && (

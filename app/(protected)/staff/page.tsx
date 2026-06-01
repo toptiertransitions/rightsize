@@ -37,6 +37,8 @@ export default async function StaffPage() {
     .map((t) => ({ id: t.id, name: t.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const canEdit = role === "TTTManager" || role === "TTTAdmin";
+
   return (
     <StaffClient
       members={active}
@@ -45,6 +47,7 @@ export default async function StaffPage() {
       inventoryContainers={inventoryContainers}
       tenants={activeTenants}
       subcontractors={subcontractors}
+      canEdit={canEdit}
     />
   );
 }
