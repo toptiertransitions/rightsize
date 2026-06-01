@@ -189,9 +189,10 @@ export async function POST(req: NextRequest) {
       } catch { /* non-fatal */ }
     }
 
-    // Send admin notification only for new non-partner accounts.
-    // Partner sign-ups are notified by /api/partner/activate instead.
-    if (event.type === "user.created" && primaryEmail && !isPartner) {
+    // Always notify admins of new account creation — partners included.
+    // Partner sign-ups also get a richer notification from /api/partner/activate,
+    // but we send this one unconditionally so no signup ever slips through silently.
+    if (event.type === "user.created" && primaryEmail) {
       const fullName = [firstName, lastName].filter(Boolean).join(" ") || primaryEmail;
       const createdAtMs = (d.created_at as number | null) ?? Date.now();
       const createdAt = new Date(createdAtMs).toLocaleDateString("en-US", {
@@ -201,14 +202,15 @@ export async function POST(req: NextRequest) {
       // Determine role: check StaffRoles table first
       const staffRecord = await getStaffRoleRecord(clerkUserId);
       let userType: "client" | "staff" | "unknown" = "unknown";
-      let roleLabel = "Self-registered";
+      let roleLabel = isPartner ? "Partner (CRM)" : "Self-registered";
 
       if (staffRecord?.role) {
         userType = "staff";
         roleLabel = staffRecord.role; // e.g. "TTTStaff", "TTTManager", "TTTSales"
       }
 
-      // Check memberships for project association
+      // Check memberships for project association (may not exist yet at webhook time
+      // if the user signed up before accepting an invite or completing onboarding)
       let projectName: string | null = null;
       let projectAddress: string | null = null;
       const memberships = await getMembershipsForUser(clerkUserId);
