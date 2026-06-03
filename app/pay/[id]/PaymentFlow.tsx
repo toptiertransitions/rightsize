@@ -170,8 +170,13 @@ export function PaymentFlow({
 
   function getToken(): Promise<string> {
     return new Promise((resolve, reject) => {
-      tokenResolveRef.current = resolve;
-      tokenRejectRef.current = reject;
+      const timeout = setTimeout(() => {
+        tokenResolveRef.current = null;
+        tokenRejectRef.current = null;
+        reject(new Error("Card tokenization timed out. Please check your card details and try again."));
+      }, 20_000);
+      tokenResolveRef.current = (t: string) => { clearTimeout(timeout); resolve(t); };
+      tokenRejectRef.current = (e: Error) => { clearTimeout(timeout); reject(e); };
       tokenizerRef.current?.submit();
     });
   }
