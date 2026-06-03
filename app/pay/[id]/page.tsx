@@ -25,7 +25,7 @@ export default async function PayPage({ params }: Props) {
   const companyName = settings?.companyName || "Top Tier Transitions";
   const fluidpayConfigured = !!(process.env.FLUIDPAY_API_KEY && process.env.FLUIDPAY_PUBLIC_KEY);
   const fluidpayPublicKey = process.env.FLUIDPAY_PUBLIC_KEY ?? "";
-  const fluidpayBaseUrl = process.env.FLUIDPAY_URL ?? "https://app.fluidpay.com";
+  const fluidpayBaseUrl = (process.env.FLUIDPAY_URL ?? "https://app.fluidpay.com").trim();
   // Pre-fill email from invoice sent-to or project client email
   const prefillEmail = invoice.sentToEmail || tenant?.clientEmail || "";
 

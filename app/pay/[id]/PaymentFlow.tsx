@@ -103,8 +103,6 @@ export function PaymentFlow({
     setFpLoadError("");
     tokenizerRef.current = null;
 
-    console.log("[FP] card_form mounted — baseUrl:", JSON.stringify(fluidpayBaseUrl), "publicKey set:", !!fluidpayPublicKey);
-
     if (!fluidpayPublicKey) {
       setFpLoadError("Payment fields are not configured. Please contact your coordinator.");
       return;
@@ -112,7 +110,6 @@ export function PaymentFlow({
 
     function initTokenizer() {
       const TokClass = (window as any).Tokenizer;
-      console.log("[FP] initTokenizer — window.Tokenizer:", typeof TokClass);
       if (!TokClass) {
         setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
         return;
@@ -123,7 +120,7 @@ export function PaymentFlow({
           url: fluidpayBaseUrl,
           apikey: fluidpayPublicKey,
           container: "#fp-tokenizer-container",
-          onLoad: () => { console.log("[FP] tokenizer onLoad fired"); setFpReady(true); },
+          onLoad: () => setFpReady(true),
           submission: (resp: any) => {
             if (resp.status === "success") {
               tokenResolveRef.current?.(resp.token);
@@ -151,7 +148,6 @@ export function PaymentFlow({
 
     const scriptId = "fluidpay-tokenizer-js";
     if (document.getElementById(scriptId)) {
-      console.log("[FP] tokenizer script already in DOM — calling initTokenizer");
       clearTimeout(loadTimeout);
       initTokenizer();
       return;
@@ -160,12 +156,11 @@ export function PaymentFlow({
     const script = document.createElement("script");
     script.id = scriptId;
     script.src = `${fluidpayBaseUrl}/tokenizer/tokenizer.js`;
-    console.log("[FP] loading tokenizer script from:", script.src);
     script.async = true;
-    script.onload = () => { console.log("[FP] tokenizer script loaded"); clearTimeout(loadTimeout); initTokenizer(); };
+    script.onload = () => { clearTimeout(loadTimeout); initTokenizer(); };
     script.onerror = () => {
       clearTimeout(loadTimeout);
-      console.error("[FP] tokenizer script failed to load:", script.src);
+      console.error("[Tokenizer] script failed to load:", script.src);
       setFpLoadError("Failed to load secure payment fields. Please refresh and try again.");
     };
     document.head.appendChild(script);
