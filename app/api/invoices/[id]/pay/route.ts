@@ -4,6 +4,8 @@ import { getInvoiceById, updateInvoice } from "@/lib/airtable";
 // Public route — no auth required. Clients access this from the pay link in their email.
 // Card data is tokenized client-side by FluidPay; only the token reaches this server.
 
+export const maxDuration = 60;
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -98,7 +100,9 @@ export async function POST(
   };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180_000);
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+
+  console.log("[pay] sending to FluidPay:", fluidpayUrl, "method:", body.paymentMethod, "cents:", amountCents);
 
   let fpData: Record<string, unknown>;
   try {
@@ -113,9 +117,11 @@ export async function POST(
     });
     clearTimeout(timeout);
     fpData = await fpRes.json().catch(() => ({}));
+    console.log("[pay] FluidPay HTTP status:", fpRes.status, "body:", JSON.stringify(fpData));
   } catch (err) {
     clearTimeout(timeout);
     if ((err as Error)?.name === "AbortError") {
+      console.error("[pay] FluidPay request timed out after 60s");
       return NextResponse.json({ error: "The payment request timed out. Please try again." }, { status: 504 });
     }
     console.error("[pay] FluidPay request failed:", err);
