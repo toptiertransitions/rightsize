@@ -169,6 +169,10 @@ const styles = StyleSheet.create({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function isValidUrl(url: string | null | undefined): url is string {
+  return typeof url === "string" && (url.startsWith("https://") || url.startsWith("http://"));
+}
+
 function bestDescription(item: Item): string {
   return (
     item.listingDescriptionEbay?.trim() ||
@@ -330,15 +334,16 @@ export const VendorFilePDF = ({
   preparedDate,
 }: VendorFilePDFProps) => {
   const companyName = settings?.companyName || "Top Tier Transitions";
-  const logoUrl     = settings?.logoUrl || undefined;
+  const logoUrl     = isValidUrl(settings?.logoUrl) ? settings!.logoUrl : undefined;
 
   // Build an array of Page elements — one cover page + 1-2 pages per item
   const itemPages = items.flatMap((item, idx) => {
-    const allPhotos: Photo[] = item.photos?.length
+    const rawPhotos: Photo[] = item.photos?.length
       ? item.photos
       : item.photoUrl
       ? [{ url: item.photoUrl, publicId: "" }]
       : [];
+    const allPhotos = rawPhotos.filter(p => isValidUrl(p.url));
 
     const n = allPhotos.length;
     const baseLabel = `Item ${idx + 1} of ${items.length}`;
