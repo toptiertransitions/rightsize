@@ -4651,6 +4651,61 @@ export async function deleteStorageUnit(id: string): Promise<void> {
   await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS).destroy(id);
 }
 
+// ─── PF Open House Dates ──────────────────────────────────────────────────────
+
+function mapOpenHouseDate(record: Airtable.Record<Airtable.FieldSet>): import("./types").OpenHouseDate {
+  const f = record.fields;
+  return {
+    id: record.id,
+    date: toStr(f["Date"]).slice(0, 10),
+    timeRange: toStr(f["TimeRange"]),
+    notes: toStr(f["Notes"]),
+  };
+}
+
+export async function getOpenHouseDates(upcomingOnly = true): Promise<import("./types").OpenHouseDate[]> {
+  const base = getBase();
+  const today = new Date().toISOString().slice(0, 10);
+  const filterFormula = upcomingOnly ? `{Date} >= "${today}"` : "";
+  const records = await base(AIRTABLE_TABLES.PF_OPEN_HOUSE_DATES)
+    .select({
+      ...(filterFormula ? { filterByFormula: filterFormula } : {}),
+      sort: [{ field: "Date", direction: "asc" }],
+    })
+    .all();
+  return records.map(mapOpenHouseDate);
+}
+
+export async function createOpenHouseDate(data: {
+  date: string;
+  timeRange: string;
+  notes?: string;
+}): Promise<import("./types").OpenHouseDate> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = { Date: data.date, TimeRange: data.timeRange };
+  if (data.notes) fields["Notes"] = data.notes;
+  const record = await base(AIRTABLE_TABLES.PF_OPEN_HOUSE_DATES).create(fields);
+  return mapOpenHouseDate(record);
+}
+
+export async function updateOpenHouseDate(
+  id: string,
+  data: Partial<{ date: string; timeRange: string; notes: string }>
+): Promise<import("./types").OpenHouseDate> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.date !== undefined) fields["Date"] = data.date;
+  if (data.timeRange !== undefined) fields["TimeRange"] = data.timeRange;
+  if (data.notes !== undefined) fields["Notes"] = data.notes;
+  const record = await base(AIRTABLE_TABLES.PF_OPEN_HOUSE_DATES).update(id, fields);
+  return mapOpenHouseDate(record);
+}
+
+export async function deleteOpenHouseDate(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.PF_OPEN_HOUSE_DATES).destroy(id);
+}
+
 // ─── Subcontractors ───────────────────────────────────────────────────────────
 
 function mapSubcontractor(record: Airtable.Record<Airtable.FieldSet>): import("./types").Subcontractor {

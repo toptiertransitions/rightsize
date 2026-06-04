@@ -1148,6 +1148,14 @@ export interface StorageUnit {
   monthlyCost: string;
 }
 
+// ─── Open House Date ──────────────────────────────────────────────────────────
+export interface OpenHouseDate {
+  id: string;
+  date: string;      // YYYY-MM-DD
+  timeRange: string; // e.g. "10:00 AM – 2:00 PM"
+  notes: string;
+}
+
 // ─── Subcontractor ────────────────────────────────────────────────────────────
 export interface Subcontractor {
   id: string;

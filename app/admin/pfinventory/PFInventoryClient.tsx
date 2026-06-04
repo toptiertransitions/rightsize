@@ -5,7 +5,7 @@ import { Pagination } from "../components/Pagination";
 
 const PAGE_SIZE = 25;
 import Image from "next/image";
-import type { Item, ItemStatus } from "@/lib/types";
+import type { Item, ItemStatus, OpenHouseDate } from "@/lib/types";
 
 const PF_STATUSES: ItemStatus[] = ["Pending Review", "Approved", "Listed", "In Cart", "Sold", "Donated", "Discarded", "Rejected / Revisit"];
 
@@ -846,6 +846,200 @@ function SquareCleanupModal({ onClose, onDone }: { onClose: () => void; onDone: 
   );
 }
 
+// ─── Open House Manager ───────────────────────────────────────────────────────
+const EMPTY_OHD = { date: "", timeRange: "", notes: "" };
+
+function OpenHouseManager() {
+  const [dates, setDates] = useState<OpenHouseDate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState(EMPTY_OHD);
+  const [addingNew, setAddingNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin/open-house")
+      .then(r => r.ok ? r.json() : { dates: [] })
+      .then(d => setDates(d.dates ?? []))
+      .catch(() => setDates([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const upcoming = dates
+    .filter(d => d.date >= new Date().toISOString().slice(0, 10))
+    .slice(0, 4);
+
+  function fmt(d: string) {
+    try {
+      return new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    } catch { return d; }
+  }
+
+  function startEdit(d: OpenHouseDate) {
+    setAddingNew(false);
+    setEditingId(d.id);
+    setDraft({ date: d.date, timeRange: d.timeRange, notes: d.notes });
+    setError("");
+  }
+
+  function startAdd() {
+    setEditingId(null);
+    setDraft(EMPTY_OHD);
+    setAddingNew(true);
+    setError("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setAddingNew(false);
+    setDraft(EMPTY_OHD);
+    setError("");
+  }
+
+  async function saveEdit() {
+    if (!draft.date || !draft.timeRange.trim()) { setError("Date and time range required"); return; }
+    setSaving(true); setError("");
+    try {
+      const res = await fetch("/api/admin/open-house", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, ...draft }),
+      });
+      if (!res.ok) throw new Error();
+      const { date } = await res.json();
+      setDates(prev => prev.map(d => d.id === editingId ? date : d));
+      setEditingId(null);
+    } catch { setError("Failed to save"); }
+    finally { setSaving(false); }
+  }
+
+  async function saveNew() {
+    if (!draft.date || !draft.timeRange.trim()) { setError("Date and time range required"); return; }
+    setSaving(true); setError("");
+    try {
+      const res = await fetch("/api/admin/open-house", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      if (!res.ok) throw new Error();
+      const { date } = await res.json();
+      setDates(prev => [...prev, date].sort((a, b) => a.date.localeCompare(b.date)));
+      setAddingNew(false);
+      setDraft(EMPTY_OHD);
+    } catch { setError("Failed to add date"); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteDate(id: string) {
+    if (!confirm("Remove this open house date?")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/open-house?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setDates(prev => prev.filter(d => d.id !== id));
+      if (editingId === id) cancelEdit();
+    } catch { setError("Failed to delete"); }
+    finally { setSaving(false); }
+  }
+
+  const inputCls = "bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-forest-500 w-full placeholder:text-gray-500";
+
+  function InlineForm({ onSave }: { onSave: () => void }) {
+    return (
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Date *</label>
+          <input type="date" value={draft.date} onChange={e => setDraft(d => ({ ...d, date: e.target.value }))}
+            className={inputCls} autoFocus />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Time Range *</label>
+          <input value={draft.timeRange} onChange={e => setDraft(d => ({ ...d, timeRange: e.target.value }))}
+            placeholder="10:00 AM – 2:00 PM" className={inputCls} />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Notes</label>
+          <input value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+            placeholder="e.g. Estate furniture preview" className={inputCls} />
+        </div>
+        {error && <p className="text-xs text-red-400 sm:col-span-3">{error}</p>}
+        <div className="flex gap-2 sm:col-span-3">
+          <button onClick={onSave} disabled={saving || !draft.date || !draft.timeRange.trim()}
+            className="px-4 py-1.5 bg-forest-600 text-white text-xs font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors">
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button onClick={cancelEdit} className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-forest-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p className="text-sm font-semibold text-white">Open House Dates</p>
+          <span className="text-xs text-gray-500">({upcoming.length} upcoming)</span>
+        </div>
+        {!addingNew && (
+          <button onClick={startAdd} className="text-xs font-medium text-forest-400 hover:text-forest-300 transition-colors">
+            + Add Date
+          </button>
+        )}
+      </div>
+
+      {loading && <p className="text-xs text-gray-500">Loading…</p>}
+
+      {!loading && upcoming.length === 0 && !addingNew && (
+        <p className="text-xs text-gray-500 italic">No upcoming open house dates. Add one above.</p>
+      )}
+
+      <div className="space-y-2">
+        {upcoming.map(d => (
+          <div key={d.id} className={`rounded-xl border transition-colors ${editingId === d.id ? "border-forest-700 bg-gray-800 p-4" : "border-gray-800 bg-gray-800/50 px-4 py-2.5 group"}`}>
+            {editingId === d.id ? (
+              <>
+                <p className="text-xs font-semibold text-forest-400 mb-1">{fmt(d.date)}</p>
+                <InlineForm onSave={saveEdit} />
+              </>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className="text-sm font-semibold text-white shrink-0">{fmt(d.date)}</span>
+                  <span className="text-xs text-forest-400 shrink-0">{d.timeRange}</span>
+                  {d.notes && <span className="text-xs text-gray-400 truncate">{d.notes}</span>}
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <button onClick={() => startEdit(d)} className="text-xs text-gray-400 hover:text-forest-400 font-medium px-1 transition-colors">Edit</button>
+                  <button onClick={() => deleteDate(d.id)} className="text-xs text-gray-600 hover:text-red-400 font-medium px-1 transition-colors">✕</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {addingNew && (
+          <div className="rounded-xl border border-forest-700 bg-gray-800 px-4 py-3">
+            <p className="text-xs font-semibold text-forest-400 mb-1">New date</p>
+            <InlineForm onSave={saveNew} />
+          </div>
+        )}
+      </div>
+
+      {dates.filter(d => d.date < new Date().toISOString().slice(0, 10)).length > 0 && (
+        <p className="text-[10px] text-gray-600 mt-3">
+          {dates.filter(d => d.date < new Date().toISOString().slice(0, 10)).length} past date(s) hidden — visible on ProFound Finds only shows upcoming.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props) {
   const [items, setItems] = useState<Item[]>(initialItems);
@@ -1089,6 +1283,8 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
 
   return (
     <div>
+      <OpenHouseManager />
+
       {/* Summary chips */}
       <div className="flex flex-wrap gap-3 mb-5">
         {[
