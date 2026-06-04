@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOpenHouseDates } from "@/lib/airtable";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
