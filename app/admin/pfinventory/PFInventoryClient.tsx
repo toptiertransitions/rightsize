@@ -848,6 +848,44 @@ function SquareCleanupModal({ onClose, onDone }: { onClose: () => void; onDone: 
 
 // ─── Open House Manager ───────────────────────────────────────────────────────
 const EMPTY_OHD = { date: "", timeRange: "", notes: "" };
+const OHD_INPUT_CLS = "bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-forest-500 w-full placeholder:text-gray-500";
+
+function OpenHouseInlineForm({ draft, setDraft, saving, error, onSave, onCancel }: {
+  draft: typeof EMPTY_OHD;
+  setDraft: React.Dispatch<React.SetStateAction<typeof EMPTY_OHD>>;
+  saving: boolean;
+  error: string;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Date *</label>
+        <input type="date" value={draft.date} onChange={e => setDraft(d => ({ ...d, date: e.target.value }))}
+          className={OHD_INPUT_CLS} autoFocus />
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Time Range *</label>
+        <input value={draft.timeRange} onChange={e => setDraft(d => ({ ...d, timeRange: e.target.value }))}
+          placeholder="10:00 AM – 2:00 PM" className={OHD_INPUT_CLS} />
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Notes</label>
+        <input value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+          placeholder="e.g. Estate furniture preview" className={OHD_INPUT_CLS} />
+      </div>
+      {error && <p className="text-xs text-red-400 sm:col-span-3">{error}</p>}
+      <div className="flex gap-2 sm:col-span-3">
+        <button onClick={onSave} disabled={saving || !draft.date || !draft.timeRange.trim()}
+          className="px-4 py-1.5 bg-forest-600 text-white text-xs font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors">
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">Cancel</button>
+      </div>
+    </div>
+  );
+}
 
 function OpenHouseManager() {
   const [dates, setDates] = useState<OpenHouseDate[]>([]);
@@ -944,38 +982,6 @@ function OpenHouseManager() {
     finally { setSaving(false); }
   }
 
-  const inputCls = "bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-forest-500 w-full placeholder:text-gray-500";
-
-  function InlineForm({ onSave }: { onSave: () => void }) {
-    return (
-      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Date *</label>
-          <input type="date" value={draft.date} onChange={e => setDraft(d => ({ ...d, date: e.target.value }))}
-            className={inputCls} autoFocus />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Time Range *</label>
-          <input value={draft.timeRange} onChange={e => setDraft(d => ({ ...d, timeRange: e.target.value }))}
-            placeholder="10:00 AM – 2:00 PM" className={inputCls} />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Notes</label>
-          <input value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
-            placeholder="e.g. Estate furniture preview" className={inputCls} />
-        </div>
-        {error && <p className="text-xs text-red-400 sm:col-span-3">{error}</p>}
-        <div className="flex gap-2 sm:col-span-3">
-          <button onClick={onSave} disabled={saving || !draft.date || !draft.timeRange.trim()}
-            className="px-4 py-1.5 bg-forest-600 text-white text-xs font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors">
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button onClick={cancelEdit} className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">Cancel</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
       <div className="flex items-center justify-between mb-4">
@@ -1005,7 +1011,7 @@ function OpenHouseManager() {
             {editingId === d.id ? (
               <>
                 <p className="text-xs font-semibold text-forest-400 mb-1">{fmt(d.date)}</p>
-                <InlineForm onSave={saveEdit} />
+                <OpenHouseInlineForm draft={draft} setDraft={setDraft} saving={saving} error={error} onSave={saveEdit} onCancel={cancelEdit} />
               </>
             ) : (
               <div className="flex items-center justify-between gap-3">
@@ -1026,7 +1032,7 @@ function OpenHouseManager() {
         {addingNew && (
           <div className="rounded-xl border border-forest-700 bg-gray-800 px-4 py-3">
             <p className="text-xs font-semibold text-forest-400 mb-1">New date</p>
-            <InlineForm onSave={saveNew} />
+            <OpenHouseInlineForm draft={draft} setDraft={setDraft} saving={saving} error={error} onSave={saveNew} onCancel={cancelEdit} />
           </div>
         )}
       </div>
