@@ -1052,19 +1052,10 @@ export async function getPlanEntriesForTenant(tenantId: string): Promise<PlanEnt
 export async function getPlanEntriesForTenants(tenantIds: string[]): Promise<PlanEntry[]> {
   if (tenantIds.length === 0) return [];
   if (tenantIds.length === 1) return getPlanEntriesForTenant(tenantIds[0]);
-  const orParts = tenantIds.map(id => `{TenantID} = "${id}"`).join(",");
-  const formula = encodeURIComponent(`OR(${orParts})`);
-  const records: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const qs = `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
-    const res = await planFetch(qs);
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    records.push(...(data.records as AirtableRecord[]));
-    offset = data.offset;
-  } while (offset);
-  return records.map(mapPlanEntry);
+  // Parallel per-tenant fetches instead of a single OR formula — the OR approach
+  // hits Airtable's URL length limit once the project count grows large enough.
+  const results = await Promise.all(tenantIds.map(id => getPlanEntriesForTenant(id).catch(() => [])));
+  return results.flat().sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
