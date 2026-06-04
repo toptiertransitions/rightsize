@@ -1138,6 +1138,15 @@ export interface InventoryContainer {
   isActive: boolean;
 }
 
+export interface StorageUnit {
+  id: string;
+  name: string;
+  address: string;
+  unitNumber: string;
+  accessCode: string;
+  lockSituation: string;
+}
+
 // ─── Subcontractor ────────────────────────────────────────────────────────────
 export interface Subcontractor {
   id: string;

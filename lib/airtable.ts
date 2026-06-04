@@ -4597,6 +4597,65 @@ export async function deleteInventoryContainer(id: string): Promise<void> {
   await base(AIRTABLE_TABLES.SUPPLY_INVENTORY).destroy(id);
 }
 
+// ─── Supply Storage Units ─────────────────────────────────────────────────────
+
+function mapStorageUnit(record: Airtable.Record<Airtable.FieldSet>): import("./types").StorageUnit {
+  const f = record.fields;
+  return {
+    id: record.id,
+    name: toStr(f["Name"]),
+    address: toStr(f["Address"]),
+    unitNumber: toStr(f["UnitNumber"]),
+    accessCode: toStr(f["AccessCode"]),
+    lockSituation: toStr(f["LockSituation"]),
+  };
+}
+
+export async function getStorageUnits(): Promise<import("./types").StorageUnit[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS)
+    .select({ sort: [{ field: "Name", direction: "asc" }] })
+    .all();
+  return records.map(mapStorageUnit);
+}
+
+export async function createStorageUnit(data: {
+  name: string;
+  address?: string;
+  unitNumber?: string;
+  accessCode?: string;
+  lockSituation?: string;
+}): Promise<import("./types").StorageUnit> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = { Name: data.name };
+  if (data.address) fields["Address"] = data.address;
+  if (data.unitNumber) fields["UnitNumber"] = data.unitNumber;
+  if (data.accessCode) fields["AccessCode"] = data.accessCode;
+  if (data.lockSituation) fields["LockSituation"] = data.lockSituation;
+  const record = await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS).create(fields);
+  return mapStorageUnit(record);
+}
+
+export async function updateStorageUnit(
+  id: string,
+  data: Partial<{ name: string; address: string; unitNumber: string; accessCode: string; lockSituation: string }>
+): Promise<import("./types").StorageUnit> {
+  const base = getBase();
+  const fields: Airtable.FieldSet = {};
+  if (data.name !== undefined) fields["Name"] = data.name;
+  if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.unitNumber !== undefined) fields["UnitNumber"] = data.unitNumber;
+  if (data.accessCode !== undefined) fields["AccessCode"] = data.accessCode;
+  if (data.lockSituation !== undefined) fields["LockSituation"] = data.lockSituation;
+  const record = await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS).update(id, fields);
+  return mapStorageUnit(record);
+}
+
+export async function deleteStorageUnit(id: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS).destroy(id);
+}
+
 // ─── Subcontractors ───────────────────────────────────────────────────────────
 
 function mapSubcontractor(record: Airtable.Record<Airtable.FieldSet>): import("./types").Subcontractor {

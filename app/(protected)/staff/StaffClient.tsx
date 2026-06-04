@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useId, useRef, useEffect } from "react";
 import Image from "next/image";
-import type { StaffMember, WeeklySchedule, TimeOffEntry, CrateLocation, InventoryContainer, InventoryItem, Subcontractor } from "@/lib/types";
+import type { StaffMember, WeeklySchedule, TimeOffEntry, CrateLocation, InventoryContainer, InventoryItem, Subcontractor, StorageUnit } from "@/lib/types";
 import { StaffCalendarTab } from "./StaffCalendarTab";
 import { LocationMgmtTab } from "./LocationMgmtTab";
 import { StaffGoalsTab } from "./StaffGoalsTab";
@@ -709,14 +709,231 @@ function InventoryModal({ containers: initialContainers, onClose, onChange }: In
   );
 }
 
+// ─── Storage Locations Section ────────────────────────────────────────────────
+
+const EMPTY_UNIT: Omit<StorageUnit, "id"> = { name: "", address: "", unitNumber: "", accessCode: "", lockSituation: "" };
+
+function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[] }) {
+  const [units, setUnits] = useState<StorageUnit[]>(initialUnits);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Omit<StorageUnit, "id">>(EMPTY_UNIT);
+  const [saving, setSaving] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [error, setError] = useState("");
+
+  function startEdit(unit: StorageUnit) {
+    setAddingNew(false);
+    setEditingId(unit.id);
+    setDraft({ name: unit.name, address: unit.address, unitNumber: unit.unitNumber, accessCode: unit.accessCode, lockSituation: unit.lockSituation });
+    setError("");
+  }
+
+  function startAdd() {
+    setEditingId(null);
+    setDraft(EMPTY_UNIT);
+    setAddingNew(true);
+    setError("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setAddingNew(false);
+    setDraft(EMPTY_UNIT);
+    setError("");
+  }
+
+  async function saveEdit() {
+    if (!draft.name.trim()) { setError("Name is required"); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/supply/storage-locations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, ...draft }),
+      });
+      if (!res.ok) throw new Error();
+      const { unit } = await res.json();
+      setUnits(prev => prev.map(u => u.id === editingId ? unit : u));
+      setEditingId(null);
+    } catch { setError("Failed to save"); }
+    finally { setSaving(false); }
+  }
+
+  async function saveNew() {
+    if (!draft.name.trim()) { setError("Name is required"); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/supply/storage-locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      if (!res.ok) throw new Error();
+      const { unit } = await res.json();
+      setUnits(prev => [...prev, unit]);
+      setAddingNew(false);
+      setDraft(EMPTY_UNIT);
+    } catch { setError("Failed to add location"); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteUnit(id: string) {
+    if (!confirm("Remove this storage location?")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/supply/storage-locations?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setUnits(prev => prev.filter(u => u.id !== id));
+      if (editingId === id) cancelEdit();
+    } catch { setError("Failed to delete"); }
+    finally { setSaving(false); }
+  }
+
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-400 bg-white placeholder:text-gray-400";
+
+  function EditForm({ onSave }: { onSave: () => void }) {
+    return (
+      <div className="mt-3 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Name *</label>
+            <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+              placeholder="e.g. Public Storage River North"
+              className={inputCls} autoFocus />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Unit Number</label>
+            <input value={draft.unitNumber} onChange={e => setDraft(d => ({ ...d, unitNumber: e.target.value }))}
+              placeholder="e.g. 4B"
+              className={inputCls} />
+          </div>
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Address</label>
+          <input value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))}
+            placeholder="e.g. 123 N Wells St, Chicago IL 60610"
+            className={inputCls} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Access Code</label>
+            <input value={draft.accessCode} onChange={e => setDraft(d => ({ ...d, accessCode: e.target.value }))}
+              placeholder="e.g. #4291"
+              className={inputCls} />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Lock Situation</label>
+            <input value={draft.lockSituation} onChange={e => setDraft(d => ({ ...d, lockSituation: e.target.value }))}
+              placeholder="e.g. Lockbox on door handle"
+              className={inputCls} />
+          </div>
+        </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div className="flex items-center gap-2 pt-1">
+          <button onClick={onSave} disabled={saving || !draft.name.trim()}
+            className="px-4 py-1.5 bg-forest-600 text-white text-xs font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors">
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button onClick={cancelEdit} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Storage Locations</p>
+          <p className="text-sm text-gray-500">{units.length} location{units.length !== 1 ? "s" : ""}</p>
+        </div>
+        {!addingNew && (
+          <button onClick={startAdd}
+            className="text-xs font-medium text-forest-600 hover:text-forest-700 transition-colors">
+            + Add Location
+          </button>
+        )}
+      </div>
+
+      {units.length === 0 && !addingNew && (
+        <p className="text-xs text-gray-400 italic">No storage locations added yet.</p>
+      )}
+
+      <div className="space-y-2">
+        {units.map(unit => (
+          <div key={unit.id} className={`rounded-xl border transition-colors ${editingId === unit.id ? "border-forest-200 bg-forest-50 p-4" : "border-gray-100 bg-gray-50 px-4 py-3 group"}`}>
+            {editingId === unit.id ? (
+              <>
+                <p className="text-sm font-semibold text-gray-900">{unit.name}</p>
+                <EditForm onSave={saveEdit} />
+              </>
+            ) : (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{unit.name}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                    {unit.address && (
+                      <p className="text-xs text-gray-500 truncate">{unit.address}{unit.unitNumber ? ` · Unit ${unit.unitNumber}` : ""}</p>
+                    )}
+                    {!unit.address && unit.unitNumber && (
+                      <p className="text-xs text-gray-500">Unit {unit.unitNumber}</p>
+                    )}
+                  </div>
+                  {(unit.accessCode || unit.lockSituation) && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                      {unit.accessCode && (
+                        <span className="text-xs text-gray-500">
+                          <span className="font-medium text-gray-700">Code:</span> {unit.accessCode}
+                        </span>
+                      )}
+                      {unit.lockSituation && (
+                        <span className="text-xs text-gray-500">
+                          <span className="font-medium text-gray-700">Lock:</span> {unit.lockSituation}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <button onClick={() => startEdit(unit)}
+                    className="text-xs text-gray-400 hover:text-forest-600 font-medium px-1 transition-colors">
+                    Edit
+                  </button>
+                  <button onClick={() => deleteUnit(unit.id)}
+                    className="text-xs text-gray-300 hover:text-red-500 font-medium px-1 transition-colors">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* New location form */}
+        {addingNew && (
+          <div className="rounded-xl border border-forest-200 bg-forest-50 px-4 py-3">
+            <p className="text-xs font-semibold text-gray-500 mb-1">New location</p>
+            <EditForm onSave={saveNew} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Supply Tracking Tab ──────────────────────────────────────────────────────
 interface SupplyProps {
   crateLocations: CrateLocation[];
   inventoryContainers: InventoryContainer[];
+  storageUnits: StorageUnit[];
   tenants: { id: string; name: string }[];
 }
 
-function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers: initialInventory, tenants }: SupplyProps) {
+function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers: initialInventory, storageUnits, tenants }: SupplyProps) {
   const [crateLocations, setCrateLocations] = useState(initialCrates);
   const [inventoryContainers, setInventoryContainers] = useState(initialInventory);
   const [showCrates, setShowCrates] = useState(false);
@@ -809,6 +1026,8 @@ function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers:
           </button>
         </div>
       </div>
+
+      <StorageLocationsSection initialUnits={storageUnits} />
 
       {showCrates && (
         <CrateTrackerModal
@@ -1307,12 +1526,13 @@ interface Props {
   locationMembers: StaffMember[];
   crateLocations: CrateLocation[];
   inventoryContainers: InventoryContainer[];
+  storageUnits: StorageUnit[];
   tenants: { id: string; name: string }[];
   subcontractors: Subcontractor[];
   canEdit?: boolean; // true for TTTManager and TTTAdmin
 }
 
-export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, tenants, subcontractors, canEdit = false }: Props) {
+export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, storageUnits, tenants, subcontractors, canEdit = false }: Props) {
   const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
@@ -1411,6 +1631,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
         <SupplyTrackingTab
           crateLocations={crateLocations}
           inventoryContainers={inventoryContainers}
+          storageUnits={storageUnits}
           tenants={tenants}
         />
       )}

@@ -1,6 +1,6 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getSystemRole, getStaffMembers, getCrateLocations, getInventoryContainers, getTenants, getSubcontractors } from "@/lib/airtable";
+import { getSystemRole, getStaffMembers, getCrateLocations, getInventoryContainers, getTenants, getSubcontractors, getStorageUnits } from "@/lib/airtable";
 import { StaffClient } from "./StaffClient";
 
 export default async function StaffPage() {
@@ -10,12 +10,13 @@ export default async function StaffPage() {
   const role = await getSystemRole(userId);
   if (role !== "TTTSales" && role !== "TTTManager" && role !== "TTTAdmin") redirect("/home");
 
-  const [members, crateLocations, inventoryContainers, allTenants, subcontractors] = await Promise.all([
+  const [members, crateLocations, inventoryContainers, allTenants, subcontractors, storageUnits] = await Promise.all([
     getStaffMembers().catch(() => []),
     getCrateLocations().catch(() => []),
     getInventoryContainers().catch(() => []),
     getTenants().catch(() => []),
     getSubcontractors().catch(() => []),
+    getStorageUnits().catch(() => []),
   ]);
 
   const active = members.filter((m) => m.isActive && m.role !== "TTTSales");
@@ -45,6 +46,7 @@ export default async function StaffPage() {
       locationMembers={allActive}
       crateLocations={crateLocations}
       inventoryContainers={inventoryContainers}
+      storageUnits={storageUnits}
       tenants={activeTenants}
       subcontractors={subcontractors}
       canEdit={canEdit}
