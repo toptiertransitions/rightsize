@@ -712,6 +712,65 @@ function InventoryModal({ containers: initialContainers, onClose, onChange }: In
 // ─── Storage Locations Section ────────────────────────────────────────────────
 
 const EMPTY_UNIT: Omit<StorageUnit, "id"> = { name: "", address: "", unitNumber: "", accessCode: "", lockSituation: "" };
+const STORAGE_INPUT_CLS = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-400 bg-white placeholder:text-gray-400";
+
+function StorageEditForm({ draft, setDraft, saving, error, onSave, onCancel }: {
+  draft: Omit<StorageUnit, "id">;
+  setDraft: React.Dispatch<React.SetStateAction<Omit<StorageUnit, "id">>>;
+  saving: boolean;
+  error: string;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Name *</label>
+          <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+            placeholder="e.g. Public Storage River North"
+            className={STORAGE_INPUT_CLS} autoFocus />
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Unit Number</label>
+          <input value={draft.unitNumber} onChange={e => setDraft(d => ({ ...d, unitNumber: e.target.value }))}
+            placeholder="e.g. 4B"
+            className={STORAGE_INPUT_CLS} />
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Address</label>
+        <input value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))}
+          placeholder="e.g. 123 N Wells St, Chicago IL 60610"
+          className={STORAGE_INPUT_CLS} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Access Code</label>
+          <input value={draft.accessCode} onChange={e => setDraft(d => ({ ...d, accessCode: e.target.value }))}
+            placeholder="e.g. #4291"
+            className={STORAGE_INPUT_CLS} />
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Lock Situation</label>
+          <input value={draft.lockSituation} onChange={e => setDraft(d => ({ ...d, lockSituation: e.target.value }))}
+            placeholder="e.g. Lockbox on door handle"
+            className={STORAGE_INPUT_CLS} />
+        </div>
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex items-center gap-2 pt-1">
+        <button onClick={onSave} disabled={saving || !draft.name.trim()}
+          className="px-4 py-1.5 bg-forest-600 text-white text-xs font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors">
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[] }) {
   const [units, setUnits] = useState<StorageUnit[]>(initialUnits);
@@ -791,59 +850,6 @@ function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[]
     finally { setSaving(false); }
   }
 
-  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-400 bg-white placeholder:text-gray-400";
-
-  function EditForm({ onSave }: { onSave: () => void }) {
-    return (
-      <div className="mt-3 space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Name *</label>
-            <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-              placeholder="e.g. Public Storage River North"
-              className={inputCls} autoFocus />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Unit Number</label>
-            <input value={draft.unitNumber} onChange={e => setDraft(d => ({ ...d, unitNumber: e.target.value }))}
-              placeholder="e.g. 4B"
-              className={inputCls} />
-          </div>
-        </div>
-        <div>
-          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Address</label>
-          <input value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))}
-            placeholder="e.g. 123 N Wells St, Chicago IL 60610"
-            className={inputCls} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Access Code</label>
-            <input value={draft.accessCode} onChange={e => setDraft(d => ({ ...d, accessCode: e.target.value }))}
-              placeholder="e.g. #4291"
-              className={inputCls} />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Lock Situation</label>
-            <input value={draft.lockSituation} onChange={e => setDraft(d => ({ ...d, lockSituation: e.target.value }))}
-              placeholder="e.g. Lockbox on door handle"
-              className={inputCls} />
-          </div>
-        </div>
-        {error && <p className="text-xs text-red-500">{error}</p>}
-        <div className="flex items-center gap-2 pt-1">
-          <button onClick={onSave} disabled={saving || !draft.name.trim()}
-            className="px-4 py-1.5 bg-forest-600 text-white text-xs font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors">
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button onClick={cancelEdit} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-5">
       <div className="flex items-center justify-between mb-4">
@@ -869,7 +875,7 @@ function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[]
             {editingId === unit.id ? (
               <>
                 <p className="text-sm font-semibold text-gray-900">{unit.name}</p>
-                <EditForm onSave={saveEdit} />
+                <StorageEditForm draft={draft} setDraft={setDraft} saving={saving} error={error} onSave={saveEdit} onCancel={cancelEdit} />
               </>
             ) : (
               <div className="flex items-start justify-between gap-3">
@@ -917,7 +923,7 @@ function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[]
         {addingNew && (
           <div className="rounded-xl border border-forest-200 bg-forest-50 px-4 py-3">
             <p className="text-xs font-semibold text-gray-500 mb-1">New location</p>
-            <EditForm onSave={saveNew} />
+            <StorageEditForm draft={draft} setDraft={setDraft} saving={saving} error={error} onSave={saveNew} onCancel={cancelEdit} />
           </div>
         )}
       </div>
