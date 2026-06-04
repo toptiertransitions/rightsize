@@ -711,7 +711,7 @@ function InventoryModal({ containers: initialContainers, onClose, onChange }: In
 
 // ─── Storage Locations Section ────────────────────────────────────────────────
 
-const EMPTY_UNIT: Omit<StorageUnit, "id"> = { name: "", address: "", unitNumber: "", accessCode: "", lockSituation: "" };
+const EMPTY_UNIT: Omit<StorageUnit, "id"> = { name: "", address: "", unitNumber: "", accessCode: "", lockSituation: "", monthlyCost: "" };
 const STORAGE_INPUT_CLS = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-400 bg-white placeholder:text-gray-400";
 
 function StorageEditForm({ draft, setDraft, saving, error, onSave, onCancel }: {
@@ -752,11 +752,17 @@ function StorageEditForm({ draft, setDraft, saving, error, onSave, onCancel }: {
             className={STORAGE_INPUT_CLS} />
         </div>
         <div>
-          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Lock Situation</label>
-          <input value={draft.lockSituation} onChange={e => setDraft(d => ({ ...d, lockSituation: e.target.value }))}
-            placeholder="e.g. Lockbox on door handle"
+          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Monthly Cost</label>
+          <input value={draft.monthlyCost} onChange={e => setDraft(d => ({ ...d, monthlyCost: e.target.value }))}
+            placeholder="e.g. $250/mo"
             className={STORAGE_INPUT_CLS} />
         </div>
+      </div>
+      <div>
+        <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Lock Situation</label>
+        <input value={draft.lockSituation} onChange={e => setDraft(d => ({ ...d, lockSituation: e.target.value }))}
+          placeholder="e.g. Lockbox on door handle"
+          className={STORAGE_INPUT_CLS} />
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex items-center gap-2 pt-1">
@@ -783,7 +789,7 @@ function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[]
   function startEdit(unit: StorageUnit) {
     setAddingNew(false);
     setEditingId(unit.id);
-    setDraft({ name: unit.name, address: unit.address, unitNumber: unit.unitNumber, accessCode: unit.accessCode, lockSituation: unit.lockSituation });
+    setDraft({ name: unit.name, address: unit.address, unitNumber: unit.unitNumber, accessCode: unit.accessCode, lockSituation: unit.lockSituation, monthlyCost: unit.monthlyCost });
     setError("");
   }
 
@@ -889,11 +895,16 @@ function StorageLocationsSection({ initialUnits }: { initialUnits: StorageUnit[]
                       <p className="text-xs text-gray-500">Unit {unit.unitNumber}</p>
                     )}
                   </div>
-                  {(unit.accessCode || unit.lockSituation) && (
+                  {(unit.accessCode || unit.lockSituation || unit.monthlyCost) && (
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
                       {unit.accessCode && (
                         <span className="text-xs text-gray-500">
                           <span className="font-medium text-gray-700">Code:</span> {unit.accessCode}
+                        </span>
+                      )}
+                      {unit.monthlyCost && (
+                        <span className="text-xs text-gray-500">
+                          <span className="font-medium text-gray-700">Cost:</span> {unit.monthlyCost}
                         </span>
                       )}
                       {unit.lockSituation && (
@@ -944,6 +955,8 @@ function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers:
   const [inventoryContainers, setInventoryContainers] = useState(initialInventory);
   const [showCrates, setShowCrates] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
+  const [cratesExpanded, setCratesExpanded] = useState(false);
+  const [inventoryExpanded, setInventoryExpanded] = useState(false);
 
   const totalCrates = crateLocations.reduce((s, l) => s + l.crateCount, 0);
   const totalItems = inventoryContainers.reduce((s, c) => s + c.items.reduce((ss, i) => ss + i.quantity, 0), 0);
@@ -973,14 +986,17 @@ function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers:
           {/* Mini location list */}
           {crateLocations.length > 0 && (
             <div className="space-y-1 mb-4">
-              {crateLocations.slice(0, 4).map(l => (
+              {(cratesExpanded ? crateLocations : crateLocations.slice(0, 4)).map(l => (
                 <div key={l.id} className="flex items-center justify-between text-xs">
                   <span className="text-gray-500 truncate pr-2">{l.name}</span>
                   <span className="font-semibold text-gray-700 shrink-0">{l.crateCount}</span>
                 </div>
               ))}
               {crateLocations.length > 4 && (
-                <p className="text-xs text-gray-400">+{crateLocations.length - 4} more</p>
+                <button onClick={() => setCratesExpanded(e => !e)}
+                  className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors mt-0.5">
+                  {cratesExpanded ? "Show less" : `+${crateLocations.length - 4} more`}
+                </button>
               )}
             </div>
           )}
@@ -1010,7 +1026,7 @@ function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers:
           {/* Mini container list */}
           {inventoryContainers.length > 0 && (
             <div className="space-y-1 mb-4">
-              {inventoryContainers.slice(0, 4).map(c => (
+              {(inventoryExpanded ? inventoryContainers : inventoryContainers.slice(0, 4)).map(c => (
                 <div key={c.id} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5 min-w-0 pr-2">
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${c.containerType === "HQ" ? "bg-purple-50 text-purple-600" : "bg-amber-50 text-amber-600"}`}>
@@ -1022,7 +1038,10 @@ function SupplyTrackingTab({ crateLocations: initialCrates, inventoryContainers:
                 </div>
               ))}
               {inventoryContainers.length > 4 && (
-                <p className="text-xs text-gray-400">+{inventoryContainers.length - 4} more</p>
+                <button onClick={() => setInventoryExpanded(e => !e)}
+                  className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors mt-0.5">
+                  {inventoryExpanded ? "Show less" : `+${inventoryContainers.length - 4} more`}
+                </button>
               )}
             </div>
           )}

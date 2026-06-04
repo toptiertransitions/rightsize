@@ -1145,6 +1145,7 @@ export interface StorageUnit {
   unitNumber: string;
   accessCode: string;
   lockSituation: string;
+  monthlyCost: string;
 }
 
 // ─── Subcontractor ────────────────────────────────────────────────────────────

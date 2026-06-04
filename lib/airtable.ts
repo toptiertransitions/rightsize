@@ -4608,6 +4608,7 @@ function mapStorageUnit(record: Airtable.Record<Airtable.FieldSet>): import("./t
     unitNumber: toStr(f["UnitNumber"]),
     accessCode: toStr(f["AccessCode"]),
     lockSituation: toStr(f["LockSituation"]),
+    monthlyCost: toStr(f["MonthlyCost"]),
   };
 }
 
@@ -4625,6 +4626,7 @@ export async function createStorageUnit(data: {
   unitNumber?: string;
   accessCode?: string;
   lockSituation?: string;
+  monthlyCost?: string;
 }): Promise<import("./types").StorageUnit> {
   const base = getBase();
   const fields: Airtable.FieldSet = { Name: data.name };
@@ -4632,13 +4634,14 @@ export async function createStorageUnit(data: {
   if (data.unitNumber) fields["UnitNumber"] = data.unitNumber;
   if (data.accessCode) fields["AccessCode"] = data.accessCode;
   if (data.lockSituation) fields["LockSituation"] = data.lockSituation;
+  if (data.monthlyCost) fields["MonthlyCost"] = data.monthlyCost;
   const record = await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS).create(fields);
   return mapStorageUnit(record);
 }
 
 export async function updateStorageUnit(
   id: string,
-  data: Partial<{ name: string; address: string; unitNumber: string; accessCode: string; lockSituation: string }>
+  data: Partial<{ name: string; address: string; unitNumber: string; accessCode: string; lockSituation: string; monthlyCost: string }>
 ): Promise<import("./types").StorageUnit> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -4647,6 +4650,7 @@ export async function updateStorageUnit(
   if (data.unitNumber !== undefined) fields["UnitNumber"] = data.unitNumber;
   if (data.accessCode !== undefined) fields["AccessCode"] = data.accessCode;
   if (data.lockSituation !== undefined) fields["LockSituation"] = data.lockSituation;
+  if (data.monthlyCost !== undefined) fields["MonthlyCost"] = data.monthlyCost;
   const record = await base(AIRTABLE_TABLES.SUPPLY_STORAGE_UNITS).update(id, fields);
   return mapStorageUnit(record);
 }

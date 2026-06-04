@@ -21,10 +21,10 @@ export async function POST(req: NextRequest) {
   if (!await guardManager(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
-  const { name, address, unitNumber, accessCode, lockSituation } = body;
+  const { name, address, unitNumber, accessCode, lockSituation, monthlyCost } = body;
   if (!name?.trim()) return NextResponse.json({ error: "name required" }, { status: 400 });
 
-  const unit = await createStorageUnit({ name: name.trim(), address, unitNumber, accessCode, lockSituation });
+  const unit = await createStorageUnit({ name: name.trim(), address, unitNumber, accessCode, lockSituation, monthlyCost });
   return NextResponse.json({ unit });
 }
 
@@ -43,6 +43,7 @@ export async function PATCH(req: NextRequest) {
     ...(updates.unitNumber !== undefined ? { unitNumber: updates.unitNumber } : {}),
     ...(updates.accessCode !== undefined ? { accessCode: updates.accessCode } : {}),
     ...(updates.lockSituation !== undefined ? { lockSituation: updates.lockSituation } : {}),
+    ...(updates.monthlyCost !== undefined ? { monthlyCost: updates.monthlyCost } : {}),
   });
   return NextResponse.json({ unit });
 }
