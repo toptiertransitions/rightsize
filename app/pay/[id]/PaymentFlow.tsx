@@ -98,10 +98,10 @@ export function PaymentFlow({
 
   useEffect(() => {
     if (step !== "card_form") return;
+    if (tokenizerRef.current) return; // already initialized — don't destroy it on error recovery
 
     setFpReady(false);
     setFpLoadError("");
-    tokenizerRef.current = null;
 
     if (!fluidpayPublicKey) {
       setFpLoadError("Payment fields are not configured. Please contact your coordinator.");
