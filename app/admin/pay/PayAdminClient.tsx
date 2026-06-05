@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Pagination } from "../components/Pagination";
+import type { AuditRow, AuditFlagType } from "@/app/api/admin/pay/audit/route";
 
 const PAGE_SIZE = 25;
 const TODAY = new Date().toISOString().slice(0, 10);
 const FIRST_OF_MONTH = TODAY.slice(0, 8) + "01";
 
-type Tab = "hours" | "commission" | "mileage" | "travel" | "expenses";
+type Tab = "hours" | "commission" | "mileage" | "travel" | "expenses" | "audit";
 type SortDir = "asc" | "desc";
 
 interface StaffOption {
@@ -883,16 +884,206 @@ function TravelTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   );
 }
 
+// ─── Audit Tab ────────────────────────────────────────────────────────────────
+const FLAG_META: Record<AuditFlagType, { label: string; color: string; bg: string; border: string }> = {
+  outside_window:      { label: "Outside Window",    color: "text-amber-300",  bg: "bg-amber-900/30",  border: "border-amber-700" },
+  wrong_focus_area:    { label: "Wrong Focus Area",  color: "text-red-300",    bg: "bg-red-900/30",    border: "border-red-700"   },
+  missing_travel_time: { label: "No Travel Time",    color: "text-blue-300",   bg: "bg-blue-900/30",   border: "border-blue-700"  },
+  missing_travel_miles:{ label: "No Travel Miles",   color: "text-purple-300", bg: "bg-purple-900/30", border: "border-purple-700"},
+};
+
+function FlagBadge({ type, detail }: { type: AuditFlagType; detail: string }) {
+  const m = FLAG_META[type];
+  return (
+    <span
+      title={detail}
+      className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border ${m.bg} ${m.color} ${m.border} cursor-help`}
+    >
+      {m.label}
+    </span>
+  );
+}
+
+function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
+  const [from, setFrom] = useState(FIRST_OF_MONTH);
+  const [to, setTo] = useState(TODAY);
+  const [staffId, setStaffId] = useState("");
+  const [typeFilter, setTypeFilter] = useState<AuditFlagType | "all">("all");
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [summary, setSummary] = useState<Record<AuditFlagType, number>>({ outside_window: 0, wrong_focus_area: 0, missing_travel_time: 0, missing_travel_miles: 0 });
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const params = new URLSearchParams({ from, to });
+      if (staffId) params.set("staffId", staffId);
+      const res = await fetch(`/api/admin/pay/audit?${params}`);
+      if (!res.ok) throw new Error((await res.json()).error);
+      const data = await res.json();
+      setRows(data.rows); setSummary(data.summary); setTotal(data.total);
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); }
+  }, [from, to, staffId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = typeFilter === "all" ? rows : rows.filter(r => r.flags.some(f => f.type === typeFilter));
+
+  function toggleExpand(id: string) {
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  const inputCls = "h-8 px-2 text-sm rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-1 focus:ring-forest-500";
+
+  return (
+    <div>
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        {(Object.entries(FLAG_META) as [AuditFlagType, typeof FLAG_META[AuditFlagType]][]).map(([type, meta]) => (
+          <button
+            key={type}
+            onClick={() => setTypeFilter(prev => prev === type ? "all" : type)}
+            className={`rounded-xl border p-3 text-left transition-all ${
+              typeFilter === type
+                ? `${meta.bg} ${meta.border} ring-1 ring-inset ${meta.border}`
+                : "bg-gray-900 border-gray-800 hover:border-gray-700"
+            }`}
+          >
+            <p className={`text-2xl font-bold ${meta.color}`}>{summary[type]}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{meta.label}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
+        <span className="text-gray-500 text-sm">to</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)} className={inputCls} />
+        <StaffCombobox staffMembers={staffMembers} value={staffId} onChange={setStaffId} />
+        {typeFilter !== "all" && (
+          <button onClick={() => setTypeFilter("all")} className="h-8 px-3 text-sm rounded-lg border border-gray-700 bg-gray-800 text-gray-300 hover:text-white transition-colors">
+            Clear filter
+          </button>
+        )}
+        <button onClick={load} className="h-8 px-3 text-sm rounded-lg border border-gray-700 bg-gray-800 text-gray-300 hover:text-white transition-colors">
+          Refresh
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
+
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-gray-400">
+          {loading ? "Checking…" : `${filtered.length} issue${filtered.length !== 1 ? "s" : ""} found`}
+          {typeFilter !== "all" && !loading && ` (filtered to ${FLAG_META[typeFilter].label})`}
+        </p>
+        {total > 0 && !loading && (
+          <p className="text-xs text-gray-500">{total} flagged entries total across {Object.values(summary).reduce((a, b) => a + b, 0)} issues</p>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="py-12 text-center text-gray-500 text-sm">Analyzing entries…</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-gray-400 text-sm font-medium">No issues found</p>
+          <p className="text-gray-600 text-xs mt-1">All time logs match their scheduled shifts for this period</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-gray-800 overflow-hidden">
+          {filtered.map((row, i) => {
+            const isOpen = expanded.has(row.entryId);
+            return (
+              <div key={row.entryId} className={`${i > 0 ? "border-t border-gray-800" : ""}`}>
+                {/* Main row */}
+                <button
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors text-left"
+                  onClick={() => toggleExpand(row.entryId)}
+                >
+                  <svg
+                    className={`w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-white font-medium text-sm">{row.staffName}</span>
+                      <span className="text-gray-400 text-xs">{row.date}</span>
+                      <span className="text-gray-300 text-xs truncate max-w-[200px]">{row.projectName}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {row.flags.map((f, fi) => (
+                        <FlagBadge key={fi} type={f.type} detail={f.detail} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-right flex-shrink-0 text-xs text-gray-400 hidden sm:block">
+                    <div>{row.startTime} – {row.endTime}</div>
+                    <div className="mt-0.5 text-gray-500">{row.focusArea}</div>
+                  </div>
+                </button>
+
+                {/* Expanded detail */}
+                {isOpen && (
+                  <div className="px-11 pb-4 bg-gray-900/50 border-t border-gray-800/50">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Logged</p>
+                        <dl className="space-y-1 text-xs">
+                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Time</dt><dd className="text-gray-300">{row.startTime} – {row.endTime}</dd></div>
+                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Focus Area</dt><dd className="text-gray-300">{row.focusArea}</dd></div>
+                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Travel Miles</dt><dd className="text-gray-300">{row.travelMiles ?? "—"}</dd></div>
+                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Travel Time</dt><dd className="text-gray-300">{row.travelMinutes ? `${row.travelMinutes} min` : "—"}</dd></div>
+                        </dl>
+                      </div>
+                      {row.matchedShift && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Scheduled Shift</p>
+                          <dl className="space-y-1 text-xs">
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Activity</dt><dd className="text-gray-300">{row.matchedShift.activity}</dd></div>
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Window</dt><dd className="text-gray-300">{row.matchedShift.startTime ?? "—"} – {row.matchedShift.endTime ?? "—"}</dd></div>
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Location</dt><dd className="text-gray-300 truncate">{row.matchedShift.address ?? "—"}</dd></div>
+                          </dl>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-1">
+                      {row.flags.map((f, fi) => (
+                        <p key={fi} className={`text-xs ${FLAG_META[f.type].color}`}>
+                          <span className="font-medium">{f.label}:</span> {f.detail}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [tab, setTab] = useState<Tab>("hours");
 
-  const tabs: { id: Tab; label: string }[] = [
+  const tabs: { id: Tab; label: string; accent?: boolean }[] = [
     { id: "hours", label: "Hours" },
     { id: "commission", label: "Commission" },
     { id: "mileage", label: "Mileage" },
     { id: "travel", label: "Travel Time" },
     { id: "expenses", label: "Expenses" },
+    { id: "audit", label: "Audit", accent: true },
   ];
 
   return (
@@ -901,7 +1092,9 @@ export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.id ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"
+              tab === t.id
+                ? t.accent ? "bg-amber-700/70 text-amber-100" : "bg-gray-700 text-white"
+                : t.accent ? "text-amber-400 hover:text-amber-300" : "text-gray-400 hover:text-white"
             }`}>
             {t.label}
           </button>
@@ -913,6 +1106,7 @@ export function PayAdminClient({ staffMembers }: { staffMembers: StaffOption[] }
       {tab === "mileage" && <MileageTab staffMembers={staffMembers} />}
       {tab === "travel" && <TravelTab staffMembers={staffMembers} />}
       {tab === "expenses" && <ExpensesTab staffMembers={staffMembers} />}
+      {tab === "audit" && <AuditTab staffMembers={staffMembers} />}
     </div>
   );
 }

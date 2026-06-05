@@ -3989,12 +3989,20 @@ export async function deleteExpense(id: string): Promise<void> {
 
 // ─── Pay: range queries and bulk updates ──────────────────────────────────────
 
+// Use < next-day instead of <= today to include all entries on `to` regardless of
+// how the Airtable base interprets the date string (UTC vs workspace timezone).
+function dateToExclusiveUpperBound(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return next.toISOString().slice(0, 10);
+}
+
 export async function getTimeEntriesInRange(
   from: string,
   to: string,
   clerkUserId?: string
 ): Promise<TimeEntry[]> {
-  const parts = [`{Date} >= "${from}"`, `{Date} <= "${to}"`];
+  const parts = [`{Date} >= "${from}"`, `{Date} < "${dateToExclusiveUpperBound(to)}"`];
   if (clerkUserId) parts.push(`{ClerkUserId} = "${clerkUserId}"`);
   const formula = encodeURIComponent(`AND(${parts.join(", ")})`);
   const baseQs = `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc&sort[1][field]=CreatedAt&sort[1][direction]=asc`;
@@ -4018,7 +4026,7 @@ export async function getSoldItemsForCommission(
   const parts = [
     `{Status} = "Sold"`,
     `{SaleDate} >= "${from}"`,
-    `{SaleDate} <= "${to}"`,
+    `{SaleDate} < "${dateToExclusiveUpperBound(to)}"`,
     `{StaffSellerId} != ""`,
   ];
   if (staffSellerId) parts.push(`{StaffSellerId} = "${staffSellerId}"`);
@@ -4039,7 +4047,7 @@ export async function getReimbursableExpensesInRange(
 ): Promise<Expense[]> {
   const parts = [
     `{Date} >= "${from}"`,
-    `{Date} <= "${to}"`,
+    `{Date} < "${dateToExclusiveUpperBound(to)}"`,
   ];
   if (clerkUserId) parts.push(`{ClerkUserId} = "${clerkUserId}"`);
   const formula = encodeURIComponent(`AND(${parts.join(", ")})`);
