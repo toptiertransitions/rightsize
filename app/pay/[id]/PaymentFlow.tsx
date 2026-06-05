@@ -108,59 +108,75 @@ export function PaymentFlow({
       return;
     }
 
+    console.log("[FP] step=card_form, url:", fluidpayBaseUrl, "key prefix:", fluidpayPublicKey?.slice(0, 8));
+
     function initTokenizer() {
       const TokClass = (window as any).Tokenizer;
       if (!TokClass) {
+        console.error("[FP] Tokenizer class not found on window after script load");
         setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
         return;
       }
+      console.log("[FP] Tokenizer class found, initializing…");
 
       try {
         tokenizerRef.current = new TokClass({
           url: fluidpayBaseUrl,
           apikey: fluidpayPublicKey,
           container: "#fp-tokenizer-container",
-          onLoad: () => setFpReady(true),
+          onLoad: () => {
+            console.log("[FP] onLoad fired — iframe ready");
+            setFpReady(true);
+          },
           submission: (resp: any) => {
+            console.log("[FP] submission callback:", JSON.stringify(resp));
             if (resp.status === "success") {
+              console.log("[FP] token received, length:", resp.token?.length);
               tokenResolveRef.current?.(resp.token);
             } else if (resp.status === "validation") {
               const fields = Array.isArray(resp.invalid) ? resp.invalid.join(", ") : "card details";
+              console.warn("[FP] validation error, invalid fields:", resp.invalid);
               tokenRejectRef.current?.(new Error(`Please check your ${fields}.`));
             } else {
+              console.error("[FP] submission error status:", resp.status, "msg:", resp.msg);
               tokenRejectRef.current?.(new Error(resp.msg || "Card tokenization failed. Please try again."));
             }
             tokenResolveRef.current = null;
             tokenRejectRef.current = null;
           },
         });
+        console.log("[FP] Tokenizer instance created");
       } catch (e) {
-        console.error("[Tokenizer] init error:", e);
+        console.error("[FP] Tokenizer init threw:", e);
         setFpLoadError("Payment fields failed to initialize. Please refresh and try again.");
       }
     }
 
     const loadTimeout = setTimeout(() => {
       if (!(window as any).Tokenizer) {
+        console.error("[FP] Tokenizer script load timed out after 15s — src:", `${fluidpayBaseUrl}/tokenizer/tokenizer.js`);
         setFpLoadError("Payment fields timed out. Please check your connection and refresh.");
       }
     }, 15_000);
 
     const scriptId = "fluidpay-tokenizer-js";
     if (document.getElementById(scriptId)) {
+      console.log("[FP] tokenizer.js already in DOM, re-initializing");
       clearTimeout(loadTimeout);
       initTokenizer();
       return;
     }
 
+    const scriptSrc = `${fluidpayBaseUrl}/tokenizer/tokenizer.js`;
+    console.log("[FP] loading tokenizer script:", scriptSrc);
     const script = document.createElement("script");
     script.id = scriptId;
-    script.src = `${fluidpayBaseUrl}/tokenizer/tokenizer.js`;
+    script.src = scriptSrc;
     script.async = true;
-    script.onload = () => { clearTimeout(loadTimeout); initTokenizer(); };
+    script.onload = () => { console.log("[FP] tokenizer.js loaded OK"); clearTimeout(loadTimeout); initTokenizer(); };
     script.onerror = () => {
       clearTimeout(loadTimeout);
-      console.error("[Tokenizer] script failed to load:", script.src);
+      console.error("[FP] tokenizer.js failed to load:", scriptSrc);
       setFpLoadError("Failed to load secure payment fields. Please refresh and try again.");
     };
     document.head.appendChild(script);
@@ -177,6 +193,7 @@ export function PaymentFlow({
       }, 20_000);
       tokenResolveRef.current = (t: string) => { clearTimeout(timeout); resolve(t); };
       tokenRejectRef.current = (e: Error) => { clearTimeout(timeout); reject(e); };
+      console.log("[FP] calling tokenizer.submit(), instance:", !!tokenizerRef.current);
       tokenizerRef.current?.submit();
     });
   }
