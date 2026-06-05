@@ -28,7 +28,8 @@ export type AuditFlagType =
   | "outside_window"
   | "wrong_focus_area"
   | "missing_travel_time"
-  | "missing_travel_miles";
+  | "missing_travel_miles"
+  | "forgot_to_log";
 
 export interface AuditFlag {
   type: AuditFlagType;
@@ -37,14 +38,18 @@ export interface AuditFlag {
 }
 
 export interface AuditRow {
+  // For rows with an actual time entry, entryId is the Airtable record ID.
+  // For "forgot to log" rows (no time entry exists), entryId is synthetic:
+  // "{planEntryId}::{clerkUserId}"
   entryId: string;
   clerkUserId: string;
   staffName: string;
   date: string;
   projectName: string;
-  startTime: string;
-  endTime: string;
-  focusArea: string;
+  // Undefined for "forgot to log" rows — no entry was ever logged
+  startTime?: string;
+  endTime?: string;
+  focusArea?: string;
   travelMiles?: number;
   travelMinutes?: number;
   nonBillable: boolean;
@@ -55,6 +60,10 @@ export interface AuditRow {
     endTime?: string;
     address?: string;
   };
+  // True when this row represents a scheduled shift with no time entry at all
+  isMissingEntry?: boolean;
+  // Invite status for "forgot to log" rows
+  inviteStatus?: "accepted" | "pending";
 }
 
 export async function GET(req: NextRequest) {
@@ -80,10 +89,10 @@ export async function GET(req: NextRequest) {
     const staffByEmail = new Map(staffMembers.map(s => [s.email.toLowerCase(), s]));
     const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s]));
 
-    // Index plan entries by "date::tenantId" for fast lookup, keeping only focus entries
-    const plansByDateTenant = new Map<string, typeof planEntries>();
-    for (const pe of planEntries) {
-      if (pe.entryType === "keydate") continue;
+    // Index focus plan entries by "date::tenantId"
+    const focusPlanEntries = planEntries.filter(pe => pe.entryType !== "keydate");
+    const plansByDateTenant = new Map<string, typeof focusPlanEntries>();
+    for (const pe of focusPlanEntries) {
       const key = `${pe.date}::${pe.tenantId}`;
       if (!plansByDateTenant.has(key)) plansByDateTenant.set(key, []);
       plansByDateTenant.get(key)!.push(pe);
@@ -91,7 +100,7 @@ export async function GET(req: NextRequest) {
 
     // Pre-compute helper clerkUserIds per plan entry
     const helperIdsByPlan = new Map<string, Set<string>>();
-    for (const pe of planEntries) {
+    for (const pe of focusPlanEntries) {
       const ids = new Set<string>();
       for (const h of pe.helpers ?? []) {
         const staff = staffByEmail.get(h.email.toLowerCase());
@@ -100,12 +109,21 @@ export async function GET(req: NextRequest) {
       helperIdsByPlan.set(pe.id, ids);
     }
 
+    // Build a set of (clerkUserId::date::tenantId) combos that HAVE a time entry —
+    // used to detect staff who were scheduled but never logged.
+    const loggedCombos = new Set<string>();
+    for (const entry of timeEntries) {
+      if (!entry.nonBillable && entry.tenantId) {
+        loggedCombos.add(`${entry.clerkUserId}::${entry.date}::${entry.tenantId}`);
+      }
+    }
+
     const auditRows: AuditRow[] = [];
 
+    // ── Pass 1: check existing time entries for discrepancies ─────────────────
     for (const entry of timeEntries) {
       const flags: AuditFlag[] = [];
 
-      // Find the best-matching plan entry for this time entry
       const key = `${entry.date}::${entry.tenantId}`;
       const candidates = plansByDateTenant.get(key) ?? [];
       const matchedPlan = candidates.find(pe =>
@@ -114,12 +132,8 @@ export async function GET(req: NextRequest) {
 
       if (matchedPlan) {
         // 1. Focus area mismatch
-        if (
-          matchedPlan.activity &&
-          entry.focusArea &&
-          !entry.nonBillable &&
-          matchedPlan.activity !== entry.focusArea
-        ) {
+        if (matchedPlan.activity && entry.focusArea && !entry.nonBillable &&
+            matchedPlan.activity !== entry.focusArea) {
           flags.push({
             type: "wrong_focus_area",
             label: "Wrong Focus Area",
@@ -127,12 +141,12 @@ export async function GET(req: NextRequest) {
           });
         }
 
-        // 2. Outside shift window (with 15-min grace buffer)
+        // 2. Outside shift window (15-min grace buffer)
         if (matchedPlan.startTime && matchedPlan.endTime && entry.startTime && entry.endTime) {
           const planStart = timeToMins(matchedPlan.startTime);
-          const planEnd = timeToMins(matchedPlan.endTime);
-          const logStart = timeToMins(entry.startTime);
-          const logEnd = timeToMins(entry.endTime);
+          const planEnd   = timeToMins(matchedPlan.endTime);
+          const logStart  = timeToMins(entry.startTime);
+          const logEnd    = timeToMins(entry.endTime);
           const GRACE = 15;
           if (logStart < planStart - GRACE || logEnd > planEnd + GRACE) {
             flags.push({
@@ -146,7 +160,8 @@ export async function GET(req: NextRequest) {
         // 3 & 4. Missing travel data — only when shift has a distinct address
         const shiftAddress = matchedPlan.address;
         const staffAddress = staffById.get(entry.clerkUserId)?.address;
-        if (shiftAddress && staffAddress && shiftAddress.trim() !== staffAddress.trim() && !entry.nonBillable) {
+        if (shiftAddress && staffAddress &&
+            shiftAddress.trim() !== staffAddress.trim() && !entry.nonBillable) {
           if (!entry.travelMinutes) {
             flags.push({
               type: "missing_travel_time",
@@ -163,14 +178,7 @@ export async function GET(req: NextRequest) {
           }
         }
       } else if (!entry.nonBillable) {
-        // No matched plan entry — check for missing travel data generically
-        // (only flag if travel is completely absent and a tenant is set)
-        if (entry.tenantId && !entry.travelMinutes && !entry.travelMiles) {
-          // Don't flag by default — too noisy without address context
-          // Only surface if both are missing — user can tune this
-        }
-
-        // Still flag if travel miles present but no travel time (or vice versa)
+        // No matched plan entry — flag asymmetric travel data
         if (entry.travelMiles && entry.travelMiles > 0 && !entry.travelMinutes) {
           flags.push({
             type: "missing_travel_time",
@@ -202,23 +210,77 @@ export async function GET(req: NextRequest) {
           nonBillable: entry.nonBillable ?? false,
           flags,
           matchedShift: matchedPlan
-            ? {
-                activity: matchedPlan.activity,
-                startTime: matchedPlan.startTime,
-                endTime: matchedPlan.endTime,
-                address: matchedPlan.address,
-              }
+            ? { activity: matchedPlan.activity, startTime: matchedPlan.startTime, endTime: matchedPlan.endTime, address: matchedPlan.address }
             : undefined,
         });
       }
     }
 
-    // Summary counts by flag type
+    // ── Pass 2: find scheduled staff who never logged hours ───────────────────
+    for (const pe of focusPlanEntries) {
+      for (const helper of pe.helpers ?? []) {
+        // Skip declined invites
+        if (helper.status === "declined") continue;
+
+        const staff = staffByEmail.get(helper.email.toLowerCase());
+        if (!staff) continue; // unknown email, skip
+
+        // If staffIdFilter is set, only check that person
+        if (staffIdFilter && staff.clerkUserId !== staffIdFilter) continue;
+
+        const combo = `${staff.clerkUserId}::${pe.date}::${pe.tenantId}`;
+        if (loggedCombos.has(combo)) continue; // they did log
+
+        auditRows.push({
+          entryId: `${pe.id}::${staff.clerkUserId}`,
+          clerkUserId: staff.clerkUserId,
+          staffName: staff.displayName,
+          date: pe.date,
+          // Store tenantId as placeholder; will be enriched below from time-entry project names
+          projectName: pe.tenantId,
+          nonBillable: false,
+          isMissingEntry: true,
+          inviteStatus: helper.status as "accepted" | "pending",
+          flags: [{
+            type: "forgot_to_log",
+            label: "No Hours Logged",
+            detail: helper.status === "accepted"
+              ? `${staff.displayName} accepted the shift invite but logged no hours`
+              : `${staff.displayName} did not reply to the shift invite (pending) and logged no hours`,
+          }],
+          matchedShift: {
+            activity: pe.activity,
+            startTime: pe.startTime,
+            endTime: pe.endTime,
+            address: pe.address,
+          },
+        });
+      }
+    }
+
+    // Enrich "forgot to log" rows: replace tenantId placeholder with a real project name
+    // using the project names we know from actual time entries for the same tenant.
+    const projectNameByTenantId = new Map<string, string>();
+    for (const e of timeEntries) {
+      if (e.tenantId && e.projectName) projectNameByTenantId.set(e.tenantId, e.projectName);
+    }
+    for (const row of auditRows) {
+      if (row.isMissingEntry) {
+        const name = projectNameByTenantId.get(row.projectName);
+        if (name) row.projectName = name;
+      }
+    }
+
+    // Sort: date desc, then staff name asc
+    auditRows.sort((a, b) => b.date.localeCompare(a.date) || a.staffName.localeCompare(b.staffName));
+
+    // Summary counts
     const summary: Record<AuditFlagType, number> = {
       outside_window: 0,
       wrong_focus_area: 0,
       missing_travel_time: 0,
       missing_travel_miles: 0,
+      forgot_to_log: 0,
     };
     for (const row of auditRows) {
       for (const f of row.flags) summary[f.type]++;

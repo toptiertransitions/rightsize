@@ -886,10 +886,11 @@ function TravelTab({ staffMembers }: { staffMembers: StaffOption[] }) {
 
 // ─── Audit Tab ────────────────────────────────────────────────────────────────
 const FLAG_META: Record<AuditFlagType, { label: string; color: string; bg: string; border: string }> = {
-  outside_window:      { label: "Outside Window",    color: "text-amber-300",  bg: "bg-amber-900/30",  border: "border-amber-700" },
-  wrong_focus_area:    { label: "Wrong Focus Area",  color: "text-red-300",    bg: "bg-red-900/30",    border: "border-red-700"   },
-  missing_travel_time: { label: "No Travel Time",    color: "text-blue-300",   bg: "bg-blue-900/30",   border: "border-blue-700"  },
-  missing_travel_miles:{ label: "No Travel Miles",   color: "text-purple-300", bg: "bg-purple-900/30", border: "border-purple-700"},
+  forgot_to_log:       { label: "No Hours Logged",  color: "text-rose-300",   bg: "bg-rose-900/30",   border: "border-rose-700"  },
+  outside_window:      { label: "Outside Window",   color: "text-amber-300",  bg: "bg-amber-900/30",  border: "border-amber-700" },
+  wrong_focus_area:    { label: "Wrong Focus Area", color: "text-orange-300", bg: "bg-orange-900/30", border: "border-orange-700"},
+  missing_travel_time: { label: "No Travel Time",   color: "text-blue-300",   bg: "bg-blue-900/30",   border: "border-blue-700"  },
+  missing_travel_miles:{ label: "No Travel Miles",  color: "text-purple-300", bg: "bg-purple-900/30", border: "border-purple-700"},
 };
 
 function FlagBadge({ type, detail }: { type: AuditFlagType; detail: string }) {
@@ -910,7 +911,7 @@ function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   const [staffId, setStaffId] = useState("");
   const [typeFilter, setTypeFilter] = useState<AuditFlagType | "all">("all");
   const [rows, setRows] = useState<AuditRow[]>([]);
-  const [summary, setSummary] = useState<Record<AuditFlagType, number>>({ outside_window: 0, wrong_focus_area: 0, missing_travel_time: 0, missing_travel_miles: 0 });
+  const [summary, setSummary] = useState<Record<AuditFlagType, number>>({ forgot_to_log: 0, outside_window: 0, wrong_focus_area: 0, missing_travel_time: 0, missing_travel_miles: 0 });
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -942,7 +943,7 @@ function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
   return (
     <div>
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
         {(Object.entries(FLAG_META) as [AuditFlagType, typeof FLAG_META[AuditFlagType]][]).map(([type, meta]) => (
           <button
             key={type}
@@ -1017,6 +1018,15 @@ function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
                       <span className="text-white font-medium text-sm">{row.staffName}</span>
                       <span className="text-gray-400 text-xs">{row.date}</span>
                       <span className="text-gray-300 text-xs truncate max-w-[200px]">{row.projectName}</span>
+                      {row.isMissingEntry && row.inviteStatus && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                          row.inviteStatus === "accepted"
+                            ? "bg-green-900/40 text-green-400"
+                            : "bg-gray-700 text-gray-400"
+                        }`}>
+                          {row.inviteStatus === "accepted" ? "Accepted" : "No Reply"}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {row.flags.map((f, fi) => (
@@ -1025,9 +1035,15 @@ function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
                     </div>
                   </div>
 
-                  <div className="text-right flex-shrink-0 text-xs text-gray-400 hidden sm:block">
-                    <div>{row.startTime} – {row.endTime}</div>
-                    <div className="mt-0.5 text-gray-500">{row.focusArea}</div>
+                  <div className="text-right flex-shrink-0 text-xs hidden sm:block">
+                    {row.isMissingEntry ? (
+                      <span className="text-rose-400/70 italic">no entry</span>
+                    ) : (
+                      <>
+                        <div className="text-gray-400">{row.startTime} – {row.endTime}</div>
+                        <div className="mt-0.5 text-gray-500">{row.focusArea}</div>
+                      </>
+                    )}
                   </div>
                 </button>
 
@@ -1035,15 +1051,24 @@ function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
                 {isOpen && (
                   <div className="px-11 pb-4 bg-gray-900/50 border-t border-gray-800/50">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Logged</p>
-                        <dl className="space-y-1 text-xs">
-                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Time</dt><dd className="text-gray-300">{row.startTime} – {row.endTime}</dd></div>
-                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Focus Area</dt><dd className="text-gray-300">{row.focusArea}</dd></div>
-                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Travel Miles</dt><dd className="text-gray-300">{row.travelMiles ?? "—"}</dd></div>
-                          <div className="flex gap-2"><dt className="text-gray-500 w-24">Travel Time</dt><dd className="text-gray-300">{row.travelMinutes ? `${row.travelMinutes} min` : "—"}</dd></div>
-                        </dl>
-                      </div>
+                      {row.isMissingEntry ? (
+                        <div>
+                          <p className="text-xs font-semibold text-rose-500/70 uppercase tracking-wide mb-2">No Time Entry Found</p>
+                          <p className="text-xs text-gray-400">
+                            This staff member was scheduled for this shift but submitted no time entry.
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Logged</p>
+                          <dl className="space-y-1 text-xs">
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Time</dt><dd className="text-gray-300">{row.startTime} – {row.endTime}</dd></div>
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Focus Area</dt><dd className="text-gray-300">{row.focusArea}</dd></div>
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Travel Miles</dt><dd className="text-gray-300">{row.travelMiles ?? "—"}</dd></div>
+                            <div className="flex gap-2"><dt className="text-gray-500 w-24">Travel Time</dt><dd className="text-gray-300">{row.travelMinutes ? `${row.travelMinutes} min` : "—"}</dd></div>
+                          </dl>
+                        </div>
+                      )}
                       {row.matchedShift && (
                         <div>
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Scheduled Shift</p>
