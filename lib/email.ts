@@ -112,26 +112,52 @@ export function buildContractSentEmail({
 }
 
 export function buildContractSignedEmail({
-  managerName,
+  salesRepName,
   clientName,
   projectName,
   signedAt,
   totalCost,
+  lineItems,
+  originAddress,
+  destAddress,
 }: {
-  managerName?: string;
+  salesRepName?: string;
   clientName: string;
   projectName: string;
   signedAt: string;
   totalCost: number;
+  lineItems?: { serviceName: string; hours: number; rate: number }[];
+  originAddress?: string;
+  destAddress?: string;
 }): string {
   const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtHrs = (h: number) => `${Math.round(h * 10) / 10} hr${Math.round(h * 10) / 10 === 1 ? "" : "s"}`;
   const signedDate = new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const totalHours = (lineItems ?? []).reduce((s, li) => s + li.hours, 0);
+
+  const serviceRows = (lineItems ?? []).map((li, i) =>
+    `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
+      <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">${li.serviceName}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${fmtHrs(li.hours)}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#374151;font-weight:600;border-top:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${fmt(li.hours * li.rate)}</td>
+    </tr>`
+  ).join("");
+
+  const addressRows = [
+    originAddress ? `<tr><td style="padding:8px 16px;font-size:13px;color:#6b7280;width:90px;">From</td><td style="padding:8px 16px;font-size:13px;color:#374151;">${originAddress}</td></tr>` : "",
+    destAddress ? `<tr style="background-color:#f9fafb;"><td style="padding:8px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">To</td><td style="padding:8px 16px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${destAddress}</td></tr>` : "",
+  ].filter(Boolean).join("");
+
+  const repLine = salesRepName
+    ? `<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">Shoutout to <strong style="color:#2E6B4F;">${salesRepName}</strong> for closing this one!</p>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agreement Signed — Top Tier Transitions</title>
+  <title>New Win — Top Tier Transitions</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
@@ -141,33 +167,61 @@ export function buildContractSignedEmail({
           <tr>
             <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
               <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
-              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Agreement Signed</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">New Signed Agreement</p>
             </td>
           </tr>
           <tr>
-            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
-              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi${managerName ? ` ${managerName}` : ""},</p>
-              <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-                <strong>${clientName}</strong> has signed the service agreement for <strong>${projectName}</strong>.
-              </p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">
+            <td style="background-color:#ffffff;padding:32px 32px 0;border-radius:0;">
+              <!-- WIN banner -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#1a4731 0%,#2E6B4F 100%);border-radius:10px;margin-bottom:28px;">
                 <tr>
-                  <td style="padding:12px 16px;font-size:14px;color:#6b7280;">Signed On</td>
-                  <td style="padding:12px 16px;font-size:14px;color:#374151;font-weight:600;text-align:right;">${signedDate}</td>
-                </tr>
-                <tr style="background-color:#f9fafb;">
-                  <td style="padding:12px 16px;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;">Total</td>
-                  <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:1px solid #e5e7eb;text-align:right;">${fmt(totalCost)}</td>
+                  <td style="padding:22px 24px;">
+                    <p style="margin:0 0 4px;font-size:28px;font-weight:bold;color:#ffffff;letter-spacing:-0.5px;">We got the deal!</p>
+                    <p style="margin:0;font-size:15px;color:#a8d4bc;">${projectName} &mdash; signed ${signedDate}</p>
+                  </td>
                 </tr>
               </table>
-              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5;">
-                Log in to the admin console to view the signed contract.
+
+              <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.6;">
+                <strong>${clientName}</strong> just signed the service agreement for <strong>${projectName}</strong>.
               </p>
+              ${repLine}
+
+              <!-- Contract value summary -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+                <tr style="background-color:#f0fdf4;">
+                  <td style="padding:14px 16px;font-size:15px;font-weight:bold;color:#2E6B4F;">Contract Value</td>
+                  <td style="padding:14px 16px;font-size:20px;font-weight:bold;color:#2E6B4F;text-align:right;">${fmt(totalCost)}</td>
+                </tr>
+                ${totalHours > 0 ? `<tr><td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Total Estimated Hours</td><td style="padding:10px 16px;font-size:13px;color:#374151;font-weight:600;text-align:right;border-top:1px solid #e5e7eb;">${fmtHrs(totalHours)}</td></tr>` : ""}
+              </table>
+
+              ${serviceRows ? `<!-- Hours by service line -->
+              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Scope of Work</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+                <tr style="background-color:#f9fafb;">
+                  <th style="padding:9px 16px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Service</th>
+                  <th style="padding:9px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Hours</th>
+                  <th style="padding:9px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Value</th>
+                </tr>
+                ${serviceRows}
+              </table>` : ""}
+
+              ${addressRows ? `<!-- Addresses -->
+              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Locations</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
+                ${addressRows}
+              </table>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:0 32px 32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5;">Log in to the admin console to view the signed contract and take next steps.</p>
             </td>
           </tr>
           <tr>
             <td style="padding:20px 32px 0;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Notification</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Win Notification</p>
             </td>
           </tr>
         </table>

@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import {
   getContractById,
@@ -69,12 +69,22 @@ export async function POST(
       hours: li.hours,
     }));
 
+    // CC the sender so they have a copy of what was sent
+    let senderEmail: string | undefined;
+    try {
+      const clerk = await clerkClient();
+      const sender = await clerk.users.getUser(userId).catch(() => null);
+      const email = sender?.emailAddresses?.[0]?.emailAddress;
+      if (email && email.toLowerCase() !== toEmail.toLowerCase()) senderEmail = email;
+    } catch { /* non-fatal */ }
+
     const resend = new Resend(process.env.RESEND_API_KEY);
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
 
     await resend.emails.send({
       from: `Top Tier Transitions <${fromEmail}>`,
       to: toEmail,
+      ...(senderEmail ? { cc: [senderEmail] } : {}),
       subject: `Updated service agreement for ${tenant.name} — please review`,
       html: buildContractSentEmail({
         clientName: toEmail,

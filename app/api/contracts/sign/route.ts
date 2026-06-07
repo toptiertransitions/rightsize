@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity } from "@/lib/airtable";
+import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { Resend } from "resend";
@@ -154,37 +154,60 @@ export async function POST(req: NextRequest) {
     );
   } catch { /* non-fatal */ }
 
-  // Notify manager
-  if (contract.sentByClerkId) {
-    try {
-      const clerk = await clerkClient();
-      const managerUser = await clerk.users.getUser(contract.sentByClerkId).catch(() => null);
-      const managerEmail = managerUser?.emailAddresses?.[0]?.emailAddress;
-      const managerName =
-        [managerUser?.firstName, managerUser?.lastName].filter(Boolean).join(" ") || undefined;
+  // Notify all TTTAdmin + TTTSales with a team win email
+  try {
+    const [staff, tenant] = await Promise.all([
+      getStaffMembers().catch(() => []),
+      getTenantById(contract.tenantId).catch(() => null),
+    ]);
 
-      if (managerEmail) {
-        // Look up tenant for project name
-        const tenant = await getTenantById(contract.tenantId).catch(() => null);
+    const recipients = staff
+      .filter((s) => s.isActive && ["TTTAdmin", "TTTSales"].includes(s.role) && s.email)
+      .map((s) => s.email);
 
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
-        await resend.emails.send({
-          from: `Top Tier Transitions <${fromEmail}>`,
-          to: managerEmail,
-          subject: `${signerName.trim()} signed the agreement for ${tenant?.name ?? "a project"}`,
-          html: buildContractSignedEmail({
-            managerName,
-            clientName: signerName.trim(),
-            projectName: tenant?.name ?? "the project",
-            signedAt,
-            totalCost: contract.totalCost,
-          }),
-        });
+    if (recipients.length > 0) {
+      // Look up the sales rep who sent the quote
+      let salesRepName: string | undefined;
+      if (contract.sentByClerkId) {
+        try {
+          const clerk = await clerkClient();
+          const repUser = await clerk.users.getUser(contract.sentByClerkId).catch(() => null);
+          salesRepName = [repUser?.firstName, repUser?.lastName].filter(Boolean).join(" ") || undefined;
+        } catch { /* non-fatal */ }
       }
-    } catch (e) {
-      console.error("Failed to send signed notification:", e);
+
+      // Build address strings
+      const originParts = [tenant?.address, tenant?.city, tenant?.state, tenant?.zip].filter(Boolean);
+      const destParts = [tenant?.destAddress, tenant?.destCity, tenant?.destState, tenant?.destZip].filter(Boolean);
+      const originAddress = originParts.length ? originParts.join(", ") : undefined;
+      const destAddress = destParts.length ? destParts.join(", ") : undefined;
+
+      const lineItemsForEmail = (contract.lineItems ?? []).map((li) => ({
+        serviceName: li.serviceName,
+        hours: li.hours,
+        rate: li.rate,
+      }));
+
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
+      await resend.emails.send({
+        from: `Top Tier Transitions <${fromEmail}>`,
+        to: recipients,
+        subject: `New Win: ${tenant?.name ?? "a project"} signed — ${signerName.trim()}`,
+        html: buildContractSignedEmail({
+          salesRepName,
+          clientName: signerName.trim(),
+          projectName: tenant?.name ?? "the project",
+          signedAt,
+          totalCost: contract.totalCost,
+          lineItems: lineItemsForEmail,
+          originAddress,
+          destAddress,
+        }),
+      });
     }
+  } catch (e) {
+    console.error("Failed to send win notification:", e);
   }
 
   return NextResponse.json({ success: true });

@@ -123,9 +123,20 @@ export async function POST(req: NextRequest) {
         const emailLineItems: { serviceName: string; hours: number }[] = Array.isArray(lineItems)
           ? lineItems.map((li: { serviceName: string; hours: number; description?: string }) => ({ serviceName: li.serviceName, hours: li.hours, description: li.description }))
           : [];
+
+        // CC the sender so they have a copy of what was sent
+        let senderEmail: string | undefined;
+        try {
+          const clerk = await clerkClient();
+          const sender = await clerk.users.getUser(userId).catch(() => null);
+          const email = sender?.emailAddresses?.[0]?.emailAddress;
+          if (email && email.toLowerCase() !== toEmail.toLowerCase()) senderEmail = email;
+        } catch { /* non-fatal */ }
+
         await resend.emails.send({
           from: `Top Tier Transitions <${fromEmail}>`,
           to: toEmail,
+          ...(senderEmail ? { cc: [senderEmail] } : {}),
           subject: `Your service agreement for ${tenant.name} is ready`,
           html: buildContractSentEmail({
             clientName,
@@ -233,11 +244,21 @@ export async function PATCH(req: NextRequest) {
           hours: li.hours,
           description: li.description,
         }));
+        // CC the sender so they have a copy of what was sent
+        let senderEmailPatch: string | undefined;
+        try {
+          const clerk = await clerkClient();
+          const sender = await clerk.users.getUser(userId).catch(() => null);
+          const email = sender?.emailAddresses?.[0]?.emailAddress;
+          if (email && email.toLowerCase() !== patchRecipient.toLowerCase()) senderEmailPatch = email;
+        } catch { /* non-fatal */ }
+
         const resend = new Resend(process.env.RESEND_API_KEY);
         const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
         await resend.emails.send({
           from: `Top Tier Transitions <${fromEmail}>`,
           to: patchRecipient,
+          ...(senderEmailPatch ? { cc: [senderEmailPatch] } : {}),
           subject: `Your service agreement for ${tenant.name} is ready`,
           html: buildContractSentEmail({
             clientName,
