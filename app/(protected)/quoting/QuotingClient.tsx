@@ -352,9 +352,11 @@ function QuoteInlineEditor({
                     type="number"
                     min={0}
                     step={0.5}
-                    value={row.hours}
-                    onChange={(e) => setRow(row.serviceId, { hours: Number(e.target.value) })}
-                    className="w-20 h-7 px-2 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                    value={row.hours === 0 ? "" : row.hours}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setRow(row.serviceId, { hours: e.target.value === "" ? 0 : Number(e.target.value) })}
+                    className="w-20 h-8 px-2 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
                   />
                 </td>
                 <td className="px-3 py-2.5 text-right">
@@ -364,9 +366,11 @@ function QuoteInlineEditor({
                       type="number"
                       min={0}
                       step={5}
-                      value={row.rate}
-                      onChange={(e) => setRow(row.serviceId, { rate: Number(e.target.value) })}
-                      className="w-14 h-7 px-1.5 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-forest-400"
+                      value={row.rate === 0 ? "" : row.rate}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setRow(row.serviceId, { rate: e.target.value === "" ? 0 : Number(e.target.value) })}
+                      className="w-16 h-8 px-1.5 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
                     />
                     <span className="text-gray-400 text-xs">/hr</span>
                   </div>
