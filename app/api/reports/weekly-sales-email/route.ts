@@ -881,11 +881,15 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   }
 
   // ── Weekly activity by rep ──
-  // Fetch activities from Monday of current week onward
-  const weekStart = weekBuckets[n - 1].start;
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
-  const weekLabel = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
-    " – " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Rolling 7-day window ending today (inclusive on both ends).
+  // e.g. if today is Jun 8, window is Jun 1 – Jun 8.
+  const todayStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const sevenDaysAgoDate = new Date(Date.UTC(year, month - 1, day - 6));
+  const weekStartStr = sevenDaysAgoDate.toISOString().slice(0, 10);
+  const weekLabel =
+    sevenDaysAgoDate.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" }) +
+    " – " +
+    new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 
   const oppContactMap = new Map(opps.map((o) => [o.id, o.clientContactId]));
 
@@ -893,7 +897,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   try {
     const allActivities = await getAllActivities();
     weekActivities = allActivities
-      .filter((a) => a.activityDate && a.activityDate.slice(0, 10) >= weekStartStr)
+      .filter((a) => a.activityDate && a.activityDate.slice(0, 10) >= weekStartStr && a.activityDate.slice(0, 10) <= todayStr)
       .map((a) => ({
         createdByClerkId: a.createdByClerkId,
         contactKey: a.clientContactId || oppContactMap.get(a.opportunityId) || a.opportunityId || "",
