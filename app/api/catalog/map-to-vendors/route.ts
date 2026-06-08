@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
@@ -41,7 +43,8 @@ export async function POST(req: NextRequest) {
     const raw = await callVendorMappingAI(prompt);
     const assignments = enforceRoutingConstraints(raw, items, vendors);
     return NextResponse.json({ assignments });
-  } catch {
+  } catch (e) {
+    console.error("map-to-vendors error:", e);
     return NextResponse.json({ error: "AI mapping failed — please try again" }, { status: 422 });
   }
 }
