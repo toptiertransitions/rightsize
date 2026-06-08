@@ -4,7 +4,7 @@ import type { Item, LocalVendor } from "./types";
 export interface VendorAssignment {
   vendorId: string;
   vendorName: string;
-  assignedItems: Array<{ itemId: string; rank: number; reasoning: string }>;
+  assignedItems: Array<{ itemId: string; rank: number; reasoning?: string }>;
 }
 
 const VENDOR_TYPE_FOR_ROUTE: Record<string, string> = {
@@ -37,21 +37,13 @@ ${JSON.stringify(vendors, null, 2)}
 
 Instructions:
 1. Assign each item to the best vendor based on item category and vendor itemCategories
-2. Batch items to the same vendor where possible to minimize total vendors used (max 3 vendors)
+2. Batch items to the same vendor where possible (max 3 vendors total)
 3. Return items in ranked order (rank 1 = best match for that vendor)
-4. If an item cannot be matched to any eligible vendor, omit it from results
-5. Return ONLY valid JSON — no prose, no markdown
+4. If an item cannot be matched to any eligible vendor, omit it
+5. Return ONLY a compact JSON array — no prose, no markdown, no code fences
 
-Return format:
-[
-  {
-    "vendorId": "recXXX",
-    "vendorName": "Village Thrift",
-    "assignedItems": [
-      { "itemId": "recABC", "rank": 1, "reasoning": "Furniture — strong category match" }
-    ]
-  }
-]`;
+Return format (compact, no whitespace):
+[{"vendorId":"recXXX","vendorName":"Village Thrift","assignedItems":[{"itemId":"recABC","rank":1}]}]`;
 }
 
 export function parseVendorMappingResponse(raw: string): VendorAssignment[] {
@@ -93,7 +85,7 @@ export async function callVendorMappingAI(prompt: string): Promise<VendorAssignm
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
   });
   const raw = msg.content[0].type === "text" ? msg.content[0].text : "";
