@@ -87,6 +87,7 @@ import type {
   OutreachEnrollmentStatus,
   OutreachSendStatus,
   SalesGoal,
+  VendorOutreach,
 } from "./types";
 
 // ─── Initialize Client ────────────────────────────────────────────────────────
@@ -567,6 +568,13 @@ export async function updateItem(
     fields["PhotoPublicId"] = data.photos[0]?.publicId ?? "";
   }
 
+  // Handle vendorQueue specially — stored as JSON string; empty array clears the field
+  if (data.vendorQueue !== undefined) {
+    fields["VendorQueue"] = Array.isArray(data.vendorQueue) && data.vendorQueue.length > 0
+      ? JSON.stringify(data.vendorQueue)
+      : "";
+  }
+
   const fieldMap: Record<keyof Item, string> = {
     photos: "",    // handled above; empty string = skip in loop
     itemName: "ItemName",
@@ -652,6 +660,12 @@ export async function updateItem(
     // Bulk price drop tracking
     priceDropOriginalValue: "PriceDropOriginalValue",
     originalValue: "OriginalValue",
+    // Vendor Outreach
+    vendorOutreachStatus: "VendorOutreachStatus",
+    currentVendorId: "CurrentVendorId",
+    claimedByVendorId: "ClaimedByVendorId",
+    vendorQueue: "",  // handled specially below
+    vendorOutreachSentAt: "VendorOutreachSentAt",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -914,6 +928,15 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
     priceDropOriginalValue: f["PriceDropOriginalValue"] != null ? (toNum(f["PriceDropOriginalValue"]) || undefined) : undefined,
     originalValue: f["OriginalValue"] != null ? (toNum(f["OriginalValue"]) || undefined) : undefined,
+    vendorOutreachStatus: (toStr(f["VendorOutreachStatus"]) || undefined) as "With Vendor" | "Claimed" | "Passed" | undefined,
+    currentVendorId: toStr(f["CurrentVendorId"]) || undefined,
+    claimedByVendorId: toStr(f["ClaimedByVendorId"]) || undefined,
+    vendorQueue: (() => {
+      const raw = toStr(f["VendorQueue"]);
+      if (!raw) return undefined;
+      try { return JSON.parse(raw) as string[]; } catch { return undefined; }
+    })(),
+    vendorOutreachSentAt: toStr(f["VendorOutreachSentAt"]) || undefined,
   };
 }
 
@@ -6054,4 +6077,102 @@ export async function getAdminStaffEmails(): Promise<string[]> {
   return (data.records as AirtableRecord[])
     .map(r => toStr(r.fields["Email"]))
     .filter(Boolean);
+}
+
+// ─── Vendor Outreach ─────────────────────────────────────────────────────────
+
+function vendorOutreachFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.VENDOR_OUTREACH;
+  return fetch(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapVendorOutreach(record: AirtableRecord): VendorOutreach {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: typeof f["TenantId"] === "string" ? f["TenantId"] : "",
+    vendorAirtableId: typeof f["VendorAirtableId"] === "string" ? f["VendorAirtableId"] : "",
+    vendorName: typeof f["VendorName"] === "string" ? f["VendorName"] : "",
+    pocName: typeof f["POCName"] === "string" ? f["POCName"] : "",
+    pocEmail: typeof f["POCEmail"] === "string" ? f["POCEmail"] : "",
+    itemIds: (() => {
+      const raw = typeof f["ItemIds"] === "string" ? f["ItemIds"] : "";
+      try { return JSON.parse(raw) as string[]; } catch { return []; }
+    })(),
+    itemCount: typeof f["ItemCount"] === "number" ? f["ItemCount"] : 0,
+    sentByClerkId: typeof f["SentByClerkId"] === "string" ? f["SentByClerkId"] : "",
+    sentByName: typeof f["SentByName"] === "string" ? f["SentByName"] : "",
+    sentByEmail: typeof f["SentByEmail"] === "string" ? f["SentByEmail"] : "",
+    sentAt: typeof f["SentAt"] === "string" ? f["SentAt"] : "",
+    emailStatus: (typeof f["EmailStatus"] === "string" ? f["EmailStatus"] : "Sent") as VendorOutreach["emailStatus"],
+    pdfCloudinaryUrl: typeof f["PDFCloudinaryUrl"] === "string" ? f["PDFCloudinaryUrl"] || undefined : undefined,
+    isHeadsUpSent: f["IsHeadsUpSent"] === true,
+  };
+}
+
+export async function getVendorOutreach(tenantId: string): Promise<VendorOutreach[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await vendorOutreachFetch(`?filterByFormula=${formula}&sort[0][field]=SentAt&sort[0][direction]=desc`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapVendorOutreach);
+}
+
+export async function createVendorOutreach(data: {
+  tenantId: string;
+  vendorAirtableId: string;
+  vendorName: string;
+  pocName: string;
+  pocEmail: string;
+  itemIds: string[];
+  itemCount: number;
+  sentByClerkId: string;
+  sentByName: string;
+  sentByEmail: string;
+  sentAt: string;
+  emailStatus: "Sent" | "Failed" | "Scheduled";
+  pdfCloudinaryUrl?: string;
+  isHeadsUpSent?: boolean;
+}): Promise<VendorOutreach> {
+  const res = await vendorOutreachFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId,
+        VendorAirtableId: data.vendorAirtableId,
+        VendorName: data.vendorName,
+        POCName: data.pocName,
+        POCEmail: data.pocEmail,
+        ItemIds: JSON.stringify(data.itemIds),
+        ItemCount: data.itemCount,
+        SentByClerkId: data.sentByClerkId,
+        SentByName: data.sentByName,
+        SentByEmail: data.sentByEmail,
+        SentAt: data.sentAt,
+        EmailStatus: data.emailStatus,
+        PDFCloudinaryUrl: data.pdfCloudinaryUrl ?? "",
+        IsHeadsUpSent: data.isHeadsUpSent ?? false,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`createVendorOutreach failed: ${await res.text()}`);
+  return mapVendorOutreach(await res.json());
+}
+
+export async function getVendorOutreachByVendor(vendorAirtableId: string): Promise<VendorOutreach[]> {
+  const formula = encodeURIComponent(`{VendorAirtableId} = "${vendorAirtableId}"`);
+  const res = await vendorOutreachFetch(`?filterByFormula=${formula}&sort[0][field]=SentAt&sort[0][direction]=desc`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapVendorOutreach);
 }

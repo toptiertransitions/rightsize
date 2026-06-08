@@ -83,6 +83,7 @@ export const AIRTABLE_TABLES = {
   PARTNER_LOYALTY: process.env.AIRTABLE_PARTNER_LOYALTY_TABLE || "PartnerLoyalty",
   PARTNER_POINTS_LEDGER: process.env.AIRTABLE_PARTNER_POINTS_LEDGER_TABLE || "PartnerPointsLedger",
   SKILLS: process.env.AIRTABLE_SKILLS_TABLE || "Skills",
+  VENDOR_OUTREACH: process.env.AIRTABLE_VENDOR_OUTREACH_TABLE || "VendorOutreach",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

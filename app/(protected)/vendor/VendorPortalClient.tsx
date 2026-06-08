@@ -34,8 +34,8 @@ interface Props {
   tenantCityMap: Record<string, string>;
 }
 
-type Tab = "All" | VendorDecision | "Preferences";
-const TABS: Tab[] = ["All", "Pending", "Approved", "Rejected", "Hold", "Preferences"];
+type Tab = "Available" | "Claims" | "Expired" | "All" | VendorDecision | "Preferences";
+const TABS: Tab[] = ["Available", "Claims", "Expired", "All", "Pending", "Approved", "Rejected", "Hold", "Preferences"];
 
 const CONDITION_COLORS: Record<string, string> = {
   Excellent: "bg-green-100 text-green-800",
@@ -396,18 +396,34 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
   const [prefSuccess, setPrefSuccess] = useState(false);
 
   const tabCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: items.length, Pending: 0, Approved: 0, Rejected: 0, Hold: 0 };
+    const now = Date.now();
+    const counts: Record<string, number> = { All: items.length, Pending: 0, Approved: 0, Rejected: 0, Hold: 0, Available: 0, Claims: 0, Expired: 0 };
     for (const item of items) {
       const dec = item.vendorDecision ?? "Pending";
       if (dec in counts) counts[dec]++;
+      if (item.vendorOutreachStatus === "With Vendor" && item.currentVendorId === vendor.id) counts["Available"]++;
+      if (item.claimedByVendorId === vendor.id) counts["Claims"]++;
+      const sentDays = item.vendorOutreachSentAt
+        ? Math.floor((now - new Date(item.vendorOutreachSentAt).getTime()) / 86_400_000)
+        : 0;
+      if (item.currentVendorId === vendor.id && item.vendorOutreachStatus === "With Vendor" && sentDays > 14) counts["Expired"]++;
     }
     return counts;
-  }, [items]);
+  }, [items, vendor.id]);
 
   const filtered = useMemo(() => {
+    const now = Date.now();
     if (activeTab === "All" || activeTab === "Preferences") return items;
+    if (activeTab === "Available") return items.filter(i => i.vendorOutreachStatus === "With Vendor" && i.currentVendorId === vendor.id);
+    if (activeTab === "Claims") return items.filter(i => i.claimedByVendorId === vendor.id);
+    if (activeTab === "Expired") return items.filter(i => {
+      const sentDays = i.vendorOutreachSentAt
+        ? Math.floor((now - new Date(i.vendorOutreachSentAt).getTime()) / 86_400_000)
+        : 0;
+      return i.currentVendorId === vendor.id && i.vendorOutreachStatus === "With Vendor" && sentDays > 14;
+    });
     return items.filter(i => (i.vendorDecision ?? "Pending") === activeTab);
-  }, [items, activeTab]);
+  }, [items, activeTab, vendor.id]);
 
   const makeDecision = useCallback(async (
     itemId: string,
@@ -584,6 +600,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                 )}
               </button>
             ))}
+
           </div>
         </div>
       </div>
@@ -593,8 +610,151 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
         )}
 
-        {/* ── Preferences Tab ── */}
-        {activeTab === "Preferences" ? (
+        {/* ── Available Tab ── */}
+        {activeTab === "Available" && (
+          <div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 text-gray-400 text-sm">No items currently available for you to review.</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filtered.map(item => {
+                  const isLoading = loadingIds.has(item.id);
+                  const city = tenantCityMap[item.tenantId] ?? "";
+                  const photo = item.photos?.[0] ?? (item.photoUrl ? { url: item.photoUrl } : null);
+                  return (
+                    <div key={item.id} className="bg-white rounded-2xl border border-[#2d4a3e]/30 shadow-sm overflow-hidden">
+                      <button onClick={() => openDetail(item)} className="relative w-full aspect-video bg-gray-100 block hover:opacity-90 transition-opacity">
+                        {photo ? (
+                          <Image src={photo.url} alt={item.itemName} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                      <div className="p-4">
+                        <h3 className="font-semibold text-gray-900 text-base">{item.itemName}</h3>
+                        <p className="text-sm text-gray-500 mt-0.5">{item.category} · {item.condition}</p>
+                        {city && <p className="text-xs text-gray-400 mt-0.5">{city}</p>}
+                        {item.valueMid > 0 && (
+                          <p className="text-lg font-bold text-[#2d4a3e] mt-2">{formatCurrency(item.valueMid)}</p>
+                        )}
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            onClick={() => makeDecision(item.id, "Approved", { vendorExpectedPrice: item.valueMid })}
+                            disabled={isLoading}
+                            className="flex-1 min-h-[44px] bg-[#C9A96E] text-white font-semibold rounded-xl text-sm hover:bg-[#b8924f] disabled:opacity-50 transition-colors">
+                            {isLoading ? "…" : "I want this"}
+                          </button>
+                          <button
+                            onClick={() => makeDecision(item.id, "Hold")}
+                            disabled={isLoading}
+                            className="min-h-[44px] px-4 bg-gray-100 text-gray-700 font-semibold rounded-xl text-sm hover:bg-gray-200 disabled:opacity-50 transition-colors">
+                            Hold for now
+                          </button>
+                          <button
+                            onClick={() => makeDecision(item.id, "Rejected")}
+                            disabled={isLoading}
+                            className="min-h-[44px] px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl text-sm hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                            Pass
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Claims Tab ── */}
+        {activeTab === "Claims" && (
+          <div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 text-gray-400 text-sm">No claimed items yet.</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filtered.map(item => {
+                  const city = tenantCityMap[item.tenantId] ?? "";
+                  const photo = item.photos?.[0] ?? (item.photoUrl ? { url: item.photoUrl } : null);
+                  return (
+                    <div key={item.id} className="bg-white rounded-2xl border border-[#C9A96E]/40 shadow-sm overflow-hidden">
+                      <button onClick={() => openDetail(item)} className="relative w-full aspect-square bg-gray-100 block hover:opacity-90 transition-opacity">
+                        {photo ? (
+                          <Image src={photo.url} alt={item.itemName} fill className="object-cover" sizes="(max-width: 640px) 50vw, 25vw" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#C9A96E]/20 text-[#9a7040]">Claimed</span>
+                        </div>
+                      </button>
+                      <div className="p-3">
+                        <h3 className="font-medium text-sm text-gray-900 truncate">{item.itemName}</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">{item.category}</p>
+                        {city && <p className="text-xs text-gray-400">{city}</p>}
+                        {item.valueMid > 0 && <p className="text-sm font-bold text-[#2d4a3e] mt-1">{formatCurrency(item.valueMid)}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Expired Tab ── */}
+        {activeTab === "Expired" && (
+          <div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 text-gray-400 text-sm">No expired items.</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filtered.map(item => {
+                  const city = tenantCityMap[item.tenantId] ?? "";
+                  const photo = item.photos?.[0] ?? (item.photoUrl ? { url: item.photoUrl } : null);
+                  const sentDays = item.vendorOutreachSentAt
+                    ? Math.floor((Date.now() - new Date(item.vendorOutreachSentAt).getTime()) / 86_400_000)
+                    : 0;
+                  return (
+                    <div key={item.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden opacity-75">
+                      <button onClick={() => openDetail(item)} className="relative w-full aspect-square bg-gray-100 block hover:opacity-90 transition-opacity">
+                        {photo ? (
+                          <Image src={photo.url} alt={item.itemName} fill className="object-cover grayscale" sizes="(max-width: 640px) 50vw, 25vw" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">{sentDays}d</span>
+                        </div>
+                      </button>
+                      <div className="p-3">
+                        <h3 className="font-medium text-sm text-gray-900 truncate">{item.itemName}</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">{item.category}</p>
+                        {city && <p className="text-xs text-gray-400">{city}</p>}
+                        {item.valueMid > 0 && <p className="text-sm font-bold text-gray-400 mt-1">{formatCurrency(item.valueMid)}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Preferences / Standard decision tabs ── */}
+        {!["Available", "Claims", "Expired"].includes(activeTab) && (activeTab === "Preferences" ? (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 max-w-lg">
             <h2 className="text-base font-semibold text-gray-900 mb-1">Item Category Preferences</h2>
             <p className="text-sm text-gray-500 mb-5">
@@ -1038,7 +1198,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
               </>
             )}
           </>
-        )}
+        ))}
       </div>
 
       {/* Item Detail Modal */}

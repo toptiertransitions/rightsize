@@ -2541,3 +2541,135 @@ export function buildTrainingCertificateEmail(params: {
 
   return { subject, html };
 }
+
+export function buildVendorHeadsUpEmail({
+  pocName, vendorName, city, state, sentByName,
+}: {
+  pocName: string; vendorName: string; city: string; state: string; sentByName: string;
+}): string {
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Heads up — Top Tier Transitions</title></head>
+<body style="margin:0;padding:0;background:#F5F0E8;font-family:Georgia,serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:32px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+  <tr><td style="background:#2d4a3e;padding:24px 32px;border-radius:12px 12px 0 0;">
+    <p style="margin:0;color:#F5F0E8;font-size:20px;font-weight:bold;">Top Tier Transitions</p>
+    <p style="margin:4px 0 0;color:#a8d4bc;font-size:13px;">Heads Up</p>
+  </td></tr>
+  <tr><td style="background:#fff;padding:32px;border-radius:0 0 12px 12px;">
+    <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${pocName},</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7;">
+      Quick note — we'll be sending over some items from a ${city}, ${state} transition tomorrow morning that we think would be a great fit for <strong>${vendorName}</strong>. Keep an eye out!
+    </p>
+    <p style="margin:24px 0 0;font-size:14px;color:#374151;">Warm regards,<br><strong>${sentByName}</strong><br><span style="color:#9ca3af;">Top Tier Transitions</span></p>
+  </td></tr>
+  <tr><td style="padding:16px;text-align:center;"><p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; ${city}, ${state}</p></td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+export function buildMapToVendorsEmail({
+  pocName, vendorName, city, state, itemCount, items, vendorPortalUrl, sentByName,
+}: {
+  pocName: string;
+  vendorName: string;
+  city: string;
+  state: string;
+  itemCount: number;
+  items: Array<{ itemName: string; category: string; condition: string; valueMid: number; photoUrl?: string }>;
+  vendorPortalUrl: string;
+  sentByName: string;
+}): string {
+  const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const displayItems = items.slice(0, 6);
+  const itemGrid = displayItems.map(item =>
+    `<td style="width:50%;padding:8px;vertical-align:top;">
+      <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        ${item.photoUrl
+          ? `<img src="${item.photoUrl}" alt="${item.itemName}" width="100%" style="display:block;height:140px;object-fit:cover;" />`
+          : `<div style="height:140px;background:#f9fafb;display:flex;align-items:center;justify-content:center;"><span style="color:#9ca3af;font-size:12px;">No photo</span></div>`}
+        <div style="padding:10px 12px;">
+          <p style="margin:0;font-size:14px;font-weight:600;color:#1a1a1a;">${item.itemName}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">${item.category} &middot; ${item.condition} &middot; Est. ${fmt(item.valueMid)}</p>
+        </div>
+      </div>
+    </td>`
+  );
+
+  const rows: string[] = [];
+  for (let i = 0; i < itemGrid.length; i += 2) {
+    rows.push(`<tr>${itemGrid[i]}${itemGrid[i + 1] || '<td style="width:50%;padding:8px;"></td>'}</tr>`);
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Items for you — Top Tier Transitions</title></head>
+<body style="margin:0;padding:0;background:#F5F0E8;font-family:Georgia,serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:32px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+  <tr><td style="background:#2d4a3e;padding:28px 32px;border-radius:12px 12px 0 0;">
+    <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+    <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Items Coming Your Way</p>
+  </td></tr>
+  <tr><td style="background:#fff;padding:32px;">
+    <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${pocName},</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
+      We've set aside <strong>${itemCount} item${itemCount !== 1 ? 's' : ''}</strong> from a client transition in <strong>${city}, ${state}</strong> that we think would be a great fit for <strong>${vendorName}</strong>. These are coming to you first — take a look when you get a chance.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">${rows.join("")}</table>
+    ${itemCount > 6 ? `<p style="margin:0 0 24px;font-size:13px;color:#6b7280;text-align:center;">+ ${itemCount - 6} more item${itemCount - 6 !== 1 ? 's' : ''} available in the portal</p>` : ""}
+    <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+      <tr><td style="background:#C9A96E;border-radius:8px;padding:14px 28px;">
+        <a href="${vendorPortalUrl}" style="color:#fff;font-size:15px;font-weight:bold;text-decoration:none;">See All Items &amp; Indicate Interest →</a>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 24px;font-size:13px;color:#6b7280;line-height:1.6;">Items are on a first-come basis — once something's claimed, it's off the table. We'll follow up in a few days if we don't hear from you.</p>
+    <p style="margin:0;font-size:14px;color:#374151;">Warm regards,<br><strong>${sentByName}</strong><br><span style="color:#9ca3af;">Top Tier Transitions · 312-600-3016 · toptiertransitions.com</span></p>
+  </td></tr>
+  <tr><td style="padding:16px;text-align:center;"><p style="margin:0;font-size:12px;color:#9ca3af;">Sent by Top Tier Transitions &middot; ${sentByName}</p></td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+export function buildVendorClaimNotificationEmail({
+  staffName, vendorName, city, state, claimedItems, catalogUrl,
+}: {
+  staffName: string;
+  vendorName: string;
+  city: string;
+  state: string;
+  claimedItems: Array<{ itemName: string; category: string; valueMid: number }>;
+  catalogUrl: string;
+}): string {
+  const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const itemList = claimedItems.map(i =>
+    `<li style="padding:4px 0;font-size:14px;color:#374151;">${i.itemName} — ${i.category} — Est. ${fmt(i.valueMid)}</li>`
+  ).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Vendor Claim — Top Tier Transitions</title></head>
+<body style="margin:0;padding:0;background:#F5F0E8;font-family:Georgia,serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:32px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+  <tr><td style="background:#2d4a3e;padding:24px 32px;border-radius:12px 12px 0 0;">
+    <p style="margin:0;color:#F5F0E8;font-size:20px;font-weight:bold;">Top Tier Transitions</p>
+    <p style="margin:4px 0 0;color:#a8d4bc;font-size:13px;">Vendor Claim</p>
+  </td></tr>
+  <tr><td style="background:#fff;padding:32px;border-radius:0 0 12px 12px;">
+    <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${staffName},</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+      Good news — <strong>${vendorName}</strong> just indicated interest in the following item(s) from your <strong>${city}, ${state}</strong> project:
+    </p>
+    <ul style="margin:0 0 24px;padding-left:20px;">${itemList}</ul>
+    <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr><td style="background:#2d4a3e;border-radius:8px;padding:12px 24px;">
+        <a href="${catalogUrl}" style="color:#F5F0E8;font-size:15px;font-weight:bold;text-decoration:none;">View Project →</a>
+      </td></tr>
+    </table>
+  </td></tr>
+  <tr><td style="padding:16px;text-align:center;"><p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Notification</p></td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}

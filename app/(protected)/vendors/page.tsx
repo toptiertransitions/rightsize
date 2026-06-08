@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { clerkClient } from "@clerk/nextjs/server";
 import {
   getTenantById,
   getUserRoleForTenant,
@@ -9,9 +10,12 @@ import {
   getLocalVendors,
   getVendorFilesForTenant,
   getSystemRole,
+  getItemsForTenant,
+  getVendorOutreach,
 } from "@/lib/airtable";
 import { Card, CardContent } from "@/components/ui/Card";
 import { VendorsClient } from "./VendorsClient";
+import { VendorOutreachSection } from "./VendorOutreachSection";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -97,6 +101,32 @@ export default async function VendorsPage({ searchParams }: PageProps) {
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
   const isTTT = ["TTTStaff", "TTTAdmin", "TTTManager"].includes(resolvedRole);
+  const isTTTStaff = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole ?? "");
+
+  const [projectItems, outreachRecords, clerkUser] = isTTTStaff
+    ? await Promise.all([
+        getItemsForTenant(tenantId).catch(() => []),
+        (async () => {
+          const records = await getVendorOutreach(tenantId).catch(() => []);
+          const now = Date.now();
+          return records.map(r => ({
+            ...r,
+            agingDays: r.sentAt ? Math.floor((now - new Date(r.sentAt).getTime()) / 86_400_000) : 0,
+          }));
+        })(),
+        (async () => {
+          try {
+            const clerk = await clerkClient();
+            return await clerk.users.getUser(userId!);
+          } catch { return null; }
+        })(),
+      ])
+    : [[], [], null];
+
+  const sentByName = clerkUser
+    ? [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || "Staff"
+    : "Staff";
+  const sentByEmail = clerkUser?.emailAddresses?.[0]?.emailAddress ?? "";
 
   // TTTClient = has a tenant membership role, no system role, and the project IS a TTT project
   const TTT_SYSTEM_ROLES = ["TTTStaff", "TTTAdmin", "TTTManager", "TTTSales"];
@@ -120,6 +150,20 @@ export default async function VendorsPage({ searchParams }: PageProps) {
         isTTTClient={isTTTClient}
         initialVendorFiles={vendorFiles}
       />
+      {isTTTStaff && (
+        <VendorOutreachSection
+          tenantId={tenantId}
+          projectCity={tenant.city ?? ""}
+          projectState={tenant.state ?? ""}
+          projectZip={tenant.zip ?? ""}
+          items={projectItems}
+          localVendors={localVendors}
+          outreachRecords={outreachRecords}
+          sentByClerkId={userId!}
+          sentByName={sentByName}
+          sentByEmail={sentByEmail}
+        />
+      )}
     </div>
   );
 }

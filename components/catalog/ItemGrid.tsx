@@ -1936,6 +1936,24 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       {route.label}
                     </Badge>
                   </div>
+                  {item.vendorOutreachStatus === "With Vendor" && (() => {
+                    const days = item.vendorOutreachSentAt
+                      ? Math.floor((Date.now() - new Date(item.vendorOutreachSentAt).getTime()) / 86_400_000)
+                      : 0;
+                    const label = days >= 4 ? `With Vendor · ${days}d` : "With Vendor";
+                    const cls = days >= 7
+                      ? "bg-red-100 text-red-700"
+                      : days >= 4
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-[#2d4a3e]/10 text-[#2d4a3e]";
+                    return <div className="mt-1"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{label}</span></div>;
+                  })()}
+                  {item.vendorOutreachStatus === "Claimed" && (
+                    <div className="mt-1"><span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#C9A96E]/20 text-[#9a7040] whitespace-nowrap">Claimed ✓</span></div>
+                  )}
+                  {item.vendorOutreachStatus === "Passed" && (
+                    <div className="mt-1"><span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">Passed</span></div>
+                  )}
                   <div className="mt-2 text-xs text-gray-500 flex items-center gap-1.5">
                     {item.barcodeNumber ? (
                       <span className="font-mono text-[10px] text-gray-400">#{item.barcodeNumber}</span>
@@ -2150,9 +2168,29 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       </td>
                       {/* Route */}
                       <td className="px-4 py-2.5">
-                        <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
-                          {item.primaryRoute}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
+                            {item.primaryRoute}
+                          </Badge>
+                          {item.vendorOutreachStatus === "With Vendor" && (() => {
+                            const days = item.vendorOutreachSentAt
+                              ? Math.floor((Date.now() - new Date(item.vendorOutreachSentAt).getTime()) / 86_400_000)
+                              : 0;
+                            const label = days >= 4 ? `With Vendor · ${days}d` : "With Vendor";
+                            const cls = days >= 7
+                              ? "bg-red-100 text-red-700"
+                              : days >= 4
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-[#2d4a3e]/10 text-[#2d4a3e]";
+                            return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{label}</span>;
+                          })()}
+                          {item.vendorOutreachStatus === "Claimed" && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#C9A96E]/20 text-[#9a7040] whitespace-nowrap">Claimed ✓</span>
+                          )}
+                          {item.vendorOutreachStatus === "Passed" && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">Passed</span>
+                          )}
+                        </div>
                       </td>
                       {/* Status */}
                       <td className="px-4 py-2.5">

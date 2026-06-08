@@ -349,6 +349,12 @@ export interface Item {
   // Bulk price drop tracking
   priceDropOriginalValue?: number; // Stored before bulk price drop applied; cleared (0) after revert
   originalValue?: number;
+  // Vendor Outreach (Vendor Outreach feature)
+  vendorOutreachStatus?: "With Vendor" | "Claimed" | "Passed";
+  currentVendorId?: string;
+  claimedByVendorId?: string;
+  vendorQueue?: string[];   // parsed from JSON stored in Airtable Long Text
+  vendorOutreachSentAt?: string;
 }
 
 export type PriceChangeType = "Listed" | "Manual Edit" | "Price Drop 1" | "Price Drop 2" | "Reverted" | "Sale Price";
@@ -432,6 +438,26 @@ export interface SoldItemRow {
   staffCommissionPercent?: number;
   staffTimeMinutes?: number;
   channel: "FB" | "eBay";
+}
+
+// ─── Vendor Outreach ─────────────────────────────────────────────────────────
+export interface VendorOutreach {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  vendorAirtableId: string;
+  vendorName: string;
+  pocName: string;
+  pocEmail: string;
+  itemIds: string[];
+  itemCount: number;
+  sentByClerkId: string;
+  sentByName: string;
+  sentByEmail: string;
+  sentAt: string;
+  emailStatus: "Sent" | "Failed" | "Scheduled";
+  pdfCloudinaryUrl?: string;
+  isHeadsUpSent: boolean;
 }
 
 // ─── Item Sale Event (one per Square transaction line) ────────────────────────

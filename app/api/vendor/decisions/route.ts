@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getLocalVendorByClerkId, updateItem } from "@/lib/airtable";
+import { Resend } from "resend";
+import { getLocalVendorByClerkId, updateItem, getVendorOutreach, getTenantById, getItemById } from "@/lib/airtable";
+import { buildVendorClaimNotificationEmail } from "@/lib/email";
 import type { VendorDecision } from "@/lib/types";
 
 export async function PATCH(req: NextRequest) {
@@ -27,25 +29,62 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Vendor not found" }, { status: 403 });
   }
 
-  // Update the item — security: only update vendorDecision/vendorNotes and price fields
-  // The API trusts that the item belongs to this vendor (verified by the query in the portal)
   const updateData: Parameters<typeof updateItem>[1] = {
     vendorDecision: decision,
     vendorNotes: (vendorPriceNote ?? notes) || undefined,
     vendorPriceApproved: decision === "Approved" ? true : undefined,
     vendorRespondedAt: new Date().toISOString(),
-    // Approval locks in the route as Other Consignment
     ...(decision === "Approved" ? { primaryRoute: "Other Consignment" } : {}),
   };
   if (vendorExpectedPrice !== undefined) {
     updateData.vendorExpectedPrice = vendorExpectedPrice;
   }
+
+  // For Approved via vendor portal, also set outreach fields
+  if (decision === "Approved") {
+    updateData.claimedByVendorId = vendor.id;
+    updateData.vendorOutreachStatus = "Claimed";
+  }
+
   const updated = await updateItem(itemId, updateData);
 
-  // Verify the item is actually assigned to this vendor
-  if (updated.assignedVendorId !== vendor.id) {
+  if (updated.assignedVendorId !== vendor.id && updated.currentVendorId !== vendor.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ success: true });
+  // Fire claim notification for Approved decisions
+  if (decision === "Approved") {
+    try {
+      const item = await getItemById(itemId).catch(() => null);
+      if (item?.tenantId) {
+        const [outreachRecords, tenant] = await Promise.all([
+          getVendorOutreach(item.tenantId).catch(() => []),
+          getTenantById(item.tenantId).catch(() => null),
+        ]);
+        const relevant = outreachRecords.find(r => r.vendorAirtableId === vendor.id);
+        if (relevant?.sentByEmail) {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com";
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+          await resend.emails.send({
+            from: `Top Tier Transitions <${fromEmail}>`,
+            to: relevant.sentByEmail,
+            subject: `${vendor.vendorName} wants ${item.itemName} — ${tenant?.city ?? ""}`,
+            html: buildVendorClaimNotificationEmail({
+              staffName: relevant.sentByName,
+              vendorName: vendor.vendorName,
+              city: tenant?.city ?? "",
+              state: tenant?.state ?? "",
+              claimedItems: [{ itemName: item.itemName, category: item.category, valueMid: item.valueMid }],
+              catalogUrl: `${appUrl}/catalog?tenantId=${item.tenantId}`,
+            }),
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Claim notification failed (non-fatal):", e);
+    }
+  }
+
+  return NextResponse.json({ success: true, claimed: decision === "Approved" });
 }
