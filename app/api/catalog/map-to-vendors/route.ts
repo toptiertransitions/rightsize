@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
     vendors: LocalVendor[];
   } = body;
 
+  if (!vendors || vendors.length === 0) {
+    return NextResponse.json({ assignments: [] });
+  }
+
   try {
     const promptItems = items.map(i => ({
       itemId: i.id,

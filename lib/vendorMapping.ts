@@ -55,16 +55,15 @@ Return format:
 }
 
 export function parseVendorMappingResponse(raw: string): VendorAssignment[] {
-  let parsed: VendorAssignment[];
   try {
     const jsonMatch = raw.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("No JSON array found");
-    parsed = JSON.parse(jsonMatch[0]);
+    if (!jsonMatch) return [];
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
   } catch {
-    throw new Error("AI mapping response was unparseable");
+    return [];
   }
-  if (!Array.isArray(parsed)) throw new Error("AI mapping response was not an array");
-  return parsed;
 }
 
 export function enforceRoutingConstraints(
