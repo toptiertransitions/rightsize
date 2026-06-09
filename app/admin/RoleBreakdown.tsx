@@ -173,6 +173,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Log CRM activities (Call, Email, Meeting, Note, Task, Text Message)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Convert lead to project",     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
   { label: "Opportunity address auto-syncs to linked project", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
+  { label: "Invite referral contact to Partner Portal (sends sign-up email)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
+  { label: "Send Partner Rewards Email to self (portal summary for a spotlight contact)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
   { group: "Sales & Payouts" },
   { label: "View sales page (consignment & marketplace)", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Set client payout preference (Zelle/Venmo/Check/Other)", permissions: { Owner: true, Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
@@ -310,9 +312,9 @@ export function RoleBreakdown() {
             <li><span className="text-gray-600">&#10005;</span> Cannot see time entries, payroll, or invoice amounts</li>
             <li><span className="text-gray-600">&#10005;</span> Cannot edit any project data</li>
           </ul>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Admin Controls (TTTManager/TTTAdmin)</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Admin Controls (TTTSales/TTTManager/TTTAdmin)</p>
           <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
-            <li><span className="text-[#C9A96E]">&#10003;</span> Invite button on CRM Referral Partners tab (sends portal invite email)</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Invite button on CRM Referral Partners tab (sends portal invite email) — TTTSales, TTTManager, TTTAdmin</li>
             <li><span className="text-[#C9A96E]">&#10003;</span> Award / redeem points via <code className="text-gray-500">/api/partner/points/award</code> and <code className="text-gray-500">/redeem</code></li>
             <li><span className="text-[#C9A96E]">&#10003;</span> Points auto-awarded when invoice is first marked Paid (via PartnerPointAwarded checkbox on Invoices)</li>
           </ul>
