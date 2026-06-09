@@ -3090,6 +3090,9 @@ function DashboardTab({
   const [activitiesLoading, setActivitiesLoading] = useState(true);
   const [lbDays, setLbDays] = useState<30 | 60 | 90 | 180 | 365>(90);
   const [spotlightId, setSpotlightId] = useState<string>("");
+  const [rewardEmailSending, setRewardEmailSending] = useState(false);
+  const [rewardEmailSent, setRewardEmailSent] = useState(false);
+  const [rewardEmailError, setRewardEmailError] = useState("");
   const [spotlightQuery, setSpotlightQuery] = useState<string>("");
   const [spotlightOpen, setSpotlightOpen] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
@@ -3767,7 +3770,7 @@ function DashboardTab({
                 return (
                   <button
                     key={rc.id}
-                    onMouseDown={() => { setSpotlightId(rc.id); setSpotlightQuery(rc.name); setSpotlightOpen(false); }}
+                    onMouseDown={() => { setSpotlightId(rc.id); setSpotlightQuery(rc.name); setSpotlightOpen(false); setRewardEmailSent(false); setRewardEmailError(""); }}
                     className="w-full text-left px-3 py-2 hover:bg-forest-50 transition-colors"
                   >
                     <p className="text-sm font-medium text-gray-900">{rc.name}</p>
@@ -3813,6 +3816,47 @@ function DashboardTab({
                     <a href={`tel:${spotlightContact.phone}`} className="text-xs text-gray-500 hover:underline">{spotlightContact.phone}</a>
                   )}
                 </div>
+              </div>
+
+              {/* Send Partner Rewards Email */}
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    setRewardEmailSending(true);
+                    setRewardEmailError("");
+                    setRewardEmailSent(false);
+                    try {
+                      const res = await fetch("/api/crm/partner-rewards-email", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ referralContactId: spotlightContact.id }),
+                      });
+                      if (!res.ok) throw new Error("Failed");
+                      setRewardEmailSent(true);
+                    } catch {
+                      setRewardEmailError("Failed to send — please try again.");
+                    } finally {
+                      setRewardEmailSending(false);
+                    }
+                  }}
+                  disabled={rewardEmailSending || rewardEmailSent}
+                  className="min-h-[36px] px-4 text-sm font-semibold rounded-lg border border-forest-600 text-forest-700 hover:bg-forest-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {rewardEmailSending ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Sending…
+                    </>
+                  ) : rewardEmailSent ? (
+                    "Email Sent to You"
+                  ) : (
+                    "Send Partner Rewards Email to Me"
+                  )}
+                </button>
+                {rewardEmailError && <p className="text-xs text-red-500">{rewardEmailError}</p>}
               </div>
 
               {/* Bio details */}

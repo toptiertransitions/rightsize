@@ -2673,3 +2673,116 @@ export function buildVendorClaimNotificationEmail({
 </td></tr></table>
 </body></html>`;
 }
+
+export function buildPartnerRewardsEmail({
+  companyName,
+  pointsAvailable,
+  pointsEarned,
+  pointsRedeemed,
+  currentProjects,
+  potentialProjects,
+  previousProjects,
+  recentReviews,
+  isInvited,
+  appUrl,
+}: {
+  companyName: string;
+  pointsAvailable: number;
+  pointsEarned: number;
+  pointsRedeemed: number;
+  currentProjects: Array<{ name: string; address?: string; city?: string; state?: string }>;
+  potentialProjects: Array<{ name: string; city?: string; state?: string }>;
+  previousProjects: Array<{ name: string; city?: string; state?: string }>;
+  recentReviews: Array<{ stars: number; text: string; tenantName?: string }>;
+  isInvited: boolean;
+  appUrl: string;
+}): string {
+  const portalUrl = `${appUrl}/partner/home`;
+  const ctaText = isInvited ? "See Your Own Referral Dashboard →" : "Ask your TTT Rep about Accessing our Free Dashboard";
+  const ctaHref = isInvited ? portalUrl : "mailto:hello@toptiertransitions.com";
+
+  function projectRow(p: { name: string; address?: string; city?: string; state?: string }): string {
+    const loc = [p.city, p.state].filter(Boolean).join(", ");
+    return `<tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+        <p style="margin:0;font-size:14px;font-weight:600;color:#1a1a1a;">${p.name}</p>
+        ${p.address ? `<p style="margin:2px 0 0;font-size:12px;color:#9ca3af;">${p.address}</p>` : ""}
+        ${loc ? `<p style="margin:2px 0 0;font-size:12px;color:#9ca3af;">${loc}</p>` : ""}
+      </td>
+    </tr>`;
+  }
+
+  function renderStars(n: number): string {
+    return Array.from({ length: 5 }, (_, i) =>
+      `<span style="color:${i < n ? "#f59e0b" : "#e5e7eb"};">&#9733;</span>`
+    ).join("");
+  }
+
+  const currentRows = currentProjects.map(projectRow).join("");
+  const potentialRows = potentialProjects.map(projectRow).join("");
+  const previousRows = previousProjects.map(projectRow).join("");
+
+  const reviewCards = recentReviews.map(r => `
+    <div style="margin-bottom:12px;padding:14px 16px;background:#f9fafb;border-radius:8px;border:1px solid #f3f4f6;">
+      <div style="margin-bottom:6px;">${renderStars(r.stars)}${r.tenantName ? `<span style="margin-left:8px;font-size:11px;color:#6b7280;">${r.tenantName}</span>` : ""}</div>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">${r.text}</p>
+    </div>`).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${companyName} Partner Summary — Top Tier Transitions</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+  <tr><td style="background:#2d4a3e;padding:28px 32px;border-radius:12px 12px 0 0;">
+    <p style="margin:0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Top Tier Transitions</p>
+    <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;font-weight:500;">Partner Rewards Summary &mdash; ${companyName}</p>
+  </td></tr>
+  <tr><td style="background:#2d4a3e;padding:0 32px 32px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.08);border-radius:10px;padding:20px 0;">
+      <tr>
+        <td style="text-align:center;padding:0 12px;">
+          <p style="margin:0;font-size:34px;font-weight:800;color:#fff;line-height:1;">${pointsAvailable}</p>
+          <p style="margin:6px 0 0;font-size:11px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.06em;">Available</p>
+        </td>
+        <td style="text-align:center;padding:0 12px;border-left:1px solid rgba(255,255,255,0.12);border-right:1px solid rgba(255,255,255,0.12);">
+          <p style="margin:0;font-size:34px;font-weight:800;color:#fff;line-height:1;">${pointsEarned}</p>
+          <p style="margin:6px 0 0;font-size:11px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.06em;">Earned This Year</p>
+        </td>
+        <td style="text-align:center;padding:0 12px;">
+          <p style="margin:0;font-size:34px;font-weight:800;color:#fff;line-height:1;">${pointsRedeemed}</p>
+          <p style="margin:6px 0 0;font-size:11px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.06em;">Redeemed</p>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:12px 0 0;font-size:11px;color:rgba(255,255,255,0.35);text-align:center;">Annual program &middot; Points and tier reset June 1 each year</p>
+  </td></tr>
+  <tr><td style="background:#fff;padding:32px;border-radius:0 0 12px 12px;">
+    ${currentProjects.length > 0 ? `
+    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#2d4a3e;text-transform:uppercase;letter-spacing:0.08em;">Current Projects (${currentProjects.length})</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">${currentRows}</table>` : ""}
+    ${potentialProjects.length > 0 ? `
+    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:0.08em;">Potential Projects (${potentialProjects.length})</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">${potentialRows}</table>` : ""}
+    ${recentReviews.length > 0 ? `
+    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.08em;">Recent Google Reviews</p>
+    <div style="margin-bottom:28px;">${reviewCards}</div>` : ""}
+    ${previousProjects.length > 0 ? `
+    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Previous Projects (${previousProjects.length})</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;opacity:0.7;">${previousRows}</table>` : ""}
+    ${currentProjects.length === 0 && potentialProjects.length === 0 ? `
+    <p style="margin:0 0 28px;font-size:14px;color:#9ca3af;text-align:center;">No active referred projects yet.</p>` : ""}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td style="text-align:center;padding:24px 0;border-top:1px solid #f3f4f6;">
+        <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+          <tr><td style="background:${isInvited ? "#2d4a3e" : "#6b7280"};border-radius:8px;padding:14px 28px;">
+            <a href="${ctaHref}" style="color:#fff;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap;">${ctaText}</a>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+    <p style="margin:0;font-size:12px;color:#d1d5db;text-align:center;">Top Tier Transitions &middot; toptiertransitions.com</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
