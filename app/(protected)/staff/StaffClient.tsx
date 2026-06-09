@@ -100,7 +100,10 @@ function MemberCard({ member }: { member: StaffMember }) {
           )}
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">{member.displayName || member.email}</p>
-            <p className="text-xs text-gray-400 truncate">{member.email}</p>
+            <a href={`mailto:${member.email}`} className="text-xs text-gray-400 truncate hover:underline">{member.email}</a>
+            {member.phone && (
+              <a href={`tel:${member.phone.replace(/\D/g, "")}`} className="text-xs text-gray-400 truncate hover:underline">{member.phone}</a>
+            )}
           </div>
         </div>
         <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_COLORS[member.role] ?? "bg-gray-100 text-gray-600"}`}>
