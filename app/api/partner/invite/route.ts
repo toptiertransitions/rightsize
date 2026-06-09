@@ -23,14 +23,17 @@ export async function POST(req: NextRequest) {
 
   // Send invite email via Resend (no Clerk invitation — partner uses standard sign-up)
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const clerk = await clerkClient().then((c) => c.users.getUser(userId)).catch(() => null);
-  const inviterName = clerk
-    ? [clerk.firstName, clerk.lastName].filter(Boolean).join(" ") || "The Team"
+  const clerkUser = await clerkClient().then((c) => c.users.getUser(userId)).catch(() => null);
+  const inviterName = clerkUser
+    ? [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || "The Team"
     : "The Team";
+  const inviterEmail = clerkUser?.emailAddresses?.[0]?.emailAddress;
+  const ccEmail = inviterEmail && inviterEmail.toLowerCase() !== email.toLowerCase() ? inviterEmail : undefined;
 
   const { error: sendError } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
     to: email,
+    ...(ccEmail ? { cc: [ccEmail] } : {}),
     subject: `${inviterName} invited you to the TTT Partner Portal`,
     html: buildPartnerInviteEmail({ inviterName, partnerName: name || email, portalUrl }),
   });
