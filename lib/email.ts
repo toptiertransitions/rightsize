@@ -1690,6 +1690,8 @@ export type ActiveReferralContactRow = {
   lastMonthValue: number;
   thisMonthReferrals: { clientName: string; city?: string; state?: string; value: number }[];
   companyId: string;
+  hasPortalAccount: boolean;
+  portalLastActiveAt?: string; // ISO string from Clerk lastActiveAt/lastSignInAt
 };
 
 function fmtDateShort(iso: string | undefined): string {
@@ -1820,6 +1822,14 @@ export function buildActiveReferralEmail({
                   <p style="margin:0;font-size:10px;color:#9ca3af;">Last Activity</p>
                   <p style="margin:1px 0 0;font-size:12px;font-weight:600;color:#374151;">${r.lastActivityDate ? fmtDateShort(r.lastActivityDate) : "None"}</p>
                   <p style="margin:1px 0 0;font-size:11px;color:#9ca3af;">${r.activityCount} activit${r.activityCount === 1 ? "y" : "ies"}</p>
+                  <p style="margin:6px 0 0;">
+                    ${r.hasPortalAccount
+                      ? r.portalLastActiveAt
+                        ? `<span style="display:inline-block;font-size:10px;font-weight:600;color:#065f46;background:#d1fae5;border:1px solid #6ee7b7;border-radius:20px;padding:2px 7px;">Portal: ${fmtDateShort(r.portalLastActiveAt)}</span>`
+                        : `<span style="display:inline-block;font-size:10px;font-weight:600;color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:20px;padding:2px 7px;">Portal: No activity yet</span>`
+                      : `<span style="display:inline-block;font-size:10px;font-weight:600;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:2px 7px;">No Portal Account Yet</span>`
+                    }
+                  </p>
                 </td>
               </tr>
             </table>

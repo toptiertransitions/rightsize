@@ -36,6 +36,21 @@ export async function POST() {
   // Only Active Referral contacts
   const activeContacts = allContacts.filter(c => c.stage === "Active Referral");
 
+  // Fetch Clerk last-active timestamps for contacts that have a portal account
+  const portalLastActiveById = new Map<string, string | null>();
+  const contactsWithAccount = activeContacts.filter(c => c.clerkUserId);
+  await Promise.all(
+    contactsWithAccount.map(async (c) => {
+      try {
+        const u = await clerk.users.getUser(c.clerkUserId!);
+        const ts = u.lastActiveAt ?? u.lastSignInAt ?? null;
+        portalLastActiveById.set(c.id, ts ? new Date(ts).toISOString() : null);
+      } catch {
+        portalLastActiveById.set(c.id, null);
+      }
+    })
+  );
+
   // Build lookup maps
   const companyMap = new Map(companies.map(c => [c.id, c]));
   const staffNameByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
@@ -179,6 +194,10 @@ export async function POST() {
       lastMonthValue: goalStats?.lastMonthValue ?? 0,
       thisMonthReferrals: goalStats?.thisMonthReferrals ?? [],
       companyId: contact.referralCompanyId,
+      hasPortalAccount: !!contact.clerkUserId,
+      portalLastActiveAt: portalLastActiveById.has(contact.id)
+        ? (portalLastActiveById.get(contact.id) ?? undefined)
+        : undefined,
     };
   });
 
