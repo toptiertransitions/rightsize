@@ -1634,7 +1634,16 @@ function ContactsTab({
                     >
                       Activities
                     </button>
-                    <button onClick={() => openEdit(c)} className="text-gray-500 hover:text-gray-800 text-xs px-2 py-1">Edit</button>
+                    <button
+                      onClick={() => openEdit(c)}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:border-forest-400 hover:text-forest-700 hover:bg-forest-50 transition-colors"
+                      title="Edit client"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit
+                    </button>
                     <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1">Delete</button>
                   </td>
                 </tr>
@@ -1695,10 +1704,21 @@ function ContactsTab({
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setModalOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold text-gray-900">{editing ? "Edit Client" : "Add Client"}</h3>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">{editing ? "Edit Client" : "Add Client"}</h3>
+                {editing && <p className="text-xs text-gray-400 mt-0.5">{editing.name}</p>}
+              </div>
+              <button onClick={() => setModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
 
             {/* Name */}
             <div>
@@ -1809,14 +1829,14 @@ function ContactsTab({
 
             {/* Owner */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Owner *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
               <select
                 value={form.assignedToClerkId}
                 onChange={(e) => setForm((f) => ({ ...f, assignedToClerkId: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
               >
-                <option value="">— Select Owner —</option>
-                {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+                <option value="">— Unassigned —</option>
+                {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin" || s.role === "TTTManager").map(s => (
                   <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
                 ))}
               </select>
@@ -1825,13 +1845,14 @@ function ContactsTab({
             {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 resize-none" />
+            </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setModalOpen(false)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.name || !form.assignedToClerkId} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
-                {saving ? "Saving…" : "Save"}
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setModalOpen(false)} className="h-9 px-4 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={handleSave} disabled={saving || !form.name} className="h-9 px-5 text-sm bg-forest-600 text-white rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors font-medium">
+                {saving ? "Saving…" : editing ? "Save Changes" : "Add Client"}
               </button>
             </div>
           </div>
