@@ -42,18 +42,19 @@ export async function POST(req: NextRequest) {
   const companyId = contact.referralCompanyId || null;
 
   const [projectsByStage, points, company] = await Promise.all([
-    getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string; stage: string }[]),
+    getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string | null; stage: string }[]),
     companyId
       ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
       : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
     companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
   ]);
 
+  const projectsWithTenant = projectsByStage.filter(p => p.tenantId !== null);
   const tenants = await Promise.all(
-    projectsByStage.map(({ tenantId }) => getTenantById(tenantId).catch(() => null))
+    projectsWithTenant.map(({ tenantId }) => getTenantById(tenantId!).catch(() => null))
   );
 
-  const wonTenantIds = projectsByStage.filter(p => p.stage === "Won").map(p => p.tenantId);
+  const wonTenantIds = projectsByStage.filter(p => p.stage === "Won" && p.tenantId !== null).map(p => p.tenantId as string);
   const allLinkedTenantIds = companyId
     ? await getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[])
     : wonTenantIds;
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
 
-  const enriched = projectsByStage
+  const enriched = projectsWithTenant
     .map(({ tenantId, stage }, i) => {
       const t = tenants[i];
       if (!t) return null;

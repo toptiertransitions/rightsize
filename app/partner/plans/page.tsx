@@ -20,10 +20,10 @@ export default async function PartnerPlansPage({
   const { t } = await searchParams;
 
   // CRM-chain projects
-  const projectsByStage = await getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string; stage: string }[]);
+  const projectsByStage = await getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string | null; stage: string }[]);
   const crmTenantIds = projectsByStage
-    .filter(p => p.stage !== "Lost" && p.stage !== "Lead" && p.stage !== "Qualifying")
-    .map(p => p.tenantId);
+    .filter(p => p.tenantId !== null && p.stage !== "Lost" && p.stage !== "Lead" && p.stage !== "Qualifying")
+    .map(p => p.tenantId as string);
 
   // Backfill path: tenants with ReferralCompanyId set directly
   const backfillTenantIds = contact.referralCompanyId

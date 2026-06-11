@@ -5935,30 +5935,37 @@ export async function getPartnerTenantIdsByCompany(referralCompanyId: string): P
 }
 
 // Returns {tenantId, stage} for all opportunities linked to a single referral contact
-export async function getPartnerOpportunitiesInfo(referralContactId: string): Promise<{ tenantId: string; stage: string }[]> {
+export async function getPartnerOpportunitiesInfo(referralContactId: string): Promise<{ tenantId: string | null; stage: string; clientName?: string }[]> {
   const formula1 = encodeURIComponent(`{ReferralPartnerId} = "${referralContactId}"`);
   const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
   if (!ccRes.ok) return [];
   const ccData = await ccRes.json();
-  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+  const ccRecords: { id: string; name: string }[] = (ccData.records ?? []).map((r: AirtableRecord) => ({ id: r.id, name: toStr(r.fields["Name"]) }));
+  const clientContactIds: string[] = ccRecords.map(r => r.id);
   if (clientContactIds.length === 0) return [];
+  const nameById: Record<string, string> = Object.fromEntries(ccRecords.map(r => [r.id, r.name]));
 
   const orClauses = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
   const formula2 = encodeURIComponent(clientContactIds.length === 1 ? orClauses : `OR(${orClauses})`);
-  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId&fields[]=Stage`);
+  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId&fields[]=Stage&fields[]=ClientContactId`);
   if (!oppRes.ok) return [];
   const oppData = await oppRes.json();
-  const results: { tenantId: string; stage: string }[] = [];
+  const results: { tenantId: string | null; stage: string; clientName?: string }[] = [];
   for (const r of (oppData.records ?? []) as AirtableRecord[]) {
     const tid = toStr(r.fields["TenantId"]);
     const stage = toStr(r.fields["Stage"]);
-    if (tid && !results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
+    const ccId = toStr(r.fields["ClientContactId"]);
+    if (tid) {
+      if (!results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
+    } else if (stage === "Proposing") {
+      results.push({ tenantId: null, stage, clientName: nameById[ccId] || undefined });
+    }
   }
   return results;
 }
 
 // Returns {tenantId, stage} for all opportunities linked to any contact at a company
-export async function getCompanyOpportunitiesInfo(referralCompanyId: string): Promise<{ tenantId: string; stage: string }[]> {
+export async function getCompanyOpportunitiesInfo(referralCompanyId: string): Promise<{ tenantId: string | null; stage: string; clientName?: string }[]> {
   const contactIds = await getCompanyContactIds(referralCompanyId);
   if (contactIds.length === 0) return [];
 
@@ -5967,19 +5974,26 @@ export async function getCompanyOpportunitiesInfo(referralCompanyId: string): Pr
   const ccRes = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${formula1}&fields[]=Name`);
   if (!ccRes.ok) return [];
   const ccData = await ccRes.json();
-  const clientContactIds: string[] = (ccData.records ?? []).map((r: AirtableRecord) => r.id);
+  const ccRecords: { id: string; name: string }[] = (ccData.records ?? []).map((r: AirtableRecord) => ({ id: r.id, name: toStr(r.fields["Name"]) }));
+  const clientContactIds: string[] = ccRecords.map(r => r.id);
   if (clientContactIds.length === 0) return [];
+  const nameById: Record<string, string> = Object.fromEntries(ccRecords.map(r => [r.id, r.name]));
 
   const cc2 = clientContactIds.map(id => `{ClientContactId} = "${id}"`).join(", ");
   const formula2 = encodeURIComponent(clientContactIds.length === 1 ? cc2 : `OR(${cc2})`);
-  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId&fields[]=Stage`);
+  const oppRes = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula2}&fields[]=TenantId&fields[]=Stage&fields[]=ClientContactId`);
   if (!oppRes.ok) return [];
   const oppData = await oppRes.json();
-  const results: { tenantId: string; stage: string }[] = [];
+  const results: { tenantId: string | null; stage: string; clientName?: string }[] = [];
   for (const r of (oppData.records ?? []) as AirtableRecord[]) {
     const tid = toStr(r.fields["TenantId"]);
     const stage = toStr(r.fields["Stage"]);
-    if (tid && !results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
+    const ccId = toStr(r.fields["ClientContactId"]);
+    if (tid) {
+      if (!results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
+    } else if (stage === "Proposing") {
+      results.push({ tenantId: null, stage, clientName: nameById[ccId] || undefined });
+    }
   }
   return results;
 }

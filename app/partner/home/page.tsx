@@ -16,7 +16,7 @@ import {
 import type { PartnerPoint, GoogleReview, StaffMember } from "@/lib/types";
 
 interface ProjectInfo {
-  tenantId: string;
+  tenantId: string | null;
   name: string;
   address?: string;
   city?: string;
@@ -44,19 +44,20 @@ export default async function PartnerHomePage() {
   const companyId = contact.referralCompanyId || null;
 
   const [projectsByStage, points, company] = await Promise.all([
-    getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string; stage: string }[]),
+    getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string | null; stage: string; clientName?: string }[]),
     companyId
       ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
       : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
     companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
   ]);
 
+  const projectsWithTenant = projectsByStage.filter(p => p.tenantId !== null);
   const tenants = await Promise.all(
-    projectsByStage.map(({ tenantId }) => getTenantById(tenantId).catch(() => null))
+    projectsWithTenant.map(({ tenantId }) => getTenantById(tenantId!).catch(() => null))
   );
 
   // Gather tenant IDs from both CRM-chain projects AND direct ReferralCompanyId backfill
-  const wonTenantIds = projectsByStage.filter(p => p.stage === "Won").map(p => p.tenantId);
+  const wonTenantIds = projectsByStage.filter(p => p.stage === "Won" && p.tenantId !== null).map(p => p.tenantId as string);
   const allLinkedTenantIds = companyId
     ? await getPartnerTenantIdsByCompany(companyId).catch(() => [] as string[])
     : wonTenantIds;
@@ -83,8 +84,8 @@ export default async function PartnerHomePage() {
   const leadById: Record<string, StaffMember> = {};
   uniqueLeadIds.forEach((id, i) => { if (leadMembers[i]) leadById[id] = leadMembers[i]!; });
 
-  // Merge stage + tenant data + team lead
-  const enriched = projectsByStage
+  // Merge stage + tenant data + team lead (for opportunities that have a project)
+  const enriched = projectsWithTenant
     .map(({ tenantId, stage }, i) => {
       const t = tenants[i];
       if (!t) return null;
@@ -103,7 +104,15 @@ export default async function PartnerHomePage() {
     })
     .filter(Boolean) as ProjectInfo[];
 
-  const potentialProjects = enriched.filter(p => p.stage === "Proposing" && !p.isArchived);
+  // Proposing-stage opportunities that haven't been converted to a project yet
+  const preProjectProposals: ProjectInfo[] = projectsByStage
+    .filter(p => p.tenantId === null && p.stage === "Proposing")
+    .map(p => ({ tenantId: null, name: p.clientName || "Client", isArchived: false, stage: "Proposing" }));
+
+  const potentialProjects = [
+    ...enriched.filter(p => p.stage === "Proposing" && !p.isArchived),
+    ...preProjectProposals,
+  ];
   const currentProjects   = enriched.filter(p => p.stage === "Won" && !p.isArchived);
   const previousProjects  = enriched.filter(p => p.stage === "Won" && p.isArchived);
 
@@ -315,13 +324,10 @@ function ProjectCard({
   potential?: boolean;
 }) {
   const locationParts = [project.city, project.state].filter(Boolean);
-  return (
-    <Link
-      href={`/partner/plans?t=${project.tenantId}`}
-      className={`block bg-white border rounded-xl px-4 py-3 hover:shadow-sm transition-shadow ${
-        dimmed ? "border-gray-100 opacity-60" : "border-gray-200"
-      }`}
-    >
+  const hasProject = project.tenantId !== null;
+
+  const inner = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-gray-900">{project.name}</p>
         {potential && (
@@ -347,7 +353,21 @@ function ProjectCard({
           )}
         </div>
       )}
-      <p className="text-xs text-[#2d4a3e] mt-2 font-medium">View plan &rarr;</p>
+      {hasProject && <p className="text-xs text-[#2d4a3e] mt-2 font-medium">View plan &rarr;</p>}
+    </>
+  );
+
+  const cardClass = `block bg-white border rounded-xl px-4 py-3 ${
+    dimmed ? "border-gray-100 opacity-60" : "border-gray-200"
+  }`;
+
+  if (!hasProject) {
+    return <div className={cardClass}>{inner}</div>;
+  }
+
+  return (
+    <Link href={`/partner/plans?t=${project.tenantId}`} className={`${cardClass} hover:shadow-sm transition-shadow`}>
+      {inner}
     </Link>
   );
 }

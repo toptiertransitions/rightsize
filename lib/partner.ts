@@ -61,28 +61,29 @@ export async function getPartnerTenantIdsFull(contact: ReferralContact): Promise
   return all;
 }
 
-// Returns {tenantId, stage} for all referred projects, including email-fallback ones marked Won
+// Returns {tenantId, stage} for all referred projects, including email-fallback ones marked Won.
+// tenantId may be null for Proposing-stage opportunities not yet converted to a project.
 export async function getPartnerProjectsByStage(
   contact: ReferralContact
-): Promise<{ tenantId: string; stage: string }[]> {
+): Promise<{ tenantId: string | null; stage: string; clientName?: string }[]> {
   const companyId = contact.referralCompanyId || null;
 
   const [fromOpp, emails] = await Promise.all([
     companyId
-      ? getCompanyOpportunitiesInfo(companyId).catch(() => [] as { tenantId: string; stage: string }[])
-      : getPartnerOpportunitiesInfo(contact.id).catch(() => [] as { tenantId: string; stage: string }[]),
+      ? getCompanyOpportunitiesInfo(companyId).catch(() => [] as { tenantId: string | null; stage: string; clientName?: string }[])
+      : getPartnerOpportunitiesInfo(contact.id).catch(() => [] as { tenantId: string | null; stage: string; clientName?: string }[]),
     companyId
       ? getCompanyClientContactEmails(companyId).catch(() => [] as string[])
       : getClientContactEmailsForPartner(contact.id).catch(() => [] as string[]),
   ]);
 
   const viaEmail = await getTenantIdsByClientEmails(emails).catch(() => [] as string[]);
-  const oppTenantIds = fromOpp.map(x => x.tenantId);
+  const oppTenantIds = fromOpp.map(x => x.tenantId).filter((id): id is string => id !== null);
   const extra = viaEmail
     .filter(id => !oppTenantIds.includes(id))
     .map(id => ({ tenantId: id, stage: "Won" }));
 
-  return [...fromOpp, ...extra];
+  return [...fromOpp, ...extra] as { tenantId: string | null; stage: string; clientName?: string }[];
 }
 
 // Access check uses full lookup so projects without TenantId on the Opportunity are found via email
