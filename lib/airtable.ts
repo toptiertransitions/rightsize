@@ -5957,7 +5957,7 @@ export async function getPartnerOpportunitiesInfo(referralContactId: string): Pr
     const ccId = toStr(r.fields["ClientContactId"]);
     if (tid) {
       if (!results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
-    } else if (stage === "Proposing") {
+    } else if (stage === "Proposing" || stage === "Qualifying") {
       results.push({ tenantId: null, stage, clientName: nameById[ccId] || undefined });
     }
   }
@@ -5991,7 +5991,7 @@ export async function getCompanyOpportunitiesInfo(referralCompanyId: string): Pr
     const ccId = toStr(r.fields["ClientContactId"]);
     if (tid) {
       if (!results.some(x => x.tenantId === tid)) results.push({ tenantId: tid, stage: stage || "Unknown" });
-    } else if (stage === "Proposing") {
+    } else if (stage === "Proposing" || stage === "Qualifying") {
       results.push({ tenantId: null, stage, clientName: nameById[ccId] || undefined });
     }
   }

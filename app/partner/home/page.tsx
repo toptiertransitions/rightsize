@@ -104,13 +104,13 @@ export default async function PartnerHomePage() {
     })
     .filter(Boolean) as ProjectInfo[];
 
-  // Proposing-stage opportunities that haven't been converted to a project yet
+  // Proposing/Qualifying opportunities that haven't been converted to a project yet
   const preProjectProposals: ProjectInfo[] = projectsByStage
-    .filter(p => p.tenantId === null && p.stage === "Proposing")
-    .map(p => ({ tenantId: null, name: p.clientName || "Client", isArchived: false, stage: "Proposing" }));
+    .filter(p => p.tenantId === null && (p.stage === "Proposing" || p.stage === "Qualifying"))
+    .map(p => ({ tenantId: null, name: p.clientName || "Client", isArchived: false, stage: p.stage }));
 
   const potentialProjects = [
-    ...enriched.filter(p => p.stage === "Proposing" && !p.isArchived),
+    ...enriched.filter(p => (p.stage === "Proposing" || p.stage === "Qualifying") && !p.isArchived),
     ...preProjectProposals,
   ];
   const currentProjects   = enriched.filter(p => p.stage === "Won" && !p.isArchived);
