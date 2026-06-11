@@ -27,7 +27,6 @@ const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "users", label: "Users", href: "/admin/users" },
   { tab: "local-vendors", label: "Vendors", href: "/admin/local-vendors" },
   { tab: "routing-rules", label: "Routing", href: "/admin/routing-rules" },
-  { tab: "bulk-upload", label: "CSVs", href: "/admin/integrations/circle-hand" },
   { tab: "contract-services", label: "Contracts", href: "/admin/contract-services" },
   { tab: "invoicing", label: "Invoicing", href: "/admin/invoicing" },
   { tab: "expenses", label: "Expenses", href: "/admin/expenses" },
@@ -62,7 +61,7 @@ export function AdminHeader({ active }: AdminHeaderProps) {
               <div className="text-[9px] text-gray-400">TTT Admin Console</div>
             </div>
           </div>
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1.5">
             {NAV_LINKS.map(({ tab, label, href }) => (
               <Link
                 key={tab}
