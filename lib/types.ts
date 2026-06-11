@@ -128,6 +128,7 @@ export interface Tenant {
   isLostDeal?: boolean;
   isTTT?: boolean;
   isConsignmentOnly?: boolean;
+  isEstateSale?: boolean;
   destinationSqFt?: number;
   payoutMethod?: PayoutMethod;
   payoutUsername?: string;

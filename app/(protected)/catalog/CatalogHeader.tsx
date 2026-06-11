@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 
 interface CatalogHeaderProps {
@@ -13,12 +14,21 @@ interface CatalogHeaderProps {
 
 export function CatalogHeader({ tenantId, canEdit, canSeeEstateMode, estateMode }: CatalogHeaderProps) {
   const router = useRouter();
+  const [pending, setPending] = useState(false);
 
-  const toggle = () => {
-    const next = estateMode
-      ? `/catalog?tenantId=${tenantId}`
-      : `/catalog?tenantId=${tenantId}&estateMode=1`;
-    router.replace(next);
+  const toggle = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      await fetch("/api/catalog/estate-mode", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, isEstateSale: !estateMode }),
+      });
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
   };
 
   const addItemHref = `/catalog/new?tenantId=${tenantId}${estateMode ? "&estateMode=1" : ""}`;
@@ -31,8 +41,9 @@ export function CatalogHeader({ tenantId, canEdit, canSeeEstateMode, estateMode 
         {canSeeEstateMode && (
           <button
             onClick={toggle}
+            disabled={pending}
             title={estateMode ? "Estate Sale mode ON — click to turn off" : "Turn on Estate Sale mode"}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all select-none ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all select-none disabled:opacity-60 ${
               estateMode
                 ? "bg-amber-100 text-amber-800 border-amber-300 shadow-sm"
                 : "bg-gray-100 text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-600"

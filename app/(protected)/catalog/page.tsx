@@ -18,7 +18,7 @@ import { CatalogHeader } from "./CatalogHeader";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
-  searchParams: Promise<{ tenantId?: string; estateMode?: string }>;
+  searchParams: Promise<{ tenantId?: string }>;
 }
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
@@ -27,8 +27,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { tenantId, estateMode: estateModeParam } = await searchParams;
-  const estateMode = estateModeParam === "1";
+  const { tenantId } = await searchParams;
 
   // ── All-projects sentinel mode (TTT staff only) ───────────────────────────────
   const SENTINEL_VIEWS = ["__all_active__", "__all_archived__", "__all_time__"];
@@ -107,6 +106,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
     const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
     const canSeeEstateMode = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+    const estateMode = tenant.isEstateSale ?? false;
 
     return (
       <div>
