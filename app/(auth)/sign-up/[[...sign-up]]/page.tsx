@@ -1,5 +1,6 @@
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
+import InAppBrowserWarning from "./InAppBrowserWarning";
 
 export default function SignUpPage() {
   return (
@@ -18,6 +19,7 @@ export default function SignUpPage() {
         </Link>
         <p className="text-sm text-gray-500">Free account · No credit card needed</p>
       </div>
+      <InAppBrowserWarning />
       <SignUp
         appearance={{
           elements: {

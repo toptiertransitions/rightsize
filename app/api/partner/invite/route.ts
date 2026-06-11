@@ -80,8 +80,13 @@ function buildPartnerInviteEmail({
               </a>
             </td></tr>
           </table>
-          <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Create a free account at:</p>
-          <p style="margin:0;font-size:12px;color:#6B7280;word-break:break-all;">${portalUrl}</p>
+          <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Or copy this link into Safari or Chrome:</p>
+          <p style="margin:0 0 20px;font-size:12px;color:#6B7280;word-break:break-all;">${portalUrl}</p>
+          <div style="background:#FFF9EC;border:1px solid #FDE68A;border-radius:10px;padding:12px 16px;">
+            <p style="margin:0;font-size:12px;color:#92400E;line-height:1.6;">
+              <strong>On your phone?</strong> If the button above doesn&rsquo;t work, it may have opened inside your email app&rsquo;s browser. Copy the link above and paste it directly into <strong>Safari</strong> or <strong>Chrome</strong> instead.
+            </p>
+          </div>
         </td></tr>
         <tr><td style="padding:16px 32px;border-top:1px solid #F3F4F6;">
           <p style="margin:0;font-size:12px;color:#9CA3AF;">
