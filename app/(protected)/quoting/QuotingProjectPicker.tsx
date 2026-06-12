@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Tenant } from "@/lib/types";
 
-type ViewMode = "active" | "archived" | "all";
+type ViewMode = "active" | "postmove" | "archived" | "all";
 
 interface Props {
   tenants: Tenant[];
@@ -25,7 +25,8 @@ export function QuotingProjectPicker({
 
   const filtered = tenants.filter(t => {
     if (t.isLostDeal) return false;
-    if (viewMode === "active" && t.isArchived) return false;
+    if (viewMode === "active" && (t.isArchived || t.isConsignmentOnly)) return false;
+    if (viewMode === "postmove" && (!t.isConsignmentOnly || t.isArchived)) return false;
     if (viewMode === "archived" && !t.isArchived) return false;
     const q = search.toLowerCase();
     if (!q) return true;
@@ -48,17 +49,17 @@ export function QuotingProjectPicker({
 
       {/* View mode toggle */}
       <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-3 w-fit">
-        {(["active", "archived", "all"] as ViewMode[]).map(m => (
+        {(["active", "postmove", "archived", "all"] as ViewMode[]).map(m => (
           <button
             key={m}
             onClick={() => setViewMode(m)}
-            className={`px-4 py-1.5 text-sm capitalize transition-colors ${
+            className={`px-4 py-1.5 text-sm transition-colors ${
               viewMode === m
                 ? "bg-forest-600 text-white"
                 : "bg-white text-gray-600 hover:bg-gray-50"
             }`}
           >
-            {m === "active" ? "Active" : m === "archived" ? "Archived" : "All"}
+            {m === "active" ? "Active" : m === "postmove" ? "Post-Move" : m === "archived" ? "Archived" : "All"}
           </button>
         ))}
       </div>
@@ -84,6 +85,8 @@ export function QuotingProjectPicker({
               ? `No projects match "${search}"`
               : viewMode === "archived"
               ? "No archived projects found"
+              : viewMode === "postmove"
+              ? "No post-move projects found"
               : "No active projects found"}
           </div>
         ) : (
