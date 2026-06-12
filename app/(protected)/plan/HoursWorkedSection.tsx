@@ -86,11 +86,12 @@ function fmt12(t?: string): string {
 // ─── Edit modal ───────────────────────────────────────────────────────────────
 interface EditModalProps {
   entry: TimeEntry;
+  focusAreas: string[];
   onClose: () => void;
   onSaved: (entry: TimeEntry) => void;
 }
 
-function EditEntryModal({ entry, onClose, onSaved }: EditModalProps) {
+function EditEntryModal({ entry, focusAreas, onClose, onSaved }: EditModalProps) {
   const [date, setDate] = useState(entry.date);
   const [focusArea, setFocusArea] = useState(entry.focusArea);
   const [startTime, setStartTime] = useState(entry.startTime);
@@ -164,7 +165,10 @@ function EditEntryModal({ entry, onClose, onSaved }: EditModalProps) {
             <label className="block text-xs font-medium text-gray-700 mb-1">Focus Area</label>
             <select value={focusArea} onChange={e => setFocusArea(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
-              {TIME_FOCUS_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+              {/* Include current value even if it's a legacy label no longer in the list */}
+              {[...focusAreas, ...(focusAreas.includes(entry.focusArea) ? [] : [entry.focusArea])].map(a => (
+                <option key={a} value={a}>{a}</option>
+              ))}
             </select>
           </div>
 
@@ -772,6 +776,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
       {editingEntry && (
         <EditEntryModal
           entry={editingEntry}
+          focusAreas={serviceList}
           onClose={() => setEditingEntry(null)}
           onSaved={(updated) => {
             setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
