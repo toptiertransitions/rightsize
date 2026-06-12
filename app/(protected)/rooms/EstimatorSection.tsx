@@ -182,20 +182,33 @@ export function EstimatorSection({
       setContractBody("");
       return;
     }
-    const lineItems = editingContract.lineItems;
-    if (lineItems?.length) {
-      setRows(
-        lineItems.map((li) => ({
-          serviceId: li.serviceId,
-          serviceName: li.serviceName,
-          rate: li.rate,
-          calculatedHours: li.hours,
-          hours: li.hours,
-          included: true,
-          overridden: true,
-        }))
-      );
+    const lineItems = editingContract.lineItems ?? [];
+    const lineMap = new Map(lineItems.map((li) => [li.serviceId, li]));
+    const rows: ServiceRow[] = lineItems.map((li) => ({
+      serviceId: li.serviceId,
+      serviceName: li.serviceName,
+      rate: li.rate,
+      calculatedHours: li.hours,
+      hours: li.hours,
+      included: true,
+      overridden: true,
+    }));
+    // Append active services not in the saved line items (unchecked)
+    for (const svc of services.filter((s) => s.isActive)) {
+      if (!lineMap.has(svc.id)) {
+        const calc = calcHoursForService(svc, rooms, destinationSqFt);
+        rows.push({
+          serviceId: svc.id,
+          serviceName: svc.name,
+          rate: svc.hourlyRate,
+          calculatedHours: calc,
+          hours: Math.round(calc * touchMultiplier * 10) / 10,
+          included: false,
+          overridden: false,
+        });
+      }
     }
+    setRows(rows);
     setContractBody(editingContract.contractBody ?? "");
     if (editingContract.templateId) setSelectedTemplateId(editingContract.templateId);
     setNotInScope(editingContract.notInScope ?? settings?.notInScopeDefault ?? "");
