@@ -893,6 +893,10 @@ export interface ClientOpportunity {
   city?: string;
   state?: string;
   zip?: string;
+  destAddress?: string;
+  destCity?: string;
+  destState?: string;
+  destZip?: string;
 }
 
 export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task" | "Text Message";

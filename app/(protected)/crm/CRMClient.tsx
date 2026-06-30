@@ -466,6 +466,10 @@ function OpportunityPanel({
   const [oppCity, setOppCity] = useState(opportunity?.city || "");
   const [oppState, setOppState] = useState(opportunity?.state || "");
   const [oppZip, setOppZip] = useState(opportunity?.zip || "");
+  const [oppDestAddress, setOppDestAddress] = useState(opportunity?.destAddress || "");
+  const [oppDestCity, setOppDestCity] = useState(opportunity?.destCity || "");
+  const [oppDestState, setOppDestState] = useState(opportunity?.destState || "");
+  const [oppDestZip, setOppDestZip] = useState(opportunity?.destZip || "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [syncingGmail, setSyncingGmail] = useState(false);
@@ -515,6 +519,10 @@ function OpportunityPanel({
         city: oppCity,
         state: oppState,
         zip: oppZip,
+        destAddress: oppDestAddress,
+        destCity: oppDestCity,
+        destState: oppDestState,
+        destZip: oppDestZip,
       };
       if (opportunity) {
         const res = await fetch("/api/crm/opportunities", {
@@ -636,6 +644,10 @@ function OpportunityPanel({
         city: oppCity,
         state: oppState,
         zip: oppZip,
+        destAddress: oppDestAddress,
+        destCity: oppDestCity,
+        destState: oppDestState,
+        destZip: oppDestZip,
       };
 
       let savedOpp: ClientOpportunity;
@@ -679,6 +691,10 @@ function OpportunityPanel({
           city: oppCity || undefined,
           state: oppState || undefined,
           zip: oppZip || undefined,
+          destAddress: oppDestAddress || undefined,
+          destCity: oppDestCity || undefined,
+          destState: oppDestState || undefined,
+          destZip: oppDestZip || undefined,
         }),
       });
       if (!tenantRes.ok) {
@@ -772,9 +788,9 @@ function OpportunityPanel({
             />
           </div>
 
-          {/* Address */}
+          {/* Origin Address */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address <span className="font-normal text-gray-400">(optional)</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Origin Address <span className="font-normal text-gray-400">(optional)</span></label>
             <input
               type="text"
               value={oppAddress}
@@ -801,6 +817,41 @@ function OpportunityPanel({
                 type="text"
                 value={oppZip}
                 onChange={(e) => setOppZip(e.target.value)}
+                placeholder="Zip"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Destination Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Destination Address <span className="font-normal text-gray-400">(optional)</span></label>
+            <input
+              type="text"
+              value={oppDestAddress}
+              onChange={(e) => setOppDestAddress(e.target.value)}
+              placeholder="Street address"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={oppDestCity}
+                onChange={(e) => setOppDestCity(e.target.value)}
+                placeholder="City"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                value={oppDestState}
+                onChange={(e) => setOppDestState(e.target.value)}
+                placeholder="State"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                value={oppDestZip}
+                onChange={(e) => setOppDestZip(e.target.value)}
                 placeholder="Zip"
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />

@@ -3048,6 +3048,10 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     city: toStr(f["City"]) || undefined,
     state: toStr(f["State"]) || undefined,
     zip: toStr(f["Zip"]) || undefined,
+    destAddress: toStr(f["DestAddress"]) || undefined,
+    destCity: toStr(f["DestCity"]) || undefined,
+    destState: toStr(f["DestState"]) || undefined,
+    destZip: toStr(f["DestZip"]) || undefined,
   };
 }
 
@@ -3101,6 +3105,10 @@ export async function createOpportunity(data: {
   city?: string;
   state?: string;
   zip?: string;
+  destAddress?: string;
+  destCity?: string;
+  destState?: string;
+  destZip?: string;
 }): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {
     TenantId: data.tenantId || "",
@@ -3118,6 +3126,10 @@ export async function createOpportunity(data: {
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
+  if (data.destAddress !== undefined) fields["DestAddress"] = data.destAddress;
+  if (data.destCity !== undefined) fields["DestCity"] = data.destCity;
+  if (data.destState !== undefined) fields["DestState"] = data.destState;
+  if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -3145,6 +3157,10 @@ export async function updateOpportunity(
     city: string;
     state: string;
     zip: string;
+    destAddress: string;
+    destCity: string;
+    destState: string;
+    destZip: string;
   }>
 ): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {};
@@ -3164,6 +3180,10 @@ export async function updateOpportunity(
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
+  if (data.destAddress !== undefined) fields["DestAddress"] = data.destAddress;
+  if (data.destCity !== undefined) fields["DestCity"] = data.destCity;
+  if (data.destState !== undefined) fields["DestState"] = data.destState;
+  if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

@@ -60,16 +60,25 @@ export async function PATCH(req: NextRequest) {
   try {
     const opportunity = await updateOpportunity(id, data);
 
-    // When address fields are updated, sync them to the linked project.
-    const addressChanged = ["address", "city", "state", "zip"].some(f => f in data);
-    if (addressChanged && opportunity.tenantId) {
+    // Sync origin/destination address fields to the linked project when changed.
+    const originChanged = ["address", "city", "state", "zip"].some(f => f in data);
+    const destChanged = ["destAddress", "destCity", "destState", "destZip"].some(f => f in data);
+    if ((originChanged || destChanged) && opportunity.tenantId) {
       try {
-        await updateTenant(opportunity.tenantId, {
-          address: opportunity.address,
-          city: opportunity.city,
-          state: opportunity.state,
-          zip: opportunity.zip,
-        });
+        const patch: Record<string, unknown> = {};
+        if (originChanged) {
+          patch.address = opportunity.address;
+          patch.city = opportunity.city;
+          patch.state = opportunity.state;
+          patch.zip = opportunity.zip;
+        }
+        if (destChanged) {
+          patch.destAddress = opportunity.destAddress;
+          patch.destCity = opportunity.destCity;
+          patch.destState = opportunity.destState;
+          patch.destZip = opportunity.destZip;
+        }
+        await updateTenant(opportunity.tenantId, patch);
       } catch { /* non-fatal */ }
     }
 
