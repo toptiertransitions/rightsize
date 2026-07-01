@@ -1148,6 +1148,11 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadModalLoading, setDownloadModalLoading] = useState(false);
 
+  // ── Send to ProFound Finds ────────────────────────────────────────────────
+  const [sendToPFItem, setSendToPFItem] = useState<Item | null>(null);
+  const [sendToPFLoading, setSendToPFLoading] = useState(false);
+  const [sendToPFError, setSendToPFError] = useState<string | null>(null);
+
   // ── Bulk Assign to Estate Sale ────────────────────────────────────────────
   const [estateSaleModalOpen, setEstateSaleModalOpen] = useState(false);
   const [estates, setEstates] = useState<{ id: string; name: string; status: string }[]>([]);
@@ -1209,6 +1214,35 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     setBulkEstateLoading(false);
     if (succeeded.length > 0) setSelected(new Set());
   };
+
+  const handleSendToPF = useCallback(async () => {
+    if (!sendToPFItem) return;
+    setSendToPFLoading(true);
+    setSendToPFError(null);
+    try {
+      const res = await fetch("/api/items/send-to-profound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: sendToPFItem.id }),
+      });
+      const data = await res.json() as { item: Item; clone: Item | null; alreadyInPF?: boolean; error?: string };
+      if (!res.ok) {
+        setSendToPFError(data.error || "Failed to move item");
+        return;
+      }
+      // Replace original item with the donated clone; if already in PF, just remove from view
+      const clone = data.clone;
+      setItems(prev => prev.flatMap(i => {
+        if (i.id !== sendToPFItem.id) return [i];
+        return clone ? [clone] : [];
+      }));
+      setSendToPFItem(null);
+    } catch {
+      setSendToPFError("Network error. Please try again.");
+    } finally {
+      setSendToPFLoading(false);
+    }
+  }, [sendToPFItem]);
 
   // Fetch image bytes, then share (mobile) or save via blob URL (desktop).
   // Web Share API is the only reliable path to "Save to Photos" on iOS.
@@ -1986,6 +2020,16 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       )}
                     </div>
                   )}
+                  {isTTTUser && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setSendToPFItem(item); setSendToPFError(null); }}
+                      disabled={!item.salePrice || item.salePrice <= 0}
+                      title={!item.salePrice || item.salePrice <= 0 ? "Price needed to send to ProFound Finds" : "Send to ProFound Finds"}
+                      className="mt-2 w-full text-left text-[10px] font-medium text-orange-600 hover:text-orange-800 disabled:text-gray-300 disabled:cursor-default transition-colors"
+                    >
+                      {!item.salePrice || item.salePrice <= 0 ? "Price needed for ProFound Finds" : "→ Send to ProFound Finds"}
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -2232,18 +2276,32 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                           ) : "—"}
                         </td>
                       )}
-                      {/* Edit */}
+                      {/* Edit + Send to PF */}
                       {canEdit && (
                         <td className="px-3 py-2.5">
-                          <button
-                            onClick={() => setEditingItem(item)}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                            title="Edit item"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setEditingItem(item)}
+                              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                              title="Edit item"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            {isTTTUser && (
+                              <button
+                                onClick={() => { setSendToPFItem(item); setSendToPFError(null); }}
+                                disabled={!item.salePrice || item.salePrice <= 0}
+                                title={!item.salePrice || item.salePrice <= 0 ? "Price needed to send to ProFound Finds" : "Send to ProFound Finds"}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-50 text-orange-400 hover:text-orange-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -2309,6 +2367,46 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           onClose={() => setShowLabelModal(false)}
           onPrint={handlePrintLabels}
         />
+      )}
+
+      {sendToPFItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => { if (!sendToPFLoading) { setSendToPFItem(null); setSendToPFError(null); } }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl p-6 w-80 flex flex-col gap-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base">Send to ProFound Finds</h3>
+              <p className="text-sm text-gray-600 mt-0.5 truncate">{sendToPFItem.itemName}</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1.5">
+              <p>A <strong>$0 / Donated</strong> duplicate will remain in the current project.</p>
+              <p>The original will be moved to <strong>ProFound Finds</strong> with status <strong>Listed</strong> and synced to Square.</p>
+            </div>
+            {sendToPFError && (
+              <p className="text-xs text-red-600 font-medium">{sendToPFError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setSendToPFItem(null); setSendToPFError(null); }}
+                disabled={sendToPFLoading}
+                className="flex-1 py-2 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendToPF}
+                disabled={sendToPFLoading}
+                className="flex-1 py-2 px-4 rounded-xl bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 transition-colors disabled:opacity-50"
+              >
+                {sendToPFLoading ? "Moving…" : "Move to PF"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {downloadItem && (
