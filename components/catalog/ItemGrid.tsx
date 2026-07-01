@@ -2023,11 +2023,11 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   {isTTTUser && (
                     <button
                       onClick={e => { e.stopPropagation(); setSendToPFItem(item); setSendToPFError(null); }}
-                      disabled={!item.salePrice || item.salePrice <= 0}
-                      title={!item.salePrice || item.salePrice <= 0 ? "Price needed to send to ProFound Finds" : "Send to ProFound Finds"}
+                      disabled={(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0)}
+                      title={(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0) ? "Price needed to send to ProFound Finds" : "Send to ProFound Finds"}
                       className="mt-2 w-full text-left text-[10px] font-medium text-orange-600 hover:text-orange-800 disabled:text-gray-300 disabled:cursor-default transition-colors"
                     >
-                      {!item.salePrice || item.salePrice <= 0 ? "Price needed for ProFound Finds" : "→ Send to ProFound Finds"}
+                      {(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0) ? "Price needed for ProFound Finds" : "→ Send to ProFound Finds"}
                     </button>
                   )}
                 </div>
@@ -2292,8 +2292,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                             {isTTTUser && (
                               <button
                                 onClick={() => { setSendToPFItem(item); setSendToPFError(null); }}
-                                disabled={!item.salePrice || item.salePrice <= 0}
-                                title={!item.salePrice || item.salePrice <= 0 ? "Price needed to send to ProFound Finds" : "Send to ProFound Finds"}
+                                disabled={(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0)}
+                                title={(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0) ? "Price needed to send to ProFound Finds" : "Send to ProFound Finds"}
                                 className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-50 text-orange-400 hover:text-orange-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

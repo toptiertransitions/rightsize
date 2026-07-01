@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
   const item = await getItemById(itemId).catch(() => null);
   if (!item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
 
-  if (!item.salePrice || item.salePrice <= 0) {
+  const hasPrice = (item.salePrice && item.salePrice > 0) || (item.valueMid && item.valueMid > 0);
+  if (!hasPrice) {
     return NextResponse.json({ error: "Price Needed to Move to ProFound Finds" }, { status: 422 });
   }
 
