@@ -175,10 +175,11 @@ export async function POST(
   ].filter(Boolean).join(" | ");
 
   try {
+    const paidAtEastern = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }); // YYYY-MM-DD in ET
     await updateInvoice(id, {
       status: "Paid",
       paidAmount: invoice.amount,
-      paidAt: new Date().toISOString().slice(0, 10),
+      paidAt: paidAtEastern,
       notes: noteLines.trim(),
     });
   } catch (err) {
@@ -219,6 +220,7 @@ export async function POST(
       await resend.emails.send({
         from: `${companyName} <billing@toptiertransitions.com>`,
         to: email,
+        bcc: "billing@toptiertransitions.com",
         subject: `Payment Confirmation — Invoice ${invoice.invoiceNumber}`,
         html,
       });
