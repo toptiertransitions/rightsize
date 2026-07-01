@@ -196,7 +196,7 @@ function OpportunitiesTab({
 }) {
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">(initialStageFilter);
-  const [sort, setSort] = useState<"newest" | "value" | "nextstep">("newest");
+  const [sort, setSort] = useState<"oldest" | "newest" | "value" | "nextstep">("oldest");
   const [filterOwner, setFilterOwner] = useState("");
   const [panelOpp, setPanelOpp] = useState<ClientOpportunity | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -236,7 +236,11 @@ function OpportunitiesTab({
       const bDate = b.nextStepDate || "9999";
       return aDate.localeCompare(bDate);
     }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sort === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    // "oldest": ascending createdAt, tiebreak by est. value descending
+    const dateCmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (dateCmp !== 0) return dateCmp;
+    return b.estimatedValue - a.estimatedValue;
   });
 
   function getContactName(id: string) {
@@ -245,11 +249,38 @@ function OpportunitiesTab({
 
   function getSourceLabel(opp: ClientOpportunity): string {
     const cc = clientContacts.find(c => c.id === opp.clientContactId);
-    if (cc?.referralPartnerId) {
+    if (cc?.source === "Referral Partner" && cc.referralPartnerId) {
       const rc = referralContacts.find(r => r.id === cc.referralPartnerId);
-      if (rc) return rc.name;
+      if (rc) return `Ref: ${rc.name}`;
+    }
+    if (cc?.source === "Staff Referral" && cc.staffReferralId) {
+      const sm = staffMembers.find(s => s.clerkUserId === cc.staffReferralId);
+      if (sm) return `Staff: ${sm.displayName}`;
     }
     return cc?.source || "—";
+  }
+
+  function renderSourceCell(opp: ClientOpportunity) {
+    const cc = clientContacts.find(c => c.id === opp.clientContactId);
+    if (cc?.source === "Referral Partner" && cc.referralPartnerId) {
+      const rc = referralContacts.find(r => r.id === cc.referralPartnerId);
+      if (rc) return (
+        <span className="inline-flex items-center gap-1 text-xs">
+          <span className="text-gray-400">Ref:</span>
+          <span className="font-medium text-gray-700 truncate max-w-[110px]" title={rc.name}>{rc.name}</span>
+        </span>
+      );
+    }
+    if (cc?.source === "Staff Referral" && cc.staffReferralId) {
+      const sm = staffMembers.find(s => s.clerkUserId === cc.staffReferralId);
+      if (sm) return (
+        <span className="inline-flex items-center gap-1 text-xs">
+          <span className="text-gray-400">Staff:</span>
+          <span className="font-medium text-gray-700 truncate max-w-[110px]" title={sm.displayName}>{sm.displayName}</span>
+        </span>
+      );
+    }
+    return <span className="text-gray-600 text-sm">{cc?.source || <span className="text-gray-400">—</span>}</span>;
   }
 
   function exportCsv() {
@@ -343,7 +374,8 @@ function OpportunitiesTab({
             onChange={(e) => setSort(e.target.value as typeof sort)}
             className="text-sm border border-gray-300 rounded-lg px-2 py-1"
           >
-            <option value="newest">Newest</option>
+            <option value="oldest">Oldest First</option>
+            <option value="newest">Newest First</option>
             <option value="value">Est. Value (desc)</option>
             <option value="nextstep">Next Step (asc)</option>
           </select>
@@ -367,13 +399,14 @@ function OpportunitiesTab({
               <th className="text-left px-4 py-3 font-medium text-gray-600">Stage</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Est. Value</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Next Step</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell whitespace-nowrap">Created</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center py-10 text-gray-400">
+                <td colSpan={10} className="text-center py-10 text-gray-400">
                   No opportunities found
                 </td>
               </tr>
@@ -384,7 +417,7 @@ function OpportunitiesTab({
               <tr key={opp.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => openEdit(opp)}>
                 <td className="px-4 py-3 font-medium text-gray-900">{getContactName(opp.clientContactId)}</td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{opp.city || <span className="text-gray-400">—</span>}</td>
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{getSourceLabel(opp)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{renderSourceCell(opp)}</td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ownerName || <span className="text-gray-400">—</span>}</td>
                 <td className="px-4 py-3">
                   <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", STAGE_COLORS[opp.stage])}>
@@ -395,6 +428,9 @@ function OpportunitiesTab({
                   {opp.estimatedValue ? `$${opp.estimatedValue.toLocaleString()}` : "—"}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{opp.nextStepDate || "—"}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs hidden lg:table-cell whitespace-nowrap">
+                  {opp.createdAt ? new Date(opp.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : <span className="text-gray-400">—</span>}
+                </td>
                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => handleDelete(opp.id)}
