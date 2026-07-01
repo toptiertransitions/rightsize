@@ -2796,3 +2796,176 @@ export function buildPartnerRewardsEmail({
 </td></tr></table>
 </body></html>`;
 }
+
+// ─── Payment Receipt Email ────────────────────────────────────────────────────
+export function buildPaymentReceiptEmail({
+  firstName,
+  invoiceNumber,
+  projectName,
+  serviceName,
+  amountPaid,
+  paymentMethod,
+  maskedCard,
+  transactionId,
+  paidAt,
+  companyName,
+  companyEmail,
+  companyPhone,
+  logoUrl,
+  lineItems,
+}: {
+  firstName: string;
+  invoiceNumber: string;
+  projectName?: string;
+  serviceName?: string;
+  amountPaid: number;
+  paymentMethod: "credit_card" | "ach";
+  maskedCard?: string;
+  transactionId?: string;
+  paidAt: string;
+  companyName: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  logoUrl?: string;
+  lineItems?: { serviceName: string; hours: number; rate: number }[];
+}): string {
+  const fmt = (n: number) =>
+    `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const GREEN = "#2E6B4F";
+  const LIGHT_GREEN = "#f0fdf4";
+  const BG = "#F5F0E8";
+  const MUTED = "#6b7280";
+  const TEXT = "#374151";
+
+  const methodLabel = paymentMethod === "credit_card"
+    ? (maskedCard ? `Credit Card ending in ${maskedCard.slice(-4)}` : "Credit / Debit Card")
+    : "ACH / Bank Transfer";
+
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${companyName}" style="max-height:48px;max-width:160px;object-fit:contain;display:block;margin-bottom:8px;" />`
+    : "";
+
+  const positiveItems = (lineItems ?? []).filter(li => li.rate >= 0);
+  const creditItems = (lineItems ?? []).filter(li => li.rate < 0);
+  const hasLineItems = positiveItems.length > 0;
+
+  const lineItemRows = hasLineItems
+    ? positiveItems.map((li, i) => `
+        <tr${i % 2 === 1 ? ` style="background:#f9fafb;"` : ""}>
+          <td style="padding:9px 16px;font-size:13px;color:${TEXT};border-top:1px solid #e5e7eb;">${li.serviceName}</td>
+          <td style="padding:9px 16px;font-size:13px;color:${MUTED};border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.hours * li.rate)}</td>
+        </tr>`).join("")
+    : serviceName
+    ? `<tr><td style="padding:9px 16px;font-size:13px;color:${TEXT};border-top:1px solid #e5e7eb;">${serviceName}</td>
+       <td style="padding:9px 16px;font-size:13px;color:${TEXT};border-top:1px solid #e5e7eb;text-align:right;">${fmt(amountPaid)}</td></tr>`
+    : "";
+
+  const creditRows = creditItems.map(li => `
+    <tr style="background:#eff6ff;">
+      <td style="padding:9px 16px;font-size:13px;color:#1d4ed8;font-style:italic;border-top:1px solid #dbeafe;">${li.serviceName}</td>
+      <td style="padding:9px 16px;font-size:13px;color:#1d4ed8;font-style:italic;border-top:1px solid #dbeafe;text-align:right;">-${fmt(Math.abs(li.hours * li.rate))}</td>
+    </tr>`).join("");
+
+  const itemsTable = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+      <thead>
+        <tr style="background:#f9fafb;">
+          <th style="padding:9px 16px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Service</th>
+          <th style="padding:9px 16px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineItemRows}
+        ${creditRows}
+      </tbody>
+      <tfoot>
+        <tr style="background:${LIGHT_GREEN};">
+          <td style="padding:12px 16px;font-size:14px;font-weight:700;color:${GREEN};border-top:2px solid ${GREEN};">Total Paid</td>
+          <td style="padding:12px 16px;font-size:14px;font-weight:700;color:${GREEN};border-top:2px solid ${GREEN};text-align:right;">${fmt(amountPaid)}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+
+  const metaRows = [
+    { label: "Invoice", value: invoiceNumber },
+    projectName ? { label: "Project", value: projectName } : null,
+    { label: "Date", value: paidAt },
+    { label: "Payment Method", value: methodLabel },
+    transactionId ? { label: "Transaction ID", value: transactionId } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  const metaTable = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      ${metaRows.map((r, i) => `
+      <tr>
+        <td style="padding:${i === 0 ? "0" : "8px"} 0 0;font-size:12px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.4px;width:40%;vertical-align:top;">${r.label}</td>
+        <td style="padding:${i === 0 ? "0" : "8px"} 0 0;font-size:13px;color:${TEXT};vertical-align:top;">${r.value}</td>
+      </tr>`).join("")}
+    </table>`;
+
+  const contactLine = [companyEmail, companyPhone].filter(Boolean).join(" &nbsp;&bull;&nbsp; ");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Payment Confirmation — ${invoiceNumber}</title>
+</head>
+<body style="margin:0;padding:0;background-color:${BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${BG};padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr><td style="background:${GREEN};padding:28px 32px;border-radius:12px 12px 0 0;">
+          ${logoHtml}
+          <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:700;letter-spacing:-0.3px;">${companyName}</p>
+          <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Payment Confirmation</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="background:#ffffff;padding:36px 32px;border-radius:0 0 12px 12px;">
+
+          <!-- Confirmation badge -->
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;width:100%;">
+            <tr>
+              <td style="background:${LIGHT_GREEN};border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;">
+                <table cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding-right:14px;vertical-align:middle;">
+                      <table cellpadding="0" cellspacing="0"><tr><td style="width:40px;height:40px;background:${GREEN};border-radius:50%;text-align:center;vertical-align:middle;font-size:20px;color:#ffffff;font-weight:bold;line-height:40px;">&#10003;</td></tr></table>
+                    </td>
+                    <td style="vertical-align:middle;">
+                      <p style="margin:0;font-size:16px;font-weight:700;color:${GREEN};">Payment received</p>
+                      <p style="margin:3px 0 0;font-size:13px;color:#4d7c68;">${fmt(amountPaid)} has been successfully processed.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin:0 0 24px;font-size:15px;color:${TEXT};line-height:1.6;">Hi ${firstName},<br /><br />Thank you for your payment. Here is a summary for your records.</p>
+
+          ${metaTable}
+          ${itemsTable}
+
+          <p style="margin:0 0 6px;font-size:13px;color:${MUTED};line-height:1.6;">Questions about this payment? Reply to this email or reach out to your coordinator.</p>
+          ${contactLine ? `<p style="margin:0 0 0;font-size:13px;color:${MUTED};">${contactLine}</p>` : ""}
+
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:20px 0 0;text-align:center;">
+          <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;">${companyName} &mdash; Billing</p>
+          <p style="margin:0;font-size:11px;color:#d1d5db;">This is a transactional receipt for invoice ${invoiceNumber}. Top Tier Transitions LLC &middot; Greater Hartford, CT</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

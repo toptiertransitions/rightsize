@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getInvoiceById, updateInvoice } from "@/lib/airtable";
+import { Resend } from "resend";
+import { getInvoiceById, updateInvoice, getInvoiceSettings, getTenantById } from "@/lib/airtable";
+import { buildPaymentReceiptEmail } from "@/lib/email";
 
 // Public route — no auth required. Clients access this from the pay link in their email.
 // Card data is tokenized client-side by FluidPay; only the token reaches this server.
@@ -96,8 +98,7 @@ export async function POST(
     payment_method: paymentMethodBody,
     billing_address: billingAddress,
     description,
-    email_receipt: true,
-    email_address: email,
+    email_receipt: false,
   };
 
   const controller = new AbortController();
@@ -182,6 +183,48 @@ export async function POST(
     });
   } catch (err) {
     console.error("[pay] Airtable update failed after successful payment — txnId:", txnId, err);
+  }
+
+  // Send branded receipt email via Resend
+  try {
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      const [settings, tenant] = await Promise.all([
+        getInvoiceSettings().catch(() => null),
+        getTenantById(invoice.tenantId).catch(() => null),
+      ]);
+      const companyName = settings?.companyName || "Top Tier Transitions";
+      const paidAtFormatted = new Date().toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        month: "long", day: "numeric", year: "numeric",
+        hour: "numeric", minute: "2-digit", timeZoneName: "short",
+      });
+      const html = buildPaymentReceiptEmail({
+        firstName,
+        invoiceNumber: invoice.invoiceNumber,
+        projectName: tenant?.name,
+        serviceName: invoice.serviceName,
+        amountPaid: chargeAmount,
+        paymentMethod,
+        maskedCard,
+        transactionId: txnId,
+        paidAt: paidAtFormatted,
+        companyName,
+        companyEmail: settings?.companyEmail,
+        companyPhone: settings?.companyPhone,
+        logoUrl: settings?.logoUrl,
+        lineItems: invoice.lineItems,
+      });
+      const resend = new Resend(resendKey);
+      await resend.emails.send({
+        from: `${companyName} <billing@toptiertransitions.com>`,
+        to: email,
+        subject: `Payment Confirmation — Invoice ${invoice.invoiceNumber}`,
+        html,
+      });
+    }
+  } catch (err) {
+    console.error("[pay] receipt email failed:", err);
   }
 
   return NextResponse.json({ ok: true, transactionId: txnId });
