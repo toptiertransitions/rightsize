@@ -45,7 +45,7 @@ const STAFF_ROLES = [
     label: "TTT Manager",
     color: "border-purple-700",
     badge: "bg-purple-900/50 text-purple-300",
-    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, send items to ProFound Finds (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, and manage storage locations on /staff. Expenses are reimbursable by default.",
+    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, and manage storage locations on /staff. Expenses are reimbursable by default.",
   },
   {
     key: "TTTSales",
@@ -59,7 +59,7 @@ const STAFF_ROLES = [
     label: "TTT Admin",
     color: "border-red-700",
     badge: "bg-red-900/50 text-red-300",
-    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, send items to ProFound Finds (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, and post and comment on internal project notes on /plan. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Expenses are non-reimbursable by default.",
+    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, and post and comment on internal project notes on /plan. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Expenses are non-reimbursable by default.",
   },
 ] as const;
 
@@ -119,7 +119,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Brand field on catalog items (add/edit)",               permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Edit items from All Active Projects view (no project filter required)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Reassign item to another project", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
-  { label: "Send item to ProFound Finds (creates $0/Donated clone in original project; moves original to PF with status Listed; auto-syncs to Square)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Donate & Leave at ProFound — creates $0/Donated clone in original project; moves original to PF with status Listed; auto-syncs to Square (TTTManager/TTTAdmin only)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Vendor Outreach — AI-maps approved items to a local vendor queue; routes sequentially; tracks With Vendor / Claimed / Passed status on catalog cards", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
