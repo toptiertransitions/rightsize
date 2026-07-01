@@ -216,18 +216,21 @@ export function PaymentFlow({
       if (!accountNumber.trim()) { setErrorMsg("Please enter your account number."); return; }
     }
 
-    setStep("processing");
-
+    // Tokenize BEFORE changing step — the FluidPay iframe must stay in the DOM
+    // while the tokenizer makes its network request. Calling setStep("processing")
+    // first causes React to unmount the iframe, which cancels the in-flight request
+    // and causes a 20s timeout.
     let token: string | undefined;
     if (method === "credit_card") {
       try {
         token = await getToken();
       } catch (err) {
         setErrorMsg(err instanceof Error ? err.message : "Card tokenization failed. Please check your details.");
-        setStep("card_form");
         return;
       }
     }
+
+    setStep("processing");
 
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/pay`, {
@@ -252,7 +255,7 @@ export function PaymentFlow({
       setStep("success");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Payment failed. Please try again.");
-      setStep(method === "credit_card" ? "card_form" : "ach_form");
+      setStep(method === "ach" ? "ach_form" : "card_form");
     }
   }
 
