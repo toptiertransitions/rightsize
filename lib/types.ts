@@ -858,6 +858,7 @@ export interface ClientContact {
   source: string;
   referralPartnerId?: string;
   clientReferralId?: string;
+  staffReferralId?: string;
   notes: string;
   assignedToClerkId: string;
   createdAt: string;

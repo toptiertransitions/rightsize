@@ -373,7 +373,7 @@ function OpportunitiesTab({
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-gray-400">
+                <td colSpan={9} className="text-center py-10 text-gray-400">
                   No opportunities found
                 </td>
               </tr>
@@ -1283,9 +1283,10 @@ function ContactsTab({
   const [contacts, setContacts] = useState(initialContacts);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ClientContact | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "", assignedToClerkId: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", staffReferralId: "", notes: "", assignedToClerkId: "" });
   const [rpQuery, setRpQuery] = useState("");
   const [crQuery, setCrQuery] = useState("");
+  const [staffQuery, setStaffQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [activityContact, setActivityContact] = useState<ClientContact | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
@@ -1299,8 +1300,8 @@ function ContactsTab({
   const [search, setSearch] = useState("");
   const [filterSource, setFilterSource] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
-  const [sortField, setSortField] = useState<"name" | "source" | "owner" | "stage">("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortField, setSortField] = useState<"name" | "source" | "owner" | "stage" | "createdAt">("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
 
@@ -1332,7 +1333,7 @@ function ContactsTab({
     return oppsWithProject.every(o => tenantMap.get(o.tenantId)?.isArchived === true);
   }
 
-  function toggleSort(field: typeof sortField) {
+  function toggleSort(field: "name" | "source" | "owner" | "stage" | "createdAt") {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortField(field); setSortDir("asc"); }
     setPage(1);
@@ -1366,8 +1367,13 @@ function ContactsTab({
           const aO = aS ? order[aS] : 99;
           const bO = bS ? order[bS] : 99;
           cmp = aO - bO;
+        } else if (sortField === "createdAt") {
+          const aT = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bT = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          cmp = aT - bT;
         }
-        return sortDir === "asc" ? cmp : -cmp;
+        if (cmp !== 0) return sortDir === "asc" ? cmp : -cmp;
+        return a.name.localeCompare(b.name);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts, viewMode, search, filterSource, filterOwner, sortField, sortDir, opportunities, tenantMap]);
@@ -1428,20 +1434,23 @@ function ContactsTab({
 
   function openNew() {
     setEditing(null);
-    setForm({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", notes: "", assignedToClerkId: "" });
+    setForm({ name: "", email: "", phone: "", source: "", referralPartnerId: "", clientReferralId: "", staffReferralId: "", notes: "", assignedToClerkId: "" });
     setRpQuery("");
     setCrQuery("");
+    setStaffQuery("");
     setModalOpen(true);
   }
 
   function openEdit(c: ClientContact) {
     setEditing(c);
-    setForm({ name: c.name, email: c.email, phone: c.phone, source: c.source, referralPartnerId: c.referralPartnerId || "", clientReferralId: c.clientReferralId || "", notes: c.notes, assignedToClerkId: c.assignedToClerkId || "" });
+    setForm({ name: c.name, email: c.email, phone: c.phone, source: c.source, referralPartnerId: c.referralPartnerId || "", clientReferralId: c.clientReferralId || "", staffReferralId: c.staffReferralId || "", notes: c.notes, assignedToClerkId: c.assignedToClerkId || "" });
     // Pre-fill combobox queries from existing IDs
     const rp = referralContacts.find((r) => r.id === c.referralPartnerId);
     setRpQuery(rp ? rp.name : "");
     const cr = allClientContacts.find((r) => r.id === c.clientReferralId);
     setCrQuery(cr ? cr.name : "");
+    const sr = staffMembers.find((s) => s.clerkUserId === c.staffReferralId);
+    setStaffQuery(sr ? sr.displayName : "");
     setModalOpen(true);
   }
 
@@ -1607,6 +1616,12 @@ function ContactsTab({
                 Source <SortIcon field="source" />
               </th>
               <th
+                className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap hidden lg:table-cell"
+                onClick={() => toggleSort("createdAt")}
+              >
+                Created <SortIcon field="createdAt" />
+              </th>
+              <th
                 className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
                 onClick={() => toggleSort("stage")}
               >
@@ -1619,7 +1634,7 @@ function ContactsTab({
           <tbody>
             {processed.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-gray-400">
+                <td colSpan={9} className="text-center py-10 text-gray-400">
                   {contacts.length === 0
                     ? "No clients yet"
                     : viewMode === "archived"
@@ -1639,7 +1654,28 @@ function ContactsTab({
                   </td>
                   <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate hidden md:table-cell">{c.email || "—"}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap hidden xl:table-cell">{c.phone || "—"}</td>
-                  <td className="px-4 py-3 text-gray-600 hidden xl:table-cell">{c.source || "—"}</td>
+                  <td className="px-4 py-3 hidden xl:table-cell">
+                    {c.source === "Referral Partner" && c.referralPartnerId ? (
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <span className="text-gray-400">Ref:</span>
+                        <span className="font-medium text-gray-700 truncate max-w-[100px]" title={referralContacts.find(r => r.id === c.referralPartnerId)?.name}>
+                          {referralContacts.find(r => r.id === c.referralPartnerId)?.name ?? "—"}
+                        </span>
+                      </span>
+                    ) : c.source === "Staff Referral" && c.staffReferralId ? (
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <span className="text-gray-400">Staff:</span>
+                        <span className="font-medium text-gray-700 truncate max-w-[100px]" title={staffMembers.find(s => s.clerkUserId === c.staffReferralId)?.displayName}>
+                          {staffMembers.find(s => s.clerkUserId === c.staffReferralId)?.displayName ?? "—"}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-600 text-sm">{c.source || <span className="text-gray-400">—</span>}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap hidden lg:table-cell">
+                    {c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : <span className="text-gray-400">—</span>}
+                  </td>
                   <td className="px-4 py-3">
                     {primaryOpp ? (
                       <button
@@ -1807,14 +1843,16 @@ function ContactsTab({
               <select
                 value={form.source}
                 onChange={(e) => {
-                  setForm((f) => ({ ...f, source: e.target.value, referralPartnerId: "", clientReferralId: "" }));
+                  setForm((f) => ({ ...f, source: e.target.value, referralPartnerId: "", clientReferralId: "", staffReferralId: "" }));
                   setRpQuery("");
                   setCrQuery("");
+                  setStaffQuery("");
                 }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               >
                 <option value="">— Select Source —</option>
                 <option value="Referral Partner">Referral Partner</option>
+                <option value="Staff Referral">Staff Referral</option>
                 <option value="Client Referral">Client Referral</option>
                 <option value="NASMM">NASMM</option>
                 <option value="Web Lead">Web Lead</option>
@@ -1886,6 +1924,57 @@ function ContactsTab({
                 )}
                 {form.clientReferralId && (
                   <p className="text-xs text-forest-600 mt-1">Linked: {crQuery}</p>
+                )}
+              </div>
+            )}
+
+            {/* Staff Referral combobox */}
+            {form.source === "Staff Referral" && (
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Referred By (Staff Member)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={staffQuery}
+                    onChange={(e) => { setStaffQuery(e.target.value); setForm((f) => ({ ...f, staffReferralId: "" })); }}
+                    placeholder="Search staff name…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm pr-8"
+                    autoComplete="off"
+                  />
+                  {staffQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setStaffQuery(""); setForm((f) => ({ ...f, staffReferralId: "" })); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                    >✕</button>
+                  )}
+                </div>
+                {staffQuery && !form.staffReferralId && (() => {
+                  const matches = staffMembers
+                    .filter(s => s.isActive && s.displayName.toLowerCase().includes(staffQuery.toLowerCase()))
+                    .slice(0, 8);
+                  return (
+                    <ul className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-44 overflow-auto w-full">
+                      {matches.length > 0 ? matches.map((s) => (
+                        <li
+                          key={s.clerkUserId}
+                          className="px-3 py-2 text-sm hover:bg-forest-50 cursor-pointer flex items-center justify-between"
+                          onMouseDown={(e) => { e.preventDefault(); setStaffQuery(s.displayName); setForm((f) => ({ ...f, staffReferralId: s.clerkUserId })); }}
+                        >
+                          <span>{s.displayName}</span>
+                          <span className="text-[10px] text-gray-400 ml-2">{s.role}</span>
+                        </li>
+                      )) : (
+                        <li className="px-3 py-2 text-sm text-gray-400">No active staff matches</li>
+                      )}
+                    </ul>
+                  );
+                })()}
+                {form.staffReferralId && (
+                  <p className="text-xs text-forest-600 mt-1 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    {staffQuery}
+                  </p>
                 )}
               </div>
             )}
