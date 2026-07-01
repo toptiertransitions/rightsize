@@ -45,7 +45,7 @@ const STAFF_ROLES = [
     label: "TTT Manager",
     color: "border-purple-700",
     badge: "bg-purple-900/50 text-purple-300",
-    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, and access the Ops console. Expenses are reimbursable by default.",
+    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, send items to ProFound Finds (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, and manage storage locations on /staff. Expenses are reimbursable by default.",
   },
   {
     key: "TTTSales",
@@ -59,7 +59,7 @@ const STAFF_ROLES = [
     label: "TTT Admin",
     color: "border-red-700",
     badge: "bg-red-900/50 text-red-300",
-    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, generate and re-print client payout PDFs, and post and comment on internal project notes on /plan. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Expenses are non-reimbursable by default.",
+    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, send items to ProFound Finds (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, and post and comment on internal project notes on /plan. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Expenses are non-reimbursable by default.",
   },
 ] as const;
 
@@ -119,6 +119,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Brand field on catalog items (add/edit)",               permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Edit items from All Active Projects view (no project filter required)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Reassign item to another project", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Send item to ProFound Finds (creates $0/Donated clone in original project; moves original to PF with status Listed; auto-syncs to Square)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Vendor Outreach — AI-maps approved items to a local vendor queue; routes sequentially; tracks With Vendor / Claimed / Passed status on catalog cards", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Create new project from /home",           permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
@@ -139,6 +141,10 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "'Get Professional Support' CTA on /plan (replaces empty hours message)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "'Get Professional Support' CTA on /sales (replaces payout preference section)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "Visible to TTT Staff in project views & time tracker", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: false, TTTStaff: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { group: "Quoting" },
+  { label: "Create & edit quotes (services, hours, pricing, contract text)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
+  { label: "Post-Move project filter in quoting project picker", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
+  { label: "Inline quote editor: view & edit Origin/Destination sq ft; auto-recalculates all enabled service hours with confirmation", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
   { group: "Invoices" },
   { label: "View invoices & PDF",         permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Create invoices",             permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
@@ -172,7 +178,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Manage opportunities",        permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
   { label: "Log CRM activities (Call, Email, Meeting, Note, Task, Text Message)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Convert lead to project",     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
-  { label: "Opportunity address auto-syncs to linked project", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
+  { label: "Opportunity Origin & Destination Address auto-syncs to linked project (Destination flows to /plan address bar & shift/key-date modals)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Invite referral contact to Partner Portal (sends sign-up email)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
   { label: "Send Partner Rewards Email to self (portal summary for a spotlight contact)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
   { group: "Sales & Payouts" },
@@ -198,6 +204,9 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Admin Pay console — Travel Time tab",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Admin Pay console — Expenses tab",                   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Bulk mark pay items as paid",                        permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Admin Pay — Audit tab (flags 'forgot-to-log' gaps per staff member)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { group: "Ops / Supply Tracking" },
+  { label: "Storage Locations on /staff Supply tab — add/edit/delete storage units with monthly cost", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Admin Console" },
   { label: "Access /admin",              permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true  } },
   { label: "Access Ops console (/admin/ops)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
@@ -208,6 +217,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Configure Venmo/Zelle payment handles & QR codes", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Toggle TTT / Non-TTT flag per project",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "View PF/FB/eBay inventory tables", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Manage Open House Dates for ProFound Finds storefront (add/edit/delete event dates shown publicly)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
 ];
 
 function CheckCell({ value }: { value: Check | undefined }) {
