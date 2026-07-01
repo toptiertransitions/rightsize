@@ -1231,7 +1231,12 @@ export function SalesClient({
       const res = await fetch("/api/sales/apply-price-drop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, type }),
+        body: JSON.stringify({
+          tenantId,
+          type,
+          drop1Pct: Math.max(1, Math.min(99, parseInt(drop1Pct) || 1)),
+          drop2Pct: Math.max(1, Math.min(99, parseInt(drop2Pct) || 1)),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to apply");

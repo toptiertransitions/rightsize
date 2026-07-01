@@ -24,7 +24,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { tenantId, type } = body as { tenantId: string; type: "drop1" | "drop2" | "revert" };
+  const { tenantId, type, drop1Pct: bodyDrop1, drop2Pct: bodyDrop2 } = body as {
+    tenantId: string;
+    type: "drop1" | "drop2" | "revert";
+    drop1Pct?: number;
+    drop2Pct?: number;
+  };
   if (!tenantId || !type) return NextResponse.json({ error: "Missing tenantId or type" }, { status: 400 });
 
   const locationId = process.env.SQUARE_LOCATION_ID;
@@ -44,8 +49,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ updated: 0, squareSynced: 0, squareFailed: 0, itemUpdates: [] });
   }
 
-  const drop1Pct = tenant.priceDrop1Percent ?? 33;
-  const drop2Pct = tenant.priceDrop2Percent ?? 66;
+  const drop1Pct = bodyDrop1 ?? tenant.priceDrop1Percent ?? 33;
+  const drop2Pct = bodyDrop2 ?? tenant.priceDrop2Percent ?? 66;
 
   type ItemUpdate = { id: string; valueMid: number; priceDropOriginalValue: number; originalValue?: number };
   let priceUpdates: ItemUpdate[];
