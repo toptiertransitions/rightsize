@@ -152,9 +152,12 @@ export async function POST(
     const cardBody = responseBody?.card as Record<string, unknown> | undefined;
     const achBody = responseBody?.ach as Record<string, unknown> | undefined;
     const responseText = (cardBody?.response_text || achBody?.response_text || responseBody?.response_text) as string | undefined;
-    const msg = responseText || (responseCode && responseCode >= 300
-      ? "A gateway error occurred. Please try again or contact your coordinator."
-      : "Payment was declined. Please check your details or try a different payment method.");
+    console.error("[pay] decline detail — response:", response, "code:", responseCode, "responseBody:", JSON.stringify(responseBody));
+    const msg = responseText
+      ? `${responseText} (code ${responseCode})`
+      : (responseCode && responseCode >= 300
+        ? `Gateway error (code ${responseCode}). Please try again or contact your coordinator.`
+        : `Declined (code ${responseCode}). Please check your details or try a different payment method.`);
     return NextResponse.json({ error: msg }, { status: 402 });
   }
 
