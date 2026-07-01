@@ -82,8 +82,9 @@ export async function POST(
       ach: {
         routing_number: body.routingNumber,
         account_number: body.accountNumber,
-        sec_code: "web",
+        sec_code: "WEB",
         account_type: body.accountType,
+        name_on_account: `${firstName} ${lastName}`,
       },
     };
   }
@@ -138,13 +139,18 @@ export async function POST(
   if (!approved) {
     console.error("[pay] FluidPay declined — full response:", JSON.stringify(fpData));
 
+    // Top-level API error (validation failure, bad key, etc.)
     if (topLevelStatus === "error" || topLevelStatus === "failed" || !txnData) {
-      return NextResponse.json({ error: topLevelMsg || "Payment processor error. Please contact your coordinator." }, { status: 402 });
+      // FluidPay sometimes puts errors in an `errors` array instead of `msg`
+      const errorsArray = Array.isArray(fpData.errors) ? (fpData.errors as string[]).join("; ") : undefined;
+      const errMsg = topLevelMsg || errorsArray || "Payment processor error. Please contact your coordinator.";
+      return NextResponse.json({ error: errMsg }, { status: 402 });
     }
 
-    const cardBody = (txnData?.response_body as Record<string, unknown>)?.card as Record<string, unknown> | undefined;
-    const achBody = (txnData?.response_body as Record<string, unknown>)?.ach as Record<string, unknown> | undefined;
-    const responseText = (cardBody?.response_text || achBody?.response_text) as string | undefined;
+    const responseBody = txnData.response_body as Record<string, unknown> | undefined;
+    const cardBody = responseBody?.card as Record<string, unknown> | undefined;
+    const achBody = responseBody?.ach as Record<string, unknown> | undefined;
+    const responseText = (cardBody?.response_text || achBody?.response_text || responseBody?.response_text) as string | undefined;
     const msg = responseText || (responseCode && responseCode >= 300
       ? "A gateway error occurred. Please try again or contact your coordinator."
       : "Payment was declined. Please check your details or try a different payment method.");
