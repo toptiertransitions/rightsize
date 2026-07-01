@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/storefront/(.*)",
   "/api/contracts/sign",
   "/api/cron/(.*)",
+  "/api/invoices/(.*)/pay",
   "/sign/(.*)",
   "/pay/(.*)",
   "/suspended",

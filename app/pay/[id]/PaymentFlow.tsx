@@ -250,7 +250,7 @@ export function PaymentFlow({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Payment failed. Please try again.");
+      if (!res.ok) throw new Error(data.error || data.message || "Payment failed. Please try again.");
       setPaidByCard(method === "credit_card");
       setStep("success");
     } catch (err) {
