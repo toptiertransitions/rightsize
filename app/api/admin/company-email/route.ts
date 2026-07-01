@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
           </tbody>
         </table>`;
 
-  // ── Section: Sales & Future Projects ─────────────────────────────────────────
+  // ── Section: Leads & Hopeful Projects ────────────────────────────────────────
   const salesContent = `
     ${
       pipelineItems.length === 0
@@ -378,7 +378,7 @@ export async function POST(req: NextRequest) {
   ${section("Weekly Announcements", announcementsContent)}
   ${section("Our People" + (newStaffWithImages.length > 0 ? ` &mdash; Welcome Aboard!` : ""), ourPeopleContent)}
   ${section(`New Projects &mdash; ${weekRangeLabel}`, newProjectsContent)}
-  ${section("Sales &amp; Future Projects", salesContent)}
+  ${section("Leads &amp; Hopeful Projects", salesContent)}
   ${section("Rehoming Our Clients&#39; Treasures", rehomingContent)}
 
   <!-- Footer -->
