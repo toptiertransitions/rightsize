@@ -1318,6 +1318,24 @@ export interface GoogleReview {
   createdAt: string;
 }
 
+// ─── Project Tasks (Checklist) ────────────────────────────────────────────────
+export interface ProjectTask {
+  id: string;
+  tenantId: string;
+  title: string;
+  description?: string;
+  status: "Open" | "Completed";
+  dueDate?: string; // YYYY-MM-DD
+  sortOrder: number;
+  completedAt?: string;
+  completedBy?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentPublicId?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
 // ─── Partner Portal ───────────────────────────────────────────────────────────
 export interface PartnerPoint {
   id: string;

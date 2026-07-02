@@ -15,12 +15,14 @@ import {
   getServices,
   getContractsForTenant,
   getStaffMembers,
+  getProjectTasksForTenant,
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
 import { IntakeFormSection } from "./IntakeFormSection";
 import { InternalNotesSection } from "./InternalNotesSection";
+import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ClientContactBar } from "./ClientContactBar";
 import { ProjectAddressBar } from "./ProjectAddressBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
@@ -261,7 +263,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts, projectTasks] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
@@ -272,6 +274,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getTenants().catch(() => []),
     getServices().catch(() => []),
     getContractsForTenant(tenantId).catch(() => []),
+    getProjectTasksForTenant(tenantId).catch(() => []),
   ]);
 
   // The current primary quote is the most-recently-signed Signed contract
@@ -393,6 +396,17 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
       {/* First Visit Intake — visible to TTTStaff, TTTManager, TTTAdmin only */}
       {isTTTStaffOrAbove && <IntakeFormSection tenantId={tenantId} />}
+
+      {/* Project Checklist — TTTManager and TTTAdmin only */}
+      {isManagerOrAdmin && (
+        <ProjectChecklistSection
+          tenantId={tenantId}
+          isAdmin={sysRole === "TTTAdmin"}
+          isManager={sysRole === "TTTManager"}
+          currentUserName={currentUserName}
+          initialTasks={projectTasks}
+        />
+      )}
 
       {/* Internal Notes — TTT staff only, never visible to clients */}
       {isTTTStaffOrAbove && (

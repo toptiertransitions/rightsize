@@ -6216,3 +6216,115 @@ export async function getVendorOutreachByVendor(vendorAirtableId: string): Promi
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapVendorOutreach);
 }
+
+// ─── Project Tasks (Checklist) ────────────────────────────────────────────────
+
+function mapProjectTask(r: AirtableRecord): import("./types").ProjectTask {
+  const f = r.fields;
+  return {
+    id: r.id,
+    tenantId: toStr(f["TenantId"]),
+    title: toStr(f["Title"]),
+    description: toStr(f["Description"]) || undefined,
+    status: (toStr(f["Status"]) || "Open") as "Open" | "Completed",
+    dueDate: toStr(f["DueDate"]) || undefined,
+    sortOrder: toNum(f["SortOrder"]),
+    completedAt: toStr(f["CompletedAt"]) || undefined,
+    completedBy: toStr(f["CompletedBy"]) || undefined,
+    attachmentUrl: toStr(f["AttachmentUrl"]) || undefined,
+    attachmentName: toStr(f["AttachmentName"]) || undefined,
+    attachmentPublicId: toStr(f["AttachmentPublicId"]) || undefined,
+    notes: toStr(f["Notes"]) || undefined,
+    createdAt: toStr(f["CreatedAt"]) || undefined,
+  };
+}
+
+function projectTasksFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PROJECT_TASKS;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    cache: "no-store",
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export async function getProjectTasksForTenant(tenantId: string): Promise<import("./types").ProjectTask[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await projectTasksFetch(`?filterByFormula=${formula}&sort[0][field]=SortOrder&sort[0][direction]=asc`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapProjectTask);
+}
+
+export async function createProjectTask(data: {
+  tenantId: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  sortOrder: number;
+  notes?: string;
+}): Promise<import("./types").ProjectTask> {
+  const res = await projectTasksFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId,
+        Title: data.title,
+        Description: data.description ?? "",
+        Status: "Open",
+        DueDate: data.dueDate ?? "",
+        SortOrder: data.sortOrder,
+        Notes: data.notes ?? "",
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`createProjectTask failed: ${await res.text()}`);
+  return mapProjectTask(await res.json());
+}
+
+export async function updateProjectTask(
+  taskId: string,
+  updates: Partial<{
+    title: string;
+    description: string;
+    status: "Open" | "Completed";
+    dueDate: string;
+    sortOrder: number;
+    completedAt: string;
+    completedBy: string;
+    attachmentUrl: string;
+    attachmentName: string;
+    attachmentPublicId: string;
+    notes: string;
+  }>
+): Promise<import("./types").ProjectTask> {
+  const fields: Record<string, unknown> = {};
+  if (updates.title !== undefined) fields["Title"] = updates.title;
+  if (updates.description !== undefined) fields["Description"] = updates.description;
+  if (updates.status !== undefined) fields["Status"] = updates.status;
+  if (updates.dueDate !== undefined) fields["DueDate"] = updates.dueDate;
+  if (updates.sortOrder !== undefined) fields["SortOrder"] = updates.sortOrder;
+  if (updates.completedAt !== undefined) fields["CompletedAt"] = updates.completedAt;
+  if (updates.completedBy !== undefined) fields["CompletedBy"] = updates.completedBy;
+  if (updates.attachmentUrl !== undefined) fields["AttachmentUrl"] = updates.attachmentUrl;
+  if (updates.attachmentName !== undefined) fields["AttachmentName"] = updates.attachmentName;
+  if (updates.attachmentPublicId !== undefined) fields["AttachmentPublicId"] = updates.attachmentPublicId;
+  if (updates.notes !== undefined) fields["Notes"] = updates.notes;
+  const res = await projectTasksFetch(`/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(`updateProjectTask failed: ${await res.text()}`);
+  return mapProjectTask(await res.json());
+}
+
+export async function deleteProjectTask(taskId: string): Promise<void> {
+  const res = await projectTasksFetch(`/${taskId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`deleteProjectTask failed: ${await res.text()}`);
+}
