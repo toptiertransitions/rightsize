@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest) {
     updates.payoutPaidAmount = Number(payoutPaidAmount);
     // Stamp today as paid date unless explicitly provided; clear if amount is 0
     if (Number(payoutPaidAmount) > 0) {
-      updates.payoutPaidAt = payoutPaidAt ?? new Date().toISOString().slice(0, 10);
+      updates.payoutPaidAt = payoutPaidAt ?? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     } else {
       updates.payoutPaidAt = undefined;
     }

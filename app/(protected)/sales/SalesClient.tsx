@@ -170,7 +170,7 @@ function SalesTableRow({
     const amount = parseFloat(payoutInput) || 0;
     setSavingPayout(true);
     try {
-      const paidAt = amount > 0 ? new Date().toISOString().slice(0, 10) : undefined;
+      const paidAt = amount > 0 ? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }) : undefined;
       const res = await fetch("/api/sales/payout", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -306,7 +306,7 @@ function SalesTableRow({
                 </div>
                 {item.payoutPaidAt && (
                   <div className="text-[10px] text-green-600 font-normal">
-                    Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    Paid {new Date(item.payoutPaidAt + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </div>
                 )}
               </button>
@@ -318,7 +318,7 @@ function SalesTableRow({
               </div>
               {item.payoutPaidAt && (
                 <div className="text-[10px] text-green-600">
-                  Paid {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  Paid {new Date(item.payoutPaidAt + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </div>
               )}
             </div>
@@ -330,7 +330,7 @@ function SalesTableRow({
         <td className="px-2 py-2.5 text-right hidden sm:table-cell whitespace-nowrap">
           {item.payoutPaidAt ? (
             <span className="text-xs text-green-700 font-medium">
-              {new Date(item.payoutPaidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              {new Date(item.payoutPaidAt + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </span>
           ) : (
             <span className="text-gray-300 text-xs">—</span>
@@ -373,10 +373,20 @@ function PFTableRow({
   onEventUpdated: (updated: ItemSaleEvent) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [events, setEvents] = useState<ItemSaleEvent[]>(initialEvents);
+  const [localEvents, setLocalEvents] = useState<ItemSaleEvent[]>(initialEvents);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(initialEvents.length > 0);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Always reflect the latest payoutPaid from the parent's pfSaleEvents state.
+  // useState ignores prop changes after mount, so we derive events as a merge of
+  // local state (for lazy-loaded events and optimistic toggles) and initialEvents
+  // (for payoutPaid updates pushed down after a bulk payout).
+  const parentEventMap = new Map(initialEvents.map(e => [e.id, e]));
+  const events: ItemSaleEvent[] = localEvents.map(e => {
+    const parent = parentEventMap.get(e.id);
+    return parent ? { ...e, payoutPaid: parent.payoutPaid } : e;
+  });
 
   const isSold = item.status === "Sold";
   const qty = item.quantity ?? 0;
@@ -392,7 +402,7 @@ function PFTableRow({
       const res = await fetch(`/api/item-sale-events?itemId=${item.id}`);
       if (res.ok) {
         const data = await res.json();
-        setEvents(data.events ?? []);
+        setLocalEvents(data.events ?? []);
         setLoaded(true);
       }
     } finally {
@@ -410,7 +420,7 @@ function PFTableRow({
       });
       if (res.ok) {
         const data = await res.json();
-        setEvents(prev => prev.map(e => e.id === event.id ? data.event : e));
+        setLocalEvents(prev => prev.map(e => e.id === event.id ? data.event : e));
         onEventUpdated(data.event);
       }
     } finally {
@@ -545,7 +555,7 @@ function PFTableRow({
                   {events.map(evt => (
                     <div key={evt.id} className="px-6 py-2.5 flex items-center gap-3">
                       <div className="text-[11px] text-gray-400 w-20 flex-shrink-0">
-                        {new Date(evt.saleDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {new Date(evt.saleDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs text-gray-700">
@@ -558,7 +568,7 @@ function PFTableRow({
                         <div className="text-[10px] text-gray-400 mt-0.5">
                           Client payout: <span className="font-medium text-green-700">{fmtCurrency(evt.clientPayout)}</span>
                           {evt.payoutPaidAt && (
-                            <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt).toLocaleDateString()}</span>
+                            <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt + "T12:00:00").toLocaleDateString()}</span>
                           )}
                         </div>
                       </div>
@@ -2288,7 +2298,7 @@ export function SalesClient({
           onGenerated={(file, markData) => {
             setProofFiles(prev => [...prev, file]);
             if (markData) {
-              const payoutDate = new Date().toISOString().slice(0, 10);
+              const payoutDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
               if (markData.itemsToMark.length > 0) {
                 const paidMap = new Map(markData.itemsToMark.map(p => [p.id, p.amount]));
                 setItems(prev => prev.map(item =>

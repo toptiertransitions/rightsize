@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
   const subtotal = items.reduce((s: number, i: PayoutLineItem) => s + i.clientPayout, 0);
   const total = Math.max(0, subtotal - (expenseDeduction || 0));
 

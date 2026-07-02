@@ -66,7 +66,7 @@ export function buildUnpaidLineItems(
     result.push({
       itemName: item.itemName,
       channel: "ProFoundFinds",
-      saleDate: item.updatedAt ?? new Date().toISOString().slice(0, 10),
+      saleDate: item.updatedAt ?? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       clientPayout: payout,
     });
   }
@@ -91,7 +91,7 @@ export function buildUnpaidLineItems(
     result.push({
       itemName: item.itemName,
       channel: channelLabel(item.primaryRoute),
-      saleDate: item.updatedAt ?? new Date().toISOString().slice(0, 10),
+      saleDate: item.updatedAt ?? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       clientPayout: payout,
     });
   }
@@ -113,7 +113,7 @@ export function buildUnpaidLineItems(
     result.push({
       itemName: item.itemName,
       channel: "Estate Sale",
-      saleDate: item.updatedAt ?? new Date().toISOString().slice(0, 10),
+      saleDate: item.updatedAt ?? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       clientPayout: payout,
     });
   }
@@ -149,7 +149,7 @@ export function buildPaidLineItems(
     result.push({
       itemName: item.itemName,
       channel: channelLabel(item.primaryRoute),
-      saleDate: item.payoutPaidAt ?? item.updatedAt ?? new Date().toISOString().slice(0, 10),
+      saleDate: item.payoutPaidAt ?? item.updatedAt ?? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       clientPayout: item.payoutPaidAmount!,
     });
   }
@@ -312,7 +312,7 @@ export function PayoutModal({
       if (!reprint) {
         // Mark items and events as paid (best-effort; fire in parallel)
         const markData = buildPayoutMarkData(items, pfSaleEvents, localVendors);
-        const payoutDate = new Date().toISOString().slice(0, 10);
+        const payoutDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         await Promise.allSettled([
           ...markData.itemsToMark.map(({ id, amount }) =>
             fetch("/api/sales/payout", {
