@@ -78,6 +78,21 @@ export function InvoiceCreatorModal({
   const [editingExpenseIdx, setEditingExpenseIdx] = useState<number | null>(null);
   const [newExpense, setNewExpense] = useState<Partial<InvoiceExpenseItem> | null>(null);
 
+  // Hours and expenses already billed in prior paid Full invoices
+  const paidFullInvoices = invoices.filter(inv => inv.type === "Full" && inv.status === "Paid");
+
+  const billedHoursByServiceId = new Map<string, number>();
+  for (const inv of paidFullInvoices) {
+    for (const li of (inv.lineItems ?? [])) {
+      if (!li.serviceId) continue; // skip deposit-credit line items (serviceId === "")
+      billedHoursByServiceId.set(li.serviceId, (billedHoursByServiceId.get(li.serviceId) ?? 0) + li.hours);
+    }
+  }
+
+  const billedExpenseIds = new Set<string>(
+    paidFullInvoices.flatMap(inv => (inv.expenseItems ?? []).map(ei => ei.expenseId).filter(Boolean) as string[])
+  );
+
   // Fetch project expenses when Full tab is opened (once)
   useEffect(() => {
     if (tab !== "Full" || expensesLoaded) return;
@@ -85,17 +100,22 @@ export function InvoiceCreatorModal({
       .then(r => r.json())
       .then(d => {
         if (d.expenses) {
-          setExpenseItems(d.expenses.map((e: { id: string; vendor: string; description: string; date: string; total: number }) => ({
-            expenseId: e.id,
-            vendor: e.vendor,
-            description: e.description,
-            date: e.date,
-            amount: e.total,
-          })));
+          setExpenseItems(
+            d.expenses
+              .filter((e: { id: string }) => !billedExpenseIds.has(e.id))
+              .map((e: { id: string; vendor: string; description: string; date: string; total: number }) => ({
+                expenseId: e.id,
+                vendor: e.vendor,
+                description: e.description,
+                date: e.date,
+                amount: e.total,
+              }))
+          );
         }
         setExpensesLoaded(true);
       })
       .catch(() => setExpensesLoaded(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, expensesLoaded, tenant.id]);
 
   const expensesTotal = includeExpenses ? expenseItems.reduce((s, e) => s + e.amount, 0) : 0;
@@ -140,6 +160,14 @@ export function InvoiceCreatorModal({
     } else {
       loggedGroups.set(svc.id, { service: svc, hours: hrs });
     }
+  }
+  // Subtract hours already billed in prior paid Full invoices, then drop services at zero
+  for (const [svcId, group] of loggedGroups) {
+    const alreadyBilled = billedHoursByServiceId.get(svcId) ?? 0;
+    group.hours = Math.max(0, group.hours - alreadyBilled);
+  }
+  for (const [svcId, group] of loggedGroups) {
+    if (group.hours <= 0) loggedGroups.delete(svcId);
   }
   const loggedTotal = Array.from(loggedGroups.values()).reduce(
     (s, g) => s + g.service.hourlyRate * g.hours,
@@ -526,7 +554,9 @@ export function InvoiceCreatorModal({
                 <div className="space-y-2">
                   {loggedGroups.size === 0 ? (
                     <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">
-                      No logged time entries found for this project.
+                      {billedHoursByServiceId.size > 0
+                        ? "All logged hours have already been included in a prior paid invoice."
+                        : "No logged time entries found for this project."}
                     </p>
                   ) : (
                     <div className="border border-gray-200 rounded-xl overflow-hidden">
