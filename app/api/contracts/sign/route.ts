@@ -154,18 +154,23 @@ export async function POST(req: NextRequest) {
     );
   } catch { /* non-fatal */ }
 
-  // Notify all TTTAdmin + TTTSales with a team win email
+  // Notify TTTSales (to:) + TTTAdmin (cc:) with a team win email
   try {
     const [staff, tenant] = await Promise.all([
       getStaffMembers().catch(() => []),
       getTenantById(contract.tenantId).catch(() => null),
     ]);
 
-    const recipients = staff
-      .filter((s) => s.isActive && ["TTTAdmin", "TTTSales"].includes(s.role) && s.email)
-      .map((s) => s.email);
+    const activeStaff = staff.filter((s) => s.isActive && s.email);
+    const salesRecipients = activeStaff.filter((s) => s.role === "TTTSales").map((s) => s.email as string);
+    const adminRecipients = activeStaff.filter((s) => s.role === "TTTAdmin").map((s) => s.email as string);
 
-    if (recipients.length > 0) {
+    const toList = salesRecipients.length > 0 ? salesRecipients : adminRecipients;
+    const ccList = salesRecipients.length > 0
+      ? adminRecipients.filter((e) => !salesRecipients.includes(e))
+      : [];
+
+    if (toList.length > 0) {
       // Look up the sales rep who sent the quote
       let salesRepName: string | undefined;
       if (contract.sentByClerkId) {
@@ -190,9 +195,9 @@ export async function POST(req: NextRequest) {
 
       const resend = new Resend(process.env.RESEND_API_KEY);
       const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
-      await resend.emails.send({
+      const emailPayload: Parameters<typeof resend.emails.send>[0] = {
         from: `Top Tier Transitions <${fromEmail}>`,
-        to: recipients,
+        to: toList,
         subject: `New Win: ${tenant?.name ?? "a project"} signed — ${signerName.trim()}`,
         html: buildContractSignedEmail({
           salesRepName,
@@ -204,7 +209,9 @@ export async function POST(req: NextRequest) {
           originAddress,
           destAddress,
         }),
-      });
+      };
+      if (ccList.length > 0) emailPayload.cc = ccList;
+      await resend.emails.send(emailPayload);
     }
   } catch (e) {
     console.error("Failed to send win notification:", e);
