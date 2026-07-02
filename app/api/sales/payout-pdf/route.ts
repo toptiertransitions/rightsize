@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   }
 
   const safeName = clientName.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
-  const fileName = `Payout-${safeName}-${date}.pdf`;
+  const fileName = `Payout-${safeName}-${date}-${Date.now()}.pdf`;
 
   // Upload to Cloudinary with explicit resource_type "raw" so the URL is
   // always /raw/upload/... and the file is served as a downloadable PDF.
@@ -117,14 +117,14 @@ export async function POST(req: NextRequest) {
         clientName,
         total,
         itemCount: items.length,
-        date: new Date(date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+        date: new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
         companyName,
       });
 
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
         from: "hello@toptiertransitions.com",
         to: recipientEmail,
-        subject: `Your Payout Statement — ${new Date(date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`,
+        subject: `Your Payout Statement — ${new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" })}`,
         html,
         attachments: [
           {
