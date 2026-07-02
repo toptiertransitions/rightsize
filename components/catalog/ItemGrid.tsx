@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { formatCurrency } from "@/lib/utils";
 import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor, StaffMember } from "@/lib/types";
 import { VendorFileModal } from "./VendorFileModal";
+import { PhotoLightbox } from "./PhotoLightbox";
 
 interface ItemGridProps {
   items: Item[];
@@ -195,6 +196,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
   const [photoDragIdx, setPhotoDragIdx] = useState<number | null>(null);
   const [photoDropIdx, setPhotoDropIdx] = useState<number | null>(null);
   const [removingBgIdx, setRemovingBgIdx] = useState<number | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const addPhotoRef = useRef<HTMLInputElement>(null);
 
   // Only show rooms belonging to this item's tenant
@@ -422,7 +424,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                       setPhotoDropIdx(null);
                     }}
                     onDragEnd={() => { setPhotoDragIdx(null); setPhotoDropIdx(null); }}
-                    className={`relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 cursor-grab active:cursor-grabbing border-2 transition-all ${
+                    onClick={() => setLightboxIndex(i)}
+                    className={`relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 cursor-grab active:cursor-grabbing border-2 transition-all hover:ring-2 hover:ring-forest-400 hover:ring-offset-1 ${
                       photoDropIdx === i ? "border-forest-400 scale-105" : i === 0 ? "border-forest-300" : "border-transparent"
                     }`}
                   >
@@ -431,7 +434,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                     <button
                       type="button"
                       title={i === 0 ? "Primary photo" : "Set as primary"}
-                      onClick={() => {
+                      onClick={e => {
+                        e.stopPropagation();
                         if (i === 0) return;
                         const arr = [...photos];
                         const [moved] = arr.splice(i, 1);
@@ -448,7 +452,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                     <button
                       type="button"
                       title="Remove photo"
-                      onClick={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                      onClick={e => { e.stopPropagation(); setPhotos(prev => prev.filter((_, idx) => idx !== i)); }}
                       className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-red-500 transition-colors text-white"
                     >
                       <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -461,7 +465,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                       type="button"
                       title="Remove background with AI"
                       disabled={removingBgIdx !== null}
-                      onClick={() => handleRemoveBg(i)}
+                      onClick={e => { e.stopPropagation(); handleRemoveBg(i); }}
                       className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-5 h-5 flex items-center justify-center rounded-md bg-black/40 hover:bg-purple-600 transition-colors text-white disabled:opacity-50"
                     >
                       {removingBgIdx === i ? (
@@ -966,6 +970,16 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
+
+        {/* Photo lightbox */}
+        {lightboxIndex !== null && photos.length > 0 && (
+          <PhotoLightbox
+            photos={photos}
+            initialIndex={lightboxIndex}
+            itemName={item.itemName}
+            onClose={() => setLightboxIndex(null)}
+          />
+        )}
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-cream-100">
