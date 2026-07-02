@@ -435,6 +435,9 @@ function PFTableRow({
 
   const totalOwed = events.reduce((s, e) => s + (e.payoutPaid ? 0 : e.clientPayout), 0);
   const totalPaidAmt = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
+  // If item-level payout was set directly (e.g. events weren't marked but item was), treat as fully paid
+  const totalEventPayout = totalOwed + totalPaidAmt;
+  const itemOverridePaid = totalOwed > 0 && (item.payoutPaidAmount ?? 0) >= totalEventPayout * 0.99;
 
   return (
     <>
@@ -494,8 +497,8 @@ function PFTableRow({
         <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
           {events.length > 0 ? (
             <div>
-              {totalOwed > 0 && <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(totalOwed)} owed</div>}
-              {totalPaidAmt > 0 && <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(totalPaidAmt)} paid</div>}
+              {!itemOverridePaid && totalOwed > 0 && <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(totalOwed)} owed</div>}
+              {(itemOverridePaid ? totalEventPayout : totalPaidAmt) > 0 && <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(itemOverridePaid ? totalEventPayout : totalPaidAmt)} paid</div>}
             </div>
           ) : (() => {
             // No Square events — compute fallback payout for sold items
@@ -503,12 +506,18 @@ function PFTableRow({
               ? <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
               : <span className="text-gray-300">—</span>;
             const calc = computeCalcPayout(item, localVendors);
-            if (calc && calc.amount > 0) return (
-              <div>
-                <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
-                {calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
-              </div>
-            );
+            if (calc && calc.amount > 0) {
+              // If item-level payout already covers the calculated amount, show as paid
+              if ((item.payoutPaidAmount ?? 0) >= calc.amount * 0.99) {
+                return <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(item.payoutPaidAmount!)} paid</div>;
+              }
+              return (
+                <div>
+                  <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
+                  {calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
+                </div>
+              );
+            }
             return <span className="text-gray-300">—</span>;
           })()}
         </td>
