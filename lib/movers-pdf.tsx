@@ -16,7 +16,8 @@ const COLS = 3;
 const CARD_GAP = 8;
 const CARD_W = Math.floor((CONTENT_W - CARD_GAP * (COLS - 1)) / COLS); // ~177pt
 const PHOTO_H = 130;
-const CARD_H = PHOTO_H + 52; // photo + name + pill row
+// Photo strip within card: 1 photo = full width, 2 = half, 3 = third
+const PHOTO_GAP = 3;
 
 const GREEN = "#2E6B4F";
 const GRAY_900 = "#111827";
@@ -97,7 +98,8 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: "#e5e7eb",
   },
-  cardPhoto: { width: CARD_W, height: PHOTO_H, backgroundColor: GRAY_100, objectFit: "contain" },
+  // Photo strip (1–3 photos side by side)
+  photoStrip: { flexDirection: "row", height: PHOTO_H, backgroundColor: GRAY_100 },
   cardNoPhoto: { width: CARD_W, height: PHOTO_H, backgroundColor: GRAY_100, alignItems: "center", justifyContent: "center" },
   cardNoPhotoText: { fontSize: 8, color: "#d1d5db" },
   cardBody: { padding: 6 },
@@ -105,12 +107,28 @@ const styles = StyleSheet.create({
   cardPills: { flexDirection: "row", gap: 3, flexWrap: "wrap" },
   cardPill: { backgroundColor: "#e5e7eb", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
   cardPillText: { fontSize: 6.5, color: GRAY_600, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.3 },
+  // "+N more" overlay on last photo slot
+  moreOverlay: {
+    position: "absolute", top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center", justifyContent: "center",
+  },
+  moreText: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#ffffff" },
 
   // ── Footer ──────────────────────────────────────────────────────────────────
   pageNum: { position: "absolute", bottom: 18, left: 32, right: 32, textAlign: "center", fontSize: 7, color: "#d1d5db" },
 });
 
-type ItemSlim = Pick<Item, "id" | "itemName" | "photoUrl" | "category" | "condition" | "sizeClass">;
+type Photo = { url: string };
+type ItemSlim = {
+  id: string;
+  itemName: string;
+  photoUrl?: string;
+  photos?: Photo[];
+  category?: string;
+  condition?: string;
+  sizeClass?: string;
+};
 
 interface MoversPDFProps {
   items: ItemSlim[];
@@ -150,6 +168,12 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
+function getPhotos(item: ItemSlim): Photo[] {
+  if (item.photos?.length) return item.photos.filter(p => p.url);
+  if (item.photoUrl) return [{ url: item.photoUrl }];
+  return [];
+}
+
 // ─── Header component ─────────────────────────────────────────────────────────
 function PageHeader({ companyName, logoUrl, docLabel }: { companyName: string; logoUrl: string | null; docLabel: string }) {
   return (
@@ -169,17 +193,62 @@ function PageHeader({ companyName, logoUrl, docLabel }: { companyName: string; l
   );
 }
 
+// ─── Photo strip (up to 3 photos side by side inside a card) ─────────────────
+const MAX_VISIBLE = 3;
+
+function CardPhotoStrip({ photos }: { photos: Photo[] }) {
+  if (photos.length === 0) {
+    return (
+      <View style={styles.cardNoPhoto}>
+        <Text style={styles.cardNoPhotoText}>No Photo</Text>
+      </View>
+    );
+  }
+
+  const visible = photos.slice(0, MAX_VISIBLE);
+  const extra   = Math.max(0, photos.length - MAX_VISIBLE);
+  const count   = visible.length;
+  // Each photo slot width = (CARD_W - gaps) / count
+  const slotW   = Math.floor((CARD_W - PHOTO_GAP * (count - 1)) / count);
+
+  return (
+    <View style={styles.photoStrip}>
+      {visible.map((p, i) => {
+        const isLast = i === visible.length - 1;
+        return (
+          <View
+            key={i}
+            style={{
+              width: slotW,
+              height: PHOTO_H,
+              marginLeft: i > 0 ? PHOTO_GAP : 0,
+              position: "relative",
+              backgroundColor: GRAY_100,
+            }}
+          >
+            <Image
+              src={p.url}
+              style={{ width: slotW, height: PHOTO_H, objectFit: "cover" }}
+            />
+            {/* Overlay "+N" on last visible slot if there are hidden photos */}
+            {isLast && extra > 0 && (
+              <View style={styles.moreOverlay}>
+                <Text style={styles.moreText}>+{extra}</Text>
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Item card ────────────────────────────────────────────────────────────────
 function ItemCard({ item }: { item: ItemSlim }) {
+  const photos = getPhotos(item);
   return (
     <View style={styles.card}>
-      {item.photoUrl ? (
-        <Image src={item.photoUrl} style={styles.cardPhoto} />
-      ) : (
-        <View style={styles.cardNoPhoto}>
-          <Text style={styles.cardNoPhotoText}>No Photo</Text>
-        </View>
-      )}
+      <CardPhotoStrip photos={photos} />
       <View style={styles.cardBody}>
         <Text style={styles.cardName}>
           {(item.itemName || "Unnamed Item").slice(0, 60)}
@@ -200,6 +269,11 @@ function ItemCard({ item }: { item: ItemSlim }) {
               <Text style={styles.cardPillText}>{item.category}</Text>
             </View>
           ) : null}
+          {photos.length > 1 && (
+            <View style={[styles.cardPill, { backgroundColor: "#dbeafe" }]}>
+              <Text style={[styles.cardPillText, { color: "#1d4ed8" }]}>{photos.length} photos</Text>
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -280,7 +354,6 @@ function SummaryPage({ items, settings, aiGroups, originAddress, destinationAddr
 }
 
 // ─── Grid pages ───────────────────────────────────────────────────────────────
-// 3 cols × 4 rows = 12 items per page
 const ROWS_PER_PAGE = 4;
 const ITEMS_PER_PAGE = COLS * ROWS_PER_PAGE;
 
@@ -309,7 +382,6 @@ function GridPages({ items, settings }: { items: ItemSlim[]; settings: MoversPDF
                 {rowItems.map((item) => (
                   <ItemCard key={item.id} item={item} />
                 ))}
-                {/* Fill empty slots so the row always has COLS items */}
                 {rowItems.length < COLS &&
                   Array.from({ length: COLS - rowItems.length }).map((_, k) => (
                     <View key={`empty-${k}`} style={{ width: CARD_W }} />

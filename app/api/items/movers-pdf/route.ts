@@ -39,14 +39,22 @@ export async function POST(req: NextRequest) {
 
   const items = itemResults
     .filter(Boolean)
-    .map((item) => ({
-      id: item!.id,
-      itemName: item!.itemName,
-      photoUrl: item!.photoUrl,
-      category: item!.category,
-      condition: item!.condition,
-      sizeClass: item!.sizeClass,
-    }));
+    .map((item) => {
+      const photos: { url: string }[] = item!.photos?.length
+        ? item!.photos.map((p) => ({ url: p.url }))
+        : item!.photoUrl
+        ? [{ url: item!.photoUrl }]
+        : [];
+      return {
+        id: item!.id,
+        itemName: item!.itemName,
+        photoUrl: item!.photoUrl,
+        photos,
+        category: item!.category,
+        condition: item!.condition,
+        sizeClass: item!.sizeClass,
+      };
+    });
 
   if (!items.length) {
     return NextResponse.json({ error: "No valid items found" }, { status: 404 });
