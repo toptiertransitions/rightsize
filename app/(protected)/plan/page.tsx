@@ -23,6 +23,7 @@ import { PlanClient } from "./PlanClient";
 import { IntakeFormSection } from "./IntakeFormSection";
 import { InternalNotesSection } from "./InternalNotesSection";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
+import { GoogleReviewsSection } from "./GoogleReviewsSection";
 import { ClientContactBar } from "./ClientContactBar";
 import { ProjectAddressBar } from "./ProjectAddressBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
@@ -417,6 +418,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
           currentUserPhoto={currentUserPhoto}
         />
       )}
+
+      {/* Google Reviews — bottom of page */}
+      <GoogleReviewsSection
+        tenantId={tenantId}
+        canEdit={isManagerOrAdmin}
+      />
     </div>
   );
 }

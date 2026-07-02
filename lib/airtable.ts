@@ -6294,9 +6294,9 @@ export async function updateProjectTask(
     title: string;
     description: string;
     status: "Open" | "Completed";
-    dueDate: string;
+    dueDate: string | null;
     sortOrder: number;
-    completedAt: string;
+    completedAt: string | null;
     completedBy: string;
     attachmentUrl: string;
     attachmentName: string;
@@ -6305,17 +6305,17 @@ export async function updateProjectTask(
   }>
 ): Promise<import("./types").ProjectTask> {
   const fields: Record<string, unknown> = {};
-  if (updates.title !== undefined) fields["Title"] = updates.title;
-  if (updates.description !== undefined) fields["Description"] = updates.description;
-  if (updates.status !== undefined) fields["Status"] = updates.status;
-  if (updates.dueDate !== undefined) fields["DueDate"] = updates.dueDate;
-  if (updates.sortOrder !== undefined) fields["SortOrder"] = updates.sortOrder;
-  if (updates.completedAt !== undefined) fields["CompletedAt"] = updates.completedAt;
-  if (updates.completedBy !== undefined) fields["CompletedBy"] = updates.completedBy;
-  if (updates.attachmentUrl !== undefined) fields["AttachmentUrl"] = updates.attachmentUrl;
-  if (updates.attachmentName !== undefined) fields["AttachmentName"] = updates.attachmentName;
-  if (updates.attachmentPublicId !== undefined) fields["AttachmentPublicId"] = updates.attachmentPublicId;
-  if (updates.notes !== undefined) fields["Notes"] = updates.notes;
+  if ("title" in updates) fields["Title"] = updates.title;
+  if ("description" in updates) fields["Description"] = updates.description;
+  if ("status" in updates) fields["Status"] = updates.status;
+  if ("dueDate" in updates) fields["DueDate"] = updates.dueDate ?? null;
+  if ("sortOrder" in updates) fields["SortOrder"] = updates.sortOrder;
+  if ("completedAt" in updates) fields["CompletedAt"] = updates.completedAt ?? null;
+  if ("completedBy" in updates) fields["CompletedBy"] = updates.completedBy;
+  if ("attachmentUrl" in updates) fields["AttachmentUrl"] = updates.attachmentUrl;
+  if ("attachmentName" in updates) fields["AttachmentName"] = updates.attachmentName;
+  if ("attachmentPublicId" in updates) fields["AttachmentPublicId"] = updates.attachmentPublicId;
+  if ("notes" in updates) fields["Notes"] = updates.notes;
   const res = await projectTasksFetch(`/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

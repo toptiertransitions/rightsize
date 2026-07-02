@@ -430,7 +430,7 @@ export function ProjectChecklistSection({ tenantId, isAdmin, isManager, currentU
           status: newStatus,
           completedAt: newStatus === "Completed"
             ? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" })
-            : "",
+            : null,
           completedBy: newStatus === "Completed" ? currentUserName : "",
         }),
       });
