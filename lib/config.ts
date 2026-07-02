@@ -99,8 +99,10 @@ export const ITEM_STATUS_COLORS: Record<string, string> = {
 };
 
 export const ROUTE_COLORS: Record<string, string> = {
-  "Keep": "bg-green-100 text-green-800",
-  "Family Keeping": "bg-emerald-100 text-emerald-800",
+  "To Be Moved": "bg-green-100 text-green-800",
+  "Family to Take": "bg-emerald-100 text-emerald-800",
+  "Storage Unit - Offsite": "bg-cyan-100 text-cyan-800",
+  "Leaving with Home": "bg-lime-100 text-lime-800",
   "ProFoundFinds Consignment": "bg-orange-100 text-orange-800",
   "FB/Marketplace": "bg-blue-100 text-blue-800",
   "Online Marketplace": "bg-indigo-100 text-indigo-800",

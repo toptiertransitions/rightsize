@@ -42,7 +42,7 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
   value_low: 0,
   value_mid: 0,
   value_high: 0,
-  primary_route: "Keep",
+  primary_route: "To Be Moved",
   route_reasoning: "",
   consignment_category: "",
   listing_title_ebay: "",
@@ -637,11 +637,13 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                       { value: "For Parts", label: "For Parts" },
                     ]}
                   />
-                  <Select label="Recommended Route" value={merged.primary_route ?? "Keep"}
+                  <Select label="Recommended Route" value={merged.primary_route ?? "To Be Moved"}
                     onChange={(e) => update("primary_route", e.target.value as PrimaryRoute)}
                     options={[
-                      { value: "Keep", label: "Keep" },
-                      { value: "Family Keeping", label: "Family Keeping" },
+                      { value: "To Be Moved", label: "To Be Moved" },
+                      { value: "Family to Take", label: "Family to Take" },
+                      { value: "Storage Unit - Offsite", label: "Storage Unit - Offsite" },
+                      { value: "Leaving with Home", label: "Leaving with Home" },
                       ...( isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                       { value: "FB/Marketplace", label: "FB/Marketplace" },
                       { value: "Online Marketplace", label: "eBay" },

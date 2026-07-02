@@ -6,7 +6,8 @@ import { AdminHeader } from "../components/AdminHeader";
 import type { RoutingRule, LocalVendor, PrimaryRoute, VendorType } from "@/lib/types";
 
 const PRIMARY_ROUTES: PrimaryRoute[] = [
-  "Keep", "Family Keeping", "ProFoundFinds Consignment", "FB/Marketplace",
+  "To Be Moved", "Family to Take", "Storage Unit - Offsite", "Leaving with Home",
+  "ProFoundFinds Consignment", "FB/Marketplace",
   "Online Marketplace", "Other Consignment", "Estate Sale", "Donate", "Discard",
 ];
 
@@ -57,8 +58,10 @@ const DEFAULT_RULES: Omit<RoutingRule, "id" | "airtableId" | "createdAt">[] = [
 ];
 
 const ROUTE_COLORS: Record<PrimaryRoute, string> = {
-  "Keep":                       "bg-gray-700 text-gray-300",
-  "Family Keeping":             "bg-gray-700 text-gray-300",
+  "To Be Moved":                "bg-green-900/60 text-green-300",
+  "Family to Take":             "bg-emerald-900/60 text-emerald-300",
+  "Storage Unit - Offsite":     "bg-cyan-900/60 text-cyan-300",
+  "Leaving with Home":          "bg-lime-900/60 text-lime-300",
   "ProFoundFinds Consignment":  "bg-purple-900/60 text-purple-300",
   "FB/Marketplace":             "bg-blue-900/60 text-blue-300",
   "Online Marketplace":         "bg-sky-900/60 text-sky-300",

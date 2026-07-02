@@ -40,8 +40,10 @@ const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "gr
 };
 
 const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" | "green" | "purple" | "yellow" | "red"; label: string }> = {
-  "Keep":                         { variant: "green",  label: "Keep" },
-  "Family Keeping":               { variant: "green",  label: "Family" },
+  "To Be Moved":                  { variant: "green",  label: "To Be Moved" },
+  "Family to Take":               { variant: "green",  label: "Family to Take" },
+  "Storage Unit - Offsite":       { variant: "teal",   label: "Storage Unit" },
+  "Leaving with Home":            { variant: "green",  label: "Leaving w/ Home" },
   "ProFoundFinds Consignment":    { variant: "orange", label: "ProFoundFinds" },
   "FB/Marketplace":               { variant: "blue",   label: "FB/Marketplace" },
   "Online Marketplace":           { variant: "blue",   label: "eBay" },
@@ -786,7 +788,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
           <section className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Route & Value</h3>
             <div className="grid grid-cols-2 gap-3 items-end">
-              <Select label="Recommended Route" value={form.primaryRoute ?? "Keep"}
+              <Select label="Recommended Route" value={form.primaryRoute ?? "To Be Moved"}
                 onChange={e => {
                   const newRoute = e.target.value as PrimaryRoute;
                   const vendorTypeForRoute: Partial<Record<string, string>> = {
@@ -803,8 +805,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   set("primaryRoute", newRoute);
                 }}
                 options={[
-                  { value: "Keep",                         label: "Keep" },
-                  { value: "Family Keeping",               label: "Family Keeping" },
+                  { value: "To Be Moved",                  label: "To Be Moved" },
+                  { value: "Family to Take",               label: "Family to Take" },
+                  { value: "Storage Unit - Offsite",       label: "Storage Unit - Offsite" },
+                  { value: "Leaving with Home",            label: "Leaving with Home" },
                   ...(isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                   { value: "FB/Marketplace",               label: "FB/Marketplace" },
                   { value: "Online Marketplace",           label: "eBay" },
@@ -1390,15 +1394,18 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   };
 
   const handleMoversPDF = async () => {
-    if (selected.size === 0) return;
+    const toBeMovedIds = items
+      .filter((i) => i.primaryRoute === "To Be Moved")
+      .map((i) => i.id);
+    const itemIds = toBeMovedIds.length > 0 ? toBeMovedIds : [...selected];
+    if (itemIds.length === 0) return;
     setPdfLoading(true);
     try {
-      const firstItem = items.find((i) => selected.has(i.id));
-      const tid = tenantId ?? firstItem?.tenantId;
+      const tid = tenantId ?? items[0]?.tenantId;
       const res = await fetch("/api/items/movers-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds: [...selected], tenantId: tid }),
+        body: JSON.stringify({ itemIds, tenantId: tid }),
       });
       if (!res.ok) throw new Error("Failed to generate PDF");
       const blob = await res.blob();
@@ -1760,8 +1767,10 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           className="h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500"
         >
           <option value="">All Routes</option>
-          <option value="Keep">Keep</option>
-          <option value="Family Keeping">Family Keeping</option>
+          <option value="To Be Moved">To Be Moved</option>
+          <option value="Family to Take">Family to Take</option>
+          <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
+          <option value="Leaving with Home">Leaving with Home</option>
           {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
           {isTTT && <option value="Estate Sale">Estate Sale</option>}
           <option value="FB/Marketplace">FB/Marketplace</option>

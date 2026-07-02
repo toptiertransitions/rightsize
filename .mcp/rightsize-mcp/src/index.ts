@@ -1050,7 +1050,7 @@ const TOOLS = [
         route: {
           type: "string",
           description: "Filter by sales route",
-          enum: ["Keep", "Family Keeping", "ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Donate", "Discard", "Estate Sale"],
+          enum: ["To Be Moved", "Family to Take", "Storage Unit - Offsite", "Leaving with Home", "ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Donate", "Discard", "Estate Sale"],
         },
         category: { type: "string", description: "Filter by item category (partial match, e.g. 'furniture', 'jewelry')" },
         limit:    { type: "number", description: "Max items to return (default 200, max 500)" },

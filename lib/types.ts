@@ -232,8 +232,10 @@ export type FragilityLevel = "Not Fragile" | "Somewhat Fragile" | "Very Fragile"
 export type ItemUseType = "Daily Use" | "Collector Item";
 
 export type PrimaryRoute =
-  | "Keep"
-  | "Family Keeping"
+  | "To Be Moved"
+  | "Family to Take"
+  | "Storage Unit - Offsite"
+  | "Leaving with Home"
   | "ProFoundFinds Consignment"
   | "FB/Marketplace"
   | "Online Marketplace"
