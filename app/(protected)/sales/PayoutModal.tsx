@@ -96,15 +96,14 @@ export function buildUnpaidLineItems(
     });
   }
 
-  // Estate Sale: sold, unpaid — client gets clientSharePercent of salePrice
+  // Estate Sale: sold, unpaid — client gets clientSharePercent (default 67%) of salePrice
   for (const item of items) {
     if (item.primaryRoute !== "Estate Sale") continue;
     if (item.status !== "Sold") continue;
     let payout = 0;
+    const estateSharePct = item.clientSharePercent || 67;
     if (item.salePrice && item.salePrice > 0) {
-      payout = item.clientSharePercent
-        ? item.salePrice * (item.clientSharePercent / 100)
-        : (item.consignorPayout ?? 0);
+      payout = item.salePrice * (estateSharePct / 100);
     } else {
       payout = item.consignorPayout ?? 0;
     }
@@ -218,9 +217,10 @@ export function buildPayoutMarkData(
   // Estate Sale sold items
   for (const item of items) {
     if (item.primaryRoute !== "Estate Sale" || item.status !== "Sold") continue;
+    const estateSharePct = item.clientSharePercent || 67;
     const payout =
       item.salePrice && item.salePrice > 0
-        ? (item.clientSharePercent ? item.salePrice * (item.clientSharePercent / 100) : (item.consignorPayout ?? 0))
+        ? item.salePrice * (estateSharePct / 100)
         : (item.consignorPayout ?? 0);
     if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
       itemsToMark.push({ id: item.id, amount: payout });
