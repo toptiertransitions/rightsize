@@ -865,7 +865,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     category: toStr(f["Category"]),
     condition: (toStr(f["Condition"]) || "Good") as ItemCondition,
     conditionNotes: toStr(f["ConditionNotes"]),
-    sizeClass: (toStr(f["SizeClass"]) || "Fits in Car-SUV") as SizeClass,
+    sizeClass: toStr(f["SizeClass"]) as SizeClass | "",
     fragility: (toStr(f["Fragility"]) || "Not Fragile") as FragilityLevel,
     itemType: (toStr(f["ItemType"]) || "Daily Use") as ItemUseType,
     valueLow: toNum(f["ValueLow"]),
@@ -1689,6 +1689,9 @@ export function applyRoutingRules(
   for (const item of items) {
     if (item.assignedVendorId) continue; // already vendor-assigned
     if (!["Pending Review", "Approved"].includes(item.status)) continue;
+    // Skip items with no size class — routing relies on it and silently defaulting
+    // caused items to be misclassified as "Fits in Car-SUV"
+    if (!item.sizeClass) continue;
 
     // Hard constraint: large items can never go to Online Marketplace
     const isLarge = item.sizeClass === "Fits in Car-SUV" || item.sizeClass === "Needs Movers";

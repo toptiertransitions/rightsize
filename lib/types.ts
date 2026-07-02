@@ -272,7 +272,7 @@ export interface Item {
   category: string;
   condition: ItemCondition;
   conditionNotes: string;
-  sizeClass: SizeClass;
+  sizeClass: SizeClass | "";
   fragility: FragilityLevel;
   itemType: ItemUseType;
   valueLow: number;
