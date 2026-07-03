@@ -10,7 +10,9 @@ import {
   getPlanEntriesForTenants,
   getMembershipsForUser,
   getProjectFiles,
+  getProjectFilesForTenants,
   getTimeEntries,
+  getTimeEntriesForTenants,
   getSystemRole,
   getServices,
   getContractsForTenant,
@@ -63,10 +65,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
     const tenantOptions = visibleTenants.map((t) => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
 
+    const selectedIds = selectedTenants.map(t => t.id);
     const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
-      getPlanEntriesForTenants(selectedTenants.map(t => t.id)).catch(() => []),
-      Promise.all(selectedTenants.map((t) => getTimeEntries({ tenantId: t.id }).catch(() => []))).then((r) => r.flat()),
-      Promise.all(selectedTenants.map((t) => getProjectFiles(t.id).catch(() => []))).then((r) => r.flat()),
+      getPlanEntriesForTenants(selectedIds).catch(() => []),
+      getTimeEntriesForTenants(selectedIds).catch(() => []),
+      getProjectFilesForTenants(selectedIds).catch(() => []),
       getServices().catch(() => []),
     ]);
 
@@ -117,11 +120,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const currentTenantId = showArchived ? "__all_archived__" : "__all_active__";
       const tenantOptions = visibleTenants2.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
 
-      // Fetch plan entries, time entries, project files, and services for all tenants in selected group
+      const selectedIds2 = selectedTenants.map(t => t.id);
       const [allEntries, allTimeEntries, allProjectFiles, serviceList] = await Promise.all([
-        getPlanEntriesForTenants(selectedTenants.map(t => t.id)).catch(() => []),
-        Promise.all(selectedTenants.map(t => getTimeEntries({ tenantId: t.id }).catch(() => []))).then(r => r.flat()),
-        Promise.all(selectedTenants.map(t => getProjectFiles(t.id).catch(() => []))).then(r => r.flat()),
+        getPlanEntriesForTenants(selectedIds2).catch(() => []),
+        getTimeEntriesForTenants(selectedIds2).catch(() => []),
+        getProjectFilesForTenants(selectedIds2).catch(() => []),
         getServices().catch(() => []),
       ]);
 
@@ -179,9 +182,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
       // Fetch time entries only for tenants where the staff member has shifts
       const tenantIdsWithEntries = [...new Set(staffEntries.map(e => e.tenantId).filter(Boolean))];
-      const staffTimeEntries = await Promise.all(
-        tenantIdsWithEntries.map(id => getTimeEntries({ tenantId: id }).catch(() => []))
-      ).then(r => r.flat());
+      const staffTimeEntries = await getTimeEntriesForTenants(tenantIdsWithEntries).catch(() => []);
 
       const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
@@ -264,7 +265,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts, projectTasks] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts, projectTasks, allStaffMembers] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
@@ -276,6 +277,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getServices().catch(() => []),
     getContractsForTenant(tenantId).catch(() => []),
     getProjectTasksForTenant(tenantId).catch(() => []),
+    getStaffMembers().catch(() => []),
   ]);
 
   // The current primary quote is the most-recently-signed Signed contract
@@ -307,13 +309,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
   let teamLeadPhoto: string | undefined;
   let teamLeadPhone: string | undefined;
   if (tenant.teamLeadClerkId) {
-    const [staffMembers, teamLeadClerkUser] = await Promise.all([
-      getStaffMembers().catch(() => []),
-      clerk.users.getUser(tenant.teamLeadClerkId).catch(() => null),
-    ]);
-    const lead = staffMembers.find(m => m.clerkUserId === tenant.teamLeadClerkId);
+    const lead = allStaffMembers.find(m => m.clerkUserId === tenant.teamLeadClerkId);
     teamLeadName = lead?.displayName || undefined;
     teamLeadPhone = lead?.phone || undefined;
+    const teamLeadClerkUser = await clerk.users.getUser(tenant.teamLeadClerkId).catch(() => null);
     teamLeadPhoto = teamLeadClerkUser?.imageUrl || undefined;
   }
 

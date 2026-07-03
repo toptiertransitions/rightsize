@@ -444,6 +444,85 @@ export async function getItemsForTenant(tenantId: string): Promise<Item[]> {
   return records.map(mapItem);
 }
 
+export async function getItemsForTenants(tenantIds: string[]): Promise<Item[]> {
+  if (tenantIds.length === 0) return [];
+  if (tenantIds.length === 1) return getItemsForTenant(tenantIds[0]);
+  const CHUNK = 30;
+  const chunks: string[][] = [];
+  for (let i = 0; i < tenantIds.length; i += CHUNK) chunks.push(tenantIds.slice(i, i + CHUNK));
+  const results = await Promise.all(chunks.map(chunk => {
+    const formula = `OR(${chunk.map(id => `{TenantId}='${id}'`).join(",")})`;
+    return getBase()(AIRTABLE_TABLES.ITEMS)
+      .select({ filterByFormula: formula, sort: [{ field: "CreatedAt", direction: "desc" }] })
+      .all()
+      .then(records => records.map(mapItem))
+      .catch(() => [] as Item[]);
+  }));
+  return results.flat();
+}
+
+export async function getRoomsForTenants(tenantIds: string[]): Promise<Room[]> {
+  if (tenantIds.length === 0) return [];
+  if (tenantIds.length === 1) return getRoomsForTenant(tenantIds[0]);
+  const CHUNK = 30;
+  const chunks: string[][] = [];
+  for (let i = 0; i < tenantIds.length; i += CHUNK) chunks.push(tenantIds.slice(i, i + CHUNK));
+  const results = await Promise.all(chunks.map(chunk => {
+    const formula = `OR(${chunk.map(id => `{TenantId}='${id}'`).join(",")})`;
+    return getBase()(AIRTABLE_TABLES.ROOMS)
+      .select({ filterByFormula: formula, sort: [{ field: "CreatedAt", direction: "desc" }] })
+      .all()
+      .then(records => records.map(mapRoom))
+      .catch(() => [] as Room[]);
+  }));
+  return results.flat();
+}
+
+export async function getTimeEntriesForTenants(tenantIds: string[]): Promise<TimeEntry[]> {
+  if (tenantIds.length === 0) return [];
+  if (tenantIds.length === 1) return getTimeEntries({ tenantId: tenantIds[0] });
+  const CHUNK = 30;
+  const chunks: string[][] = [];
+  for (let i = 0; i < tenantIds.length; i += CHUNK) chunks.push(tenantIds.slice(i, i + CHUNK));
+  const results = await Promise.all(chunks.map(async chunk => {
+    const formula = `OR(${chunk.map(id => `{TenantId}='${id}'`).join(",")})`;
+    const baseQs = `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Date&sort[0][direction]=desc`;
+    const records: AirtableRecord[] = [];
+    let offset: string | undefined;
+    do {
+      const res = await timeFetch(baseQs + (offset ? `&offset=${offset}` : ""));
+      if (!res.ok) return [] as TimeEntry[];
+      const data = await res.json();
+      records.push(...(data.records as AirtableRecord[]));
+      offset = data.offset;
+    } while (offset);
+    return records.map(mapTimeEntry);
+  }));
+  return results.flat();
+}
+
+export async function getProjectFilesForTenants(tenantIds: string[]): Promise<ProjectFile[]> {
+  if (tenantIds.length === 0) return [];
+  if (tenantIds.length === 1) return getProjectFiles(tenantIds[0]);
+  const CHUNK = 30;
+  const chunks: string[][] = [];
+  for (let i = 0; i < tenantIds.length; i += CHUNK) chunks.push(tenantIds.slice(i, i + CHUNK));
+  const results = await Promise.all(chunks.map(async chunk => {
+    const formula = encodeURIComponent(`OR(${chunk.map(id => `{TenantID}='${id}'`).join(",")})`);
+    const records: AirtableRecord[] = [];
+    let offset: string | undefined;
+    do {
+      const res = await fileFetch(`?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`);
+      if (!res.ok) return [] as ProjectFile[];
+      const data = await res.json();
+      records.push(...(data.records as AirtableRecord[]));
+      offset = data.offset;
+    } while (offset);
+    return records.map(mapProjectFile);
+  }));
+  return results.flat();
+}
+
 export async function getItemById(id: string): Promise<Item | null> {
   try {
     const base = getBase();
@@ -1569,14 +1648,16 @@ export async function deleteLocalVendor(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function getAllLocalVendors(): Promise<LocalVendor[]> {
-  const res = await localVendorFetch(
-    `?sort[0][field]=VendorType&sort[0][direction]=asc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapLocalVendor);
-}
+export const getAllLocalVendors = unstable_cache(
+  async function _getAllLocalVendors(): Promise<LocalVendor[]> {
+    const res = await localVendorFetch(`?sort[0][field]=VendorType&sort[0][direction]=asc`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return (data.records as AirtableRecord[]).map(mapLocalVendor);
+  },
+  ["local-vendors"],
+  { revalidate: 300 }
+);
 
 export async function getLocalVendorByClerkId(clerkUserId: string): Promise<LocalVendor | null> {
   const encoded = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
@@ -2244,14 +2325,16 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
   };
 }
 
-export async function getStaffMembers(): Promise<StaffMember[]> {
-  const res = await staffRolesFetch(
-    `?sort[0][field]=DisplayName&sort[0][direction]=asc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapStaffMember);
-}
+export const getStaffMembers = unstable_cache(
+  async function _getStaffMembers(): Promise<StaffMember[]> {
+    const res = await staffRolesFetch(`?sort[0][field]=DisplayName&sort[0][direction]=asc`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return (data.records as AirtableRecord[]).map(mapStaffMember);
+  },
+  ["staff-members"],
+  { revalidate: 300 }
+);
 
 export async function getStaffMember(clerkUserId: string): Promise<StaffMember | null> {
   const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);

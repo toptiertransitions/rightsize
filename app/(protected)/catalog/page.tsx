@@ -3,10 +3,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   getItemsForTenant,
+  getItemsForTenants,
   getUserRoleForTenant,
   getTenantById,
   getTenants,
   getRoomsForTenant,
+  getRoomsForTenants,
   getMembershipsForUser,
   getSystemRole,
   getAllLocalVendors,
@@ -41,17 +43,15 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :
       allTenants;
 
-    const [itemArrays, roomArrays, localVendors, staffMembers] = await Promise.all([
-      Promise.all(selectedTenants.map((t) => getItemsForTenant(t.id).catch(() => []))),
-      Promise.all(selectedTenants.map((t) => getRoomsForTenant(t.id).catch(() => []))),
+    const tenantIdList = selectedTenants.map((t) => t.id);
+    const [items, rooms, localVendors, staffMembers] = await Promise.all([
+      getItemsForTenants(tenantIdList).catch(() => []),
+      getRoomsForTenants(tenantIdList).catch(() => []),
       getAllLocalVendors().catch(() => []),
       getStaffMembers().catch(() => []),
     ]);
 
-    const items = itemArrays.flat().sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-    const rooms = roomArrays.flat();
+    items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const canAutoRoute = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
     const viewLabel =
       tenantId === "__all_active__" ? "All Active Projects" :
@@ -143,16 +143,13 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   const tenantIds = memberships.map((m) => m.tenantId);
 
-  const [itemArrays, tenantObjects, roomArrays] = await Promise.all([
-    Promise.all(tenantIds.map((tid) => getItemsForTenant(tid).catch(() => []))),
+  const [items, tenantObjects, rooms] = await Promise.all([
+    getItemsForTenants(tenantIds).catch(() => []),
     Promise.all(tenantIds.map((tid) => getTenantById(tid).catch(() => null))),
-    Promise.all(tenantIds.map((tid) => getRoomsForTenant(tid).catch(() => []))),
+    getRoomsForTenants(tenantIds).catch(() => []),
   ]);
 
-  const items = itemArrays.flat().sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  const rooms = roomArrays.flat();
+  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const tenants = tenantObjects.filter(Boolean) as Tenant[];
   const editableMembership = memberships.find((m) => EDIT_ROLES.includes(m.role));
   const canEdit = !!editableMembership;
