@@ -16,6 +16,7 @@ import {
   getOpportunitiesForTenant,
   getClientContacts,
   getInvoicesForTenant,
+  getItemsByIds,
 } from "@/lib/airtable";
 import { QuotingClient } from "./QuotingClient";
 import { QuotingProjectPicker } from "./QuotingProjectPicker";
@@ -54,6 +55,10 @@ export default async function QuotingPage({ searchParams }: PageProps) {
       getClientContacts().catch(() => []),
       getInvoicesForTenant(tenantId).catch(() => []),
     ]);
+
+  const assessedItems = tenant?.quoteAssessmentItemIds?.length
+    ? await getItemsByIds(tenant.quoteAssessmentItemIds).catch(() => [])
+    : [];
 
   if (!tenant) redirect("/home");
 
@@ -115,6 +120,7 @@ export default async function QuotingPage({ searchParams }: PageProps) {
       ownerEmail={ownerEmail}
       currentUserEmail={currentUserEmail}
       invoices={invoices}
+      initialAssessedItems={assessedItems}
     />
   );
 }

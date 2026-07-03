@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import {
   getTimeEntries,
   getTimeEntryById,
@@ -7,6 +7,7 @@ import {
   updateTimeEntry,
   deleteTimeEntry,
   getSystemRole,
+  getStaffMember,
 } from "@/lib/airtable";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import type { FocusArea } from "@/lib/types";
@@ -56,13 +57,6 @@ export async function POST(req: NextRequest) {
 
   const canEditAll = hasPermission(systemRole, PERMISSIONS.TIME_EDIT_ALL);
 
-  const user = await currentUser().catch(() => null);
-  const authenticatedStaffName = user
-    ? (`${user.firstName ?? ""} ${user.lastName ?? ""}`).trim() ||
-      user.emailAddresses?.[0]?.emailAddress ||
-      "Staff"
-    : "Staff";
-
   let body: {
     tenantId?: string;
     projectName?: string;
@@ -102,7 +96,11 @@ export async function POST(req: NextRequest) {
   }
 
   const entryUserId = (canEditAll && body.staffUserId) ? body.staffUserId : userId;
-  const staffName = (canEditAll && body.staffUserId && body.staffName) ? body.staffName : authenticatedStaffName;
+
+  // Always resolve name from StaffRoles so self-logged and admin-logged entries
+  // use the same canonical displayName regardless of what Clerk has stored.
+  const staffMember = await getStaffMember(entryUserId);
+  const staffName = staffMember?.displayName || "Staff";
 
   const sharedFields = {
     clerkUserId: entryUserId,

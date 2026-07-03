@@ -214,6 +214,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     priceDrop2Days: f["PriceDrop2Days"] != null ? toNum(f["PriceDrop2Days"]) : undefined,
     priceDrop2Percent: f["PriceDrop2Percent"] != null ? toNum(f["PriceDrop2Percent"]) : undefined,
     quotePhotos: (() => { try { const s = toStr(f["QuotePhotos"]); return s ? JSON.parse(s) : undefined; } catch { return undefined; } })(),
+    quoteAssessmentItemIds: (() => { try { const s = toStr(f["QuoteAssessmentItemIds"]); return s ? JSON.parse(s) : undefined; } catch { return undefined; } })(),
   };
 }
 
@@ -226,7 +227,11 @@ export async function getUserByClerkId(clerkUserId: string): Promise<User | null
       maxRecords: 1,
     })
     .all();
-  return records.length > 0 ? mapUser(records[0]) : null;
+  if (records.length === 0) return null;
+  const user = mapUser(records[0]);
+  // Fire-and-forget: stamp LastActivityAt so we can observe actual usage before removing this table.
+  touchUserLastActivity(records[0].id).catch(() => {});
+  return user;
 }
 
 export async function createUser(data: {
@@ -235,11 +240,13 @@ export async function createUser(data: {
   name: string;
 }): Promise<User> {
   const base = getBase();
+  const now = new Date().toISOString();
   const record = await base(AIRTABLE_TABLES.USERS).create({
     ClerkUserId: data.clerkUserId,
     Email: data.email,
     Name: data.name,
-    CreatedAt: new Date().toISOString(),
+    CreatedAt: now,
+    LastActivityAt: now,
   });
   return mapUser(record);
 }
@@ -254,6 +261,13 @@ export async function upsertUser(data: {
   return createUser(data);
 }
 
+async function touchUserLastActivity(airtableId: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.USERS).update(airtableId, {
+    LastActivityAt: new Date().toISOString(),
+  });
+}
+
 function mapUser(record: Airtable.Record<Airtable.FieldSet>): User {
   const f = record.fields;
   return {
@@ -263,6 +277,7 @@ function mapUser(record: Airtable.Record<Airtable.FieldSet>): User {
     email: toStr(f["Email"]),
     name: toStr(f["Name"]),
     createdAt: toStr(f["CreatedAt"]),
+    lastActivityAt: toStr(f["LastActivityAt"]) || undefined,
   };
 }
 
@@ -437,6 +452,16 @@ export async function getItemById(id: string): Promise<Item | null> {
   } catch {
     return null;
   }
+}
+
+export async function getItemsByIds(ids: string[]): Promise<Item[]> {
+  if (!ids.length) return [];
+  const base = getBase();
+  const formula = ids.length === 1
+    ? `RECORD_ID()='${ids[0]}'`
+    : `OR(${ids.map(id => `RECORD_ID()='${id}'`).join(",")})`;
+  const records = await base(AIRTABLE_TABLES.ITEMS).select({ filterByFormula: formula }).all();
+  return records.map(mapItem);
 }
 
 // ─── Storefront helpers ───────────────────────────────────────────────────────
@@ -963,7 +988,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null }
+  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -999,6 +1024,7 @@ export async function updateTenant(
   if (data.priceDrop2Days !== undefined) fields["PriceDrop2Days"] = data.priceDrop2Days ?? 0;
   if (data.priceDrop2Percent !== undefined) fields["PriceDrop2Percent"] = data.priceDrop2Percent ?? 0;
   if (data.quotePhotos !== undefined) fields["QuotePhotos"] = data.quotePhotos ? JSON.stringify(data.quotePhotos) : "";
+  if (data.quoteAssessmentItemIds !== undefined) fields["QuoteAssessmentItemIds"] = data.quoteAssessmentItemIds?.length ? JSON.stringify(data.quoteAssessmentItemIds) : "";
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }

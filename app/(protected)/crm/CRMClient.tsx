@@ -969,12 +969,21 @@ function OpportunityPanel({
           {stage === "Lost" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Lost Reason</label>
-              <input
-                type="text"
+              <select
                 value={lostReason}
                 onChange={(e) => setLostReason(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">— Select a reason —</option>
+                <option>Competitor – Lower Hourly Rate</option>
+                <option>Competitor – Fewer Hours</option>
+                <option>Competitor – Less Services</option>
+                <option>DIY / Family Handled It</option>
+                <option>Move / Timing Change</option>
+                <option>Health Event / Passing</option>
+                <option>Unresponsive / Went Dark</option>
+                <option>Top Tier Rejected</option>
+              </select>
             </div>
           )}
 
@@ -3312,6 +3321,22 @@ function DashboardTab({
   const [activeReportStatus, setActiveReportStatus] = useState<"idle" | "sent" | "error">("idle");
   const [activeReportError, setActiveReportError] = useState<string | null>(null);
 
+  // Loyalty spotlight state
+  const [spotlightPoints, setSpotlightPoints] = useState<{ earned: number; redeemed: number; balance: number; earnedYTD: number } | null>(null);
+  const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+
+  useEffect(() => {
+    if (!spotlightId) { setSpotlightPoints(null); return; }
+    setLoyaltyLoading(true);
+    fetch(`/api/crm/partner-loyalty?referralContactId=${spotlightId}`)
+      .then(r => r.json())
+      .then((d: { earned: number; redeemed: number; balance: number; earnedYTD: number }) => {
+        setSpotlightPoints(d.earned > 0 ? d : null);
+      })
+      .catch(() => setSpotlightPoints(null))
+      .finally(() => setLoyaltyLoading(false));
+  }, [spotlightId]);
+
   useEffect(() => {
     fetch("/api/crm/activities")
       .then(r => r.json())
@@ -4168,6 +4193,42 @@ function DashboardTab({
                 </div>
               </div>
             </div>
+
+            {/* Loyalty Program */}
+            {(spotlightPoints || loyaltyLoading) && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Loyalty Program</p>
+                {loyaltyLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+                    Loading…
+                  </div>
+                ) : spotlightPoints && (
+                  <div className="flex flex-wrap gap-8">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">Earned YTD</p>
+                      <p className="text-2xl font-bold text-gray-900">{spotlightPoints.earnedYTD}</p>
+                      <p className="text-xs text-gray-400">pts this year</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">Available Balance</p>
+                      <p className="text-2xl font-bold text-forest-600">{spotlightPoints.balance}</p>
+                      <p className="text-xs text-gray-400">pts available</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">Redeemed</p>
+                      <p className="text-2xl font-bold text-gray-900">{spotlightPoints.redeemed}</p>
+                      <p className="text-xs text-gray-400">pts redeemed</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">Total Earned</p>
+                      <p className="text-2xl font-bold text-gray-900">{spotlightPoints.earned}</p>
+                      <p className="text-xs text-gray-400">pts all time</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Lost opportunities */}
             {spotlightOpps.filter(o => o.stage === "Lost").length > 0 && (

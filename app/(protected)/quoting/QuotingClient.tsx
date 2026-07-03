@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { EstimatorSection } from "@/app/(protected)/rooms/EstimatorSection";
 import { AddRoomButton } from "@/app/(protected)/rooms/RoomsClient";
-import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus, ItemPhoto } from "@/lib/types";
+import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus, ItemPhoto, Item } from "@/lib/types";
 import { ROOM_TYPES } from "@/lib/types";
 
 interface Props {
@@ -21,6 +21,7 @@ interface Props {
   ownerEmail?: string;
   currentUserEmail?: string;
   invoices?: Invoice[];
+  initialAssessedItems?: Item[];
 }
 
 // ─── Deposit Invoice Panel ────────────────────────────────────────────────────
@@ -1025,8 +1026,29 @@ function HoursComparison({ signedContracts, timeEntries }: { signedContracts: Co
   );
 }
 
+// ─── Route badge colors ────────────────────────────────────────────────────────
+const ROUTE_BADGE: Record<string, string> = {
+  "Donate":                    "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "Discard":                   "bg-gray-100 text-gray-600 border-gray-200",
+  "FB/Marketplace":            "bg-amber-50 text-amber-700 border-amber-200",
+  "Online Marketplace":        "bg-blue-50 text-blue-700 border-blue-200",
+  "ProFoundFinds Consignment": "bg-purple-50 text-purple-700 border-purple-200",
+  "Other Consignment":         "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "To Be Moved":               "bg-stone-100 text-stone-600 border-stone-200",
+  "Local Vendor":              "bg-teal-50 text-teal-700 border-teal-200",
+  "Estate Sale":               "bg-orange-50 text-orange-700 border-orange-200",
+};
+
 // ─── Quote Photos Section ─────────────────────────────────────────────────────
-function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; initialPhotos: ItemPhoto[] }) {
+function QuotePhotosSection({
+  tenantId,
+  initialPhotos,
+  initialAssessedItems = [],
+}: {
+  tenantId: string;
+  initialPhotos: ItemPhoto[];
+  initialAssessedItems?: Item[];
+}) {
   const [photos, setPhotos] = useState<ItemPhoto[]>(initialPhotos);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -1035,6 +1057,12 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Selection + assessment state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [assessing, setAssessing] = useState(false);
+  const [assessError, setAssessError] = useState<string | null>(null);
+  const [assessedItems, setAssessedItems] = useState<Item[]>(initialAssessedItems);
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -1079,6 +1107,7 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
       if (!res.ok) throw new Error("Failed");
       const { photos: updated } = await res.json();
       setPhotos(updated);
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(publicId); return next; });
     } catch { /* ignore */ }
     finally { setDeletingId(null); }
   }
@@ -1100,65 +1129,166 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
     }
   }
 
+  function toggleSelect(publicId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(publicId)) next.delete(publicId);
+      else next.add(publicId);
+      return next;
+    });
+  }
+
+  async function handleAssessItems() {
+    const selectedPhotos = photos.filter(p => selectedIds.has(p.publicId));
+    if (!selectedPhotos.length) return;
+    setAssessing(true);
+    setAssessError(null);
+    try {
+      const res = await fetch(`/api/quoting/${tenantId}/assess-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photos: selectedPhotos }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Assessment failed");
+      }
+      const { items } = await res.json();
+      setAssessedItems(prev => {
+        const byId = new Map(prev.map((i: Item) => [i.id, i]));
+        for (const item of items) byId.set(item.id, item);
+        return Array.from(byId.values());
+      });
+      setSelectedIds(new Set());
+    } catch (e) {
+      setAssessError(e instanceof Error ? e.message : "Assessment failed. Please try again.");
+    } finally {
+      setAssessing(false);
+    }
+  }
+
+  const routeSummary = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    for (const item of assessedItems) {
+      const route = (item.primaryRoute as string) || "Unknown";
+      const existing = map.get(route) ?? { count: 0, total: 0 };
+      map.set(route, { count: existing.count + 1, total: existing.total + (item.valueMid ?? 0) });
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1].total - a[1].total);
+  }, [assessedItems]);
+
+  const selectedCount = selectedIds.size;
+
   return (
     <div className="mt-12 pb-8">
-      <div className="flex items-start justify-between gap-4 mb-4">
+      {/* ─── Header ─── */}
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Pictures from Quote</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Photos from this quoting visit — stored on this project</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {selectedCount > 0
+              ? `${selectedCount} photo${selectedCount !== 1 ? "s" : ""} selected`
+              : "Select photos to assess items, or tap a photo to view full size"}
+          </p>
         </div>
-        <button
-          onClick={handleEmailInfo}
-          disabled={emailSending}
-          className="flex items-center gap-2 shrink-0 text-sm font-medium px-4 py-2 rounded-xl bg-forest-600 text-white hover:bg-forest-700 transition-colors disabled:opacity-50"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-          {emailSending ? "Sending…" : "Email Me Images/Info"}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {selectedCount > 0 && (
+            <button
+              onClick={handleAssessItems}
+              disabled={assessing}
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl bg-forest-600 text-white hover:bg-forest-700 transition-colors disabled:opacity-60"
+            >
+              {assessing ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
+                  Assessing {selectedCount} item{selectedCount !== 1 ? "s" : ""}…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Assess {selectedCount} Item{selectedCount !== 1 ? "s" : ""}
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={handleEmailInfo}
+            disabled={emailSending}
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            {emailSending ? "Sending…" : "Email Me Images/Info"}
+          </button>
+        </div>
       </div>
 
       {emailMsg && (
-        <div className={cn(
-          "mb-4 text-sm px-3 py-2 rounded-lg border",
-          emailMsg.includes("sent") ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"
-        )}>
+        <div className={cn("mb-4 text-sm px-3 py-2 rounded-lg border", emailMsg.includes("sent") ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200")}>
           {emailMsg}
         </div>
       )}
-
       {uploadError && (
-        <div className="mb-4 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-600 border-red-200">
-          {uploadError}
-        </div>
+        <div className="mb-4 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-600 border-red-200">{uploadError}</div>
+      )}
+      {assessError && (
+        <div className="mb-4 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-600 border-red-200">{assessError}</div>
       )}
 
+      {/* ─── Photo grid ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {photos.map((photo) => (
-          <div
-            key={photo.publicId}
-            className="relative group aspect-square rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer shadow-sm hover:shadow-md transition-shadow"
-            onClick={() => setLightbox(photo.url)}
-          >
-            <img
-              src={photo.url}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(photo.publicId); }}
-              disabled={deletingId === photo.publicId}
-              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-sm font-bold disabled:opacity-40"
-              title="Remove photo"
+        {photos.map((photo) => {
+          const isSelected = selectedIds.has(photo.publicId);
+          return (
+            <div
+              key={photo.publicId}
+              className={cn(
+                "relative group aspect-square rounded-2xl overflow-hidden bg-gray-100 border cursor-pointer shadow-sm transition-all",
+                isSelected
+                  ? "border-forest-500 ring-2 ring-forest-400 shadow-md"
+                  : "border-gray-200 hover:shadow-md"
+              )}
+              onClick={() => setLightbox(photo.url)}
             >
-              {deletingId === photo.publicId ? (
-                <span className="w-3 h-3 border border-white/60 border-t-transparent rounded-full animate-spin block" />
-              ) : "×"}
-            </button>
-          </div>
-        ))}
+              <img src={photo.url} alt="" className="w-full h-full object-cover" />
+              <div className={cn("absolute inset-0 transition-colors", isSelected ? "bg-forest-900/10" : "bg-black/0 group-hover:bg-black/10")} />
+
+              {/* Selection checkbox */}
+              <button
+                onClick={(e) => toggleSelect(photo.publicId, e)}
+                className={cn(
+                  "absolute top-2 left-2 w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center shadow-sm",
+                  isSelected
+                    ? "bg-forest-600 border-forest-600 opacity-100"
+                    : "bg-white/85 border-gray-300 opacity-0 group-hover:opacity-100"
+                )}
+                title={isSelected ? "Deselect" : "Select for assessment"}
+              >
+                {isSelected && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Delete button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(photo.publicId); }}
+                disabled={deletingId === photo.publicId}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-sm font-bold disabled:opacity-40"
+                title="Remove photo"
+              >
+                {deletingId === photo.publicId ? (
+                  <span className="w-3 h-3 border border-white/60 border-t-transparent rounded-full animate-spin block" />
+                ) : "×"}
+              </button>
+            </div>
+          );
+        })}
 
         {/* Upload tile */}
         <label
@@ -1169,15 +1299,7 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
               : "border-gray-200 bg-gray-50/50 hover:border-forest-300 hover:bg-forest-50 hover:shadow-md"
           )}
         >
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,.heic,.heif"
-            multiple
-            className="hidden"
-            onChange={(e) => handleFiles(e.target.files)}
-            disabled={uploading}
-          />
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} disabled={uploading} />
           {uploading ? (
             <>
               <div className="w-6 h-6 border-2 border-forest-500 border-t-transparent rounded-full animate-spin" />
@@ -1189,9 +1311,7 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="text-xs text-gray-500 text-center px-3 leading-tight">
-                Take photo or<br />upload image
-              </span>
+              <span className="text-xs text-gray-500 text-center px-3 leading-tight">Take photo or<br />upload image</span>
             </>
           )}
         </label>
@@ -1201,24 +1321,80 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
         <p className="mt-3 text-xs text-gray-400">No photos yet. Tap the tile above to add photos from your camera or library.</p>
       )}
 
-      {/* Lightbox */}
+      {/* ─── Catalog From Quote ─── */}
+      {assessedItems.length > 0 && (
+        <div className="mt-10 pt-8 border-t border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900 mb-1">Catalog From Quote</h2>
+          <p className="text-xs text-gray-400 mb-5">
+            {assessedItems.length} item{assessedItems.length !== 1 ? "s" : ""} assessed — also visible in this project&apos;s Catalog
+          </p>
+
+          {/* Route summary cards */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            {routeSummary.map(([route, { count, total }]) => (
+              <div key={route} className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white shadow-sm">
+                <span className={cn("px-2 py-0.5 rounded-full text-xs font-semibold border", ROUTE_BADGE[route] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
+                  {route}
+                </span>
+                <span className="text-sm font-medium text-gray-800">{count} item{count !== 1 ? "s" : ""}</span>
+                <span className="text-sm text-gray-500">${total.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Disclaimer */}
+          <p className="text-xs text-gray-400 italic mb-5 max-w-2xl">
+            These are preliminary AI-generated estimates and do not constitute a guarantee of value.
+            Final valuations are subject to market conditions, item condition verification, and team review.
+          </p>
+
+          {/* Item cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {assessedItems.map((item) => (
+              <div key={item.id} className="flex gap-3 p-3 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+                {item.photos?.[0]?.url ? (
+                  <img
+                    src={item.photos[0].url}
+                    alt=""
+                    className="w-16 h-16 rounded-lg object-cover shrink-0 bg-gray-100"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg shrink-0 bg-gray-100 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate leading-snug">{item.itemName}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className={cn("px-1.5 py-0.5 rounded-full text-xs font-medium border", ROUTE_BADGE[(item.primaryRoute as string)] ?? "bg-gray-100 text-gray-600 border-gray-200")}>
+                      {item.primaryRoute}
+                    </span>
+                    {item.sizeClass && (
+                      <span className="text-xs text-gray-400">{item.sizeClass}</span>
+                    )}
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 mt-1.5">
+                    {item.valueMid ? `$${item.valueMid.toLocaleString()}` : "—"}
+                    {item.valueLow && item.valueHigh ? (
+                      <span className="text-xs font-normal text-gray-400 ml-1">
+                        (${item.valueLow}–${item.valueHigh})
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Lightbox ─── */}
       {lightbox && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightbox(null)}
-        >
-          <img
-            src={lightbox}
-            alt=""
-            className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setLightbox(null)}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xl font-bold"
-          >
-            ×
-          </button>
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="" className="max-w-full max-h-full rounded-xl shadow-2xl object-contain" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xl font-bold">×</button>
         </div>
       )}
     </div>
@@ -1226,7 +1402,7 @@ function QuotePhotosSection({ tenantId, initialPhotos }: { tenantId: string; ini
 }
 
 // ─── Main Client ──────────────────────────────────────────────────────────────
-export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices }: Props) {
+export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices, initialAssessedItems = [] }: Props) {
   const [mode, setMode] = useState<Mode>("quick");
   const [highSqFt, setHighSqFt] = useState(0);
   const [avgSqFt, setAvgSqFt] = useState(0);
@@ -1669,6 +1845,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         <QuotePhotosSection
           tenantId={tenant.id}
           initialPhotos={tenant.quotePhotos ?? []}
+          initialAssessedItems={initialAssessedItems}
         />
       </div>
     </div>

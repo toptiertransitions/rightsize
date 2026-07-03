@@ -145,6 +145,7 @@ export interface Tenant {
   priceDrop2Days?: number;
   priceDrop2Percent?: number;
   quotePhotos?: ItemPhoto[];
+  quoteAssessmentItemIds?: string[];
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -155,6 +156,7 @@ export interface User {
   email: string;
   name: string;
   createdAt: string;
+  lastActivityAt?: string;
 }
 
 // ─── Membership ───────────────────────────────────────────────────────────────

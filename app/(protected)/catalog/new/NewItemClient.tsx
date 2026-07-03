@@ -155,12 +155,41 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
         ai.primary_route = "Estate Sale";
       }
       setAnalysis(ai);
-      setEditedAnalysis({
+
+      const scaledMid = ai.value_mid != null ? Math.round(ai.value_mid * 0.6) : ai.value_mid;
+      const editedBase = {
         ...ai,
-        value_low:  ai.value_low  != null ? Math.round(ai.value_low  * 0.75) : ai.value_low,
-        value_mid:  ai.value_mid  != null ? Math.round(ai.value_mid  * 0.75) : ai.value_mid,
-        value_high: ai.value_high != null ? Math.round(ai.value_high * 0.75) : ai.value_high,
-      });
+        value_low:  ai.value_low  != null ? Math.round(ai.value_low  * 0.6) : ai.value_low,
+        value_mid:  scaledMid,
+        value_high: ai.value_high != null ? Math.round(ai.value_high * 0.6) : ai.value_high,
+      };
+
+      // Apply routing rules preview — same logic as server uses on save
+      // so the displayed route matches what will actually be assigned
+      if (!estateMode && ai.size_class) {
+        try {
+          const previewRes = await fetch("/api/items/preview-route", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              valueMid: scaledMid ?? 0,
+              sizeClass: ai.size_class,
+              condition: ai.condition,
+              category: ai.category,
+              fragility: ai.fragility,
+              tenantId,
+            }),
+          });
+          if (previewRes.ok) {
+            const { primaryRoute } = await previewRes.json();
+            if (primaryRoute) editedBase.primary_route = primaryRoute;
+          }
+        } catch {
+          // silent fail — AI suggestion remains
+        }
+      }
+
+      setEditedAnalysis(editedBase);
       setManualMode(false);
       setStep("review");
     } catch (e) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorById, updateLocalVendor } from "@/lib/airtable";
+import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorById, updateLocalVendor, upsertUser } from "@/lib/airtable";
 import { verifyInviteToken, isVendorInvite } from "@/lib/invites";
 import { Resend } from "resend";
 import { buildNewUserAdminEmail } from "@/lib/email";
@@ -82,7 +82,17 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ alreadyMember: true, tenantId: data.tenantId });
   }
 
+  const clerk = await clerkClient();
+  const clerkUser = await clerk.users.getUser(userId).catch(() => null);
+  const primaryEmailId = clerkUser?.primaryEmailAddressId;
+  const email = clerkUser?.emailAddresses?.find(e => e.id === primaryEmailId)?.emailAddress
+    ?? clerkUser?.emailAddresses?.[0]?.emailAddress ?? "";
+  const name = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(" ") || email;
+
   await createMembership({ tenantId: data.tenantId, clerkUserId: userId, role: data.role });
+
+  // Track this user in the Users table so we can observe real usage before deciding to remove it.
+  upsertUser({ clerkUserId: userId, email, name }).catch(() => {});
 
   // Notify admins that the invite was accepted and the user is now linked to the project.
   // This fires after the membership exists, so it always has complete project context.
