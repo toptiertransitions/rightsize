@@ -19,6 +19,7 @@ const TYPE_COLORS: Record<VendorType, string> = {
   "Broker": "bg-yellow-900/40 text-yellow-300",
   "Donation Org": "bg-orange-900/40 text-orange-300",
   "Consignment Store": "bg-amber-900/40 text-amber-300",
+  "Collector/Reseller": "bg-indigo-900/40 text-indigo-300",
   "Junk Hauler": "bg-gray-700/40 text-gray-300",
   "Attorney": "bg-red-900/40 text-red-300",
   "Other": "bg-gray-700/40 text-gray-300",
@@ -267,7 +268,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
           </div>
 
           {/* Consignment Take */}
-          {vendorType === "Consignment Store" && (
+          {(vendorType === "Consignment Store" || vendorType === "Collector/Reseller") && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">Consignment Take (%)</label>
               <input type="number" min={0} max={100} value={consignmentTake}

@@ -29,19 +29,22 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Vendor not found" }, { status: 403 });
   }
 
+  // Collector/Reseller offers: item stays on original route, staff notified of offer
+  const isCollectorReseller = vendor.vendorType === "Collector/Reseller";
+
   const updateData: Parameters<typeof updateItem>[1] = {
     vendorDecision: decision,
     vendorNotes: (vendorPriceNote ?? notes) || undefined,
     vendorPriceApproved: decision === "Approved" ? true : undefined,
     vendorRespondedAt: new Date().toISOString(),
-    ...(decision === "Approved" ? { primaryRoute: "Other Consignment" } : {}),
+    ...(decision === "Approved" && !isCollectorReseller ? { primaryRoute: "Other Consignment" } : {}),
   };
   if (vendorExpectedPrice !== undefined) {
     updateData.vendorExpectedPrice = vendorExpectedPrice;
   }
 
-  // For Approved via vendor portal, also set outreach fields
-  if (decision === "Approved") {
+  // Standard consignment: claim the item and mark outreach status
+  if (decision === "Approved" && !isCollectorReseller) {
     updateData.claimedByVendorId = vendor.id;
     updateData.vendorOutreachStatus = "Claimed";
   }
@@ -52,7 +55,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Fire claim notification for Approved decisions
+  // Fire claim/offer notification for Approved decisions
   if (decision === "Approved") {
     try {
       const item = await getItemById(itemId).catch(() => null);
@@ -66,10 +69,15 @@ export async function PATCH(req: NextRequest) {
           const resend = new Resend(process.env.RESEND_API_KEY);
           const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com";
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+          const offerNote = isCollectorReseller && vendorExpectedPrice !== undefined
+            ? ` (offer: $${Math.round(vendorExpectedPrice).toLocaleString()})`
+            : "";
           await resend.emails.send({
             from: `Top Tier Transitions <${fromEmail}>`,
             to: relevant.sentByEmail,
-            subject: `${vendor.vendorName} wants ${item.itemName} — ${tenant?.city ?? ""}`,
+            subject: isCollectorReseller
+              ? `${vendor.vendorName} made an offer on ${item.itemName}${offerNote} — ${tenant?.city ?? ""}`
+              : `${vendor.vendorName} wants ${item.itemName} — ${tenant?.city ?? ""}`,
             html: buildVendorClaimNotificationEmail({
               staffName: relevant.sentByName,
               vendorName: vendor.vendorName,

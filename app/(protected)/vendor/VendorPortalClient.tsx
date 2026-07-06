@@ -55,6 +55,7 @@ const DECISION_COLORS: Record<string, string> = {
 const VENDOR_TYPE_COLORS: Record<string, string> = {
   "Donation Org": "bg-orange-100 text-orange-700",
   "Consignment Store": "bg-amber-100 text-amber-700",
+  "Collector/Reseller": "bg-indigo-100 text-indigo-700",
   "Junk Hauler": "bg-gray-100 text-gray-700",
   "Move Manager": "bg-purple-100 text-purple-700",
   "Mover": "bg-blue-100 text-blue-700",
@@ -143,11 +144,12 @@ interface DetailModalProps {
   city: string;
   initialAction: "approve" | "reject" | null;
   isLoading: boolean;
+  isCollector?: boolean;
   onClose: () => void;
   onDecision: (itemId: string, decision: VendorDecision, opts?: { notes?: string; vendorExpectedPrice?: number; vendorPriceNote?: string }) => Promise<void>;
 }
 
-function ItemDetailModal({ item, city, initialAction, isLoading, onClose, onDecision }: DetailModalProps) {
+function ItemDetailModal({ item, city, initialAction, isLoading, isCollector, onClose, onDecision }: DetailModalProps) {
   const [action, setAction] = useState<"approve" | "reject" | null>(initialAction);
   const [rejectNotes, setRejectNotes] = useState("");
   const [customPrice, setCustomPrice] = useState("");
@@ -270,16 +272,22 @@ function ItemDetailModal({ item, city, initialAction, isLoading, onClose, onDeci
 
               {action === "approve" && (
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                  <p className="text-xs text-gray-500 italic">
-                    Set an expected price — this is an estimate, not a binding commitment.
-                  </p>
+                  {isCollector ? (
+                    <p className="text-xs text-gray-500 italic">
+                      Enter your offer price — this notifies our team and does not obligate either party.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">
+                      Set an expected price — this is an estimate, not a binding commitment.
+                    </p>
+                  )}
                   {item.valueMid > 0 && (
                     <button
                       onClick={handleApproveAtMid}
                       disabled={isLoading}
                       className="w-full h-9 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                     >
-                      {isLoading ? "…" : `Approve at ${formatCurrency(item.valueMid)}`}
+                      {isLoading ? "…" : isCollector ? `Offer ${formatCurrency(item.valueMid)}` : `Approve at ${formatCurrency(item.valueMid)}`}
                     </button>
                   )}
                   <div className="flex gap-2">
@@ -287,7 +295,7 @@ function ItemDetailModal({ item, city, initialAction, isLoading, onClose, onDeci
                       type="number" min="0" step="0.01"
                       value={customPrice}
                       onChange={e => setCustomPrice(e.target.value)}
-                      placeholder="Custom price"
+                      placeholder={isCollector ? "Your offer price" : "Custom price"}
                       className="flex-1 h-9 text-sm rounded-lg border border-gray-300 px-3 focus:outline-none focus:ring-2 focus:ring-forest-500"
                     />
                     <button
@@ -295,7 +303,7 @@ function ItemDetailModal({ item, city, initialAction, isLoading, onClose, onDeci
                       disabled={isLoading || !customPrice}
                       className="h-9 px-4 text-sm font-medium bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
                     >
-                      Set
+                      {isCollector ? "Submit Offer" : "Set"}
                     </button>
                   </div>
                   <input
@@ -341,7 +349,7 @@ function ItemDetailModal({ item, city, initialAction, isLoading, onClose, onDeci
                     disabled={isLoading || decision === "Approved"}
                     className="flex-1 h-9 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors"
                   >
-                    Approve
+                    {isCollector ? "Make Offer" : "Approve"}
                   </button>
                   <button
                     onClick={() => { setAction("reject"); setRejectNotes(""); setLocalError(""); }}
@@ -402,7 +410,8 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
       const dec = item.vendorDecision ?? "Pending";
       if (dec in counts) counts[dec]++;
       if (item.vendorOutreachStatus === "With Vendor" && item.currentVendorId === vendor.id) counts["Available"]++;
-      if (item.claimedByVendorId === vendor.id) counts["Claims"]++;
+      // Collector/Reseller: "Offers" tab = items they approved (offered on); others: claimedByVendorId
+      if (isCollector ? dec === "Approved" : item.claimedByVendorId === vendor.id) counts["Claims"]++;
       const sentDays = item.vendorOutreachSentAt
         ? Math.floor((now - new Date(item.vendorOutreachSentAt).getTime()) / 86_400_000)
         : 0;
@@ -415,7 +424,9 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
     const now = Date.now();
     if (activeTab === "All" || activeTab === "Preferences") return items;
     if (activeTab === "Available") return items.filter(i => i.vendorOutreachStatus === "With Vendor" && i.currentVendorId === vendor.id);
-    if (activeTab === "Claims") return items.filter(i => i.claimedByVendorId === vendor.id);
+    if (activeTab === "Claims") return isCollector
+      ? items.filter(i => (i.vendorDecision ?? "Pending") === "Approved")
+      : items.filter(i => i.claimedByVendorId === vendor.id);
     if (activeTab === "Expired") return items.filter(i => {
       const sentDays = i.vendorOutreachSentAt
         ? Math.floor((now - new Date(i.vendorOutreachSentAt).getTime()) / 86_400_000)
@@ -538,6 +549,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
     }
   };
 
+  const isCollector = vendor.vendorType === "Collector/Reseller";
   const typeColor = VENDOR_TYPE_COLORS[vendor.vendorType] ?? "bg-gray-100 text-gray-700";
 
   return (
@@ -584,22 +596,25 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
 
           {/* Tabs */}
           <div className="flex gap-1 mt-4 overflow-x-auto pb-px">
-            {TABS.map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === tab ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {tab}
-                {tab !== "Preferences" && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>
-                    {tabCounts[tab] ?? 0}
-                  </span>
-                )}
-              </button>
-            ))}
+            {TABS.map(tab => {
+              const label = tab === "Claims" && isCollector ? "Offers" : tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeTab === tab ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {label}
+                  {tab !== "Preferences" && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>
+                      {tabCounts[tab] ?? 0}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
 
           </div>
         </div>
@@ -643,10 +658,13 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                         )}
                         <div className="flex gap-2 mt-4">
                           <button
-                            onClick={() => makeDecision(item.id, "Approved", { vendorExpectedPrice: item.valueMid })}
+                            onClick={() => isCollector
+                              ? openDetail(item, "approve")
+                              : makeDecision(item.id, "Approved", { vendorExpectedPrice: item.valueMid })
+                            }
                             disabled={isLoading}
                             className="flex-1 min-h-[44px] bg-[#C9A96E] text-white font-semibold rounded-xl text-sm hover:bg-[#b8924f] disabled:opacity-50 transition-colors">
-                            {isLoading ? "…" : "I want this"}
+                            {isLoading ? "…" : isCollector ? "Make an Offer" : "I want this"}
                           </button>
                           <button
                             onClick={() => makeDecision(item.id, "Hold")}
@@ -670,11 +688,13 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
           </div>
         )}
 
-        {/* ── Claims Tab ── */}
+        {/* ── Claims / Offers Tab ── */}
         {activeTab === "Claims" && (
           <div>
             {filtered.length === 0 ? (
-              <div className="text-center py-16 text-gray-400 text-sm">No claimed items yet.</div>
+              <div className="text-center py-16 text-gray-400 text-sm">
+                {isCollector ? "No submitted offers yet." : "No claimed items yet."}
+              </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filtered.map(item => {
@@ -693,7 +713,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                           </div>
                         )}
                         <div className="absolute top-2 right-2">
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#C9A96E]/20 text-[#9a7040]">Claimed</span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#C9A96E]/20 text-[#9a7040]">{isCollector ? "Offered" : "Claimed"}</span>
                         </div>
                       </button>
                       <div className="p-3">
@@ -812,12 +832,14 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
               <div className="mb-4 flex flex-wrap items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
                 <span className="text-sm font-medium text-gray-700">{selectedIds.size} selected</span>
                 <div className="flex-1" />
-                <button
-                  onClick={() => makeBatchDecision("Approved")}
-                  className="h-8 px-4 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Approve All
-                </button>
+                {!isCollector && (
+                  <button
+                    onClick={() => makeBatchDecision("Approved")}
+                    className="h-8 px-4 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Approve All
+                  </button>
+                )}
                 <button
                   onClick={() => makeBatchDecision("Hold")}
                   className="h-8 px-4 bg-amber-100 text-amber-800 text-sm font-medium rounded-lg hover:bg-amber-200 transition-colors"
@@ -964,7 +986,9 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                             {isPriceApproving && (
                               <div className="mt-1 p-2 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
                                 <p className="text-[10px] text-gray-500 italic leading-snug">
-                                  Estimated expected value — not a guaranteed commitment.
+                                  {isCollector
+                                    ? "Enter your offer price — this notifies our team."
+                                    : "Estimated expected value — not a guaranteed commitment."}
                                 </p>
                                 {item.valueMid > 0 && (
                                   <button
@@ -972,7 +996,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                                     disabled={isLoading}
                                     className="w-full h-7 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                                   >
-                                    {isLoading ? "…" : `Approve at ${formatCurrency(item.valueMid)}`}
+                                    {isLoading ? "…" : isCollector ? `Offer ${formatCurrency(item.valueMid)}` : `Approve at ${formatCurrency(item.valueMid)}`}
                                   </button>
                                 )}
                                 <div className="flex gap-1.5">
@@ -988,7 +1012,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                                     disabled={isLoading || !customPrice}
                                     className="h-7 px-2.5 text-xs font-medium bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
                                   >
-                                    Set
+                                    {isCollector ? "Offer" : "Set"}
                                   </button>
                                 </div>
                                 <textarea
@@ -1017,7 +1041,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                                   disabled={isLoading || decision === "Approved"}
                                   className="flex-1 h-7 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors"
                                 >
-                                  {isLoading ? "…" : "Approve"}
+                                  {isLoading ? "…" : isCollector ? "Make Offer" : "Approve"}
                                 </button>
                                 <button
                                   onClick={() => { setRejectingItemId(item.id); setRejectNotes(""); }}
@@ -1164,10 +1188,10 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
                                     <button
                                       onClick={() => openDetail(item, "approve")}
                                       disabled={isLoading || decision === "Approved"}
-                                      title="Approve"
+                                      title={isCollector ? "Make Offer" : "Approve"}
                                       className="h-7 px-3 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors whitespace-nowrap"
                                     >
-                                      {isLoading ? "…" : "Approve"}
+                                      {isLoading ? "…" : isCollector ? "Make Offer" : "Approve"}
                                     </button>
                                     <button
                                       onClick={() => openDetail(item, "reject")}
@@ -1208,6 +1232,7 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
           city={tenantCityMap[detailItem.tenantId] ?? ""}
           initialAction={detailAction}
           isLoading={loadingIds.has(detailItem.id)}
+          isCollector={isCollector}
           onClose={closeDetail}
           onDecision={makeDecision}
         />

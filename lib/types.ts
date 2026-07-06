@@ -565,6 +565,7 @@ export type VendorType =
   | "Broker"
   | "Donation Org"
   | "Consignment Store"
+  | "Collector/Reseller"
   | "Junk Hauler"
   | "Attorney"
   | "Other";
@@ -577,6 +578,7 @@ export const VENDOR_TYPES: VendorType[] = [
   "Broker",
   "Donation Org",
   "Consignment Store",
+  "Collector/Reseller",
   "Junk Hauler",
   "Attorney",
   "Other",
