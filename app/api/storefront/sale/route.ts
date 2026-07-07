@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, updateItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer } from "@/lib/airtable";
+import { getItemById, updateItem, createItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -15,6 +15,7 @@ async function attemptRecordSale(data: {
   buyerPhone?: string;
   buyerMarketingConsent?: boolean;
   buyerConsentAt?: string;
+  quantityPurchased?: number;
 }): Promise<{ estateSlug?: string; estateSaleId?: string; estateName?: string; alreadyRecorded?: boolean }> {
   // ── Idempotency check ───────────────────────────────────────────────────────
   // Stripe can retry webhooks and our own retry loop can re-enter this function.
@@ -40,17 +41,20 @@ async function attemptRecordSale(data: {
   }
 
   const saleDate = new Date().toISOString().split("T")[0];
+  const itemTotalQty = item.quantity ?? 1;
+  const qtyPurchased = Math.min(data.quantityPurchased ?? 1, itemTotalQty);
+  const unitPrice = Math.round((data.salePrice / qtyPurchased) * 100) / 100;
+
   // Estate Sale defaults to 67% client payout (33% TTT take) when clientSharePercent is unset.
   const clientPct = item.clientSharePercent || (item.primaryRoute === "Estate Sale" ? 67 : 0);
   const consignorPayout = clientPct > 0
     ? Math.round(data.salePrice * (clientPct / 100) * 100) / 100
     : 0;
 
-  await updateItem(data.itemId, {
-    status: "Sold",
+  const saleFields = {
     salePrice: data.salePrice,
     saleDate,
-    saleChannel: "Online",
+    saleChannel: "Online" as const,
     buyerName: data.buyerName,
     buyerEmail: data.buyerEmail,
     buyerPhone: data.buyerPhone,
@@ -59,14 +63,49 @@ async function attemptRecordSale(data: {
     stripePaymentIntentId: data.stripePaymentIntentId,
     consignorPayout,
     completedDate: saleDate,
-  });
+  };
 
+  if (qtyPurchased >= itemTotalQty) {
+    // Buying all available units — mark the original item sold (existing behavior)
+    await updateItem(data.itemId, { status: "Sold", quantity: qtyPurchased, ...saleFields });
+  } else {
+    // Partial purchase — create a sold copy for the units purchased, reduce original
+    const soldCopy = await createItem({
+      tenantId: item.tenantId,
+      itemName: item.itemName,
+      category: item.category,
+      condition: item.condition,
+      conditionNotes: item.conditionNotes,
+      photos: item.photos,
+      photoUrl: item.photoUrl,
+      photoPublicId: item.photoPublicId,
+      valueMid: unitPrice,
+      valueLow: item.valueLow,
+      valueHigh: item.valueHigh,
+      brand: item.brand,
+      listingDescriptionEbay: item.listingDescriptionEbay,
+      primaryRoute: item.primaryRoute,
+      estateSaleId: item.estateSaleId,
+      clientSharePercent: item.clientSharePercent,
+      storefrontActive: false,
+      status: "Sold",
+      quantity: qtyPurchased,
+    });
+    await updateItem(soldCopy.id, saleFields);
+    // Reduce original item's available quantity
+    await updateItem(data.itemId, {
+      quantity: itemTotalQty - qtyPurchased,
+      quantitySold: (item.quantitySold ?? 0) + qtyPurchased,
+    });
+  }
+
+  // SaleEvent always recorded against original item ID for idempotency
   await createItemSaleEvent({
     itemId: data.itemId,
     tenantId: item.tenantId,
     itemName: item.itemName,
-    quantitySold: 1,
-    unitPrice: data.salePrice,
+    quantitySold: qtyPurchased,
+    unitPrice,
     totalAmount: data.salePrice,
     clientPayout: consignorPayout,
     squarePaymentId: data.stripePaymentIntentId,
@@ -124,6 +163,7 @@ export async function POST(req: NextRequest) {
     buyerPhone?: string;
     buyerMarketingConsent?: boolean;
     buyerConsentAt?: string;
+    quantityPurchased?: number;
   };
 
   try {
@@ -132,7 +172,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt } = body;
+  const { itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt, quantityPurchased } = body;
   if (!itemId || !stripePaymentIntentId || !salePrice || !buyerName || !buyerEmail) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -142,7 +182,7 @@ export async function POST(req: NextRequest) {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const { estateSlug, alreadyRecorded } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt });
+      const { estateSlug, alreadyRecorded } = await attemptRecordSale({ itemId, stripePaymentIntentId, salePrice, buyerName, buyerEmail, buyerPhone, buyerMarketingConsent, buyerConsentAt, quantityPurchased });
 
       // Ping storefront to invalidate ISR cache (item + estate page if applicable)
       const storefrontUrl = process.env.STOREFRONT_URL;
