@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getReferralContactById, getPartnerPointsByCompany, getPartnerPoints } from "@/lib/airtable";
+import { getSystemRole, getReferralContactById } from "@/lib/airtable";
+import { getLoyaltyRecord } from "@/lib/airtable-loyalty";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -18,16 +19,15 @@ export async function GET(req: NextRequest) {
   if (!contact) return NextResponse.json({ earned: 0, redeemed: 0, balance: 0, earnedYTD: 0 });
 
   const companyId = contact.referralCompanyId || null;
-  const points = await (companyId
-    ? getPartnerPointsByCompany(companyId).catch(() => [])
-    : getPartnerPoints(contact.id).catch(() => [])
-  );
+  const loyaltyKey = companyId || contact.clerkUserId || contact.id;
 
-  const currentYear = new Date().getFullYear();
-  const earned    = points.length;
-  const redeemed  = points.filter(p => p.redeemedAt).length;
-  const balance   = earned - redeemed;
-  const earnedYTD = points.filter(p => new Date(p.earnedAt).getFullYear() === currentYear).length;
+  const record = await getLoyaltyRecord(loyaltyKey).catch(() => null);
+  if (!record) return NextResponse.json({ earned: 0, redeemed: 0, balance: 0, earnedYTD: 0 });
 
-  return NextResponse.json({ earned, redeemed, balance, earnedYTD });
+  return NextResponse.json({
+    earned: record.lifetimePoints,
+    redeemed: 0,
+    balance: record.lifetimePoints,
+    earnedYTD: record.currentYearPoints,
+  });
 }

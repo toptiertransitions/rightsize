@@ -7,15 +7,14 @@ import {
   getSystemRole,
   getReferralContactById,
   getReferralCompanyById,
-  getPartnerPointsByCompany,
-  getPartnerPoints,
   getReviewsForTenant,
   getPartnerTenantIdsByCompany,
   getTenantById,
 } from "@/lib/airtable";
+import { getLoyaltyRecord } from "@/lib/airtable-loyalty";
 import { getPartnerProjectsByStage } from "@/lib/partner";
 import { buildPartnerRewardsEmail } from "@/lib/email";
-import type { PartnerPoint, GoogleReview } from "@/lib/types";
+import type { GoogleReview } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -40,12 +39,11 @@ export async function POST(req: NextRequest) {
   if (!contact) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
 
   const companyId = contact.referralCompanyId || null;
+  const loyaltyKey = companyId || contact.clerkUserId || contact.id;
 
-  const [projectsByStage, points, company] = await Promise.all([
+  const [projectsByStage, loyaltyRecord, company] = await Promise.all([
     getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string | null; stage: string }[]),
-    companyId
-      ? getPartnerPointsByCompany(companyId).catch(() => [] as PartnerPoint[])
-      : getPartnerPoints(contact.id).catch(() => [] as PartnerPoint[]),
+    getLoyaltyRecord(loyaltyKey).catch(() => null),
     companyId ? getReferralCompanyById(companyId).catch(() => null) : Promise.resolve(null),
   ]);
 
@@ -83,9 +81,9 @@ export async function POST(req: NextRequest) {
   const potentialProjects = enriched.filter(p => p.stage === "Proposing" && !p.isArchived);
   const previousProjects  = enriched.filter(p => p.stage === "Won" && p.isArchived);
 
-  const earned    = points.length;
-  const redeemed  = points.filter(p => p.redeemedAt).length;
-  const available = earned - redeemed;
+  const earned    = loyaltyRecord?.lifetimePoints ?? 0;
+  const redeemed  = 0;
+  const available = earned;
 
   const companyName = company?.name || contact.name;
   const isInvited = !!contact.clerkUserId;

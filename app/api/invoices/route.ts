@@ -321,7 +321,7 @@ async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: st
   const { getReferralCompanyById } = await import("@/lib/airtable");
 
   const referralContact = await getReferralContactById(referralContactAirtableId).catch(() => null);
-  if (!referralContact?.clerkUserId) return;
+  if (!referralContact) return;
 
   const programYear = getCurrentProgramYear();
   const now = new Date().toISOString();
@@ -329,7 +329,7 @@ async function awardLoyaltyPoint(referralContactAirtableId: string, tenantId: st
   // Resolve to company-level key so all contacts at the same firm share one record
   const companyId = referralContact.referralCompanyId || null;
   const company = companyId ? await getReferralCompanyById(companyId).catch(() => null) : null;
-  const loyaltyKey = companyId || referralContact.clerkUserId;
+  const loyaltyKey = companyId || referralContact.clerkUserId || referralContact.id;
   const companyName = company?.name || referralContact.name || loyaltyKey;
 
   let record = await getLoyaltyRecord(loyaltyKey);
