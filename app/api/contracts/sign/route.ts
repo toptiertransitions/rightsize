@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
       const emailPayload: Parameters<typeof resend.emails.send>[0] = {
         from: `Top Tier Transitions <${fromEmail}>`,
         to: contract.recipientEmail,
+        cc: "billing@toptiertransitions.com",
         subject: `${fmt(createdInvoice.amount)} Deposit Invoice — ${tenant?.name ?? "Your Project"}`,
         html,
       };

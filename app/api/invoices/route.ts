@@ -188,8 +188,8 @@ export async function POST(req: NextRequest) {
         to: sentToEmail,
         subject: `Invoice ${invoiceNumber} — ${type} Invoice`,
         html,
+        cc: ccEmail ? ["billing@toptiertransitions.com", ccEmail] : "billing@toptiertransitions.com",
       };
-      if (ccEmail) emailOpts.cc = ccEmail;
       await resend.emails.send(emailOpts);
       invoice = await updateInvoice(invoice.id, { emailSent: true });
     } catch (e) {
@@ -242,8 +242,8 @@ export async function PATCH(req: NextRequest) {
         to: sentToEmail,
         subject: `Invoice ${invoice.invoiceNumber} — ${invoice.type} Invoice`,
         html,
+        cc: ccEmail ? ["billing@toptiertransitions.com", ccEmail] : "billing@toptiertransitions.com",
       };
-      if (ccEmail) emailOpts.cc = ccEmail;
       await resend.emails.send(emailOpts);
       invoice = await updateInvoice(invoice.id, { emailSent: true });
     } catch (e) {
