@@ -160,6 +160,8 @@ export function buildContractSignedEmail({
   lineItems,
   originAddress,
   destAddress,
+  discountCode,
+  discountAmount,
 }: {
   salesRepName?: string;
   clientName: string;
@@ -169,11 +171,14 @@ export function buildContractSignedEmail({
   lineItems?: { serviceName: string; hours: number; rate: number }[];
   originAddress?: string;
   destAddress?: string;
+  discountCode?: string;
+  discountAmount?: number;
 }): string {
   const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtHrs = (h: number) => `${Math.round(h * 10) / 10} hr${Math.round(h * 10) / 10 === 1 ? "" : "s"}`;
   const signedDate = new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const totalHours = (lineItems ?? []).reduce((s, li) => s + li.hours, 0);
+  const hasDiscount = !!discountCode && !!discountAmount && discountAmount > 0;
 
   const serviceRows = (lineItems ?? []).map((li, i) =>
     `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
@@ -229,9 +234,18 @@ export function buildContractSignedEmail({
 
               <!-- Contract value summary -->
               <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+                ${hasDiscount ? `
+                <tr>
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;">Subtotal (before discount)</td>
+                  <td style="padding:10px 16px;font-size:13px;color:#6b7280;text-align:right;">${fmt(totalCost + discountAmount!)}</td>
+                </tr>
+                <tr style="background-color:#eff6ff;">
+                  <td style="padding:10px 16px;font-size:13px;color:#1d4ed8;border-top:1px solid #e5e7eb;">Discount — ${discountCode}</td>
+                  <td style="padding:10px 16px;font-size:13px;color:#1d4ed8;text-align:right;border-top:1px solid #e5e7eb;">−${fmt(discountAmount!)}</td>
+                </tr>` : ""}
                 <tr style="background-color:#f0fdf4;">
-                  <td style="padding:14px 16px;font-size:15px;font-weight:bold;color:#2E6B4F;">Contract Value</td>
-                  <td style="padding:14px 16px;font-size:20px;font-weight:bold;color:#2E6B4F;text-align:right;">${fmt(totalCost)}</td>
+                  <td style="padding:14px 16px;font-size:15px;font-weight:bold;color:#2E6B4F;${hasDiscount ? "border-top:2px solid #2E6B4F;" : ""}">${hasDiscount ? "Contract Value After Discount" : "Contract Value"}</td>
+                  <td style="padding:14px 16px;font-size:20px;font-weight:bold;color:#2E6B4F;text-align:right;${hasDiscount ? "border-top:2px solid #2E6B4F;" : ""}">${fmt(totalCost)}</td>
                 </tr>
                 ${totalHours > 0 ? `<tr><td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Total Estimated Hours</td><td style="padding:10px 16px;font-size:13px;color:#374151;font-weight:600;text-align:right;border-top:1px solid #e5e7eb;">${fmtHrs(totalHours)}</td></tr>` : ""}
               </table>

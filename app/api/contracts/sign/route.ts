@@ -166,10 +166,10 @@ export async function POST(req: NextRequest) {
     const salesRecipients = activeStaff.filter((s) => s.role === "TTTSales").map((s) => s.email as string);
     const adminRecipients = activeStaff.filter((s) => s.role === "TTTAdmin").map((s) => s.email as string);
 
-    const toList = salesRecipients.length > 0 ? salesRecipients : adminRecipients;
-    const ccList = salesRecipients.length > 0
-      ? adminRecipients.filter((e) => !salesRecipients.includes(e))
-      : [];
+    // Always send to TTTSales + TTTAdmin (deduplicated)
+    const allRecipients = [...new Set([...salesRecipients, ...adminRecipients])];
+    const toList = allRecipients;
+    const ccList: string[] = [];
 
     if (toList.length > 0) {
       // Look up the sales rep who sent the quote
@@ -209,6 +209,8 @@ export async function POST(req: NextRequest) {
           lineItems: lineItemsForEmail,
           originAddress,
           destAddress,
+          discountCode: contract.discountCode,
+          discountAmount: contract.discountAmount,
         }),
       };
       if (ccList.length > 0) emailPayload.cc = ccList;
