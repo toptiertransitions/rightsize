@@ -146,6 +146,13 @@ export function InvoiceCreatorModal({
   const fullContract = contracts.find((c) => c.id === fullContractId);
   const contractLineItems = fullContract?.lineItems ?? [];
   const contractNetTotal = contractLineItems.reduce((s, li) => s + li.hours * li.rate, 0);
+  const fullContractDiscount = fullSource === "contract" ? (fullContract?.discountAmount ?? 0) : 0;
+  const discountLineItem = fullContractDiscount > 0 ? {
+    serviceId: "",
+    serviceName: `Discount — ${fullContract?.discountCode ?? "Code Applied"}`,
+    hours: 1,
+    rate: -fullContractDiscount,
+  } : null;
 
   // Logged hours: group timeEntries by focusArea -> match to service
   const serviceByName = new Map(services.map((s) => [s.name.toLowerCase(), s]));
@@ -176,7 +183,7 @@ export function InvoiceCreatorModal({
 
   const fullSubtotal =
     fullSource === "contract"
-      ? contractNetTotal
+      ? contractNetTotal - fullContractDiscount
       : fullSource === "logged"
       ? loggedTotal
       : parseFloat(specificAmount) || 0;
@@ -258,6 +265,7 @@ export function InvoiceCreatorModal({
               hours: li.hours,
               rate: li.rate,
             })),
+            ...(discountLineItem ? [discountLineItem] : []),
             ...(withDepositCredit ? [depositCreditLineItem] : []),
           ];
           body = {

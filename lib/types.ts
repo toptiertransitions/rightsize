@@ -803,8 +803,25 @@ export interface Contract {
   includeServiceDescriptions?: boolean;
   includeServiceHours?: boolean;
   notInScope?: string;
+  discountCodeId?: string;
+  discountCode?: string;
+  discountPercent?: number;
+  maxDiscount?: number;
+  discountAmount?: number;
   createdAt: string;
   lineItems?: ContractLineItem[];
+}
+
+// ─── Discount Codes ───────────────────────────────────────────────────────────
+export interface DiscountCode {
+  id: string;
+  code: string;
+  label: string;
+  discountPercent: number;
+  maxDiscount?: number;
+  expiresAt?: string;
+  isActive: boolean;
+  createdAt: string;
 }
 
 // ─── CRM ──────────────────────────────────────────────────────────────────────

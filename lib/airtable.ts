@@ -2640,6 +2640,11 @@ function mapContract(record: AirtableRecord): Contract {
     includeServiceDescriptions: f["IncludeServiceDescriptions"] === true,
     includeServiceHours: f["IncludeServiceHours"] === true,
     notInScope: toStr(f["NotInScope"]) || undefined,
+    discountCodeId: toStr(f["DiscountCodeId"]) || undefined,
+    discountCode: toStr(f["DiscountCode"]) || undefined,
+    discountPercent: typeof f["DiscountPercent"] === "number" ? f["DiscountPercent"] : undefined,
+    maxDiscount: typeof f["MaxDiscount"] === "number" ? f["MaxDiscount"] : undefined,
+    discountAmount: typeof f["DiscountAmount"] === "number" ? f["DiscountAmount"] : undefined,
     createdAt: toStr(f["CreatedAt"]),
     lineItems,
   };
@@ -2685,6 +2690,11 @@ export async function createContract(data: {
   includeServiceDescriptions?: boolean;
   includeServiceHours?: boolean;
   notInScope?: string;
+  discountCodeId?: string;
+  discountCode?: string;
+  discountPercent?: number;
+  maxDiscount?: number;
+  discountAmount?: number;
 }): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const fields: Record<string, unknown> = {
@@ -2710,6 +2720,11 @@ export async function createContract(data: {
   if (data.includeServiceDescriptions) fields["IncludeServiceDescriptions"] = true;
   if (data.includeServiceHours) fields["IncludeServiceHours"] = true;
   if (data.notInScope) fields["NotInScope"] = data.notInScope;
+  if (data.discountCodeId) fields["DiscountCodeId"] = data.discountCodeId;
+  if (data.discountCode) fields["DiscountCode"] = data.discountCode;
+  if (data.discountPercent != null) fields["DiscountPercent"] = data.discountPercent;
+  if (data.maxDiscount != null) fields["MaxDiscount"] = data.maxDiscount;
+  if (data.discountAmount != null) fields["DiscountAmount"] = data.discountAmount;
   const res = await contractFetch(table, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -2737,6 +2752,11 @@ export async function updateContract(
     totalCost: number;
     lineItems: ContractLineItem[];
     notInScope: string;
+    discountCodeId: string;
+    discountCode: string;
+    discountPercent: number;
+    maxDiscount: number;
+    discountAmount: number;
   }>
 ): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
@@ -2757,12 +2777,123 @@ export async function updateContract(
   if (data.totalCost !== undefined) fields["TotalCost"] = data.totalCost;
   if (data.lineItems !== undefined) fields["ServiceLineItems"] = JSON.stringify(data.lineItems);
   if (data.notInScope !== undefined) fields["NotInScope"] = data.notInScope;
+  if (data.discountCodeId !== undefined) fields["DiscountCodeId"] = data.discountCodeId;
+  if (data.discountCode !== undefined) fields["DiscountCode"] = data.discountCode;
+  if (data.discountPercent !== undefined) fields["DiscountPercent"] = data.discountPercent;
+  if (data.maxDiscount !== undefined) fields["MaxDiscount"] = data.maxDiscount;
+  if (data.discountAmount !== undefined) fields["DiscountAmount"] = data.discountAmount;
   const res = await contractFetch(table, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapContract(await res.json());
+}
+
+// ─── Discount Codes ───────────────────────────────────────────────────────────
+function discountFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const baseId = process.env.AIRTABLE_BASE_ID!;
+  const table = encodeURIComponent(AIRTABLE_TABLES.DISCOUNT_CODES);
+  return fetch(`https://api.airtable.com/v0/${baseId}/${table}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapDiscountCode(record: AirtableRecord): import("./types").DiscountCode {
+  const f = record.fields;
+  return {
+    id: record.id,
+    code: toStr(f["Code"]),
+    label: toStr(f["Label"]),
+    discountPercent: typeof f["DiscountPercent"] === "number" ? f["DiscountPercent"] : 0,
+    maxDiscount: typeof f["MaxDiscount"] === "number" ? f["MaxDiscount"] : undefined,
+    expiresAt: toStr(f["ExpiresAt"]) || undefined,
+    isActive: f["IsActive"] === true,
+    createdAt: toStr(f["CreatedAt"]) || new Date().toISOString(),
+  };
+}
+
+export async function getAllDiscountCodes(): Promise<import("./types").DiscountCode[]> {
+  const res = await discountFetch(`?sort[0][field]=CreatedAt&sort[0][direction]=desc`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapDiscountCode);
+}
+
+export async function getDiscountCodeByCode(code: string): Promise<import("./types").DiscountCode | null> {
+  const formula = encodeURIComponent(`UPPER({Code}) = "${code.toUpperCase()}"`);
+  const res = await discountFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.records?.length) return null;
+  return mapDiscountCode(data.records[0] as AirtableRecord);
+}
+
+export async function createDiscountCode(data: {
+  code: string;
+  label: string;
+  discountPercent: number;
+  maxDiscount?: number;
+  expiresAt?: string;
+  isActive?: boolean;
+}): Promise<import("./types").DiscountCode> {
+  const fields: Record<string, unknown> = {
+    Code: data.code.toUpperCase().trim(),
+    Label: data.label.trim(),
+    DiscountPercent: data.discountPercent,
+    IsActive: data.isActive ?? true,
+    CreatedAt: new Date().toISOString(),
+  };
+  if (data.maxDiscount != null) fields["MaxDiscount"] = data.maxDiscount;
+  if (data.expiresAt) fields["ExpiresAt"] = data.expiresAt;
+  const res = await discountFetch("", { method: "POST", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDiscountCode(await res.json());
+}
+
+export async function updateDiscountCode(
+  id: string,
+  data: Partial<{
+    code: string;
+    label: string;
+    discountPercent: number;
+    maxDiscount: number | null;
+    expiresAt: string | null;
+    isActive: boolean;
+  }>
+): Promise<import("./types").DiscountCode> {
+  const fields: Record<string, unknown> = {};
+  if (data.code !== undefined) fields["Code"] = data.code.toUpperCase().trim();
+  if (data.label !== undefined) fields["Label"] = data.label.trim();
+  if (data.discountPercent !== undefined) fields["DiscountPercent"] = data.discountPercent;
+  if (data.maxDiscount !== undefined) fields["MaxDiscount"] = data.maxDiscount ?? null;
+  if (data.expiresAt !== undefined) fields["ExpiresAt"] = data.expiresAt ?? null;
+  if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
+  const res = await discountFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapDiscountCode(await res.json());
+}
+
+export async function deleteDiscountCode(id: string): Promise<void> {
+  const res = await discountFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function getContractsByDiscountCodeId(discountCodeId: string): Promise<Contract[]> {
+  const formula = encodeURIComponent(`{DiscountCodeId} = "${discountCodeId}"`);
+  const res = await contractFetch(
+    AIRTABLE_TABLES.CONTRACTS,
+    `?filterByFormula=${formula}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapContract);
 }
 
 // ─── CRM helpers ──────────────────────────────────────────────────────────────

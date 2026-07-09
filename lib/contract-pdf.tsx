@@ -159,6 +159,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
     borderBottom: "1pt solid #f3f4f6",
   },
+  subtotalRow: {
+    flexDirection: "row",
+    padding: "7 10",
+    borderTop: "1pt solid #e5e7eb",
+  },
+  discountRow: {
+    flexDirection: "row",
+    padding: "7 10",
+    borderTop: "1pt solid #e5e7eb",
+    backgroundColor: "#eff6ff",
+  },
   totalRow: {
     flexDirection: "row",
     padding: "9 10",
@@ -175,6 +186,10 @@ const styles = StyleSheet.create({
   cellHrs: { flex: 1, fontSize: 9, color: "#374151", textAlign: "right" },
   cellRate: { flex: 1, fontSize: 9, color: "#374151", textAlign: "right" },
   cellAmt: { flex: 1.5, fontSize: 9, color: "#374151", textAlign: "right" },
+  subtotalLabel: { flex: 5, fontSize: 9, color: "#6b7280" },
+  subtotalValue: { flex: 1.5, fontSize: 9, color: "#6b7280", textAlign: "right" },
+  discountLabel: { flex: 5, fontSize: 9, color: "#1d4ed8" },
+  discountValue: { flex: 1.5, fontSize: 9, color: "#1d4ed8", textAlign: "right" },
   totalLabel: { flex: 5, fontSize: 10, fontFamily: "Helvetica-Bold", color: "#2E6B4F" },
   totalValue: { flex: 1.5, fontSize: 10, fontFamily: "Helvetica-Bold", color: "#2E6B4F", textAlign: "right" },
   // Contract body
@@ -353,8 +368,20 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
                 <Text style={styles.cellAmt}>{fmt(item.hours * item.rate)}</Text>
               </View>
             ))}
+            {contract.discountAmount != null && contract.discountAmount > 0 && (
+              <>
+                <View style={styles.subtotalRow}>
+                  <Text style={styles.subtotalLabel}>Subtotal</Text>
+                  <Text style={styles.subtotalValue}>{fmt(contract.totalCost + contract.discountAmount)}</Text>
+                </View>
+                <View style={styles.discountRow}>
+                  <Text style={styles.discountLabel}>Discount — {contract.discountCode}</Text>
+                  <Text style={styles.discountValue}>−{fmt(contract.discountAmount)}</Text>
+                </View>
+              </>
+            )}
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>{showServiceHours ? `${totalHours} hrs — ` : ""}Total Estimate</Text>
+              <Text style={styles.totalLabel}>{showServiceHours ? `${totalHours} hrs — ` : ""}{contract.discountAmount ? "Total After Discount" : "Total Estimate"}</Text>
               <Text style={styles.totalValue}>{fmt(contract.totalCost)}</Text>
             </View>
           </View>

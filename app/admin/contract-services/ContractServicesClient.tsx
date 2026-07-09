@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AdminHeader } from "../components/AdminHeader";
-import type { ContractSettings, ContractTemplate, Service } from "@/lib/types";
+import type { ContractSettings, ContractTemplate, Service, DiscountCode } from "@/lib/types";
 
 // ─── Template Modal ────────────────────────────────────────────────────────────
 interface TemplateModalProps {
@@ -826,6 +826,321 @@ function NotInScopeSection({ initialSettings }: { initialSettings: ContractSetti
   );
 }
 
+// ─── Discount Codes Section ────────────────────────────────────────────────────
+function DiscountCodesSection() {
+  const [codes, setCodes] = useState<DiscountCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [usageMap, setUsageMap] = useState<Record<string, { contractId: string; tenantName: string; status: string; discountAmount: number; totalCost: number; createdAt: string }[]>>({});
+  const [usageLoading, setUsageLoading] = useState<string | null>(null);
+
+  // Add/Edit form state
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<DiscountCode | null>(null);
+  const [formCode, setFormCode] = useState("");
+  const [formLabel, setFormLabel] = useState("");
+  const [formPercent, setFormPercent] = useState("");
+  const [formMax, setFormMax] = useState("");
+  const [formExpires, setFormExpires] = useState("");
+  const [formActive, setFormActive] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const load = async () => {
+    setLoading(true);
+    const res = await fetch("/api/admin/discount-codes").catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      setCodes(data.codes ?? []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openAdd = () => {
+    setEditing(null);
+    setFormCode(""); setFormLabel(""); setFormPercent(""); setFormMax(""); setFormExpires(""); setFormActive(true);
+    setFormError("");
+    setShowForm(true);
+  };
+
+  const openEdit = (c: DiscountCode) => {
+    setEditing(c);
+    setFormCode(c.code); setFormLabel(c.label); setFormPercent(String(c.discountPercent));
+    setFormMax(c.maxDiscount != null ? String(c.maxDiscount) : "");
+    setFormExpires(c.expiresAt ? c.expiresAt.slice(0, 10) : "");
+    setFormActive(c.isActive);
+    setFormError("");
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!formCode.trim() || !formLabel.trim() || !formPercent) { setFormError("Code, label, and percent are required"); return; }
+    const pct = parseFloat(formPercent);
+    if (isNaN(pct) || pct < 1 || pct > 100) { setFormError("Percent must be 1–100"); return; }
+    setSaving(true); setFormError("");
+    try {
+      const body: Record<string, unknown> = {
+        code: formCode.toUpperCase().trim(),
+        label: formLabel.trim(),
+        discountPercent: pct,
+        maxDiscount: formMax ? parseFloat(formMax) : undefined,
+        expiresAt: formExpires || undefined,
+        isActive: formActive,
+      };
+      if (editing) body.id = editing.id;
+      const res = await fetch("/api/admin/discount-codes", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      setShowForm(false);
+      await load();
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/admin/discount-codes?id=${id}`, { method: "DELETE" });
+    if (res.ok) { setConfirmDeleteId(null); await load(); }
+  };
+
+  const toggleUsage = async (id: string) => {
+    if (expandedId === id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    if (usageMap[id]) return;
+    setUsageLoading(id);
+    const res = await fetch(`/api/admin/discount-codes?usageId=${id}`).catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      setUsageMap((prev) => ({ ...prev, [id]: data.usage ?? [] }));
+    }
+    setUsageLoading(null);
+  };
+
+  return (
+    <section className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-white">Discount Codes</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Create codes for quoting discounts. Applied codes reduce the contract total — not hourly rates.</p>
+        </div>
+        <button
+          onClick={openAdd}
+          className="h-9 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Code
+        </button>
+      </div>
+
+      {/* Add/Edit form */}
+      {showForm && (
+        <div className="mb-4 p-4 bg-gray-800 rounded-xl border border-gray-600 space-y-3">
+          <p className="text-sm font-medium text-white">{editing ? "Edit Discount Code" : "New Discount Code"}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Code *</label>
+              <input
+                type="text"
+                value={formCode}
+                onChange={(e) => setFormCode(e.target.value.toUpperCase())}
+                placeholder="SUMMER25"
+                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-forest-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Label / Description *</label>
+              <input
+                type="text"
+                value={formLabel}
+                onChange={(e) => setFormLabel(e.target.value)}
+                placeholder="Summer 2025 Promotion"
+                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Discount % *</label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={formPercent}
+                onChange={(e) => setFormPercent(e.target.value)}
+                placeholder="20"
+                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Max Discount $ (optional)</label>
+              <input
+                type="number"
+                min={0}
+                value={formMax}
+                onChange={(e) => setFormMax(e.target.value)}
+                placeholder="250"
+                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Expiration Date (optional)</label>
+              <input
+                type="date"
+                value={formExpires}
+                onChange={(e) => setFormExpires(e.target.value)}
+                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formActive}
+                  onChange={(e) => setFormActive(e.target.checked)}
+                  className="w-4 h-4 rounded accent-forest-600"
+                />
+                <span className="text-sm text-gray-300">Active</span>
+              </label>
+            </div>
+          </div>
+          {formError && <p className="text-xs text-red-400">{formError}</p>}
+          <div className="flex items-center gap-3">
+            <button onClick={handleSave} disabled={saving} className="h-9 px-5 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors">
+              {saving ? "Saving…" : editing ? "Save Changes" : "Create Code"}
+            </button>
+            <button onClick={() => setShowForm(false)} className="h-9 px-4 rounded-xl border border-gray-600 text-gray-300 text-sm hover:bg-gray-700 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-gray-500 text-sm py-4">Loading…</p>
+      ) : codes.length === 0 ? (
+        <p className="text-gray-500 text-sm py-4">No discount codes yet. Add one above.</p>
+      ) : (
+        <div className="border border-gray-700 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-700">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Label</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Discount</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Max $</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Expires</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {codes.map((c, i) => {
+                const isExpired = c.expiresAt ? new Date(c.expiresAt) < new Date() : false;
+                const isOpen = expandedId === c.id;
+                return (
+                  <>
+                    <tr
+                      key={c.id}
+                      className={`border-b border-gray-800 ${i % 2 === 0 ? "" : "bg-gray-800/20"} cursor-pointer hover:bg-gray-800/40 transition-colors`}
+                      onClick={() => toggleUsage(c.id)}
+                    >
+                      <td className="px-4 py-3 font-mono text-white font-medium">{c.code}</td>
+                      <td className="px-4 py-3 text-gray-300">{c.label}</td>
+                      <td className="px-4 py-3 text-right text-gray-300">{c.discountPercent}%</td>
+                      <td className="px-4 py-3 text-right text-gray-400">{c.maxDiscount != null ? fmt(c.maxDiscount) : "—"}</td>
+                      <td className="px-4 py-3 text-gray-400">
+                        {c.expiresAt ? (
+                          <span className={isExpired ? "text-red-400" : ""}>{new Date(c.expiresAt).toLocaleDateString()}</span>
+                        ) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          !c.isActive || isExpired ? "bg-gray-700 text-gray-400" : "bg-green-900/40 text-green-400"
+                        }`}>
+                          {!c.isActive ? "Inactive" : isExpired ? "Expired" : "Active"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEdit(c)} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors">Edit</button>
+                          {confirmDeleteId === c.id ? (
+                            <>
+                              <button onClick={() => handleDelete(c.id)} className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-gray-700 transition-colors">Confirm</button>
+                              <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors">Cancel</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteId(c.id)} className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded hover:bg-gray-700 transition-colors">Delete</button>
+                          )}
+                          <span className="text-gray-600 ml-1">{isOpen ? "▲" : "▼"}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr key={`${c.id}-usage`} className="border-b border-gray-800 bg-gray-800/50">
+                        <td colSpan={7} className="px-4 py-3">
+                          {usageLoading === c.id ? (
+                            <p className="text-xs text-gray-400">Loading usage…</p>
+                          ) : (usageMap[c.id]?.length ?? 0) === 0 ? (
+                            <p className="text-xs text-gray-500">No quotes have used this code yet.</p>
+                          ) : (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Usage ({usageMap[c.id].length} quote{usageMap[c.id].length !== 1 ? "s" : ""})</p>
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-gray-500">
+                                    <th className="text-left font-medium pb-1">Client / Project</th>
+                                    <th className="text-left font-medium pb-1">Status</th>
+                                    <th className="text-right font-medium pb-1">Discount Applied</th>
+                                    <th className="text-right font-medium pb-1">Contract Total</th>
+                                    <th className="text-left font-medium pb-1">Date</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {usageMap[c.id].map((u) => (
+                                    <tr key={u.contractId} className="border-t border-gray-700/50">
+                                      <td className="py-1.5 text-gray-300">{u.tenantName}</td>
+                                      <td className="py-1.5">
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                          u.status === "Signed" ? "bg-green-900/40 text-green-400" :
+                                          u.status === "Sent" ? "bg-blue-900/40 text-blue-400" :
+                                          u.status === "Draft" ? "bg-gray-700 text-gray-400" :
+                                          "bg-gray-700 text-gray-500"
+                                        }`}>{u.status}</span>
+                                      </td>
+                                      <td className="py-1.5 text-right text-blue-400">−{fmt(u.discountAmount)}</td>
+                                      <td className="py-1.5 text-right text-gray-300">{fmt(u.totalCost)}</td>
+                                      <td className="py-1.5 text-gray-500">{new Date(u.createdAt).toLocaleDateString()}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 interface ContractServicesClientProps {
   initialSettings: ContractSettings | null;
@@ -912,6 +1227,9 @@ export function ContractServicesClient({ initialSettings, initialTemplates, init
 
         {/* Section 5 — QuickBooks Online */}
         <QBOIntegrationSection services={initialServices} />
+
+        {/* Section 6 — Discount Codes */}
+        <DiscountCodesSection />
       </main>
 
       {showModal && (

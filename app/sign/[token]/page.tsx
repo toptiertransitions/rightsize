@@ -114,8 +114,20 @@ export default async function SignPage({ params }: PageProps) {
                       <td className="px-3 py-3 sm:px-6 text-right text-gray-900 whitespace-nowrap">{item.hours} hrs</td>
                     </tr>
                   ))}
+                  {contract.discountAmount != null && contract.discountAmount > 0 && (
+                    <>
+                      <tr className="border-t border-gray-100">
+                        <td className="px-3 py-2.5 sm:px-6 text-gray-400 text-xs">Subtotal</td>
+                        <td className="px-3 py-2.5 sm:px-6 text-right text-gray-400 text-xs whitespace-nowrap">{formatCost(contract.totalCost + contract.discountAmount)}</td>
+                      </tr>
+                      <tr className="border-t border-gray-100 bg-blue-50">
+                        <td className="px-3 py-2.5 sm:px-6 text-blue-700 text-sm">Discount — {contract.discountCode}</td>
+                        <td className="px-3 py-2.5 sm:px-6 text-right text-blue-700 text-sm whitespace-nowrap">−{formatCost(contract.discountAmount)}</td>
+                      </tr>
+                    </>
+                  )}
                   <tr className="border-t-2 border-forest-200 bg-forest-50">
-                    <td className="px-3 py-4 sm:px-6 font-bold text-forest-700">Total</td>
+                    <td className="px-3 py-4 sm:px-6 font-bold text-forest-700">{contract.discountAmount ? "Total After Discount" : "Total"}</td>
                     <td className="px-3 py-4 sm:px-6 text-right font-bold text-forest-700 whitespace-nowrap">
                       {totalHrs} hrs &nbsp;·&nbsp; {formatCost(contract.totalCost)}
                     </td>
@@ -134,10 +146,20 @@ export default async function SignPage({ params }: PageProps) {
                       </td>
                     </tr>
                   ))}
+                  {contract.discountAmount != null && contract.discountAmount > 0 && (
+                    <tr className="border-t border-gray-100 bg-blue-50">
+                      <td className="px-3 py-2.5 sm:px-6">
+                        <div className="flex justify-between items-center">
+                          <span className="text-blue-700 text-sm">Discount — {contract.discountCode}</span>
+                          <span className="text-blue-700 text-sm whitespace-nowrap">−{formatCost(contract.discountAmount)}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   <tr className="border-t-2 border-forest-200 bg-forest-50">
                     <td className="px-3 py-4 sm:px-6">
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-forest-700">Total</span>
+                        <span className="font-bold text-forest-700">{contract.discountAmount ? "Total After Discount" : "Total"}</span>
                         <span className="font-bold text-forest-700 whitespace-nowrap">
                           {totalHrs} hrs &nbsp;·&nbsp; {formatCost(contract.totalCost)}
                         </span>

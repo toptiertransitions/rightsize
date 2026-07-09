@@ -174,12 +174,40 @@ export function EstimatorSection({
   // "Not Included in this Scope" text — defaults to admin-set value
   const [notInScope, setNotInScope] = useState(settings?.notInScopeDefault ?? "");
 
+  // Discount code toggle + state
+  const [discountCodeActive, setDiscountCodeActive] = useState(false);
+  const [discountCodeInput, setDiscountCodeInput] = useState("");
+  const [resolvedDiscount, setResolvedDiscount] = useState<{ id: string; code: string; label: string; discountPercent: number; maxDiscount?: number } | null>(null);
+  const [discountValidating, setDiscountValidating] = useState(false);
+  const [discountError, setDiscountError] = useState("");
+
+  const handleApplyDiscount = async () => {
+    if (!discountCodeInput.trim()) return;
+    setDiscountValidating(true);
+    setDiscountError("");
+    setResolvedDiscount(null);
+    try {
+      const res = await fetch(`/api/admin/discount-codes?code=${encodeURIComponent(discountCodeInput.trim())}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Invalid code");
+      setResolvedDiscount(data.discount);
+    } catch (e) {
+      setDiscountError(e instanceof Error ? e.message : "Code not found");
+    } finally {
+      setDiscountValidating(false);
+    }
+  };
+
   // When editingContract changes, load its line items into rows
   useEffect(() => {
     if (!editingContract) {
       // Reset to fresh calculation when cancelling edit
       setRows([]);
       setContractBody("");
+      setDiscountCodeActive(false);
+      setDiscountCodeInput("");
+      setResolvedDiscount(null);
+      setDiscountError("");
       return;
     }
     const lineItems = editingContract.lineItems ?? [];
@@ -212,6 +240,22 @@ export function EstimatorSection({
     setContractBody(editingContract.contractBody ?? "");
     if (editingContract.templateId) setSelectedTemplateId(editingContract.templateId);
     setNotInScope(editingContract.notInScope ?? settings?.notInScopeDefault ?? "");
+    // Load discount state
+    if (editingContract.discountAmount && editingContract.discountAmount > 0 && editingContract.discountCode) {
+      setDiscountCodeActive(true);
+      setDiscountCodeInput(editingContract.discountCode);
+      setResolvedDiscount({
+        id: editingContract.discountCodeId ?? "",
+        code: editingContract.discountCode,
+        label: editingContract.discountCode,
+        discountPercent: editingContract.discountPercent ?? 0,
+        maxDiscount: editingContract.maxDiscount,
+      });
+    } else {
+      setDiscountCodeActive(false);
+      setDiscountCodeInput("");
+      setResolvedDiscount(null);
+    }
   }, [editingContract]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Init on mount + recalc non-overridden rows when rooms, services, destinationSqFt, or touchMultiplier change
@@ -283,9 +327,20 @@ export function EstimatorSection({
 
   const anyOverridden = rows.some((r) => r.overridden);
 
-  const totalCost = rows
+  const rawTotal = rows
     .filter((r) => r.included)
     .reduce((sum, r) => sum + r.hours * r.rate, 0);
+
+  const discountAmount = (discountCodeActive && resolvedDiscount)
+    ? Math.round(
+        Math.min(
+          rawTotal * resolvedDiscount.discountPercent / 100,
+          resolvedDiscount.maxDiscount != null ? resolvedDiscount.maxDiscount : Infinity
+        ) * 100
+      ) / 100
+    : 0;
+
+  const totalCost = rawTotal - discountAmount;
 
   const includedLineItems = rows
     .filter((r) => r.included && r.hours > 0)
@@ -327,7 +382,7 @@ export function EstimatorSection({
       })
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTemplateId, templates, rows]);
+  }, [selectedTemplateId, templates, rows, discountAmount]);
 
   const sharedFields = {
     tenantId: tenant.id,
@@ -344,6 +399,11 @@ export function EstimatorSection({
     includeServiceDescriptions,
     includeServiceHours,
     notInScope,
+    discountCodeId: discountCodeActive && resolvedDiscount ? resolvedDiscount.id : undefined,
+    discountCode: discountCodeActive && resolvedDiscount ? resolvedDiscount.code : undefined,
+    discountPercent: discountCodeActive && resolvedDiscount ? resolvedDiscount.discountPercent : undefined,
+    maxDiscount: discountCodeActive && resolvedDiscount?.maxDiscount != null ? resolvedDiscount.maxDiscount : undefined,
+    discountAmount: discountAmount > 0 ? discountAmount : undefined,
   };
 
   const saveDestSqFt = () =>
@@ -600,8 +660,20 @@ export function EstimatorSection({
                     </td>
                   </tr>
                 ))}
+                {discountAmount > 0 && (
+                  <>
+                    <tr className="border-t border-gray-100">
+                      <td colSpan={4} className="px-4 py-2 text-sm text-gray-400">Subtotal</td>
+                      <td className="px-4 py-2 text-right text-sm text-gray-400">{formatCost(rawTotal)}</td>
+                    </tr>
+                    <tr className="bg-blue-50">
+                      <td colSpan={4} className="px-4 py-2 text-sm text-blue-700">Discount — {resolvedDiscount?.code}{resolvedDiscount?.maxDiscount ? ` (${resolvedDiscount.discountPercent}%, max ${formatCost(resolvedDiscount.maxDiscount)})` : ` (${resolvedDiscount?.discountPercent}%)`}</td>
+                      <td className="px-4 py-2 text-right text-sm text-blue-700">−{formatCost(discountAmount)}</td>
+                    </tr>
+                  </>
+                )}
                 <tr className="bg-forest-50">
-                  <td colSpan={4} className="px-4 py-3 font-bold text-forest-700">Total Estimated Cost</td>
+                  <td colSpan={4} className="px-4 py-3 font-bold text-forest-700">{discountAmount > 0 ? "Total After Discount" : "Total Estimated Cost"}</td>
                   <td className="px-4 py-3 text-right font-bold text-forest-700">{formatCost(totalCost)}</td>
                 </tr>
               </tbody>
@@ -782,6 +854,87 @@ export function EstimatorSection({
                 ? "Hours per service will appear in the email, PDF, and signing page. The client will see a full breakdown."
                 : "Per-service hours are hidden. The client sees total hours and total cost only."}
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Discount Code toggle */}
+      <div className="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={discountCodeActive}
+            onClick={() => {
+              setDiscountCodeActive((v) => {
+                if (v) {
+                  setDiscountCodeInput("");
+                  setResolvedDiscount(null);
+                  setDiscountError("");
+                }
+                return !v;
+              });
+            }}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mt-0.5 ${
+              discountCodeActive ? "bg-forest-600" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                discountCodeActive ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-800">Apply a discount code</p>
+            {!discountCodeActive && (
+              <p className="text-xs text-gray-500 mt-0.5">No discount code applied. Toggle on to add one.</p>
+            )}
+            {discountCodeActive && (
+              <div className="mt-2 space-y-2">
+                {resolvedDiscount ? (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                      {resolvedDiscount.code} — {resolvedDiscount.label} ({resolvedDiscount.discountPercent}% off{resolvedDiscount.maxDiscount ? `, max ${formatCost(resolvedDiscount.maxDiscount)}` : ""})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setResolvedDiscount(null); setDiscountCodeInput(""); setDiscountError(""); }}
+                      className="text-xs text-gray-400 hover:text-gray-600 underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={discountCodeInput}
+                      onChange={(e) => { setDiscountCodeInput(e.target.value.toUpperCase()); setDiscountError(""); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleApplyDiscount(); } }}
+                      placeholder="Enter code (e.g. SUMMER25)"
+                      className="h-9 px-3 rounded-lg border border-gray-200 text-sm text-gray-900 font-mono focus:outline-none focus:ring-2 focus:ring-forest-400 w-48"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyDiscount}
+                      disabled={discountValidating || !discountCodeInput.trim()}
+                      className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                    >
+                      {discountValidating ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {discountError && (
+                  <p className="text-xs text-red-500">{discountError}</p>
+                )}
+                {resolvedDiscount && discountAmount > 0 && (
+                  <p className="text-xs text-blue-600">
+                    Saves {formatCost(discountAmount)} — total reduced from {formatCost(rawTotal)} to {formatCost(totalCost)}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

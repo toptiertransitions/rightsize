@@ -65,6 +65,11 @@ export async function POST(req: NextRequest) {
     includeServiceDescriptions,
     includeServiceHours,
     notInScope,
+    discountCodeId,
+    discountCode,
+    discountPercent,
+    maxDiscount,
+    discountAmount,
   } = body;
 
   if (!tenantId) {
@@ -92,6 +97,11 @@ export async function POST(req: NextRequest) {
       includeServiceDescriptions: includeServiceDescriptions ?? false,
       includeServiceHours: includeServiceHours ?? false,
       notInScope: notInScope ?? undefined,
+      discountCodeId: discountCodeId ?? undefined,
+      discountCode: discountCode ?? undefined,
+      discountPercent: discountPercent ?? undefined,
+      maxDiscount: maxDiscount ?? undefined,
+      discountAmount: discountAmount ?? undefined,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to create contract";
@@ -145,6 +155,8 @@ export async function POST(req: NextRequest) {
             totalCost: totalCost ?? 0,
             lineItems: emailLineItems,
             includeServiceHours: includeServiceHours ?? false,
+            discountCode: discountCode ?? undefined,
+            discountAmount: discountAmount ?? undefined,
           }),
         });
       }
@@ -267,6 +279,8 @@ export async function PATCH(req: NextRequest) {
             totalCost: contract.totalCost,
             lineItems: emailLineItems,
             includeServiceHours: patchIncludeHours ?? false,
+            discountCode: contract.discountCode,
+            discountAmount: contract.discountAmount,
           }),
         });
       }

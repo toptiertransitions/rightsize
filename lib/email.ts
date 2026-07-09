@@ -5,6 +5,8 @@ export function buildContractSentEmail({
   totalCost,
   lineItems,
   includeServiceHours = false,
+  discountCode,
+  discountAmount,
 }: {
   clientName: string;
   projectName: string;
@@ -12,10 +14,14 @@ export function buildContractSentEmail({
   totalCost: number;
   lineItems: { serviceName: string; hours: number; description?: string }[];
   includeServiceHours?: boolean;
+  discountCode?: string;
+  discountAmount?: number;
 }): string {
   const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtHrs = (h: number) => `${Math.round(h * 10) / 10} hrs`;
   const totalHours = lineItems.reduce((s, i) => s + i.hours, 0);
+  const hasDiscount = !!discountCode && !!discountAmount && discountAmount > 0;
+  const rawTotal = hasDiscount ? totalCost + discountAmount! : totalCost;
 
   // When hours per service are hidden: true single-column table — no ghost right column.
   // When hours shown: two-column table (Service | Hrs).
@@ -36,18 +42,51 @@ export function buildContractSentEmail({
     )
     .join("");
 
+  // Discount rows (only when a discount is applied): subtotal + discount + final total
+  const discountRows = hasDiscount
+    ? includeServiceHours
+      ? `<tr>
+          <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Subtotal</td>
+          <td style="padding:10px 16px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;white-space:nowrap;">${fmt(rawTotal)}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px;font-size:13px;color:#1d4ed8;border-top:1px solid #e5e7eb;">Discount — ${discountCode}</td>
+          <td style="padding:10px 16px;font-size:13px;color:#1d4ed8;border-top:1px solid #e5e7eb;text-align:right;white-space:nowrap;">−${fmt(discountAmount!)}</td>
+        </tr>`
+      : `<tr>
+          <td style="padding:0;border-top:1px solid #e5e7eb;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:10px 16px;font-size:13px;color:#6b7280;">Subtotal</td>
+                <td style="padding:10px 16px;font-size:13px;color:#6b7280;text-align:right;white-space:nowrap;">${fmt(rawTotal)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0;border-top:1px solid #e5e7eb;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:10px 16px;font-size:13px;color:#1d4ed8;">Discount — ${discountCode}</td>
+                <td style="padding:10px 16px;font-size:13px;color:#1d4ed8;text-align:right;white-space:nowrap;">−${fmt(discountAmount!)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    : "";
+
   // Totals row: always shows hours + cost in green.
   // When single-column, nest a table inside the td for left/right alignment (email-safe).
   const totalsRow = includeServiceHours
     ? `<tr style="background-color:#f0fdf4;">
-        <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;">Estimated Total</td>
+        <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;">${hasDiscount ? "Total After Discount" : "Estimated Total"}</td>
         <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;text-align:right;white-space:nowrap;">${fmtHrs(totalHours)} &nbsp;&middot;&nbsp; ${fmt(totalCost)}</td>
       </tr>`
     : `<tr style="background-color:#f0fdf4;">
         <td style="padding:0;border-top:2px solid #2E6B4F;">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;">Estimated Total</td>
+              <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;">${hasDiscount ? "Total After Discount" : "Estimated Total"}</td>
               <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;text-align:right;white-space:nowrap;">${fmtHrs(totalHours)} &nbsp;&middot;&nbsp; ${fmt(totalCost)}</td>
             </tr>
           </table>
@@ -84,6 +123,7 @@ export function buildContractSentEmail({
                   <th style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;white-space:nowrap;">Hours</th>
                 </tr>` : ""}
                 ${serviceRows}
+                ${discountRows}
                 ${totalsRow}
               </table>
               <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
