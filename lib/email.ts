@@ -2831,7 +2831,7 @@ export function buildPartnerRewardsEmail({
     <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.08em;">Recent Google Reviews</p>
     <div style="margin-bottom:28px;">${reviewCards}</div>` : ""}
     ${previousProjects.length > 0 ? `
-    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Previous Projects (${previousProjects.length})</p>
+    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Prior Projects (${previousProjects.length})</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;opacity:0.7;">${previousRows}</table>` : ""}
     ${currentProjects.length === 0 && potentialProjects.length === 0 ? `
     <p style="margin:0 0 28px;font-size:14px;color:#9ca3af;text-align:center;">No active referred projects yet.</p>` : ""}

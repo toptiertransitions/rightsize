@@ -73,13 +73,13 @@ export async function POST(req: NextRequest) {
     .map(({ tenantId, stage }, i) => {
       const t = tenants[i];
       if (!t) return null;
-      return { name: t.name, address: t.address, city: t.city, state: t.state, isArchived: t.isArchived, stage };
+      return { name: t.name, address: t.address, city: t.city, state: t.state, isArchived: t.isArchived, isConsignmentOnly: t.isConsignmentOnly, stage };
     })
-    .filter(Boolean) as Array<{ name: string; address?: string; city?: string; state?: string; isArchived: boolean; stage: string }>;
+    .filter(Boolean) as Array<{ name: string; address?: string; city?: string; state?: string; isArchived: boolean; isConsignmentOnly: boolean; stage: string }>;
 
-  const currentProjects  = enriched.filter(p => p.stage === "Won" && !p.isArchived);
+  const currentProjects  = enriched.filter(p => p.stage === "Won" && !p.isArchived && !p.isConsignmentOnly);
   const potentialProjects = enriched.filter(p => p.stage === "Proposing" && !p.isArchived);
-  const previousProjects  = enriched.filter(p => p.stage === "Won" && p.isArchived);
+  const previousProjects  = enriched.filter(p => p.stage === "Won" && (p.isArchived || p.isConsignmentOnly));
 
   const earned    = loyaltyRecord?.lifetimePoints ?? 0;
   const redeemed  = 0;
