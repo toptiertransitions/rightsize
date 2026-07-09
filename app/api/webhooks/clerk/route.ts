@@ -4,7 +4,7 @@ import { Resend } from "resend";
 import { clerkClient } from "@clerk/nextjs/server";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { buildNewUserAdminEmail } from "@/lib/email";
-import { findReferralContactByEmail, setReferralContactClerkUserId } from "@/lib/airtable";
+import { findReferralContactByEmail, setReferralContactClerkUserId, getStaffMembers } from "@/lib/airtable";
 
 const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
 const AT_HEADERS = {
@@ -95,41 +95,30 @@ async function sendAdminNotification(params: {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
 
-  // Prefer ADMIN_NOTIFICATION_EMAIL env var (comma-separated).
-  // Fall back to looking up emails via Clerk API from TTT_ADMIN_USER_IDS.
-  let adminEmails: string[] = (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Primary: pull all active TTTAdmin users from the live StaffRoles table.
+  let adminEmails: string[] = [];
+  try {
+    const staff = await getStaffMembers();
+    adminEmails = staff
+      .filter((s) => s.isActive && s.email && s.role === "TTTAdmin")
+      .map((s) => s.email as string);
+  } catch { /* fall through */ }
 
+  // Fallback: comma-separated env var (e.g. ADMIN_NOTIFICATION_EMAIL)
   if (adminEmails.length === 0) {
-    const adminClerkIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
+    adminEmails = (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const clerkSecret = process.env.CLERK_SECRET_KEY;
-    if (adminClerkIds.length > 0 && clerkSecret) {
-      for (const id of adminClerkIds) {
-        const r = await fetch(`https://api.clerk.com/v1/users/${id}`, {
-          headers: { Authorization: `Bearer ${clerkSecret}` },
-        });
-        if (!r.ok) continue;
-        const u = await r.json();
-        const primaryId = u.primary_email_address_id as string | null;
-        const email = (u.email_addresses as Array<{ id: string; email_address: string }>)
-          ?.find((e) => e.id === primaryId)?.email_address
-          ?? (u.email_addresses as Array<{ email_address: string }>)?.[0]?.email_address;
-        if (email) adminEmails.push(email);
-      }
-    }
   }
 
   if (adminEmails.length === 0) return;
 
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
   const resend = new Resend(resendKey);
   const html = buildNewUserAdminEmail(params);
   await resend.emails.send({
-    from: "Top Tier Transitions <noreply@toptiertransitions.com>",
+    from: `Top Tier Transitions <${fromEmail}>`,
     to: adminEmails,
     subject: `New User: ${params.fullName} (${params.roleLabel})`,
     html,
