@@ -354,6 +354,24 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
   const [bonusPartner, setBonusPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [redeemPartner, setRedeemPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [resetPartner, setResetPartner] = useState<PartnerLoyaltyRecord | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ created: string[]; skipped: string[]; errors: string[] } | null>(null);
+
+  const runBackfill = async () => {
+    if (!confirm("This will create PartnerLoyalty records for all referral contacts with at least 1 Won referral who are not already in the loyalty table. Proceed?")) return;
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const r = await fetch("/api/admin/partner-loyalty-backfill", { method: "POST" });
+      const data = await r.json();
+      setBackfillResult(data);
+      if (data.created?.length > 0) reload();
+    } catch {
+      setBackfillResult({ created: [], skipped: [], errors: ["Request failed"] });
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const reload = () => {
     fetch("/api/partner-loyalty/all-partners")
@@ -423,12 +441,54 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
         ))}
       </div>
 
-      {/* Program year pill */}
-      <div className="mb-4">
+      {/* Program year pill + backfill */}
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
         <span className="text-xs text-gray-500 bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">
           {programYearLabel}
         </span>
+        <button
+          onClick={runBackfill}
+          disabled={backfilling}
+          className="text-xs px-3 py-1 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600 disabled:opacity-50 transition-colors"
+        >
+          {backfilling ? "Backfilling…" : "Backfill from CRM"}
+        </button>
       </div>
+
+      {/* Backfill result */}
+      {backfillResult && (
+        <div className="mb-4 rounded-xl bg-gray-800 border border-gray-700 p-4 text-sm space-y-2">
+          <div className="font-semibold text-gray-200">Backfill complete</div>
+          {backfillResult.created.length > 0 && (
+            <div>
+              <div className="text-green-400 font-medium mb-1">Created ({backfillResult.created.length})</div>
+              <ul className="text-gray-400 space-y-0.5">
+                {backfillResult.created.map((s, i) => <li key={i}>+ {s}</li>)}
+              </ul>
+            </div>
+          )}
+          {backfillResult.skipped.length > 0 && (
+            <div>
+              <div className="text-yellow-400 font-medium mb-1">Skipped ({backfillResult.skipped.length})</div>
+              <ul className="text-gray-400 space-y-0.5">
+                {backfillResult.skipped.map((s, i) => <li key={i}>— {s}</li>)}
+              </ul>
+            </div>
+          )}
+          {backfillResult.errors.length > 0 && (
+            <div>
+              <div className="text-red-400 font-medium mb-1">Errors ({backfillResult.errors.length})</div>
+              <ul className="text-gray-400 space-y-0.5">
+                {backfillResult.errors.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+          {backfillResult.created.length === 0 && backfillResult.errors.length === 0 && (
+            <div className="text-gray-400">All eligible partners already have loyalty records.</div>
+          )}
+          <button onClick={() => setBackfillResult(null)} className="text-xs text-gray-500 hover:text-gray-300 mt-1">Dismiss</button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-4">
