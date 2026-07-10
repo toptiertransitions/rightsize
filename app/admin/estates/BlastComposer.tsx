@@ -44,6 +44,8 @@ export function BlastComposer({
 
   // Recipients
   const [filterCategory, setFilterCategory] = useState("");
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(new Set());
+  const [recipientSearch, setRecipientSearch] = useState("");
 
   // Send
   const [sending, setSending] = useState(false);
@@ -56,14 +58,17 @@ export function BlastComposer({
   const [preview, setPreview] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  // Eligible recipient count
-  const eligibleShoppers = shoppers.filter(s => {
-    if (s.optOut) return false;
-    if (filterCategory) {
-      return (s.categoryInterests ?? "").toLowerCase().includes(filterCategory.toLowerCase());
-    }
-    return true;
-  });
+  // Eligible recipient count — manual selection takes priority over category filter
+  const hasManualSelection = selectedRecipientIds.size > 0;
+  const eligibleShoppers = hasManualSelection
+    ? shoppers.filter(s => !s.optOut && selectedRecipientIds.has(s.id))
+    : shoppers.filter(s => {
+        if (s.optOut) return false;
+        if (filterCategory) {
+          return (s.categoryInterests ?? "").toLowerCase().includes(filterCategory.toLowerCase());
+        }
+        return true;
+      });
 
   const featuredEstates = estates.filter(e => selectedEstateIds.has(e.id));
   const featuredItems = availableItems.filter(i => selectedItemIds.has(i.id));
@@ -189,7 +194,8 @@ export function BlastComposer({
         body: JSON.stringify({
           subject,
           bodyText,
-          filterCategory: filterCategory || undefined,
+          shopperIds: hasManualSelection ? Array.from(selectedRecipientIds) : undefined,
+          filterCategory: !hasManualSelection && filterCategory ? filterCategory : undefined,
           featuredEstates: featuredEstates.map(e => ({
             id: e.id, name: e.name, slug: e.slug,
             saleStartDate: e.saleStartDate, description: e.description, status: e.status,
@@ -405,26 +411,92 @@ export function BlastComposer({
                 ))}
               </div>
 
+              {/* Manual selection */}
               <div>
-                <p className="text-sm font-semibold text-white mb-3">Filter by category interest <span className="text-gray-500 font-normal text-xs">(leave blank for all active shoppers)</span></p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setFilterCategory("")}
-                    className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${!filterCategory ? "bg-forest-700 border-forest-500 text-white" : "border-gray-700 text-gray-400 hover:border-gray-500"}`}
-                  >
-                    All active shoppers
-                  </button>
-                  {CATEGORY_OPTIONS.map(cat => (
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-white">
+                    Pick specific recipients
+                    <span className="text-gray-500 font-normal text-xs ml-2">— overrides category filter when any are checked</span>
+                  </p>
+                  {selectedRecipientIds.size > 0 && (
                     <button
-                      key={cat}
-                      onClick={() => setFilterCategory(filterCategory === cat ? "" : cat)}
-                      className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${filterCategory === cat ? "bg-forest-700 border-forest-500 text-white" : "border-gray-700 text-gray-400 hover:border-gray-500"}`}
+                      onClick={() => setSelectedRecipientIds(new Set())}
+                      className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
                     >
-                      {cat}
+                      Clear selection ({selectedRecipientIds.size})
                     </button>
-                  ))}
+                  )}
+                </div>
+                <input
+                  className={`${inputCls} mb-2`}
+                  placeholder="Search by name or email…"
+                  value={recipientSearch}
+                  onChange={e => setRecipientSearch(e.target.value)}
+                />
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-800 divide-y divide-gray-800">
+                  {shoppers
+                    .filter(s => {
+                      if (s.optOut) return false;
+                      const q = recipientSearch.toLowerCase();
+                      if (!q) return true;
+                      return s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
+                    })
+                    .map(s => {
+                      const checked = selectedRecipientIds.has(s.id);
+                      return (
+                        <label
+                          key={s.id}
+                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${checked ? "bg-forest-900/30" : "hover:bg-gray-900"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={ev => {
+                              const next = new Set(selectedRecipientIds);
+                              ev.target.checked ? next.add(s.id) : next.delete(s.id);
+                              setSelectedRecipientIds(next);
+                            }}
+                            className="rounded border-gray-600 accent-forest-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-100 truncate">{s.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{s.email}</p>
+                          </div>
+                          {s.categoryInterests && (
+                            <span className="text-xs text-gray-600 shrink-0">{s.categoryInterests}</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  {shoppers.filter(s => !s.optOut).length === 0 && (
+                    <p className="px-3 py-4 text-sm text-gray-600 text-center">No active shoppers.</p>
+                  )}
                 </div>
               </div>
+
+              {/* Category filter — only applies when no manual selection */}
+              {!hasManualSelection && (
+                <div>
+                  <p className="text-sm font-semibold text-white mb-3">Filter by category interest <span className="text-gray-500 font-normal text-xs">(ignored when specific recipients are selected above)</span></p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setFilterCategory("")}
+                      className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${!filterCategory ? "bg-forest-700 border-forest-500 text-white" : "border-gray-700 text-gray-400 hover:border-gray-500"}`}
+                    >
+                      All active shoppers
+                    </button>
+                    {CATEGORY_OPTIONS.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setFilterCategory(filterCategory === cat ? "" : cat)}
+                        className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${filterCategory === cat ? "bg-forest-700 border-forest-500 text-white" : "border-gray-700 text-gray-400 hover:border-gray-500"}`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Opted-out shoppers</p>
@@ -441,7 +513,7 @@ export function BlastComposer({
         <div className="border-t border-gray-800 px-6 py-4 flex items-center justify-between gap-4">
           <div className="text-sm text-gray-500">
             {eligibleShoppers.length} recipient{eligibleShoppers.length !== 1 ? "s" : ""}
-            {filterCategory ? ` interested in ${filterCategory}` : ""}
+            {hasManualSelection ? " (manually selected)" : filterCategory ? ` interested in ${filterCategory}` : ""}
             {(selectedEstateIds.size + selectedItemIds.size) > 0 && ` · ${selectedEstateIds.size} estate${selectedEstateIds.size !== 1 ? "s" : ""} + ${selectedItemIds.size} item${selectedItemIds.size !== 1 ? "s" : ""} featured`}
           </div>
 
