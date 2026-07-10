@@ -948,12 +948,12 @@ export async function getSoldStorefrontItemsSince(sinceIso: string): Promise<Arr
   const records: Airtable.Record<Airtable.FieldSet>[] = [];
   await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({Status}="Sold", {BuyerEmail}!="", {StripePaymentIntentId}!="", IS_AFTER({CompletedDate}, "${sinceDate}"))`,
+      filterByFormula: `AND({Status}="Sold", {BuyerEmail}!="", {StripePaymentIntentId}!="")`,
       fields: ["BuyerEmail", "BuyerName", "BuyerPhone", "StripePaymentIntentId", "SalePrice", "CompletedDate", "EstateSaleId"],
     })
     .eachPage((page, next) => { records.push(...page); next(); });
   return records
-    .filter(r => r.fields["BuyerEmail"] && r.fields["StripePaymentIntentId"])
+    .filter(r => r.fields["BuyerEmail"] && r.fields["StripePaymentIntentId"] && toStr(r.fields["CompletedDate"]) >= sinceDate)
     .map(r => {
       const f = r.fields;
       return {
