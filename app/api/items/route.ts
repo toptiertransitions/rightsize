@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, getRoutingRules, getAllLocalVendors, applyRoutingRules } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
@@ -93,12 +93,7 @@ export async function POST(req: NextRequest) {
       ? (isNonTTT && NON_TTT_SHARE[route] !== undefined ? NON_TTT_SHARE[route] : ROUTE_CLIENT_SHARE[route])
       : undefined;
 
-    // Fetch barcode + routing rules + vendors in parallel
-    const [barcodeNumber, routingRules, localVendors] = await Promise.all([
-      getNextBarcodeNumber(),
-      getRoutingRules().catch(() => []),
-      getAllLocalVendors().catch(() => []),
-    ]);
+    const barcodeNumber = await getNextBarcodeNumber();
 
     const item = await createItem({
       tenantId,
@@ -135,39 +130,7 @@ export async function POST(req: NextRequest) {
       weightOunces: body.weightOunces != null ? Number(body.weightOunces) : undefined,
     });
 
-    // Auto-apply routing rules — rules always override the AI-suggested route
-    let finalItem = item;
-    try {
-      const activeRules = routingRules.filter(r => r.isActive);
-      if (activeRules.length > 0) {
-        const projectZip = itemTenant?.zip ?? "";
-        const assignments = applyRoutingRules([item], localVendors, activeRules, projectZip);
-        if (assignments.length > 0) {
-          const { primaryRoute: ruleRoute, vendorId } = assignments[0];
-          const ruleAutoShare = isNonTTT && NON_TTT_SHARE[ruleRoute] !== undefined
-            ? NON_TTT_SHARE[ruleRoute]
-            : ROUTE_CLIENT_SHARE[ruleRoute];
-          const routeUpdates: Record<string, unknown> = { primaryRoute: ruleRoute };
-          if (vendorId) {
-            routeUpdates.assignedVendorId = vendorId;
-            routeUpdates.vendorDecision = "Pending";
-          }
-          if (ruleAutoShare !== undefined) routeUpdates.clientSharePercent = ruleAutoShare;
-          await updateItem(item.id, routeUpdates as never);
-          finalItem = {
-            ...item,
-            primaryRoute: ruleRoute,
-            ...(vendorId ? { assignedVendorId: vendorId, vendorDecision: "Pending" as const } : {}),
-            ...(ruleAutoShare !== undefined ? { clientSharePercent: ruleAutoShare } : {}),
-          };
-        }
-      }
-    } catch (e) {
-      // Non-fatal — item saved with AI-suggested route if routing fails
-      console.error("Auto-routing on create failed:", e instanceof Error ? e.message : e);
-    }
-
-    return NextResponse.json({ item: finalItem });
+    return NextResponse.json({ item });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("createItem failed:", msg);
