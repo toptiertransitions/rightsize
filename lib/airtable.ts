@@ -5495,12 +5495,17 @@ export async function upsertShopperFromPurchase(data: {
 }): Promise<import("./types").EstateSaleShopper> {
   const existing = await getShopperByEmail(data.email);
   if (existing) {
+    // Only increment purchaseCount when the date is different from the last known
+    // purchase date — items from the same cart share the same date, so this
+    // correctly counts checkouts rather than individual items.
+    const isNewTransaction = !existing.lastPurchaseDate ||
+      existing.lastPurchaseDate.slice(0, 10) !== data.purchaseDate.slice(0, 10);
     return updateShopper(existing.id, {
       name: existing.name || data.name,
       phone: existing.phone || data.phone,
       zip: existing.zip || data.zip,
       city: existing.city || data.city,
-      purchaseCount: existing.purchaseCount + 1,
+      purchaseCount: isNewTransaction ? existing.purchaseCount + 1 : existing.purchaseCount,
       totalSpend: Math.round((existing.totalSpend + data.purchaseAmount) * 100) / 100,
       firstPurchaseDate: existing.firstPurchaseDate || data.purchaseDate,
       lastPurchaseDate: data.purchaseDate,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, updateItem, createItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer } from "@/lib/airtable";
+import { getItemById, updateItem, createItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer, upsertShopperFromPurchase } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -144,6 +144,20 @@ async function attemptRecordSale(data: {
     });
   } catch (e) {
     console.error("[storefront/sale] createStorefrontBuyer failed (non-fatal):", e);
+  }
+
+  // Sync shopper CRM record — create on first purchase, update spend/count on repeat
+  try {
+    await upsertShopperFromPurchase({
+      name: data.buyerName,
+      email: data.buyerEmail.toLowerCase().trim(),
+      phone: data.buyerPhone,
+      source: estateSaleId ? "Online Estate Sale" : "Online Catalog",
+      purchaseAmount: data.salePrice,
+      purchaseDate: saleDate,
+    });
+  } catch (e) {
+    console.error("[storefront/sale] upsertShopperFromPurchase failed (non-fatal):", e);
   }
 
   return { estateSlug, estateSaleId, estateName };
