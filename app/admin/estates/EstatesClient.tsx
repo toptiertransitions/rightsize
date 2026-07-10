@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant, EstateSaleShopper, EstateSaleShopperSource } from "@/lib/types";
+import { BlastComposer } from "./BlastComposer";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
 // Convert 24h "HH:mm" (from <input type="time">) to "H:MM AM/PM" for storage.
@@ -780,7 +781,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
 
     {/* Shoppers CRM */}
     <div className="mt-12">
-      <ShoppersSection />
+      <ShoppersSection estates={estates} />
     </div>
     </div>
   );
@@ -799,7 +800,7 @@ const EMPTY_SHOPPER_FORM = {
   optOut: false,
 };
 
-function ShoppersSection() {
+function ShoppersSection({ estates }: { estates: Estate[] }) {
   const [shoppers, setShoppers] = useState<EstateSaleShopper[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -812,6 +813,7 @@ function ShoppersSection() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ created: string[]; updated: string[]; errors: string[]; totalBuyerRows: number } | null>(null);
+  const [showBlast, setShowBlast] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/estate-shoppers")
@@ -942,19 +944,33 @@ function ShoppersSection() {
 
   return (
     <div>
+      {showBlast && (
+        <BlastComposer
+          shoppers={shoppers}
+          estates={estates}
+          onClose={() => setShowBlast(false)}
+        />
+      )}
       <div className="border-t border-gray-800 pt-10">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-white">Estate Sale Shoppers</h2>
             <p className="text-gray-400 text-sm mt-0.5">{shoppers.length} shoppers · {activeCount} active · {fmt(totalSpend)} total spend</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={runBackfill}
               disabled={backfilling}
               className="px-4 py-2 bg-gray-700 text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors border border-gray-600"
             >
               {backfilling ? "Syncing…" : "Sync ProFoundFinds (90d)"}
+            </button>
+            <button
+              onClick={() => setShowBlast(true)}
+              disabled={shoppers.filter(s => !s.optOut).length === 0}
+              className="px-4 py-2 bg-amber-700 text-amber-100 text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+            >
+              Send Email Blast
             </button>
             <button
               onClick={openCreate}
