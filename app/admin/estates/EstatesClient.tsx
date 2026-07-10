@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant, EstateSaleShopper, EstateSaleShopperSource } from "@/lib/types";
 import { BlastComposer } from "./BlastComposer";
 import { computeDutchPrice } from "@/lib/estate-utils";
@@ -814,6 +814,11 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ created: string[]; updated: string[]; errors: string[]; totalBuyerRows: number } | null>(null);
   const [showBlast, setShowBlast] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const [csvRows, setCsvRows] = useState<{ firstName: string; lastName: string; email: string }[] | null>(null);
+  const [csvError, setCsvError] = useState("");
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvResult, setCsvResult] = useState<{ created: string[]; skipped: string[]; errors: string[] } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/estate-shoppers")
@@ -840,6 +845,59 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
       setBackfillResult({ created: [], updated: [], errors: ["Request failed"], totalBuyerRows: 0 });
     } finally {
       setBackfilling(false);
+    }
+  };
+
+  const handleCsvFile = (file: File) => {
+    setCsvError("");
+    setCsvResult(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = (e.target?.result as string) || "";
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { setCsvError("CSV has no data rows."); return; }
+      // Detect header row — accept any reasonable column order
+      const header = lines[0].split(",").map(h => h.trim().replace(/^["']|["']$/g, "").toLowerCase());
+      const firstIdx = header.findIndex(h => h.includes("first"));
+      const lastIdx = header.findIndex(h => h.includes("last"));
+      const emailIdx = header.findIndex(h => h.includes("email"));
+      if (emailIdx === -1) { setCsvError("CSV must have an Email column."); return; }
+      const rows: { firstName: string; lastName: string; email: string }[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",").map(c => c.trim().replace(/^["']|["']$/g, ""));
+        const email = emailIdx !== -1 ? cols[emailIdx] : "";
+        if (!email || !email.includes("@")) continue;
+        rows.push({
+          firstName: firstIdx !== -1 ? cols[firstIdx] ?? "" : "",
+          lastName: lastIdx !== -1 ? cols[lastIdx] ?? "" : "",
+          email: email.toLowerCase(),
+        });
+      }
+      if (rows.length === 0) { setCsvError("No valid email addresses found in CSV."); return; }
+      setCsvRows(rows);
+    };
+    reader.readAsText(file);
+  };
+
+  const runCsvImport = async () => {
+    if (!csvRows?.length) return;
+    setCsvImporting(true);
+    setCsvResult(null);
+    try {
+      const res = await fetch("/api/admin/estate-shoppers-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: csvRows }),
+      });
+      const data = await res.json();
+      setCsvResult(data);
+      setCsvRows(null);
+      if (data.created?.length > 0) reload();
+    } catch {
+      setCsvError("Import request failed.");
+    } finally {
+      setCsvImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = "";
     }
   };
 
@@ -966,6 +1024,19 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
               {backfilling ? "Syncing…" : "Sync ProFoundFinds (90d)"}
             </button>
             <button
+              onClick={() => { setCsvRows(null); setCsvResult(null); setCsvError(""); csvInputRef.current?.click(); }}
+              className="px-4 py-2 bg-gray-700 text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-600 transition-colors border border-gray-600"
+            >
+              Import CSV
+            </button>
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); }}
+            />
+            <button
               onClick={() => setShowBlast(true)}
               disabled={shoppers.filter(s => !s.optOut).length === 0}
               className="px-4 py-2 bg-amber-700 text-amber-100 text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
@@ -980,6 +1051,46 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
             </button>
           </div>
         </div>
+
+        {/* CSV preview / result */}
+        {csvError && (
+          <div className="mb-4 px-4 py-3 bg-red-900/30 border border-red-700 rounded-xl text-sm text-red-300">{csvError}</div>
+        )}
+        {csvRows && (
+          <div className="mb-6 bg-gray-900 border border-gray-700 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-white">{csvRows.length} contact{csvRows.length !== 1 ? "s" : ""} ready to import</p>
+              <button onClick={() => { setCsvRows(null); if (csvInputRef.current) csvInputRef.current.value = ""; }} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Cancel</button>
+            </div>
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-800 divide-y divide-gray-800 mb-3">
+              {csvRows.map((r, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <span className="text-gray-200">{[r.firstName, r.lastName].filter(Boolean).join(" ") || "(no name)"}</span>
+                  <span className="text-gray-500">{r.email}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mb-3">Existing shoppers with matching emails will be skipped. Source will be set to &quot;Manual&quot;.</p>
+            <button
+              onClick={runCsvImport}
+              disabled={csvImporting}
+              className="px-4 py-2 bg-forest-600 text-white text-sm font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
+            >
+              {csvImporting ? "Importing…" : `Import ${csvRows.length} contact${csvRows.length !== 1 ? "s" : ""}`}
+            </button>
+          </div>
+        )}
+        {csvResult && (
+          <div className="mb-6 bg-gray-900 border border-gray-700 rounded-xl p-4 text-sm">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-semibold text-white">Import complete</p>
+              <button onClick={() => setCsvResult(null)} className="text-xs text-gray-500 hover:text-gray-300">Dismiss</button>
+            </div>
+            {csvResult.created.length > 0 && <p className="text-green-400">+ {csvResult.created.length} created</p>}
+            {csvResult.skipped.length > 0 && <p className="text-gray-400">{csvResult.skipped.length} skipped (already exist)</p>}
+            {csvResult.errors.length > 0 && <p className="text-red-400">{csvResult.errors.length} errors</p>}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
