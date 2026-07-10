@@ -810,6 +810,8 @@ function ShoppersSection() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ created: string[]; updated: string[]; errors: string[]; totalBuyerRows: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/estate-shoppers")
@@ -823,6 +825,21 @@ function ShoppersSection() {
     fetch("/api/admin/estate-shoppers")
       .then(r => r.json())
       .then(d => setShoppers(d.shoppers ?? []));
+
+  const runBackfill = async () => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const r = await fetch("/api/admin/estate-shoppers-backfill", { method: "POST" });
+      const data = await r.json();
+      setBackfillResult(data);
+      if (data.created?.length > 0 || data.updated?.length > 0) reload();
+    } catch {
+      setBackfillResult({ created: [], updated: [], errors: ["Request failed"], totalBuyerRows: 0 });
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const filtered = shoppers.filter(s => {
     if (!showOptedOut && s.optOut) return false;
@@ -931,12 +948,21 @@ function ShoppersSection() {
             <h2 className="text-xl font-bold text-white">Estate Sale Shoppers</h2>
             <p className="text-gray-400 text-sm mt-0.5">{shoppers.length} shoppers · {activeCount} active · {fmt(totalSpend)} total spend</p>
           </div>
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors"
-          >
-            + Add Shopper
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={runBackfill}
+              disabled={backfilling}
+              className="px-4 py-2 bg-gray-700 text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors border border-gray-600"
+            >
+              {backfilling ? "Syncing…" : "Sync ProFoundFinds (90d)"}
+            </button>
+            <button
+              onClick={openCreate}
+              className="px-4 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors"
+            >
+              + Add Shopper
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -953,6 +979,37 @@ function ShoppersSection() {
             </div>
           ))}
         </div>
+
+        {/* Backfill result */}
+        {backfillResult && (
+          <div className="mb-5 rounded-xl bg-gray-900 border border-gray-700 p-4 text-sm space-y-2">
+            <div className="font-semibold text-gray-200">
+              Sync complete — {backfillResult.totalBuyerRows} purchase row(s) scanned
+            </div>
+            {backfillResult.created.length > 0 && (
+              <div>
+                <div className="text-green-400 font-medium mb-1">New shoppers ({backfillResult.created.length})</div>
+                <ul className="text-gray-400 space-y-0.5 text-xs">{backfillResult.created.map((s, i) => <li key={i}>+ {s}</li>)}</ul>
+              </div>
+            )}
+            {backfillResult.updated.length > 0 && (
+              <div>
+                <div className="text-blue-400 font-medium mb-1">Updated ({backfillResult.updated.length})</div>
+                <ul className="text-gray-400 space-y-0.5 text-xs">{backfillResult.updated.map((s, i) => <li key={i}>↑ {s}</li>)}</ul>
+              </div>
+            )}
+            {backfillResult.errors.length > 0 && (
+              <div>
+                <div className="text-red-400 font-medium mb-1">Errors ({backfillResult.errors.length})</div>
+                <ul className="text-gray-400 space-y-0.5 text-xs">{backfillResult.errors.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              </div>
+            )}
+            {backfillResult.created.length === 0 && backfillResult.updated.length === 0 && backfillResult.errors.length === 0 && (
+              <div className="text-gray-400">No new purchases found in the last 90 days.</div>
+            )}
+            <button onClick={() => setBackfillResult(null)} className="text-xs text-gray-500 hover:text-gray-300">Dismiss</button>
+          </div>
+        )}
 
         <div className="flex gap-4 mb-4 flex-wrap items-center">
           <input
