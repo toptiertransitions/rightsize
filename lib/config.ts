@@ -86,6 +86,7 @@ export const AIRTABLE_TABLES = {
   VENDOR_OUTREACH: process.env.AIRTABLE_VENDOR_OUTREACH_TABLE || "VendorOutreach",
   PROJECT_TASKS: process.env.AIRTABLE_PROJECT_TASKS_TABLE || "ProjectTasks",
   DISCOUNT_CODES: process.env.AIRTABLE_DISCOUNT_CODES_TABLE || "DiscountCodes",
+  ESTATE_SALE_SHOPPERS: process.env.AIRTABLE_ESTATE_SALE_SHOPPERS_TABLE || "EstateSaleShoppers",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

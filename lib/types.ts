@@ -396,6 +396,25 @@ export interface StorefrontBuyer {
 // ─── Estate Sale ──────────────────────────────────────────────────────────────
 export type EstateStatus = "Upcoming" | "Active" | "Closed";
 export type EstateSaleType = "Online" | "In-Person";
+export type EstateSaleShopperSource = "Online Estate Sale" | "Online Catalog" | "In-Person" | "Manual";
+
+export interface EstateSaleShopper {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  zip?: string;
+  city?: string;
+  source: EstateSaleShopperSource;
+  purchaseCount: number;
+  totalSpend: number;
+  firstPurchaseDate?: string;
+  lastPurchaseDate?: string;
+  categoryInterests?: string;
+  notes?: string;
+  optOut: boolean;
+  createdAt: string;
+}
 
 export interface Estate {
   id: string;

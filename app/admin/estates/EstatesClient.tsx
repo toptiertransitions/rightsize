@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { Estate, EstateStatus, EstateSaleType, Tenant } from "@/lib/types";
+import { useState, useEffect } from "react";
+import type { Estate, EstateStatus, EstateSaleType, Tenant, EstateSaleShopper, EstateSaleShopperSource } from "@/lib/types";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
 // Convert 24h "HH:mm" (from <input type="time">) to "H:MM AM/PM" for storage.
@@ -275,6 +275,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
   const showForm = creating || !!editing;
 
   return (
+    <div>
     <div className="flex gap-8">
       {/* Estate List */}
       <div className="flex-1 min-w-0">
@@ -775,6 +776,377 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
           </div>
         </div>
       )}
+    </div>
+
+    {/* Shoppers CRM */}
+    <div className="mt-12">
+      <ShoppersSection />
+    </div>
+    </div>
+  );
+}
+
+// ─── Estate Sale Shoppers Mini-CRM ────────────────────────────────────────────
+
+const CATEGORY_OPTIONS = ["Furniture", "Jewelry", "Art", "Vintage", "Décor", "Other"];
+const SOURCE_OPTIONS: EstateSaleShopperSource[] = ["Online Estate Sale", "Online Catalog", "In-Person", "Manual"];
+
+const EMPTY_SHOPPER_FORM = {
+  name: "", email: "", phone: "", zip: "", city: "",
+  source: "Manual" as EstateSaleShopperSource,
+  categoryInterests: "",
+  notes: "",
+  optOut: false,
+};
+
+function ShoppersSection() {
+  const [shoppers, setShoppers] = useState<EstateSaleShopper[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [showOptedOut, setShowOptedOut] = useState(false);
+  const [editing, setEditing] = useState<EstateSaleShopper | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState(EMPTY_SHOPPER_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/estate-shoppers")
+      .then(r => r.json())
+      .then(d => setShoppers(d.shoppers ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const reload = () =>
+    fetch("/api/admin/estate-shoppers")
+      .then(r => r.json())
+      .then(d => setShoppers(d.shoppers ?? []));
+
+  const filtered = shoppers.filter(s => {
+    if (!showOptedOut && s.optOut) return false;
+    const q = search.toLowerCase();
+    if (!q) return true;
+    return s.name.toLowerCase().includes(q) ||
+      s.email.toLowerCase().includes(q) ||
+      (s.city ?? "").toLowerCase().includes(q) ||
+      (s.zip ?? "").toLowerCase().includes(q);
+  });
+
+  const totalSpend = shoppers.filter(s => !s.optOut).reduce((sum, s) => sum + s.totalSpend, 0);
+  const activeCount = shoppers.filter(s => !s.optOut).length;
+  const optedOutCount = shoppers.filter(s => s.optOut).length;
+
+  function openCreate() {
+    setForm(EMPTY_SHOPPER_FORM);
+    setEditing(null);
+    setCreating(true);
+    setError("");
+  }
+
+  function openEdit(s: EstateSaleShopper) {
+    setForm({
+      name: s.name,
+      email: s.email,
+      phone: s.phone ?? "",
+      zip: s.zip ?? "",
+      city: s.city ?? "",
+      source: s.source,
+      categoryInterests: s.categoryInterests ?? "",
+      notes: s.notes ?? "",
+      optOut: s.optOut,
+    });
+    setEditing(s);
+    setCreating(false);
+    setError("");
+  }
+
+  function closeForm() {
+    setEditing(null);
+    setCreating(false);
+    setError("");
+  }
+
+  async function handleSave() {
+    if (!form.name.trim() || !form.email.trim()) {
+      setError("Name and email are required");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      if (creating) {
+        const res = await fetch("/api/admin/estate-shoppers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Save failed");
+        const { shopper } = await res.json();
+        setShoppers(prev => [shopper, ...prev]);
+      } else if (editing) {
+        const res = await fetch("/api/admin/estate-shoppers", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editing.id, ...form }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Save failed");
+        const { shopper } = await res.json();
+        setShoppers(prev => prev.map(s => s.id === shopper.id ? shopper : s));
+      }
+      closeForm();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/admin/estate-shoppers?id=${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setShoppers(prev => prev.filter(s => s.id !== id));
+      setDeleteConfirm(null);
+      closeForm();
+    }
+  }
+
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+  const showForm = creating || !!editing;
+
+  const interests = form.categoryInterests ? form.categoryInterests.split(",").map(s => s.trim()).filter(Boolean) : [];
+  function toggleInterest(cat: string) {
+    const set = new Set(interests);
+    if (set.has(cat)) set.delete(cat); else set.add(cat);
+    setForm(f => ({ ...f, categoryInterests: Array.from(set).join(", ") }));
+  }
+
+  return (
+    <div>
+      <div className="border-t border-gray-800 pt-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-white">Estate Sale Shoppers</h2>
+            <p className="text-gray-400 text-sm mt-0.5">{shoppers.length} shoppers · {activeCount} active · {fmt(totalSpend)} total spend</p>
+          </div>
+          <button
+            onClick={openCreate}
+            className="px-4 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors"
+          >
+            + Add Shopper
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: "Total Shoppers", value: shoppers.length },
+            { label: "Active (not opted out)", value: activeCount },
+            { label: "Opted Out", value: optedOutCount },
+            { label: "Total Spend (active)", value: fmt(totalSpend) },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+              <div className="text-xl font-bold text-white">{value}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-4 mb-4 flex-wrap items-center">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, email, city, zip…"
+            className="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-800 text-gray-200 placeholder-gray-600 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+          />
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showOptedOut}
+              onChange={e => setShowOptedOut(e.target.checked)}
+              className="rounded border-gray-600"
+            />
+            Show opted-out
+          </label>
+        </div>
+
+        <div className="flex gap-6">
+          {/* Table */}
+          <div className="flex-1 min-w-0">
+            {loading ? (
+              <p className="text-gray-500 text-sm">Loading…</p>
+            ) : filtered.length === 0 ? (
+              <div className="rounded-xl bg-gray-900 border border-gray-800 px-6 py-10 text-center text-gray-500 text-sm">
+                {shoppers.length === 0 ? "No shoppers yet. Add one or sync from ProFoundFinds orders." : "No shoppers match your search."}
+              </div>
+            ) : (
+              <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-800">
+                    <tr className="text-xs text-gray-500 text-left">
+                      <th className="px-4 py-3 font-medium">Name / Email</th>
+                      <th className="px-4 py-3 font-medium">Location</th>
+                      <th className="px-4 py-3 font-medium">Source</th>
+                      <th className="px-4 py-3 font-medium text-right">Purchases</th>
+                      <th className="px-4 py-3 font-medium text-right">Spend</th>
+                      <th className="px-4 py-3 font-medium">Last Purchase</th>
+                      <th className="px-4 py-3 font-medium">Interests</th>
+                      <th className="px-4 py-3 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    {filtered.map(s => (
+                      <tr
+                        key={s.id}
+                        onClick={() => openEdit(s)}
+                        className={`cursor-pointer hover:bg-gray-800/50 transition-colors ${s.optOut ? "opacity-50" : ""} ${editing?.id === s.id ? "bg-gray-800" : ""}`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-100">{s.name}</div>
+                          <div className="text-xs text-gray-500">{s.email}</div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">
+                          {[s.city, s.zip].filter(Boolean).join(" ") || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs bg-gray-800 border border-gray-700 text-gray-400 px-2 py-0.5 rounded-full">{s.source}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-300">{s.purchaseCount}</td>
+                        <td className="px-4 py-3 text-right text-gray-300">{fmt(s.totalSpend)}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400">{fmtDate(s.lastPurchaseDate)}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px] truncate">{s.categoryInterests || "—"}</td>
+                        <td className="px-4 py-3 text-right">
+                          {s.optOut && <span className="text-xs text-red-500 font-medium">Opted out</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Form Panel */}
+          {showForm && (
+            <div className="w-[360px] flex-shrink-0">
+              <div className="sticky top-4 bg-gray-900 border border-gray-700 rounded-2xl p-5 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-semibold text-white">{creating ? "Add Shopper" : "Edit Shopper"}</h3>
+                  <button onClick={closeForm} className="text-gray-500 hover:text-gray-300 text-lg leading-none">&times;</button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Name *</label>
+                    <input className={inputCls} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Email *</label>
+                    <input className={inputCls} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Phone</label>
+                      <input className={inputCls} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 555-5555" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">City</label>
+                      <input className={inputCls} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Denver" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Zip</label>
+                      <input className={inputCls} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="80202" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Source</label>
+                      <select className={inputCls} value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value as EstateSaleShopperSource }))}>
+                        {SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Category Interests</label>
+                    <div className="flex flex-wrap gap-2">
+                      {CATEGORY_OPTIONS.map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => toggleInterest(cat)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            interests.includes(cat)
+                              ? "bg-forest-700 border-forest-500 text-forest-100"
+                              : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Notes</label>
+                    <textarea className={inputCls} rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Staff notes…" />
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={form.optOut}
+                      onChange={e => setForm(f => ({ ...f, optOut: e.target.checked }))}
+                      className="rounded border-gray-600"
+                    />
+                    <span className="text-sm text-gray-300">Opted out of communications</span>
+                  </label>
+
+                  {editing && (
+                    <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-500 space-y-0.5">
+                      <div>Purchases: {editing.purchaseCount} · Spend: {fmt(editing.totalSpend)}</div>
+                      <div>First: {fmtDate(editing.firstPurchaseDate)} · Last: {fmtDate(editing.lastPurchaseDate)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex-1 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? "Saving…" : creating ? "Add Shopper" : "Save Changes"}
+                  </button>
+                  <button onClick={closeForm} className="px-3 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg hover:bg-gray-700 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+
+                {editing && (
+                  <div className="mt-3">
+                    {deleteConfirm === editing.id ? (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleDelete(editing.id)} className="flex-1 py-2 bg-red-700 text-white text-xs font-medium rounded-lg hover:bg-red-600">Confirm Delete</button>
+                        <button onClick={() => setDeleteConfirm(null)} className="px-3 py-2 bg-gray-800 text-gray-400 text-xs rounded-lg hover:bg-gray-700">Cancel</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(editing.id)} className="w-full py-2 text-xs text-red-500 hover:text-red-400 transition-colors">
+                        Delete shopper
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -5304,6 +5304,156 @@ export async function getItemsForEstateSale(estateId: string): Promise<Item[]> {
   return records.map(mapItem);
 }
 
+// ─── Estate Sale Shoppers ─────────────────────────────────────────────────────
+function shopperFetch(path: string, options?: RequestInit) {
+  return crmFetch(AIRTABLE_TABLES.ESTATE_SALE_SHOPPERS, path, options);
+}
+
+function mapShopper(rec: AirtableRecord): import("./types").EstateSaleShopper {
+  const f = rec.fields;
+  return {
+    id: rec.id,
+    name: toStr(f["Name"]),
+    email: toStr(f["Email"]),
+    phone: toStr(f["Phone"]) || undefined,
+    zip: toStr(f["Zip"]) || undefined,
+    city: toStr(f["City"]) || undefined,
+    source: (toStr(f["Source"]) || "Manual") as import("./types").EstateSaleShopperSource,
+    purchaseCount: f["PurchaseCount"] != null ? Number(f["PurchaseCount"]) : 0,
+    totalSpend: f["TotalSpend"] != null ? Number(f["TotalSpend"]) : 0,
+    firstPurchaseDate: toStr(f["FirstPurchaseDate"]) || undefined,
+    lastPurchaseDate: toStr(f["LastPurchaseDate"]) || undefined,
+    categoryInterests: toStr(f["CategoryInterests"]) || undefined,
+    notes: toStr(f["Notes"]) || undefined,
+    optOut: !!f["OptOut"],
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getAllShoppers(): Promise<import("./types").EstateSaleShopper[]> {
+  const all: import("./types").EstateSaleShopper[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=CreatedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await shopperFetch(qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapShopper));
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+export async function getShopperByEmail(email: string): Promise<import("./types").EstateSaleShopper | null> {
+  const formula = encodeURIComponent(`LOWER({Email}) = LOWER("${email.replace(/"/g, '\\"')}")`);
+  const res = await shopperFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.records?.length ? mapShopper(data.records[0]) : null;
+}
+
+export async function createShopper(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  zip?: string;
+  city?: string;
+  source: import("./types").EstateSaleShopperSource;
+  purchaseCount?: number;
+  totalSpend?: number;
+  firstPurchaseDate?: string;
+  lastPurchaseDate?: string;
+  categoryInterests?: string;
+  notes?: string;
+  optOut?: boolean;
+}): Promise<import("./types").EstateSaleShopper> {
+  const res = await shopperFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        Name: data.name,
+        Email: data.email,
+        Phone: data.phone || "",
+        Zip: data.zip || "",
+        City: data.city || "",
+        Source: data.source,
+        PurchaseCount: data.purchaseCount ?? 0,
+        TotalSpend: data.totalSpend ?? 0,
+        FirstPurchaseDate: data.firstPurchaseDate || "",
+        LastPurchaseDate: data.lastPurchaseDate || "",
+        CategoryInterests: data.categoryInterests || "",
+        Notes: data.notes || "",
+        OptOut: data.optOut ?? false,
+        CreatedAt: new Date().toISOString(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Failed to create shopper: ${await res.text()}`);
+  return mapShopper(await res.json());
+}
+
+export async function updateShopper(
+  id: string,
+  data: Partial<Omit<import("./types").EstateSaleShopper, "id" | "createdAt">>
+): Promise<import("./types").EstateSaleShopper> {
+  const fields: Record<string, unknown> = {};
+  if (data.name !== undefined)              fields["Name"] = data.name;
+  if (data.email !== undefined)             fields["Email"] = data.email;
+  if (data.phone !== undefined)             fields["Phone"] = data.phone || "";
+  if (data.zip !== undefined)               fields["Zip"] = data.zip || "";
+  if (data.city !== undefined)              fields["City"] = data.city || "";
+  if (data.source !== undefined)            fields["Source"] = data.source;
+  if (data.purchaseCount !== undefined)     fields["PurchaseCount"] = data.purchaseCount;
+  if (data.totalSpend !== undefined)        fields["TotalSpend"] = data.totalSpend;
+  if (data.firstPurchaseDate !== undefined) fields["FirstPurchaseDate"] = data.firstPurchaseDate || "";
+  if (data.lastPurchaseDate !== undefined)  fields["LastPurchaseDate"] = data.lastPurchaseDate || "";
+  if (data.categoryInterests !== undefined) fields["CategoryInterests"] = data.categoryInterests || "";
+  if (data.notes !== undefined)             fields["Notes"] = data.notes || "";
+  if (data.optOut !== undefined)            fields["OptOut"] = data.optOut;
+  const res = await shopperFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(`Failed to update shopper: ${await res.text()}`);
+  return mapShopper(await res.json());
+}
+
+export async function upsertShopperFromPurchase(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  zip?: string;
+  city?: string;
+  source: import("./types").EstateSaleShopperSource;
+  purchaseAmount: number;
+  purchaseDate: string;
+}): Promise<import("./types").EstateSaleShopper> {
+  const existing = await getShopperByEmail(data.email);
+  if (existing) {
+    return updateShopper(existing.id, {
+      name: existing.name || data.name,
+      phone: existing.phone || data.phone,
+      zip: existing.zip || data.zip,
+      city: existing.city || data.city,
+      purchaseCount: existing.purchaseCount + 1,
+      totalSpend: Math.round((existing.totalSpend + data.purchaseAmount) * 100) / 100,
+      firstPurchaseDate: existing.firstPurchaseDate || data.purchaseDate,
+      lastPurchaseDate: data.purchaseDate,
+    });
+  }
+  return createShopper({
+    ...data,
+    purchaseCount: 1,
+    totalSpend: data.purchaseAmount,
+    firstPurchaseDate: data.purchaseDate,
+    lastPurchaseDate: data.purchaseDate,
+  });
+}
+
+export async function deleteShopper(id: string): Promise<void> {
+  await shopperFetch(`/${id}`, { method: "DELETE" });
+}
+
 // ─── Outreach Templates ───────────────────────────────────────────────────────
 function mapOutreachTemplate(record: AirtableRecord): OutreachTemplate {
   const f = record.fields;
