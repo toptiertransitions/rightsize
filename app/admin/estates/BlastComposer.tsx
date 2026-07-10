@@ -49,6 +49,8 @@ export function BlastComposer({
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
   const [sendError, setSendError] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   // Preview
   const [preview, setPreview] = useState<string | null>(null);
@@ -129,6 +131,41 @@ export function BlastComposer({
       // ignore preview failure
     } finally {
       setPreviewing(false);
+    }
+  }
+
+  async function handleTestSend() {
+    if (!subject.trim() || !bodyText.trim()) {
+      setSendError("Subject and body are required.");
+      return;
+    }
+    setTestSending(true);
+    setTestResult(null);
+    setSendError("");
+    try {
+      const res = await fetch("/api/admin/estate-blast/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject,
+          bodyText,
+          featuredEstates: featuredEstates.map(e => ({
+            id: e.id, name: e.name, slug: e.slug,
+            saleStartDate: e.saleStartDate, description: e.description, status: e.status,
+          })),
+          featuredItems: featuredItems.map(i => ({
+            id: i.id, itemName: i.itemName, photoUrl: i.photoUrl,
+            valueMid: i.valueMid, onlineListingSlug: i.onlineListingSlug, category: i.category,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Test send failed");
+      setTestResult(data.sentTo);
+    } catch (e) {
+      setSendError(String(e));
+    } finally {
+      setTestSending(false);
     }
   }
 
@@ -408,24 +445,36 @@ export function BlastComposer({
             {(selectedEstateIds.size + selectedItemIds.size) > 0 && ` · ${selectedEstateIds.size} estate${selectedEstateIds.size !== 1 ? "s" : ""} + ${selectedItemIds.size} item${selectedItemIds.size !== 1 ? "s" : ""} featured`}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
             {sendResult && (
               <span className="text-sm text-green-400 font-medium">
                 Sent {sendResult.sent}/{sendResult.total}{sendResult.failed > 0 ? ` · ${sendResult.failed} failed` : ""}
               </span>
+            )}
+            {testResult && (
+              <span className="text-sm text-blue-400 font-medium">Test sent to {testResult}</span>
             )}
             {sendError && <span className="text-sm text-red-400">{sendError}</span>}
             <button onClick={onClose} className="px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg hover:bg-gray-700 transition-colors">
               {sendResult ? "Close" : "Cancel"}
             </button>
             {!sendResult && (
-              <button
-                onClick={handleSend}
-                disabled={sending || !subject.trim() || !bodyText.trim() || eligibleShoppers.length === 0}
-                className="px-5 py-2 bg-forest-600 text-white text-sm font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
-              >
-                {sending ? `Sending…` : `Send to ${eligibleShoppers.length} shopper${eligibleShoppers.length !== 1 ? "s" : ""}`}
-              </button>
+              <>
+                <button
+                  onClick={handleTestSend}
+                  disabled={testSending || !subject.trim() || !bodyText.trim()}
+                  className="px-4 py-2 bg-gray-700 border border-gray-600 text-gray-200 text-sm rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                >
+                  {testSending ? "Sending…" : "Send test to me"}
+                </button>
+                <button
+                  onClick={handleSend}
+                  disabled={sending || !subject.trim() || !bodyText.trim() || eligibleShoppers.length === 0}
+                  className="px-5 py-2 bg-forest-600 text-white text-sm font-semibold rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {sending ? `Sending…` : `Send to ${eligibleShoppers.length} shopper${eligibleShoppers.length !== 1 ? "s" : ""}`}
+                </button>
+              </>
             )}
           </div>
         </div>

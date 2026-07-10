@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getAllStorefrontBuyersSince, getAllShoppers, createShopper, updateShopper } from "@/lib/airtable";
+import { getSystemRole, getSoldStorefrontItemsSince, getAllShoppers, createShopper, updateShopper } from "@/lib/airtable";
 import type { EstateSaleShopperSource } from "@/lib/types";
 
 export async function POST() {
@@ -11,46 +11,51 @@ export async function POST() {
 
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [buyers, existingShoppers] = await Promise.all([
-    getAllStorefrontBuyersSince(since),
+  const [items, existingShoppers] = await Promise.all([
+    getSoldStorefrontItemsSince(since),
     getAllShoppers(),
   ]);
 
-  // Group StorefrontBuyer rows by lowercased email
+  // Group sold items by buyer email, then count unique payment intents (= checkouts/transactions)
   const byEmail = new Map<string, {
     name: string;
     email: string;
     phone?: string;
     source: EstateSaleShopperSource;
     totalSpend: number;
-    count: number;
+    transactionCount: number;
+    seenIntents: Set<string>;
     firstDate: string;
     lastDate: string;
   }>();
 
-  for (const b of buyers) {
-    if (!b.buyerEmail) continue;
-    const key = b.buyerEmail.toLowerCase().trim();
-    const source: EstateSaleShopperSource = b.estateSaleId ? "Online Estate Sale" : "Online Catalog";
+  for (const item of items) {
+    if (!item.buyerEmail) continue;
+    const key = item.buyerEmail;
+    const source: EstateSaleShopperSource = item.estateSaleId ? "Online Estate Sale" : "Online Catalog";
     const existing = byEmail.get(key);
     if (existing) {
-      existing.totalSpend = Math.round((existing.totalSpend + b.purchaseAmount) * 100) / 100;
-      existing.count += 1;
-      if (b.createdAt < existing.firstDate) existing.firstDate = b.createdAt;
-      if (b.createdAt > existing.lastDate) existing.lastDate = b.createdAt;
-      if (!existing.phone && b.buyerPhone) existing.phone = b.buyerPhone;
-      // Prefer "Online Estate Sale" over "Online Catalog" if either purchase was an estate sale
+      const isNewIntent = !existing.seenIntents.has(item.stripePaymentIntentId);
+      if (isNewIntent) {
+        existing.seenIntents.add(item.stripePaymentIntentId);
+        existing.transactionCount += 1;
+      }
+      existing.totalSpend = Math.round((existing.totalSpend + item.salePrice) * 100) / 100;
+      if (item.completedDate < existing.firstDate) existing.firstDate = item.completedDate;
+      if (item.completedDate > existing.lastDate) existing.lastDate = item.completedDate;
+      if (!existing.phone && item.buyerPhone) existing.phone = item.buyerPhone;
       if (source === "Online Estate Sale") existing.source = "Online Estate Sale";
     } else {
       byEmail.set(key, {
-        name: b.buyerName,
+        name: item.buyerName,
         email: key,
-        phone: b.buyerPhone,
+        phone: item.buyerPhone,
         source,
-        totalSpend: b.purchaseAmount,
-        count: 1,
-        firstDate: b.createdAt,
-        lastDate: b.createdAt,
+        totalSpend: item.salePrice,
+        transactionCount: 1,
+        seenIntents: new Set([item.stripePaymentIntentId]),
+        firstDate: item.completedDate,
+        lastDate: item.completedDate,
       });
     }
   }
@@ -66,38 +71,32 @@ export async function POST() {
     try {
       const existing = shopperByEmail.get(email);
       if (existing) {
-        // Update only if the backfill data adds new purchase history
-        const newCount = existing.purchaseCount + agg.count;
-        const newSpend = Math.round((existing.totalSpend + agg.totalSpend) * 100) / 100;
-        const firstDate = existing.firstPurchaseDate && existing.firstPurchaseDate < agg.firstDate
-          ? existing.firstPurchaseDate : agg.firstDate;
-        const lastDate = existing.lastPurchaseDate && existing.lastPurchaseDate > agg.lastDate
-          ? existing.lastPurchaseDate : agg.lastDate;
+        // Replace ProFoundFinds-sourced counts (idempotent — safe to re-run)
         await updateShopper(existing.id, {
-          purchaseCount: newCount,
-          totalSpend: newSpend,
-          firstPurchaseDate: firstDate,
-          lastPurchaseDate: lastDate,
+          purchaseCount: agg.transactionCount,
+          totalSpend: agg.totalSpend,
+          firstPurchaseDate: agg.firstDate,
+          lastPurchaseDate: agg.lastDate,
           phone: existing.phone || agg.phone,
         });
-        updated.push(`${agg.name} (${email}) — +${agg.count} purchase(s)`);
+        updated.push(`${agg.name} (${email}) — ${agg.transactionCount} transaction(s), $${agg.totalSpend.toFixed(2)}`);
       } else {
         await createShopper({
           name: agg.name,
           email: agg.email,
           phone: agg.phone,
           source: agg.source,
-          purchaseCount: agg.count,
+          purchaseCount: agg.transactionCount,
           totalSpend: agg.totalSpend,
           firstPurchaseDate: agg.firstDate,
           lastPurchaseDate: agg.lastDate,
         });
-        created.push(`${agg.name} (${email}) — ${agg.count} purchase(s), $${agg.totalSpend.toFixed(2)}`);
+        created.push(`${agg.name} (${email}) — ${agg.transactionCount} transaction(s), $${agg.totalSpend.toFixed(2)}`);
       }
     } catch (e) {
       errors.push(`${email}: ${String(e)}`);
     }
   }
 
-  return NextResponse.json({ created, updated, errors, totalBuyerRows: buyers.length });
+  return NextResponse.json({ created, updated, errors, totalItemsSold: items.length });
 }

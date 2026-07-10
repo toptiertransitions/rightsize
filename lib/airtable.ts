@@ -933,6 +933,42 @@ export async function getAllStorefrontBuyersSince(sinceIso: string): Promise<imp
   });
 }
 
+export async function getSoldStorefrontItemsSince(sinceIso: string): Promise<Array<{
+  id: string;
+  buyerEmail: string;
+  buyerName: string;
+  buyerPhone?: string;
+  stripePaymentIntentId: string;
+  salePrice: number;
+  completedDate: string;
+  estateSaleId?: string;
+}>> {
+  const base = getBase();
+  const sinceDate = sinceIso.split("T")[0];
+  const records: Airtable.Record<Airtable.FieldSet>[] = [];
+  await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `AND({Status}="Sold", {BuyerEmail}!="", {StripePaymentIntentId}!="", IS_AFTER({CompletedDate}, "${sinceDate}"))`,
+      fields: ["BuyerEmail", "BuyerName", "BuyerPhone", "StripePaymentIntentId", "SalePrice", "CompletedDate", "EstateSaleId"],
+    })
+    .eachPage((page, next) => { records.push(...page); next(); });
+  return records
+    .filter(r => r.fields["BuyerEmail"] && r.fields["StripePaymentIntentId"])
+    .map(r => {
+      const f = r.fields;
+      return {
+        id: r.id,
+        buyerEmail: toStr(f["BuyerEmail"]).toLowerCase().trim(),
+        buyerName: toStr(f["BuyerName"]),
+        buyerPhone: toStr(f["BuyerPhone"]) || undefined,
+        stripePaymentIntentId: toStr(f["StripePaymentIntentId"]),
+        salePrice: typeof f["SalePrice"] === "number" ? f["SalePrice"] : 0,
+        completedDate: toStr(f["CompletedDate"]),
+        estateSaleId: toStr(f["EstateSaleId"]) || undefined,
+      };
+    });
+}
+
 export async function getStorefrontBuyersByEstate(estateId: string): Promise<import("./types").StorefrontBuyer[]> {
   const base = getBase();
   const records: Airtable.Record<Airtable.FieldSet>[] = [];
