@@ -62,6 +62,14 @@ function computeCalcPayout(item: Item, localVendors: LocalVendor[]): CalcPayout 
     }
     return null;
   }
+  // Per-item clientSharePercent overrides the vendor's default rate
+  if (item.clientSharePercent != null && item.clientSharePercent > 0) {
+    return {
+      amount: item.salePrice * (item.clientSharePercent / 100),
+      vendorName: match.vendorName,
+      rate: 100 - item.clientSharePercent,
+    };
+  }
   return {
     amount: item.salePrice * (1 - match.consignmentTake / 100),
     vendorName: match.vendorName,
