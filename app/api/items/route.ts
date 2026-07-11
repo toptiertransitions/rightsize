@@ -216,7 +216,8 @@ export async function PATCH(req: NextRequest) {
   const needsExisting = newVendorId !== undefined || updates.status !== undefined
     || resolvedNewRoute === "ProFoundFinds Consignment"
     || (resolvedNewRoute !== undefined && !VENDOR_ROUTES.has(resolvedNewRoute))
-    || updates.valueMid !== undefined;
+    || updates.valueMid !== undefined
+    || updates.clientSharePercent !== undefined;
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
 
   // When route changes to one that doesn't support a vendor, auto-clear the assigned vendor
@@ -235,6 +236,19 @@ export async function PATCH(req: NextRequest) {
       vendorChanged = true;
       // Reset decision on reassignment
       (updates as Record<string, unknown>).vendorDecision = "Pending";
+    }
+  }
+
+  // When clientSharePercent changes on a Sold item, recalculate consignorPayout immediately
+  // so the Sales page stays in sync without requiring a manual edit.
+  if (updates.clientSharePercent !== undefined) {
+    const effectiveStatus = (updates.status as string | undefined) ?? existing?.status;
+    if (effectiveStatus === "Sold") {
+      const pct = updates.clientSharePercent as number;
+      const price = (updates.valueMid as number | undefined) ?? existing?.salePrice ?? existing?.valueMid ?? 0;
+      if (price > 0 && pct > 0) {
+        (updates as Record<string, unknown>).consignorPayout = Math.round(price * (pct / 100) * 100) / 100;
+      }
     }
   }
 
