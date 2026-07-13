@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Pagination } from "../components/Pagination";
+import { BulkAIFixModal } from "./BulkAIFixModal";
 
 const PAGE_SIZE = 25;
 import Image from "next/image";
@@ -1059,6 +1060,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showQAFix, setShowQAFix] = useState(false);
   const [showCleanup, setShowCleanup] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [saleEventsItem, setSaleEventsItem] = useState<Item | null>(null);
@@ -1397,6 +1399,15 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
           </svg>
           Bulk Photo Import
         </button>
+        <button
+          onClick={() => setShowQAFix(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-700/50 bg-amber-900/20 hover:bg-amber-900/40 text-sm font-medium text-amber-300 transition-colors"
+        >
+          <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Fix QA Issues with AI
+        </button>
       </div>
       <div className="flex flex-wrap gap-3 mb-4">
         <input type="text" placeholder="Search items, clients, barcodes…" value={search}
@@ -1669,6 +1680,16 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
           items={items}
           onClose={() => setShowBulkImport(false)}
           onItemUpdated={handleItemPhotoUpdate}
+        />
+      )}
+
+      {showQAFix && (
+        <BulkAIFixModal
+          items={items}
+          onClose={() => setShowQAFix(false)}
+          onItemFixed={(id, updates) =>
+            setItems((prev) => prev.map((item) => item.id === id ? { ...item, ...updates } : item))
+          }
         />
       )}
 

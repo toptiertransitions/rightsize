@@ -3,59 +3,11 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getSystemRole, getProFoundFindsStorefrontItems, getTenantById } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
+import { getQAIssues } from "@/lib/pf-qa";
+import type { QAIssue } from "@/lib/pf-qa";
 import type { Item } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-// ─── QA Logic ────────────────────────────────────────────────────────────────
-
-const GENERIC_TITLE_RE = /^(various|misc|miscellaneous|unknown|untitled|lot|assorted|items?|stuff|things|other|n\/a|tbd|mixed)\b/i;
-
-interface QAIssue {
-  severity: "critical" | "warning";
-  label: string;
-}
-
-function checkItem(item: Item): QAIssue[] {
-  const issues: QAIssue[] = [];
-
-  // Title check
-  const title = (item.itemName ?? "").trim();
-  if (title.length < 5 || GENERIC_TITLE_RE.test(title)) {
-    issues.push({ severity: "critical", label: "Generic or vague title" });
-  }
-
-  // Photos
-  if (!item.photos || item.photos.length === 0) {
-    issues.push({ severity: "critical", label: "No photos uploaded" });
-  } else if (item.photos.length === 1) {
-    issues.push({ severity: "warning", label: "Only 1 photo (more recommended)" });
-  }
-
-  // Description
-  const desc = (item.listingDescriptionEbay ?? "").trim();
-  if (desc.length < 20) {
-    issues.push({ severity: "critical", label: desc.length === 0 ? "No listing description" : "Description too short (< 20 chars)" });
-  }
-
-  // Condition notes
-  const condNotes = (item.conditionNotes ?? "").trim();
-  if (condNotes.length < 10) {
-    issues.push({ severity: "warning", label: condNotes.length === 0 ? "No condition notes" : "Condition notes too short" });
-  }
-
-  // Pickup location
-  if (!item.pickupLocation) {
-    issues.push({ severity: "warning", label: "No pickup location set" });
-  }
-
-  // Price
-  if (!item.valueMid || item.valueMid === 0) {
-    issues.push({ severity: "critical", label: "No price set" });
-  }
-
-  return issues;
-}
 
 // ─── Email builder ────────────────────────────────────────────────────────────
 
@@ -280,7 +232,7 @@ export async function POST() {
   // Run QA on each item
   const flagged: FlaggedItem[] = [];
   for (const item of listedItems) {
-    const issues = checkItem(item);
+    const issues = getQAIssues(item);
     if (issues.length > 0) {
       flagged.push({
         item,
