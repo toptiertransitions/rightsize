@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
+  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -103,6 +103,7 @@ export async function PATCH(req: NextRequest) {
   const tenant = await updateTenant(tenantId, {
     name: typeof name === "string" && name.trim() ? name.trim() : undefined,
     address: typeof address === "string" ? address : undefined,
+    addressUnitNumber: addressUnitNumber !== undefined ? (addressUnitNumber as string | null) : undefined,
     city: typeof city === "string" ? city : undefined,
     state: typeof state === "string" ? state : undefined,
     zip: typeof zip === "string" ? zip : undefined,
@@ -117,10 +118,13 @@ export async function PATCH(req: NextRequest) {
     payoutUsername: payoutUsername !== undefined ? (payoutUsername as string | null) : undefined,
     clientEmail: isTTTInternalRole && clientEmail !== undefined ? (clientEmail as string | null) : undefined,
     clientPhone: isTTTInternalRole && clientPhone !== undefined ? (clientPhone as string | null) : undefined,
+    secondaryClientEmail: isTTTInternalRole && secondaryClientEmail !== undefined ? (secondaryClientEmail as string | null) : undefined,
+    secondaryClientPhone: isTTTInternalRole && secondaryClientPhone !== undefined ? (secondaryClientPhone as string | null) : undefined,
     // Only TTTManager/TTTAdmin can set consignment expenses
     consignmentExpense: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && consignmentExpense !== undefined ? (consignmentExpense as number | null) : undefined,
     consignmentExpenseNote: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && consignmentExpenseNote !== undefined ? (consignmentExpenseNote as string | null) : undefined,
     destAddress: destAddress !== undefined ? (destAddress as string | null) : undefined,
+    destAddressUnitNumber: destAddressUnitNumber !== undefined ? (destAddressUnitNumber as string | null) : undefined,
     destCity: destCity !== undefined ? (destCity as string | null) : undefined,
     destState: destState !== undefined ? (destState as string | null) : undefined,
     destZip: destZip !== undefined ? (destZip as string | null) : undefined,

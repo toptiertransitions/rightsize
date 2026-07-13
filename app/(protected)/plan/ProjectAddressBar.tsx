@@ -14,10 +14,12 @@ interface StaffOption {
 interface Props {
   tenantId: string;
   initialAddress?: string;
+  initialAddressUnitNumber?: string;
   initialCity?: string;
   initialState?: string;
   initialZip?: string;
   initialDestAddress?: string;
+  initialDestAddressUnitNumber?: string;
   initialDestCity?: string;
   initialDestState?: string;
   initialDestZip?: string;
@@ -38,7 +40,7 @@ function PencilIcon() {
   );
 }
 
-function AddressBlock({ label, street, city, state, zip }: { label: string; street?: string; city?: string; state?: string; zip?: string }) {
+function AddressBlock({ label, street, unitNumber, city, state, zip }: { label: string; street?: string; unitNumber?: string; city?: string; state?: string; zip?: string }) {
   const hasAny = street || city || state || zip;
   const cityStateZip = [city, state, zip].filter(Boolean).join(" ");
   return (
@@ -46,7 +48,7 @@ function AddressBlock({ label, street, city, state, zip }: { label: string; stre
       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
       {hasAny ? (
         <div className="text-sm text-gray-700 leading-snug mt-0.5">
-          {street && <div>{street}</div>}
+          {street && <div>{street}{unitNumber ? `, Unit ${unitNumber}` : ""}</div>}
           {cityStateZip && <div>{cityStateZip}</div>}
         </div>
       ) : (
@@ -91,10 +93,12 @@ const inputCls =
 export function ProjectAddressBar({
   tenantId,
   initialAddress,
+  initialAddressUnitNumber,
   initialCity,
   initialState,
   initialZip,
   initialDestAddress,
+  initialDestAddressUnitNumber,
   initialDestCity,
   initialDestState,
   initialDestZip,
@@ -109,12 +113,14 @@ export function ProjectAddressBar({
 
   // Origin fields
   const [address, setAddress] = useState(initialAddress ?? "");
+  const [addressUnitNumber, setAddressUnitNumber] = useState(initialAddressUnitNumber ?? "");
   const [city, setCity] = useState(initialCity ?? "");
   const [state, setState] = useState(initialState ?? "");
   const [zip, setZip] = useState(initialZip ?? "");
 
   // Destination fields
   const [destAddress, setDestAddress] = useState(initialDestAddress ?? "");
+  const [destAddressUnitNumber, setDestAddressUnitNumber] = useState(initialDestAddressUnitNumber ?? "");
   const [destCity, setDestCity] = useState(initialDestCity ?? "");
   const [destState, setDestState] = useState(initialDestState ?? "");
   const [destZip, setDestZip] = useState(initialDestZip ?? "");
@@ -150,10 +156,12 @@ export function ProjectAddressBar({
         body: JSON.stringify({
           tenantId,
           address: address.trim() || null,
+          addressUnitNumber: addressUnitNumber.trim() || null,
           city: city.trim() || null,
           state: state.trim() || null,
           zip: zip.trim() || null,
           destAddress: destAddress.trim() || null,
+          destAddressUnitNumber: destAddressUnitNumber.trim() || null,
           destCity: destCity.trim() || null,
           destState: destState.trim() || null,
           destZip: destZip.trim() || null,
@@ -174,10 +182,12 @@ export function ProjectAddressBar({
 
   function handleCancel() {
     setAddress(initialAddress ?? "");
+    setAddressUnitNumber(initialAddressUnitNumber ?? "");
     setCity(initialCity ?? "");
     setState(initialState ?? "");
     setZip(initialZip ?? "");
     setDestAddress(initialDestAddress ?? "");
+    setDestAddressUnitNumber(initialDestAddressUnitNumber ?? "");
     setDestCity(initialDestCity ?? "");
     setDestState(initialDestState ?? "");
     setDestZip(initialDestZip ?? "");
@@ -207,6 +217,7 @@ export function ProjectAddressBar({
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Origin</p>
               <div className="flex flex-col gap-1.5">
                 <input type="text" placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} autoFocus />
+                <input type="text" placeholder="Unit # (optional)" value={addressUnitNumber} onChange={e => setAddressUnitNumber(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="State" value={state} onChange={e => setState(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="Zip" value={zip} onChange={e => setZip(e.target.value)} className={inputCls} />
@@ -217,6 +228,7 @@ export function ProjectAddressBar({
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Destination</p>
               <div className="flex flex-col gap-1.5">
                 <input type="text" placeholder="Street address" value={destAddress} onChange={e => setDestAddress(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="Unit # (optional)" value={destAddressUnitNumber} onChange={e => setDestAddressUnitNumber(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="State" value={destState} onChange={e => setDestState(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="Zip" value={destZip} onChange={e => setDestZip(e.target.value)} className={inputCls} />
@@ -267,6 +279,7 @@ export function ProjectAddressBar({
       <AddressBlock
         label="Origin"
         street={address || initialAddress}
+        unitNumber={addressUnitNumber || initialAddressUnitNumber}
         city={city || initialCity}
         state={state || initialState}
         zip={zip || initialZip}
@@ -274,6 +287,7 @@ export function ProjectAddressBar({
       <AddressBlock
         label="Destination"
         street={destAddress || initialDestAddress}
+        unitNumber={destAddressUnitNumber || initialDestAddressUnitNumber}
         city={destCity || initialDestCity}
         state={destState || initialDestState}
         zip={destZip || initialDestZip}

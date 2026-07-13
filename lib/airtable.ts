@@ -184,10 +184,12 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     ownerUserId: toStr(f["OwnerUserId"]),
     createdAt: toStr(f["CreatedAt"]),
     address: toStr(f["Address"]) || undefined,
+    addressUnitNumber: toStr(f["AddressUnitNumber"]) || undefined,
     city: toStr(f["City"]) || undefined,
     state: toStr(f["State"]) || undefined,
     zip: toStr(f["Zip"]) || undefined,
     destAddress: toStr(f["DestAddress"]) || undefined,
+    destAddressUnitNumber: toStr(f["DestAddressUnitNumber"]) || undefined,
     destCity: toStr(f["DestCity"]) || undefined,
     destState: toStr(f["DestState"]) || undefined,
     destZip: toStr(f["DestZip"]) || undefined,
@@ -204,6 +206,8 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     payoutCheckAddress: toStr(f["PayoutCheckAddress"]) || undefined,
     clientEmail: toStr(f["ClientEmail"]) || undefined,
     clientPhone: toStr(f["ClientPhone"]) || undefined,
+    secondaryClientEmail: toStr(f["SecondaryClientEmail"]) || undefined,
+    secondaryClientPhone: toStr(f["SecondaryClientPhone"]) || undefined,
     consignmentExpense: f["ConsignmentExpense"] != null ? toNum(f["ConsignmentExpense"]) : undefined,
     consignmentExpenseNote: toStr(f["ConsignmentExpenseNote"]) || undefined,
     teamLeadClerkId: toStr(f["TeamLeadClerkId"]) || undefined,
@@ -1159,16 +1163,18 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; city?: string; state?: string; zip?: string; destAddress?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
+  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
   if (data.name !== undefined) fields["Name"] = data.name;
   if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.addressUnitNumber !== undefined) fields["AddressUnitNumber"] = data.addressUnitNumber ?? "";
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.destAddress !== undefined) fields["DestAddress"] = data.destAddress ?? "";
+  if (data.destAddressUnitNumber !== undefined) fields["DestAddressUnitNumber"] = data.destAddressUnitNumber ?? "";
   if (data.destCity !== undefined) fields["DestCity"] = data.destCity ?? "";
   if (data.destState !== undefined) fields["DestState"] = data.destState ?? "";
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip ?? "";
@@ -1185,6 +1191,8 @@ export async function updateTenant(
   if (data.payoutCheckAddress !== undefined) fields["PayoutCheckAddress"] = data.payoutCheckAddress ?? "";
   if (data.clientEmail !== undefined) fields["ClientEmail"] = data.clientEmail ?? "";
   if (data.clientPhone !== undefined) fields["ClientPhone"] = data.clientPhone ?? "";
+  if (data.secondaryClientEmail !== undefined) fields["SecondaryClientEmail"] = data.secondaryClientEmail ?? "";
+  if (data.secondaryClientPhone !== undefined) fields["SecondaryClientPhone"] = data.secondaryClientPhone ?? "";
   if (data.consignmentExpense !== undefined) fields["ConsignmentExpense"] = data.consignmentExpense ?? 0;
   if (data.consignmentExpenseNote !== undefined) fields["ConsignmentExpenseNote"] = data.consignmentExpenseNote ?? "";
   if (data.teamLeadClerkId !== undefined) fields["TeamLeadClerkId"] = data.teamLeadClerkId ?? "";
@@ -3384,10 +3392,12 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
     address: toStr(f["Address"]) || undefined,
+    addressUnitNumber: toStr(f["AddressUnitNumber"]) || undefined,
     city: toStr(f["City"]) || undefined,
     state: toStr(f["State"]) || undefined,
     zip: toStr(f["Zip"]) || undefined,
     destAddress: toStr(f["DestAddress"]) || undefined,
+    destAddressUnitNumber: toStr(f["DestAddressUnitNumber"]) || undefined,
     destCity: toStr(f["DestCity"]) || undefined,
     destState: toStr(f["DestState"]) || undefined,
     destZip: toStr(f["DestZip"]) || undefined,
@@ -3441,10 +3451,12 @@ export async function createOpportunity(data: {
   estimatedValue?: number;
   assignedToClerkId?: string;
   address?: string;
+  addressUnitNumber?: string;
   city?: string;
   state?: string;
   zip?: string;
   destAddress?: string;
+  destAddressUnitNumber?: string;
   destCity?: string;
   destState?: string;
   destZip?: string;
@@ -3462,10 +3474,12 @@ export async function createOpportunity(data: {
     CreatedAt: new Date().toISOString(),
   };
   if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.addressUnitNumber !== undefined) fields["AddressUnitNumber"] = data.addressUnitNumber;
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.destAddress !== undefined) fields["DestAddress"] = data.destAddress;
+  if (data.destAddressUnitNumber !== undefined) fields["DestAddressUnitNumber"] = data.destAddressUnitNumber;
   if (data.destCity !== undefined) fields["DestCity"] = data.destCity;
   if (data.destState !== undefined) fields["DestState"] = data.destState;
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
@@ -3493,10 +3507,12 @@ export async function updateOpportunity(
     lostReason: string;
     assignedToClerkId: string;
     address: string;
+    addressUnitNumber: string;
     city: string;
     state: string;
     zip: string;
     destAddress: string;
+    destAddressUnitNumber: string;
     destCity: string;
     destState: string;
     destZip: string;
@@ -3516,10 +3532,12 @@ export async function updateOpportunity(
   if (data.lostReason !== undefined) fields["LostReason"] = data.lostReason;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   if (data.address !== undefined) fields["Address"] = data.address;
+  if (data.addressUnitNumber !== undefined) fields["AddressUnitNumber"] = data.addressUnitNumber;
   if (data.city !== undefined) fields["City"] = data.city;
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.destAddress !== undefined) fields["DestAddress"] = data.destAddress;
+  if (data.destAddressUnitNumber !== undefined) fields["DestAddressUnitNumber"] = data.destAddressUnitNumber;
   if (data.destCity !== undefined) fields["DestCity"] = data.destCity;
   if (data.destState !== undefined) fields["DestState"] = data.destState;
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;

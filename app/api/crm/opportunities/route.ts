@@ -61,19 +61,21 @@ export async function PATCH(req: NextRequest) {
     const opportunity = await updateOpportunity(id, data);
 
     // Sync origin/destination address fields to the linked project when changed.
-    const originChanged = ["address", "city", "state", "zip"].some(f => f in data);
-    const destChanged = ["destAddress", "destCity", "destState", "destZip"].some(f => f in data);
+    const originChanged = ["address", "addressUnitNumber", "city", "state", "zip"].some(f => f in data);
+    const destChanged = ["destAddress", "destAddressUnitNumber", "destCity", "destState", "destZip"].some(f => f in data);
     if ((originChanged || destChanged) && opportunity.tenantId) {
       try {
         const patch: Record<string, unknown> = {};
         if (originChanged) {
           patch.address = opportunity.address;
+          patch.addressUnitNumber = opportunity.addressUnitNumber ?? null;
           patch.city = opportunity.city;
           patch.state = opportunity.state;
           patch.zip = opportunity.zip;
         }
         if (destChanged) {
           patch.destAddress = opportunity.destAddress;
+          patch.destAddressUnitNumber = opportunity.destAddressUnitNumber ?? null;
           patch.destCity = opportunity.destCity;
           patch.destState = opportunity.destState;
           patch.destZip = opportunity.destZip;

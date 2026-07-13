@@ -499,10 +499,12 @@ function OpportunityPanel({
   const [activityNote, setActivityNote] = useState("");
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [oppAddress, setOppAddress] = useState(opportunity?.address || "");
+  const [oppAddressUnit, setOppAddressUnit] = useState(opportunity?.addressUnitNumber || "");
   const [oppCity, setOppCity] = useState(opportunity?.city || "");
   const [oppState, setOppState] = useState(opportunity?.state || "");
   const [oppZip, setOppZip] = useState(opportunity?.zip || "");
   const [oppDestAddress, setOppDestAddress] = useState(opportunity?.destAddress || "");
+  const [oppDestAddressUnit, setOppDestAddressUnit] = useState(opportunity?.destAddressUnitNumber || "");
   const [oppDestCity, setOppDestCity] = useState(opportunity?.destCity || "");
   const [oppDestState, setOppDestState] = useState(opportunity?.destState || "");
   const [oppDestZip, setOppDestZip] = useState(opportunity?.destZip || "");
@@ -552,10 +554,12 @@ function OpportunityPanel({
         lostAt: stage === "Lost" && !opportunity?.lostAt ? new Date().toISOString() : opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
         address: oppAddress,
+        addressUnitNumber: oppAddressUnit,
         city: oppCity,
         state: oppState,
         zip: oppZip,
         destAddress: oppDestAddress,
+        destAddressUnitNumber: oppDestAddressUnit,
         destCity: oppDestCity,
         destState: oppDestState,
         destZip: oppDestZip,
@@ -677,10 +681,12 @@ function OpportunityPanel({
         lostAt: opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
         address: oppAddress,
+        addressUnitNumber: oppAddressUnit,
         city: oppCity,
         state: oppState,
         zip: oppZip,
         destAddress: oppDestAddress,
+        destAddressUnitNumber: oppDestAddressUnit,
         destCity: oppDestCity,
         destState: oppDestState,
         destZip: oppDestZip,
@@ -724,10 +730,12 @@ function OpportunityPanel({
           clientEmail: contact.email || undefined,
           clientPhone: contact.phone || undefined,
           address: oppAddress || undefined,
+          addressUnitNumber: oppAddressUnit || undefined,
           city: oppCity || undefined,
           state: oppState || undefined,
           zip: oppZip || undefined,
           destAddress: oppDestAddress || undefined,
+          destAddressUnitNumber: oppDestAddressUnit || undefined,
           destCity: oppDestCity || undefined,
           destState: oppDestState || undefined,
           destZip: oppDestZip || undefined,
@@ -834,6 +842,13 @@ function OpportunityPanel({
               placeholder="Street address"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
             />
+            <input
+              type="text"
+              value={oppAddressUnit}
+              onChange={(e) => setOppAddressUnit(e.target.value)}
+              placeholder="Unit # (optional)"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+            />
             <div className="grid grid-cols-3 gap-2">
               <input
                 type="text"
@@ -867,6 +882,13 @@ function OpportunityPanel({
               value={oppDestAddress}
               onChange={(e) => setOppDestAddress(e.target.value)}
               placeholder="Street address"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+            />
+            <input
+              type="text"
+              value={oppDestAddressUnit}
+              onChange={(e) => setOppDestAddressUnit(e.target.value)}
+              placeholder="Unit # (optional)"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
             />
             <div className="grid grid-cols-3 gap-2">

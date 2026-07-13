@@ -6,6 +6,8 @@ interface Props {
   tenantId: string;
   initialEmail?: string;
   initialPhone?: string;
+  initialSecondaryEmail?: string;
+  initialSecondaryPhone?: string;
 }
 
 function PhoneIcon() {
@@ -32,14 +34,16 @@ function PencilIcon() {
   );
 }
 
-export function ClientContactBar({ tenantId, initialEmail, initialPhone }: Props) {
+export function ClientContactBar({ tenantId, initialEmail, initialPhone, initialSecondaryEmail, initialSecondaryPhone }: Props) {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState(initialPhone ?? "");
   const [email, setEmail] = useState(initialEmail ?? "");
+  const [secondaryPhone, setSecondaryPhone] = useState(initialSecondaryPhone ?? "");
+  const [secondaryEmail, setSecondaryEmail] = useState(initialSecondaryEmail ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hasData = !!(initialPhone || initialEmail || phone || email);
+  const hasData = !!(initialPhone || initialEmail || phone || email || secondaryPhone || secondaryEmail || initialSecondaryPhone || initialSecondaryEmail);
 
   async function handleSave() {
     setSaving(true);
@@ -48,7 +52,7 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone }: Props
       const res = await fetch("/api/tenants", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, clientPhone: phone.trim() || null, clientEmail: email.trim() || null }),
+        body: JSON.stringify({ tenantId, clientPhone: phone.trim() || null, clientEmail: email.trim() || null, secondaryClientPhone: secondaryPhone.trim() || null, secondaryClientEmail: secondaryEmail.trim() || null }),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -66,6 +70,8 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone }: Props
   function handleCancel() {
     setPhone(initialPhone ?? "");
     setEmail(initialEmail ?? "");
+    setSecondaryPhone(initialSecondaryPhone ?? "");
+    setSecondaryEmail(initialSecondaryEmail ?? "");
     setError(null);
     setEditing(false);
   }
@@ -75,27 +81,52 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone }: Props
 
   if (editing) {
     return (
-      <div className="flex flex-wrap items-center gap-2 mt-2">
-        <div className="flex items-center gap-1.5">
-          <PhoneIcon />
-          <input
-            type="tel"
-            placeholder="Phone number"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className={`${inputCls} w-40`}
-            autoFocus
-          />
+      <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <PhoneIcon />
+            <input
+              type="tel"
+              placeholder="Phone number"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={`${inputCls} w-40`}
+              autoFocus
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MailIcon />
+            <input
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`${inputCls} w-52`}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <MailIcon />
-          <input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={`${inputCls} w-52`}
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-full">Spouse / Secondary (optional)</span>
+          <div className="flex items-center gap-1.5">
+            <PhoneIcon />
+            <input
+              type="tel"
+              placeholder="Secondary phone"
+              value={secondaryPhone}
+              onChange={(e) => setSecondaryPhone(e.target.value)}
+              className={`${inputCls} w-40`}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MailIcon />
+            <input
+              type="email"
+              placeholder="Secondary email"
+              value={secondaryEmail}
+              onChange={(e) => setSecondaryEmail(e.target.value)}
+              className={`${inputCls} w-52`}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -112,47 +143,78 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone }: Props
             Cancel
           </button>
         </div>
-        {error && <p className="text-xs text-red-600 w-full">{error}</p>}
+        {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
     );
   }
 
+  const displayPhone = phone || initialPhone;
+  const displayEmail = email || initialEmail;
+  const displaySecondaryPhone = secondaryPhone || initialSecondaryPhone;
+  const displaySecondaryEmail = secondaryEmail || initialSecondaryEmail;
+
   // View mode
   return (
-    <div className="group flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-      {phone ? (
-        <a
-          href={`tel:${phone.replace(/\D/g, "")}`}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-forest-700 transition-colors"
-        >
-          <PhoneIcon />
-          <span>{phone}</span>
-        </a>
-      ) : null}
+    <div className="group flex flex-col gap-1 mt-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {displayPhone ? (
+          <a
+            href={`tel:${displayPhone.replace(/\D/g, "")}`}
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-forest-700 transition-colors"
+          >
+            <PhoneIcon />
+            <span>{displayPhone}</span>
+          </a>
+        ) : null}
 
-      {email ? (
-        <a
-          href={`mailto:${email}`}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-forest-700 transition-colors"
-        >
-          <MailIcon />
-          <span>{email}</span>
-        </a>
-      ) : null}
+        {displayEmail ? (
+          <a
+            href={`mailto:${displayEmail}`}
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-forest-700 transition-colors"
+          >
+            <MailIcon />
+            <span>{displayEmail}</span>
+          </a>
+        ) : null}
 
-      {!hasData && (
-        <span className="text-sm text-gray-400 italic">No client contact on file</span>
+        {!hasData && (
+          <span className="text-sm text-gray-400 italic">No client contact on file</span>
+        )}
+
+        {/* Edit pencil — always visible on mobile, hover-only on desktop */}
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+          title="Edit client contact"
+        >
+          <PencilIcon />
+          <span className="sr-only sm:not-sr-only">Edit</span>
+        </button>
+      </div>
+
+      {(displaySecondaryPhone || displaySecondaryEmail) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-0.5">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Secondary</span>
+          {displaySecondaryPhone && (
+            <a
+              href={`tel:${displaySecondaryPhone.replace(/\D/g, "")}`}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-forest-700 transition-colors"
+            >
+              <PhoneIcon />
+              <span>{displaySecondaryPhone}</span>
+            </a>
+          )}
+          {displaySecondaryEmail && (
+            <a
+              href={`mailto:${displaySecondaryEmail}`}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-forest-700 transition-colors"
+            >
+              <MailIcon />
+              <span>{displaySecondaryEmail}</span>
+            </a>
+          )}
+        </div>
       )}
-
-      {/* Edit pencil — always visible on mobile, hover-only on desktop */}
-      <button
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-        title="Edit client contact"
-      >
-        <PencilIcon />
-        <span className="sr-only sm:not-sr-only">Edit</span>
-      </button>
     </div>
   );
 }

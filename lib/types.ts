@@ -115,10 +115,12 @@ export interface Tenant {
   ownerUserId: string; // Clerk user ID
   createdAt: string;
   address?: string;
+  addressUnitNumber?: string;
   city?: string;
   state?: string;
   zip?: string;
   destAddress?: string;
+  destAddressUnitNumber?: string;
   destCity?: string;
   destState?: string;
   destZip?: string;
@@ -135,6 +137,8 @@ export interface Tenant {
   payoutCheckAddress?: string;
   clientEmail?: string;
   clientPhone?: string;
+  secondaryClientEmail?: string;
+  secondaryClientPhone?: string;
   consignmentExpense?: number;
   consignmentExpenseNote?: string;
   teamLeadClerkId?: string;
@@ -933,10 +937,12 @@ export interface ClientOpportunity {
   assignedToClerkId: string;
   createdAt: string;
   address?: string;
+  addressUnitNumber?: string;
   city?: string;
   state?: string;
   zip?: string;
   destAddress?: string;
+  destAddressUnitNumber?: string;
   destCity?: string;
   destState?: string;
   destZip?: string;

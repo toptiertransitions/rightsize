@@ -342,10 +342,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
           <ProjectAddressBar
             tenantId={tenantId}
             initialAddress={tenant.address}
+            initialAddressUnitNumber={tenant.addressUnitNumber}
             initialCity={tenant.city}
             initialState={tenant.state}
             initialZip={tenant.zip}
             initialDestAddress={tenant.destAddress}
+            initialDestAddressUnitNumber={tenant.destAddressUnitNumber}
             initialDestCity={tenant.destCity}
             initialDestState={tenant.destState}
             initialDestZip={tenant.destZip}
@@ -361,6 +363,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
               tenantId={tenantId}
               initialEmail={tenant.clientEmail}
               initialPhone={tenant.clientPhone}
+              initialSecondaryEmail={tenant.secondaryClientEmail}
+              initialSecondaryPhone={tenant.secondaryClientPhone}
             />
           )}
         </div>
