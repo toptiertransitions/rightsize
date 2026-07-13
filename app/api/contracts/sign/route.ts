@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
+import { isTTTAdmin } from "@/lib/config";
 import { Resend } from "resend";
 
 export async function POST(req: NextRequest) {
@@ -164,7 +165,8 @@ export async function POST(req: NextRequest) {
 
     const activeStaff = staff.filter((s) => s.isActive && s.email);
     const salesRecipients = activeStaff.filter((s) => s.role === "TTTSales").map((s) => s.email as string);
-    const adminRecipients = activeStaff.filter((s) => s.role === "TTTAdmin").map((s) => s.email as string);
+    // TTTAdmin users may be defined via env var (isTTTAdmin) rather than the StaffRoles table Role field
+    const adminRecipients = activeStaff.filter((s) => s.role === "TTTAdmin" || isTTTAdmin(s.clerkUserId)).map((s) => s.email as string);
 
     // Always send to TTTSales + TTTAdmin (deduplicated)
     const allRecipients = [...new Set([...salesRecipients, ...adminRecipients])];
