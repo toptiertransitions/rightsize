@@ -54,11 +54,6 @@ function checkItem(item: Item): QAIssue[] {
     issues.push({ severity: "critical", label: "No price set" });
   }
 
-  // Slug — active on site but not discoverable
-  if (!item.onlineListingSlug) {
-    issues.push({ severity: "critical", label: "No listing slug (not reachable online)" });
-  }
-
   return issues;
 }
 
@@ -145,7 +140,6 @@ function buildEmail(flagged: FlaggedItem[], totalListed: number, generatedAt: st
     }).join("");
 
     const priceLine = item.valueMid ? fmtMoney(item.valueMid) : "—";
-    const slugLine  = item.onlineListingSlug ? item.onlineListingSlug : "—";
     const catLine   = item.category || "—";
 
     return `
@@ -163,7 +157,6 @@ function buildEmail(flagged: FlaggedItem[], totalListed: number, generatedAt: st
                 <div style="font-size:12px;color:${MUTED};margin-bottom:8px;">
                   ${tenantName} &nbsp;·&nbsp; ${catLine} &nbsp;·&nbsp; ${priceLine}
                   ${item.pickupLocation ? `&nbsp;·&nbsp; ${item.pickupLocation}` : ""}
-                  ${slugLine !== "—" ? `&nbsp;·&nbsp; <span style="font-family:monospace;font-size:11px;">${slugLine}</span>` : ""}
                 </div>
                 <div>${issueChips}</div>
               </td>
