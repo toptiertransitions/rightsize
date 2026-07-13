@@ -4,6 +4,7 @@ import { isTTTAdmin } from "@/lib/config";
 import { getItemsByPrimaryRoute, getTenantById, getMembershipsForTenant, getUserByClerkId } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { PFInventoryClient } from "./PFInventoryClient";
+import { OnlineListingQAButton } from "./OnlineListingQAButton";
 
 export default async function PFInventoryPage() {
   const { userId } = await auth();
@@ -49,6 +50,9 @@ export default async function PFInventoryPage() {
           <p className="text-gray-400 text-sm mt-1">
             All client items routed to ProFoundFinds Consignment. Edit inline — changes sync back to the item catalog and sales page.
           </p>
+          <div className="mt-4">
+            <OnlineListingQAButton />
+          </div>
         </div>
         <PFInventoryClient items={items} tenantInfoMap={tenantInfoMap} />
       </main>
