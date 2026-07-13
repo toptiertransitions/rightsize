@@ -5,6 +5,7 @@ import { getInvoiceSettings, getSalesGoals } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { InvoicingSettingsClient } from "./InvoicingSettingsClient";
 import { WeeklySalesReportButton } from "./WeeklySalesReportButton";
+import { WeeklyActiveProjectsButton } from "./WeeklyActiveProjectsButton";
 import { SalesGoalsClient } from "./SalesGoalsClient";
 
 export default async function InvoicingSettingsPage() {
@@ -27,7 +28,10 @@ export default async function InvoicingSettingsPage() {
             Configure company branding, contact info, payment link, and invoice footer.
           </p>
         </div>
-        <WeeklySalesReportButton />
+        <div className="flex flex-col gap-0">
+          <WeeklySalesReportButton />
+          <WeeklyActiveProjectsButton />
+        </div>
         <InvoicingSettingsClient initialSettings={settings} />
 
         {/* Sales Goals */}
