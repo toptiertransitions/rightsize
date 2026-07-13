@@ -31,10 +31,43 @@ function IssueChip({ label, critical }: { label: string; critical: boolean }) {
   );
 }
 
+// Derive unique values for filter dropdowns from the full item list
+function uniqueSorted(vals: (string | undefined)[]): string[] {
+  return [...new Set(vals.filter((v): v is string => !!v))].sort();
+}
+
 export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
   const [step, setStep] = useState<Step>("select");
+
+  // Filters
+  const [routeFilter, setRouteFilter] = useState("ProFoundFinds Consignment");
+  const [statusFilter, setStatusFilter] = useState("Listed");
+  const [siteFilter, setSiteFilter] = useState<"all" | "yes" | "no">("yes");
+
+  const allRoutes = useMemo(() => uniqueSorted(items.map(i => i.primaryRoute)), [items]);
+  const allStatuses = useMemo(() => uniqueSorted(items.map(i => i.status)), [items]);
+
+  // Filtered + fixable items
+  const fixableItems = useMemo(() => {
+    return items
+      .filter(item => {
+        if (routeFilter && item.primaryRoute !== routeFilter) return false;
+        if (statusFilter && item.status !== statusFilter) return false;
+        if (siteFilter === "yes" && !item.storefrontActive) return false;
+        if (siteFilter === "no" && item.storefrontActive) return false;
+        const issues = getQAIssues(item);
+        return issues.some(isAIFixable);
+      })
+      .sort((a, b) => {
+        const aIssues = getQAIssues(a);
+        const bIssues = getQAIssues(b);
+        const aCrit = aIssues.some(i => i.severity === "critical" && isAIFixable(i)) ? 0 : 1;
+        const bCrit = bIssues.some(i => i.severity === "critical" && isAIFixable(i)) ? 0 : 1;
+        return aCrit - bCrit || a.itemName.localeCompare(b.itemName);
+      });
+  }, [items, routeFilter, statusFilter, siteFilter]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
-    // Pre-select all items that have AI-fixable issues
     const ids = new Set<string>();
     for (const item of items) {
       const issues = getQAIssues(item);
@@ -49,24 +82,6 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
   const [doneCount, setDoneCount] = useState(0);
   const [errorCount, setErrorCount] = useState(0);
 
-  // Only show items with at least one AI-fixable issue
-  const fixableItems = useMemo(() =>
-    items
-      .filter(item => {
-        const issues = getQAIssues(item);
-        return issues.some(isAIFixable);
-      })
-      .sort((a, b) => {
-        // Critical issues first
-        const aIssues = getQAIssues(a);
-        const bIssues = getQAIssues(b);
-        const aCrit = aIssues.some(i => i.severity === "critical" && isAIFixable(i)) ? 0 : 1;
-        const bCrit = bIssues.some(i => i.severity === "critical" && isAIFixable(i)) ? 0 : 1;
-        return aCrit - bCrit || a.itemName.localeCompare(b.itemName);
-      }),
-    [items]
-  );
-
   function toggleItem(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -76,11 +91,14 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
   }
 
   function toggleAll() {
-    if (selectedIds.size === fixableItems.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(fixableItems.map(i => i.id)));
-    }
+    const filteredIds = fixableItems.map(i => i.id);
+    const allChecked = filteredIds.every(id => selectedIds.has(id));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allChecked) filteredIds.forEach(id => next.delete(id));
+      else filteredIds.forEach(id => next.add(id));
+      return next;
+    });
   }
 
   function toggleField(key: QAFixField) {
@@ -94,6 +112,7 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
   async function handleFix() {
     const toFix = fixableItems.filter(i => selectedIds.has(i.id));
     if (!toFix.length || !fixFields.size) return;
+
 
     const initialProgress: ItemProgress[] = toFix.map(item => ({
       id: item.id,
@@ -163,7 +182,8 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
 
   const selectedCount = selectedIds.size;
   const totalFixable = fixableItems.length;
-  const allSelected = selectedCount === totalFixable && totalFixable > 0;
+  const filteredSelectedCount = fixableItems.filter(i => selectedIds.has(i.id)).length;
+  const allSelected = filteredSelectedCount === totalFixable && totalFixable > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -208,6 +228,38 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
                 </div>
               ) : (
                 <>
+                  {/* Filters */}
+                  <div className="mb-4 p-4 bg-gray-800/60 rounded-xl border border-gray-700">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Filter items</p>
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={routeFilter}
+                        onChange={e => setRouteFilter(e.target.value)}
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#2E6B4F]"
+                      >
+                        <option value="">All Routes</option>
+                        {allRoutes.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <select
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value)}
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#2E6B4F]"
+                      >
+                        <option value="">All Statuses</option>
+                        {allStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <select
+                        value={siteFilter}
+                        onChange={e => setSiteFilter(e.target.value as "all" | "yes" | "no")}
+                        className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#2E6B4F]"
+                      >
+                        <option value="all">All (Site)</option>
+                        <option value="yes">Site: Active</option>
+                        <option value="no">Site: Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+
                   {/* Issue type toggles */}
                   <div className="mb-5 p-4 bg-gray-800/60 rounded-xl border border-gray-700">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Fix these issue types</p>
@@ -242,7 +294,7 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
                       className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-[#2E6B4F] focus:ring-[#2E6B4F] focus:ring-offset-gray-900 cursor-pointer"
                     />
                     <span className="text-xs text-gray-400 font-medium">
-                      {allSelected ? "Deselect all" : `Select all ${totalFixable} items`}
+                      {allSelected ? "Deselect all" : `Select all ${totalFixable} filtered item${totalFixable !== 1 ? "s" : ""}`}
                     </span>
                   </div>
 
@@ -410,8 +462,8 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
         {step === "select" && totalFixable > 0 && (
           <div className="px-6 py-4 border-t border-gray-800 shrink-0 flex items-center justify-between gap-3">
             <span className="text-sm text-gray-400">
-              {selectedCount > 0
-                ? `${selectedCount} item${selectedCount !== 1 ? "s" : ""} selected`
+              {filteredSelectedCount > 0
+                ? `${filteredSelectedCount} item${filteredSelectedCount !== 1 ? "s" : ""} selected`
                 : "No items selected"}
             </span>
             <div className="flex gap-2">
@@ -423,13 +475,13 @@ export function BulkAIFixModal({ items, onClose, onItemFixed }: Props) {
               </button>
               <button
                 onClick={handleFix}
-                disabled={selectedCount === 0 || fixFields.size === 0}
+                disabled={filteredSelectedCount === 0 || fixFields.size === 0}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#2E6B4F] hover:bg-[#245a40] text-white text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Fix {selectedCount} item{selectedCount !== 1 ? "s" : ""} with AI
+                Fix {filteredSelectedCount} item{filteredSelectedCount !== 1 ? "s" : ""} with AI
               </button>
             </div>
           </div>
