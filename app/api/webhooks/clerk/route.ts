@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
 import { clerkClient } from "@clerk/nextjs/server";
-import { AIRTABLE_TABLES } from "@/lib/config";
+import { AIRTABLE_TABLES, isTTTAdmin } from "@/lib/config";
 import { buildNewUserAdminEmail } from "@/lib/email";
 import { findReferralContactByEmail, setReferralContactClerkUserId, getStaffMembers } from "@/lib/airtable";
 
@@ -82,6 +82,39 @@ async function getTenantById(tenantId: string): Promise<{ name: string; address?
   };
 }
 
+async function getAdminEmails(): Promise<string[]> {
+  // 1. Airtable StaffRoles — include users who are TTTAdmin by role OR by env var
+  try {
+    const staff = await getStaffMembers();
+    const emails = staff
+      .filter((s) => s.isActive && s.email && (s.role === "TTTAdmin" || isTTTAdmin(s.clerkUserId)))
+      .map((s) => s.email as string);
+    if (emails.length > 0) return emails;
+  } catch { /* fall through */ }
+
+  // 2. Look up TTT_ADMIN_USER_IDS directly in Clerk (bypasses Airtable entirely)
+  const adminIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  if (adminIds.length > 0) {
+    try {
+      const clerk = await clerkClient();
+      const emails: string[] = [];
+      for (const id of adminIds) {
+        const u = await clerk.users.getUser(id).catch(() => null);
+        const email =
+          u?.emailAddresses.find((e) => e.id === u.primaryEmailAddressId)?.emailAddress ??
+          u?.emailAddresses[0]?.emailAddress;
+        if (email) emails.push(email);
+      }
+      if (emails.length > 0) return emails;
+    } catch { /* fall through */ }
+  }
+
+  // 3. Hard-coded env var fallback
+  return (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 async function sendAdminNotification(params: {
   fullName: string;
   email: string;
@@ -95,23 +128,7 @@ async function sendAdminNotification(params: {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
 
-  // Primary: pull all active TTTAdmin users from the live StaffRoles table.
-  let adminEmails: string[] = [];
-  try {
-    const staff = await getStaffMembers();
-    adminEmails = staff
-      .filter((s) => s.isActive && s.email && s.role === "TTTAdmin")
-      .map((s) => s.email as string);
-  } catch { /* fall through */ }
-
-  // Fallback: comma-separated env var (e.g. ADMIN_NOTIFICATION_EMAIL)
-  if (adminEmails.length === 0) {
-    adminEmails = (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-
+  const adminEmails = await getAdminEmails();
   if (adminEmails.length === 0) return;
 
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";

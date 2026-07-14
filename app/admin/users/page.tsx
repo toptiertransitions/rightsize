@@ -85,7 +85,14 @@ export default async function AdminUsersPage() {
     memberships: membershipsByUser.get(u.id) ?? [],
   }));
 
-  const tenantList = tenants.map(t => ({ id: t.id, name: t.name, isTTT: t.isTTT ?? false }));
+  const tenantList = tenants.map(t => ({
+    id: t.id,
+    name: t.name,
+    isTTT: t.isTTT ?? false,
+    isArchived: t.isArchived ?? false,
+    isLostDeal: t.isLostDeal ?? false,
+    isConsignmentOnly: t.isConsignmentOnly ?? false,
+  }));
 
   return (
     <div className="min-h-screen bg-gray-950">

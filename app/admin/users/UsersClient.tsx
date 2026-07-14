@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Pagination } from "../components/Pagination";
 
 const PAGE_SIZE = 25;
@@ -110,9 +110,78 @@ function systemRoleBadge(role: string | undefined) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>;
 }
 
+function ProjectCombobox({ tenants, allAvailable, selectedId, search, open, inputClass, onSearchChange, onSelect, onOpen, onClose }: {
+  tenants: Array<{ id: string; name: string }>;
+  allAvailable: Array<{ id: string; name: string }>;
+  selectedId: string;
+  search: string;
+  open: boolean;
+  inputClass: string;
+  onSearchChange: (v: string) => void;
+  onSelect: (id: string, name: string) => void;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const selectedName = allAvailable.find(t => t.id === selectedId)?.name;
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="relative">
+        <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={e => onSearchChange(e.target.value)}
+          onFocus={onOpen}
+          placeholder={selectedName ?? "Search projects…"}
+          className={`w-full pl-8 pr-8 ${inputClass}`}
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => { onSearchChange(""); onSelect("", ""); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+          {tenants.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-gray-500">No matching projects</p>
+          ) : tenants.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onSelect(t.id, t.name); }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${selectedId === t.id ? "text-white font-semibold" : "text-gray-300"}`}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ManageModalProps {
   user: AdminUser;
-  tenants: Array<{ id: string; name: string }>;
+  tenants: Array<{ id: string; name: string; isTTT?: boolean; isArchived?: boolean; isLostDeal?: boolean; isConsignmentOnly?: boolean }>;
   currentUserId: string;
   onClose: () => void;
   onUpdate: (updated: AdminUser) => void;
@@ -133,8 +202,21 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
   const [addressInput, setAddressInput] = useState(user.address ?? "");
   const [pinColorInput, setPinColorInput] = useState(user.pinColor ?? "#16A34A");
   const [partnerLoading, setPartnerLoading] = useState(false);
+  const [tenantSearch, setTenantSearch] = useState("");
+  const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
 
-  const availableTenants = tenants.filter(t => !current.memberships.some(m => m.tenantId === t.id));
+  // Only active projects (not archived, not lost deals) — includes post-move consignment
+  const availableTenants = tenants.filter(t =>
+    !t.isArchived &&
+    !t.isLostDeal &&
+    !current.memberships.some(m => m.tenantId === t.id)
+  );
+
+  const tenantSearchResults = useMemo(() => {
+    const q = tenantSearch.trim().toLowerCase();
+    if (!q) return availableTenants.slice(0, 30);
+    return availableTenants.filter(t => t.name.toLowerCase().includes(q)).slice(0, 30);
+  }, [availableTenants, tenantSearch]);
   const isHardAdmin = current.systemRole === "TTTAdmin"; // hardcoded via env — can't be changed via API
 
   async function call(method: string, body: object) {
@@ -549,11 +631,19 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
           {availableTenants.length > 0 && (
             <section>
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Add to Project</h3>
-              <div className="flex gap-2">
-                <select value={addTenantId} onChange={e => setAddTenantId(e.target.value)} className={`flex-1 ${inputClass}`}>
-                  <option value="">Select project…</option>
-                  {availableTenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+              <ProjectCombobox
+                tenants={tenantSearchResults}
+                allAvailable={availableTenants}
+                selectedId={addTenantId}
+                search={tenantSearch}
+                open={tenantDropdownOpen}
+                inputClass={inputClass}
+                onSearchChange={(v) => { setTenantSearch(v); setTenantDropdownOpen(true); if (!v) setAddTenantId(""); }}
+                onSelect={(id, name) => { setAddTenantId(id); setTenantSearch(name); setTenantDropdownOpen(false); }}
+                onOpen={() => setTenantDropdownOpen(true)}
+                onClose={() => setTenantDropdownOpen(false)}
+              />
+              <div className="flex gap-2 mt-2">
                 <select value={addRole} onChange={e => setAddRole(e.target.value)} className={inputClass}>
                   {PROJECT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
@@ -987,7 +1077,7 @@ function LookupPanel({ tenants, onFound }: { tenants: Array<{ id: string; name: 
 
 interface Props {
   users: AdminUser[];
-  tenants: Array<{ id: string; name: string; isTTT?: boolean }>;
+  tenants: Array<{ id: string; name: string; isTTT?: boolean; isArchived?: boolean; isLostDeal?: boolean; isConsignmentOnly?: boolean }>;
   currentUserId: string;
 }
 
