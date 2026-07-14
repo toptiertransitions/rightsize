@@ -171,6 +171,9 @@ function ActivityEditModal({
 }
 
 // ─── Opportunities Tab ────────────────────────────────────────────────────────
+type OppSortCol = "client" | "town" | "source" | "owner" | "stage" | "value" | "nextstep" | "created";
+const OPP_STAGE_ORDER: Record<OpportunityStage, number> = { Lead: 0, Qualifying: 1, Proposing: 2, Won: 3, Lost: 4 };
+
 function OpportunitiesTab({
   initialOpportunities,
   clientContacts,
@@ -196,8 +199,17 @@ function OpportunitiesTab({
 }) {
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">(initialStageFilter);
-  const [sort, setSort] = useState<"oldest" | "newest" | "value" | "nextstep">("oldest");
+  const [sort, setSort] = useState<{ col: OppSortCol; dir: "asc" | "desc" }>({ col: "created", dir: "desc" });
+  const [search, setSearch] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
+
+  function toggleSort(col: OppSortCol) {
+    setSort(prev =>
+      prev.col === col
+        ? { col, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { col, dir: col === "value" ? "desc" : "asc" }
+    );
+  }
   const [panelOpp, setPanelOpp] = useState<ClientOpportunity | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelInitialContactId, setPanelInitialContactId] = useState<string | undefined>(undefined);
@@ -226,21 +238,33 @@ function OpportunitiesTab({
   const filtered = opportunities.filter((o) => {
     if (stageFilter !== "All" && o.stage !== stageFilter) return false;
     if (filterOwner && o.assignedToClerkId !== filterOwner) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const name = getContactName(o.clientContactId).toLowerCase();
+      const city = (o.city || "").toLowerCase();
+      const src = getSourceLabel(o).toLowerCase();
+      if (!name.includes(q) && !city.includes(q) && !src.includes(q)) return false;
+    }
     return true;
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    if (sort === "value") return b.estimatedValue - a.estimatedValue;
-    if (sort === "nextstep") {
-      const aDate = a.nextStepDate || "9999";
-      const bDate = b.nextStepDate || "9999";
-      return aDate.localeCompare(bDate);
+    const d = sort.dir === "asc" ? 1 : -1;
+    switch (sort.col) {
+      case "client": return d * getContactName(a.clientContactId).localeCompare(getContactName(b.clientContactId));
+      case "town":   return d * (a.city || "").localeCompare(b.city || "");
+      case "source": return d * getSourceLabel(a).localeCompare(getSourceLabel(b));
+      case "owner": {
+        const aO = staffMembers.find(s => s.clerkUserId === a.assignedToClerkId)?.displayName || "";
+        const bO = staffMembers.find(s => s.clerkUserId === b.assignedToClerkId)?.displayName || "";
+        return d * aO.localeCompare(bO);
+      }
+      case "stage":   return d * (OPP_STAGE_ORDER[a.stage] - OPP_STAGE_ORDER[b.stage]);
+      case "value":   return d * (a.estimatedValue - b.estimatedValue);
+      case "nextstep": return d * (a.nextStepDate || "9999").localeCompare(b.nextStepDate || "9999");
+      case "created": return d * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      default: return 0;
     }
-    if (sort === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    // "oldest": ascending createdAt, tiebreak by est. value descending
-    const dateCmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    if (dateCmp !== 0) return dateCmp;
-    return b.estimatedValue - a.estimatedValue;
   });
 
   function getContactName(id: string) {
@@ -337,48 +361,77 @@ function OpportunitiesTab({
     if (res.ok) setOpportunities((prev) => prev.filter((o) => o.id !== id));
   }
 
+  function SortTh({ col, label, className }: { col: OppSortCol; label: string; className?: string }) {
+    const active = sort.col === col;
+    return (
+      <th
+        onClick={() => toggleSort(col)}
+        className={cn(
+          "px-4 py-3 font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap group",
+          className
+        )}
+      >
+        <span className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors">
+          {label}
+          <span className={cn("text-[10px] transition-colors", active ? "text-forest-600" : "text-gray-300 group-hover:text-gray-400")}>
+            {active ? (sort.dir === "asc" ? "▲" : "▼") : "▲▼"}
+          </span>
+        </span>
+      </th>
+    );
+  }
+
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex flex-wrap gap-2">
-          {(["All", ...STAGES] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStageFilter(s)}
-              className={cn(
-                "px-3 py-1 rounded-full text-sm font-medium border transition-colors",
-                stageFilter === s
-                  ? "bg-forest-600 text-white border-forest-600"
-                  : "bg-white text-gray-600 border-gray-300 hover:border-forest-400"
-              )}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          {staffMembers.length > 0 && (
-            <select
-              value={filterOwner}
-              onChange={e => setFilterOwner(e.target.value)}
-              className="h-8 border border-gray-300 rounded-lg px-2 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-forest-500"
-            >
-              <option value="">All Owners</option>
-              {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
-                <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
-              ))}
-            </select>
-          )}
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as typeof sort)}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1"
+      {/* Stage filter pills */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {(["All", ...STAGES] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStageFilter(s)}
+            className={cn(
+              "px-3 py-1 rounded-full text-sm font-medium border transition-colors",
+              stageFilter === s
+                ? "bg-forest-600 text-white border-forest-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-forest-400"
+            )}
           >
-            <option value="oldest">Oldest First</option>
-            <option value="newest">Newest First</option>
-            <option value="value">Est. Value (desc)</option>
-            <option value="nextstep">Next Step (asc)</option>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* Search + filters row */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[180px]">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search client, town, source…"
+            className="w-full h-8 pl-8 pr-8 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm leading-none">×</button>
+          )}
+        </div>
+        {staffMembers.length > 0 && (
+          <select
+            value={filterOwner}
+            onChange={e => setFilterOwner(e.target.value)}
+            className="h-8 border border-gray-300 rounded-lg px-2 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-forest-500"
+          >
+            <option value="">All Owners</option>
+            {staffMembers.filter(s => s.role === "TTTSales" || s.role === "TTTAdmin").map(s => (
+              <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+            ))}
           </select>
+        )}
+        <span className="text-sm text-gray-400 whitespace-nowrap">{sorted.length} result{sorted.length !== 1 ? "s" : ""}</span>
+        <div className="flex items-center gap-2 ml-auto">
           <button onClick={exportCsv} className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50">
             Export CSV
           </button>
@@ -388,19 +441,19 @@ function OpportunitiesTab({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Client</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Town</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Source</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Owner</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Stage</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Est. Value</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Next Step</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell whitespace-nowrap">Created</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+              <SortTh col="client"   label="Client"     className="text-left" />
+              <SortTh col="town"     label="Town"       className="text-left" />
+              <SortTh col="source"   label="Source"     className="text-left" />
+              <SortTh col="owner"    label="Owner"      className="text-left" />
+              <SortTh col="stage"    label="Stage"      className="text-left" />
+              <SortTh col="value"    label="Est. Value" className="text-left" />
+              <SortTh col="nextstep" label="Next Step"  className="text-left" />
+              <SortTh col="created"  label="Created"    className="text-left hidden lg:table-cell" />
+              <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
