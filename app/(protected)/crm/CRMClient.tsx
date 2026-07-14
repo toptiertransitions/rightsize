@@ -2840,12 +2840,7 @@ function ReferralPartnersTab({
                           <td className="py-1.5 text-gray-500">{c.email || "—"}</td>
                           <td className="py-1.5 text-gray-500">{c.phone || "—"}</td>
                           <td className="py-1.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {!c.isFormerEmployee && c.clerkUserId && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#2d4a3e]/10 text-[#2d4a3e] font-medium" title="Has Partner Portal access">
-                                  Partner
-                                </span>
-                              )}
+                            <div className="flex items-center justify-end gap-2">
                               {!c.isFormerEmployee && c.email && (() => {
                                 const alreadySent = inviteResults.get(c.id) === "sent" || c.portalInviteSent;
                                 const inPortal = !!c.clerkUserId;
@@ -2858,21 +2853,22 @@ function ReferralPartnersTab({
                                   : alreadySent
                                   ? "Pending"
                                   : "Invite";
-                                const isGreyed = inPortal || alreadySent;
                                 return (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setPendingInviteContact(c); }}
                                     disabled={invitingSendId === c.id}
                                     className={cn(
-                                      "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                                      "text-xs px-2 py-0.5 rounded-full border font-medium transition-colors",
                                       inviteResults.get(c.id) === "error"
                                         ? "border-red-200 text-red-500"
-                                        : isGreyed
+                                        : inPortal
+                                        ? "border-[#2d4a3e]/20 text-[#2d4a3e] bg-[#2d4a3e]/10 hover:bg-[#2d4a3e]/15"
+                                        : alreadySent
                                         ? "border-gray-200 text-gray-400 bg-gray-50 hover:bg-gray-100"
                                         : "border-[#2d4a3e]/30 text-[#2d4a3e] hover:bg-[#2d4a3e]/5",
                                       invitingSendId === c.id && "opacity-50 cursor-wait"
                                     )}
-                                    title={isGreyed ? "Send follow-up invitation" : "Send Partner Portal invitation"}
+                                    title={inPortal || alreadySent ? "Send follow-up invitation" : "Send Partner Portal invitation"}
                                   >
                                     {label}
                                   </button>
