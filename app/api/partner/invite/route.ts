@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
-import { getSystemRole } from "@/lib/airtable";
+import { getSystemRole, updateReferralContact } from "@/lib/airtable";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { email, name } = body as { email?: string; name?: string };
+  const { email, name, contactId } = body as { email?: string; name?: string; contactId?: string };
   if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
   if (sendError) {
     console.error("Partner invite email error:", sendError);
     return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+  }
+
+  // Persist invite flag so all users see "Pending" across sessions
+  if (contactId) {
+    await updateReferralContact(contactId, { portalInviteSent: true }).catch(() => {});
   }
 
   return NextResponse.json({ sent: true });

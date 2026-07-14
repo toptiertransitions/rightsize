@@ -2153,7 +2153,7 @@ function ReferralPartnersTab({
       const res = await fetch("/api/partner/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: contact.email, name: contact.name }),
+        body: JSON.stringify({ email: contact.email, name: contact.name, contactId: contact.id }),
       });
       setInviteResults((prev) => new Map(prev).set(contact.id, res.ok ? "sent" : "error"));
     } catch {
@@ -2846,33 +2846,38 @@ function ReferralPartnersTab({
                                   Partner
                                 </span>
                               )}
-                              {!c.isFormerEmployee && c.email && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPendingInviteContact(c);
-                                  }}
-                                  disabled={invitingSendId === c.id}
-                                  className={cn(
-                                    "text-xs px-2 py-0.5 rounded-full border transition-colors",
-                                    inviteResults.get(c.id) === "error"
-                                      ? "border-red-200 text-red-500"
-                                      : (inviteResults.get(c.id) === "sent" || c.clerkUserId)
-                                      ? "border-gray-200 text-gray-400 bg-gray-50 hover:bg-gray-100"
-                                      : "border-[#2d4a3e]/30 text-[#2d4a3e] hover:bg-[#2d4a3e]/5",
-                                    invitingSendId === c.id && "opacity-50 cursor-wait"
-                                  )}
-                                  title={inviteResults.get(c.id) === "sent" || c.clerkUserId ? "Send follow-up invitation" : "Send Partner Portal invitation"}
-                                >
-                                  {inviteResults.get(c.id) === "error"
-                                    ? "Failed"
-                                    : invitingSendId === c.id
-                                    ? "Sending…"
-                                    : (inviteResults.get(c.id) === "sent" || c.clerkUserId)
-                                    ? "Invited"
-                                    : "Invite"}
-                                </button>
-                              )}
+                              {!c.isFormerEmployee && c.email && (() => {
+                                const alreadySent = inviteResults.get(c.id) === "sent" || c.portalInviteSent;
+                                const inPortal = !!c.clerkUserId;
+                                const label = inviteResults.get(c.id) === "error"
+                                  ? "Failed"
+                                  : invitingSendId === c.id
+                                  ? "Sending…"
+                                  : inPortal
+                                  ? "In-Portal"
+                                  : alreadySent
+                                  ? "Pending"
+                                  : "Invite";
+                                const isGreyed = inPortal || alreadySent;
+                                return (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setPendingInviteContact(c); }}
+                                    disabled={invitingSendId === c.id}
+                                    className={cn(
+                                      "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                                      inviteResults.get(c.id) === "error"
+                                        ? "border-red-200 text-red-500"
+                                        : isGreyed
+                                        ? "border-gray-200 text-gray-400 bg-gray-50 hover:bg-gray-100"
+                                        : "border-[#2d4a3e]/30 text-[#2d4a3e] hover:bg-[#2d4a3e]/5",
+                                      invitingSendId === c.id && "opacity-50 cursor-wait"
+                                    )}
+                                    title={isGreyed ? "Send follow-up invitation" : "Send Partner Portal invitation"}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })()}
                               {!c.isFormerEmployee && (
                                 <button
                                   onClick={() => setNextStepContact({ id: c.id, name: c.name, companyId: company.id, nextStepDate: c.nextStepDate || "", nextStepNote: c.nextStepNote || "" })}
@@ -3277,12 +3282,12 @@ function ReferralPartnersTab({
               </div>
               <div>
                 <h3 className="text-base font-semibold text-gray-900">
-                  {pendingInviteContact.clerkUserId || inviteResults.get(pendingInviteContact.id) === "sent"
+                  {(pendingInviteContact.portalInviteSent || inviteResults.get(pendingInviteContact.id) === "sent" || pendingInviteContact.clerkUserId)
                     ? "Send Follow-Up Invitation?"
                     : "Send Partner Portal Invite?"}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  {pendingInviteContact.clerkUserId || inviteResults.get(pendingInviteContact.id) === "sent"
+                  {(pendingInviteContact.portalInviteSent || inviteResults.get(pendingInviteContact.id) === "sent" || pendingInviteContact.clerkUserId)
                     ? <>This will send a follow-up invitation email to <strong>{pendingInviteContact.name}</strong> at{" "}<span className="font-medium text-gray-700">{pendingInviteContact.email}</span>.</>
                     : <>This will email <strong>{pendingInviteContact.name}</strong> at{" "}<span className="font-medium text-gray-700">{pendingInviteContact.email}</span> with a link to create their own login for the Top Tier Partner Portal.</>
                   }

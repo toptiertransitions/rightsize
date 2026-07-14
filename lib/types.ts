@@ -895,6 +895,7 @@ export interface ReferralContact {
   nextStepNote?: string;
   clerkUserId?: string;
   isFormerEmployee?: boolean;
+  portalInviteSent?: boolean;
 }
 
 export interface ClientContact {
