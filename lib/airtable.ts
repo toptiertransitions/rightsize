@@ -3145,6 +3145,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     nextStepDate: toStr(f["NextStepDate"]) || undefined,
     nextStepNote: toStr(f["NextStepNote"]) || undefined,
     clerkUserId: toStr(f["ClerkUserId"]) || undefined,
+    isFormerEmployee: !!f["IsFormerEmployee"],
   };
 }
 
@@ -3221,7 +3222,7 @@ export async function createReferralContact(data: {
 
 export async function updateReferralContact(
   id: string,
-  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string; nextStepDate: string | null; nextStepNote: string }>
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string; nextStepDate: string | null; nextStepNote: string; isFormerEmployee: boolean }>
 ): Promise<ReferralContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -3238,6 +3239,7 @@ export async function updateReferralContact(
   if (data.lastActivityDate !== undefined) fields["LastActivityDate"] = data.lastActivityDate;
   if (data.nextStepDate !== undefined) fields["NextStepDate"] = data.nextStepDate || null;
   if (data.nextStepNote !== undefined) fields["NextStepNote"] = data.nextStepNote;
+  if (data.isFormerEmployee !== undefined) fields["IsFormerEmployee"] = data.isFormerEmployee;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

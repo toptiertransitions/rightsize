@@ -2508,6 +2508,22 @@ function ReferralPartnersTab({
     }
   }
 
+  async function toggleFormerEmployee(contact: ReferralContact) {
+    const next = !contact.isFormerEmployee;
+    const res = await fetch("/api/crm/contacts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: contact.id, isFormerEmployee: next }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setContacts((prev) => {
+      const base = prev[contact.referralCompanyId] ?? initialReferralContacts.filter(rc => rc.referralCompanyId === contact.referralCompanyId);
+      return { ...prev, [contact.referralCompanyId]: base.map(c => c.id === contact.id ? data.contact : c) };
+    });
+    setContactModal(null);
+  }
+
   // Compute unique types for filter dropdown
   const allTypes = Array.from(new Set(companies.map(c => c.type).filter(Boolean))).sort();
 
@@ -2797,29 +2813,40 @@ function ReferralPartnersTab({
                       </thead>
                       <tbody>
                       {displayContacts.map((c) => (
-                        <tr key={c.id} className="border-t border-gray-100">
-                          <td className="py-1.5 font-medium text-gray-800">{c.name}</td>
+                        <tr key={c.id} className={cn("border-t border-gray-100", c.isFormerEmployee && "opacity-50")}>
                           <td className="py-1.5">
-                            <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", REF_STAGE_COLORS[c.stage || "Identified"])}>
-                              {c.stage || "Identified"}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={cn("font-medium", c.isFormerEmployee ? "text-gray-400" : "text-gray-800")}>{c.name}</span>
+                              {c.isFormerEmployee && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 uppercase tracking-wide border border-gray-200">Former</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1.5">
+                            {c.isFormerEmployee ? (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-400">—</span>
+                            ) : (
+                              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", REF_STAGE_COLORS[c.stage || "Identified"])}>
+                                {c.stage || "Identified"}
+                              </span>
+                            )}
                           </td>
                           <td className="py-1.5 text-xs text-gray-500">
                             {getEffectiveLastActivity(c.id, c.lastActivityDate)
                               ? new Date(getEffectiveLastActivity(c.id, c.lastActivityDate)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                               : "—"}
                           </td>
-                          <td className="py-1.5 text-gray-600">{c.title || "—"}</td>
-                          <td className="py-1.5 text-gray-600">{c.email || "—"}</td>
-                          <td className="py-1.5 text-gray-600">{c.phone || "—"}</td>
+                          <td className="py-1.5 text-gray-500">{c.title || "—"}</td>
+                          <td className="py-1.5 text-gray-500">{c.email || "—"}</td>
+                          <td className="py-1.5 text-gray-500">{c.phone || "—"}</td>
                           <td className="py-1.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {c.clerkUserId && (
+                              {!c.isFormerEmployee && c.clerkUserId && (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-[#2d4a3e]/10 text-[#2d4a3e] font-medium" title="Has Partner Portal access">
                                   Partner
                                 </span>
                               )}
-                              {c.email && (
+                              {!c.isFormerEmployee && c.email && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -2849,19 +2876,23 @@ function ReferralPartnersTab({
                                     : "Invite"}
                                 </button>
                               )}
-                              <button
-                                onClick={() => setNextStepContact({ id: c.id, name: c.name, companyId: company.id, nextStepDate: c.nextStepDate || "", nextStepNote: c.nextStepNote || "" })}
-                                className="text-xs px-2 py-0.5 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
-                                title="Set next step"
-                              >
-                                Next Step
-                              </button>
-                              <button
-                                onClick={() => setActivityContact({ id: c.id, name: c.name, email: c.email || undefined })}
-                                className="text-xs px-2 py-0.5 rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors"
-                              >
-                                Log
-                              </button>
+                              {!c.isFormerEmployee && (
+                                <button
+                                  onClick={() => setNextStepContact({ id: c.id, name: c.name, companyId: company.id, nextStepDate: c.nextStepDate || "", nextStepNote: c.nextStepNote || "" })}
+                                  className="text-xs px-2 py-0.5 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
+                                  title="Set next step"
+                                >
+                                  Next Step
+                                </button>
+                              )}
+                              {!c.isFormerEmployee && (
+                                <button
+                                  onClick={() => setActivityContact({ id: c.id, name: c.name, email: c.email || undefined })}
+                                  className="text-xs px-2 py-0.5 rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors"
+                                >
+                                  Log
+                                </button>
+                              )}
                               <button onClick={() => openEditContact(c)} className="text-xs text-forest-600 hover:text-forest-800 px-1">Edit</button>
                               <button onClick={() => deleteContact(company.id, c.id)} className="text-xs text-red-500 hover:text-red-700 px-1">Delete</button>
                             </div>
@@ -3138,11 +3169,41 @@ function ReferralPartnersTab({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setContactModal(null)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
-              <button onClick={saveContact} disabled={saving || !contactForm.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
-                {saving ? "Saving…" : "Save"}
-              </button>
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 mt-2">
+              {/* Left: former employee toggle (edit only) */}
+              {editingContact ? (
+                editingContact.isFormerEmployee ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleFormerEmployee(editingContact)}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 text-sm text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Restore to Active
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleFormerEmployee(editingContact)}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 text-sm text-amber-700 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+                    title="Mark this person as no longer working at this company. Their history stays attached to the company."
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    No Longer at Company
+                  </button>
+                )
+              ) : (
+                <span />
+              )}
+              {/* Right: cancel + save */}
+              <div className="flex gap-2">
+                <button onClick={() => setContactModal(null)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>
+                <button onClick={saveContact} disabled={saving || !contactForm.name} className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700 disabled:opacity-50">
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
