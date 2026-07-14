@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
@@ -270,7 +270,7 @@ export async function PATCH(req: NextRequest) {
       (updates as Record<string, unknown>).staffCommissionPercent = autoCommission;
     }
   }
-  // When reverting from Sold → clear sale fields
+  // When reverting from Sold → clear sale fields and delete orphaned sale events
   if (updates.status && updates.status !== "Sold" && existing?.status === "Sold") {
     if (!(updates as Record<string, unknown>).salePrice) {
       (updates as Record<string, unknown>).salePrice = 0;
@@ -278,10 +278,14 @@ export async function PATCH(req: NextRequest) {
     if (!(updates as Record<string, unknown>).saleDate) {
       (updates as Record<string, unknown>).saleDate = "";
     }
-    // Always clear payout when un-selling — the item is no longer sold
+    // Always clear payout when un-selling
     if ((updates as Record<string, unknown>).consignorPayout === undefined) {
       (updates as Record<string, unknown>).consignorPayout = 0;
     }
+    // Delete any unpaid sale events so the Sales page doesn't show stale "owed" amounts
+    const saleEvents = await getItemSaleEvents(id as string).catch(() => []);
+    const unpaid = saleEvents.filter(e => !e.payoutPaid);
+    await Promise.all(unpaid.map(e => deleteItemSaleEvent(e.id).catch(() => null)));
   }
 
   // Auto-set completedDate when status → Sold/Donated/Discarded; clear when reverting
