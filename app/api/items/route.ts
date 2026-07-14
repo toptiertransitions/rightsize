@@ -278,6 +278,10 @@ export async function PATCH(req: NextRequest) {
     if (!(updates as Record<string, unknown>).saleDate) {
       (updates as Record<string, unknown>).saleDate = "";
     }
+    // Always clear payout when un-selling — the item is no longer sold
+    if ((updates as Record<string, unknown>).consignorPayout === undefined) {
+      (updates as Record<string, unknown>).consignorPayout = 0;
+    }
   }
 
   // Auto-set completedDate when status → Sold/Donated/Discarded; clear when reverting
