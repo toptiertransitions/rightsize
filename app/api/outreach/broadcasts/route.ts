@@ -16,6 +16,7 @@ import {
 import { getValidAccessToken } from "@/lib/gmail";
 import { sendGmailMessage } from "@/lib/gmail";
 import { clerkClient } from "@clerk/nextjs/server";
+import { Resend } from "resend";
 import type { OutreachContactFilter } from "@/lib/airtable";
 
 async function requireSalesRole(userId: string) {
@@ -137,6 +138,8 @@ export async function POST(req: NextRequest) {
         const fromName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Top Tier Transitions";
         const fromEmail = user.emailAddresses[0]?.emailAddress ?? "";
 
+        let sent = 0;
+        let failed = 0;
         for (const enrollment of enrollments) {
           try {
             const result = await sendGmailMessage({
@@ -149,6 +152,7 @@ export async function POST(req: NextRequest) {
                 first_name: enrollment.contactName.split(" ")[0] || enrollment.contactName,
                 last_name: enrollment.contactName.split(" ").slice(1).join(" "),
                 rep_first_name: user.firstName ?? "",
+                company: enrollment.company ?? "",
               }),
             });
             await createOutreachSend({
@@ -164,6 +168,7 @@ export async function POST(req: NextRequest) {
               status: "Completed",
               lastSentAt: new Date().toISOString(),
             });
+            sent++;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             await createOutreachSend({
@@ -176,7 +181,26 @@ export async function POST(req: NextRequest) {
               errorMessage: msg,
             }).catch(() => {});
             await updateOutreachEnrollment(enrollment.id, { status: "Bounced" }).catch(() => {});
+            failed++;
           }
+        }
+
+        // Send confirmation email to the sender
+        if (fromEmail) {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const statusLine = failed === 0
+            ? `All ${sent} email${sent !== 1 ? "s" : ""} delivered successfully.`
+            : `${sent} delivered, ${failed} failed.`;
+          await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
+            to: fromEmail,
+            subject: `Broadcast "${name}" sent — ${statusLine}`,
+            html: `<p>Hi ${user.firstName ?? "there"},</p>
+<p>Your broadcast <strong>"${name}"</strong> has finished sending.</p>
+<p>${statusLine}</p>
+${failed > 0 ? `<p style="color:#b91c1c">${failed} email${failed !== 1 ? "s" : ""} could not be delivered.</p>` : ""}
+<p style="color:#6b7280;font-size:12px;margin-top:24px">Top Tier Transitions · Rightsize</p>`,
+          }).catch(() => {});
         }
       } catch (err) {
         console.error("[broadcasts] send error:", err);
@@ -203,5 +227,5 @@ export async function POST(req: NextRequest) {
 }
 
 function applyMergeTags(body: string, vars: Record<string, string>): string {
-  return body.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+  return body.replace(/\{\{([\w.]+)\}\}/g, (_, key) => vars[key] ?? "");
 }

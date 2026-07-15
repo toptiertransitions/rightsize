@@ -6069,6 +6069,8 @@ export interface OutreachContactFilter {
   stages?: string[];
   tags?: string;
   companyId?: string;
+  companyIds?: string[];
+  contactIds?: string[];
   assignedToClerkId?: string;
   excludeOptout?: boolean;
 }
@@ -6082,9 +6084,32 @@ export interface ResolvedOutreachContact {
 
 export async function resolveOutreachContacts(filter: OutreachContactFilter): Promise<ResolvedOutreachContact[]> {
   if (filter.contactType === "ReferralContacts") {
+    // If specific contact IDs provided, fetch exactly those
+    if (filter.contactIds?.length) {
+      const idOr = filter.contactIds.map(id => `RECORD_ID()="${id}"`).join(",");
+      const formula = filter.contactIds.length === 1 ? `RECORD_ID()="${filter.contactIds[0]}"` : `OR(${idOr})`;
+      const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `?filterByFormula=${encodeURIComponent(formula)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.records as AirtableRecord[]).map(r => {
+        const c = mapReferralContact(r);
+        return { id: c.id, name: c.name, email: c.email };
+      }).filter(c => c.email);
+    }
+
     const parts: string[] = [`{Email} != ""`];
     if (filter.excludeOptout !== false) parts.push(`{EmailOptout} != 1`);
-    if (filter.companyId) parts.push(`{ReferralCompanyId} = "${filter.companyId}"`);
+    // Support both single companyId and array companyIds
+    const effectiveCompanyIds = filter.companyIds?.length
+      ? filter.companyIds
+      : filter.companyId
+      ? [filter.companyId]
+      : [];
+    if (effectiveCompanyIds.length === 1) {
+      parts.push(`{ReferralCompanyId} = "${effectiveCompanyIds[0]}"`);
+    } else if (effectiveCompanyIds.length > 1) {
+      parts.push(`OR(${effectiveCompanyIds.map(id => `{ReferralCompanyId}="${id}"`).join(",")})`);
+    }
     if (filter.stages?.length) {
       const stageOr = filter.stages.map(s => `{Stage} = "${s}"`).join(",");
       parts.push(`OR(${stageOr})`);
@@ -6106,6 +6131,18 @@ export async function resolveOutreachContacts(filter: OutreachContactFilter): Pr
     } while (offset);
     return all;
   } else {
+    if (filter.contactIds?.length) {
+      const idOr = filter.contactIds.map(id => `RECORD_ID()="${id}"`).join(",");
+      const formula = filter.contactIds.length === 1 ? `RECORD_ID()="${filter.contactIds[0]}"` : `OR(${idOr})`;
+      const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${encodeURIComponent(formula)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.records as AirtableRecord[]).map(r => {
+        const c = mapClientContact(r);
+        return { id: c.id, name: c.name, email: c.email };
+      }).filter(c => c.email);
+    }
+
     const parts: string[] = [`{Email} != ""`];
     if (filter.excludeOptout !== false) parts.push(`{EmailOptout} != 1`);
     if (filter.assignedToClerkId) parts.push(`{AssignedToClerkId} = "${filter.assignedToClerkId}"`);
