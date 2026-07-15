@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     threadWithPrevious: false,
   });
 
-  // Batch-create enrollments
+  // Snapshot contact data for the after() callback before returning
   const enrollmentData = contacts.map(c => ({
     sequenceId: sequence.id,
     contactType: filter.contactType,
@@ -126,12 +126,13 @@ export async function POST(req: NextRequest) {
     lastReplySnippet: "",
     repliesAcknowledgedAt: "",
   }));
-  const enrollments = await batchCreateOutreachEnrollments(enrollmentData);
 
-  // Fire emails asynchronously after response
-  if (channel === "Email") {
-    after(async () => {
-      try {
+  // Return immediately — enrollment creation + email sending happen after response
+  after(async () => {
+    try {
+      const enrollments = await batchCreateOutreachEnrollments(enrollmentData);
+
+      if (channel === "Email") {
         const accessToken = await getValidAccessToken(userId);
         const clerk = await clerkClient();
         const user = await clerk.users.getUser(userId);
@@ -164,10 +165,7 @@ export async function POST(req: NextRequest) {
               status: "Sent",
               errorMessage: "",
             });
-            await updateOutreachEnrollment(enrollment.id, {
-              status: "Completed",
-              lastSentAt: new Date().toISOString(),
-            });
+            await updateOutreachEnrollment(enrollment.id, { status: "Completed", lastSentAt: new Date().toISOString() });
             sent++;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -185,7 +183,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Send confirmation email to the sender
+        // Confirmation email to sender
         if (fromEmail) {
           const resend = new Resend(process.env.RESEND_API_KEY);
           const statusLine = failed === 0
@@ -202,18 +200,16 @@ ${failed > 0 ? `<p style="color:#b91c1c">${failed} email${failed !== 1 ? "s" : "
 <p style="color:#6b7280;font-size:12px;margin-top:24px">Top Tier Transitions · Rightsize</p>`,
           }).catch(() => {});
         }
-      } catch (err) {
-        console.error("[broadcasts] send error:", err);
+      } else {
+        // SMS / manual task — mark all completed
+        await Promise.all(enrollments.map(e =>
+          updateOutreachEnrollment(e.id, { status: "Completed", lastSentAt: now }).catch(() => {})
+        ));
       }
-    });
-  } else {
-    // SMS / task — mark all enrollments as Completed immediately (manual tasks)
-    after(async () => {
-      await Promise.all(enrollments.map(e =>
-        updateOutreachEnrollment(e.id, { status: "Completed", lastSentAt: now }).catch(() => {})
-      ));
-    });
-  }
+    } catch (err) {
+      console.error("[broadcasts] after() error:", err);
+    }
+  });
 
   return NextResponse.json({
     broadcast: {

@@ -495,14 +495,23 @@ function ComposeWizard({
           templateId: selectedTemplateId || undefined,
           channel,
         }),
+        signal: AbortSignal.timeout(30000),
       });
-      const data = await res.json();
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* non-JSON body */ }
       if (!res.ok) {
-        setError(data.error ?? "Failed to send broadcast");
+        setError((data.error as string) ?? `Server error (${res.status}). Please try again.`);
         return;
       }
-      setSendSuccess({ count: data.broadcast.recipientCount });
-      onDone(data.broadcast);
+      const broadcast = data.broadcast as BroadcastSummary;
+      setSendSuccess({ count: broadcast.recipientCount });
+      onDone(broadcast);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        setError("Request timed out. The server may still be processing — check your inbox for a confirmation email.");
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      }
     } finally {
       setSending(false);
     }
@@ -864,6 +873,19 @@ function ComposeWizard({
       {/* ── Step 3: Review & Send ── */}
       {step === 3 && (
         <div className="space-y-5">
+          {error && (
+            <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {channel === "Email" && !hasSendScope && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              Gmail reconnection required before sending.{" "}
+              <a href="/api/crm/gmail/auth" className="font-medium underline">Reconnect Gmail →</a>
+            </div>
+          )}
+
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">Broadcast name</span>
@@ -918,17 +940,6 @@ function ComposeWizard({
                 {bodyText}
               </div>
             </div>
-          )}
-
-          {channel === "Email" && !hasSendScope && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              Gmail reconnection required before sending.{" "}
-              <a href="/api/crm/gmail/auth" className="font-medium underline">Reconnect Gmail →</a>
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
           <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
