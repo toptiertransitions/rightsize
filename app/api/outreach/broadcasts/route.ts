@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
         const fromEmail = user.emailAddresses[0]?.emailAddress ?? "";
 
         let sent = 0;
-        let failed = 0;
+        const failures: { contact: string; error: string }[] = [];
         for (const enrollment of enrollments) {
           try {
             const result = await sendGmailMessage({
@@ -186,6 +186,7 @@ export async function POST(req: NextRequest) {
             sent++;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
+            failures.push({ contact: enrollment.contactEmail || enrollment.contactName, error: msg });
             await createOutreachSend({
               enrollmentId: enrollment.id,
               stepOrder: 1,
@@ -196,16 +197,19 @@ export async function POST(req: NextRequest) {
               errorMessage: msg,
             }).catch(() => {});
             await updateOutreachEnrollment(enrollment.id, { status: "Bounced" }).catch(() => {});
-            failed++;
           }
         }
 
         // Confirmation email to sender
         if (fromEmail) {
           const resend = new Resend(process.env.RESEND_API_KEY);
+          const failed = failures.length;
           const statusLine = failed === 0
             ? `All ${sent} email${sent !== 1 ? "s" : ""} delivered successfully.`
             : `${sent} delivered, ${failed} failed.`;
+          const failureRows = failures.map(f =>
+            `<tr><td style="padding:4px 8px;color:#374151">${f.contact}</td><td style="padding:4px 8px;color:#b91c1c;font-size:12px">${f.error}</td></tr>`
+          ).join("");
           await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
             to: fromEmail,
@@ -213,7 +217,12 @@ export async function POST(req: NextRequest) {
             html: `<p>Hi ${user.firstName ?? "there"},</p>
 <p>Your broadcast <strong>"${name}"</strong> has finished sending.</p>
 <p>${statusLine}</p>
-${failed > 0 ? `<p style="color:#b91c1c">${failed} email${failed !== 1 ? "s" : ""} could not be delivered.</p>` : ""}
+${failed > 0 ? `
+<p style="color:#b91c1c;font-weight:600;margin-top:16px">${failed} email${failed !== 1 ? "s" : ""} could not be delivered:</p>
+<table style="border-collapse:collapse;width:100%;font-size:13px;margin-top:8px">
+  <thead><tr style="background:#f9fafb"><th style="padding:4px 8px;text-align:left;color:#6b7280">Recipient</th><th style="padding:4px 8px;text-align:left;color:#6b7280">Error</th></tr></thead>
+  <tbody>${failureRows}</tbody>
+</table>` : ""}
 <p style="color:#6b7280;font-size:12px;margin-top:24px">Top Tier Transitions · Rightsize</p>`,
           }).catch(() => {});
         }
