@@ -12,6 +12,8 @@ interface BroadcastSummary {
   recipientCount: number;
   sentAt: string;
   channel: "Email" | "SMS";
+  sentCount?: number;
+  failedCount?: number;
 }
 
 interface AudienceFilter {
@@ -315,21 +317,99 @@ function AiPromptPanel({
 }
 
 // ─── Broadcasts list ──────────────────────────────────────────────────────────
+type BcastSortCol = "name" | "channel" | "recipients" | "delivered" | "failed" | "sent";
+
 function BroadcastsList({ broadcasts, loading, onNew }: {
   broadcasts: BroadcastSummary[];
   loading: boolean;
   onNew: () => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [channelFilter, setChannelFilter] = useState<"All" | "Email" | "SMS">("All");
+  const [statusFilter, setStatusFilter] = useState<"all" | "ok" | "failures">("all");
+  const [sort, setSort] = useState<{ col: BcastSortCol; dir: "asc" | "desc" }>({ col: "sent", dir: "desc" });
+
+  function toggleSort(col: BcastSortCol) {
+    setSort(s => s.col === col ? { col, dir: s.dir === "asc" ? "desc" : "asc" } : { col, dir: "desc" });
+  }
+
+  const filtered = broadcasts.filter(b => {
+    if (search && !b.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (channelFilter !== "All" && b.channel !== channelFilter) return false;
+    if (statusFilter === "ok" && (b.failedCount ?? 0) > 0) return false;
+    if (statusFilter === "failures" && (b.failedCount ?? 0) === 0) return false;
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    switch (sort.col) {
+      case "name": cmp = a.name.localeCompare(b.name); break;
+      case "channel": cmp = a.channel.localeCompare(b.channel); break;
+      case "recipients": cmp = a.recipientCount - b.recipientCount; break;
+      case "delivered": cmp = (a.sentCount ?? -1) - (b.sentCount ?? -1); break;
+      case "failed": cmp = (a.failedCount ?? -1) - (b.failedCount ?? -1); break;
+      case "sent": cmp = a.sentAt.localeCompare(b.sentAt); break;
+    }
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+
+  function SortTh({ col, label, className }: { col: BcastSortCol; label: string; className?: string }) {
+    const active = sort.col === col;
+    return (
+      <th
+        className={cn("px-4 py-3 cursor-pointer select-none whitespace-nowrap group", className)}
+        onClick={() => toggleSort(col)}
+      >
+        <span className="flex items-center gap-1">
+          {label}
+          <span className={cn("text-xs transition-colors", active ? "text-forest-600" : "text-gray-300 group-hover:text-gray-400")}>
+            {active ? (sort.dir === "asc" ? "▲" : "▼") : "▲▼"}
+          </span>
+        </span>
+      </th>
+    );
+  }
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-gray-500">One-time sends to a filtered or hand-picked list of contacts.</p>
         <button
           onClick={onNew}
-          className="rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 transition-colors"
+          className="shrink-0 rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 transition-colors"
         >
           + New Broadcast
         </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="mb-3 flex flex-wrap gap-2">
+        <input
+          type="text"
+          placeholder="Search broadcasts…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="flex-1 min-w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+        />
+        <select
+          value={channelFilter}
+          onChange={e => setChannelFilter(e.target.value as "All" | "Email" | "SMS")}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+        >
+          <option value="All">All channels</option>
+          <option value="Email">Email</option>
+          <option value="SMS">SMS</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as "all" | "ok" | "failures")}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+        >
+          <option value="all">All statuses</option>
+          <option value="ok">Fully delivered</option>
+          <option value="failures">Has failures</option>
+        </select>
       </div>
 
       {loading ? (
@@ -341,35 +421,60 @@ function BroadcastsList({ broadcasts, loading, onNew }: {
             Send your first broadcast →
           </button>
         </div>
+      ) : sorted.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-300 py-10 text-center">
+          <p className="text-sm text-gray-500">No broadcasts match your filters.</p>
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Channel</th>
-                <th className="px-4 py-3">Recipients</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Sent</th>
+                <SortTh col="name" label="Name" />
+                <SortTh col="channel" label="Channel" />
+                <SortTh col="recipients" label="Recipients" />
+                <SortTh col="delivered" label="Delivered" className="hidden sm:table-cell" />
+                <SortTh col="failed" label="Failed" className="hidden sm:table-cell" />
+                <SortTh col="sent" label="Sent" className="hidden md:table-cell" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {broadcasts.map(b => (
-                <tr key={b.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{b.name}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                      b.channel === "Email" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
-                    )}>
-                      {b.channel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{b.recipientCount.toLocaleString()}</td>
-                  <td className="px-4 py-3 hidden sm:table-cell text-gray-500">{timeAgo(b.sentAt)}</td>
-                </tr>
-              ))}
+              {sorted.map(b => {
+                const hasFailed = (b.failedCount ?? 0) > 0;
+                const hasTracking = b.sentCount !== undefined;
+                return (
+                  <tr key={b.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{b.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                        b.channel === "Email" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                      )}>
+                        {b.channel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{b.recipientCount.toLocaleString()}</td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {hasTracking
+                        ? <span className="font-medium text-green-700">{b.sentCount!.toLocaleString()}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {hasTracking
+                        ? hasFailed
+                          ? <span className="font-medium text-red-600">{b.failedCount!.toLocaleString()}</span>
+                          : <span className="text-gray-400">0</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell text-gray-500">{timeAgo(b.sentAt)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-400">
+            {sorted.length} of {broadcasts.length} broadcast{broadcasts.length !== 1 ? "s" : ""}
+          </div>
         </div>
       )}
     </div>
@@ -997,6 +1102,8 @@ export default function BroadcastsTab({
             recipientCount: Number(cfg.recipientCount ?? 0),
             sentAt: String(cfg.sentAt ?? s.createdAt ?? ""),
             channel: (cfg.channel as "Email" | "SMS") ?? "Email",
+            sentCount: cfg.sentCount !== undefined ? Number(cfg.sentCount) : undefined,
+            failedCount: cfg.failedCount !== undefined ? Number(cfg.failedCount) : undefined,
           };
         });
         setBroadcasts(parsed.sort((a, b) => b.sentAt.localeCompare(a.sentAt)));

@@ -7,6 +7,7 @@ import {
   getSystemRole,
   getOutreachSequences,
   createOutreachSequence,
+  updateOutreachSequence,
   createOutreachSequenceStep,
   resolveOutreachContacts,
   batchCreateOutreachEnrollments,
@@ -226,11 +227,35 @@ ${failed > 0 ? `
 <p style="color:#6b7280;font-size:12px;margin-top:24px">Top Tier Transitions · Rightsize</p>`,
           }).catch(() => {});
         }
+
+        // Write final sent/failed counts back into triggerConfigJson
+        await updateOutreachSequence(sequence.id, {
+          triggerConfigJson: JSON.stringify({
+            isBroadcast: true,
+            sentAt: now,
+            recipientCount: contacts.length,
+            channel,
+            filterJson: JSON.stringify(filter),
+            sentCount: sent,
+            failedCount: failures.length,
+          }),
+        }).catch(err => console.error("[broadcasts] updateOutreachSequence failed:", err));
       } else {
         // SMS / manual task — mark all completed
         await Promise.all(enrollments.map(e =>
           updateOutreachEnrollment(e.id, { status: "Completed", lastSentAt: now }).catch(() => {})
         ));
+        await updateOutreachSequence(sequence.id, {
+          triggerConfigJson: JSON.stringify({
+            isBroadcast: true,
+            sentAt: now,
+            recipientCount: contacts.length,
+            channel,
+            filterJson: JSON.stringify(filter),
+            sentCount: enrollments.length,
+            failedCount: 0,
+          }),
+        }).catch(err => console.error("[broadcasts] updateOutreachSequence (SMS) failed:", err));
       }
     } catch (err) {
       console.error("[broadcasts] after() error:", err);
