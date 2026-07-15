@@ -64,48 +64,65 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Resolve contacts
-  const contacts = await resolveOutreachContacts(filter);
+  let contacts: Awaited<ReturnType<typeof resolveOutreachContacts>>;
+  try {
+    contacts = await resolveOutreachContacts(filter);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[broadcasts] resolveOutreachContacts failed:", msg);
+    return NextResponse.json({ error: `Failed to load contacts: ${msg}` }, { status: 500 });
+  }
   if (contacts.length === 0) {
     return NextResponse.json({ error: "No contacts match this audience" }, { status: 400 });
   }
 
   const now = new Date().toISOString();
 
-  // Create sequence record representing this broadcast
-  const sequence = await createOutreachSequence({
-    name,
-    description: "",
-    status: "Active",
-    ownerClerkId: userId,
-    triggerType: "Manual",
-    triggerConfigJson: JSON.stringify({
-      isBroadcast: true,
-      sentAt: now,
-      recipientCount: contacts.length,
-      channel,
-      filterJson: JSON.stringify(filter),
-    }),
-    defaultAudienceId: "",
-    sendWindowJson: "",
-    autoPauseOnReply: true,
-  });
+  let sequence: Awaited<ReturnType<typeof createOutreachSequence>>;
+  try {
+    sequence = await createOutreachSequence({
+      name,
+      description: "",
+      status: "Active",
+      ownerClerkId: userId,
+      triggerType: "Manual",
+      triggerConfigJson: JSON.stringify({
+        isBroadcast: true,
+        sentAt: now,
+        recipientCount: contacts.length,
+        channel,
+        filterJson: JSON.stringify(filter),
+      }),
+      defaultAudienceId: "",
+      sendWindowJson: "",
+      autoPauseOnReply: true,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[broadcasts] createOutreachSequence failed:", msg);
+    return NextResponse.json({ error: `Failed to create broadcast record: ${msg}` }, { status: 500 });
+  }
 
-  // Create the single step
-  await createOutreachSequenceStep({
-    sequenceId: sequence.id,
-    stepOrder: 1,
-    channel: channel === "SMS" ? "Task" : "Email",
-    delayDays: 0,
-    delayHours: 0,
-    templateId: templateId ?? "",
-    subjectOverride: subject,
-    bodyOverride: bodyHtml,
-    taskTitle: channel === "SMS" ? `Send SMS: ${name}` : "",
-    taskDescription: channel === "SMS" ? bodyHtml : "",
-    taskType: channel === "SMS" ? "SMS" : "",
-    threadWithPrevious: false,
-  });
+  try {
+    await createOutreachSequenceStep({
+      sequenceId: sequence.id,
+      stepOrder: 1,
+      channel: channel === "SMS" ? "Task" : "Email",
+      delayDays: 0,
+      delayHours: 0,
+      templateId: templateId ?? "",
+      subjectOverride: subject,
+      bodyOverride: bodyHtml,
+      taskTitle: channel === "SMS" ? `Send SMS: ${name}` : "",
+      taskDescription: channel === "SMS" ? bodyHtml : "",
+      taskType: channel === "SMS" ? "SMS" : "",
+      threadWithPrevious: false,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[broadcasts] createOutreachSequenceStep failed:", msg);
+    return NextResponse.json({ error: `Failed to create step record: ${msg}` }, { status: 500 });
+  }
 
   // Snapshot contact data for the after() callback before returning
   const enrollmentData = contacts.map(c => ({
