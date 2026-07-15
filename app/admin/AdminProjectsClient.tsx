@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { Pagination } from "./components/Pagination";
 import type { Tenant } from "@/lib/types";
 
@@ -339,14 +338,6 @@ export function AdminProjectsClient({ tenants, memberCountByTenant, isAdmin = fa
                       ) : (
                         <span className="text-xs bg-green-900/40 text-green-400 px-2 py-0.5 rounded-full">Active</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/admin/impersonate?tenantId=${r.id}`}
-                        className="text-xs text-forest-400 hover:text-forest-300 font-medium whitespace-nowrap"
-                      >
-                        Enter as Staff →
-                      </Link>
                     </td>
                   </tr>
                 ))
