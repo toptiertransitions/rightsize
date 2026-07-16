@@ -891,6 +891,8 @@ function ComposeWizard({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [sendSuccess, setSendSuccess] = useState<{ count: number } | null>(null);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<"sent" | "error" | null>(null);
 
   const emailTemplates = templates.filter(t => t.channel === "Email");
   const smsTemplates = templates.filter(t => t.channel === "SMS");
@@ -1578,6 +1580,54 @@ function ComposeWizard({
             <div className="flex items-center gap-2 text-sm">
               <span className="text-gray-500">Attachment</span>
               <span className="font-medium text-gray-900">{attachmentName}</span>
+            </div>
+          )}
+
+          {/* Test send */}
+          {channel === "Email" && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setSendingTest(true);
+                  setTestResult(null);
+                  const isBranded = emailType === "branded";
+                  const finalBodyHtml = isBranded
+                    ? brandedHtml
+                    : (ctaLink ? bodyText + `\n\n${ctaLabel || "Click here"}: ${ctaLink}` : bodyText).replace(/\n/g, "<br>");
+                  try {
+                    const res = await fetch("/api/outreach/broadcasts/test-send", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ subject, bodyHtml: finalBodyHtml, attachmentUrl: attachmentUrl || undefined }),
+                    });
+                    setTestResult(res.ok ? "sent" : "error");
+                  } catch {
+                    setTestResult("error");
+                  } finally {
+                    setSendingTest(false);
+                  }
+                }}
+                disabled={sendingTest || !hasSendScope || (emailType === "branded" ? !brandedHtml : !bodyText.trim())}
+                className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {sendingTest ? (
+                  <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Sending test…</>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Send test to me
+                  </>
+                )}
+              </button>
+              {testResult === "sent" && (
+                <span className="text-sm text-green-600 font-medium">Test sent to {gmailEmail}</span>
+              )}
+              {testResult === "error" && (
+                <span className="text-sm text-red-600">Test send failed — check Gmail connection</span>
+              )}
             </div>
           )}
 
