@@ -1519,11 +1519,14 @@ export function SalesClient({
     "Estate Sale": 67,
   };
 
-  // Total inventory value: base × clientSharePercent for all consignment items.
-  // Estate Sale: base = valueMid if set, else salePrice (items priced at the sale with no prior valuation).
-  // All routes: fall back to ROUTE_SHARE_DEFAULTS when clientSharePercent is missing or 0 (never set).
+  // Total inventory value: active (unsold/undisposed) consignment items only.
+  // Estate Sale: base = valueMid if set, else salePrice.
+  // All routes: fall back to ROUTE_SHARE_DEFAULTS when clientSharePercent is missing or 0.
   const totalInventoryValue = items
-    .filter(i => ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute))
+    .filter(i =>
+      ["ProFoundFinds Consignment", "FB/Marketplace", "Online Marketplace", "Other Consignment", "Estate Sale"].includes(i.primaryRoute) &&
+      ["Pending Review", "Approved", "Listed", "In Cart"].includes(i.status)
+    )
     .reduce((s, i) => {
       const base = i.primaryRoute === "Estate Sale"
         ? (i.valueMid || i.salePrice || 0)
