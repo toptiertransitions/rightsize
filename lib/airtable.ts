@@ -5938,7 +5938,7 @@ export async function getOutreachEnrollments(filters?: {
   status?: OutreachEnrollmentStatus;
 }): Promise<OutreachEnrollment[]> {
   const parts: string[] = [];
-  if (filters?.sequenceId) parts.push(`FIND("${filters.sequenceId}", ARRAYJOIN({Sequence}, ",")) > 0`);
+  if (filters?.sequenceId) parts.push(`{SequenceId} = "${filters.sequenceId}"`);
   if (filters?.assignedToClerkId) parts.push(`{AssignedToClerkId} = "${filters.assignedToClerkId}"`);
   if (filters?.status) parts.push(`{Status} = "${filters.status}"`);
   const formula = parts.length > 0 ? encodeURIComponent(parts.length === 1 ? parts[0] : `AND(${parts.join(",")})`) : "";
@@ -5958,6 +5958,7 @@ export async function getOutreachEnrollments(filters?: {
 export async function createOutreachEnrollment(data: Omit<OutreachEnrollment, "id">): Promise<OutreachEnrollment> {
   const fields: Record<string, unknown> = {
     Sequence: [data.sequenceId],
+    SequenceId: data.sequenceId,
     ContactType: data.contactType,
     ContactId: data.contactId,
     ContactEmail: data.contactEmail,
@@ -6015,7 +6016,7 @@ function mapOutreachSend(record: AirtableRecord): OutreachSend {
 }
 
 export async function getOutreachSendsForEnrollment(enrollmentId: string): Promise<OutreachSend[]> {
-  const formula = encodeURIComponent(`FIND("${enrollmentId}", ARRAYJOIN({Enrollment}, ",")) > 0`);
+  const formula = encodeURIComponent(`{EnrollmentId} = "${enrollmentId}"`);
   const qs = `?filterByFormula=${formula}&sort[0][field]=SentAt&sort[0][direction]=asc`;
   const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SENDS, qs);
   if (!res.ok) return [];
@@ -6059,6 +6060,7 @@ export async function getOutreachSendsForSequence(sequenceId: string): Promise<{
 export async function createOutreachSend(data: Omit<OutreachSend, "id">): Promise<OutreachSend> {
   const fields: Record<string, unknown> = {
     Enrollment: [data.enrollmentId],
+    EnrollmentId: data.enrollmentId,
     StepOrder: data.stepOrder,
     SentAt: data.sentAt || new Date().toISOString(),
     GmailMessageId: data.gmailMessageId,
@@ -6223,6 +6225,7 @@ export async function batchCreateOutreachEnrollments(records: Omit<OutreachEnrol
         records: batch.map(data => ({
           fields: {
             Sequence: [data.sequenceId],
+            SequenceId: data.sequenceId,
             ContactType: data.contactType,
             ContactId: data.contactId,
             ContactEmail: data.contactEmail,
