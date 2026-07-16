@@ -6042,22 +6042,18 @@ export async function getOutreachSendsForSequence(sequenceId: string): Promise<{
   const enrollments = await getOutreachEnrollments({ sequenceId });
   if (enrollments.length === 0) return [];
 
-  const sendMap = new Map<string, OutreachSend>();
-  // Batch in groups of 40 to stay within Airtable URL limits
-  for (let i = 0; i < enrollments.length; i += 40) {
-    const batch = enrollments.slice(i, i + 40);
-    const clauses = batch.map(e => `FIND("${e.id}", ARRAYJOIN({Enrollment}, ",")) > 0`);
-    const formula = clauses.length === 1 ? clauses[0] : `OR(${clauses.join(", ")})`;
-    const qs = `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=SentAt&sort[0][direction]=asc`;
-    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SENDS, qs);
-    if (!res.ok) continue;
-    const data = await res.json();
-    for (const s of (data.records as AirtableRecord[]).map(mapOutreachSend)) {
-      sendMap.set(s.enrollmentId, s);
-    }
-  }
-
-  return enrollments.map(e => ({ enrollment: e, send: sendMap.get(e.id) ?? null }));
+  // Fetch sends per enrollment in parallel using the same lookup that works
+  // everywhere else — ARRAYJOIN on a linked record field returns primary field
+  // values (not record IDs), so a batch OR formula never matches. Individual
+  // lookups via getOutreachSendsForEnrollment are reliable.
+  const results = await Promise.all(
+    enrollments.map(async e => {
+      const sends = await getOutreachSendsForEnrollment(e.id);
+      const send = sends.find(s => s.status === "Sent") ?? sends[0] ?? null;
+      return { enrollment: e, send };
+    })
+  );
+  return results;
 }
 
 export async function createOutreachSend(data: Omit<OutreachSend, "id">): Promise<OutreachSend> {
