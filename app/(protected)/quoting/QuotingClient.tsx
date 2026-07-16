@@ -1404,9 +1404,9 @@ function QuotePhotosSection({
 // ─── Main Client ──────────────────────────────────────────────────────────────
 export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices, initialAssessedItems = [] }: Props) {
   const [mode, setMode] = useState<Mode>("quick");
-  const [highSqFt, setHighSqFt] = useState(0);
-  const [avgSqFt, setAvgSqFt] = useState(0);
-  const [lowSqFt, setLowSqFt] = useState(0);
+  const [highSqFt, setHighSqFt] = useState(tenant.originHighSqFt ?? 0);
+  const [avgSqFt, setAvgSqFt] = useState(tenant.originMedSqFt ?? tenant.originSqFt ?? 0);
+  const [lowSqFt, setLowSqFt] = useState(tenant.originLowSqFt ?? 0);
   const [quotes, setQuotes] = useState<Contract[]>(existingContracts);
   const [invoices] = useState<Invoice[]>(initialInvoices ?? []);
   const [showEstimator, setShowEstimator] = useState(existingContracts.length === 0);
@@ -1800,7 +1800,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
               <EstimatorSection
                 tenant={tenant}
                 rooms={estimatorRooms}
-                actualRoomsTotal={localRooms.reduce((s, r) => s + r.squareFeet, 0)}
+                actualRooms={mode === "rooms" ? localRooms : undefined}
                 settings={settings}
                 templates={templates}
                 recipients={recipients}
@@ -1825,7 +1825,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
           <EstimatorSection
             tenant={tenant}
             rooms={estimatorRooms}
-            actualRoomsTotal={localRooms.reduce((s, r) => s + r.squareFeet, 0)}
+            actualRooms={mode === "rooms" ? localRooms : undefined}
             settings={settings}
             templates={templates}
             recipients={recipients}

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { calculateServiceHours } from "@/lib/calculator";
-import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, Service, InvoiceSettings, TimeEntry } from "@/lib/types";
+import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, Service, InvoiceSettings, TimeEntry, DensityLevel, RoomType } from "@/lib/types";
 import { InvoiceCreatorModal } from "@/app/(protected)/invoices/InvoiceCreatorModal";
 
 // Services whose SqFt input is the destination square footage
@@ -11,13 +11,30 @@ const DESTINATION_SQFT_SERVICES = ["Unpacking", "Setting Up Your Space", "Managi
 // Services whose SqFt input is the delta (source total − destination)
 const DELTA_SQFT_SERVICES = ["Packing for Donation/Dispersal", "Donating/Dispersal"];
 
+function buildOriginRooms(high: number, med: number, low: number): Room[] {
+  const make = (density: DensityLevel, sqFt: number): Room => ({
+    id: `origin-${density}`,
+    airtableId: "",
+    tenantId: "",
+    name: `${density} Density`,
+    roomType: "Other" as RoomType,
+    squareFeet: sqFt,
+    density,
+    createdAt: "",
+  });
+  return [
+    ...(high > 0 ? [make("High", high)] : []),
+    ...(med > 0 ? [make("Medium", med)] : []),
+    ...(low > 0 ? [make("Low", low)] : []),
+  ];
+}
+
 function calcHoursForService(
   service: Service,
-  rooms: Room[],
+  originRooms: Room[],
   destinationSqFt: number,
-  originSqFtOverride?: number
 ): number {
-  const sourceSqFt = originSqFtOverride ?? rooms.reduce((sum, r) => sum + r.squareFeet, 0);
+  const sourceSqFt = originRooms.reduce((sum, r) => sum + r.squareFeet, 0);
   if (DESTINATION_SQFT_SERVICES.includes(service.name)) {
     return Math.round((destinationSqFt / 100) * service.estimatorAvg * 10) / 10;
   }
@@ -25,7 +42,7 @@ function calcHoursForService(
     const deltaSqFt = Math.max(0, sourceSqFt - destinationSqFt);
     return Math.round((deltaSqFt / 100) * service.estimatorAvg * 10) / 10;
   }
-  return calculateServiceHours(service, rooms);
+  return calculateServiceHours(service, originRooms);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -109,7 +126,7 @@ function QBOInvoiceButton({ contractId, customerName }: { contractId: string; cu
 interface EstimatorSectionProps {
   tenant: Tenant;
   rooms: Room[];
-  actualRoomsTotal?: number;
+  actualRooms?: Room[];
   settings: ContractSettings | null;
   templates: ContractTemplate[];
   recipients: { name: string; email: string; role: string }[];
@@ -128,7 +145,7 @@ interface EstimatorSectionProps {
 export function EstimatorSection({
   tenant,
   rooms,
-  actualRoomsTotal,
+  actualRooms,
   settings,
   templates,
   recipients,
@@ -145,9 +162,33 @@ export function EstimatorSection({
   const router = useRouter();
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
-  const roomsOriginSqFt = actualRoomsTotal ?? rooms.reduce((sum, r) => sum + r.squareFeet, 0);
-  const [originSqFt, setOriginSqFt] = useState(tenant.originSqFt ?? roomsOriginSqFt);
+  const sourceRooms = actualRooms ?? rooms;
+  const roomsHighSqFt = sourceRooms.filter(r => r.density === "High").reduce((s, r) => s + r.squareFeet, 0);
+  const roomsMedSqFt = sourceRooms.filter(r => r.density === "Medium").reduce((s, r) => s + r.squareFeet, 0);
+  const roomsLowSqFt = sourceRooms.filter(r => r.density === "Low").reduce((s, r) => s + r.squareFeet, 0);
+
+  // Quick mode: restore saved per-density values; rooms mode: use actual room breakdown.
+  // initMed falls back to originSqFt total (in Average bucket) for old quotes that predate per-density storage.
+  const initHigh = actualRooms !== undefined ? roomsHighSqFt : (tenant.originHighSqFt ?? 0);
+  const initMed  = actualRooms !== undefined ? roomsMedSqFt  : (tenant.originMedSqFt  ?? tenant.originSqFt ?? 0);
+  const initLow  = actualRooms !== undefined ? roomsLowSqFt  : (tenant.originLowSqFt  ?? 0);
+
+  const [originHighSqFt, setOriginHighSqFt] = useState(initHigh);
+  const [originMedSqFt, setOriginMedSqFt] = useState(initMed);
+  const [originLowSqFt, setOriginLowSqFt] = useState(initLow);
   const [destinationSqFt, setDestinationSqFt] = useState(tenant.destinationSqFt ?? 0);
+
+  // In quick-quote mode (no actualRooms), keep density states synced with the
+  // syntheticRooms passed via `rooms` so the main-page H/M/L inputs drive calculations here.
+  // Skip the first run so saved tenant values aren't overwritten immediately on mount.
+  const syncInitRef = useRef(false);
+  useEffect(() => {
+    if (actualRooms !== undefined) return;
+    if (!syncInitRef.current) { syncInitRef.current = true; return; }
+    setOriginHighSqFt(rooms.filter(r => r.density === "High").reduce((s, r) => s + r.squareFeet, 0));
+    setOriginMedSqFt(rooms.filter(r => r.density === "Medium").reduce((s, r) => s + r.squareFeet, 0));
+    setOriginLowSqFt(rooms.filter(r => r.density === "Low").reduce((s, r) => s + r.squareFeet, 0));
+  }, [rooms]); // eslint-disable-line react-hooks/exhaustive-deps
   const [touchLevel, setTouchLevel] = useState<TouchLevel>("average");
   const touchMultiplier = TOUCH_OPTIONS.find((o) => o.key === touchLevel)!.multiplier;
   const [rows, setRows] = useState<ServiceRow[]>([]);
@@ -227,9 +268,10 @@ export function EstimatorSection({
       overridden: true,
     }));
     // Append active services not in the saved line items (unchecked)
+    const oRooms = buildOriginRooms(originHighSqFt, originMedSqFt, originLowSqFt);
     for (const svc of services.filter((s) => s.isActive)) {
       if (!lineMap.has(svc.id)) {
-        const calc = calcHoursForService(svc, rooms, destinationSqFt, originSqFt);
+        const calc = calcHoursForService(svc, oRooms, destinationSqFt);
         rows.push({
           serviceId: svc.id,
           serviceName: svc.name,
@@ -266,11 +308,12 @@ export function EstimatorSection({
   // Init on mount + recalc non-overridden rows when rooms, services, destinationSqFt, or touchMultiplier change
   useEffect(() => {
     if (editingContract) return; // don't override when editing
+    const oRooms = buildOriginRooms(originHighSqFt, originMedSqFt, originLowSqFt);
     setRows((prev) => {
       if (prev.length === 0) {
         // Initial population
         return services.filter((s) => s.isActive).map((s) => {
-          const calc = calcHoursForService(s, rooms, destinationSqFt, originSqFt);
+          const calc = calcHoursForService(s, oRooms, destinationSqFt);
           const hours = Math.round(calc * touchMultiplier * 10) / 10;
           return {
             serviceId: s.id,
@@ -288,12 +331,12 @@ export function EstimatorSection({
         if (row.overridden) return row;
         const svc = services.find((s) => s.id === row.serviceId);
         if (!svc) return row;
-        const calc = calcHoursForService(svc, rooms, destinationSqFt, originSqFt);
+        const calc = calcHoursForService(svc, oRooms, destinationSqFt);
         const hours = Math.round(calc * touchMultiplier * 10) / 10;
         return { ...row, calculatedHours: calc, hours };
       });
     });
-  }, [rooms, services, originSqFt, destinationSqFt, touchMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rooms, services, originHighSqFt, originMedSqFt, originLowSqFt, destinationSqFt, touchMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setRowHours = (serviceId: string, hours: number) => {
     setRows((prev) =>
@@ -320,10 +363,11 @@ export function EstimatorSection({
   };
 
   const resetAll = () => {
+    const oRooms = buildOriginRooms(originHighSqFt, originMedSqFt, originLowSqFt);
     setRows((prev) =>
       prev.map((r) => {
         const svc = services.find((s) => s.id === r.serviceId);
-        const calc = svc ? calcHoursForService(svc, rooms, destinationSqFt, originSqFt) : r.calculatedHours;
+        const calc = svc ? calcHoursForService(svc, oRooms, destinationSqFt) : r.calculatedHours;
         const hours = Math.round(calc * touchMultiplier * 10) / 10;
         return { ...r, calculatedHours: calc, hours, overridden: false };
       })
@@ -415,7 +459,14 @@ export function EstimatorSection({
     fetch("/api/tenants", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantId: tenant.id, originSqFt, destinationSqFt }),
+      body: JSON.stringify({
+        tenantId: tenant.id,
+        originSqFt: originHighSqFt + originMedSqFt + originLowSqFt,
+        originHighSqFt,
+        originMedSqFt,
+        originLowSqFt,
+        destinationSqFt,
+      }),
     });
 
   const handleSaveDraft = async () => {
@@ -554,32 +605,45 @@ export function EstimatorSection({
 
       {/* Square Footage */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Square Footage</label>
-        <div className="flex items-start gap-5 flex-wrap">
+        <label className="block text-sm font-medium text-gray-700 mb-3">Square Footage</label>
+        <div className="flex flex-col gap-4">
+          {/* Origin by density */}
           <div>
-            <p className="text-xs text-gray-500 mb-1">Origin</p>
-            <div className="relative w-36">
-              <input
-                type="number"
-                min={0}
-                value={originSqFt || ""}
-                placeholder="0"
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setOriginSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
-                className="w-full h-10 px-3 pr-8 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">SF</span>
+            <p className="text-xs font-medium text-gray-500 mb-2">Origin (by Density)</p>
+            <div className="flex flex-wrap gap-3">
+              {([
+                { label: "High", state: originHighSqFt, set: setOriginHighSqFt, rooms: roomsHighSqFt, color: "border-orange-300 focus:ring-orange-400" },
+                { label: "Average", state: originMedSqFt, set: setOriginMedSqFt, rooms: roomsMedSqFt, color: "border-forest-300 focus:ring-forest-400" },
+                { label: "Low", state: originLowSqFt, set: setOriginLowSqFt, rooms: roomsLowSqFt, color: "border-blue-300 focus:ring-blue-400" },
+              ] as const).map((field) => (
+                <div key={field.label}>
+                  <p className="text-xs text-gray-500 mb-1">{field.label}</p>
+                  <div className="relative w-32">
+                    <input
+                      type="number"
+                      min={0}
+                      value={field.state || ""}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => field.set(e.target.value === "" ? 0 : Number(e.target.value))}
+                      className={`w-full h-10 px-3 pr-8 rounded-xl border text-sm text-gray-900 focus:outline-none focus:ring-2 ${field.color}`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">SF</span>
+                  </div>
+                  {field.rooms > 0 && field.state !== field.rooms && (
+                    <p className="text-[11px] text-amber-600 mt-0.5">{field.rooms.toLocaleString()} from rooms</p>
+                  )}
+                  {field.rooms > 0 && field.state === field.rooms && (
+                    <p className="text-[11px] text-gray-400 mt-0.5">{field.rooms.toLocaleString()} from rooms</p>
+                  )}
+                </div>
+              ))}
             </div>
-            {roomsOriginSqFt > 0 && originSqFt !== roomsOriginSqFt && (
-              <p className="text-[11px] text-amber-600 mt-0.5">{roomsOriginSqFt.toLocaleString()} SF from rooms</p>
-            )}
-            {roomsOriginSqFt > 0 && originSqFt === roomsOriginSqFt && (
-              <p className="text-[11px] text-gray-400 mt-0.5">{roomsOriginSqFt.toLocaleString()} SF from rooms</p>
-            )}
           </div>
+          {/* Destination */}
           <div>
-            <p className="text-xs text-gray-500 mb-1">Destination</p>
-            <div className="relative w-36">
+            <p className="text-xs font-medium text-gray-500 mb-2">Destination</p>
+            <div className="relative w-32">
               <input
                 type="number"
                 min={0}
@@ -593,8 +657,8 @@ export function EstimatorSection({
             </div>
           </div>
         </div>
-        <p className="text-xs text-gray-400 mt-1.5">
-          Drives: Unpacking, Setting Up, Managing Moving Day (dest. SF) · Donation/Dispersal (origin − dest. delta).
+        <p className="text-xs text-gray-400 mt-2">
+          Drives: Unpacking, Setting Up, Managing Moving Day (dest. SF) · Donation/Dispersal (origin − dest. delta) · Rightsizing (origin by density).
         </p>
       </div>
 

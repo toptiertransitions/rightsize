@@ -132,6 +132,9 @@ export interface Tenant {
   isConsignmentOnly?: boolean;
   isEstateSale?: boolean;
   originSqFt?: number;
+  originHighSqFt?: number;
+  originMedSqFt?: number;
+  originLowSqFt?: number;
   destinationSqFt?: number;
   payoutMethod?: PayoutMethod;
   payoutUsername?: string;

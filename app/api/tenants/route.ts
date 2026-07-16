@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
+  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, originSqFt, originHighSqFt, originMedSqFt, originLowSqFt, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -113,6 +113,10 @@ export async function PATCH(req: NextRequest) {
     isLostDeal: resolvedIsLostDeal,
     isTTT: resolvedIsTTT,
     isConsignmentOnly: resolvedConsignment,
+    originSqFt: typeof originSqFt === "number" ? originSqFt : undefined,
+    originHighSqFt: typeof originHighSqFt === "number" ? originHighSqFt : undefined,
+    originMedSqFt: typeof originMedSqFt === "number" ? originMedSqFt : undefined,
+    originLowSqFt: typeof originLowSqFt === "number" ? originLowSqFt : undefined,
     destinationSqFt: typeof destinationSqFt === "number" ? destinationSqFt : undefined,
     payoutMethod: payoutMethod !== undefined ? (payoutMethod as string | null) : undefined,
     payoutUsername: payoutUsername !== undefined ? (payoutUsername as string | null) : undefined,
