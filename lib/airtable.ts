@@ -3789,7 +3789,7 @@ function mapGmailToken(record: AirtableRecord): GmailToken {
     refreshToken: toStr(f["RefreshToken"]),
     expiresAt: toStr(f["ExpiresAt"]),
     email: toStr(f["Email"]),
-    hasSendScope: true,
+    hasSendScope: !!f["HasSendScope"],
   };
 }
 
@@ -3826,7 +3826,7 @@ export async function saveGmailToken(
     Email: data.email,
     UpdatedAt: new Date().toISOString(),
   };
-  // HasSendScope field not in Airtable — scope is always gmail.send since we request it at auth time
+  if (data.hasSendScope !== undefined) fields.HasSendScope = data.hasSendScope;
   // Only write RefreshToken when we actually have one — never overwrite with empty
   if (data.refreshToken) fields.RefreshToken = data.refreshToken;
   if (existing) {

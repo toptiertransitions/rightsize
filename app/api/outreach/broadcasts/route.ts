@@ -157,6 +157,51 @@ export async function POST(req: NextRequest) {
         const fromName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Top Tier Transitions";
         const fromEmail = user.emailAddresses[0]?.emailAddress ?? "";
 
+        // Pre-flight: verify token has gmail.send scope before looping contacts
+        const tokenInfoRes = await fetch(
+          `https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`
+        ).catch(() => null);
+        const tokenInfo = tokenInfoRes?.ok ? await tokenInfoRes.json() : null;
+        const hasSendScope = String(tokenInfo?.scope ?? "").includes("gmail.send");
+
+        if (!hasSendScope) {
+          const scopeError = "Gmail reconnection required — your current connection does not have send permission.";
+          await Promise.all(enrollments.map(e =>
+            createOutreachSend({
+              enrollmentId: e.id,
+              stepOrder: 1,
+              sentAt: new Date().toISOString(),
+              gmailMessageId: "",
+              gmailThreadId: "",
+              status: "Failed",
+              errorMessage: scopeError,
+            }).catch(() => {})
+          ));
+          await Promise.all(enrollments.map(e =>
+            updateOutreachEnrollment(e.id, { status: "Bounced" }).catch(() => {})
+          ));
+          if (fromEmail) {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            await resend.emails.send({
+              from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
+              to: fromEmail,
+              subject: `Broadcast "${name}" failed — Gmail reconnection required`,
+              html: `<p>Hi ${user.firstName ?? "there"},</p>
+<p>Your broadcast <strong>"${name}"</strong> could not be sent because your Gmail account needs to be reconnected with send permission.</p>
+<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com"}/api/crm/gmail/auth" style="background:#166534;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Reconnect Gmail →</a></p>
+<p style="color:#6b7280;font-size:12px;margin-top:24px">After reconnecting, you can resend this broadcast from the Outreach tab.</p>
+<p style="color:#6b7280;font-size:12px">Top Tier Transitions · Rightsize</p>`,
+            }).catch(() => {});
+          }
+          await updateOutreachSequence(sequence.id, {
+            triggerConfigJson: JSON.stringify({
+              isBroadcast: true, sentAt: now, recipientCount: contacts.length,
+              channel, filterJson: JSON.stringify(filter), sentCount: 0, failedCount: enrollments.length,
+            }),
+          }).catch(() => {});
+          return;
+        }
+
         let sent = 0;
         const failures: { contact: string; error: string }[] = [];
         for (const enrollment of enrollments) {

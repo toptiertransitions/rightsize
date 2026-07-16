@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     if (!tokens.refreshToken) {
       console.warn(`[gmail/callback] No refresh token returned for ${clerkUserId} — token will be short-lived`);
     }
-    await saveGmailToken(clerkUserId, { ...tokens, hasSendScope: true });
+    await saveGmailToken(clerkUserId, tokens);
 
     // Kick off a full email history sync in the background after redirect
     after(async () => {

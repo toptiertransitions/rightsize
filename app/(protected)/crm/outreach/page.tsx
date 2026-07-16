@@ -26,7 +26,7 @@ export default async function OutreachPage() {
     <OutreachClient
       currentUserId={userId}
       gmailConnected={!!gmailToken}
-      hasSendScope={!!gmailToken}
+      hasSendScope={gmailToken?.hasSendScope ?? false}
       gmailEmail={gmailToken?.email}
       initialTemplates={templates}
       companies={companies}
