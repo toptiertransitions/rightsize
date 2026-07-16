@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
   const broadcasts = allSeqs.filter(s => {
     try { return JSON.parse(s.triggerConfigJson || "{}").isBroadcast === true; } catch { return false; }
   });
+  // Return all statuses — client decides what to show
   return NextResponse.json({ broadcasts });
 }
 
