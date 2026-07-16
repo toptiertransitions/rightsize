@@ -62,6 +62,9 @@ export async function POST(req: NextRequest) {
     channel: "Email" | "SMS";
   } = body;
 
+  const ctaLink: string = body.ctaLink ?? "";
+  const attachmentUrl: string = body.attachmentUrl ?? "";
+
   if (!name || !filter || !bodyHtml) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -158,6 +161,22 @@ export async function POST(req: NextRequest) {
         const fromName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Top Tier Transitions";
         const fromEmail = user.emailAddresses[0]?.emailAddress ?? "";
 
+        // Fetch attachment if provided
+        let attachment: { data: Buffer; name: string; mimeType: string } | undefined;
+        if (attachmentUrl) {
+          try {
+            const fileRes = await fetch(attachmentUrl);
+            if (fileRes.ok) {
+              const mimeType = fileRes.headers.get("content-type") || "application/octet-stream";
+              const urlPath = new URL(attachmentUrl).pathname;
+              const attachName = decodeURIComponent(urlPath.split("/").pop() || "attachment");
+              attachment = { data: Buffer.from(await fileRes.arrayBuffer()), name: attachName, mimeType };
+            }
+          } catch (err) {
+            console.error("[broadcasts] attachment fetch failed:", err);
+          }
+        }
+
         // Pre-flight: verify token has gmail.send scope before looping contacts
         const tokenInfoRes = await fetch(
           `https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`
@@ -198,6 +217,7 @@ export async function POST(req: NextRequest) {
             triggerConfigJson: JSON.stringify({
               isBroadcast: true, sentAt: now, recipientCount: contacts.length,
               channel, filterJson: JSON.stringify(filter), sentCount: 0, failedCount: enrollments.length,
+              attachmentUrl: attachmentUrl || undefined,
             }),
           }).catch(() => {});
           return;
@@ -219,6 +239,7 @@ export async function POST(req: NextRequest) {
                 rep_first_name: user.firstName ?? "",
                 company: enrollment.company ?? "",
               }),
+              attachment,
             });
             await createOutreachSend({
               enrollmentId: enrollment.id,
@@ -284,6 +305,7 @@ ${failed > 0 ? `
             filterJson: JSON.stringify(filter),
             sentCount: sent,
             failedCount: failures.length,
+            attachmentUrl: attachmentUrl || undefined,
           }),
         }).catch(err => console.error("[broadcasts] updateOutreachSequence failed:", err));
       } else {

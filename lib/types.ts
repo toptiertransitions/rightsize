@@ -1275,6 +1275,10 @@ export interface OutreachTemplate {
   shared: boolean;
   createdAt: string;
   updatedAt: string;
+  emailType?: "text" | "branded";
+  ctaLink?: string;
+  ctaLabel?: string;
+  attachmentUrl?: string;
 }
 
 export interface OutreachAudience {

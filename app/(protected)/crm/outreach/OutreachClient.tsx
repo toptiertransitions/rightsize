@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { OutreachTemplate, OutreachTemplateChannel } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
@@ -51,6 +51,55 @@ function GmailBanner({ connected, hasSendScope }: { connected: boolean; hasSendS
         {!connected ? "Connect Gmail" : "Reconnect Gmail"}
       </a>
     </div>
+  );
+}
+
+// ─── AttachmentUpload ─────────────────────────────────────────────────────────
+function AttachmentUpload({ url, name, onChange }: {
+  url: string;
+  name: string;
+  onChange: (url: string, name: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("tenantId", "outreach");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.photoUrl) onChange(data.photoUrl, file.name);
+    } catch { /* ignore */ } finally { setUploading(false); }
+  }
+
+  if (url) return (
+    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+      <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+      </svg>
+      <span className="text-sm text-gray-700 truncate flex-1 min-w-0">{name}</span>
+      <button type="button" onClick={() => onChange("", "")} className="text-gray-400 hover:text-gray-600 shrink-0 text-lg leading-none">×</button>
+    </div>
+  );
+
+  return (
+    <>
+      <input ref={ref} type="file" className="sr-only" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = ""; }} />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        disabled={uploading}
+        className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50 w-full"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+        </svg>
+        {uploading ? "Uploading…" : "Attach a file (optional)"}
+      </button>
+    </>
   );
 }
 
@@ -132,13 +181,19 @@ const CHANNEL_PILLS: Record<OutreachTemplateChannel, string> = {
 interface TemplateFormState {
   name: string;
   channel: OutreachTemplateChannel;
+  emailType: "text" | "branded";
   subject: string;
   body: string;
+  ctaLink: string;
+  ctaLabel: string;
+  attachmentUrl: string;
+  attachmentName: string;
   shared: boolean;
 }
 
 const EMPTY_TEMPLATE: TemplateFormState = {
-  name: "", channel: "Email", subject: "", body: "", shared: false,
+  name: "", channel: "Email", emailType: "text", subject: "", body: "",
+  ctaLink: "", ctaLabel: "", attachmentUrl: "", attachmentName: "", shared: false,
 };
 
 function TemplatesTab({
@@ -159,6 +214,9 @@ function TemplatesTab({
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<OutreachTemplateChannel | "All">("All");
   const [showAiPrompt, setShowAiPrompt] = useState(false);
+  const [brandedGist, setBrandedGist] = useState("");
+  const [generatingBranded, setGeneratingBranded] = useState(false);
+  const [brandedError, setBrandedError] = useState("");
 
   const currentUser = staffMembers.find(s => s.clerkUserId === currentUserId);
   const senderName = currentUser?.displayName || "Top Tier Transitions";
@@ -173,13 +231,28 @@ function TemplatesTab({
     setEditingId(null);
     setForm(EMPTY_TEMPLATE);
     setShowAiPrompt(false);
+    setBrandedGist("");
+    setBrandedError("");
     setModalOpen(true);
   }
 
   function openEdit(t: OutreachTemplate) {
     setEditingId(t.id);
-    setForm({ name: t.name, channel: t.channel, subject: t.subject, body: t.body, shared: t.shared });
+    setForm({
+      name: t.name,
+      channel: t.channel,
+      emailType: t.emailType ?? "text",
+      subject: t.subject,
+      body: t.body,
+      ctaLink: t.ctaLink ?? "",
+      ctaLabel: t.ctaLabel ?? "",
+      attachmentUrl: t.attachmentUrl ?? "",
+      attachmentName: t.attachmentUrl ? "Attached file" : "",
+      shared: t.shared,
+    });
     setShowAiPrompt(false);
+    setBrandedGist("");
+    setBrandedError("");
     setModalOpen(true);
   }
 
@@ -346,7 +419,7 @@ function TemplatesTab({
                         name="channel"
                         value={ch}
                         checked={form.channel === ch}
-                        onChange={() => setForm(f => ({ ...f, channel: ch }))}
+                        onChange={() => setForm(f => ({ ...f, channel: ch, emailType: "text" }))}
                         className="accent-forest-600"
                       />
                       <span className="text-sm text-gray-700">{ch}</span>
@@ -355,55 +428,174 @@ function TemplatesTab({
                 </div>
               </div>
 
-              {/* AI prompt */}
-              {showAiPrompt ? (
-                <AiPromptPanel
-                  channel={form.channel}
-                  senderName={senderName}
-                  onGenerated={(s, b) => { setForm(f => ({ ...f, subject: s, body: b })); }}
-                  onClose={() => setShowAiPrompt(false)}
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowAiPrompt(true)}
-                  className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Prompt with AI
-                </button>
-              )}
-
+              {/* Email format toggle */}
               {form.channel === "Email" && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
-                  <input
-                    type="text"
-                    value={form.subject}
-                    onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                    className={inputCls}
-                    placeholder="e.g. Following up on our conversation"
-                  />
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Email format</label>
+                  <div className="flex gap-1 p-1 rounded-lg bg-gray-100 w-fit">
+                    {(["text", "branded"] as const).map(t => (
+                      <button key={t} type="button"
+                        onClick={() => { setForm(f => ({ ...f, emailType: t })); setBrandedError(""); }}
+                        className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                          form.emailType === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                        )}
+                      >
+                        {t === "text" ? "Text Email" : "✦ Branded Email"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Body</label>
-                <textarea
-                  value={form.body}
-                  onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-                  className={inputCls}
-                  rows={8}
-                  placeholder={form.channel === "Email"
-                    ? "Hi {{first_name}},\n\nI wanted to reach out…"
-                    : "Hi {{first_name}}, just following up…"}
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Merge tags: {MERGE_TAGS.join(", ")}
-                </p>
-              </div>
+              {/* Text email controls */}
+              {form.emailType === "text" && (
+                <>
+                  {/* AI prompt */}
+                  {showAiPrompt ? (
+                    <AiPromptPanel
+                      channel={form.channel}
+                      senderName={senderName}
+                      onGenerated={(s, b) => { setForm(f => ({ ...f, subject: s, body: b })); }}
+                      onClose={() => setShowAiPrompt(false)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAiPrompt(true)}
+                      className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      Prompt with AI
+                    </button>
+                  )}
+
+                  {form.channel === "Email" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
+                      <input
+                        type="text"
+                        value={form.subject}
+                        onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+                        className={inputCls}
+                        placeholder="e.g. Following up on our conversation"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Body</label>
+                    <textarea
+                      value={form.body}
+                      onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                      className={inputCls}
+                      rows={8}
+                      placeholder={form.channel === "Email"
+                        ? "Hi {{first_name}},\n\nI wanted to reach out…"
+                        : "Hi {{first_name}}, just following up…"}
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Merge tags: {MERGE_TAGS.join(", ")}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Branded email controls */}
+              {form.emailType === "branded" && form.channel === "Email" && (
+                <div className="rounded-xl border border-[#2d4a3e]/20 bg-[#2d4a3e]/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[#2d4a3e]">✦ Branded Email Generator</span>
+                  </div>
+                  <textarea
+                    value={brandedGist}
+                    onChange={e => setBrandedGist(e.target.value)}
+                    placeholder="Describe what you want to communicate — e.g. 'Checking in with active referral partners about our Q3 availability and upcoming estate sales events.'"
+                    className={cn(inputCls, "resize-none")}
+                    rows={3}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">CTA link (optional)</label>
+                      <input type="url" value={form.ctaLink} onChange={e => setForm(f => ({ ...f, ctaLink: e.target.value }))} className={inputCls} placeholder="https://..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">CTA label</label>
+                      <input type="text" value={form.ctaLabel} onChange={e => setForm(f => ({ ...f, ctaLabel: e.target.value }))} className={inputCls} placeholder="e.g. Book a call" />
+                    </div>
+                  </div>
+                  {brandedError && <p className="text-xs text-red-600">{brandedError}</p>}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!brandedGist.trim()) return;
+                      setGeneratingBranded(true); setBrandedError("");
+                      try {
+                        const res = await fetch("/api/outreach/ai-branded-email", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ gist: brandedGist, ctaLink: form.ctaLink, ctaLabel: form.ctaLabel, senderName }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) { setBrandedError(data.error ?? "Generation failed"); return; }
+                        setForm(f => ({ ...f, subject: data.subject ?? f.subject, body: data.html ?? f.body }));
+                      } catch { setBrandedError("Something went wrong. Try again."); }
+                      finally { setGeneratingBranded(false); }
+                    }}
+                    disabled={generatingBranded || !brandedGist.trim()}
+                    className="rounded-lg bg-[#2d4a3e] px-4 py-2 text-sm font-medium text-white hover:bg-[#1e3329] disabled:opacity-50 transition-colors flex items-center gap-2"
+                  >
+                    {generatingBranded ? (<><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Generating…</>) : "Generate Branded Email"}
+                  </button>
+                  {form.body && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-600">Preview</span>
+                        <span className="text-xs text-gray-400">Merge tags will be filled at send time</span>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 overflow-hidden" style={{ height: 280 }}>
+                        <iframe
+                          srcDoc={form.body}
+                          className="w-full h-full border-0"
+                          sandbox="allow-same-origin"
+                          title="Branded email preview"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Subject (editable)</label>
+                        <input type="text" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} className={inputCls} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* CTA link for text emails */}
+              {form.emailType === "text" && form.channel === "Email" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">CTA link (optional)</label>
+                    <input type="url" value={form.ctaLink} onChange={e => setForm(f => ({ ...f, ctaLink: e.target.value }))} className={inputCls} placeholder="https://..." />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">CTA label</label>
+                    <input type="text" value={form.ctaLabel} onChange={e => setForm(f => ({ ...f, ctaLabel: e.target.value }))} className={inputCls} placeholder="e.g. Book a call" />
+                  </div>
+                </div>
+              )}
+
+              {/* Attachment — Email only */}
+              {form.channel === "Email" && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Attachment</label>
+                  <AttachmentUpload
+                    url={form.attachmentUrl}
+                    name={form.attachmentName}
+                    onChange={(u, n) => setForm(f => ({ ...f, attachmentUrl: u, attachmentName: n }))}
+                  />
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <input

@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!await requireSalesRole(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { name, channel, subject, body: templateBody, shared } = body;
+  const { name, channel, subject, body: templateBody, shared, emailType, ctaLink, ctaLabel, attachmentUrl } = body;
   if (!name || !channel) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
   const template = await createOutreachTemplate({
@@ -39,6 +39,10 @@ export async function POST(req: NextRequest) {
     body: templateBody ?? "",
     ownerClerkId: userId,
     shared: shared ?? false,
+    emailType: emailType ?? "text",
+    ctaLink: ctaLink ?? "",
+    ctaLabel: ctaLabel ?? "",
+    attachmentUrl: attachmentUrl ?? "",
   });
   return NextResponse.json({ template });
 }

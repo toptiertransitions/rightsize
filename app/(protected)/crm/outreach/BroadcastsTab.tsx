@@ -248,6 +248,55 @@ function ContactPicker({
   );
 }
 
+// ─── AttachmentUpload ─────────────────────────────────────────────────────────
+function AttachmentUpload({ url, name, onChange }: {
+  url: string;
+  name: string;
+  onChange: (url: string, name: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("tenantId", "outreach");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.photoUrl) onChange(data.photoUrl, file.name);
+    } catch { /* ignore */ } finally { setUploading(false); }
+  }
+
+  if (url) return (
+    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+      <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+      </svg>
+      <span className="text-sm text-gray-700 truncate flex-1 min-w-0">{name}</span>
+      <button type="button" onClick={() => onChange("", "")} className="text-gray-400 hover:text-gray-600 shrink-0 text-lg leading-none">×</button>
+    </div>
+  );
+
+  return (
+    <>
+      <input ref={ref} type="file" className="sr-only" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = ""; }} />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        disabled={uploading}
+        className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50 w-full"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+        </svg>
+        {uploading ? "Uploading…" : "Attach a file (optional)"}
+      </button>
+    </>
+  );
+}
+
 // ─── AI Prompt Panel ──────────────────────────────────────────────────────────
 function AiPromptPanel({
   channel, senderName, onGenerated, onClose,
@@ -646,6 +695,15 @@ function ComposeWizard({
   const [subject, setSubject] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [showAiPrompt, setShowAiPrompt] = useState(false);
+  const [emailType, setEmailType] = useState<"text" | "branded">("text");
+  const [ctaLink, setCtaLink] = useState("");
+  const [ctaLabel, setCtaLabel] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentName, setAttachmentName] = useState("");
+  const [brandedHtml, setBrandedHtml] = useState("");
+  const [brandedGist, setBrandedGist] = useState("");
+  const [generatingBranded, setGeneratingBranded] = useState(false);
+  const [brandedError, setBrandedError] = useState("");
 
   // Step 3 / result
   const [sending, setSending] = useState(false);
@@ -664,7 +722,19 @@ function ComposeWizard({
     const t = templates.find(t => t.id === id);
     if (!t) return;
     setSubject(t.subject);
-    setBodyText(t.body);
+    const tType = t.emailType ?? "text";
+    setEmailType(tType);
+    if (tType === "branded") {
+      setBrandedHtml(t.body);
+      setBodyText("");
+    } else {
+      setBodyText(t.body);
+      setBrandedHtml("");
+    }
+    setCtaLink(t.ctaLink ?? "");
+    setCtaLabel(t.ctaLabel ?? "");
+    setAttachmentUrl(t.attachmentUrl ?? "");
+    setAttachmentName(t.attachmentUrl ? "Attached file" : "");
   }
 
   // Build the filter payload for the API
@@ -720,9 +790,19 @@ function ComposeWizard({
   }, [filter, audienceMode, selectedContactIds]);
 
   async function handleSend() {
-    if (!broadcastName.trim() || !bodyText.trim()) return;
+    const isBranded = emailType === "branded";
+    if (!broadcastName.trim()) return;
+    if (isBranded && !brandedHtml) return;
+    if (!isBranded && !bodyText.trim()) return;
     setSending(true);
     setError("");
+
+    const finalBodyHtml = isBranded
+      ? brandedHtml
+      : (channel === "Email"
+        ? (ctaLink ? bodyText + `\n\n${ctaLabel || "Click here"}: ${ctaLink}` : bodyText).replace(/\n/g, "<br>")
+        : bodyText);
+
     try {
       const res = await fetch("/api/outreach/broadcasts", {
         method: "POST",
@@ -731,9 +811,12 @@ function ComposeWizard({
           name: broadcastName,
           filter: buildApiFilter(),
           subject,
-          bodyHtml: bodyText.replace(/\n/g, "<br>"),
+          bodyHtml: finalBodyHtml,
           templateId: selectedTemplateId || undefined,
           channel,
+          ctaLink: ctaLink || undefined,
+          ctaLabel: ctaLabel || undefined,
+          attachmentUrl: attachmentUrl || undefined,
         }),
         signal: AbortSignal.timeout(30000),
       });
@@ -1016,7 +1099,7 @@ function ComposeWizard({
                     name="channel"
                     value={ch}
                     checked={channel === ch}
-                    onChange={() => { setChannel(ch); setSelectedTemplateId(""); }}
+                    onChange={() => { setChannel(ch); setSelectedTemplateId(""); setEmailType("text"); }}
                     className="accent-forest-600"
                   />
                   <span className="text-sm text-gray-700">
@@ -1026,6 +1109,25 @@ function ComposeWizard({
               ))}
             </div>
           </div>
+
+          {/* Email format toggle */}
+          {channel === "Email" && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Email format</label>
+              <div className="flex gap-1 p-1 rounded-lg bg-gray-100 w-fit">
+                {(["text", "branded"] as const).map(t => (
+                  <button key={t} type="button"
+                    onClick={() => { setEmailType(t); setBrandedError(""); }}
+                    className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                      emailType === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    )}
+                  >
+                    {t === "text" ? "Text Email" : "✦ Branded Email"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {relevantTemplates.length > 0 && (
             <div>
@@ -1043,57 +1145,154 @@ function ComposeWizard({
             </div>
           )}
 
-          {/* AI prompt panel */}
-          {showAiPrompt ? (
-            <AiPromptPanel
-              channel={channel}
-              senderName={senderName}
-              onGenerated={(s, b) => { setSubject(s); setBodyText(b); }}
-              onClose={() => setShowAiPrompt(false)}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowAiPrompt(true)}
-              className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              Prompt with AI
-            </button>
+          {/* Text email mode */}
+          {emailType === "text" && (
+            <>
+              {/* AI prompt panel */}
+              {showAiPrompt ? (
+                <AiPromptPanel
+                  channel={channel}
+                  senderName={senderName}
+                  onGenerated={(s, b) => { setSubject(s); setBodyText(b); }}
+                  onClose={() => setShowAiPrompt(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAiPrompt(true)}
+                  className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Prompt with AI
+                </button>
+              )}
+
+              {channel === "Email" && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Subject <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={e => setSubject(e.target.value)}
+                    className={inputCls}
+                    placeholder="e.g. Quick update from Top Tier"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {channel === "Email" ? "Body" : "SMS message"} <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={bodyText}
+                  onChange={e => setBodyText(e.target.value)}
+                  className={inputCls}
+                  rows={12}
+                  placeholder={channel === "Email"
+                    ? "Hi {{first_name}},\n\nI wanted to reach out…"
+                    : "Hi {{first_name}}, just following up from Top Tier…"}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Merge tags: <code>{"{{first_name}}"}</code> <code>{"{{last_name}}"}</code> <code>{"{{company}}"}</code> <code>{"{{rep_first_name}}"}</code>
+                </p>
+              </div>
+            </>
           )}
 
-          {channel === "Email" && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Subject <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-                className={inputCls}
-                placeholder="e.g. Quick update from Top Tier"
+          {/* Branded email mode */}
+          {emailType === "branded" && channel === "Email" && (
+            <div className="rounded-xl border border-[#2d4a3e]/20 bg-[#2d4a3e]/5 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-[#2d4a3e]">✦ Branded Email Generator</span>
+              </div>
+              <textarea
+                value={brandedGist}
+                onChange={e => setBrandedGist(e.target.value)}
+                placeholder="Describe what you want to communicate — e.g. 'Checking in with active referral partners about our Q3 availability and upcoming estate sales events.'"
+                className={cn(inputCls, "resize-none")}
+                rows={3}
               />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">CTA link (optional)</label>
+                  <input type="url" value={ctaLink} onChange={e => setCtaLink(e.target.value)} className={inputCls} placeholder="https://..." />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">CTA label</label>
+                  <input type="text" value={ctaLabel} onChange={e => setCtaLabel(e.target.value)} className={inputCls} placeholder="e.g. Book a call" />
+                </div>
+              </div>
+              {brandedError && <p className="text-xs text-red-600">{brandedError}</p>}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!brandedGist.trim()) return;
+                  setGeneratingBranded(true); setBrandedError("");
+                  try {
+                    const res = await fetch("/api/outreach/ai-branded-email", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ gist: brandedGist, ctaLink, ctaLabel, senderName }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) { setBrandedError(data.error ?? "Generation failed"); return; }
+                    setSubject(data.subject ?? "");
+                    setBrandedHtml(data.html ?? "");
+                  } catch { setBrandedError("Something went wrong. Try again."); }
+                  finally { setGeneratingBranded(false); }
+                }}
+                disabled={generatingBranded || !brandedGist.trim()}
+                className="rounded-lg bg-[#2d4a3e] px-4 py-2 text-sm font-medium text-white hover:bg-[#1e3329] disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {generatingBranded ? (<><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Generating…</>) : "Generate Branded Email"}
+              </button>
+              {brandedHtml && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-600">Preview</span>
+                    <span className="text-xs text-gray-400">Merge tags will be filled at send time</span>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 overflow-hidden" style={{ height: 320 }}>
+                    <iframe
+                      srcDoc={brandedHtml}
+                      className="w-full h-full border-0"
+                      sandbox="allow-same-origin"
+                      title="Branded email preview"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Subject (editable)</label>
+                    <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className={inputCls} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              {channel === "Email" ? "Body" : "SMS message"} <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={bodyText}
-              onChange={e => setBodyText(e.target.value)}
-              className={inputCls}
-              rows={12}
-              placeholder={channel === "Email"
-                ? "Hi {{first_name}},\n\nI wanted to reach out…"
-                : "Hi {{first_name}}, just following up from Top Tier…"}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Merge tags: <code>{"{{first_name}}"}</code> <code>{"{{last_name}}"}</code> <code>{"{{company}}"}</code> <code>{"{{rep_first_name}}"}</code>
-            </p>
-          </div>
+          {/* CTA link for text emails */}
+          {emailType === "text" && channel === "Email" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">CTA link (optional)</label>
+                <input type="url" value={ctaLink} onChange={e => setCtaLink(e.target.value)} className={inputCls} placeholder="https://..." />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">CTA label</label>
+                <input type="text" value={ctaLabel} onChange={e => setCtaLabel(e.target.value)} className={inputCls} placeholder="e.g. Book a call" />
+              </div>
+            </div>
+          )}
+
+          {/* Attachment — both modes, Email only */}
+          {channel === "Email" && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Attachment</label>
+              <AttachmentUpload url={attachmentUrl} name={attachmentName} onChange={(u, n) => { setAttachmentUrl(u); setAttachmentName(n); }} />
+            </div>
+          )}
 
           <div className="flex justify-between pt-2">
             <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700">
@@ -1101,7 +1300,11 @@ function ComposeWizard({
             </button>
             <button
               onClick={() => setStep(3)}
-              disabled={!bodyText.trim() || (channel === "Email" && !subject.trim())}
+              disabled={
+                emailType === "branded"
+                  ? !brandedHtml || !subject.trim()
+                  : !bodyText.trim() || (channel === "Email" && !subject.trim())
+              }
               className="rounded-lg bg-forest-600 px-5 py-2 text-sm font-medium text-white hover:bg-forest-700 disabled:opacity-50 transition-colors"
             >
               Next: Review →
@@ -1173,12 +1376,26 @@ function ComposeWizard({
           </div>
 
           {/* Message preview */}
-          {bodyText && (
+          {emailType === "branded" && brandedHtml ? (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Branded email preview</p>
+              <div className="rounded-lg border border-gray-200 overflow-hidden" style={{ height: 280 }}>
+                <iframe srcDoc={brandedHtml} className="w-full h-full border-0" sandbox="allow-same-origin" title="Preview" />
+              </div>
+            </div>
+          ) : bodyText ? (
             <div>
               <p className="text-xs font-medium text-gray-500 mb-1">Message preview</p>
               <div className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
                 {bodyText}
               </div>
+            </div>
+          ) : null}
+
+          {attachmentName && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">Attachment</span>
+              <span className="font-medium text-gray-900">{attachmentName}</span>
             </div>
           )}
 

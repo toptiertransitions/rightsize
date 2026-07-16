@@ -5586,6 +5586,10 @@ function mapOutreachTemplate(record: AirtableRecord): OutreachTemplate {
     shared: !!f["Shared"],
     createdAt: toStr(f["CreatedAt"]),
     updatedAt: toStr(f["UpdatedAt"]),
+    emailType: (toStr(f["EmailType"]) || "text") as "text" | "branded",
+    ctaLink: toStr(f["CtaLink"]),
+    ctaLabel: toStr(f["CtaLabel"]),
+    attachmentUrl: toStr(f["AttachmentUrl"]),
   };
 }
 
@@ -5620,6 +5624,10 @@ export async function createOutreachTemplate(data: Omit<OutreachTemplate, "id" |
         Shared: data.shared,
         CreatedAt: now,
         UpdatedAt: now,
+        EmailType: data.emailType ?? "text",
+        CtaLink: data.ctaLink ?? "",
+        CtaLabel: data.ctaLabel ?? "",
+        AttachmentUrl: data.attachmentUrl ?? "",
       },
     }),
   });
@@ -5634,6 +5642,10 @@ export async function updateOutreachTemplate(id: string, data: Partial<Omit<Outr
   if (data.subject !== undefined) fields.Subject = data.subject;
   if (data.body !== undefined) fields.Body = data.body;
   if (data.shared !== undefined) fields.Shared = data.shared;
+  if (data.emailType !== undefined) fields.EmailType = data.emailType;
+  if (data.ctaLink !== undefined) fields.CtaLink = data.ctaLink;
+  if (data.ctaLabel !== undefined) fields.CtaLabel = data.ctaLabel;
+  if (data.attachmentUrl !== undefined) fields.AttachmentUrl = data.attachmentUrl;
   const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

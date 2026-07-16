@@ -398,6 +398,7 @@ export interface GmailSendOptions {
   htmlBody: string;
   threadId?: string;   // set to reply in-thread
   messageId?: string;  // In-Reply-To header for threading
+  attachment?: { data: Buffer; name: string; mimeType: string };
 }
 
 export interface GmailSendResult {
@@ -406,23 +407,52 @@ export interface GmailSendResult {
 }
 
 export async function sendGmailMessage(opts: GmailSendOptions): Promise<GmailSendResult> {
-  const headers: Record<string, string> = {
-    From: `${opts.fromName} <${opts.fromEmail}>`,
-    To: opts.to,
-    Subject: opts.subject,
-    "Content-Type": "text/html; charset=utf-8",
-    "MIME-Version": "1.0",
-  };
-  if (opts.messageId) {
-    headers["In-Reply-To"] = opts.messageId;
-    headers["References"] = opts.messageId;
-  }
+  let encoded: string;
 
-  const rawHeaders = Object.entries(headers)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\r\n");
-  const raw = `${rawHeaders}\r\n\r\n${opts.htmlBody}`;
-  const encoded = Buffer.from(raw).toString("base64url");
+  if (opts.attachment) {
+    const boundary = `TTT_${Date.now()}`;
+    const bodyB64 = Buffer.from(opts.htmlBody).toString("base64");
+    const attachB64 = opts.attachment.data.toString("base64");
+    const raw =
+      `From: ${opts.fromName} <${opts.fromEmail}>\r\n` +
+      `To: ${opts.to}\r\n` +
+      `Subject: ${opts.subject}\r\n` +
+      `MIME-Version: 1.0\r\n` +
+      (opts.messageId ? `In-Reply-To: ${opts.messageId}\r\nReferences: ${opts.messageId}\r\n` : "") +
+      `Content-Type: multipart/mixed; boundary="${boundary}"\r\n` +
+      `\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: text/html; charset=utf-8\r\n` +
+      `Content-Transfer-Encoding: base64\r\n` +
+      `\r\n` +
+      `${bodyB64}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: ${opts.attachment.mimeType}\r\n` +
+      `Content-Transfer-Encoding: base64\r\n` +
+      `Content-Disposition: attachment; filename="${opts.attachment.name}"\r\n` +
+      `\r\n` +
+      `${attachB64}\r\n` +
+      `--${boundary}--`;
+    encoded = Buffer.from(raw).toString("base64url");
+  } else {
+    const headers: Record<string, string> = {
+      From: `${opts.fromName} <${opts.fromEmail}>`,
+      To: opts.to,
+      Subject: opts.subject,
+      "Content-Type": "text/html; charset=utf-8",
+      "MIME-Version": "1.0",
+    };
+    if (opts.messageId) {
+      headers["In-Reply-To"] = opts.messageId;
+      headers["References"] = opts.messageId;
+    }
+
+    const rawHeaders = Object.entries(headers)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\r\n");
+    const raw = `${rawHeaders}\r\n\r\n${opts.htmlBody}`;
+    encoded = Buffer.from(raw).toString("base64url");
+  }
 
   const body: Record<string, string> = { raw: encoded };
   if (opts.threadId) (body as Record<string, string>).threadId = opts.threadId;
