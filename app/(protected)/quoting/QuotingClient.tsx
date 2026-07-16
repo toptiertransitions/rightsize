@@ -1800,6 +1800,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
               <EstimatorSection
                 tenant={tenant}
                 rooms={estimatorRooms}
+                actualRoomsTotal={localRooms.reduce((s, r) => s + r.squareFeet, 0)}
                 settings={settings}
                 templates={templates}
                 recipients={recipients}
@@ -1824,6 +1825,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
           <EstimatorSection
             tenant={tenant}
             rooms={estimatorRooms}
+            actualRoomsTotal={localRooms.reduce((s, r) => s + r.squareFeet, 0)}
             settings={settings}
             templates={templates}
             recipients={recipients}

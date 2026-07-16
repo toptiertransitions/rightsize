@@ -109,6 +109,7 @@ function QBOInvoiceButton({ contractId, customerName }: { contractId: string; cu
 interface EstimatorSectionProps {
   tenant: Tenant;
   rooms: Room[];
+  actualRoomsTotal?: number;
   settings: ContractSettings | null;
   templates: ContractTemplate[];
   recipients: { name: string; email: string; role: string }[];
@@ -127,6 +128,7 @@ interface EstimatorSectionProps {
 export function EstimatorSection({
   tenant,
   rooms,
+  actualRoomsTotal,
   settings,
   templates,
   recipients,
@@ -143,7 +145,7 @@ export function EstimatorSection({
   const router = useRouter();
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
-  const roomsOriginSqFt = rooms.reduce((sum, r) => sum + r.squareFeet, 0);
+  const roomsOriginSqFt = actualRoomsTotal ?? rooms.reduce((sum, r) => sum + r.squareFeet, 0);
   const [originSqFt, setOriginSqFt] = useState(tenant.originSqFt ?? roomsOriginSqFt);
   const [destinationSqFt, setDestinationSqFt] = useState(tenant.destinationSqFt ?? 0);
   const [touchLevel, setTouchLevel] = useState<TouchLevel>("average");
