@@ -49,7 +49,7 @@ Generate a complete standalone HTML email. Requirements:
 - White content area, 32px padding, 600px max-width centered
 - Body starts with "Hi {{first_name}}," on its own line, then a blank line
 - Leave {{first_name}}, {{last_name}}, {{company}}, {{rep_first_name}} exactly as-is
-- ${ctaLink ? `Include a centered CTA button: #2d4a3e background, white text, Georgia font, 14px 32px padding, 4px border-radius, <a href="${ctaLink}"> tag, label "${ctaLabel || "Learn More"}"` : "No CTA button"}
+- ${ctaLink ? `CTA button (email-safe): use a <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto"><tr><td align="center" bgcolor="#2d4a3e" style="border-radius:4px;mso-padding-alt:0"><a href="${ctaLink}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-family:Georgia,serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:4px;-webkit-text-size-adjust:none">${ctaLabel || "Learn More"}</a></td></tr></table> — the <a> tag MUST be the innermost element with all padding on it, NOT on the <td>` : "No CTA button — do not render any button or link placeholder"}
 - Footer: #f5f4f0 bg, 16px padding, center-aligned, gray 12px text, "Top Tier Transitions" and "{{rep_first_name}}"
 - No em dashes anywhere
 - Subject: short (6 words max), specific, real human voice`;

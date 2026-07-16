@@ -1259,7 +1259,7 @@ function ComposeWizard({
                     <iframe
                       srcDoc={brandedHtml}
                       className="w-full h-full border-0"
-                      sandbox="allow-same-origin"
+                      sandbox="allow-same-origin allow-popups allow-top-navigation-by-user-activation"
                       title="Branded email preview"
                     />
                   </div>
@@ -1380,7 +1380,7 @@ function ComposeWizard({
             <div>
               <p className="text-xs font-medium text-gray-500 mb-1">Branded email preview</p>
               <div className="rounded-lg border border-gray-200 overflow-hidden" style={{ height: 280 }}>
-                <iframe srcDoc={brandedHtml} className="w-full h-full border-0" sandbox="allow-same-origin" title="Preview" />
+                <iframe srcDoc={brandedHtml} className="w-full h-full border-0" sandbox="allow-same-origin allow-popups allow-top-navigation-by-user-activation" title="Preview" />
               </div>
             </div>
           ) : bodyText ? (

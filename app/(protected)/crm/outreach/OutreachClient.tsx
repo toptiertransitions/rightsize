@@ -558,7 +558,7 @@ function TemplatesTab({
                         <iframe
                           srcDoc={form.body}
                           className="w-full h-full border-0"
-                          sandbox="allow-same-origin"
+                          sandbox="allow-same-origin allow-popups allow-top-navigation-by-user-activation"
                           title="Branded email preview"
                         />
                       </div>
