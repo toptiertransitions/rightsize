@@ -14,13 +14,14 @@ const DELTA_SQFT_SERVICES = ["Packing for Donation/Dispersal", "Donating/Dispers
 function calcHoursForService(
   service: Service,
   rooms: Room[],
-  destinationSqFt: number
+  destinationSqFt: number,
+  originSqFtOverride?: number
 ): number {
+  const sourceSqFt = originSqFtOverride ?? rooms.reduce((sum, r) => sum + r.squareFeet, 0);
   if (DESTINATION_SQFT_SERVICES.includes(service.name)) {
     return Math.round((destinationSqFt / 100) * service.estimatorAvg * 10) / 10;
   }
   if (DELTA_SQFT_SERVICES.includes(service.name)) {
-    const sourceSqFt = rooms.reduce((sum, r) => sum + r.squareFeet, 0);
     const deltaSqFt = Math.max(0, sourceSqFt - destinationSqFt);
     return Math.round((deltaSqFt / 100) * service.estimatorAvg * 10) / 10;
   }
@@ -142,6 +143,8 @@ export function EstimatorSection({
   const router = useRouter();
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
+  const roomsOriginSqFt = rooms.reduce((sum, r) => sum + r.squareFeet, 0);
+  const [originSqFt, setOriginSqFt] = useState(tenant.originSqFt ?? roomsOriginSqFt);
   const [destinationSqFt, setDestinationSqFt] = useState(tenant.destinationSqFt ?? 0);
   const [touchLevel, setTouchLevel] = useState<TouchLevel>("average");
   const touchMultiplier = TOUCH_OPTIONS.find((o) => o.key === touchLevel)!.multiplier;
@@ -224,7 +227,7 @@ export function EstimatorSection({
     // Append active services not in the saved line items (unchecked)
     for (const svc of services.filter((s) => s.isActive)) {
       if (!lineMap.has(svc.id)) {
-        const calc = calcHoursForService(svc, rooms, destinationSqFt);
+        const calc = calcHoursForService(svc, rooms, destinationSqFt, originSqFt);
         rows.push({
           serviceId: svc.id,
           serviceName: svc.name,
@@ -265,7 +268,7 @@ export function EstimatorSection({
       if (prev.length === 0) {
         // Initial population
         return services.filter((s) => s.isActive).map((s) => {
-          const calc = calcHoursForService(s, rooms, destinationSqFt);
+          const calc = calcHoursForService(s, rooms, destinationSqFt, originSqFt);
           const hours = Math.round(calc * touchMultiplier * 10) / 10;
           return {
             serviceId: s.id,
@@ -283,12 +286,12 @@ export function EstimatorSection({
         if (row.overridden) return row;
         const svc = services.find((s) => s.id === row.serviceId);
         if (!svc) return row;
-        const calc = calcHoursForService(svc, rooms, destinationSqFt);
+        const calc = calcHoursForService(svc, rooms, destinationSqFt, originSqFt);
         const hours = Math.round(calc * touchMultiplier * 10) / 10;
         return { ...row, calculatedHours: calc, hours };
       });
     });
-  }, [rooms, services, destinationSqFt, touchMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rooms, services, originSqFt, destinationSqFt, touchMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setRowHours = (serviceId: string, hours: number) => {
     setRows((prev) =>
@@ -318,7 +321,7 @@ export function EstimatorSection({
     setRows((prev) =>
       prev.map((r) => {
         const svc = services.find((s) => s.id === r.serviceId);
-        const calc = svc ? calcHoursForService(svc, rooms, destinationSqFt) : r.calculatedHours;
+        const calc = svc ? calcHoursForService(svc, rooms, destinationSqFt, originSqFt) : r.calculatedHours;
         const hours = Math.round(calc * touchMultiplier * 10) / 10;
         return { ...r, calculatedHours: calc, hours, overridden: false };
       })
@@ -406,11 +409,11 @@ export function EstimatorSection({
     discountAmount: discountAmount > 0 ? discountAmount : undefined,
   };
 
-  const saveDestSqFt = () =>
+  const saveSqFt = () =>
     fetch("/api/tenants", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantId: tenant.id, destinationSqFt }),
+      body: JSON.stringify({ tenantId: tenant.id, originSqFt, destinationSqFt }),
     });
 
   const handleSaveDraft = async () => {
@@ -437,7 +440,7 @@ export function EstimatorSection({
         throw new Error(err.error || "Failed to save");
       }
       const data = await res.json();
-      await saveDestSqFt();
+      await saveSqFt();
       setSuccessMsg("Quote saved.");
       await onSaved?.(data.contract);
       if (!editingContract) {
@@ -494,7 +497,7 @@ export function EstimatorSection({
         throw new Error(err.error || "Failed to send");
       }
       const data = await res.json();
-      await saveDestSqFt();
+      await saveSqFt();
       setSuccessMsg("Agreement sent for signature!");
       await onSaved?.(data.contract);
       router.refresh();
@@ -547,22 +550,49 @@ export function EstimatorSection({
         )}
       </div>
 
-      {/* Destination SF */}
+      {/* Square Footage */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Destination Square Footage</label>
-        <div className="relative w-40">
-          <input
-            type="number"
-            min={0}
-            value={destinationSqFt || ""}
-            placeholder="0"
-            onChange={(e) => setDestinationSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
-            className="w-full h-10 px-3 pr-8 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">SF</span>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Square Footage</label>
+        <div className="flex items-start gap-5 flex-wrap">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Origin</p>
+            <div className="relative w-36">
+              <input
+                type="number"
+                min={0}
+                value={originSqFt || ""}
+                placeholder="0"
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setOriginSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
+                className="w-full h-10 px-3 pr-8 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">SF</span>
+            </div>
+            {roomsOriginSqFt > 0 && originSqFt !== roomsOriginSqFt && (
+              <p className="text-[11px] text-amber-600 mt-0.5">{roomsOriginSqFt.toLocaleString()} SF from rooms</p>
+            )}
+            {roomsOriginSqFt > 0 && originSqFt === roomsOriginSqFt && (
+              <p className="text-[11px] text-gray-400 mt-0.5">{roomsOriginSqFt.toLocaleString()} SF from rooms</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Destination</p>
+            <div className="relative w-36">
+              <input
+                type="number"
+                min={0}
+                value={destinationSqFt || ""}
+                placeholder="0"
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setDestinationSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
+                className="w-full h-10 px-3 pr-8 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">SF</span>
+            </div>
+          </div>
         </div>
-        <p className="text-xs text-gray-400 mt-1">
-          Drives: Unpacking, Setting Up Your Space, Managing Moving Day (dest. SF) and Packing for Donation/Dispersal, Donating/Dispersal (source − dest. delta).
+        <p className="text-xs text-gray-400 mt-1.5">
+          Drives: Unpacking, Setting Up, Managing Moving Day (dest. SF) · Donation/Dispersal (origin − dest. delta).
         </p>
       </div>
 

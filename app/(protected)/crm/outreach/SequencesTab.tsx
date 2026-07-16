@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type {
   OutreachSequence, OutreachSequenceStep, OutreachSequenceStatus,
-  OutreachStepChannel, OutreachTaskType, OutreachContactType,
+  OutreachStepChannel, OutreachTaskType, OutreachContactType, OutreachTemplate,
 } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
 
@@ -288,10 +288,12 @@ const EMPTY_STEP: StepFormState = {
 
 function StepModal({
   step,
+  templates,
   onSave,
   onClose,
 }: {
   step: Partial<OutreachSequenceStep> & { id?: string };
+  templates: OutreachTemplate[];
   onSave: (data: StepFormState) => Promise<void>;
   onClose: () => void;
 }) {
@@ -371,6 +373,33 @@ function StepModal({
               />
             </div>
           </div>
+
+          {form.channel !== "Task" && (() => {
+            const channelTemplates = templates.filter(t => t.channel === form.channel);
+            return channelTemplates.length > 0 ? (
+              <div>
+                <label className={labelCls}>Load from template (optional)</label>
+                <select
+                  defaultValue=""
+                  onChange={e => {
+                    const t = channelTemplates.find(t => t.id === e.target.value);
+                    if (!t) return;
+                    setForm(f => ({
+                      ...f,
+                      subjectOverride: t.subject || f.subjectOverride,
+                      bodyOverride: t.body,
+                    }));
+                  }}
+                  className={inputCls}
+                >
+                  <option value="">— Pick a template —</option>
+                  {channelTemplates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null;
+          })()}
 
           {form.channel !== "Task" && (
             <>
@@ -781,6 +810,7 @@ function SequenceDetail({
   companies,
   staffMembers,
   currentUserId,
+  templates,
   onBack,
   onUpdated,
 }: {
@@ -788,6 +818,7 @@ function SequenceDetail({
   companies: ReferralCompany[];
   staffMembers: StaffMember[];
   currentUserId: string;
+  templates: OutreachTemplate[];
   onBack: () => void;
   onUpdated: (s: OutreachSequence) => void;
 }) {
@@ -970,6 +1001,7 @@ function SequenceDetail({
       {stepModal !== null && (
         <StepModal
           step={stepModal}
+          templates={templates}
           onSave={handleSaveStep}
           onClose={() => setStepModal(null)}
         />
@@ -1150,10 +1182,12 @@ export default function SequencesTab({
   companies,
   staffMembers,
   currentUserId,
+  templates,
 }: {
   companies: ReferralCompany[];
   staffMembers: StaffMember[];
   currentUserId: string;
+  templates: OutreachTemplate[];
 }) {
   const [sequences, setSequences] = useState<OutreachSequence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1198,6 +1232,7 @@ export default function SequencesTab({
         companies={companies}
         staffMembers={staffMembers}
         currentUserId={currentUserId}
+        templates={templates}
         onBack={() => setSelected(null)}
         onUpdated={handleUpdated}
       />

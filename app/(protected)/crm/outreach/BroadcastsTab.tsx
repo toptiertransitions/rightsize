@@ -877,7 +877,7 @@ function ComposeWizard({
   const [subject, setSubject] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [showAiPrompt, setShowAiPrompt] = useState(false);
-  const [emailType, setEmailType] = useState<"text" | "branded">("text");
+  const [emailType, setEmailType] = useState<"text" | "branded" | "template">("text");
   const [ctaLink, setCtaLink] = useState("");
   const [ctaLabel, setCtaLabel] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
@@ -1299,33 +1299,47 @@ function ComposeWizard({
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-2">Email format</label>
               <div className="flex gap-1 p-1 rounded-lg bg-gray-100 w-fit">
-                {(["text", "branded"] as const).map(t => (
+                {(["text", "branded", "template"] as const).map(t => (
                   <button key={t} type="button"
-                    onClick={() => { setEmailType(t); setBrandedError(""); }}
+                    onClick={() => {
+                      setEmailType(t);
+                      setBrandedError("");
+                      if (t !== "template") setSelectedTemplateId("");
+                    }}
                     className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
                       emailType === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
                     )}
                   >
-                    {t === "text" ? "Text Email" : "✦ Branded Email"}
+                    {t === "text" ? "Text Email" : t === "branded" ? "✦ Branded Email" : "From Template"}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {relevantTemplates.length > 0 && (
+          {/* Template picker mode */}
+          {emailType === "template" && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Start from template (optional)</label>
-              <select
-                value={selectedTemplateId}
-                onChange={e => applyTemplate(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— Write from scratch —</option>
-                {relevantTemplates.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
+              {relevantTemplates.length === 0 ? (
+                <p className="text-sm text-gray-500 rounded-lg border border-dashed border-gray-300 px-4 py-3">
+                  No {channel} templates saved yet. Create one in the Templates tab.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-gray-600">Choose a template</label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={e => applyTemplate(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">— Select a template —</option>
+                    {relevantTemplates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400">Selecting a template will load its content and switch to the appropriate editor.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1485,9 +1499,11 @@ function ComposeWizard({
             <button
               onClick={() => setStep(3)}
               disabled={
-                emailType === "branded"
-                  ? !brandedHtml || !subject.trim()
-                  : !bodyText.trim() || (channel === "Email" && !subject.trim())
+                emailType === "template"
+                  ? true
+                  : emailType === "branded"
+                    ? !brandedHtml || !subject.trim()
+                    : !bodyText.trim() || (channel === "Email" && !subject.trim())
               }
               className="rounded-lg bg-forest-600 px-5 py-2 text-sm font-medium text-white hover:bg-forest-700 disabled:opacity-50 transition-colors"
             >

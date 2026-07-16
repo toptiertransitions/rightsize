@@ -200,6 +200,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     isTTT: f["IsTTT"] == null ? undefined : f["IsTTT"] === true,
     isConsignmentOnly: f["IsConsignmentOnly"] === true,
     isEstateSale: f["IsEstateSale"] === true,
+    originSqFt: f["OriginSqFt"] != null ? toNum(f["OriginSqFt"]) : undefined,
     destinationSqFt: f["DestinationSqFt"] != null ? toNum(f["DestinationSqFt"]) : undefined,
     payoutMethod: toStr(f["PayoutMethod"]) as import("./types").PayoutMethod || undefined,
     payoutUsername: toStr(f["PayoutUsername"]) || undefined,
@@ -1163,7 +1164,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
+  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -1185,6 +1186,7 @@ export async function updateTenant(
   if (data.isTTT !== undefined) fields["IsTTT"] = data.isTTT;
   if (data.isConsignmentOnly !== undefined) fields["IsConsignmentOnly"] = data.isConsignmentOnly;
   if (data.isEstateSale !== undefined) fields["IsEstateSale"] = data.isEstateSale;
+  if (data.originSqFt !== undefined) fields["OriginSqFt"] = data.originSqFt;
   if (data.destinationSqFt !== undefined) fields["DestinationSqFt"] = data.destinationSqFt;
   if (data.payoutMethod !== undefined) fields["PayoutMethod"] = data.payoutMethod ?? "";
   if (data.payoutUsername !== undefined) fields["PayoutUsername"] = data.payoutUsername ?? "";

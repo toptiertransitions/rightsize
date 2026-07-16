@@ -725,6 +725,7 @@ export default function OutreachClient({
           companies={companies}
           staffMembers={staffMembers}
           currentUserId={currentUserId}
+          templates={initialTemplates}
         />
       )}
       {tab === "templates" && (
