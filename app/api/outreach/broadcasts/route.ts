@@ -16,6 +16,7 @@ import {
 } from "@/lib/airtable";
 import { getValidAccessToken } from "@/lib/gmail";
 import { sendGmailMessage } from "@/lib/gmail";
+import { injectTracking } from "@/lib/tracking";
 import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import type { OutreachContactFilter } from "@/lib/airtable";
@@ -223,22 +224,24 @@ export async function POST(req: NextRequest) {
           return;
         }
 
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
         let sent = 0;
         const failures: { contact: string; error: string }[] = [];
         for (const enrollment of enrollments) {
           try {
+            const mergedHtml = applyMergeTags(bodyHtml, {
+              first_name: enrollment.contactName.split(" ")[0] || enrollment.contactName,
+              last_name: enrollment.contactName.split(" ").slice(1).join(" "),
+              rep_first_name: user.firstName ?? "",
+              company: enrollment.company ?? "",
+            });
             const result = await sendGmailMessage({
               accessToken,
               to: enrollment.contactEmail,
               fromName,
               fromEmail,
               subject,
-              htmlBody: applyMergeTags(bodyHtml, {
-                first_name: enrollment.contactName.split(" ")[0] || enrollment.contactName,
-                last_name: enrollment.contactName.split(" ").slice(1).join(" "),
-                rep_first_name: user.firstName ?? "",
-                company: enrollment.company ?? "",
-              }),
+              htmlBody: injectTracking(mergedHtml, enrollment.id, baseUrl),
               attachment,
             });
             await createOutreachSend({

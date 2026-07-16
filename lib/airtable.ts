@@ -6008,6 +6008,9 @@ function mapOutreachSend(record: AirtableRecord): OutreachSend {
     gmailThreadId: toStr(f["GmailThreadId"]),
     status: (toStr(f["Status"]) || "Sent") as OutreachSendStatus,
     errorMessage: toStr(f["ErrorMessage"]),
+    openedAt: toStr(f["OpenedAt"]) || undefined,
+    clickedAt: toStr(f["ClickedAt"]) || undefined,
+    clickedUrl: toStr(f["ClickedUrl"]) || undefined,
   };
 }
 
@@ -6018,6 +6021,43 @@ export async function getOutreachSendsForEnrollment(enrollmentId: string): Promi
   if (!res.ok) return [];
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapOutreachSend);
+}
+
+export async function updateOutreachSend(id: string, data: Pick<OutreachSend, "openedAt" | "clickedAt" | "clickedUrl">): Promise<void> {
+  const fields: Record<string, unknown> = {};
+  if (data.openedAt) fields.OpenedAt = data.openedAt;
+  if (data.clickedAt) fields.ClickedAt = data.clickedAt;
+  if (data.clickedUrl) fields.ClickedUrl = data.clickedUrl;
+  if (Object.keys(fields).length === 0) return;
+  await crmFetch(AIRTABLE_TABLES.OUTREACH_SENDS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields }),
+  });
+}
+
+export async function getOutreachSendsForSequence(sequenceId: string): Promise<{
+  enrollment: OutreachEnrollment;
+  send: OutreachSend | null;
+}[]> {
+  const enrollments = await getOutreachEnrollments({ sequenceId });
+  if (enrollments.length === 0) return [];
+
+  const sendMap = new Map<string, OutreachSend>();
+  // Batch in groups of 40 to stay within Airtable URL limits
+  for (let i = 0; i < enrollments.length; i += 40) {
+    const batch = enrollments.slice(i, i + 40);
+    const clauses = batch.map(e => `FIND("${e.id}", ARRAYJOIN({Enrollment}, ",")) > 0`);
+    const formula = clauses.length === 1 ? clauses[0] : `OR(${clauses.join(", ")})`;
+    const qs = `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=SentAt&sort[0][direction]=asc`;
+    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SENDS, qs);
+    if (!res.ok) continue;
+    const data = await res.json();
+    for (const s of (data.records as AirtableRecord[]).map(mapOutreachSend)) {
+      sendMap.set(s.enrollmentId, s);
+    }
+  }
+
+  return enrollments.map(e => ({ enrollment: e, send: sendMap.get(e.id) ?? null }));
 }
 
 export async function createOutreachSend(data: Omit<OutreachSend, "id">): Promise<OutreachSend> {

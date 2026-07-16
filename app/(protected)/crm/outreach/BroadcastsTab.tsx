@@ -6,6 +6,21 @@ import type { OutreachTemplate, OutreachSequence, OutreachContactType } from "@/
 import type { ReferralCompany, StaffMember } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface MetricsRecipient {
+  contactName: string;
+  contactEmail: string;
+  status: "Sent" | "Failed" | "Pending";
+  errorMessage: string;
+  openedAt: string | null;
+  clickedAt: string | null;
+  clickedUrl: string | null;
+}
+
+interface BroadcastMetrics {
+  recipients: MetricsRecipient[];
+  stats: { sent: number; failed: number; opened: number; clicked: number; total: number };
+}
+
 interface BroadcastSummary {
   id: string;
   name: string;
@@ -366,6 +381,144 @@ function AiPromptPanel({
   );
 }
 
+// ─── Metrics Accordion ───────────────────────────────────────────────────────
+function StatPill({ label, value, total, color }: {
+  label: string; value: number; total: number; color: string;
+}) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="flex flex-col items-center gap-1 min-w-[80px]">
+      <div className="relative w-14 h-14">
+        <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+          <circle
+            cx="18" cy="18" r="15.9" fill="none"
+            stroke={color} strokeWidth="3"
+            strokeDasharray={`${pct} ${100 - pct}`}
+            strokeDashoffset="0"
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-800">{pct}%</span>
+      </div>
+      <div className="text-center">
+        <div className="text-xs font-medium text-gray-700">{value.toLocaleString()}</div>
+        <div className="text-xs text-gray-400">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function BroadcastMetricsAccordion({ broadcastId, channel }: { broadcastId: string; channel: "Email" | "SMS" }) {
+  const [data, setData] = useState<BroadcastMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/outreach/broadcasts/${broadcastId}/metrics`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) setError(d.error);
+        else setData(d);
+      })
+      .catch(() => setError("Failed to load"))
+      .finally(() => setLoading(false));
+  }, [broadcastId]);
+
+  if (loading) return (
+    <div className="px-6 py-4 text-sm text-gray-400 animate-pulse">Loading metrics…</div>
+  );
+  if (error) return (
+    <div className="px-6 py-4 text-sm text-red-500">{error}</div>
+  );
+  if (!data) return null;
+
+  const { stats, recipients } = data;
+  const isEmail = channel === "Email";
+
+  return (
+    <div className="bg-gray-50 border-t border-gray-100 px-6 py-5 space-y-5">
+      {/* Stats row */}
+      <div className="flex items-start gap-6 flex-wrap">
+        <StatPill label="Delivered" value={stats.sent} total={stats.total} color="#16a34a" />
+        {isEmail && (
+          <>
+            <StatPill label="Opened" value={stats.opened} total={stats.sent || 1} color="#2563eb" />
+            <StatPill label="Clicked" value={stats.clicked} total={stats.sent || 1} color="#7c3aed" />
+          </>
+        )}
+        {stats.failed > 0 && (
+          <StatPill label="Failed" value={stats.failed} total={stats.total} color="#dc2626" />
+        )}
+        {isEmail && (
+          <p className="self-end text-xs text-gray-400 max-w-[180px] pb-1">
+            Open rates may be inflated for Apple Mail users due to Mail Privacy Protection.
+          </p>
+        )}
+      </div>
+
+      {/* Per-recipient table */}
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 text-gray-500 uppercase tracking-wide">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">Recipient</th>
+              <th className="px-3 py-2 text-left font-medium">Status</th>
+              {isEmail && <th className="px-3 py-2 text-left font-medium hidden sm:table-cell">Opened</th>}
+              {isEmail && <th className="px-3 py-2 text-left font-medium hidden md:table-cell">Clicked</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {recipients.map((r, i) => (
+              <tr key={i} className="hover:bg-gray-50 transition-colors">
+                <td className="px-3 py-2">
+                  <div className="font-medium text-gray-800 truncate max-w-[160px]">{r.contactName}</div>
+                  <div className="text-gray-400 truncate max-w-[160px]">{r.contactEmail}</div>
+                </td>
+                <td className="px-3 py-2">
+                  {r.status === "Sent" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Delivered</span>
+                  ) : r.status === "Failed" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700" title={r.errorMessage}>Failed</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">Pending</span>
+                  )}
+                </td>
+                {isEmail && (
+                  <td className="px-3 py-2 hidden sm:table-cell text-gray-600">
+                    {r.openedAt ? (
+                      <span className="text-blue-600 font-medium">{timeAgo(r.openedAt)}</span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                )}
+                {isEmail && (
+                  <td className="px-3 py-2 hidden md:table-cell">
+                    {r.clickedUrl ? (
+                      <a
+                        href={r.clickedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-violet-600 hover:text-violet-800 underline truncate max-w-[200px] inline-block"
+                        title={r.clickedUrl}
+                      >
+                        {new URL(r.clickedUrl).hostname}
+                      </a>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Broadcasts list ──────────────────────────────────────────────────────────
 type BcastSortCol = "name" | "channel" | "recipients" | "delivered" | "failed" | "sent";
 
@@ -380,6 +533,7 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "ok" | "failures">("all");
   const [showArchived, setShowArchived] = useState(false);
   const [sort, setSort] = useState<{ col: BcastSortCol; dir: "asc" | "desc" }>({ col: "sent", dir: "desc" });
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<BroadcastSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -552,76 +706,104 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
                 <th className="px-4 py-3 w-20" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="bg-white">
               {sorted.map(b => {
                 const hasFailed = (b.failedCount ?? 0) > 0;
                 const hasTracking = b.sentCount !== undefined;
                 const isArchived = b.status === "Archived";
                 const isBusy = actioning === b.id;
+                const isExpanded = expandedId === b.id;
                 return (
-                  <tr key={b.id} className={cn("group transition-colors", isArchived ? "bg-gray-50 opacity-60 hover:opacity-80" : "hover:bg-gray-50")}>
-                    <td className="px-4 py-3 font-medium max-w-xs truncate">
-                      <span className={isArchived ? "text-gray-500" : "text-gray-900"}>{b.name}</span>
-                      {isArchived && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">archived</span>
+                  <>
+                    <tr
+                      key={b.id}
+                      onClick={e => {
+                        // Don't expand when clicking action buttons
+                        if ((e.target as HTMLElement).closest("button")) return;
+                        setExpandedId(isExpanded ? null : b.id);
+                      }}
+                      className={cn(
+                        "group transition-colors cursor-pointer border-b border-gray-100",
+                        isArchived ? "bg-gray-50 opacity-60 hover:opacity-80" : "hover:bg-gray-50",
+                        isExpanded && "bg-gray-50"
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                        b.channel === "Email" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700",
-                        isArchived && "opacity-60"
-                      )}>
-                        {b.channel}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{b.recipientCount.toLocaleString()}</td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      {hasTracking
-                        ? <span className={cn("font-medium", isArchived ? "text-gray-400" : "text-green-700")}>{b.sentCount!.toLocaleString()}</span>
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      {hasTracking
-                        ? hasFailed
-                          ? <span className={cn("font-medium", isArchived ? "text-gray-400" : "text-red-600")}>{b.failedCount!.toLocaleString()}</span>
-                          : <span className="text-gray-400">0</span>
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell text-gray-500">{timeAgo(b.sentAt)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Archive / Unarchive */}
-                        <button
-                          onClick={() => handleArchive(b)}
-                          disabled={isBusy}
-                          title={isArchived ? "Unarchive" : "Archive"}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                        >
-                          {isArchived ? (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 11l3-3m0 0l3 3m-3-3v8m-6 1h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12" />
-                            </svg>
-                          )}
-                        </button>
-                        {/* Delete */}
-                        <button
-                          onClick={() => setDeleteConfirm(b)}
-                          disabled={isBusy}
-                          title="Delete"
-                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    >
+                      <td className="px-4 py-3 font-medium max-w-xs">
+                        <div className="flex items-center gap-2">
+                          <svg
+                            className={cn("w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform", isExpanded && "rotate-90")}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                           </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                          <span className={cn("truncate", isArchived ? "text-gray-500" : "text-gray-900")}>{b.name}</span>
+                          {isArchived && (
+                            <span className="shrink-0 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">archived</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                          b.channel === "Email" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700",
+                          isArchived && "opacity-60"
+                        )}>
+                          {b.channel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{b.recipientCount.toLocaleString()}</td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {hasTracking
+                          ? <span className={cn("font-medium", isArchived ? "text-gray-400" : "text-green-700")}>{b.sentCount!.toLocaleString()}</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {hasTracking
+                          ? hasFailed
+                            ? <span className={cn("font-medium", isArchived ? "text-gray-400" : "text-red-600")}>{b.failedCount!.toLocaleString()}</span>
+                            : <span className="text-gray-400">0</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell text-gray-500">{timeAgo(b.sentAt)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleArchive(b)}
+                            disabled={isBusy}
+                            title={isArchived ? "Unarchive" : "Archive"}
+                            className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 transition-colors"
+                          >
+                            {isArchived ? (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 11l3-3m0 0l3 3m-3-3v8m-6 1h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(b)}
+                            disabled={isBusy}
+                            title="Delete"
+                            className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${b.id}-metrics`} className="border-b border-gray-100">
+                        <td colSpan={7} className="p-0">
+                          <BroadcastMetricsAccordion broadcastId={b.id} channel={b.channel} />
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               })}
             </tbody>

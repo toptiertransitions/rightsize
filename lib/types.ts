@@ -1354,6 +1354,9 @@ export interface OutreachSend {
   gmailThreadId: string;
   status: OutreachSendStatus;
   errorMessage: string;
+  openedAt?: string;
+  clickedAt?: string;
+  clickedUrl?: string;
 }
 
 export interface OutreachNurtureSetting {
