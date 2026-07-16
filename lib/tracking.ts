@@ -16,11 +16,11 @@ export function injectTracking(html: string, enrollmentId: string, baseUrl: stri
   const t = sign(enrollmentId);
   if (!t) return html;
 
-  // Rewrite all http/https href links to click-tracking redirects
+  // Rewrite all http/https href links to click-tracking redirects (double or single quotes)
   const tracked = html.replace(
-    /href="(https?:\/\/[^"]+)"/gi,
-    (_, url: string) => {
-      if (url.includes("/api/track/")) return `href="${url}"`;
+    /href=(["'])(https?:\/\/[^"']+)\1/gi,
+    (_, q: string, url: string) => {
+      if (url.includes("/api/track/")) return `href=${q}${url}${q}`;
       const encoded = encodeURIComponent(url);
       return `href="${baseUrl}/api/track/click?e=${enrollmentId}&url=${encoded}&t=${t}" target="_blank"`;
     }

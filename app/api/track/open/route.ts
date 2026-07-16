@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { verifyTrackToken } from "@/lib/tracking";
 import { getOutreachSendsForEnrollment, updateOutreachSend } from "@/lib/airtable";
 
@@ -23,16 +23,17 @@ export async function GET(req: NextRequest) {
 
   if (!verifyTrackToken(enrollmentId, token)) return gif;
 
-  // Fire-and-forget — don't delay the image response
-  (async () => {
+  after(async () => {
     try {
       const sends = await getOutreachSendsForEnrollment(enrollmentId);
       const sent = sends.find(s => s.status === "Sent");
       if (sent && !sent.openedAt) {
         await updateOutreachSend(sent.id, { openedAt: new Date().toISOString() });
       }
-    } catch { /* ignore */ }
-  })();
+    } catch (err) {
+      console.error("[track/open] failed:", err);
+    }
+  });
 
   return gif;
 }
