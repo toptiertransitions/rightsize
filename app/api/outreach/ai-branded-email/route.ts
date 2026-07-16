@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
 Brand:
 - Company: Top Tier Transitions
-- Tagline: Premium Estate Liquidation & Move Management
+- Tagline: White Glove Senior Move Management. Done Right.
 - Primary: #2d4a3e (dark forest green)
 - Accent: #4a7c5f
 - Background: #f5f4f0 (warm off-white)
@@ -45,7 +45,7 @@ ${ctaLink ? `CTA button label: "${ctaLabel || "Learn More"}", URL: ${ctaLink}` :
 Generate a complete standalone HTML email. Requirements:
 - Return ONLY valid JSON (no markdown fences): {"subject": "...", "html": "..."}
 - The html must be a full HTML document with inline CSS only (no <style> blocks)
-- Header: #2d4a3e background, "Top Tier Transitions" in white Georgia 24px bold, tagline in #a7c4b5 14px below
+- Header: #2d4a3e background, "Top Tier Transitions" in white Georgia 24px bold, tagline "White Glove Senior Move Management. Done Right." in #a7c4b5 14px below
 - White content area, 32px padding, 600px max-width centered
 - Body starts with "Hi {{first_name}}," on its own line, then a blank line
 - Leave {{first_name}}, {{last_name}}, {{company}}, {{rep_first_name}} exactly as-is
