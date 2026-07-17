@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { getValidAccessToken, sendGmailMessage } from "@/lib/gmail";
 import { clerkClient } from "@clerk/nextjs/server";
+import { injectTracking } from "@/lib/tracking";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -52,13 +53,14 @@ export async function POST(req: NextRequest) {
     } catch { /* best-effort */ }
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
   await sendGmailMessage({
     accessToken,
     to: toEmail,
     fromName,
     fromEmail: toEmail,
     subject: `[TEST] ${subject || "(no subject)"}`,
-    htmlBody: filledHtml,
+    htmlBody: injectTracking(filledHtml, "test", baseUrl),
     attachment,
   });
 
