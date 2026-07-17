@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
   getSystemRole,
-  getOutreachSequences,
+  getAllOutreachSequences,
   createOutreachSequence,
   updateOutreachSequence,
   createOutreachSequenceStep,
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!await requireSalesRole(userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const allSeqs = await getOutreachSequences(userId);
+  const allSeqs = await getAllOutreachSequences();
   const broadcasts = allSeqs.filter(s => {
     try { return JSON.parse(s.triggerConfigJson || "{}").isBroadcast === true; } catch { return false; }
   });

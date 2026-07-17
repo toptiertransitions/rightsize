@@ -30,6 +30,7 @@ interface BroadcastSummary {
   sentCount?: number;
   failedCount?: number;
   status: "Active" | "Archived";
+  ownerClerkId: string;
 }
 
 interface AudienceFilter {
@@ -520,23 +521,33 @@ function BroadcastMetricsAccordion({ broadcastId, channel }: { broadcastId: stri
 }
 
 // ─── Broadcasts list ──────────────────────────────────────────────────────────
-type BcastSortCol = "name" | "channel" | "recipients" | "delivered" | "failed" | "sent";
+type BcastSortCol = "name" | "channel" | "recipients" | "delivered" | "failed" | "sent" | "sender";
 
-function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
+function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew, staffMembers, currentUserId }: {
   broadcasts: BroadcastSummary[];
   loading: boolean;
   onNew: () => void;
+  staffMembers: StaffMember[];
+  currentUserId: string;
 }) {
   const [broadcasts, setBroadcasts] = useState<BroadcastSummary[]>(initialBroadcasts);
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<"All" | "Email" | "SMS">("All");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "ok" | "failures">("all");
+  const [senderFilter, setSenderFilter] = useState<string>(currentUserId);
   const [showArchived, setShowArchived] = useState(false);
   const [sort, setSort] = useState<{ col: BcastSortCol; dir: "asc" | "desc" }>({ col: "sent", dir: "desc" });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<BroadcastSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const salesStaff = staffMembers.filter(s => ["TTTSales", "TTTAdmin", "TTTManager"].includes(s.role ?? ""));
+
+  function senderName(clerkId: string) {
+    const m = staffMembers.find(s => s.clerkUserId === clerkId);
+    return m?.displayName ?? clerkId;
+  }
 
   // Keep in sync when parent reloads
   useEffect(() => { setBroadcasts(initialBroadcasts); }, [initialBroadcasts]);
@@ -585,6 +596,7 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
     if (channelFilter !== "All" && b.channel !== channelFilter) return false;
     if (deliveryFilter === "ok" && (b.failedCount ?? 0) > 0) return false;
     if (deliveryFilter === "failures" && (b.failedCount ?? 0) === 0) return false;
+    if (senderFilter !== "all" && b.ownerClerkId !== senderFilter) return false;
     return true;
   });
 
@@ -597,6 +609,7 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
       case "delivered": cmp = (a.sentCount ?? -1) - (b.sentCount ?? -1); break;
       case "failed": cmp = (a.failedCount ?? -1) - (b.failedCount ?? -1); break;
       case "sent": cmp = a.sentAt.localeCompare(b.sentAt); break;
+      case "sender": cmp = senderName(a.ownerClerkId).localeCompare(senderName(b.ownerClerkId)); break;
     }
     return sort.dir === "asc" ? cmp : -cmp;
   });
@@ -650,6 +663,17 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
           <option value="Email">Email</option>
           <option value="SMS">SMS</option>
         </select>
+        <select
+          value={senderFilter}
+          onChange={e => setSenderFilter(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+        >
+          <option value={currentUserId}>My broadcasts</option>
+          <option value="all">All senders</option>
+          {salesStaff.filter(s => s.clerkUserId !== currentUserId).map(s => (
+            <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+          ))}
+        </select>
         {!showArchived && (
           <select
             value={deliveryFilter}
@@ -698,7 +722,8 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
             <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <tr>
                 <SortTh col="name" label="Name" />
-                <SortTh col="channel" label="Channel" />
+                <SortTh col="channel" label="Channel" className="hidden sm:table-cell" />
+                <SortTh col="sender" label="Sender" className="hidden lg:table-cell" />
                 <SortTh col="recipients" label="Recipients" />
                 <SortTh col="delivered" label="Delivered" className="hidden sm:table-cell" />
                 <SortTh col="failed" label="Failed" className="hidden sm:table-cell" />
@@ -742,13 +767,20 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 hidden sm:table-cell">
                         <span className={cn(
                           "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                           b.channel === "Email" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700",
                           isArchived && "opacity-60"
                         )}>
                           {b.channel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <span className={cn("text-sm text-gray-700", isArchived && "text-gray-400")}>
+                          {b.ownerClerkId === currentUserId ? (
+                            <span className="font-medium text-forest-700">Me</span>
+                          ) : senderName(b.ownerClerkId)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{b.recipientCount.toLocaleString()}</td>
@@ -798,7 +830,7 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew }: {
                     </tr>
                     {isExpanded && (
                       <tr key={`${b.id}-metrics`} className="border-b border-gray-100">
-                        <td colSpan={7} className="p-0">
+                        <td colSpan={8} className="p-0">
                           <BroadcastMetricsAccordion broadcastId={b.id} channel={b.channel} />
                         </td>
                       </tr>
@@ -1706,6 +1738,7 @@ export default function BroadcastsTab({
             sentCount: cfg.sentCount !== undefined ? Number(cfg.sentCount) : undefined,
             failedCount: cfg.failedCount !== undefined ? Number(cfg.failedCount) : undefined,
             status: (s.status === "Archived" ? "Archived" : "Active") as "Active" | "Archived",
+            ownerClerkId: s.ownerClerkId,
           };
         });
         setBroadcasts(parsed.sort((a, b) => b.sentAt.localeCompare(a.sentAt)));
@@ -1738,6 +1771,8 @@ export default function BroadcastsTab({
       broadcasts={broadcasts}
       loading={loading}
       onNew={() => setView("compose")}
+      staffMembers={staffMembers}
+      currentUserId={currentUserId}
     />
   );
 }
