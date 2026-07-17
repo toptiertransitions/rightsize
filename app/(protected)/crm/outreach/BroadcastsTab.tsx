@@ -1001,6 +1001,7 @@ function ComposeWizard({
           ctaLink: ctaLink || undefined,
           ctaLabel: ctaLabel || undefined,
           attachmentUrl: attachmentUrl || undefined,
+          attachmentName: attachmentName || undefined,
         }),
         signal: AbortSignal.timeout(30000),
       });
@@ -1615,7 +1616,7 @@ function ComposeWizard({
                     const res = await fetch("/api/outreach/broadcasts/test-send", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ subject, bodyHtml: finalBodyHtml, attachmentUrl: attachmentUrl || undefined }),
+                      body: JSON.stringify({ subject, bodyHtml: finalBodyHtml, attachmentUrl: attachmentUrl || undefined, attachmentName: attachmentName || undefined }),
                     });
                     setTestResult(res.ok ? "sent" : "error");
                   } catch {

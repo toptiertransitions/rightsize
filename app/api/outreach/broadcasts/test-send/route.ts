@@ -15,10 +15,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { subject, bodyHtml, attachmentUrl } = await req.json() as {
+  const { subject, bodyHtml, attachmentUrl, attachmentName } = await req.json() as {
     subject: string;
     bodyHtml: string;
     attachmentUrl?: string;
+    attachmentName?: string;
   };
 
   if (!bodyHtml) return NextResponse.json({ error: "bodyHtml required" }, { status: 400 });
@@ -45,8 +46,7 @@ export async function POST(req: NextRequest) {
       const fileRes = await fetch(attachmentUrl);
       if (fileRes.ok) {
         const mimeType = fileRes.headers.get("content-type") || "application/octet-stream";
-        const urlPath = new URL(attachmentUrl).pathname;
-        const attachName = decodeURIComponent(urlPath.split("/").pop() || "attachment");
+        const attachName = attachmentName || decodeURIComponent(new URL(attachmentUrl).pathname.split("/").pop() || "attachment");
         attachment = { data: Buffer.from(await fileRes.arrayBuffer()), name: attachName, mimeType };
       }
     } catch { /* best-effort */ }

@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
 
   const ctaLink: string = body.ctaLink ?? "";
   const attachmentUrl: string = body.attachmentUrl ?? "";
+  const attachmentName: string = body.attachmentName ?? "";
 
   if (!name || !filter || !bodyHtml) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -169,8 +170,7 @@ export async function POST(req: NextRequest) {
             const fileRes = await fetch(attachmentUrl);
             if (fileRes.ok) {
               const mimeType = fileRes.headers.get("content-type") || "application/octet-stream";
-              const urlPath = new URL(attachmentUrl).pathname;
-              const attachName = decodeURIComponent(urlPath.split("/").pop() || "attachment");
+              const attachName = attachmentName || decodeURIComponent(new URL(attachmentUrl).pathname.split("/").pop() || "attachment");
               attachment = { data: Buffer.from(await fileRes.arrayBuffer()), name: attachName, mimeType };
             }
           } catch (err) {
