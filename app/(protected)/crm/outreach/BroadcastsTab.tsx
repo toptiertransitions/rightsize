@@ -984,7 +984,7 @@ function ComposeWizard({
     const finalBodyHtml = isBranded
       ? brandedHtml
       : (channel === "Email"
-        ? (ctaLink ? bodyText + `\n\n${ctaLabel || "Click here"}: ${ctaLink}` : bodyText).replace(/\n/g, "<br>")
+        ? (ctaLink ? bodyText + `\n\n<a href="${ctaLink}">${ctaLabel || "Click here"}</a>` : bodyText).replace(/\n/g, "<br>")
         : bodyText);
 
     try {
