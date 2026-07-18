@@ -895,9 +895,11 @@ function ComposeWizard({
   templates, companies, staffMembers, currentUserId,
   hasSendScope, gmailEmail, onDone, onCancel,
 }: ComposeProps) {
+  const isSalesOnly = (staffMembers.find(s => s.clerkUserId === currentUserId)?.role ?? "") === "TTTSales";
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [broadcastName, setBroadcastName] = useState("");
-  const [filter, setFilter] = useState<AudienceFilter>(EMPTY_FILTER);
+  const [filter, setFilter] = useState<AudienceFilter>({ ...EMPTY_FILTER, ownerClerkId: isSalesOnly ? currentUserId : "" });
   const [audienceMode, setAudienceMode] = useState<"filter" | "manual">("filter");
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<{ count: number; sample: string[] } | null>(null);
@@ -1135,7 +1137,7 @@ function ComposeWizard({
                     value={ct}
                     checked={filter.contactType === ct}
                     onChange={() => {
-                      setFilter(f => ({ ...f, contactType: ct, stages: [], companyIds: [], ownerClerkId: "" }));
+                      setFilter(f => ({ ...f, contactType: ct, stages: [], companyIds: [], ownerClerkId: isSalesOnly ? currentUserId : "" }));
                       setSelectedContactIds(new Set());
                       setPreview(null);
                     }}
@@ -1149,21 +1151,33 @@ function ComposeWizard({
             </div>
           </div>
 
-          {/* Sales Owner filter — both contact types */}
+          {/* Sales Owner filter — locked for TTTSales, full dropdown for Admin/Manager */}
           {salesStaff.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Sales owner</label>
-              <select
-                value={filter.ownerClerkId}
-                onChange={e => setFilter(f => ({ ...f, ownerClerkId: e.target.value }))}
-                className={inputCls}
-              >
-                <option value="">All owners</option>
-                <option value={currentUserId}>Me only</option>
-                {salesStaff.filter(s => s.clerkUserId !== currentUserId).map(s => (
-                  <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
-                ))}
-              </select>
+              {isSalesOnly ? (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span className="text-sm font-medium text-gray-800">
+                    {currentUser?.displayName ?? "You"}
+                  </span>
+                  <span className="text-xs text-gray-400 ml-1">— your contacts only</span>
+                  <svg className="w-3.5 h-3.5 text-gray-400 ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+              ) : (
+                <select
+                  value={filter.ownerClerkId}
+                  onChange={e => setFilter(f => ({ ...f, ownerClerkId: e.target.value }))}
+                  className={inputCls}
+                >
+                  <option value="">All owners</option>
+                  <option value={currentUserId}>Me only</option>
+                  {salesStaff.filter(s => s.clerkUserId !== currentUserId).map(s => (
+                    <option key={s.clerkUserId} value={s.clerkUserId}>{s.displayName}</option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 
