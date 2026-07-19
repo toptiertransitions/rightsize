@@ -6,6 +6,8 @@ import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { GroupedSelect } from "@/components/ui/GroupedSelect";
+import { CATEGORY_GROUPS, isValidCategory } from "@/lib/categories";
 import { Card, CardContent } from "@/components/ui/Card";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import type { Room, ItemAnalysis, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemPhoto } from "@/lib/types";
@@ -649,12 +651,29 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
               </h3>
               <div className="space-y-4">
                 <Input label="Item Name" value={merged.item_name ?? ""} onChange={(e) => update("item_name", e.target.value)} />
-                <Select label="Category" value={merged.category ?? ""} onChange={(e) => update("category", e.target.value)}
-                  options={[
-                    { value: "", label: "— select —" },
-                    ...["Art & Collectibles","Books & Media","Clothing & Accessories","Décor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
-                  ]}
-                />
+                {merged.category && !isValidCategory(merged.category) ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-amber-600">
+                      Needs recategorization — "{merged.category}" is no longer valid
+                    </p>
+                    <GroupedSelect
+                      label="Category"
+                      value=""
+                      onChange={e => update("category", e.target.value)}
+                      placeholder="— select new category —"
+                      groups={CATEGORY_GROUPS.map(g => ({ group: g.group, options: g.categories.map(c => ({ value: c, label: c })) }))}
+                      required
+                    />
+                  </div>
+                ) : (
+                  <GroupedSelect
+                    label="Category"
+                    value={merged.category ?? ""}
+                    onChange={e => update("category", e.target.value)}
+                    groups={CATEGORY_GROUPS.map(g => ({ group: g.group, options: g.categories.map(c => ({ value: c, label: c })) }))}
+                    required
+                  />
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <Select label="Condition" value={merged.condition ?? "Good"}
                     onChange={(e) => update("condition", e.target.value as ItemCondition)}

@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { GroupedSelect } from "@/components/ui/GroupedSelect";
+import { CATEGORY_GROUPS, isValidCategory } from "@/lib/categories";
 import { formatCurrency } from "@/lib/utils";
 import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor, StaffMember } from "@/lib/types";
 import { VendorFileModal } from "./VendorFileModal";
@@ -514,11 +516,17 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             <Input label="Item Name" value={form.itemName ?? ""} onChange={e => set("itemName", e.target.value)} />
             <div className="flex items-end gap-2">
               <div className="flex-1 min-w-0">
-                <Select label="Category" value={form.category ?? ""} onChange={e => set("category", e.target.value)}
-                  options={[
-                    { value: "", label: "— select —" },
-                    ...["Art & Collectibles","Books & Media","Clothing & Accessories","Décor & Accessories","Furniture","Kitchen & Dining","Other"].map(c => ({ value: c, label: c })),
-                  ]}
+                {form.category && !isValidCategory(form.category) && (
+                  <p className="text-xs font-medium text-amber-600 -mb-1">
+                    Needs recategorization — &ldquo;{form.category}&rdquo; is no longer valid
+                  </p>
+                )}
+                <GroupedSelect
+                  label="Category"
+                  value={isValidCategory(form.category ?? "") ? (form.category ?? "") : ""}
+                  onChange={e => set("category", e.target.value)}
+                  placeholder={form.category && !isValidCategory(form.category) ? "— select new category —" : "— select —"}
+                  groups={CATEGORY_GROUPS.map(g => ({ group: g.group, options: g.categories.map(c => ({ value: c, label: c })) }))}
                 />
               </div>
               <button

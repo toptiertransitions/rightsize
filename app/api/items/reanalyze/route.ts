@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     itemName: analysis.item_name,
     category: analysis.category,
+    isAntique: analysis.is_antique ?? false,
     conditionNotes: analysis.condition_notes,
     listingTitleEbay: analysis.listing_title_ebay,
     listingDescriptionEbay: analysis.listing_description_ebay,

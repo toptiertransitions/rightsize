@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ItemAnalysis } from "./types";
+import { ALL_CATEGORIES, CATEGORY_AI_HINT, isValidCategory } from "./categories";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -7,8 +8,9 @@ const ANALYSIS_PROMPT = `You are an expert estate sale appraiser and senior down
 Analyze the photo of this household item and return a JSON object with EXACTLY these fields:
 
 {
-  "item_name": "Short descriptive name (e.g., 'Vintage Oak Rocking Chair')",
-  "category": "Category (e.g., 'Furniture', 'Art & Collectibles', 'Electronics', 'Kitchen & Dining', 'Books & Media', 'Clothing & Accessories', 'Tools & Hardware', 'Sports & Outdoors', 'Décor & Accessories', 'Other')",
+  "item_name": "Short descriptive name (e.g., 'Victorian Walnut Side Chair')",
+  "category": "<see category rules below — must be verbatim from the 26-value list>",
+  "is_antique": true or false (true if the item appears to be antique or vintage, i.e. likely 50+ years old or with clear period styling — this is an attribute, not a category),
   "condition": "One of: Excellent | Good | Fair | Poor | For Parts",
   "condition_notes": "Brief honest description of condition, visible wear, damage",
   "size_class": "One of: Small & Shippable | Fits in Car-SUV | Needs Movers",
@@ -19,13 +21,15 @@ Analyze the photo of this household item and return a JSON object with EXACTLY t
   "value_high": number (USD, best-case if patient seller),
   "primary_route": "One of: To Be Moved | Family to Take | Storage Unit - Offsite | Leaving with Home | ProFoundFinds Consignment | FB/Marketplace | Online Marketplace | Other Consignment | Donate | Discard",
   "route_reasoning": "1-2 sentences explaining why this route is best",
-  "consignment_category": "If consignment-worthy, the best shop category (e.g., 'Antique Furniture', 'Vintage Jewelry'), else empty string",
+  "consignment_category": "If consignment-worthy, the best shop sub-category description (e.g., 'Victorian Walnut Furniture', 'Art Deco Jewelry'), else empty string",
   "listing_title_ebay": "SEO-optimized eBay title under 80 chars with key details",
   "listing_description_ebay": "2-3 paragraph description focused on provenance/history, style, notable features, and why a buyer would want this item. Do NOT include condition or condition notes (captured separately). Do NOT include dimensions or measurements (captured separately). Do NOT include shipping instructions or packaging guidance.",
   "listing_fb": "Short casual Facebook Marketplace post (2-3 sentences)",
   "listing_offerup": "Short OfferUp listing (1-2 sentences, price-focused)",
   "staff_tips": "Practical tip for the TTT helper — how to handle, photograph better, where to list, watch-outs"
 }
+
+${CATEGORY_AI_HINT}
 
 Return ONLY valid JSON with no markdown, no explanation, no code fences.`;
 
@@ -108,6 +112,16 @@ export async function analyzeItemPhoto(
     analysis = JSON.parse(cleaned);
   } catch {
     throw new Error(`Claude returned invalid JSON: ${text.slice(0, 200)}`);
+  }
+
+  // Coerce category to a valid value — never let a bad string reach the DB.
+  if (!isValidCategory(analysis.category)) {
+    const fallback = ALL_CATEGORIES.find(c =>
+      c.toLowerCase().includes(analysis.category.toLowerCase()) ||
+      analysis.category.toLowerCase().includes(c.toLowerCase())
+    ) ?? "Other";
+    console.warn(`[analyzeItemPhoto] AI returned unknown category "${analysis.category}", coerced to "${fallback}"`);
+    analysis = { ...analysis, category: fallback };
   }
 
   return analysis;

@@ -4,6 +4,7 @@ import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEven
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
+import { isValidCategory, LEGACY_CATEGORY_MAP, migrateCategoryByKeyword } from "@/lib/categories";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -95,14 +96,20 @@ export async function POST(req: NextRequest) {
 
     const barcodeNumber = await getNextBarcodeNumber();
 
+    const rawCategory = (body.category as string) || "";
+    const itemNameForMigration = (body.itemName as string) || (body.item_name as string) || "";
+    const resolvedCategory = isValidCategory(rawCategory)
+      ? rawCategory
+      : (LEGACY_CATEGORY_MAP[rawCategory] ?? migrateCategoryByKeyword(itemNameForMigration));
+
     const item = await createItem({
       tenantId,
-      itemName: (body.itemName as string) || (body.item_name as string) || "Unknown Item",
+      itemName: itemNameForMigration || "Unknown Item",
       roomId: body.roomId as string | undefined,
       photos: body.photos as never,
       photoUrl: body.photoUrl as string | undefined,
       photoPublicId: body.photoPublicId as string | undefined,
-      category: body.category as string,
+      category: resolvedCategory,
       condition: body.condition as never,
       conditionNotes: body.conditionNotes as string,
       sizeClass: body.sizeClass as never,

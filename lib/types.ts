@@ -515,6 +515,7 @@ export interface ItemSaleEvent {
 export interface ItemAnalysis {
   item_name: string;
   category: string;
+  is_antique: boolean;
   condition: ItemCondition;
   condition_notes: string;
   size_class: SizeClass;
@@ -651,27 +652,8 @@ export interface RoutingRule {
 }
 
 // ─── Item Categories ──────────────────────────────────────────────────────────
-export const ITEM_CATEGORIES: string[] = [
-  "Furniture",
-  "Electronics",
-  "Appliances",
-  "Clothing & Accessories",
-  "Books & Media",
-  "Art & Collectibles",
-  "Jewelry",
-  "Sporting Goods",
-  "Tools & Hardware",
-  "Kitchen & Dining",
-  "Bedroom",
-  "Bathroom",
-  "Office",
-  "Toys & Games",
-  "Musical Instruments",
-  "Outdoor & Garden",
-  "Holiday & Seasonal",
-  "Antiques",
-  "Other",
-];
+// Re-exported for backwards-compat — prefer importing ALL_CATEGORIES from lib/categories.ts directly.
+export { ALL_CATEGORIES as ITEM_CATEGORIES } from "./categories";
 
 // ─── Local Vendor Directory ───────────────────────────────────────────────────
 export interface LocalVendor {
