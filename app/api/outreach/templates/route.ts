@@ -32,19 +32,24 @@ export async function POST(req: NextRequest) {
   const { name, channel, subject, body: templateBody, shared, emailType, ctaLink, ctaLabel, attachmentUrl } = body;
   if (!name || !channel) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
-  const template = await createOutreachTemplate({
-    name,
-    channel,
-    subject: subject ?? "",
-    body: templateBody ?? "",
-    ownerClerkId: userId,
-    shared: shared ?? false,
-    emailType: emailType ?? "text",
-    ctaLink: ctaLink ?? "",
-    ctaLabel: ctaLabel ?? "",
-    attachmentUrl: attachmentUrl ?? "",
-  });
-  return NextResponse.json({ template });
+  try {
+    const template = await createOutreachTemplate({
+      name,
+      channel,
+      subject: subject ?? "",
+      body: templateBody ?? "",
+      ownerClerkId: userId,
+      shared: shared ?? false,
+      emailType: emailType ?? "text",
+      ctaLink: ctaLink ?? "",
+      ctaLabel: ctaLabel ?? "",
+      attachmentUrl: attachmentUrl ?? "",
+    });
+    return NextResponse.json({ template });
+  } catch (err) {
+    console.error("[outreach/templates POST]", err);
+    return NextResponse.json({ error: "Failed to save template" }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {
@@ -56,8 +61,13 @@ export async function PATCH(req: NextRequest) {
   const { id, ...data } = body;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  const template = await updateOutreachTemplate(id, data);
-  return NextResponse.json({ template });
+  try {
+    const template = await updateOutreachTemplate(id, data);
+    return NextResponse.json({ template });
+  } catch (err) {
+    console.error("[outreach/templates PATCH]", err);
+    return NextResponse.json({ error: "Failed to update template" }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {
@@ -68,6 +78,11 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  await deleteOutreachTemplate(id);
-  return NextResponse.json({ ok: true });
+  try {
+    await deleteOutreachTemplate(id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[outreach/templates DELETE]", err);
+    return NextResponse.json({ error: "Failed to delete template" }, { status: 500 });
+  }
 }

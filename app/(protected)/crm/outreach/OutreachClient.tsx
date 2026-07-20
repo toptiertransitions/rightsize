@@ -210,6 +210,7 @@ function TemplatesTab({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<TemplateFormState>(EMPTY_TEMPLATE);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<OutreachTemplateChannel | "All">("All");
@@ -233,6 +234,7 @@ function TemplatesTab({
     setShowAiPrompt(false);
     setBrandedGist("");
     setBrandedError("");
+    setSaveError(null);
     setModalOpen(true);
   }
 
@@ -253,12 +255,14 @@ function TemplatesTab({
     setShowAiPrompt(false);
     setBrandedGist("");
     setBrandedError("");
+    setSaveError(null);
     setModalOpen(true);
   }
 
   async function handleSave() {
     if (!form.name.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
       if (editingId) {
         const res = await fetch("/api/outreach/templates", {
@@ -267,6 +271,7 @@ function TemplatesTab({
           body: JSON.stringify({ id: editingId, ...form }),
         });
         const data = await res.json();
+        if (!res.ok) { setSaveError(data.error ?? "Failed to save template"); return; }
         setTemplates(prev => prev.map(t => t.id === editingId ? data.template : t));
       } else {
         const res = await fetch("/api/outreach/templates", {
@@ -275,9 +280,12 @@ function TemplatesTab({
           body: JSON.stringify(form),
         });
         const data = await res.json();
+        if (!res.ok) { setSaveError(data.error ?? "Failed to create template"); return; }
         setTemplates(prev => [data.template, ...prev]);
       }
       setModalOpen(false);
+    } catch {
+      setSaveError("Unexpected error — please try again");
     } finally {
       setSaving(false);
     }
@@ -611,20 +619,26 @@ function TemplatesTab({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !form.name.trim()}
-                className="rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? "Saving…" : editingId ? "Save Changes" : "Create Template"}
-              </button>
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
+              {saveError
+                ? <p className="text-xs text-red-600 flex-1">{saveError}</p>
+                : <span />
+              }
+              <div className="flex gap-3 shrink-0">
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !form.name.trim()}
+                  className="rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? "Saving…" : editingId ? "Save Changes" : "Create Template"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
