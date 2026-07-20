@@ -47,8 +47,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ template });
   } catch (err) {
-    console.error("[outreach/templates POST]", err);
-    return NextResponse.json({ error: "Failed to save template" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[outreach/templates POST]", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 

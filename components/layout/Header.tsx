@@ -73,7 +73,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const salesOnlyLinks = [
     { href: "/quoting", base: "/quoting", label: "Quoting" },
     { href: "/invoices", base: "/invoices", label: "Invoices" },
-    { href: "/crm", base: "/crm", label: "CRM" },
+    { href: "/crm", base: "/crm", label: "CRM", excludeBase: "/crm/outreach" },
     { href: "/crm/outreach", base: "/crm/outreach", label: "Outreach" },
     { href: "/expenses", base: "/expenses", label: "Expenses" },
     { href: "/help", base: "/help", label: "Help" },
@@ -92,7 +92,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     ...(isManager ? [{ href: `/invoices${projectTq}`, base: "/invoices", label: "Invoices" }] : []),
     // CRM + Outreach — Admin only
     ...(isAdmin ? [
-      { href: "/crm", base: "/crm", label: "CRM" },
+      { href: "/crm", base: "/crm", label: "CRM", excludeBase: "/crm/outreach" },
       { href: "/crm/outreach", base: "/crm/outreach", label: "Outreach" },
     ] : []),
     // Expenses — Staff, Manager, and Admin
@@ -149,7 +149,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
                 href={link.href}
                 className={cn(
                   "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  pathname.startsWith(link.base ?? link.href)
+                  pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase))
                     ? "bg-forest-50 text-forest-700"
                     : "text-gray-600 hover:text-forest-700 hover:bg-gray-50"
                 )}
