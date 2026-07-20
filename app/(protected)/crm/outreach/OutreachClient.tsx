@@ -197,15 +197,16 @@ const EMPTY_TEMPLATE: TemplateFormState = {
 };
 
 function TemplatesTab({
-  templates: initialTemplates,
+  templates,
+  setTemplates,
   currentUserId,
   staffMembers,
 }: {
   templates: OutreachTemplate[];
+  setTemplates: React.Dispatch<React.SetStateAction<OutreachTemplate[]>>;
   currentUserId: string;
   staffMembers: StaffMember[];
 }) {
-  const [templates, setTemplates] = useState(initialTemplates);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<TemplateFormState>(EMPTY_TEMPLATE);
@@ -681,6 +682,7 @@ export default function OutreachClient({
   staffMembers,
 }: OutreachClientProps) {
   const [tab, setTab] = useState<OutreachTab>("myday");
+  const [templates, setTemplates] = useState(initialTemplates);
 
   const tabs: { key: OutreachTab; label: string }[] = [
     { key: "myday", label: "My Day" },
@@ -726,7 +728,7 @@ export default function OutreachClient({
       {tab === "myday" && <MyDayTab />}
       {tab === "broadcasts" && (
         <BroadcastsTab
-          templates={initialTemplates}
+          templates={templates}
           companies={companies}
           staffMembers={staffMembers}
           currentUserId={currentUserId}
@@ -739,12 +741,13 @@ export default function OutreachClient({
           companies={companies}
           staffMembers={staffMembers}
           currentUserId={currentUserId}
-          templates={initialTemplates}
+          templates={templates}
         />
       )}
       {tab === "templates" && (
         <TemplatesTab
-          templates={initialTemplates}
+          templates={templates}
+          setTemplates={setTemplates}
           currentUserId={currentUserId}
           staffMembers={staffMembers}
         />
