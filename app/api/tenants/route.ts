@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
-import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole, getTenants } from "@/lib/airtable";
+import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole, getTenants, getSignedTenantIds } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
@@ -14,12 +14,16 @@ export async function GET(req: NextRequest) {
 
   const isTTTAdminCaller = sysRole === "TTTAdmin";
   const includeArchived = req.nextUrl.searchParams.get("includeArchived") === "true";
-  const all = await getTenants().catch(() => []);
+  const [all, signedIds] = await Promise.all([
+    getTenants().catch(() => []),
+    getSignedTenantIds().catch(() => new Set<string>()),
+  ]);
   const tenants = all
     .filter(t => !t.isLostDeal) // Lost deals never appear in pickers
     .filter(t => includeArchived || !t.isArchived)
     .filter(t => isTTTAdminCaller || (t.isTTT ?? true)) // Non-TTT invisible to staff/manager
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
   return NextResponse.json({ tenants });
 }
 

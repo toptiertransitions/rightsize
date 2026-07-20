@@ -2764,6 +2764,29 @@ function mapContract(record: AirtableRecord): Contract {
   };
 }
 
+export async function getSignedTenantIds(): Promise<Set<string>> {
+  const table = AIRTABLE_TABLES.CONTRACTS;
+  const ids = new Set<string>();
+  let offset: string | undefined;
+  do {
+    const params = new URLSearchParams({
+      filterByFormula: `{Status} = "Signed"`,
+      "fields[]": "TenantId",
+      pageSize: "100",
+    });
+    if (offset) params.set("offset", offset);
+    const res = await contractFetch(table, `?${params.toString()}`);
+    if (!res.ok) break;
+    const data = await res.json();
+    for (const rec of (data.records as AirtableRecord[])) {
+      const tid = toStr(rec.fields["TenantId"]);
+      if (tid) ids.add(tid);
+    }
+    offset = data.offset;
+  } while (offset);
+  return ids;
+}
+
 export async function getContractsForTenant(tenantId: string): Promise<Contract[]> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
