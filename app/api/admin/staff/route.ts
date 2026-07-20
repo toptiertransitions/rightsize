@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { revalidateTag } from "next/cache";
 import {
   getSystemRole,
   getStaffMembers,
+  getStaffMemberById,
   upsertStaffMember,
   updateStaffMember,
   deleteStaffMember,
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const member = await upsertStaffMember({ clerkUserId, displayName, email, role, isActive: true });
+    revalidateTag("staff-members");
     return NextResponse.json({ member });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
@@ -77,7 +80,41 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
+    // If email is changing, update Clerk too so login + invite emails use the new address
+    if (fields.email) {
+      const existing = await getStaffMemberById(id);
+      if (existing?.clerkUserId && existing.email !== fields.email) {
+        const client = await clerkClient();
+        try {
+          const clerkUser = await client.users.getUser(existing.clerkUserId);
+          // Create the new address as primary + verified (admin bypass, no verification email)
+          const created = await client.emailAddresses.createEmailAddress({
+            userId: existing.clerkUserId,
+            emailAddress: fields.email,
+            primary: true,
+            verified: true,
+          });
+          // Make it primary
+          await client.users.updateUser(existing.clerkUserId, {
+            primaryEmailAddressID: created.id,
+          });
+          // Remove the old primary address
+          const oldId = clerkUser.primaryEmailAddressId;
+          if (oldId && oldId !== created.id) {
+            await client.emailAddresses.deleteEmailAddress(oldId).catch(() => {});
+          }
+        } catch (clerkErr) {
+          console.error("[staff PATCH] Clerk email update failed:", clerkErr);
+          return NextResponse.json(
+            { error: `Airtable saved but Clerk update failed: ${String(clerkErr)}` },
+            { status: 500 }
+          );
+        }
+      }
+    }
+
     const member = await updateStaffMember(id, fields);
+    revalidateTag("staff-members");
     return NextResponse.json({ member });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
@@ -94,6 +131,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await deleteStaffMember(id);
+    revalidateTag("staff-members");
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

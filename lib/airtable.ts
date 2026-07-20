@@ -2441,8 +2441,14 @@ export const getStaffMembers = unstable_cache(
     return (data.records as AirtableRecord[]).map(mapStaffMember);
   },
   ["staff-members"],
-  { revalidate: 300 }
+  { revalidate: 300, tags: ["staff-members"] }
 );
+
+export async function getStaffMemberById(airtableId: string): Promise<StaffMember | null> {
+  const res = await staffRolesFetch(`/${airtableId}`);
+  if (!res.ok) return null;
+  return mapStaffMember(await res.json());
+}
 
 export async function getStaffMember(clerkUserId: string): Promise<StaffMember | null> {
   const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
