@@ -5620,22 +5620,21 @@ export async function getOutreachTemplateById(id: string): Promise<OutreachTempl
 
 export async function createOutreachTemplate(data: Omit<OutreachTemplate, "id" | "createdAt" | "updatedAt">): Promise<OutreachTemplate> {
   const now = new Date().toISOString();
-  // Only include optional fields when they have a value — avoids UNKNOWN_FIELD_NAME
-  // errors if the Airtable table hasn't yet been extended with newer columns.
   const fields: Record<string, unknown> = {
     Name: data.name,
     Channel: data.channel,
+    Body: data.body,
     OwnerClerkId: data.ownerClerkId,
     Shared: data.shared,
     CreatedAt: now,
     UpdatedAt: now,
+    EmailType: data.emailType ?? "text",
+    CtaLink: data.ctaLink ?? "",
+    CtaLabel: data.ctaLabel ?? "",
+    AttachmentUrl: data.attachmentUrl ?? "",
   };
-  if (data.subject)       fields.Subject       = data.subject;
-  if (data.body)          fields.Body          = data.body;
-  if (data.emailType && data.emailType !== "text") fields.EmailType = data.emailType;
-  if (data.ctaLink)       fields.CtaLink       = data.ctaLink;
-  if (data.ctaLabel)      fields.CtaLabel      = data.ctaLabel;
-  if (data.attachmentUrl) fields.AttachmentUrl = data.attachmentUrl;
+  // Subject field must be added to the OutreachTemplates table before writing it
+  if (data.subject) fields.Subject = data.subject;
 
   const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, "", {
     method: "POST",
