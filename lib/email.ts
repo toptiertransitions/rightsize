@@ -3023,3 +3023,211 @@ export function buildPaymentReceiptEmail({
 </body>
 </html>`;
 }
+
+// ─── Client Pipeline Report Email ─────────────────────────────────────────────
+
+export type ClientPipelineRow = {
+  clientName: string;
+  location: string;
+  value: number;
+  referralSource: string;
+  ownerName: string;
+  nextStepDate?: string;
+  nextStepNote?: string;
+  wonAt?: string;
+  createdAt: string;
+  notes?: string;
+};
+
+export function buildClientPipelineEmail({
+  wonRows,
+  proposingRows,
+  qualifyingRows,
+  leadRows,
+  generatedAt,
+}: {
+  wonRows: ClientPipelineRow[];
+  proposingRows: ClientPipelineRow[];
+  qualifyingRows: ClientPipelineRow[];
+  leadRows: ClientPipelineRow[];
+  generatedAt: string;
+}): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+  const in7Days = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+
+  function fmtDate(d?: string): string {
+    if (!d) return "—";
+    const [y, m, day] = d.slice(0, 10).split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}, ${y}`;
+  }
+
+  function fmtMoney(n: number): string {
+    if (!n) return "—";
+    return "$" + n.toLocaleString("en-US");
+  }
+
+  function nextStepBg(d?: string): string {
+    if (!d) return "#ffffff";
+    if (d < todayStr) return "#FEF2F2";
+    if (d <= in7Days) return "#FFFBEB";
+    return "#ffffff";
+  }
+
+  const pipelineStages = [
+    { label: "Proposing", rows: proposingRows },
+    { label: "Qualifying", rows: qualifyingRows },
+    { label: "Lead", rows: leadRows },
+  ];
+
+  const totalPipelineValue =
+    proposingRows.reduce((s, r) => s + r.value, 0) +
+    qualifyingRows.reduce((s, r) => s + r.value, 0) +
+    leadRows.reduce((s, r) => s + r.value, 0);
+
+  const totalWonValue = wonRows.reduce((s, r) => s + r.value, 0);
+  const totalOpps = proposingRows.length + qualifyingRows.length + leadRows.length;
+
+  const STAGE_COLORS: Record<string, { accent: string; bg: string; text: string }> = {
+    Won:        { accent: "#16a34a", bg: "#f0fdf4", text: "#15803d" },
+    Proposing:  { accent: "#C9A96E", bg: "#fefce8", text: "#92400e" },
+    Qualifying: { accent: "#f97316", bg: "#fff7ed", text: "#c2410c" },
+    Lead:       { accent: "#6b7280", bg: "#f9fafb", text: "#374151" },
+  };
+
+  function pipelineRow(r: ClientPipelineRow, includeWonDate = false): string {
+    const bg = nextStepBg(r.nextStepDate);
+    const nsdColor = !r.nextStepDate ? "#9ca3af" : r.nextStepDate < todayStr ? "#dc2626" : r.nextStepDate <= in7Days ? "#d97706" : "#374151";
+    return `<tr style="background:${bg};border-bottom:1px solid #e5e7eb;">
+      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#1f2937;white-space:nowrap;vertical-align:top;">${r.clientName}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#6b7280;white-space:nowrap;vertical-align:top;">${r.location || "—"}</td>
+      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#2d4a3e;white-space:nowrap;vertical-align:top;">${fmtMoney(r.value)}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#374151;vertical-align:top;">${r.referralSource || "—"}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#374151;white-space:nowrap;vertical-align:top;">${r.ownerName || "—"}</td>
+      ${includeWonDate ? `<td style="padding:9px 12px;font-size:12px;color:#16a34a;white-space:nowrap;vertical-align:top;font-weight:500;">${fmtDate(r.wonAt)}</td>` : ""}
+      <td style="padding:9px 12px;font-size:12px;color:${nsdColor};white-space:nowrap;vertical-align:top;font-weight:${r.nextStepDate ? "500" : "400"};">${fmtDate(r.nextStepDate)}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#374151;max-width:200px;vertical-align:top;">${r.nextStepNote || "—"}</td>
+    </tr>`;
+  }
+
+  function thead(includeWonDate = false): string {
+    return `<thead><tr style="background:#f3f4f6;">
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Client</th>
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Location</th>
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Value</th>
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Referral Source</th>
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Owner</th>
+      ${includeWonDate ? `<th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Won</th>` : ""}
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Next Step</th>
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Next Step Note</th>
+    </tr></thead>`;
+  }
+
+  function sectionBlock(label: string, rows: ClientPipelineRow[], includeWonDate = false): string {
+    if (rows.length === 0) return "";
+    const c = STAGE_COLORS[label] ?? STAGE_COLORS["Lead"];
+    const sectionValue = rows.reduce((s, r) => s + r.value, 0);
+    return `<tr><td style="padding:24px 0 10px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="border-left:4px solid ${c.accent};padding-left:12px;">
+              <span style="font-size:15px;font-weight:700;color:#1f2937;">${label}</span>
+              <span style="font-size:12px;color:#9ca3af;margin-left:8px;">${rows.length} opp${rows.length !== 1 ? "s" : ""}</span>
+              <span style="font-size:12px;font-weight:600;color:${c.text};margin-left:10px;">· ${fmtMoney(sectionValue)}</span>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          ${thead(includeWonDate)}
+          <tbody>${rows.map(r => pipelineRow(r, includeWonDate)).join("")}</tbody>
+        </table>
+      </td></tr>`;
+  }
+
+  const wonSection = wonRows.length > 0 ? sectionBlock("Won", wonRows, true) : "";
+  const wonDivider = wonRows.length > 0 ? `<tr><td style="padding:8px 0 4px;">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="border-top:2px solid #e5e7eb;"></td>
+      <td style="padding:0 14px;white-space:nowrap;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Active Pipeline</td>
+      <td style="border-top:2px solid #e5e7eb;"></td>
+    </tr></table>
+  </td></tr>` : "";
+
+  const pipelineSections = pipelineStages.map(s => sectionBlock(s.label, s.rows)).join("");
+
+  const emptySections = pipelineStages.every(s => s.rows.length === 0) && wonRows.length === 0
+    ? `<tr><td style="padding:40px 0;text-align:center;color:#9ca3af;font-size:14px;">No opportunities found.</td></tr>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:960px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+
+        <!-- Header -->
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions</p>
+            <h1 style="margin:6px 0 0;font-size:24px;font-weight:700;color:#ffffff;">Client Pipeline Report</h1>
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.6);">Generated ${generatedAt}</p>
+          </td>
+        </tr>
+
+        <!-- Summary bar -->
+        <tr><td style="padding:0;border-bottom:1px solid #e5e7eb;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:16px 32px;border-right:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Won Last 7 Days</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#16a34a;">${wonRows.length > 0 ? fmtMoney(totalWonValue) : "—"}</p>
+                <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${wonRows.length} deal${wonRows.length !== 1 ? "s" : ""}</p>
+              </td>
+              <td style="padding:16px 32px;border-right:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Active Pipeline</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#2d4a3e;">${fmtMoney(totalPipelineValue)}</p>
+                <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${totalOpps} open opp${totalOpps !== 1 ? "s" : ""}</p>
+              </td>
+              <td style="padding:16px 32px;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">By Stage</p>
+                <p style="margin:6px 0 0;font-size:12px;color:#374151;line-height:1.8;">
+                  <span style="color:#C9A96E;font-weight:600;">Proposing:</span> ${proposingRows.length} &nbsp;
+                  <span style="color:#f97316;font-weight:600;">Qualifying:</span> ${qualifyingRows.length} &nbsp;
+                  <span style="color:#6b7280;font-weight:600;">Lead:</span> ${leadRows.length}
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:8px 32px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${wonSection}
+            ${wonDivider}
+            ${pipelineSections}
+            ${emptySections}
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions &middot; Internal use only &middot;
+            Row tinting: <span style="background:#FEF2F2;padding:1px 4px;border-radius:3px;">red = next step overdue</span> &nbsp;
+            <span style="background:#FFFBEB;padding:1px 4px;border-radius:3px;">amber = due within 7 days</span>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

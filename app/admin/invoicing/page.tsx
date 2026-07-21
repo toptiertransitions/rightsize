@@ -6,6 +6,7 @@ import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { InvoicingSettingsClient } from "./InvoicingSettingsClient";
 import { WeeklySalesReportButton } from "./WeeklySalesReportButton";
 import { WeeklyActiveProjectsButton } from "./WeeklyActiveProjectsButton";
+import { ClientPipelineReportButton } from "./ClientPipelineReportButton";
 import { SalesGoalsClient } from "./SalesGoalsClient";
 
 export default async function InvoicingSettingsPage() {
@@ -31,6 +32,7 @@ export default async function InvoicingSettingsPage() {
         <div className="flex flex-col gap-0">
           <WeeklySalesReportButton />
           <WeeklyActiveProjectsButton />
+          <ClientPipelineReportButton />
         </div>
         <InvoicingSettingsClient initialSettings={settings} />
 
