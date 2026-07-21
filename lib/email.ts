@@ -3069,11 +3069,10 @@ export function buildClientPipelineEmail({
     return "$" + n.toLocaleString("en-US");
   }
 
-  function nextStepBg(d?: string): string {
-    if (!d) return "#ffffff";
-    if (d < todayStr) return "#FEF2F2";
-    if (d <= in7Days) return "#FFFBEB";
-    return "#ffffff";
+  function nextStepBg(d: string | undefined, isWon: boolean): string {
+    if (isWon) return "#f0fdf4";
+    if (!d || d >= todayStr) return "#ffffff";
+    return "#FEF2F2";
   }
 
   const pipelineStages = [
@@ -3098,8 +3097,11 @@ export function buildClientPipelineEmail({
   };
 
   function pipelineRow(r: ClientPipelineRow, includeWonDate = false): string {
-    const bg = nextStepBg(r.nextStepDate);
-    const nsdColor = !r.nextStepDate ? "#9ca3af" : r.nextStepDate < todayStr ? "#dc2626" : r.nextStepDate <= in7Days ? "#d97706" : "#374151";
+    const isWon = includeWonDate;
+    const bg = nextStepBg(r.nextStepDate, isWon);
+    const nsdColor = isWon
+      ? "#15803d"
+      : (!r.nextStepDate || r.nextStepDate >= todayStr) ? "#374151" : "#dc2626";
     return `<tr style="background:${bg};border-bottom:1px solid #e5e7eb;">
       <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#1f2937;white-space:nowrap;vertical-align:top;">${r.clientName}</td>
       <td style="padding:9px 12px;font-size:12px;color:#6b7280;white-space:nowrap;vertical-align:top;">${r.location || "—"}</td>
