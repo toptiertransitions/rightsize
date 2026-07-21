@@ -489,11 +489,14 @@ export async function getRoomsForTenants(tenantIds: string[]): Promise<Room[]> {
 export async function getTimeEntriesForTenants(tenantIds: string[]): Promise<TimeEntry[]> {
   if (tenantIds.length === 0) return [];
   if (tenantIds.length === 1) return getTimeEntries({ tenantId: tenantIds[0] });
-  // Parallel per-tenant fetches — the OR formula approach hits Airtable's URL
-  // length limit (especially on paginated requests with long offset tokens) once
-  // the project count grows large enough.
-  const results = await Promise.all(tenantIds.map(id => getTimeEntries({ tenantId: id }).catch(() => [] as TimeEntry[])));
-  return results.flat();
+  // For many tenants, fetch all entries in one paginated sequence and filter in JS.
+  // Per-tenant parallel fetches trigger Airtable's 5-req/s rate limit.
+  // OR-formula approaches fail silently on paginated requests once the record
+  // count exceeds 100 (the slash in Airtable offset tokens can corrupt URLs,
+  // and chunked OR formulas double the number of outbound requests).
+  const tenantSet = new Set(tenantIds);
+  const all = await getTimeEntries();
+  return all.filter(e => tenantSet.has(e.tenantId));
 }
 
 export async function getProjectFilesForTenants(tenantIds: string[]): Promise<ProjectFile[]> {
