@@ -489,23 +489,10 @@ export async function getRoomsForTenants(tenantIds: string[]): Promise<Room[]> {
 export async function getTimeEntriesForTenants(tenantIds: string[]): Promise<TimeEntry[]> {
   if (tenantIds.length === 0) return [];
   if (tenantIds.length === 1) return getTimeEntries({ tenantId: tenantIds[0] });
-  const CHUNK = 30;
-  const chunks: string[][] = [];
-  for (let i = 0; i < tenantIds.length; i += CHUNK) chunks.push(tenantIds.slice(i, i + CHUNK));
-  const results = await Promise.all(chunks.map(async chunk => {
-    const formula = `OR(${chunk.map(id => `{TenantId}='${id}'`).join(",")})`;
-    const baseQs = `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Date&sort[0][direction]=desc`;
-    const records: AirtableRecord[] = [];
-    let offset: string | undefined;
-    do {
-      const res = await timeFetch(baseQs + (offset ? `&offset=${offset}` : ""));
-      if (!res.ok) return [] as TimeEntry[];
-      const data = await res.json();
-      records.push(...(data.records as AirtableRecord[]));
-      offset = data.offset;
-    } while (offset);
-    return records.map(mapTimeEntry);
-  }));
+  // Parallel per-tenant fetches — the OR formula approach hits Airtable's URL
+  // length limit (especially on paginated requests with long offset tokens) once
+  // the project count grows large enough.
+  const results = await Promise.all(tenantIds.map(id => getTimeEntries({ tenantId: id }).catch(() => [] as TimeEntry[])));
   return results.flat();
 }
 
