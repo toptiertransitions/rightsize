@@ -383,10 +383,22 @@ export async function POST() {
   const tenantIds = activeTenants.map(t => t.id);
 
   // Batch-fetch plan entries and time entries across all active projects
-  const [allPlanEntries, allTimeEntries] = await Promise.all([
-    getPlanEntriesForTenants(tenantIds).catch(() => [] as PlanEntry[]),
-    getTimeEntriesForTenants(tenantIds).catch(() => [] as TimeEntry[]),
-  ]);
+  let allTimeEntries: TimeEntry[] = [];
+  try {
+    allTimeEntries = await getTimeEntriesForTenants(tenantIds);
+  } catch (err) {
+    console.error("[weekly-active-projects] getTimeEntriesForTenants THREW:", err);
+  }
+  const allPlanEntries = await getPlanEntriesForTenants(tenantIds).catch(() => [] as PlanEntry[]);
+
+  console.log("[weekly-active-projects] tenantIds:", tenantIds);
+  console.log("[weekly-active-projects] allTimeEntries.length:", allTimeEntries.length);
+  if (allTimeEntries.length > 0) {
+    const sample = allTimeEntries[0];
+    console.log("[weekly-active-projects] sample entry tenantId:", sample.tenantId, "durationMinutes:", sample.durationMinutes, "nonBillable:", sample.nonBillable);
+    const uniqueTenantIds = [...new Set(allTimeEntries.map(e => e.tenantId))];
+    console.log("[weekly-active-projects] unique tenantIds in time entries:", uniqueTenantIds);
+  }
 
   // Group by tenantId
   const planByTenant = new Map<string, PlanEntry[]>();
