@@ -38,6 +38,8 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [showNonTTT, setShowNonTTT] = useState(false);
+  const [nonTTTFilter, setNonTTTFilter] = useState("");
   const [showConsignment, setShowConsignment] = useState(false);
   const [togglingConsignment, setTogglingConsignment] = useState<string | null>(null);
   const [consignmentFilter, setConsignmentFilter] = useState("");
@@ -64,7 +66,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const [activeSortDir, setActiveSortDir] = useState<SortDir>("asc");
 
   const activeTenants = useMemo(() => {
-    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false)).filter(t => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false).filter(t => {
       if (!activeSearch) return true;
       const q = activeSearch.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -141,9 +143,20 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
     return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [tenants, lostDealFilter]);
 
+  const sortedNonTTTTenants = useMemo(() => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === false).filter(t => {
+      if (!nonTTTFilter) return true;
+      const q = nonTTTFilter.toLowerCase();
+      const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
+      return t.name.toLowerCase().includes(q) || loc.includes(q);
+    });
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [tenants, nonTTTFilter]);
+
   const archivedCount = tenants.filter(t => t.isArchived && !t.isLostDeal).length;
   const lostDealCount = tenants.filter(t => t.isLostDeal).length;
   const consignmentCount = tenants.filter(t => !t.isArchived && (t.isConsignmentOnly ?? false)).length;
+  const nonTTTCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === false).length;
 
   function toggleConsignmentSort(field: SortField) {
     if (consignmentSortField === field) setConsignmentSortDir(d => d === "asc" ? "desc" : "asc");
@@ -954,6 +967,86 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
                               className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
                             >
                               {archiving === tenant.id ? "Restoring…" : "Restore to Archived"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Non-TTT Clients accordion (Admin only) ── */}
+      {isAdmin && nonTTTCount > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowNonTTT(v => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${showNonTTT ? "rotate-90" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Non-TTT Client Projects ({nonTTTCount})
+          </button>
+
+          {showNonTTT && (
+            <div className="mt-4 opacity-70">
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={nonTTTFilter}
+                  onChange={e => setNonTTTFilter(e.target.value)}
+                  placeholder="Filter by name or location…"
+                  className="w-full sm:w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
+                />
+              </div>
+
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-500">Project</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-500">Location</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-500">Created</th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {sortedNonTTTTenants.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-gray-400 text-sm">
+                          No non-TTT projects match your filter.
+                        </td>
+                      </tr>
+                    ) : sortedNonTTTTenants.map(tenant => {
+                      const location = [tenant.city, tenant.state].filter(Boolean).join(", ");
+                      const createdDisplay = tenant.createdAt
+                        ? new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—";
+                      return (
+                        <tr key={tenant.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <Link href={`/catalog?tenantId=${tenant.id}`}
+                              className="font-medium text-gray-500 hover:text-gray-700 transition-colors">
+                              {tenant.name}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-gray-400">{location || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
+                              disabled={archiving === tenant.id}
+                              className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                            >
+                              {archiving === tenant.id ? "…" : "Archive"}
                             </button>
                           </td>
                         </tr>

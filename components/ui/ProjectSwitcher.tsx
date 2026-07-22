@@ -11,6 +11,7 @@ interface TenantOption {
   isArchived?: boolean;
   isConsignmentOnly?: boolean;
   isContractSigned?: boolean;
+  isTTT?: boolean;
 }
 
 const SENTINEL_SHORT: Record<string, string> = {
@@ -82,10 +83,11 @@ export function ProjectSwitcher({
     : tenants;
 
   const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
-  const activeTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isContractSigned));
-  const notSignedTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && !t.isContractSigned));
+  const activeTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isContractSigned && t.isTTT !== false));
+  const notSignedTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && !t.isContractSigned && t.isTTT !== false));
   const postMoveTenants = sort(filtered.filter((t) => !t.isArchived && t.isConsignmentOnly));
   const archivedTenants = sort(filtered.filter((t) => t.isArchived));
+  const nonTTTTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isTTT === false));
 
   function select(id: string) {
     setOpen(false);
@@ -156,7 +158,7 @@ export function ProjectSwitcher({
             )}
 
             {/* Individual tenants */}
-            {activeTenants.length === 0 && notSignedTenants.length === 0 && postMoveTenants.length === 0 && archivedTenants.length === 0 && !allowAllProjects ? (
+            {activeTenants.length === 0 && notSignedTenants.length === 0 && postMoveTenants.length === 0 && archivedTenants.length === 0 && nonTTTTenants.length === 0 && !allowAllProjects ? (
               <p className="text-xs text-gray-400 px-3 py-4 text-center">No projects found</p>
             ) : (
               <>
@@ -278,6 +280,43 @@ export function ProjectSwitcher({
                         >
                           <div className="min-w-0">
                             <p className={`text-sm font-medium truncate ${isActive ? "text-forest-700" : "text-gray-600"}`}>
+                              {t.name}
+                            </p>
+                            {(t.city || t.state) && (
+                              <p className="text-xs text-gray-400 truncate">
+                                {[t.city, t.state].filter(Boolean).join(", ")}
+                              </p>
+                            )}
+                          </div>
+                          {isActive && (
+                            <svg className="w-4 h-4 flex-shrink-0 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+
+                {nonTTTTenants.length > 0 && (
+                  <>
+                    <div className="h-px bg-gray-100 mx-2 my-1" />
+                    <div className="px-3 pt-2 pb-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Not-TTT Clients</p>
+                    </div>
+                    {nonTTTTenants.map((t) => {
+                      const isActive = t.id === currentTenantId;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => select(t.id)}
+                          className={`w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 transition-colors ${
+                            isActive ? "bg-forest-50 text-forest-700" : "text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium truncate ${isActive ? "text-forest-700" : "text-gray-500"}`}>
                               {t.name}
                             </p>
                             {(t.city || t.state) && (
