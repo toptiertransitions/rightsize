@@ -49,7 +49,11 @@ function scheduledHoursFromEntries(entries: PlanEntry[]): number {
     const [sh, sm] = e.startTime.split(":").map(Number);
     const [eh, em] = e.endTime.split(":").map(Number);
     const mins = (eh * 60 + em) - (sh * 60 + sm);
-    if (mins > 0) total += mins / 60;
+    if (mins <= 0) continue;
+    // Multiply by helper count so a 3-helper shift counts as 3× the duration.
+    // Floor of 1 so unassigned shifts still appear rather than dropping to 0.
+    const helperCount = Math.max(1, (e.helpers ?? []).filter(h => h.status !== "declined").length);
+    total += (mins / 60) * helperCount;
   }
   return Math.round(total * 10) / 10;
 }
