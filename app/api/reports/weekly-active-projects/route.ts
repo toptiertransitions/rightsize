@@ -52,7 +52,9 @@ function scheduledHoursFromEntries(entries: PlanEntry[]): number {
     if (mins <= 0) continue;
     // Multiply by helper count so a 3-helper shift counts as 3× the duration.
     // Floor of 1 so unassigned shifts still appear rather than dropping to 0.
-    const helperCount = Math.max(1, (e.helpers ?? []).filter(h => h.status !== "declined").length);
+    // Array.isArray guard: if Helpers JSON parsed to a non-array, skip the count rather than throw.
+    const helperList = Array.isArray(e.helpers) ? e.helpers : [];
+    const helperCount = Math.max(1, helperList.filter(h => h?.status !== "declined").length);
     total += (mins / 60) * helperCount;
   }
   return Math.round(total * 10) / 10;
