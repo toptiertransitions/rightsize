@@ -935,6 +935,7 @@ export interface ClientOpportunity {
   destCity?: string;
   destState?: string;
   destZip?: string;
+  expectedCloseDate?: string;
 }
 
 export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task" | "Text Message";

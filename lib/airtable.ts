@@ -3433,6 +3433,7 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     destCity: toStr(f["DestCity"]) || undefined,
     destState: toStr(f["DestState"]) || undefined,
     destZip: toStr(f["DestZip"]) || undefined,
+    expectedCloseDate: toStr(f["ExpectedCloseDate"]) || undefined,
   };
 }
 
@@ -3492,6 +3493,7 @@ export async function createOpportunity(data: {
   destCity?: string;
   destState?: string;
   destZip?: string;
+  expectedCloseDate?: string;
 }): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {
     TenantId: data.tenantId || "",
@@ -3515,6 +3517,7 @@ export async function createOpportunity(data: {
   if (data.destCity !== undefined) fields["DestCity"] = data.destCity;
   if (data.destState !== undefined) fields["DestState"] = data.destState;
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
+  if (data.expectedCloseDate !== undefined) fields["ExpectedCloseDate"] = data.expectedCloseDate || null;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -3548,6 +3551,7 @@ export async function updateOpportunity(
     destCity: string;
     destState: string;
     destZip: string;
+    expectedCloseDate: string;
   }>
 ): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {};
@@ -3573,6 +3577,7 @@ export async function updateOpportunity(
   if (data.destCity !== undefined) fields["DestCity"] = data.destCity;
   if (data.destState !== undefined) fields["DestState"] = data.destState;
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
+  if (data.expectedCloseDate !== undefined) fields["ExpectedCloseDate"] = data.expectedCloseDate || null;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

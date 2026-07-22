@@ -3032,6 +3032,7 @@ export type ClientPipelineRow = {
   value: number;
   referralSource: string;
   ownerName: string;
+  expectedCloseDate?: string;
   nextStepDate?: string;
   nextStepNote?: string;
   wonAt?: string;
@@ -3108,6 +3109,7 @@ export function buildClientPipelineEmail({
       <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#2d4a3e;white-space:nowrap;vertical-align:top;">${fmtMoney(r.value)}</td>
       <td style="padding:9px 12px;font-size:12px;color:#374151;vertical-align:top;">${r.referralSource || "—"}</td>
       <td style="padding:9px 12px;font-size:12px;color:#374151;white-space:nowrap;vertical-align:top;">${r.ownerName || "—"}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#374151;white-space:nowrap;vertical-align:top;">${fmtDate(r.expectedCloseDate)}</td>
       ${includeWonDate ? `<td style="padding:9px 12px;font-size:12px;color:#16a34a;white-space:nowrap;vertical-align:top;font-weight:500;">${fmtDate(r.wonAt)}</td>` : ""}
       <td style="padding:9px 12px;font-size:12px;color:${nsdColor};white-space:nowrap;vertical-align:top;font-weight:${r.nextStepDate ? "500" : "400"};">${fmtDate(r.nextStepDate)}</td>
       <td style="padding:9px 12px;font-size:12px;color:#374151;max-width:200px;vertical-align:top;">${r.nextStepNote || "—"}</td>
@@ -3121,6 +3123,7 @@ export function buildClientPipelineEmail({
       <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Value</th>
       <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Referral Source</th>
       <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Owner</th>
+      <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Close Date</th>
       ${includeWonDate ? `<th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Won</th>` : ""}
       <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Next Step</th>
       <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Next Step Note</th>

@@ -171,7 +171,7 @@ function ActivityEditModal({
 }
 
 // ─── Opportunities Tab ────────────────────────────────────────────────────────
-type OppSortCol = "client" | "town" | "source" | "owner" | "stage" | "value" | "nextstep" | "created";
+type OppSortCol = "client" | "town" | "source" | "owner" | "stage" | "value" | "closedate" | "nextstep" | "created";
 const OPP_STAGE_ORDER: Record<OpportunityStage, number> = { Lead: 0, Qualifying: 1, Proposing: 2, Won: 3, Lost: 4 };
 
 function OpportunitiesTab({
@@ -261,6 +261,7 @@ function OpportunitiesTab({
       }
       case "stage":   return d * (OPP_STAGE_ORDER[a.stage] - OPP_STAGE_ORDER[b.stage]);
       case "value":   return d * (a.estimatedValue - b.estimatedValue);
+      case "closedate": return d * (a.expectedCloseDate || "9999").localeCompare(b.expectedCloseDate || "9999");
       case "nextstep": return d * (a.nextStepDate || "9999").localeCompare(b.nextStepDate || "9999");
       case "created": return d * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       default: return 0;
@@ -451,6 +452,7 @@ function OpportunitiesTab({
               <SortTh col="owner"    label="Owner"      className="text-left" />
               <SortTh col="stage"    label="Stage"      className="text-left" />
               <SortTh col="value"    label="Est. Value" className="text-left" />
+              <SortTh col="closedate" label="Close Date" className="text-left" />
               <SortTh col="nextstep" label="Next Step"  className="text-left" />
               <SortTh col="created"  label="Created"    className="text-left hidden lg:table-cell" />
               <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">Actions</th>
@@ -480,6 +482,7 @@ function OpportunitiesTab({
                 <td className="px-4 py-3 text-gray-700">
                   {opp.estimatedValue ? `$${opp.estimatedValue.toLocaleString()}` : "—"}
                 </td>
+                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{opp.expectedCloseDate || "—"}</td>
                 <td className="px-4 py-3 text-gray-600">{opp.nextStepDate || "—"}</td>
                 <td className="px-4 py-3 text-gray-500 text-xs hidden lg:table-cell whitespace-nowrap">
                   {opp.createdAt ? new Date(opp.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : <span className="text-gray-400">—</span>}
@@ -561,6 +564,7 @@ function OpportunityPanel({
   const [oppDestCity, setOppDestCity] = useState(opportunity?.destCity || "");
   const [oppDestState, setOppDestState] = useState(opportunity?.destState || "");
   const [oppDestZip, setOppDestZip] = useState(opportunity?.destZip || "");
+  const [expectedCloseDate, setExpectedCloseDate] = useState(opportunity?.expectedCloseDate || "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [syncingGmail, setSyncingGmail] = useState(false);
@@ -616,6 +620,7 @@ function OpportunityPanel({
         destCity: oppDestCity,
         destState: oppDestState,
         destZip: oppDestZip,
+        expectedCloseDate,
       };
       if (opportunity) {
         const res = await fetch("/api/crm/opportunities", {
@@ -967,6 +972,17 @@ function OpportunityPanel({
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
+          </div>
+
+          {/* Expected Close Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Expected Close Date</label>
+            <input
+              type="date"
+              value={expectedCloseDate}
+              onChange={(e) => setExpectedCloseDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs"
+            />
           </div>
 
           {/* Key People */}

@@ -63,6 +63,7 @@ export async function POST() {
       value: opp.estimatedValue,
       referralSource,
       ownerName: owner,
+      expectedCloseDate: opp.expectedCloseDate,
       nextStepDate: opp.nextStepDate,
       nextStepNote: opp.nextStepNote,
       wonAt: opp.wonAt,
