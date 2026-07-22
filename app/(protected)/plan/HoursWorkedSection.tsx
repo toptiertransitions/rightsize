@@ -347,6 +347,8 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
   const remainingMins = estimatedHours > 0
     ? Math.max(0, estimatedTotalMins - totalMins - scheduledMins)
     : 0;
+  // Unclamped for display only — negative means over budget
+  const displayRemainingMins = estimatedHours > 0 ? estimatedTotalMins - totalMins - scheduledMins : 0;
   const pctLogged = estimatedHours > 0 ? Math.min(100, (totalMins / estimatedTotalMins) * 100) : 0;
   const pctScheduled = estimatedHours > 0
     ? Math.min(100 - pctLogged, (scheduledMins / estimatedTotalMins) * 100)
@@ -566,11 +568,15 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
           <div className="text-xs text-gray-500 mb-1">Remaining to Schedule</div>
           <div className={`text-xl font-bold ${
             estimatedHours > 0
-              ? remainingMins > 0 ? "text-gray-900" : "text-emerald-600"
+              ? displayRemainingMins > 0 ? "text-gray-900"
+              : displayRemainingMins === 0 ? "text-emerald-600"
+              : "text-red-600"
               : "text-gray-400"
           }`}>
             {estimatedHours > 0
-              ? remainingMins > 0 ? fmtMins(remainingMins) : "Done"
+              ? displayRemainingMins > 0 ? fmtMins(displayRemainingMins)
+              : displayRemainingMins === 0 ? "Done"
+              : `-${fmtMins(-displayRemainingMins)}`
               : "—"}
           </div>
           {/* Manager accordion */}
