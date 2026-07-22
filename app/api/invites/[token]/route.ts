@@ -4,6 +4,7 @@ import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorBy
 import { verifyInviteToken, isVendorInvite } from "@/lib/invites";
 import { Resend } from "resend";
 import { buildNewUserAdminEmail } from "@/lib/email";
+import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 
 interface RouteContext {
   params: Promise<{ token: string }>;
@@ -71,7 +72,24 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
 
   // Vendor invite: link vendor to Clerk user
   if (isVendorInvite(data)) {
-    await updateLocalVendor(data.vendorId, { clerkUserId: userId });
+    const [, clerkUserForVendor, vendorRecord] = await Promise.all([
+      updateLocalVendor(data.vendorId, { clerkUserId: userId }),
+      clerkClient().then(c => c.users.getUser(userId)).catch(() => null),
+      getLocalVendorById(data.vendorId).catch(() => null),
+    ]);
+    const vendorEmail = clerkUserForVendor?.emailAddresses?.find(
+      e => e.id === clerkUserForVendor.primaryEmailAddressId
+    )?.emailAddress ?? clerkUserForVendor?.emailAddresses?.[0]?.emailAddress ?? "";
+    const vendorFullName = [clerkUserForVendor?.firstName, clerkUserForVendor?.lastName]
+      .filter(Boolean).join(" ") || vendorEmail;
+    sendNewUserAdminNotification({
+      fullName: vendorFullName,
+      email: vendorEmail,
+      imageUrl: clerkUserForVendor?.imageUrl ?? null,
+      userType: "unknown",
+      roleLabel: "Vendor",
+      projectName: vendorRecord?.vendorName ?? null,
+    }).catch(() => {});
     return NextResponse.json({ success: true, vendorId: data.vendorId, redirect: "/vendor" });
   }
 

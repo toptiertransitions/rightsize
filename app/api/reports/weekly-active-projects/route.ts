@@ -432,28 +432,18 @@ export async function POST() {
     timeByTenant.get(e.tenantId)!.push(e);
   }
 
-  // Filter to projects with at least one upcoming focus or keydate entry
-  const tenantsWithUpcoming = activeTenants.filter(t => {
-    const entries = planByTenant.get(t.id) ?? [];
-    return entries.some(e => e.date >= todayStr);
-  });
-
-  if (tenantsWithUpcoming.length === 0) {
-    return NextResponse.json({ success: true, message: "No projects with upcoming schedule entries" });
-  }
-
   // Sort alphabetically
-  tenantsWithUpcoming.sort((a, b) => a.name.localeCompare(b.name));
+  activeTenants.sort((a, b) => a.name.localeCompare(b.name));
 
   // Fetch contracts and notes per project in parallel
   const [contractsPerProject, notesPerProject] = await Promise.all([
-    Promise.all(tenantsWithUpcoming.map(t => getContractsForTenant(t.id).catch(() => [] as Contract[]))),
-    Promise.all(tenantsWithUpcoming.map(t => getProjectNotes(t.id).catch(() => []))),
+    Promise.all(activeTenants.map(t => getContractsForTenant(t.id).catch(() => [] as Contract[]))),
+    Promise.all(activeTenants.map(t => getProjectNotes(t.id).catch(() => []))),
   ]);
 
   // Fetch team lead Clerk user photos for unique team lead IDs
   const uniqueLeadIds = [...new Set(
-    tenantsWithUpcoming.map(t => t.teamLeadClerkId).filter(Boolean) as string[]
+    activeTenants.map(t => t.teamLeadClerkId).filter(Boolean) as string[]
   )];
   const leadPhotoMap = new Map<string, string>();
   await Promise.all(
@@ -466,7 +456,7 @@ export async function POST() {
   );
 
   // ── Assemble per-project data ─────────────────────────────────────────────
-  const projects: ProjectData[] = tenantsWithUpcoming.map((tenant, i) => {
+  const projects: ProjectData[] = activeTenants.map((tenant, i) => {
     const contracts   = contractsPerProject[i];
     const rawNotes    = notesPerProject[i];
     const planEntries = planByTenant.get(tenant.id) ?? [];

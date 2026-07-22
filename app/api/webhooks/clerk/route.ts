@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
-import { Resend } from "resend";
 import { clerkClient } from "@clerk/nextjs/server";
-import { AIRTABLE_TABLES, isTTTAdmin } from "@/lib/config";
-import { buildNewUserAdminEmail } from "@/lib/email";
-import { findReferralContactByEmail, setReferralContactClerkUserId, getStaffMembers } from "@/lib/airtable";
+import { AIRTABLE_TABLES } from "@/lib/config";
+import { findReferralContactByEmail, setReferralContactClerkUserId } from "@/lib/airtable";
+import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 
 const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
 const AT_HEADERS = {
@@ -82,65 +81,6 @@ async function getTenantById(tenantId: string): Promise<{ name: string; address?
   };
 }
 
-async function getAdminEmails(): Promise<string[]> {
-  // 1. Airtable StaffRoles — include users who are TTTAdmin by role OR by env var
-  try {
-    const staff = await getStaffMembers();
-    const emails = staff
-      .filter((s) => s.isActive && s.email && (s.role === "TTTAdmin" || isTTTAdmin(s.clerkUserId)))
-      .map((s) => s.email as string);
-    if (emails.length > 0) return emails;
-  } catch { /* fall through */ }
-
-  // 2. Look up TTT_ADMIN_USER_IDS directly in Clerk (bypasses Airtable entirely)
-  const adminIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  if (adminIds.length > 0) {
-    try {
-      const clerk = await clerkClient();
-      const emails: string[] = [];
-      for (const id of adminIds) {
-        const u = await clerk.users.getUser(id).catch(() => null);
-        const email =
-          u?.emailAddresses.find((e) => e.id === u.primaryEmailAddressId)?.emailAddress ??
-          u?.emailAddresses[0]?.emailAddress;
-        if (email) emails.push(email);
-      }
-      if (emails.length > 0) return emails;
-    } catch { /* fall through */ }
-  }
-
-  // 3. Hard-coded env var fallback
-  return (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-}
-
-async function sendAdminNotification(params: {
-  fullName: string;
-  email: string;
-  imageUrl?: string | null;
-  userType: "client" | "staff" | "unknown";
-  roleLabel: string;
-  projectName?: string | null;
-  projectAddress?: string | null;
-  createdAt: string;
-}) {
-  const resendKey = process.env.RESEND_API_KEY;
-  if (!resendKey) return;
-
-  const adminEmails = await getAdminEmails();
-  if (adminEmails.length === 0) return;
-
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
-  const resend = new Resend(resendKey);
-  const html = buildNewUserAdminEmail(params);
-  await resend.emails.send({
-    from: `Top Tier Transitions <${fromEmail}>`,
-    to: adminEmails,
-    subject: `New User: ${params.fullName} (${params.roleLabel})`,
-    html,
-  });
-}
 
 export async function POST(req: NextRequest) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -200,10 +140,6 @@ export async function POST(req: NextRequest) {
     // but we send this one unconditionally so no signup ever slips through silently.
     if (event.type === "user.created" && primaryEmail) {
       const fullName = [firstName, lastName].filter(Boolean).join(" ") || primaryEmail;
-      const createdAtMs = (d.created_at as number | null) ?? Date.now();
-      const createdAt = new Date(createdAtMs).toLocaleDateString("en-US", {
-        weekday: "long", month: "long", day: "numeric", year: "numeric",
-      });
 
       // Determine role: check StaffRoles table first
       const staffRecord = await getStaffRoleRecord(clerkUserId);
@@ -233,7 +169,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      await sendAdminNotification({
+      await sendNewUserAdminNotification({
         fullName,
         email: primaryEmail,
         imageUrl,
@@ -241,7 +177,6 @@ export async function POST(req: NextRequest) {
         roleLabel,
         projectName,
         projectAddress,
-        createdAt,
       }).catch(() => {}); // never block the webhook response
     }
   }

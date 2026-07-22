@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { isTTTAdmin } from "@/lib/config";
 import { upsertStaffMember, getMembershipsForUser, deleteMembership, getStaffMember, deleteStaffMember, findReferralContactByEmail, findReferralContactByClerkUserId, setReferralContactClerkUserId } from "@/lib/airtable";
 import { buildStaffWelcomeEmail } from "@/lib/email";
+import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 
 async function checkAdmin() {
   const { userId } = await auth();
@@ -92,6 +93,15 @@ export async function POST(req: NextRequest) {
         html: buildStaffWelcomeEmail({ firstName, roleLabel, signInUrl: token.url }),
       });
       if (emailError) console.error("[createStaff] email error:", emailError);
+
+      // Notify admins of new staff account
+      sendNewUserAdminNotification({
+        fullName: displayName,
+        email: newEmail,
+        imageUrl: newUser.imageUrl || null,
+        userType: "staff",
+        roleLabel: role,
+      }).catch(() => {});
 
       return NextResponse.json({
         user: {
