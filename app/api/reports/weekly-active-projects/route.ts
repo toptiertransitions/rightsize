@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import {
   getSystemRole,
   getTenants,
+  getSignedTenantIds,
   getContractsForTenant,
   getTimeEntriesForTenants,
   getPlanEntriesForTenants,
@@ -385,25 +386,39 @@ export async function POST() {
   });
 
   // ── Fetch base data ──────────────────────────────────────────────────────────
-  const [allTenants, staffMembers] = await Promise.all([
+  const [allTenants, staffMembers, signedTenantIds] = await Promise.all([
     getTenants(),
     getStaffMembers().catch(() => [] as Awaited<ReturnType<typeof getStaffMembers>>),
+    getSignedTenantIds().catch(() => new Set<string>()),
   ]);
 
-  // Active TTT-managed projects (not archived, not lost)
-  const activeTenants = allTenants.filter(t => !t.isArchived && !t.isLostDeal && t.isTTT !== false);
+  // Active, signed, non-consignment TTT projects only
+  const activeTenants = allTenants.filter(t =>
+    t.isTTT === true &&
+    !t.isArchived &&
+    !t.isLostDeal &&
+    !t.isConsignmentOnly &&
+    signedTenantIds.has(t.id)
+  );
 
   if (activeTenants.length === 0) {
-    return NextResponse.json({ success: true, message: "No active projects found" });
+    return NextResponse.json({ success: true, message: "No active signed projects found" });
   }
 
   const tenantIds = activeTenants.map(t => t.id);
 
-  // Batch-fetch plan entries and time entries across all active projects
-  const [allPlanEntries, allTimeEntries] = await Promise.all([
-    getPlanEntriesForTenants(tenantIds).catch((err) => { console.error("[weekly-report] planEntries fetch failed:", err); return [] as PlanEntry[]; }),
-    getTimeEntriesForTenants(tenantIds).catch((err) => { console.error("[weekly-report] timeEntries fetch failed:", err); return [] as TimeEntry[]; }),
-  ]);
+  // Fetch plan entries FIRST, then time entries sequentially.
+  // getPlanEntriesForTenants fires N parallel Airtable calls; running getTimeEntriesForTenants
+  // concurrently saturates the rate limit and causes the time entries paginated scan to get
+  // a 429, throw, and be caught as [], producing 0 logged hours for every project.
+  const allPlanEntries = await getPlanEntriesForTenants(tenantIds).catch((err) => {
+    console.error("[weekly-report] planEntries fetch failed:", err);
+    return [] as PlanEntry[];
+  });
+  const allTimeEntries = await getTimeEntriesForTenants(tenantIds).catch((err) => {
+    console.error("[weekly-report] timeEntries fetch failed:", err);
+    return [] as TimeEntry[];
+  });
 
   // Group by tenantId
   const planByTenant = new Map<string, PlanEntry[]>();
