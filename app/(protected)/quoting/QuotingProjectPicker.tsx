@@ -25,9 +25,9 @@ export function QuotingProjectPicker({
 
   const filtered = tenants.filter(t => {
     if (t.isLostDeal) return false;
-    if (viewMode === "active" && (t.isArchived || t.isConsignmentOnly)) return false;
+    if (viewMode === "active" && (t.isArchived || t.isConsignmentOnly || t.isTTT !== true)) return false;
     if (viewMode === "postmove" && (!t.isConsignmentOnly || t.isArchived)) return false;
-    if (viewMode === "archived" && !t.isArchived) return false;
+    if (viewMode === "archived" && !t.isArchived && t.isTTT === true) return false;
     const q = search.toLowerCase();
     if (!q) return true;
     return (
@@ -84,7 +84,7 @@ export function QuotingProjectPicker({
             {search
               ? `No projects match "${search}"`
               : viewMode === "archived"
-              ? "No archived projects found"
+              ? "No archived or non-TTT projects found"
               : viewMode === "postmove"
               ? "No post-move projects found"
               : "No active projects found"}
@@ -104,6 +104,9 @@ export function QuotingProjectPicker({
                         <span className="text-sm font-medium text-gray-900 group-hover:text-forest-700 transition-colors">{t.name}</span>
                         {t.isArchived && (
                           <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Archived</span>
+                        )}
+                        {t.isTTT !== true && !t.isArchived && (
+                          <span className="text-xs bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">Non-TTT</span>
                         )}
                       </div>
                       {location && <div className="text-xs text-gray-400 mt-0.5">{location}</div>}
