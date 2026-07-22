@@ -41,25 +41,54 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-function scheduledHoursFromEntries(entries: PlanEntry[]): number {
-  let total = 0;
-  for (const e of entries) {
-    if (e.entryType === "keydate") continue;
-    if (!e.startTime || !e.endTime) continue;
-    const [sh, sm] = e.startTime.split(":").map(Number);
-    const [eh, em] = e.endTime.split(":").map(Number);
-    const mins = (eh * 60 + em) - (sh * 60 + sm);
-    if (mins > 0) total += mins / 60;
+// Match Plan page: multiply duration by helper count, net of already-logged for same date+service
+function scheduledHoursFromEntries(planEntries: PlanEntry[], timeEntries: TimeEntry[], todayStr: string): number {
+  // Step 1: gross helper-hours by "date|service" for upcoming shifts with at least one non-declined helper
+  const grossByDateService = new Map<string, number>();
+  for (const pe of planEntries) {
+    if (pe.date < todayStr) continue;
+    if (pe.entryType === "keydate") continue;
+    if (!pe.startTime || !pe.endTime) continue;
+    const [sh, sm] = pe.startTime.split(":").map(Number);
+    const [eh, em] = pe.endTime.split(":").map(Number);
+    const shiftMins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+    if (shiftMins === 0) continue;
+    const helperCount = (pe.helpers ?? []).filter(h => h.status !== "declined").length;
+    if (helperCount === 0) continue;
+    const dsKey = `${pe.date}|${(pe.activity as string) || "Other"}`;
+    grossByDateService.set(dsKey, (grossByDateService.get(dsKey) ?? 0) + helperCount * shiftMins);
   }
-  return Math.round(total * 10) / 10;
+  // Step 2: already-logged by "date|focusArea"
+  const loggedByDateService = new Map<string, number>();
+  for (const te of timeEntries) {
+    const dsKey = `${te.date}|${te.focusArea}`;
+    loggedByDateService.set(dsKey, (loggedByDateService.get(dsKey) ?? 0) + te.durationMinutes);
+  }
+  // Step 3: net = gross minus already-logged
+  let totalMins = 0;
+  for (const [dsKey, grossMins] of grossByDateService) {
+    totalMins += Math.max(0, grossMins - (loggedByDateService.get(dsKey) ?? 0));
+  }
+  return Math.round(totalMins / 60 * 10) / 10;
 }
 
-function bestContract(contracts: Contract[]): Contract | null {
+// Match Plan page: only use the most recently signed contract
+function signedContract(contracts: Contract[]): Contract | null {
   const signed = contracts.filter(c => c.status === "Signed");
-  if (signed.length) return signed.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  const sent = contracts.filter(c => c.status === "Sent");
-  if (sent.length) return sent.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  return contracts.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+  if (!signed.length) return null;
+  return signed.sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt))[0];
+}
+
+// Match Plan page: lineItems → legacy hours fields → 0
+function contractEstimatedHours(contract: Contract | null): number {
+  if (!contract) return 0;
+  if (contract.lineItems && contract.lineItems.length > 0) {
+    const sum = contract.lineItems.reduce((s, li) => s + li.hours, 0);
+    if (sum > 0) return Math.round(sum * 10) / 10;
+  }
+  const legacy = contract.rightsizingHours + contract.packingHours + contract.unpackingHours;
+  if (legacy > 0) return Math.round(legacy * 10) / 10;
+  return 0;
 }
 
 const KEY_DATE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -440,20 +469,16 @@ export async function POST() {
     const planEntries = planByTenant.get(tenant.id) ?? [];
     const timeEntries = timeByTenant.get(tenant.id) ?? [];
 
-    const contract = bestContract(contracts);
-    const quoteAmount = contract?.totalCost ?? null;
+    const contract = signedContract(contracts);
+    const quoteAmount = (contract?.totalCost ?? 0) > 0 ? contract!.totalCost : null;
 
-    // Estimated hours: from contract line items if available, else tenant field
-    const estimatedHours =
-      (contract?.lineItems && contract.lineItems.length > 0)
-        ? Math.round(contract.lineItems.reduce((s, li) => s + li.hours, 0) * 10) / 10
-        : (tenant.estimatedHours ?? 0);
+    // Estimated hours: match Plan page (lineItems → legacy contract fields → tenant field)
+    const contractHours = contractEstimatedHours(contract);
+    const estimatedHours = contractHours > 0 ? contractHours : (tenant.estimatedHours ?? 0);
 
-    // Logged hours: sum of all non-nonBillable time entries
+    // Logged hours: ALL entries including nonBillable, matching Plan page
     const loggedHours = Math.round(
-      timeEntries
-        .filter(e => !e.nonBillable)
-        .reduce((s, e) => s + e.durationMinutes, 0) / 60 * 10
+      timeEntries.reduce((s, e) => s + e.durationMinutes, 0) / 60 * 10
     ) / 10;
 
     // Upcoming plan entries (today or future), sorted by date
@@ -461,8 +486,8 @@ export async function POST() {
       .filter(e => e.date >= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Scheduled hours from upcoming focus entries with times
-    const scheduledHours = scheduledHoursFromEntries(upcomingEntries);
+    // Scheduled hours: match Plan page (helper count × duration, net of already-logged)
+    const scheduledHours = scheduledHoursFromEntries(planEntries, timeEntries, todayStr);
 
     // Team lead
     const staffMember = tenant.teamLeadClerkId
