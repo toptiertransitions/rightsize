@@ -41,35 +41,17 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-// Match Plan page: multiply duration by helper count, net of already-logged for same date+service
-function scheduledHoursFromEntries(planEntries: PlanEntry[], timeEntries: TimeEntry[], todayStr: string): number {
-  // Step 1: gross helper-hours by "date|service" for upcoming shifts with at least one non-declined helper
-  const grossByDateService = new Map<string, number>();
-  for (const pe of planEntries) {
-    if (pe.date < todayStr) continue;
-    if (pe.entryType === "keydate") continue;
-    if (!pe.startTime || !pe.endTime) continue;
-    const [sh, sm] = pe.startTime.split(":").map(Number);
-    const [eh, em] = pe.endTime.split(":").map(Number);
-    const shiftMins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
-    if (shiftMins === 0) continue;
-    const helperCount = (pe.helpers ?? []).filter(h => h.status !== "declined").length;
-    if (helperCount === 0) continue;
-    const dsKey = `${pe.date}|${(pe.activity as string) || "Other"}`;
-    grossByDateService.set(dsKey, (grossByDateService.get(dsKey) ?? 0) + helperCount * shiftMins);
+function scheduledHoursFromEntries(entries: PlanEntry[]): number {
+  let total = 0;
+  for (const e of entries) {
+    if (e.entryType === "keydate") continue;
+    if (!e.startTime || !e.endTime) continue;
+    const [sh, sm] = e.startTime.split(":").map(Number);
+    const [eh, em] = e.endTime.split(":").map(Number);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins > 0) total += mins / 60;
   }
-  // Step 2: already-logged by "date|focusArea"
-  const loggedByDateService = new Map<string, number>();
-  for (const te of timeEntries) {
-    const dsKey = `${te.date}|${te.focusArea}`;
-    loggedByDateService.set(dsKey, (loggedByDateService.get(dsKey) ?? 0) + te.durationMinutes);
-  }
-  // Step 3: net = gross minus already-logged
-  let totalMins = 0;
-  for (const [dsKey, grossMins] of grossByDateService) {
-    totalMins += Math.max(0, grossMins - (loggedByDateService.get(dsKey) ?? 0));
-  }
-  return Math.round(totalMins / 60 * 10) / 10;
+  return Math.round(total * 10) / 10;
 }
 
 // Match Plan page: only use the most recently signed contract
@@ -129,7 +111,7 @@ function buildEmail(projects: ProjectData[], reportDate: string): string {
 
   const projectCards = projects.map(p => {
     const { tenant, quoteAmount, estimatedHours, loggedHours, scheduledHours, upcomingEntries, teamLeadName, teamLeadPhotoUrl, recentNotes } = p;
-    const remainingHours = Math.round((estimatedHours - loggedHours) * 10) / 10;
+    const remainingHours = Math.round((estimatedHours - loggedHours - scheduledHours) * 10) / 10;
     const budgetDelta = Math.round(remainingHours * HOURLY_RATE);
     const isOver = remainingHours < 0;
     const isOn = remainingHours === 0;
@@ -413,8 +395,8 @@ export async function POST() {
 
   // Batch-fetch plan entries and time entries across all active projects
   const [allPlanEntries, allTimeEntries] = await Promise.all([
-    getPlanEntriesForTenants(tenantIds).catch(() => [] as PlanEntry[]),
-    getTimeEntriesForTenants(tenantIds).catch(() => [] as TimeEntry[]),
+    getPlanEntriesForTenants(tenantIds).catch((err) => { console.error("[weekly-report] planEntries fetch failed:", err); return [] as PlanEntry[]; }),
+    getTimeEntriesForTenants(tenantIds).catch((err) => { console.error("[weekly-report] timeEntries fetch failed:", err); return [] as TimeEntry[]; }),
   ]);
 
   // Group by tenantId
@@ -486,8 +468,8 @@ export async function POST() {
       .filter(e => e.date >= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Scheduled hours: match Plan page (helper count × duration, net of already-logged)
-    const scheduledHours = scheduledHoursFromEntries(planEntries, timeEntries, todayStr);
+    // Scheduled hours: sum of upcoming non-keydate focus entries with start/end times
+    const scheduledHours = scheduledHoursFromEntries(upcomingEntries);
 
     // Team lead
     const staffMember = tenant.teamLeadClerkId
