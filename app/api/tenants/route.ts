@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const tenants = all
     .filter(t => !t.isLostDeal) // Lost deals never appear in pickers
     .filter(t => includeArchived || !t.isArchived)
-    .filter(t => isTTTAdminCaller || (t.isTTT ?? true)) // Non-TTT invisible to staff/manager
+    .filter(t => isTTTAdminCaller || t.isTTT === true) // Non-TTT (undefined or false) invisible to staff/manager
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
   return NextResponse.json({ tenants });

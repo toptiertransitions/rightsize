@@ -133,7 +133,7 @@ export default async function DashboardPage({
       : undefined;
 
     // Filter tenants for staff views: admin sees all, staff/manager sees only TTT
-    const filteredTenants = allTenants.filter(t => !t.isArchived && (isAdmin || (t.isTTT ?? true)));
+    const filteredTenants = allTenants.filter(t => !t.isArchived && (isAdmin || t.isTTT === true));
 
     return (
       <div>

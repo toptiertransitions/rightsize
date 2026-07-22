@@ -68,7 +68,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const [activeSortDir, setActiveSortDir] = useState<SortDir>("asc");
 
   const activeTenants = useMemo(() => {
-    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false && (t.isContractSigned ?? true)).filter(t => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === true && (t.isContractSigned ?? true)).filter(t => {
       if (!activeSearch) return true;
       const q = activeSearch.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -146,7 +146,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   }, [tenants, lostDealFilter]);
 
   const sortedNotSignedTenants = useMemo(() => {
-    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false && t.isContractSigned === false).filter(t => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === true && t.isContractSigned === false).filter(t => {
       if (!notSignedFilter) return true;
       const q = notSignedFilter.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -156,7 +156,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   }, [tenants, notSignedFilter]);
 
   const sortedNonTTTTenants = useMemo(() => {
-    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === false).filter(t => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== true).filter(t => {
       if (!nonTTTFilter) return true;
       const q = nonTTTFilter.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -168,8 +168,8 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const archivedCount = tenants.filter(t => t.isArchived && !t.isLostDeal).length;
   const lostDealCount = tenants.filter(t => t.isLostDeal).length;
   const consignmentCount = tenants.filter(t => !t.isArchived && (t.isConsignmentOnly ?? false)).length;
-  const notSignedCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false && t.isContractSigned === false).length;
-  const nonTTTCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === false).length;
+  const notSignedCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === true && t.isContractSigned === false).length;
+  const nonTTTCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== true).length;
 
   function toggleConsignmentSort(field: SortField) {
     if (consignmentSortField === field) setConsignmentSortDir(d => d === "asc" ? "desc" : "asc");

@@ -83,11 +83,11 @@ export function ProjectSwitcher({
     : tenants;
 
   const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
-  const activeTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isContractSigned && t.isTTT !== false));
-  const notSignedTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && !t.isContractSigned && t.isTTT !== false));
+  const activeTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isContractSigned && t.isTTT === true));
+  const notSignedTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && !t.isContractSigned && t.isTTT === true));
   const postMoveTenants = sort(filtered.filter((t) => !t.isArchived && t.isConsignmentOnly));
   const archivedTenants = sort(filtered.filter((t) => t.isArchived));
-  const nonTTTTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isTTT === false));
+  const nonTTTTenants = sort(filtered.filter((t) => !t.isArchived && !t.isConsignmentOnly && t.isTTT !== true));
 
   function select(id: string) {
     setOpen(false);
