@@ -130,6 +130,7 @@ export interface Tenant {
   isLostDeal?: boolean;
   isTTT?: boolean;
   isConsignmentOnly?: boolean;
+  isContractSigned?: boolean;
   isEstateSale?: boolean;
   originSqFt?: number;
   originHighSqFt?: number;

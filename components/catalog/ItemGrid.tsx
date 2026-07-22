@@ -2051,7 +2051,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       )}
                     </div>
                   )}
-                  {isTTTUser && ["Pending Review", "Approved", "Listed"].includes(item.status) && (
+                  {isTTTUser && ["Pending Review", "Approved", "Listed"].includes(item.status) && ["ProFoundFinds Consignment", "Estate Sale", "FB/Marketplace", "Online Marketplace"].includes(item.primaryRoute) && (
                     <button
                       onClick={e => { e.stopPropagation(); setSendToPFItem(item); setSendToPFError(null); }}
                       disabled={(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0)}
@@ -2320,7 +2320,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                             </button>
-                            {isTTTUser && ["Pending Review", "Approved", "Listed"].includes(item.status) && (
+                            {isTTTUser && ["Pending Review", "Approved", "Listed"].includes(item.status) && ["ProFoundFinds Consignment", "Estate Sale", "FB/Marketplace", "Online Marketplace"].includes(item.primaryRoute) && (
                               <button
                                 onClick={() => { setSendToPFItem(item); setSendToPFError(null); }}
                                 disabled={(!item.salePrice || item.salePrice <= 0) && (!item.valueMid || item.valueMid <= 0)}

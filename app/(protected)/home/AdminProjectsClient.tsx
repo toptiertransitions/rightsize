@@ -38,6 +38,8 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [showNotSigned, setShowNotSigned] = useState(false);
+  const [notSignedFilter, setNotSignedFilter] = useState("");
   const [showNonTTT, setShowNonTTT] = useState(false);
   const [nonTTTFilter, setNonTTTFilter] = useState("");
   const [showConsignment, setShowConsignment] = useState(false);
@@ -66,7 +68,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const [activeSortDir, setActiveSortDir] = useState<SortDir>("asc");
 
   const activeTenants = useMemo(() => {
-    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false).filter(t => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false && (t.isContractSigned ?? true)).filter(t => {
       if (!activeSearch) return true;
       const q = activeSearch.toLowerCase();
       const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
@@ -143,6 +145,16 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
     return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [tenants, lostDealFilter]);
 
+  const sortedNotSignedTenants = useMemo(() => {
+    const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false && t.isContractSigned === false).filter(t => {
+      if (!notSignedFilter) return true;
+      const q = notSignedFilter.toLowerCase();
+      const loc = [t.city, t.state].filter(Boolean).join(", ").toLowerCase();
+      return t.name.toLowerCase().includes(q) || loc.includes(q);
+    });
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [tenants, notSignedFilter]);
+
   const sortedNonTTTTenants = useMemo(() => {
     const filtered = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === false).filter(t => {
       if (!nonTTTFilter) return true;
@@ -156,6 +168,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
   const archivedCount = tenants.filter(t => t.isArchived && !t.isLostDeal).length;
   const lostDealCount = tenants.filter(t => t.isLostDeal).length;
   const consignmentCount = tenants.filter(t => !t.isArchived && (t.isConsignmentOnly ?? false)).length;
+  const notSignedCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT !== false && t.isContractSigned === false).length;
   const nonTTTCount = tenants.filter(t => !t.isArchived && !(t.isConsignmentOnly ?? false) && t.isTTT === false).length;
 
   function toggleConsignmentSort(field: SortField) {
@@ -692,6 +705,88 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
               <Link href="/onboarding" className="text-sm text-forest-600 hover:text-forest-700 font-medium transition-colors">
                 + New Project
               </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Not Signed Yet accordion ── */}
+      {notSignedCount > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowNotSigned(v => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-orange-500 hover:text-orange-700 transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${showNotSigned ? "rotate-90" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Not Signed Yet ({notSignedCount})
+          </button>
+
+          {showNotSigned && (
+            <div className="mt-4 opacity-80">
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={notSignedFilter}
+                  onChange={e => setNotSignedFilter(e.target.value)}
+                  placeholder="Filter by name or location…"
+                  className="w-full sm:w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                />
+              </div>
+
+              <div className="border border-orange-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-orange-50 border-b border-orange-200">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium text-orange-700">Project</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-orange-700">Location</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-orange-700">Created</th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-100 bg-white">
+                    {sortedNotSignedTenants.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-gray-400 text-sm">
+                          No unsigned projects match your filter.
+                        </td>
+                      </tr>
+                    ) : sortedNotSignedTenants.map(tenant => {
+                      const location = [tenant.city, tenant.state].filter(Boolean).join(", ");
+                      const createdDisplay = tenant.createdAt
+                        ? new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—";
+                      return (
+                        <tr key={tenant.id} className="hover:bg-orange-50/40 transition-colors">
+                          <td className="px-4 py-3">
+                            <Link href={`/catalog?tenantId=${tenant.id}`}
+                              className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                              {tenant.name}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">{location || "—"}</td>
+                          <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
+                          <td className="px-4 py-3 text-right">
+                            {(isManager || isAdmin) && (
+                              <button
+                                onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
+                                disabled={archiving === tenant.id}
+                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                              >
+                                {archiving === tenant.id ? "…" : "Archive"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

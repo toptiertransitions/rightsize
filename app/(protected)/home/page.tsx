@@ -1,7 +1,7 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -48,12 +48,14 @@ export default async function DashboardPage({
     const todayStr = new Date().toISOString().slice(0, 10);
     const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager";
 
-    const [allTenants, timeEntries, allStaff, serviceList] = await Promise.all([
+    const [allTenantsRaw, timeEntries, allStaff, serviceList, signedIds] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
       getStaffMembers().catch(() => []),
       getServices().catch(() => []),
+      getSignedTenantIds().catch(() => new Set<string>()),
     ]);
+    const allTenants = allTenantsRaw.map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
 
     // Use the Airtable-stored email (what's actually saved in plan helpers JSON)
     // rather than the Clerk primary email, which may differ
