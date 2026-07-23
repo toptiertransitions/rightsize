@@ -447,6 +447,10 @@ function ContentFormModal({
   const [uploading, setUploading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState(item?.fileUrl ?? "");
   const [uploadedPublicId, setUploadedPublicId] = useState(item?.filePublicId ?? "");
+  const [thumbnailUrl, setThumbnailUrl] = useState(item?.thumbnailUrl ?? "");
+  const [thumbnailPublicId, setThumbnailPublicId] = useState(item?.thumbnailPublicId ?? "");
+  const [generatingIcon, setGeneratingIcon] = useState(false);
+  const [iconError, setIconError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const needsFile = contentType === "PDF" || contentType === "Image";
@@ -471,6 +475,27 @@ function ContentFormModal({
     }
   }
 
+  async function generateIcon() {
+    if (!title.trim()) return;
+    setGeneratingIcon(true);
+    setIconError("");
+    try {
+      const res = await fetch("/api/content/generate-icon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), description: description.trim() || undefined, contentType, audience }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setIconError(data.error ?? "Generation failed"); return; }
+      setThumbnailUrl(data.thumbnailUrl);
+      setThumbnailPublicId(data.thumbnailPublicId);
+    } catch {
+      setIconError("Something went wrong. Try again.");
+    } finally {
+      setGeneratingIcon(false);
+    }
+  }
+
   async function handleSave() {
     if (!title.trim()) return;
     setSaving(true);
@@ -488,6 +513,8 @@ function ContentFormModal({
       linkUrl: needsLink ? linkUrl : undefined,
       fileUrl: uploadedUrl || undefined,
       filePublicId: uploadedPublicId || undefined,
+      thumbnailUrl: thumbnailUrl || undefined,
+      thumbnailPublicId: thumbnailPublicId || undefined,
     });
     setSaving(false);
   }
@@ -587,6 +614,43 @@ function ContentFormModal({
               rows={2}
               className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
             />
+          </div>
+
+          {/* AI Icon */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Icon</label>
+            <div className="flex items-start gap-3">
+              {/* Preview */}
+              <div className="shrink-0 w-16 h-16 rounded-xl border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center">
+                {thumbnailUrl ? (
+                  <img src={thumbnailUrl} alt="icon" className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-7 h-7 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                )}
+              </div>
+              {/* Controls */}
+              <div className="flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={generateIcon}
+                  disabled={!title.trim() || generatingIcon}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {generatingIcon ? (
+                    <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Generating…</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>{thumbnailUrl ? "Regenerate Icon" : "Generate AI Icon"}</>
+                  )}
+                </button>
+                {!title.trim() && <p className="mt-1.5 text-xs text-gray-400">Enter a title first</p>}
+                {thumbnailUrl && !generatingIcon && (
+                  <button type="button" onClick={() => { setThumbnailUrl(""); setThumbnailPublicId(""); }} className="mt-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors">
+                    Remove icon
+                  </button>
+                )}
+                {iconError && <p className="mt-1.5 text-xs text-red-500">{iconError}</p>}
+              </div>
+            </div>
           </div>
 
           {/* Audience + Stage */}
