@@ -687,6 +687,7 @@ export default function OutreachClient({
 }: OutreachClientProps) {
   const [tab, setTab] = useState<OutreachTab>("myday");
   const [templates, setTemplates] = useState(initialTemplates);
+  const [repoFocusItemId, setRepoFocusItemId] = useState<string | null>(null);
 
   const isAdmin = systemRole === "TTTAdmin";
 
@@ -764,11 +765,17 @@ export default function OutreachClient({
         <ContentRepository
           currentUserId={currentUserId}
           isAdmin={isAdmin}
+          focusItemId={repoFocusItemId}
+          onFocusConsumed={() => setRepoFocusItemId(null)}
         />
       )}
       {tab === "contentcal" && (
         <ContentCalendar
           isAdmin={isAdmin}
+          onViewInRepository={item => {
+            setRepoFocusItemId(item.id);
+            setTab("repository");
+          }}
         />
       )}
     </div>

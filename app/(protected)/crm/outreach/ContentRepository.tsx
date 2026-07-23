@@ -859,9 +859,11 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
 interface Props {
   isAdmin: boolean;
   currentUserId: string;
+  focusItemId?: string | null;
+  onFocusConsumed?: () => void;
 }
 
-export default function ContentRepository({ isAdmin, currentUserId }: Props) {
+export default function ContentRepository({ isAdmin, currentUserId, focusItemId, onFocusConsumed }: Props) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [categories, setCategories] = useState<ContentCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -882,6 +884,15 @@ export default function ContentRepository({ isAdmin, currentUserId }: Props) {
   useEffect(() => {
     loadData();
   }, [showArchived]);
+
+  useEffect(() => {
+    if (!focusItemId || items.length === 0) return;
+    const target = items.find(i => i.id === focusItemId);
+    if (target) {
+      setSelectedItem(target);
+      onFocusConsumed?.();
+    }
+  }, [focusItemId, items]);
 
   async function loadData() {
     setLoading(true);

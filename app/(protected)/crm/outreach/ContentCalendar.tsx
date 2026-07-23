@@ -94,10 +94,106 @@ function ContentPill({ item, category, compact, onClick }: {
   );
 }
 
+// ─── Quick Add Modal ──────────────────────────────────────────────────────────
+
+function QuickAddModal({ date, categories, onClose, onCreated }: {
+  date: Date;
+  categories: ContentCategory[];
+  onClose: () => void;
+  onCreated: (item: ContentItem) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCreate() {
+    if (!title.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/content/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          categoryId: categoryId || undefined,
+          scheduledDate: toISO(date),
+          contentType: "PDF",
+          audience: "Both",
+          pipelineStage: "All",
+          status: "Draft",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.item) { setError(data.error ?? "Failed to create"); return; }
+      onCreated(data.item);
+      onClose();
+    } catch {
+      setError("Unexpected error — try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400">{date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
+            <h3 className="text-sm font-semibold text-gray-900">Quick Add to Calendar</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Title *</label>
+            <input
+              autoFocus
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleCreate()}
+              placeholder="e.g. LinkedIn Post — Q3 Market Update"
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Category <span className="font-normal normal-case text-gray-400">(optional)</span></label>
+            <select
+              value={categoryId}
+              onChange={e => setCategoryId(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500"
+            >
+              <option value="">No category</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+        <div className="px-5 pb-5 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 text-sm text-gray-700 rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
+          <button
+            onClick={handleCreate}
+            disabled={!title.trim() || saving}
+            className="flex-1 px-4 py-2.5 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "Adding…" : "Add to Calendar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Day Cell (month view) ────────────────────────────────────────────────────
 
 function DayCell({
-  date, isCurrentMonth, items, categories, isAdmin, onClickDay, onDropItem, onItemClick,
+  date, isCurrentMonth, items, categories, isAdmin, onClickDay, onDropItem, onItemClick, onQuickAdd,
 }: {
   date: Date;
   isCurrentMonth: boolean;
@@ -107,6 +203,7 @@ function DayCell({
   onClickDay: (date: Date) => void;
   onDropItem: (itemId: string, date: string) => void;
   onItemClick: (item: ContentItem) => void;
+  onQuickAdd: (date: Date) => void;
 }) {
   const iso = toISO(date);
   const today = toISO(new Date());
@@ -137,16 +234,27 @@ function DayCell({
       onClick={() => onClickDay(date)}
     >
       {/* Day number */}
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1 group/day">
         <span className={cn(
           "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full",
           isToday ? "bg-forest-600 text-white font-bold" : isCurrentMonth ? "text-gray-700" : "text-gray-300"
         )}>
           {date.getDate()}
         </span>
-        {items.length > 0 && (
-          <span className="text-xs text-gray-400 font-medium">{items.length}</span>
-        )}
+        <div className="flex items-center gap-1">
+          {items.length > 0 && (
+            <span className="text-xs text-gray-400 font-medium">{items.length}</span>
+          )}
+          {isAdmin && (
+            <button
+              onClick={e => { e.stopPropagation(); onQuickAdd(date); }}
+              className="opacity-0 group-hover/day:opacity-100 w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-forest-600 hover:bg-forest-50 transition-all text-base leading-none"
+              title="Quick add"
+            >
+              +
+            </button>
+          )}
+        </div>
       </div>
       {/* Pills */}
       <div className="space-y-0.5">
@@ -166,13 +274,14 @@ function DayCell({
 
 // ─── Item Detail Slideout ─────────────────────────────────────────────────────
 
-function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onReschedule }: {
+function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onReschedule, onViewInRepository }: {
   item: ContentItem;
   category?: ContentCategory;
   onClose: () => void;
   isAdmin: boolean;
   onEdit: () => void;
   onReschedule: (date: string | null) => void;
+  onViewInRepository?: () => void;
 }) {
   const color = category?.color ?? "#6b7280";
   const today = toISO(new Date());
@@ -277,6 +386,17 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onResche
               Content available on {item.scheduledDate ? parseDate(item.scheduledDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "scheduled date"}
             </div>
           )}
+
+          {/* View in Repository */}
+          {onViewInRepository && (item.fileUrl || item.linkUrl) && (
+            <button
+              onClick={onViewInRepository}
+              className="flex items-center justify-center gap-2 border border-forest-200 text-forest-700 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-50 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" /></svg>
+              View in Repository
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -336,9 +456,10 @@ function DayExpandedModal({ date, items, categories, onClose, onItemClick }: {
 
 interface Props {
   isAdmin: boolean;
+  onViewInRepository?: (item: ContentItem) => void;
 }
 
-export default function ContentCalendar({ isAdmin }: Props) {
+export default function ContentCalendar({ isAdmin, onViewInRepository }: Props) {
   const [view, setView] = useState<CalView>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [items, setItems] = useState<ContentItem[]>([]);
@@ -348,6 +469,7 @@ export default function ContentCalendar({ isAdmin }: Props) {
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
   const [catFilter, setCatFilter] = useState<string | "All">("All");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [quickAddDate, setQuickAddDate] = useState<Date | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -356,7 +478,7 @@ export default function ContentCalendar({ isAdmin }: Props) {
   async function loadAll() {
     setLoading(true);
     const [itemsRes, catsRes] = await Promise.all([
-      fetch("/api/content/items?status=Active").then(r => r.json()),
+      fetch("/api/content/items?status=active_draft").then(r => r.json()),
       fetch("/api/content/categories").then(r => r.json()),
     ]);
     setItems((itemsRes.items ?? []).filter((i: ContentItem) => i.scheduledDate));
@@ -435,6 +557,7 @@ export default function ContentCalendar({ isAdmin }: Props) {
                 }}
                 onDropItem={rescheduleItem}
                 onItemClick={setSelectedItem}
+                onQuickAdd={setQuickAddDate}
               />
             );
           })}
@@ -458,10 +581,19 @@ export default function ContentCalendar({ isAdmin }: Props) {
             const dayItems = itemsForDate(iso);
             return (
               <div key={i} className="border-r border-gray-100 last:border-r-0">
-                <div className={cn("py-3 text-center border-b border-gray-100", isToday ? "bg-forest-50" : "bg-gray-50")}>
+                <div className={cn("py-3 text-center border-b border-gray-100 group/wday relative", isToday ? "bg-forest-50" : "bg-gray-50")}>
                   <p className="text-xs text-gray-400">{DAYS_OF_WEEK[day.getDay()]}</p>
                   <p className={cn("text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full mx-auto",
                     isToday ? "bg-forest-600 text-white" : "text-gray-800")}>{day.getDate()}</p>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setQuickAddDate(day)}
+                      className="opacity-0 group-hover/wday:opacity-100 absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-forest-600 hover:bg-forest-50 transition-all text-base leading-none"
+                      title="Quick add"
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
                 <div
                   className={cn("min-h-[200px] p-2 space-y-1", isAdmin ? "cursor-default" : "")}
@@ -625,6 +757,23 @@ export default function ContentCalendar({ isAdmin }: Props) {
           isAdmin={isAdmin}
           onEdit={() => setSelectedItem(null)}
           onReschedule={async (date) => { await rescheduleItem(selectedItem.id, date); }}
+          onViewInRepository={onViewInRepository && (selectedItem.fileUrl || selectedItem.linkUrl) ? () => {
+            setSelectedItem(null);
+            onViewInRepository(selectedItem);
+          } : undefined}
+        />
+      )}
+
+      {/* Quick add modal */}
+      {isAdmin && quickAddDate && (
+        <QuickAddModal
+          date={quickAddDate}
+          categories={categories}
+          onClose={() => setQuickAddDate(null)}
+          onCreated={item => {
+            setItems(prev => [...prev, item]);
+            setQuickAddDate(null);
+          }}
         />
       )}
 
