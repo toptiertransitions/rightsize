@@ -48,6 +48,7 @@ export async function createContentCategory(data: { name: string; color: string;
     Name: data.name,
     Color: data.color,
     SortOrder: data.sortOrder ?? 0,
+    CreatedAt: new Date().toISOString(),
   });
   return mapCategory(record);
 }
@@ -173,6 +174,7 @@ export async function createContentItem(data: {
     LikeCount: 0,
     CommentCount: 0,
     Tags: JSON.stringify(data.tags ?? []),
+    CreatedAt: new Date().toISOString(),
     UpdatedAt: new Date().toISOString(),
   };
   if (data.description) fields["Description"] = data.description;
@@ -260,6 +262,7 @@ export async function addLike(contentId: string, userClerkId: string): Promise<v
   await base(AIRTABLE_TABLES.CONTENT_LIKES).create({
     ContentId: contentId,
     UserClerkId: userClerkId,
+    CreatedAt: new Date().toISOString(),
   });
   const item = await base(AIRTABLE_TABLES.CONTENT_ITEMS).find(contentId);
   const current = toNum(item.fields["LikeCount"]);
@@ -314,6 +317,7 @@ export async function addComment(data: {
     AuthorName: data.authorName,
     AuthorPhotoUrl: data.authorPhotoUrl ?? "",
     Body: data.body,
+    CreatedAt: new Date().toISOString(),
   });
   // Increment comment count
   const item = await base(AIRTABLE_TABLES.CONTENT_ITEMS).find(data.contentId);
