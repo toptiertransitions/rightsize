@@ -106,7 +106,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): ContentItem {
 }
 
 export async function getContentItems(opts?: {
-  status?: ContentStatus | "active_draft";
+  status?: ContentStatus | "active_draft" | "all";
   audience?: ContentAudience;
   pipelineStage?: ContentPipelineStage;
   categoryId?: string;
@@ -116,7 +116,9 @@ export async function getContentItems(opts?: {
   const base = getBase();
   const filters: string[] = [];
 
-  if (opts?.status === "active_draft") {
+  if (opts?.status === "all") {
+    // no status filter — return every status
+  } else if (opts?.status === "active_draft") {
     filters.push(`OR({Status} = "Active", {Status} = "Draft")`);
   } else if (opts?.status) {
     filters.push(`{Status} = "${opts.status}"`);

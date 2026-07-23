@@ -872,7 +872,7 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
   const [audienceFilter, setAudienceFilter] = useState<ContentAudience | "All">("All");
   const [stageFilter, setStageFilter] = useState<ContentPipelineStage | "All">("All");
   const [typeFilter, setTypeFilter] = useState<ContentItemType | "All">("All");
-  const [showArchived, setShowArchived] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<ContentStatus | "All">("Active");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [editingItem, setEditingItem] = useState<ContentItem | null | "new">(null);
@@ -883,7 +883,7 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
 
   useEffect(() => {
     loadData();
-  }, [showArchived]);
+  }, [statusFilter]);
 
   useEffect(() => {
     if (!focusItemId || items.length === 0) return;
@@ -896,8 +896,9 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
 
   async function loadData() {
     setLoading(true);
+    const apiStatus = statusFilter === "All" ? "all" : statusFilter;
     const [itemsRes, catsRes] = await Promise.all([
-      fetch(`/api/content/items${showArchived ? "?status=Archived" : ""}`).then(r => r.json()),
+      fetch(`/api/content/items?status=${apiStatus}`).then(r => r.json()),
       fetch("/api/content/categories").then(r => r.json()),
     ]);
     setItems(itemsRes.items ?? []);
@@ -994,7 +995,6 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
 
   // ── Filtering + sorting ────────────────────────────────────────────────────
   const filtered = items.filter(item => {
-    if (!showArchived && item.status === "Archived") return false;
     if (audienceFilter !== "All" && item.audience !== audienceFilter && item.audience !== "Both") return false;
     if (stageFilter !== "All" && item.pipelineStage !== stageFilter && item.pipelineStage !== "All") return false;
     if (typeFilter !== "All" && item.contentType !== typeFilter) return false;
@@ -1094,11 +1094,15 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
           ))}
         </div>
 
-        {/* Archived toggle */}
-        <button onClick={() => setShowArchived(v => !v)}
-          className={cn("px-3 py-1 text-xs font-medium rounded-xl border transition-colors", showArchived ? "bg-gray-700 text-white border-gray-700" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300")}>
-          {showArchived ? "Archived" : "Show Archived"}
-        </button>
+        {/* Status filter */}
+        <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+          {(["Active", "Draft", "Archived", "All"] as const).map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={cn("px-3 py-1 text-xs font-medium transition-colors", statusFilter === s ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
+              {s}
+            </button>
+          ))}
+        </div>
 
         {/* Category manager */}
         {isAdmin && (
