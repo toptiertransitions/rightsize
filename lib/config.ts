@@ -87,6 +87,11 @@ export const AIRTABLE_TABLES = {
   PROJECT_TASKS: process.env.AIRTABLE_PROJECT_TASKS_TABLE || "ProjectTasks",
   DISCOUNT_CODES: process.env.AIRTABLE_DISCOUNT_CODES_TABLE || "DiscountCodes",
   ESTATE_SALE_SHOPPERS: process.env.AIRTABLE_ESTATE_SALE_SHOPPERS_TABLE || "EstateSaleShoppers",
+  CONTENT_ITEMS: process.env.AIRTABLE_CONTENT_ITEMS_TABLE || "ContentItems",
+  CONTENT_CATEGORIES: process.env.AIRTABLE_CONTENT_CATEGORIES_TABLE || "ContentCategories",
+  CONTENT_COMMENTS: process.env.AIRTABLE_CONTENT_COMMENTS_TABLE || "ContentComments",
+  CONTENT_LIKES: process.env.AIRTABLE_CONTENT_LIKES_TABLE || "ContentLikes",
+  CONTENT_DOWNLOADS: process.env.AIRTABLE_CONTENT_DOWNLOADS_TABLE || "ContentDownloads",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

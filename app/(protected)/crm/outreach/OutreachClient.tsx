@@ -7,11 +7,14 @@ import type { ReferralCompany, StaffMember } from "@/lib/types";
 import BroadcastsTab from "./BroadcastsTab";
 import MyDayTab from "./MyDayTab";
 import SequencesTab from "./SequencesTab";
+import ContentRepository from "./ContentRepository";
+import ContentCalendar from "./ContentCalendar";
 
-type OutreachTab = "myday" | "broadcasts" | "sequences" | "templates";
+type OutreachTab = "myday" | "broadcasts" | "sequences" | "templates" | "repository" | "contentcal";
 
 interface OutreachClientProps {
   currentUserId: string;
+  systemRole: string;
   gmailConnected: boolean;
   hasSendScope: boolean;
   gmailEmail?: string;
@@ -674,6 +677,7 @@ function TemplatesTab({
 // ─── Main client ──────────────────────────────────────────────────────────────
 export default function OutreachClient({
   currentUserId,
+  systemRole,
   gmailConnected,
   hasSendScope,
   gmailEmail,
@@ -684,11 +688,15 @@ export default function OutreachClient({
   const [tab, setTab] = useState<OutreachTab>("myday");
   const [templates, setTemplates] = useState(initialTemplates);
 
+  const isAdmin = systemRole === "TTTAdmin";
+
   const tabs: { key: OutreachTab; label: string }[] = [
     { key: "myday", label: "My Day" },
     { key: "broadcasts", label: "Broadcasts" },
     { key: "sequences", label: "Sequences" },
     { key: "templates", label: "Templates" },
+    { key: "repository", label: "Content Repository" },
+    { key: "contentcal", label: "Content Cal" },
   ];
 
   return (
@@ -750,6 +758,17 @@ export default function OutreachClient({
           setTemplates={setTemplates}
           currentUserId={currentUserId}
           staffMembers={staffMembers}
+        />
+      )}
+      {tab === "repository" && (
+        <ContentRepository
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+        />
+      )}
+      {tab === "contentcal" && (
+        <ContentCalendar
+          isAdmin={isAdmin}
         />
       )}
     </div>

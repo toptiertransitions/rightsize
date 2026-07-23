@@ -1468,3 +1468,59 @@ export interface LoyaltyStatusResponse {
   percentToNextTier: number | null;
   recentActivity: PartnerLedgerEntry[];
 }
+
+// ─── Content Repository ───────────────────────────────────────────────────────
+
+export type ContentItemType = "PDF" | "Image" | "Video" | "URL" | "LinkedIn";
+export type ContentAudience = "Clients" | "ReferralPartners" | "Both";
+export type ContentStatus = "Draft" | "Active" | "Archived";
+export type ContentPipelineStage = "All" | "Lead" | "Qualifying" | "Proposing" | "Won";
+
+export interface ContentCategory {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface ContentItem {
+  id: string;
+  title: string;
+  description?: string;
+  contentType: ContentItemType;
+  fileUrl?: string;
+  filePublicId?: string;
+  linkUrl?: string;
+  thumbnailUrl?: string;
+  thumbnailPublicId?: string;
+  audience: ContentAudience;
+  pipelineStage: ContentPipelineStage;
+  categoryId?: string;
+  tags: string[];
+  authorClerkId: string;
+  status: ContentStatus;
+  downloadCount: number;
+  likeCount: number;
+  commentCount: number;
+  scheduledDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentComment {
+  id: string;
+  contentId: string;
+  authorClerkId: string;
+  authorName: string;
+  authorPhotoUrl?: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface ContentLike {
+  id: string;
+  contentId: string;
+  userClerkId: string;
+  createdAt: string;
+}
