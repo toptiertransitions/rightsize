@@ -1582,6 +1582,8 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
   // Add Staff Time Off modal state
   const [showAddTO, setShowAddTO] = useState(false);
   const [addTOStaffId, setAddTOStaffId] = useState("");
+  const [addTOStaffQuery, setAddTOStaffQuery] = useState("");
+  const [addTOStaffOpen, setAddTOStaffOpen] = useState(false);
   const [addTODateFrom, setAddTODateFrom] = useState("");
   const [addTODateTo, setAddTODateTo] = useState("");
   const [addTOIsRange, setAddTOIsRange] = useState(false);
@@ -1641,7 +1643,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
       setAddTOAllDay(true);
       setAddTOStartTime("");
       setAddTOEndTime("");
-      setTimeout(() => { setShowAddTO(false); setAddTOStaffId(""); setAddTOSuccess(""); }, 1500);
+      setTimeout(() => { setShowAddTO(false); setAddTOStaffId(""); setAddTOStaffQuery(""); setAddTOSuccess(""); }, 1500);
     } catch (e) {
       setAddTOError(e instanceof Error ? e.message : "Unexpected error");
     } finally {
@@ -1708,7 +1710,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
             </p>
             {canEdit && (
               <button
-                onClick={() => { setShowAddTO(true); setAddTOError(""); setAddTOSuccess(""); }}
+                onClick={() => { setShowAddTO(true); setAddTOError(""); setAddTOSuccess(""); setAddTOStaffId(""); setAddTOStaffQuery(""); }}
                 className="ml-auto flex items-center gap-1.5 h-9 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1751,19 +1753,45 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
                 </div>
 
                 <div className="space-y-4">
-                  {/* Staff selector */}
-                  <div>
+                  {/* Staff selector — autofill search */}
+                  <div className="relative">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Staff Member</label>
-                    <select
-                      value={addTOStaffId}
-                      onChange={e => setAddTOStaffId(e.target.value)}
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      placeholder="Search staff…"
+                      value={addTOStaffQuery}
+                      onChange={e => {
+                        setAddTOStaffQuery(e.target.value);
+                        setAddTOStaffId("");
+                        setAddTOStaffOpen(true);
+                      }}
+                      onFocus={() => setAddTOStaffOpen(true)}
+                      onBlur={() => setTimeout(() => setAddTOStaffOpen(false), 150)}
                       className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
-                    >
-                      <option value="">Select a staff member…</option>
-                      {membersList.map(m => (
-                        <option key={m.id} value={m.id}>{m.displayName}</option>
-                      ))}
-                    </select>
+                    />
+                    {addTOStaffOpen && (
+                      <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                        {membersList
+                          .filter(m => m.displayName.toLowerCase().includes(addTOStaffQuery.toLowerCase()))
+                          .map(m => (
+                            <li
+                              key={m.id}
+                              onMouseDown={() => {
+                                setAddTOStaffId(m.id);
+                                setAddTOStaffQuery(m.displayName);
+                                setAddTOStaffOpen(false);
+                              }}
+                              className="px-3 py-2 text-sm text-gray-800 cursor-pointer hover:bg-forest-50 hover:text-forest-700"
+                            >
+                              {m.displayName}
+                            </li>
+                          ))}
+                        {membersList.filter(m => m.displayName.toLowerCase().includes(addTOStaffQuery.toLowerCase())).length === 0 && (
+                          <li className="px-3 py-2 text-sm text-gray-400">No staff found</li>
+                        )}
+                      </ul>
+                    )}
                   </div>
 
                   {/* Single day vs range toggle */}
