@@ -45,21 +45,21 @@ const STAFF_ROLES = [
     label: "TTT Manager",
     color: "border-purple-700",
     badge: "bg-purple-900/50 text-purple-300",
-    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, and manage storage locations on /staff. Expenses are reimbursable by default.",
+    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, manage storage locations on /staff, add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off), and access the Content Repository (view, download, like, comment, upload, edit, and manage categories). Receives an email notification with a direct link to the project Plan page when any shift helper declines a calendar invitation. Time-off notification emails include a warning if the absent staff member is scheduled on a Daily Focus Shift during their time off. Expenses are reimbursable by default.",
   },
   {
     key: "TTTSales",
     label: "TTT Sales",
     color: "border-blue-700",
     badge: "bg-blue-900/50 text-blue-300",
-    desc: "Sales team with access to CRM, Outreach (sequences, broadcasts, My Day), quoting, invoicing, expenses, the Staff page, and internal project notes on /plan. Expenses are non-reimbursable by default. Broadcasts are audience-locked: TTTSales can only send to contacts from companies they own; they cannot switch the owner filter.",
+    desc: "Sales team with access to CRM, Outreach (sequences, broadcasts, My Day, Content Repository), quoting, invoicing, expenses, the Staff page, and internal project notes on /plan. Can view, download, like, and comment on Content Repository items. Expenses are non-reimbursable by default. Broadcasts are audience-locked: TTTSales can only send to contacts from companies they own; they cannot switch the owner filter.",
   },
   {
     key: "TTTAdmin",
     label: "TTT Admin",
     color: "border-red-700",
     badge: "bg-red-900/50 text-red-300",
-    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, and post and comment on internal project notes on /plan. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Expenses are non-reimbursable by default.",
+    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, post and comment on internal project notes on /plan, add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off), edit staff first/last name, display name, and phone number from /admin/users (name syncs to Clerk + Airtable; phone syncs to Airtable only), and access the Content Repository (view, download, like, comment, upload, edit, and manage categories). Can edit items directly from the All Active Projects catalog view without selecting a specific project. Receives an email notification with a direct link to the project Plan page when any shift helper declines a calendar invitation. Expenses are non-reimbursable by default.",
   },
 ] as const;
 
@@ -88,6 +88,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Outreach tab (sequences, My Day, templates)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Broadcasts — send to any contact (full audience, any owner)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Broadcasts — own contacts only (locked to companies you own)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: true, TTTAdmin: false } },
+  { label: "Content Repository — view, download, like, and comment on files, links, and videos (status filter: Active / Draft / Archived / All)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
+  { label: "Content Repository — create, edit, archive, delete items and manage categories", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Quoting tab",                 permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Ops tab (/staff)",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: true, TTTAdmin: true  } },
   { label: "Help tab",                    permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
@@ -104,6 +106,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Add / delete Google Reviews on /plan",                      permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite TTT Team Members via staff name picker",   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Invite Helpers via email (family / friends)",     permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
+  { label: "Email notification when a shift helper declines calendar invitation — includes shift details and direct link to project Plan page (sent to all TTTAdmins + TTTManagers)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Project Access" },
   { label: "View project & rooms",        permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Add & edit items",            permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
@@ -156,6 +159,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Log own time",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Set own availability",        permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
   { label: "Set time off",                permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
+  { label: "Add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off; supports single day or date range, all-day or timed)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Time-off notification email flags Daily Focus Shifts the absent staff member is scheduled for during their time off", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "View Today's Plan (home)",    permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "View all staff time",         permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "View staff name on logged time entries (Plan page)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
@@ -220,6 +225,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Toggle TTT / Non-TTT flag per project",            permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "View PF/FB/eBay inventory tables", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Manage Open House Dates for ProFound Finds storefront (add/edit/delete event dates shown publicly)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Edit staff first/last name, display name, and phone from /admin/users — name syncs to Clerk and Airtable; phone syncs to Airtable only", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
 ];
 
 function CheckCell({ value }: { value: Check | undefined }) {
