@@ -18,6 +18,7 @@ export type AdminUser = {
   hourlyRate?: number;    // Staff hourly pay rate
   address?: string;       // Home/work address for location map
   pinColor?: string;      // Hex color for map pin
+  phone?: string;         // Staff phone number
   isVendor?: boolean;     // Has a LocalVendors record with this ClerkUserId
   isPartner?: boolean;    // publicMetadata.userType === "partner"
   memberships: Array<{
@@ -49,6 +50,7 @@ export default async function AdminUsersPage() {
   const staffHourlyRateByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.hourlyRate]));
   const staffAddressByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.address]));
   const staffPinColorByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.pinColor]));
+  const staffPhoneByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.phone]));
   const vendorClerkIds = new Set(localVendors.map(v => v.clerkUserId).filter(Boolean));
 
   const tenantMap = new Map(tenants.map(t => [t.id, t.name]));
@@ -80,6 +82,7 @@ export default async function AdminUsersPage() {
     hourlyRate: staffHourlyRateByClerkId.get(u.id),
     address: staffAddressByClerkId.get(u.id),
     pinColor: staffPinColorByClerkId.get(u.id),
+    phone: staffPhoneByClerkId.get(u.id),
     isVendor: vendorClerkIds.has(u.id),
     isPartner: (u.publicMetadata as { userType?: string })?.userType === "partner",
     memberships: membershipsByUser.get(u.id) ?? [],

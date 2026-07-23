@@ -311,7 +311,6 @@ function StaffModal({ member, onClose, onSaved }: ModalProps) {
 export function StaffClient({ initialStaff }: Props) {
   const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
   const [page, setPage] = useState(1);
-  const [showModal, setShowModal] = useState(false);
   const [editMember, setEditMember] = useState<StaffMember | undefined>(undefined);
   const [removing, setRemoving] = useState<string | null>(null);
   const [resending, setResending] = useState<string | null>(null);
@@ -329,9 +328,8 @@ export function StaffClient({ initialStaff }: Props) {
     }).catch(() => {});
   }, []);
 
-  function openNew() { setEditMember(undefined); setShowModal(true); }
-  function openEdit(m: StaffMember) { setEditMember(m); setShowModal(true); }
-  function closeModal() { setShowModal(false); setEditMember(undefined); }
+  function openEdit(m: StaffMember) { setEditMember(m); }
+  function closeModal() { setEditMember(undefined); }
 
   function handleSaved(saved: StaffMember) {
     setStaff(prev => {
@@ -384,20 +382,11 @@ export function StaffClient({ initialStaff }: Props) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">{staff.length} staff member{staff.length !== 1 ? "s" : ""}</p>
-        <button
-          onClick={openNew}
-          className="px-4 py-2 rounded-xl text-sm bg-forest-600 text-white hover:bg-forest-500 transition-colors font-medium"
-        >
-          + Add Staff
-        </button>
       </div>
 
       {staff.length === 0 ? (
         <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8 text-center text-gray-500">
           <p className="text-sm">No staff members added yet.</p>
-          <button onClick={openNew} className="mt-2 text-sm text-forest-400 hover:text-forest-300 transition-colors">
-            Add the first staff member
-          </button>
         </div>
       ) : (
         <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
@@ -487,7 +476,7 @@ export function StaffClient({ initialStaff }: Props) {
         </div>
       )}
 
-      {showModal && (
+      {editMember !== undefined && (
         <StaffModal member={editMember} onClose={closeModal} onSaved={handleSaved} />
       )}
     </div>

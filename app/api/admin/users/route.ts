@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { revalidateTag } from "next/cache";
 import { Resend } from "resend";
 import { isTTTAdmin } from "@/lib/config";
-import { upsertStaffMember, getMembershipsForUser, deleteMembership, getStaffMember, deleteStaffMember, findReferralContactByEmail, findReferralContactByClerkUserId, setReferralContactClerkUserId } from "@/lib/airtable";
+import { upsertStaffMember, updateStaffMember, getMembershipsForUser, deleteMembership, getStaffMember, deleteStaffMember, findReferralContactByEmail, findReferralContactByClerkUserId, setReferralContactClerkUserId } from "@/lib/airtable";
 import { buildStaffWelcomeEmail } from "@/lib/email";
 import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 
@@ -189,6 +190,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     } catch (e) {
       console.error("deleteUser error:", e);
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  if (action === "updateProfile") {
+    const { firstName, lastName, phone, staffMemberId } = body;
+    if (!clerkUserId) return NextResponse.json({ error: "clerkUserId required" }, { status: 400 });
+    try {
+      // 1. Always update Clerk name
+      await client.users.updateUser(clerkUserId, {
+        firstName: (firstName ?? "").trim() || undefined,
+        lastName: (lastName ?? "").trim() || undefined,
+      });
+      // 2. Update Airtable StaffMembers if this is a staff user
+      if (staffMemberId) {
+        const displayName = [firstName, lastName].filter((s: string) => s?.trim()).join(" ").trim();
+        await updateStaffMember(staffMemberId, {
+          displayName: displayName || (firstName ?? "").trim(),
+          phone: (phone ?? "").trim() || undefined,
+        });
+        revalidateTag("staff-members");
+      }
+      const displayName = [firstName, lastName].filter((s: string) => s?.trim()).join(" ").trim();
+      return NextResponse.json({ success: true, name: displayName });
+    } catch (e) {
       return NextResponse.json({ error: String(e) }, { status: 500 });
     }
   }

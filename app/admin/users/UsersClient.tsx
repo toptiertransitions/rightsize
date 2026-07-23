@@ -190,6 +190,13 @@ interface ManageModalProps {
 
 function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDeleted }: ManageModalProps) {
   const [current, setCurrent] = useState(user);
+  const nameParts = user.name.trim().split(/\s+/);
+  const [firstName, setFirstName] = useState(nameParts[0] ?? "");
+  const [lastName, setLastName] = useState(nameParts.slice(1).join(" "));
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileSaved, setProfileSaved] = useState(false);
   const [addTenantId, setAddTenantId] = useState("");
   const [addRole, setAddRole] = useState<string>(PROJECT_ROLES[1]);
   const [loading, setLoading] = useState<string | null>(null);
@@ -223,6 +230,38 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
     const res = await fetch("/api/admin/memberships", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error((await res.json()).error ?? "Request failed");
     return res.json();
+  }
+
+  async function handleProfileSave() {
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileSaved(false);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "updateProfile",
+          clerkUserId: current.clerkUserId,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phone: phone.trim(),
+          staffMemberId: current.staffMemberId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save");
+      const newName = data.name || firstName.trim();
+      const updated = { ...current, name: newName, phone: phone.trim() || undefined };
+      setCurrent(updated);
+      onUpdate(updated);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2500);
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   async function handleRoleChange(membershipId: string, role: string) {
@@ -486,6 +525,58 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
         </div>
 
         <div className="px-6 py-5 space-y-6">
+
+          {/* Profile */}
+          <section>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Profile</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={e => setFirstName(e.target.value)}
+                    placeholder="Jane"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Last Name</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Smith"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              {current.staffMemberId && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder="(555) 555-5555"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleProfileSave}
+                  disabled={profileSaving}
+                  className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                >
+                  {profileSaving ? "Saving…" : profileSaved ? "Saved!" : "Save Profile"}
+                </button>
+                {profileSaved && <span className="text-xs text-forest-400">Changes saved</span>}
+                {profileError && <span className="text-xs text-red-400">{profileError}</span>}
+              </div>
+            </div>
+          </section>
 
           {/* System Role */}
           <section>
@@ -1073,6 +1164,45 @@ function LookupPanel({ tenants, onFound }: { tenants: Array<{ id: string; name: 
   );
 }
 
+// ─── Sort / Filter helpers ─────────────────────────────────────────────────────
+
+type SortKey = "name" | "email" | "joined" | "lastActive" | "type";
+type TypeFilter = "All" | "TTTAdmin" | "TTTManager" | "TTTSales" | "TTTStaff" | "Client" | "Partner" | "Vendor" | "None";
+
+function getCategory(u: AdminUser): TypeFilter {
+  if (u.systemRole === "TTTAdmin") return "TTTAdmin";
+  if (u.systemRole === "TTTManager") return "TTTManager";
+  if (u.systemRole === "TTTSales") return "TTTSales";
+  if (u.systemRole === "TTTStaff") return "TTTStaff";
+  if (u.isPartner) return "Partner";
+  if (u.isVendor) return "Vendor";
+  if (u.memberships.length > 0) return "Client";
+  return "None";
+}
+
+const TYPE_FILTER_LABELS: Record<TypeFilter, string> = {
+  All: "All",
+  TTTAdmin: "Admin",
+  TTTManager: "Manager",
+  TTTSales: "Sales",
+  TTTStaff: "Staff",
+  Client: "Client",
+  Partner: "Partner",
+  Vendor: "Vendor",
+  None: "No Access",
+};
+
+function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
+  return (
+    <svg className={`w-3 h-3 ml-1 inline-block ${active ? "text-white" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      {!active || dir === "asc"
+        ? <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+        : <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      }
+    </svg>
+  );
+}
+
 // ─── Main Users Client ─────────────────────────────────────────────────────────
 
 interface Props {
@@ -1085,6 +1215,9 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [managing, setManaging] = useState<AdminUser | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [inviteSent, setInviteSent] = useState<{ userName: string; email: string } | null>(null);
@@ -1123,11 +1256,36 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
     [tenants]
   );
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return users;
-    const q = search.toLowerCase();
-    return users.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  }, [users, search]);
+  const filteredSorted = useMemo(() => {
+    let list = users;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(u =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.phone ?? "").includes(q)
+      );
+    }
+    if (typeFilter !== "All") {
+      list = list.filter(u => getCategory(u) === typeFilter);
+    }
+    list = [...list].sort((a, b) => {
+      let va: string, vb: string;
+      if (sortKey === "name") { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+      else if (sortKey === "email") { va = a.email.toLowerCase(); vb = b.email.toLowerCase(); }
+      else if (sortKey === "joined") { va = a.createdAt; vb = b.createdAt; }
+      else if (sortKey === "lastActive") { va = a.lastActiveAt ?? ""; vb = b.lastActiveAt ?? ""; }
+      else { va = getCategory(a); vb = getCategory(b); }
+      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [users, search, typeFilter, sortKey, sortDir]);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  }
 
   function handleUpdate(updated: AdminUser) {
     setUsers(prev => prev.map(u => u.clerkUserId === updated.clerkUserId ? updated : u));
@@ -1203,7 +1361,7 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
           </svg>
           <input
             type="text"
-            placeholder="Search name or email…"
+            placeholder="Search name, email…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-64 h-10 pl-9 pr-3 rounded-xl border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500 placeholder-gray-500"
@@ -1214,21 +1372,61 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
 
       <LookupPanel tenants={tenants} onFound={handleFoundUser} />
 
+      {/* Type filter */}
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {(["All", "TTTAdmin", "TTTManager", "TTTSales", "TTTStaff", "Client", "Partner", "Vendor", "None"] as TypeFilter[]).map(f => (
+          <button
+            key={f}
+            onClick={() => { setTypeFilter(f); setPage(1); }}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+              typeFilter === f
+                ? "bg-forest-600 text-white"
+                : "bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+            }`}
+          >
+            {TYPE_FILTER_LABELS[f]}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-gray-600 self-center">
+          {filteredSorted.length} of {users.length}
+        </span>
+      </div>
+
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
-              <th className="text-left px-5 py-3 font-semibold text-gray-400">User</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-400">User Type</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden md:table-cell">Projects</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden lg:table-cell">Joined</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-400 hidden xl:table-cell">Last Active</th>
-              <th className="text-left px-5 py-3 font-semibold text-gray-400">Status</th>
-              <th className="px-5 py-3 w-24"></th>
+            <tr className="border-b border-gray-800 bg-gray-900">
+              <th
+                onClick={() => handleSort("name")}
+                className="text-left px-5 py-3 font-semibold text-gray-400 text-xs uppercase tracking-wide cursor-pointer hover:text-white select-none"
+              >
+                User <SortIcon active={sortKey === "name"} dir={sortDir} />
+              </th>
+              <th
+                onClick={() => handleSort("type")}
+                className="text-left px-5 py-3 font-semibold text-gray-400 text-xs uppercase tracking-wide cursor-pointer hover:text-white select-none"
+              >
+                Type <SortIcon active={sortKey === "type"} dir={sortDir} />
+              </th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-400 text-xs uppercase tracking-wide hidden md:table-cell">Projects</th>
+              <th
+                onClick={() => handleSort("joined")}
+                className="text-left px-5 py-3 font-semibold text-gray-400 text-xs uppercase tracking-wide cursor-pointer hover:text-white select-none hidden lg:table-cell"
+              >
+                Joined <SortIcon active={sortKey === "joined"} dir={sortDir} />
+              </th>
+              <th
+                onClick={() => handleSort("lastActive")}
+                className="text-left px-5 py-3 font-semibold text-gray-400 text-xs uppercase tracking-wide cursor-pointer hover:text-white select-none hidden xl:table-cell"
+              >
+                Last Active <SortIcon active={sortKey === "lastActive"} dir={sortDir} />
+              </th>
+              <th className="text-left px-5 py-3 font-semibold text-gray-400 text-xs uppercase tracking-wide">Status</th>
+              <th className="px-5 py-3 w-32"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(user => (
+            {filteredSorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(user => (
               <tr key={user.clerkUserId} className="hover:bg-gray-800/50 transition-colors">
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
@@ -1301,14 +1499,14 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {filteredSorted.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-5 py-12 text-center text-gray-600">No users found.</td>
               </tr>
             )}
           </tbody>
         </table>
-        <Pagination currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination currentPage={page} totalItems={filteredSorted.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </>
   );

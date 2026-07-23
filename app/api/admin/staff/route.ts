@@ -80,36 +80,54 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
+    let existing: Awaited<ReturnType<typeof getStaffMemberById>> = null;
+    const needsClerkSync = fields.email || fields.displayName !== undefined;
+    if (needsClerkSync) {
+      existing = await getStaffMemberById(id);
+    }
+
     // If email is changing, update Clerk too so login + invite emails use the new address
-    if (fields.email) {
-      const existing = await getStaffMemberById(id);
-      if (existing?.clerkUserId && existing.email !== fields.email) {
-        const client = await clerkClient();
-        try {
-          const clerkUser = await client.users.getUser(existing.clerkUserId);
-          // Create the new address as primary + verified (admin bypass, no verification email)
-          const created = await client.emailAddresses.createEmailAddress({
-            userId: existing.clerkUserId,
-            emailAddress: fields.email,
-            primary: true,
-            verified: true,
-          });
-          // Make it primary
-          await client.users.updateUser(existing.clerkUserId, {
-            primaryEmailAddressID: created.id,
-          });
-          // Remove the old primary address
-          const oldId = clerkUser.primaryEmailAddressId;
-          if (oldId && oldId !== created.id) {
-            await client.emailAddresses.deleteEmailAddress(oldId).catch(() => {});
-          }
-        } catch (clerkErr) {
-          console.error("[staff PATCH] Clerk email update failed:", clerkErr);
-          return NextResponse.json(
-            { error: `Airtable saved but Clerk update failed: ${String(clerkErr)}` },
-            { status: 500 }
-          );
+    if (fields.email && existing?.clerkUserId && existing.email !== fields.email) {
+      const client = await clerkClient();
+      try {
+        const clerkUser = await client.users.getUser(existing.clerkUserId);
+        // Create the new address as primary + verified (admin bypass, no verification email)
+        const created = await client.emailAddresses.createEmailAddress({
+          userId: existing.clerkUserId,
+          emailAddress: fields.email,
+          primary: true,
+          verified: true,
+        });
+        // Make it primary
+        await client.users.updateUser(existing.clerkUserId, {
+          primaryEmailAddressID: created.id,
+        });
+        // Remove the old primary address
+        const oldId = clerkUser.primaryEmailAddressId;
+        if (oldId && oldId !== created.id) {
+          await client.emailAddresses.deleteEmailAddress(oldId).catch(() => {});
         }
+      } catch (clerkErr) {
+        console.error("[staff PATCH] Clerk email update failed:", clerkErr);
+        return NextResponse.json(
+          { error: `Airtable saved but Clerk update failed: ${String(clerkErr)}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // If displayName is changing, sync name to Clerk (non-fatal)
+    if (fields.displayName !== undefined && existing?.clerkUserId) {
+      const parts = (fields.displayName as string).trim().split(/\s+/);
+      try {
+        const client = await clerkClient();
+        await client.users.updateUser(existing.clerkUserId, {
+          firstName: parts[0] ?? "",
+          lastName: parts.slice(1).join(" ") || undefined,
+        });
+      } catch (clerkErr) {
+        console.error("[staff PATCH] Clerk name update failed:", clerkErr);
+        // Non-fatal: Airtable DisplayName will still update
       }
     }
 
