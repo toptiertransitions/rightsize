@@ -83,31 +83,19 @@ function audienceLabel(a: ContentAudience): string {
 }
 
 // ─── Download URL builder ─────────────────────────────────────────────────────
-// Cloudinary raw URLs (PDFs, videos) have no file extension and a random ID as
-// the filename. fl_attachment forces the browser to save with a clean name + ext.
+// Cloudinary raw URLs (PDFs, videos) have no extension and use a random internal
+// ID as the filename. Route those through our proxy so the browser gets the
+// correct Content-Type and a clean title-based filename. Images are served
+// directly since their Cloudinary URLs already carry the right extension.
 
-const CONTENT_TYPE_EXT: Partial<Record<ContentItemType, string>> = {
-  PDF: ".pdf",
-  Video: ".mp4",
-};
+const PROXIED_TYPES = new Set<ContentItemType>(["PDF", "Video"]);
 
 function buildDownloadUrl(item: ContentItem): string {
-  const url = item.fileUrl;
-  if (!url) return item.linkUrl ?? "";
-
-  const ext = CONTENT_TYPE_EXT[item.contentType];
-  if (!ext) return url; // Images already have the correct extension in the URL
-
-  const safeName = (item.title || "file")
-    .replace(/[^\w\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "_")
-    .slice(0, 80);
-
-  const filename = `${safeName}${ext}`;
-  const idx = url.indexOf("/upload/");
-  if (idx === -1) return url;
-  return `${url.slice(0, idx + 8)}fl_attachment:${filename}/${url.slice(idx + 8)}`;
+  if (!item.fileUrl) return item.linkUrl ?? "";
+  if (PROXIED_TYPES.has(item.contentType)) {
+    return `/api/content/items/${item.id}/file`;
+  }
+  return item.fileUrl;
 }
 
 // ─── Thumbnail component ──────────────────────────────────────────────────────
