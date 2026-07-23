@@ -28,10 +28,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   if (!body.name) return NextResponse.json({ error: "Name required" }, { status: 400 });
 
-  const category = await createContentCategory({
-    name: body.name,
-    color: body.color ?? "#6b7280",
-    sortOrder: body.sortOrder ?? 0,
-  });
-  return NextResponse.json({ category });
+  try {
+    const category = await createContentCategory({
+      name: body.name,
+      color: body.color ?? "#6b7280",
+      sortOrder: body.sortOrder ?? 0,
+    });
+    return NextResponse.json({ category });
+  } catch (e) {
+    console.error("[content/categories POST]", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }

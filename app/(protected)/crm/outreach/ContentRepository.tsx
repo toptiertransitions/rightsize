@@ -750,17 +750,25 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
   const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState("");
 
   async function add() {
     if (!newName.trim()) return;
     setSaving(true);
-    const res = await fetch("/api/content/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newName.trim(), color: newColor, sortOrder: list.length }) });
-    const data = await res.json();
-    const updated = [...list, data.category];
-    setList(updated);
-    onChange(updated);
-    setNewName("");
-    setSaving(false);
+    setAddError("");
+    try {
+      const res = await fetch("/api/content/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newName.trim(), color: newColor, sortOrder: list.length }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.category) { setAddError(data.error ?? "Failed to create category"); return; }
+      const updated = [...list, data.category];
+      setList(updated);
+      onChange(updated);
+      setNewName("");
+    } catch {
+      setAddError("Unexpected error — please try again");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function remove(id: string) {
@@ -819,6 +827,7 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
               <button key={c} onClick={() => setNewColor(c)} className={cn("w-6 h-6 rounded-full border-2 transition-transform hover:scale-110", newColor === c ? "border-gray-800 scale-110" : "border-transparent")} style={{ background: c }} />
             ))}
           </div>
+          {addError && <p className="text-xs text-red-600">{addError}</p>}
           <button onClick={add} disabled={!newName.trim() || saving}
             className="w-full py-2 bg-forest-600 text-white text-sm font-medium rounded-xl hover:bg-forest-700 disabled:opacity-50 transition-colors">
             {saving ? "Adding…" : "Add Category"}
