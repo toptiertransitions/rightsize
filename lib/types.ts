@@ -1472,9 +1472,17 @@ export interface LoyaltyStatusResponse {
 // ─── Content Repository ───────────────────────────────────────────────────────
 
 export type ContentItemType = "PDF" | "Image" | "Video" | "URL" | "LinkedIn";
-export type ContentAudience = "Clients" | "ReferralPartners" | "Both";
+export type ContentAudience = "Clients" | "ReferralPartners" | "Both" | "InternalTraining";
 export type ContentStatus = "Draft" | "Active" | "Archived";
-export type ContentPipelineStage = "All" | "Lead" | "Qualifying" | "Proposing" | "Won";
+export type ContentPipelineStage =
+  // Shared
+  | "All"
+  // Client pipeline
+  | "Lead" | "Qualifying" | "Proposing" | "Won"
+  // Referral Partner pipeline
+  | "Identified" | "Met" | "Agreed to Refer" | "Shared Leads" | "Active Referral" | "Inactive Referral"
+  // Internal Training
+  | "Onboarding" | "New Feature" | "Ad Hoc";
 
 export interface ContentCategory {
   id: string;

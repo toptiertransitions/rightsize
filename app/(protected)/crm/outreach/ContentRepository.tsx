@@ -14,15 +14,43 @@ const AUDIENCES: { key: ContentAudience | "All"; label: string }[] = [
   { key: "Clients", label: "Clients" },
   { key: "ReferralPartners", label: "Referral Partners" },
   { key: "Both", label: "Both" },
+  { key: "InternalTraining", label: "Internal Training" },
 ];
 
-const STAGES: { key: ContentPipelineStage | "All"; label: string }[] = [
-  { key: "All", label: "All Stages" },
-  { key: "Lead", label: "Lead" },
-  { key: "Qualifying", label: "Qualifying" },
-  { key: "Proposing", label: "Proposing" },
-  { key: "Won", label: "Won" },
-];
+type StageOption = { key: ContentPipelineStage | "All"; label: string };
+
+const STAGES_BY_AUDIENCE: Record<ContentAudience | "All", StageOption[]> = {
+  All: [{ key: "All", label: "All Stages" }],
+  Both: [
+    { key: "All", label: "All Stages" },
+    { key: "Lead", label: "Lead" },
+    { key: "Qualifying", label: "Qualifying" },
+    { key: "Proposing", label: "Proposing" },
+    { key: "Won", label: "Won" },
+  ],
+  Clients: [
+    { key: "All", label: "All Stages" },
+    { key: "Lead", label: "Lead" },
+    { key: "Qualifying", label: "Qualifying" },
+    { key: "Proposing", label: "Proposing" },
+    { key: "Won", label: "Won" },
+  ],
+  ReferralPartners: [
+    { key: "All", label: "All Stages" },
+    { key: "Identified", label: "Identified" },
+    { key: "Met", label: "Met" },
+    { key: "Agreed to Refer", label: "Agreed to Refer" },
+    { key: "Shared Leads", label: "Shared Leads" },
+    { key: "Active Referral", label: "Active Referral" },
+    { key: "Inactive Referral", label: "Inactive Referral" },
+  ],
+  InternalTraining: [
+    { key: "All", label: "All Stages" },
+    { key: "Onboarding", label: "Onboarding" },
+    { key: "New Feature", label: "New Feature" },
+    { key: "Ad Hoc", label: "Ad Hoc" },
+  ],
+};
 
 const TYPES: { key: ContentItemType | "All"; label: string; icon: string }[] = [
   { key: "All", label: "All Types", icon: "◈" },
@@ -45,7 +73,14 @@ const AUDIENCE_COLORS: Record<ContentAudience, string> = {
   Clients: "bg-emerald-50 text-emerald-700",
   ReferralPartners: "bg-violet-50 text-violet-700",
   Both: "bg-amber-50 text-amber-700",
+  InternalTraining: "bg-sky-50 text-sky-700",
 };
+
+function audienceLabel(a: ContentAudience): string {
+  if (a === "ReferralPartners") return "Partners";
+  if (a === "InternalTraining") return "Training";
+  return a;
+}
 
 // ─── Thumbnail component ──────────────────────────────────────────────────────
 
@@ -154,7 +189,7 @@ function ContentCard({
             {item.contentType === "LinkedIn" ? "LinkedIn" : item.contentType}
           </span>
           <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", AUDIENCE_COLORS[item.audience])}>
-            {item.audience === "ReferralPartners" ? "Partners" : item.audience}
+            {audienceLabel(item.audience)}
           </span>
           {item.pipelineStage !== "All" && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-forest-50 text-forest-700 font-medium">{item.pipelineStage}</span>
@@ -252,7 +287,7 @@ function ContentDetailPanel({
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-500 truncate">{item.contentType} · {item.audience === "ReferralPartners" ? "Partners" : item.audience}</p>
+            <p className="text-xs text-gray-500 truncate">{item.contentType} · {audienceLabel(item.audience)}</p>
           </div>
           {isAdmin && (
             <button onClick={onEdit} className="text-xs text-forest-600 hover:text-forest-700 font-medium px-3 py-1.5 rounded-lg border border-forest-200 hover:bg-forest-50 transition-colors">
@@ -558,22 +593,21 @@ function ContentFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Audience</label>
-              <select value={audience} onChange={e => setAudience(e.target.value as ContentAudience)}
+              <select value={audience} onChange={e => { setAudience(e.target.value as ContentAudience); setPipelineStage("All"); }}
                 className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500">
                 <option value="Both">Both</option>
                 <option value="Clients">Clients</option>
                 <option value="ReferralPartners">Referral Partners</option>
+                <option value="InternalTraining">Internal Training</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pipeline Stage</label>
               <select value={pipelineStage} onChange={e => setPipelineStage(e.target.value as ContentPipelineStage)}
                 className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500">
-                <option value="All">All Stages</option>
-                <option value="Lead">Lead</option>
-                <option value="Qualifying">Qualifying</option>
-                <option value="Proposing">Proposing</option>
-                <option value="Won">Won</option>
+                {STAGES_BY_AUDIENCE[audience].map(s => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -933,16 +967,16 @@ export default function ContentRepository({ isAdmin, currentUserId }: Props) {
         {/* Audience */}
         <div className="flex rounded-xl border border-gray-200 overflow-hidden">
           {AUDIENCES.map(a => (
-            <button key={a.key} onClick={() => setAudienceFilter(a.key as ContentAudience | "All")}
+            <button key={a.key} onClick={() => { setAudienceFilter(a.key as ContentAudience | "All"); setStageFilter("All"); }}
               className={cn("px-3 py-1 text-xs font-medium transition-colors", audienceFilter === a.key ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
               {a.label}
             </button>
           ))}
         </div>
 
-        {/* Stage */}
+        {/* Stage — options change based on selected audience */}
         <div className="flex rounded-xl border border-gray-200 overflow-hidden">
-          {STAGES.map(s => (
+          {STAGES_BY_AUDIENCE[audienceFilter].map(s => (
             <button key={s.key} onClick={() => setStageFilter(s.key as ContentPipelineStage | "All")}
               className={cn("px-3 py-1 text-xs font-medium transition-colors", stageFilter === s.key ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
               {s.label}
@@ -1044,7 +1078,7 @@ export default function ContentRepository({ isAdmin, currentUserId }: Props) {
                     <td className="px-4 py-3">
                       <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", TYPE_COLORS[item.contentType])}>{item.contentType}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{item.audience === "ReferralPartners" ? "Partners" : item.audience}</td>
+                    <td className="px-4 py-3 text-gray-600">{audienceLabel(item.audience)}</td>
                     <td className="px-4 py-3 text-gray-600">{item.pipelineStage}</td>
                     <td className="px-4 py-3">
                       {cat && (
