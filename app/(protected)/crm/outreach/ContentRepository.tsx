@@ -82,6 +82,34 @@ function audienceLabel(a: ContentAudience): string {
   return a;
 }
 
+// ─── Download URL builder ─────────────────────────────────────────────────────
+// Cloudinary raw URLs (PDFs, videos) have no file extension and a random ID as
+// the filename. fl_attachment forces the browser to save with a clean name + ext.
+
+const CONTENT_TYPE_EXT: Partial<Record<ContentItemType, string>> = {
+  PDF: ".pdf",
+  Video: ".mp4",
+};
+
+function buildDownloadUrl(item: ContentItem): string {
+  const url = item.fileUrl;
+  if (!url) return item.linkUrl ?? "";
+
+  const ext = CONTENT_TYPE_EXT[item.contentType];
+  if (!ext) return url; // Images already have the correct extension in the URL
+
+  const safeName = (item.title || "file")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+
+  const filename = `${safeName}${ext}`;
+  const idx = url.indexOf("/upload/");
+  if (idx === -1) return url;
+  return `${url.slice(0, idx + 8)}fl_attachment:${filename}/${url.slice(idx + 8)}`;
+}
+
 // ─── Thumbnail component ──────────────────────────────────────────────────────
 
 function ContentThumbnail({ item, category, size = "lg" }: { item: ContentItem; category?: ContentCategory; size?: "lg" | "sm" }) {
@@ -274,7 +302,7 @@ function ContentDetailPanel({
     setSubmitting(false);
   }
 
-  const url = item.fileUrl || item.linkUrl;
+  const url = item.fileUrl ? buildDownloadUrl(item) : item.linkUrl;
   const isExternal = !item.fileUrl && item.linkUrl;
 
   return (
