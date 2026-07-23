@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant, getTenantById, getSystemRole } from "@/lib/airtable";
+import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant, getTenantById, getSystemRole, getStaffMembers } from "@/lib/airtable";
 import { createOrUpdateCalendarEvent, syncCalendarEventRSVPs, cancelCalendarEvent } from "@/lib/googleCalendar";
+import { buildShiftDeclinedEmail } from "@/lib/email";
+import { Resend } from "resend";
 import type { PlanHelper } from "@/lib/types";
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
 export async function POST(req: NextRequest) {
@@ -130,7 +134,53 @@ export async function POST(req: NextRequest) {
         return rsvp ? { ...h, status: rsvp.status, comment: rsvp.comment } : h;
       });
 
+      // Detect helpers that newly transitioned to "declined"
+      const newlyDeclined = updatedHelpers.filter((h) => {
+        const prev = (entry.helpers || []).find((p) => p.email.toLowerCase() === h.email.toLowerCase());
+        return h.status === "declined" && prev?.status !== "declined";
+      });
+
       const updated = await updatePlanEntry(planEntryId, { helpers: updatedHelpers });
+
+      // Fire-and-forget decline notifications
+      if (newlyDeclined.length > 0) {
+        (async () => {
+          try {
+            const [allStaff, tenant] = await Promise.all([
+              getStaffMembers(),
+              getTenantById(entry.tenantId).catch(() => null),
+            ]);
+            const recipientEmails = allStaff
+              .filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email)
+              .map((s) => s.email);
+            if (recipientEmails.length === 0) return;
+
+            const projectName = tenant?.name ?? "Unknown Project";
+            const planUrl = `${APP_URL}/plan?tenantId=${entry.tenantId}`;
+
+            for (const helper of newlyDeclined) {
+              const staffMember = allStaff.find((s) => s.email.toLowerCase() === helper.email.toLowerCase());
+              const html = buildShiftDeclinedEmail({
+                declinedByEmail: helper.email,
+                declinedByName: staffMember?.displayName,
+                shiftDate: entry.date,
+                activity: entry.activity,
+                projectName,
+                planUrl,
+              });
+              await resend.emails.send({
+                from: process.env.RESEND_FROM_EMAIL || "notifications@toptiertransitions.com",
+                to: recipientEmails,
+                subject: `Shift Declined — ${projectName} · ${entry.date}`,
+                html,
+              });
+            }
+          } catch (e) {
+            console.error("[plan/calendar sync] decline notification failed:", e);
+          }
+        })();
+      }
+
       return NextResponse.json({ entry: updated });
     }
 

@@ -934,10 +934,12 @@ export function buildTimeOffEmail({
   staffName,
   entries,
   opsUrl,
+  conflictingShifts = [],
 }: {
   staffName: string;
   entries: Array<{ date: string; allDay: boolean; startTime?: string; endTime?: string }>;
   opsUrl: string;
+  conflictingShifts?: Array<{ date: string; activity: string; projectName: string; startTime?: string; endTime?: string }>;
 }): string {
   function fmt12h(t: string) {
     const [h, m] = t.split(":").map(Number);
@@ -957,6 +959,31 @@ export function buildTimeOffEmail({
       <td style="padding:10px 16px;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${timeStr}</td>
     </tr>`;
   }).join("");
+
+  const conflictBlock = conflictingShifts.length > 0 ? `
+    <div style="background-color:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:bold;color:#c2410c;">
+        \u26a0 Scheduled Shift Conflict${conflictingShifts.length > 1 ? "s" : ""}
+      </p>
+      <p style="margin:0 0 12px;font-size:13px;color:#92400e;line-height:1.5;">
+        ${staffName} is currently scheduled on the following Daily Focus Shift${conflictingShifts.length > 1 ? "s" : ""} during this time off. You may need to reassign.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fed7aa;border-radius:6px;overflow:hidden;">
+        <tr style="background-color:#ffedd5;">
+          <th style="padding:8px 14px;text-align:left;font-size:11px;color:#c2410c;font-weight:600;text-transform:uppercase;">Date</th>
+          <th style="padding:8px 14px;text-align:left;font-size:11px;color:#c2410c;font-weight:600;text-transform:uppercase;">Activity</th>
+          <th style="padding:8px 14px;text-align:left;font-size:11px;color:#c2410c;font-weight:600;text-transform:uppercase;">Project</th>
+        </tr>
+        ${conflictingShifts.map(s => {
+          const timeStr = s.startTime ? ` (${fmt12h(s.startTime)}${s.endTime ? `\u2013${fmt12h(s.endTime)}` : ""})` : "";
+          return `<tr>
+            <td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #fed7aa;">${fmtDate(s.date)}${timeStr}</td>
+            <td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #fed7aa;">${s.activity}</td>
+            <td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #fed7aa;">${s.projectName}</td>
+          </tr>`;
+        }).join("")}
+      </table>
+    </div>` : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -978,6 +1005,7 @@ export function buildTimeOffEmail({
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
               Just a heads up \u2014 <strong>${staffName}</strong> has marked the following date${entries.length > 1 ? "s" : ""} as unavailable:
             </p>
+            ${conflictBlock}
             <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
               <tr style="background-color:#f9fafb;">
                 <th style="padding:10px 16px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Date</th>
@@ -996,6 +1024,82 @@ export function buildTimeOffEmail({
               </tr>
             </table>
             <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions \u2014 Internal Notification</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ─── Shift Declined Notification Email ───────────────────────────────────────
+export function buildShiftDeclinedEmail({
+  declinedByEmail,
+  declinedByName,
+  shiftDate,
+  activity,
+  projectName,
+  planUrl,
+}: {
+  declinedByEmail: string;
+  declinedByName?: string;
+  shiftDate: string;
+  activity: string;
+  projectName: string;
+  planUrl: string;
+}): string {
+  function fmtDate(d: string) {
+    return new Date(d + "T12:00:00").toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric", year: "numeric",
+    });
+  }
+  const who = declinedByName ? `${declinedByName} (${declinedByEmail})` : declinedByEmail;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Shift Declined — ${projectName}</title></head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+            <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Shift Declined — Action May Be Required</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            <p style="margin:0 0 8px;font-size:16px;color:#1a1a1a;font-weight:bold;">Shift Declined</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+              <strong>${who}</strong> has declined their calendar invitation for the following shift:
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
+              <tr style="background-color:#f9fafb;">
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;width:120px;">Project</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;font-weight:600;">${projectName}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Date</td>
+                <td style="padding:10px 16px;font-size:14px;color:#374151;">${fmtDate(shiftDate)}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Activity</td>
+                <td style="padding:10px 16px;font-size:14px;color:#374151;">${activity}</td>
+              </tr>
+            </table>
+            <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+              You may want to assign a replacement or adjust the schedule for this project.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background-color:#2E6B4F;border-radius:8px;padding:13px 28px;">
+                  <a href="${planUrl}" style="color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">View Project Plan →</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions — Internal Notification</p>
           </td>
         </tr>
       </table>

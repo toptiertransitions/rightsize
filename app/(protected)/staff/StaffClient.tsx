@@ -1579,6 +1579,76 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
+  // Add Staff Time Off modal state
+  const [showAddTO, setShowAddTO] = useState(false);
+  const [addTOStaffId, setAddTOStaffId] = useState("");
+  const [addTODateFrom, setAddTODateFrom] = useState("");
+  const [addTODateTo, setAddTODateTo] = useState("");
+  const [addTOIsRange, setAddTOIsRange] = useState(false);
+  const [addTOAllDay, setAddTOAllDay] = useState(true);
+  const [addTOStartTime, setAddTOStartTime] = useState("");
+  const [addTOEndTime, setAddTOEndTime] = useState("");
+  const [addTOSaving, setAddTOSaving] = useState(false);
+  const [addTOError, setAddTOError] = useState("");
+  const [addTOSuccess, setAddTOSuccess] = useState("");
+  const [membersList, setMembersList] = useState(members);
+
+  async function handleAddTimeOff() {
+    if (!addTOStaffId || !addTODateFrom) {
+      setAddTOError("Please select a staff member and date.");
+      return;
+    }
+    setAddTOSaving(true);
+    setAddTOError("");
+    setAddTOSuccess("");
+
+    // Generate one entry per date in the range
+    const entries: Array<{ id: string; date: string; allDay: boolean; startTime?: string; endTime?: string }> = [];
+    const start = new Date(addTODateFrom + "T12:00:00");
+    const end = addTOIsRange && addTODateTo ? new Date(addTODateTo + "T12:00:00") : start;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().slice(0, 10);
+      entries.push({
+        id: Math.random().toString(36).slice(2, 10),
+        date: dateStr,
+        allDay: addTOAllDay,
+        startTime: !addTOAllDay && addTOStartTime ? addTOStartTime : undefined,
+        endTime: !addTOAllDay && addTOEndTime ? addTOEndTime : undefined,
+      });
+    }
+
+    try {
+      const res = await fetch("/api/admin/staff-time-off", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffMemberId: addTOStaffId, entries }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to add time off");
+
+      // Update local members list to reflect the new time off
+      setMembersList(prev => prev.map(m => {
+        if (m.id !== addTOStaffId) return m;
+        const merged = [...(m.timeOff ?? []), ...entries.filter(e => !(m.timeOff ?? []).some(t => t.date === e.date))];
+        return { ...m, timeOff: merged };
+      }));
+
+      setAddTOSuccess(`Added ${data.added} time-off day${data.added !== 1 ? "s" : ""}.`);
+      // Reset form
+      setAddTODateFrom("");
+      setAddTODateTo("");
+      setAddTOIsRange(false);
+      setAddTOAllDay(true);
+      setAddTOStartTime("");
+      setAddTOEndTime("");
+      setTimeout(() => { setShowAddTO(false); setAddTOStaffId(""); setAddTOSuccess(""); }, 1500);
+    } catch (e) {
+      setAddTOError(e instanceof Error ? e.message : "Unexpected error");
+    } finally {
+      setAddTOSaving(false);
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       {/* Page header */}
@@ -1631,17 +1701,28 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
       {/* Staff Availability Tab */}
       {activeTab === "availability" && (
         <div>
-          <div className="mb-6">
+          <div className="mb-6 flex items-center gap-4">
             <p className="text-sm text-gray-500">
-              {members.length} active staff member{members.length !== 1 ? "s" : ""}.
+              {membersList.length} active staff member{membersList.length !== 1 ? "s" : ""}.
               {totalOut > 0 && <span className="ml-2 text-amber-600 font-medium">{totalOut} out today.</span>}
             </p>
+            {canEdit && (
+              <button
+                onClick={() => { setShowAddTO(true); setAddTOError(""); setAddTOSuccess(""); }}
+                className="ml-auto flex items-center gap-1.5 h-9 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Staff Time Off
+              </button>
+            )}
           </div>
-          {members.length === 0 ? (
+          {membersList.length === 0 ? (
             <p className="text-sm text-gray-400">No active staff members found.</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {members.map(m => <MemberCard key={m.id} member={m} />)}
+              {membersList.map(m => <MemberCard key={m.id} member={m} />)}
             </div>
           )}
           <div className="mt-10 pt-6 border-t border-gray-100 flex items-center gap-6 text-xs text-gray-400">
@@ -1655,6 +1736,139 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
             </div>
             <p className="ml-auto italic">Staff update their own availability from the Home page.</p>
           </div>
+
+          {/* Add Staff Time Off Modal */}
+          {showAddTO && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-base font-bold text-gray-900">Add Staff Time Off</h2>
+                  <button onClick={() => setShowAddTO(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Staff selector */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Staff Member</label>
+                    <select
+                      value={addTOStaffId}
+                      onChange={e => setAddTOStaffId(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    >
+                      <option value="">Select a staff member…</option>
+                      {membersList.map(m => (
+                        <option key={m.id} value={m.id}>{m.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Single day vs range toggle */}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setAddTOIsRange(false); setAddTODateTo(""); }}
+                      className={`flex-1 h-9 rounded-xl text-sm font-medium transition-colors ${!addTOIsRange ? "bg-forest-600 text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      Single Day
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddTOIsRange(true)}
+                      className={`flex-1 h-9 rounded-xl text-sm font-medium transition-colors ${addTOIsRange ? "bg-forest-600 text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      Date Range
+                    </button>
+                  </div>
+
+                  {/* Date picker(s) */}
+                  <div className={addTOIsRange ? "grid grid-cols-2 gap-3" : ""}>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        {addTOIsRange ? "From" : "Date"}
+                      </label>
+                      <input
+                        type="date"
+                        value={addTODateFrom}
+                        onChange={e => setAddTODateFrom(e.target.value)}
+                        className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                      />
+                    </div>
+                    {addTOIsRange && (
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
+                        <input
+                          type="date"
+                          value={addTODateTo}
+                          min={addTODateFrom}
+                          onChange={e => setAddTODateTo(e.target.value)}
+                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* All day toggle */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAddTOAllDay(v => !v)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${addTOAllDay ? "bg-forest-600" : "bg-gray-200"}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${addTOAllDay ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                    <span className="text-sm text-gray-700">All Day</span>
+                  </div>
+
+                  {/* Time range (if not all day) */}
+                  {!addTOAllDay && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Start Time</label>
+                        <input
+                          type="time"
+                          value={addTOStartTime}
+                          onChange={e => setAddTOStartTime(e.target.value)}
+                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">End Time</label>
+                        <input
+                          type="time"
+                          value={addTOEndTime}
+                          onChange={e => setAddTOEndTime(e.target.value)}
+                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {addTOError && <p className="text-sm text-red-600">{addTOError}</p>}
+                  {addTOSuccess && <p className="text-sm text-forest-600 font-medium">{addTOSuccess}</p>}
+
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      onClick={() => setShowAddTO(false)}
+                      className="flex-1 h-10 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddTimeOff}
+                      disabled={addTOSaving || !addTOStaffId || !addTODateFrom}
+                      className="flex-1 h-10 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                    >
+                      {addTOSaving ? "Saving…" : "Add Time Off"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getStaffMember, getSystemRole, updateStaffAvailability, getStaffMembers } from "@/lib/airtable";
+import { getStaffMember, getSystemRole, updateStaffAvailability, getStaffMembers, getPlanEntriesForDateRange, getTenants } from "@/lib/airtable";
 import { buildTimeOffEmail } from "@/lib/email";
 import { Resend } from "resend";
 import type { TimeOffEntry } from "@/lib/types";
@@ -62,10 +62,36 @@ export async function PATCH(req: NextRequest) {
 
           if (recipientEmails.length === 0) return;
 
+          // Check for conflicting Daily Focus Shifts on the time-off dates
+          const timeOffDates = new Set(newEntries.map((e) => e.date));
+          const minDate = [...timeOffDates].sort()[0];
+          const maxDate = [...timeOffDates].sort().at(-1)!;
+          const [planEntries, allTenants] = await Promise.all([
+            getPlanEntriesForDateRange(minDate, maxDate).catch(() => []),
+            getTenants().catch(() => []),
+          ]);
+          const tenantNameMap = new Map(allTenants.map((t) => [t.id, t.name]));
+          const memberEmailLower = member.email.toLowerCase();
+          const conflictingShifts = planEntries
+            .filter(
+              (e) =>
+                e.entryType !== "keydate" &&
+                timeOffDates.has(e.date) &&
+                (e.helpers ?? []).some((h) => h.email.toLowerCase() === memberEmailLower)
+            )
+            .map((e) => ({
+              date: e.date,
+              activity: e.activity as string,
+              projectName: tenantNameMap.get(e.tenantId) ?? "Unknown Project",
+              startTime: e.startTime,
+              endTime: e.endTime,
+            }));
+
           const html = buildTimeOffEmail({
             staffName: member.displayName,
             entries: newEntries,
             opsUrl: `${APP_URL}/admin/ops`,
+            conflictingShifts,
           });
 
           await resend.emails.send({
