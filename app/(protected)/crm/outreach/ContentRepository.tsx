@@ -347,7 +347,7 @@ function ContentDetailPanel({
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                onClick={!isExternal ? onDownload : undefined}
+                onClick={onDownload}
                 className="flex-1 flex items-center justify-center gap-2 bg-forest-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-700 transition-colors"
               >
                 {isExternal ? (
