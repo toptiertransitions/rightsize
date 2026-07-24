@@ -10,11 +10,11 @@ type ViewMode = "grid" | "table";
 type SortKey = "newest" | "oldest" | "downloads" | "likes" | "az";
 
 const AUDIENCES: { key: ContentAudience | "All"; label: string }[] = [
-  { key: "All", label: "All Audiences" },
+  { key: "Both", label: "External" },
   { key: "Clients", label: "Clients" },
   { key: "ReferralPartners", label: "Referral Partners" },
-  { key: "Both", label: "Both" },
   { key: "InternalTraining", label: "Internal Training" },
+  { key: "All", label: "All" },
 ];
 
 type StageOption = { key: ContentPipelineStage | "All"; label: string };
@@ -27,6 +27,12 @@ const STAGES_BY_AUDIENCE: Record<ContentAudience | "All", StageOption[]> = {
     { key: "Qualifying", label: "Qualifying" },
     { key: "Proposing", label: "Proposing" },
     { key: "Won", label: "Won" },
+    { key: "Identified", label: "Identified" },
+    { key: "Met", label: "Met" },
+    { key: "Agreed to Refer", label: "Agreed to Refer" },
+    { key: "Shared Leads", label: "Shared Leads" },
+    { key: "Active Referral", label: "Active Referral" },
+    { key: "Inactive Referral", label: "Inactive Referral" },
   ],
   Clients: [
     { key: "All", label: "All Stages" },
@@ -934,7 +940,7 @@ export default function ContentRepository({ isAdmin, currentUserId, staffMembers
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
-  const [audienceFilter, setAudienceFilter] = useState<ContentAudience | "All">("All");
+  const [audienceFilter, setAudienceFilter] = useState<ContentAudience | "All">("Both");
   const [stageFilter, setStageFilter] = useState<ContentPipelineStage | "All">("All");
   const [typeFilter, setTypeFilter] = useState<ContentItemType | "All">("All");
   const [statusFilter, setStatusFilter] = useState<ContentStatus | "All">("Active");
@@ -1114,7 +1120,8 @@ export default function ContentRepository({ isAdmin, currentUserId, staffMembers
 
   // ── Filtering + sorting ────────────────────────────────────────────────────
   const filtered = items.filter(item => {
-    if (audienceFilter !== "All" && item.audience !== audienceFilter && item.audience !== "Both") return false;
+    if (audienceFilter === "Both") { if (item.audience === "InternalTraining") return false; }
+    else if (audienceFilter !== "All" && item.audience !== audienceFilter && item.audience !== "Both") return false;
     if (stageFilter !== "All" && item.pipelineStage !== stageFilter && item.pipelineStage !== "All") return false;
     if (typeFilter !== "All" && item.contentType !== typeFilter) return false;
     if (search) {
