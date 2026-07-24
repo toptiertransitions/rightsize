@@ -761,21 +761,54 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
                         ? new Date(tenant.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : "—";
                       return (
-                        <tr key={tenant.id} className="hover:bg-orange-50/40 transition-colors">
+                        <tr key={tenant.id} className="group hover:bg-orange-50/40 transition-colors">
                           <td className="px-4 py-3">
-                            <Link href={`/catalog?tenantId=${tenant.id}`}
-                              className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                              {tenant.name}
-                            </Link>
+                            {editingId === tenant.id ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  autoFocus
+                                  value={editName}
+                                  onChange={e => setEditName(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") saveName(tenant.id);
+                                    if (e.key === "Escape") setEditingId(null);
+                                  }}
+                                  className="font-medium text-gray-900 border-b border-orange-400 bg-transparent focus:outline-none text-sm w-48"
+                                />
+                                <button onClick={() => saveName(tenant.id)} disabled={savingName || !editName.trim()}
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-medium disabled:opacity-50">
+                                  {savingName ? "…" : "Save"}
+                                </button>
+                                <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Link href={`/catalog?tenantId=${tenant.id}`}
+                                  className="font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                                  {tenant.name}
+                                </Link>
+                                {(isManager || isAdmin) && (
+                                  <button
+                                    onClick={() => startEdit(tenant)}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-orange-500 transition-all"
+                                    title="Rename project"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-gray-500">{location || "—"}</td>
                           <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
                           <td className="px-4 py-3 text-right">
-                            {(isManager || isAdmin) && (
+                            {(isManager || isAdmin) && editingId !== tenant.id && (
                               <button
                                 onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
                                 disabled={archiving === tenant.id}
-                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
                               >
                                 {archiving === tenant.id ? "…" : "Archive"}
                               </button>
