@@ -121,21 +121,21 @@ Generate a complete standalone HTML email from a TTT team member to a referral p
         if (blocks.length > 1) {
           try {
             message = await anthropic.messages.create({
-              model: "claude-haiku-4-5-20251001",
+              model: "claude-sonnet-4-6",
               max_tokens: 4000,
               messages: [{ role: "user", content: blocks }],
             });
           } catch (multimodalErr) {
             console.error("[content/items] multimodal call failed, falling back to text-only:", multimodalErr);
             message = await anthropic.messages.create({
-              model: "claude-haiku-4-5-20251001",
+              model: "claude-sonnet-4-6",
               max_tokens: 4000,
               messages: [{ role: "user", content: prompt }],
             });
           }
         } else {
           message = await anthropic.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            model: "claude-sonnet-4-6",
             max_tokens: 4000,
             messages: [{ role: "user", content: prompt }],
           });
