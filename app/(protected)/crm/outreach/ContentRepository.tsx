@@ -861,9 +861,11 @@ interface Props {
   currentUserId: string;
   focusItemId?: string | null;
   onFocusConsumed?: () => void;
+  focusItemIdForEdit?: string | null;
+  onFocusForEditConsumed?: () => void;
 }
 
-export default function ContentRepository({ isAdmin, currentUserId, focusItemId, onFocusConsumed }: Props) {
+export default function ContentRepository({ isAdmin, currentUserId, focusItemId, onFocusConsumed, focusItemIdForEdit, onFocusForEditConsumed }: Props) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [categories, setCategories] = useState<ContentCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -880,6 +882,7 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
   const [comments, setComments] = useState<ContentComment[]>([]);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [pendingEditFocusId, setPendingEditFocusId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -893,6 +896,30 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
       onFocusConsumed?.();
     }
   }, [focusItemId, items]);
+
+  // When the calendar requests editing a specific item, switch to "All" status so
+  // drafts (created via Quick Add) are visible, then open the edit modal once items load.
+  // "__new__" is a sentinel meaning "open the new upload form immediately".
+  useEffect(() => {
+    if (!focusItemIdForEdit) return;
+    if (focusItemIdForEdit === "__new__") {
+      setEditingItem("new");
+      onFocusForEditConsumed?.();
+      return;
+    }
+    setPendingEditFocusId(focusItemIdForEdit);
+    setStatusFilter("All");
+    onFocusForEditConsumed?.();
+  }, [focusItemIdForEdit]);
+
+  useEffect(() => {
+    if (!pendingEditFocusId || items.length === 0) return;
+    const target = items.find(i => i.id === pendingEditFocusId);
+    if (target) {
+      setEditingItem(target);
+      setPendingEditFocusId(null);
+    }
+  }, [pendingEditFocusId, items]);
 
   async function loadData() {
     setLoading(true);

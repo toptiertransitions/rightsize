@@ -274,12 +274,12 @@ function DayCell({
 
 // ─── Item Detail Slideout ─────────────────────────────────────────────────────
 
-function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onReschedule, onViewInRepository }: {
+function ItemDetailSlideout({ item, category, onClose, isAdmin, onEditInRepository, onReschedule, onViewInRepository }: {
   item: ContentItem;
   category?: ContentCategory;
   onClose: () => void;
   isAdmin: boolean;
-  onEdit: () => void;
+  onEditInRepository?: (item: ContentItem) => void;
   onReschedule: (date: string | null) => void;
   onViewInRepository?: () => void;
 }) {
@@ -287,6 +287,7 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onResche
   const today = toISO(new Date());
   const isAvailable = !item.scheduledDate || item.scheduledDate <= today;
   const url = item.fileUrl || item.linkUrl;
+  const hasContent = !!(item.fileUrl || item.linkUrl);
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -299,8 +300,16 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onResche
           <div className="flex-1 min-w-0">
             <p className="text-xs text-gray-400 truncate">{item.contentType}</p>
           </div>
-          {isAdmin && (
-            <button onClick={onEdit} className="text-xs text-forest-600 hover:text-forest-700 font-medium">Edit</button>
+          {isAdmin && onEditInRepository && (
+            <button
+              onClick={() => { onClose(); onEditInRepository(item); }}
+              className="text-xs text-forest-600 hover:text-forest-700 font-medium flex items-center gap-1"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
+            </button>
           )}
         </div>
         <div className="p-5 flex flex-col gap-4">
@@ -370,7 +379,25 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onResche
             </div>
           )}
 
-          {/* Action */}
+          {/* Upload Content — shown when no file/link yet (e.g. Quick Add drafts) */}
+          {isAdmin && !hasContent && onEditInRepository && (
+            <button
+              onClick={() => { onClose(); onEditInRepository(item); }}
+              className="flex items-center justify-center gap-2 bg-amber-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-amber-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Upload Content
+            </button>
+          )}
+          {isAdmin && !hasContent && !onEditInRepository && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-center">
+              No file or link attached yet. Edit this item in the Content Repository to upload content.
+            </p>
+          )}
+
+          {/* Download / Open Link */}
           {url && isAvailable && (
             <a href={url} target="_blank" rel="noreferrer"
               className="flex items-center justify-center gap-2 bg-forest-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-700 transition-colors">
@@ -388,7 +415,7 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEdit, onResche
           )}
 
           {/* View in Repository */}
-          {onViewInRepository && (item.fileUrl || item.linkUrl) && (
+          {onViewInRepository && hasContent && (
             <button
               onClick={onViewInRepository}
               className="flex items-center justify-center gap-2 border border-forest-200 text-forest-700 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-50 transition-colors"
@@ -457,9 +484,10 @@ function DayExpandedModal({ date, items, categories, onClose, onItemClick }: {
 interface Props {
   isAdmin: boolean;
   onViewInRepository?: (item: ContentItem) => void;
+  onEditInRepository?: (item: ContentItem) => void;
 }
 
-export default function ContentCalendar({ isAdmin, onViewInRepository }: Props) {
+export default function ContentCalendar({ isAdmin, onViewInRepository, onEditInRepository }: Props) {
   const [view, setView] = useState<CalView>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [items, setItems] = useState<ContentItem[]>([]);
@@ -706,14 +734,30 @@ export default function ContentCalendar({ isAdmin, onViewInRepository }: Props) 
           <h2 className="text-base font-bold text-gray-900 ml-1 min-w-[200px]">{navLabel}</h2>
         </div>
 
-        {/* View toggle */}
-        <div className="flex rounded-xl border border-gray-200 overflow-hidden ml-auto">
-          {(["month", "week", "list"] as CalView[]).map(v => (
-            <button key={v} onClick={() => setView(v)}
-              className={cn("px-3 py-1.5 text-xs font-medium capitalize transition-colors", view === v ? "bg-forest-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50")}>
-              {v}
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Upload shortcut — takes admin directly to Content Repository upload form */}
+          {isAdmin && onEditInRepository && (
+            <button
+              onClick={() => { onEditInRepository({ id: "__new__" } as ContentItem); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-forest-700 border border-forest-200 rounded-xl hover:bg-forest-50 transition-colors"
+              title="Upload new content to the Repository"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Upload Content
             </button>
-          ))}
+          )}
+
+          {/* View toggle */}
+          <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+            {(["month", "week", "list"] as CalView[]).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                className={cn("px-3 py-1.5 text-xs font-medium capitalize transition-colors", view === v ? "bg-forest-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50")}>
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -755,7 +799,10 @@ export default function ContentCalendar({ isAdmin, onViewInRepository }: Props) 
           category={selectedItem.categoryId ? catMap.get(selectedItem.categoryId) : undefined}
           onClose={() => setSelectedItem(null)}
           isAdmin={isAdmin}
-          onEdit={() => setSelectedItem(null)}
+          onEditInRepository={onEditInRepository ? (item) => {
+            setSelectedItem(null);
+            onEditInRepository(item);
+          } : undefined}
           onReschedule={async (date) => { await rescheduleItem(selectedItem.id, date); }}
           onViewInRepository={onViewInRepository && (selectedItem.fileUrl || selectedItem.linkUrl) ? () => {
             setSelectedItem(null);

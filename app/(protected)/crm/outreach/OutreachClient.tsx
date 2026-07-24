@@ -688,6 +688,7 @@ export default function OutreachClient({
   const [tab, setTab] = useState<OutreachTab>("myday");
   const [templates, setTemplates] = useState(initialTemplates);
   const [repoFocusItemId, setRepoFocusItemId] = useState<string | null>(null);
+  const [repoEditItemId, setRepoEditItemId] = useState<string | null>(null);
 
   const isAdmin = systemRole === "TTTAdmin";
 
@@ -767,6 +768,8 @@ export default function OutreachClient({
           isAdmin={isAdmin}
           focusItemId={repoFocusItemId}
           onFocusConsumed={() => setRepoFocusItemId(null)}
+          focusItemIdForEdit={repoEditItemId}
+          onFocusForEditConsumed={() => setRepoEditItemId(null)}
         />
       )}
       {tab === "contentcal" && (
@@ -774,6 +777,14 @@ export default function OutreachClient({
           isAdmin={isAdmin}
           onViewInRepository={item => {
             setRepoFocusItemId(item.id);
+            setTab("repository");
+          }}
+          onEditInRepository={item => {
+            if (item.id === "__new__") {
+              setRepoEditItemId(null);
+            } else {
+              setRepoEditItemId(item.id);
+            }
             setTab("repository");
           }}
         />
