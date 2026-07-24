@@ -13,6 +13,7 @@ import {
   batchCreateOutreachEnrollments,
   updateOutreachEnrollment,
   createOutreachSend,
+  createActivity,
 } from "@/lib/airtable";
 import { getValidAccessToken } from "@/lib/gmail";
 import { sendGmailMessage } from "@/lib/gmail";
@@ -254,6 +255,16 @@ export async function POST(req: NextRequest) {
               errorMessage: "",
             });
             await updateOutreachEnrollment(enrollment.id, { status: "Completed", lastSentAt: new Date().toISOString() });
+            createActivity({
+              type: "Email",
+              clientContactId: enrollment.contactId,
+              note: `[Broadcast: "${name}"] ${subject}`,
+              activityDate: new Date().toISOString(),
+              createdByClerkId: userId,
+              gmailMessageId: result.messageId,
+              gmailThreadId: result.threadId,
+              isGmailImported: false,
+            }).catch(() => {});
             sent++;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

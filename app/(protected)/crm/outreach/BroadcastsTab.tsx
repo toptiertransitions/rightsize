@@ -40,6 +40,7 @@ interface AudienceFilter {
   companyIds: string[];
   ownerClerkId: string;
   excludeOptout: boolean;
+  lastActivityDays?: number;
 }
 
 interface ContactItem {
@@ -60,6 +61,7 @@ const EMPTY_FILTER: AudienceFilter = {
   companyIds: [],
   ownerClerkId: "",
   excludeOptout: true,
+  lastActivityDays: undefined,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -969,6 +971,7 @@ function ComposeWizard({
       stages: filter.stages.length ? filter.stages : undefined,
       tags: filter.tags || undefined,
       excludeOptout: filter.excludeOptout,
+      lastActivityDays: filter.lastActivityDays ?? undefined,
     };
     if (filter.contactType === "ClientContacts") {
       return { ...base, assignedToClerkId: filter.ownerClerkId || undefined };
@@ -1251,6 +1254,33 @@ function ComposeWizard({
                   className={inputCls}
                   placeholder="e.g. newsletter"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Last activity</label>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { label: "Any", value: undefined },
+                    { label: "No activity in 3 days", value: 3 },
+                    { label: "No activity in 7 days", value: 7 },
+                    { label: "No activity in 14 days", value: 14 },
+                    { label: "No activity in 30+ days", value: 30 },
+                  ] as { label: string; value: number | undefined }[]).map(opt => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setFilter(f => ({ ...f, lastActivityDays: opt.value }))}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                        filter.lastActivityDays === opt.value
+                          ? "bg-forest-600 text-white border-forest-600"
+                          : "bg-white text-gray-600 border-gray-300 hover:border-forest-400"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}

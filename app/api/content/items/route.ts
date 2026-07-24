@@ -1,8 +1,13 @@
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole } from "@/lib/airtable";
+import { getSystemRole, createOutreachTemplate } from "@/lib/airtable";
 import { getContentItems, createContentItem } from "@/lib/airtable-content";
 import type { ContentItemType, ContentAudience, ContentPipelineStage, ContentStatus } from "@/lib/types";
+import Anthropic from "@anthropic-ai/sdk";
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -56,5 +61,74 @@ export async function POST(req: NextRequest) {
     status: body.status ?? "Active",
     scheduledDate: body.scheduledDate,
   });
+
+  // Fire-and-forget: auto-generate a branded email template for referral partner content
+  if (item.audience === "ReferralPartners") {
+    after(async () => {
+      try {
+        const anthropic = new Anthropic();
+        const isFile = ["PDF", "Video", "Image", "Document"].includes(item.contentType);
+        const ctaLink = item.linkUrl ?? "";
+        const ctaLabel = isFile ? "Download Resource" : "View Resource";
+
+        const prompt = `You are a world-class HTML email designer for Top Tier Transitions — a premium estate liquidation and move management company.
+
+Brand:
+- Company: Top Tier Transitions
+- Tagline: White Glove Senior Move Management. Done Right.
+- Primary: #2d4a3e (dark forest green)
+- Accent: #4a7c5f
+- Background: #f5f4f0 (warm off-white)
+- Font: Georgia serif for headings, Arial sans for body
+- Tone: Warm, premium, human — NOT corporate AI
+
+Resource being shared: "${item.title}"
+${item.description ? `Description: ${item.description}` : ""}
+Content type: ${item.contentType}
+Audience: Referral Partners
+${ctaLink ? `CTA label: "${ctaLabel}", URL: ${ctaLink}` : "No external link — resource will be attached to the email"}
+
+Generate a complete standalone HTML email from a TTT team member to a referral partner sharing this resource. Requirements:
+- Return ONLY valid JSON (no markdown fences): {"subject": "...", "html": "..."}
+- Full HTML document with inline CSS only (no <style> blocks)
+- Header: #2d4a3e background, "Top Tier Transitions" in white Georgia 24px bold, tagline "White Glove Senior Move Management. Done Right." in #a7c4b5 14px below
+- White content area, 32px padding, 600px max-width centered
+- Body starts with "Hi {{first_name}}," on its own line, then blank line
+- Leave {{first_name}}, {{last_name}}, {{company}}, {{rep_first_name}} exactly as-is (merge tags)
+- ${ctaLink ? `CTA button (email-safe): use a <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto"><tr><td align="center" bgcolor="#2d4a3e" style="border-radius:4px;mso-padding-alt:0"><a href="${ctaLink}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-family:Georgia,serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:4px;-webkit-text-size-adjust:none">${ctaLabel}</a></td></tr></table>` : "No CTA button — mention the resource is attached"}
+- Warm sign-off from {{rep_first_name}} at Top Tier Transitions in the footer
+- Footer: #f5f4f0 bg, 16px padding, center-aligned gray 12px, "Top Tier Transitions"
+- No em dashes anywhere
+- Subject: short (6 words max), specific, human voice`;
+
+        const message = await anthropic.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4000,
+          messages: [{ role: "user", content: prompt }],
+        });
+
+        const raw = (message.content[0] as { type: string; text: string }).text.trim();
+        const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+        const parsed = JSON.parse(cleaned) as { subject: string; html: string };
+
+        await createOutreachTemplate({
+          name: item.title,
+          channel: "Email",
+          subject: parsed.subject || `New Resource: ${item.title}`,
+          body: parsed.html,
+          ownerClerkId: userId,
+          shared: true,
+          emailType: "branded",
+          ctaLink,
+          ctaLabel,
+          attachmentUrl: item.fileUrl ?? "",
+        });
+        console.log(`[content/items] auto-template created for "${item.title}"`);
+      } catch (err) {
+        console.error("[content/items] auto-template generation failed:", err);
+      }
+    });
+  }
+
   return NextResponse.json({ item });
 }

@@ -6157,6 +6157,7 @@ export interface OutreachContactFilter {
   contactIds?: string[];
   assignedToClerkId?: string;
   excludeOptout?: boolean;
+  lastActivityDays?: number;
 }
 
 export interface ResolvedOutreachContact {
@@ -6183,6 +6184,12 @@ export async function resolveOutreachContacts(filter: OutreachContactFilter): Pr
 
     const parts: string[] = [`{Email} != ""`];
     if (filter.excludeOptout !== false) parts.push(`{EmailOptout} != 1`);
+    if (filter.lastActivityDays !== undefined) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - filter.lastActivityDays);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      parts.push(`OR({LastActivityDate} = "", IS_BEFORE({LastActivityDate}, "${cutoffStr}"))`);
+    }
     // Support both single companyId and array companyIds
     const effectiveCompanyIds = filter.companyIds?.length
       ? filter.companyIds
@@ -6229,6 +6236,12 @@ export async function resolveOutreachContacts(filter: OutreachContactFilter): Pr
 
     const parts: string[] = [`{Email} != ""`];
     if (filter.excludeOptout !== false) parts.push(`{EmailOptout} != 1`);
+    if (filter.lastActivityDays !== undefined) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - filter.lastActivityDays);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      parts.push(`OR({LastActivityDate} = "", IS_BEFORE({LastActivityDate}, "${cutoffStr}"))`);
+    }
     if (filter.assignedToClerkId) parts.push(`{AssignedToClerkId} = "${filter.assignedToClerkId}"`);
     const formula = parts.length > 1 ? `AND(${parts.join(",")})` : parts[0];
     const all: ResolvedOutreachContact[] = [];
