@@ -1261,6 +1261,7 @@ export interface OutreachTemplate {
   body: string;
   ownerClerkId: string;
   shared: boolean;
+  sharedWith: string[];  // clerk user IDs; empty = not specifically shared; shared=true overrides
   createdAt: string;
   updatedAt: string;
   emailType?: "text" | "branded";
@@ -1507,6 +1508,7 @@ export interface ContentItem {
   categoryId?: string;
   tags: string[];
   authorClerkId: string;
+  sharedWith: string[];  // empty = visible to all; populated = only those clerk IDs + author
   status: ContentStatus;
   downloadCount: number;
   likeCount: number;

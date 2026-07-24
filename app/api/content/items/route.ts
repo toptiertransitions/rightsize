@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     authorClerkId: userId,
     status: body.status ?? "Active",
     scheduledDate: body.scheduledDate,
+    sharedWith: Array.isArray(body.sharedWith) ? body.sharedWith : [],
   });
 
   return NextResponse.json({ item });

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import type { ContentItem, ContentCategory, ContentComment, ContentItemType, ContentAudience, ContentPipelineStage, ContentStatus } from "@/lib/types";
+import type { ContentItem, ContentCategory, ContentComment, ContentItemType, ContentAudience, ContentPipelineStage, ContentStatus, StaffMember } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,12 +440,15 @@ const PRESET_COLORS = [
 ];
 
 function ContentFormModal({
-  item, categories, onClose, onSave,
+  item, categories, onClose, onSave, isAdmin, currentUserId, staffMembers,
 }: {
   item?: ContentItem;
   categories: ContentCategory[];
   onClose: () => void;
   onSave: (data: Partial<ContentItem> & { fileObj?: File }) => Promise<void>;
+  isAdmin: boolean;
+  currentUserId: string;
+  staffMembers: StaffMember[];
 }) {
   const [title, setTitle] = useState(item?.title ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
@@ -467,6 +470,10 @@ function ContentFormModal({
   const [thumbnailPublicId, setThumbnailPublicId] = useState(item?.thumbnailPublicId ?? "");
   const [generatingIcon, setGeneratingIcon] = useState(false);
   const [iconError, setIconError] = useState("");
+  const [shareMode, setShareMode] = useState<"all" | "specific" | "private">(
+    item ? (item.sharedWith?.length ? "specific" : "all") : "all"
+  );
+  const [sharedWith, setSharedWith] = useState<string[]>(item?.sharedWith ?? []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const needsFile = contentType === "PDF" || contentType === "Image";
@@ -531,6 +538,7 @@ function ContentFormModal({
       filePublicId: uploadedPublicId || undefined,
       thumbnailUrl: thumbnailUrl || undefined,
       thumbnailPublicId: thumbnailPublicId || undefined,
+      sharedWith: shareMode === "specific" ? sharedWith : [],
     });
     setSaving(false);
   }
@@ -735,6 +743,60 @@ function ContentFormModal({
               className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500"
             />
           </div>
+
+          {/* Visibility (admin only) */}
+          {isAdmin && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Visibility</label>
+              <div className="space-y-2">
+                {([
+                  { mode: "all", label: "All reps", desc: "Visible to everyone on the team" },
+                  { mode: "specific", label: "Specific reps", desc: "Choose who can see this content" },
+                  { mode: "private", label: "Private", desc: "Only you can see this" },
+                ] as const).map(opt => (
+                  <label key={opt.mode} className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="contentShareMode"
+                      value={opt.mode}
+                      checked={shareMode === opt.mode}
+                      onChange={() => setShareMode(opt.mode)}
+                      className="mt-0.5 accent-forest-600 shrink-0"
+                    />
+                    <div>
+                      <span className="text-sm text-gray-800 font-medium">{opt.label}</span>
+                      <span className="text-xs text-gray-400 ml-2">{opt.desc}</span>
+                    </div>
+                  </label>
+                ))}
+                {shareMode === "specific" && (
+                  <div className="ml-5 mt-2 rounded-xl border border-gray-200 p-3 bg-gray-50">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Select reps to share with:</p>
+                    {staffMembers.filter(s => s.clerkUserId !== currentUserId && ["TTTSales", "TTTManager", "TTTAdmin"].includes(s.role ?? "")).length === 0 ? (
+                      <p className="text-xs text-gray-400">No other staff members found.</p>
+                    ) : (
+                      <div className="space-y-1 max-h-44 overflow-y-auto">
+                        {staffMembers.filter(s => s.clerkUserId !== currentUserId && ["TTTSales", "TTTManager", "TTTAdmin"].includes(s.role ?? "")).map(s => (
+                          <label key={s.clerkUserId} className="flex items-center gap-2 cursor-pointer py-0.5">
+                            <input
+                              type="checkbox"
+                              checked={sharedWith.includes(s.clerkUserId)}
+                              onChange={e => {
+                                const id = s.clerkUserId;
+                                setSharedWith(prev => e.target.checked ? [...prev, id] : prev.filter(x => x !== id));
+                              }}
+                              className="h-3.5 w-3.5 rounded accent-forest-600"
+                            />
+                            <span className="text-sm text-gray-700">{s.displayName}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -859,13 +921,14 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
 interface Props {
   isAdmin: boolean;
   currentUserId: string;
+  staffMembers?: StaffMember[];
   focusItemId?: string | null;
   onFocusConsumed?: () => void;
   focusItemIdForEdit?: string | null;
   onFocusForEditConsumed?: () => void;
 }
 
-export default function ContentRepository({ isAdmin, currentUserId, focusItemId, onFocusConsumed, focusItemIdForEdit, onFocusForEditConsumed }: Props) {
+export default function ContentRepository({ isAdmin, currentUserId, staffMembers = [], focusItemId, onFocusConsumed, focusItemIdForEdit, onFocusForEditConsumed }: Props) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [categories, setCategories] = useState<ContentCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1321,6 +1384,9 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
           categories={categories}
           onClose={() => setEditingItem(null)}
           onSave={handleSaveItem}
+          isAdmin={isAdmin}
+          currentUserId={currentUserId}
+          staffMembers={staffMembers}
         />
       )}
 

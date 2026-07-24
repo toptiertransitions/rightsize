@@ -5617,6 +5617,7 @@ function mapOutreachTemplate(record: AirtableRecord): OutreachTemplate {
     body: toStr(f["Body"]),
     ownerClerkId: toStr(f["OwnerClerkId"]),
     shared: !!f["Shared"],
+    sharedWith: (() => { try { const s = toStr(f["SharedWithClerkIds"]); return s ? s.split(",").filter(Boolean) : []; } catch { return []; } })(),
     createdAt: toStr(f["CreatedAt"]),
     updatedAt: toStr(f["UpdatedAt"]),
     emailType: (toStr(f["EmailType"]) || "text") as "text" | "branded",
@@ -5627,14 +5628,17 @@ function mapOutreachTemplate(record: AirtableRecord): OutreachTemplate {
 }
 
 export async function getOutreachTemplates(clerkUserId?: string): Promise<OutreachTemplate[]> {
-  const formula = clerkUserId
-    ? encodeURIComponent(`OR({Shared} = 1, {OwnerClerkId} = "${clerkUserId}")`)
-    : "";
-  const qs = `?sort[0][field]=Name&sort[0][direction]=asc${formula ? `&filterByFormula=${formula}` : ""}`;
+  const qs = `?sort[0][field]=CreatedAt&sort[0][direction]=desc`;
   const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, qs);
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapOutreachTemplate);
+  const all = (data.records as AirtableRecord[]).map(mapOutreachTemplate);
+  if (!clerkUserId) return all;
+  return all.filter(t =>
+    t.shared ||
+    t.ownerClerkId === clerkUserId ||
+    t.sharedWith.includes(clerkUserId)
+  );
 }
 
 export async function getOutreachTemplateById(id: string): Promise<OutreachTemplate | null> {
@@ -5651,6 +5655,7 @@ export async function createOutreachTemplate(data: Omit<OutreachTemplate, "id" |
     Body: data.body,
     OwnerClerkId: data.ownerClerkId,
     Shared: data.shared,
+    SharedWithClerkIds: (data.sharedWith ?? []).join(","),
     CreatedAt: now,
     UpdatedAt: now,
     EmailType: data.emailType ?? "text",
@@ -5688,6 +5693,7 @@ export async function updateOutreachTemplate(id: string, data: Partial<Omit<Outr
   if (data.subject !== undefined) fields.Subject = data.subject;
   if (data.body !== undefined) fields.Body = data.body;
   if (data.shared !== undefined) fields.Shared = data.shared;
+  if (data.sharedWith !== undefined) fields.SharedWithClerkIds = data.sharedWith.join(",");
   if (data.emailType !== undefined) fields.EmailType = data.emailType;
   if (data.ctaLink !== undefined) fields.CtaLink = data.ctaLink;
   if (data.ctaLabel !== undefined) fields.CtaLabel = data.ctaLabel;

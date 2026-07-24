@@ -33,6 +33,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     tags: body.tags,
     status: body.status as ContentStatus | undefined,
     scheduledDate: body.scheduledDate,
+    sharedWith: Array.isArray(body.sharedWith) ? body.sharedWith : undefined,
   });
   return NextResponse.json({ item });
 }

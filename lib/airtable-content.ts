@@ -95,6 +95,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): ContentItem {
     categoryId: toStr(f["CategoryId"]) || undefined,
     tags: parseTags(f["Tags"]),
     authorClerkId: toStr(f["AuthorClerkId"]),
+    sharedWith: (() => { try { const s = toStr(f["SharedWithClerkIds"]); return s ? s.split(",").filter(Boolean) : []; } catch { return []; } })(),
     status: (toStr(f["Status"]) || "Draft") as ContentStatus,
     downloadCount: toNum(f["DownloadCount"]),
     likeCount: toNum(f["LikeCount"]),
@@ -163,6 +164,7 @@ export async function createContentItem(data: {
   authorClerkId: string;
   status?: ContentStatus;
   scheduledDate?: string;
+  sharedWith?: string[];
 }): Promise<ContentItem> {
   const base = getBase();
   const fields: Airtable.FieldSet = {
@@ -187,6 +189,7 @@ export async function createContentItem(data: {
   if (data.thumbnailPublicId) fields["ThumbnailPublicId"] = data.thumbnailPublicId;
   if (data.categoryId) fields["CategoryId"] = data.categoryId;
   if (data.scheduledDate) fields["ScheduledDate"] = data.scheduledDate;
+  fields["SharedWithClerkIds"] = (data.sharedWith ?? []).join(",");
   const record = await base(AIRTABLE_TABLES.CONTENT_ITEMS).create(fields);
   return mapItem(record);
 }
@@ -196,6 +199,7 @@ export async function updateContentItem(id: string, data: Partial<{
   description: string;
   contentType: ContentItemType;
   fileUrl: string | null;
+  sharedWith: string[];
   filePublicId: string | null;
   linkUrl: string | null;
   thumbnailUrl: string | null;
@@ -223,6 +227,7 @@ export async function updateContentItem(id: string, data: Partial<{
   if (data.tags !== undefined) fields["Tags"] = JSON.stringify(data.tags);
   if (data.status !== undefined) fields["Status"] = data.status;
   if (data.scheduledDate !== undefined) fields["ScheduledDate"] = data.scheduledDate ?? "";
+  if (data.sharedWith !== undefined) fields["SharedWithClerkIds"] = data.sharedWith.join(",");
   const record = await base(AIRTABLE_TABLES.CONTENT_ITEMS).update(id, fields);
   return mapItem(record);
 }

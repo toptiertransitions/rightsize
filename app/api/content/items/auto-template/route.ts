@@ -116,6 +116,7 @@ Email requirements:
       body: parsed.html,
       ownerClerkId: userId,
       shared: true,
+      sharedWith: [],
       emailType: "branded",
       ctaLink,
       ctaLabel,

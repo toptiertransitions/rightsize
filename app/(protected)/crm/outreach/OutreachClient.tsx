@@ -191,23 +191,27 @@ interface TemplateFormState {
   ctaLabel: string;
   attachmentUrl: string;
   attachmentName: string;
-  shared: boolean;
+  shareMode: "all" | "specific" | "private";
+  sharedWith: string[];
 }
 
 const EMPTY_TEMPLATE: TemplateFormState = {
   name: "", channel: "Email", emailType: "text", subject: "", body: "",
-  ctaLink: "", ctaLabel: "", attachmentUrl: "", attachmentName: "", shared: false,
+  ctaLink: "", ctaLabel: "", attachmentUrl: "", attachmentName: "",
+  shareMode: "all", sharedWith: [],
 };
 
 function TemplatesTab({
   templates,
   setTemplates,
   currentUserId,
+  isAdmin,
   staffMembers,
 }: {
   templates: OutreachTemplate[];
   setTemplates: React.Dispatch<React.SetStateAction<OutreachTemplate[]>>;
   currentUserId: string;
+  isAdmin: boolean;
   staffMembers: StaffMember[];
 }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -290,7 +294,8 @@ function TemplatesTab({
       ctaLabel: t.ctaLabel ?? "",
       attachmentUrl: t.attachmentUrl ?? "",
       attachmentName: t.attachmentUrl ? "Attached file" : "",
-      shared: t.shared,
+      shareMode: t.shared ? "all" : (t.sharedWith?.length ? "specific" : "private"),
+      sharedWith: t.sharedWith ?? [],
     });
     setShowAiPrompt(false);
     setBrandedGist("");
@@ -303,12 +308,15 @@ function TemplatesTab({
     if (!form.name.trim()) return;
     setSaving(true);
     setSaveError(null);
+    const shared = form.shareMode === "all";
+    const sharedWith = form.shareMode === "specific" ? form.sharedWith : [];
+    const payload = { ...form, shared, sharedWith };
     try {
       if (editingId) {
         const res = await fetch("/api/outreach/templates", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingId, ...form }),
+          body: JSON.stringify({ id: editingId, ...payload }),
         });
         const data = await res.json();
         if (!res.ok) { setSaveError(data.error ?? "Failed to save template"); return; }
@@ -317,7 +325,7 @@ function TemplatesTab({
         const res = await fetch("/api/outreach/templates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (!res.ok) { setSaveError(data.error ?? "Failed to create template"); return; }
@@ -704,17 +712,73 @@ function TemplatesTab({
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="shared"
-                  checked={form.shared}
-                  onChange={e => setForm(f => ({ ...f, shared: e.target.checked }))}
-                  className="h-4 w-4 rounded border-gray-300 accent-forest-600 cursor-pointer"
-                />
-                <label htmlFor="shared" className="text-sm text-gray-700 cursor-pointer">
-                  Share with all reps
-                </label>
+              {/* Visibility / sharing */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Visibility</label>
+                {isAdmin ? (
+                  <div className="space-y-2">
+                    {([
+                      { mode: "all", label: "All reps", desc: "Everyone on the team can see and use this template" },
+                      { mode: "specific", label: "Specific reps", desc: "Choose exactly who can access it" },
+                      { mode: "private", label: "Private", desc: "Only you can see this template" },
+                    ] as const).map(opt => (
+                      <label key={opt.mode} className="flex items-start gap-2.5 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="shareMode"
+                          value={opt.mode}
+                          checked={form.shareMode === opt.mode}
+                          onChange={() => setForm(f => ({ ...f, shareMode: opt.mode }))}
+                          className="mt-0.5 accent-forest-600 shrink-0"
+                        />
+                        <div>
+                          <span className="text-sm text-gray-800 font-medium">{opt.label}</span>
+                          <span className="text-xs text-gray-400 ml-2">{opt.desc}</span>
+                        </div>
+                      </label>
+                    ))}
+                    {form.shareMode === "specific" && (
+                      <div className="ml-5 mt-2 rounded-lg border border-gray-200 p-3 bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600 mb-2">Select reps to share with:</p>
+                        {staffMembers.filter(s => s.clerkUserId !== currentUserId && ["TTTSales", "TTTManager", "TTTAdmin"].includes(s.role ?? "")).length === 0 ? (
+                          <p className="text-xs text-gray-400">No other staff members found.</p>
+                        ) : (
+                          <div className="space-y-1 max-h-44 overflow-y-auto">
+                            {staffMembers.filter(s => s.clerkUserId !== currentUserId && ["TTTSales", "TTTManager", "TTTAdmin"].includes(s.role ?? "")).map(s => (
+                              <label key={s.clerkUserId} className="flex items-center gap-2 cursor-pointer py-0.5">
+                                <input
+                                  type="checkbox"
+                                  checked={form.sharedWith.includes(s.clerkUserId)}
+                                  onChange={e => {
+                                    const id = s.clerkUserId;
+                                    setForm(f => ({
+                                      ...f,
+                                      sharedWith: e.target.checked
+                                        ? [...f.sharedWith, id]
+                                        : f.sharedWith.filter(x => x !== id),
+                                    }));
+                                  }}
+                                  className="h-3.5 w-3.5 rounded accent-forest-600"
+                                />
+                                <span className="text-sm text-gray-700">{s.displayName}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.shareMode === "all"}
+                      onChange={e => setForm(f => ({ ...f, shareMode: e.target.checked ? "all" : "private" }))}
+                      className="h-4 w-4 rounded border-gray-300 accent-forest-600 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700">Share with all reps</span>
+                  </label>
+                )}
               </div>
             </div>
 
@@ -854,6 +918,7 @@ export default function OutreachClient({
           templates={templates}
           setTemplates={setTemplates}
           currentUserId={currentUserId}
+          isAdmin={isAdmin}
           staffMembers={staffMembers}
         />
       )}
@@ -861,6 +926,7 @@ export default function OutreachClient({
         <ContentRepository
           currentUserId={currentUserId}
           isAdmin={isAdmin}
+          staffMembers={staffMembers}
           focusItemId={repoFocusItemId}
           onFocusConsumed={() => setRepoFocusItemId(null)}
           focusItemIdForEdit={repoEditItemId}
