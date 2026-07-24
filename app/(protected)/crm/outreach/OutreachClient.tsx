@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { OutreachTemplate, OutreachTemplateChannel } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
@@ -218,6 +218,11 @@ function TemplatesTab({
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<OutreachTemplateChannel | "All">("All");
+  const [ownerFilter, setOwnerFilter] = useState<"All" | "Shared" | "Mine">("All");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortKey, setSortKey] = useState<"name" | "channel" | "shared" | "createdAt" | "owner">("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showAiPrompt, setShowAiPrompt] = useState(false);
   const [brandedGist, setBrandedGist] = useState("");
   const [generatingBranded, setGeneratingBranded] = useState(false);
@@ -226,11 +231,42 @@ function TemplatesTab({
   const currentUser = staffMembers.find(s => s.clerkUserId === currentUserId);
   const senderName = currentUser?.displayName || "Top Tier Transitions";
 
-  const filtered = templates.filter(t => {
-    const matchSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.subject.toLowerCase().includes(search.toLowerCase());
-    const matchChannel = channelFilter === "All" || t.channel === channelFilter;
-    return matchSearch && matchChannel;
-  });
+  function ownerName(clerkId: string): string {
+    const s = staffMembers.find(s => s.clerkUserId === clerkId);
+    return s?.displayName ?? "Unknown";
+  }
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(key === "createdAt" ? "desc" : "asc"); }
+  }
+
+  function SortIcon({ col }: { col: typeof sortKey }) {
+    if (sortKey !== col) return <span className="ml-1 text-gray-300">↕</span>;
+    return <span className="ml-1 text-forest-600">{sortDir === "asc" ? "↑" : "↓"}</span>;
+  }
+
+  const filtered = useMemo(() => {
+    const result = templates.filter(t => {
+      const matchSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.subject.toLowerCase().includes(search.toLowerCase());
+      const matchChannel = channelFilter === "All" || t.channel === channelFilter;
+      const matchOwner = ownerFilter === "All" || (ownerFilter === "Shared" && t.shared) || (ownerFilter === "Mine" && t.ownerClerkId === currentUserId);
+      const matchDateFrom = !dateFrom || t.createdAt.slice(0, 10) >= dateFrom;
+      const matchDateTo = !dateTo || t.createdAt.slice(0, 10) <= dateTo;
+      return matchSearch && matchChannel && matchOwner && matchDateFrom && matchDateTo;
+    });
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "name") cmp = a.name.localeCompare(b.name);
+      else if (sortKey === "channel") cmp = a.channel.localeCompare(b.channel);
+      else if (sortKey === "shared") cmp = Number(b.shared) - Number(a.shared);
+      else if (sortKey === "owner") cmp = ownerName(a.ownerClerkId).localeCompare(ownerName(b.ownerClerkId));
+      else cmp = a.createdAt.localeCompare(b.createdAt);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, search, channelFilter, ownerFilter, dateFrom, dateTo, sortKey, sortDir, currentUserId]);
 
   function openCreate() {
     setEditingId(null);
@@ -306,89 +342,148 @@ function TemplatesTab({
   return (
     <div>
       {/* Toolbar */}
-      <div className="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex gap-2 flex-1 min-w-0">
-          <input
-            type="text"
-            placeholder="Search templates…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-          />
-          <select
-            value={channelFilter}
-            onChange={e => setChannelFilter(e.target.value as OutreachTemplateChannel | "All")}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+      <div className="mb-4 space-y-2">
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
+          <div className="flex gap-2 flex-1 min-w-0 flex-wrap">
+            <input
+              type="text"
+              placeholder="Search name or subject…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 min-w-[160px] rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+            />
+            <select
+              value={channelFilter}
+              onChange={e => setChannelFilter(e.target.value as OutreachTemplateChannel | "All")}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+            >
+              <option value="All">All channels</option>
+              <option value="Email">Email</option>
+              <option value="SMS">SMS</option>
+            </select>
+            <select
+              value={ownerFilter}
+              onChange={e => setOwnerFilter(e.target.value as "All" | "Shared" | "Mine")}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+            >
+              <option value="All">All owners</option>
+              <option value="Shared">Shared only</option>
+              <option value="Mine">My templates</option>
+            </select>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                title="Created from"
+              />
+              <span className="text-gray-400 text-sm">–</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                title="Created to"
+              />
+            </div>
+            {(search || channelFilter !== "All" || ownerFilter !== "All" || dateFrom || dateTo) && (
+              <button
+                onClick={() => { setSearch(""); setChannelFilter("All"); setOwnerFilter("All"); setDateFrom(""); setDateTo(""); }}
+                className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 rounded-md border border-gray-200 hover:border-gray-300 transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+          <button
+            onClick={openCreate}
+            className="shrink-0 rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 transition-colors"
           >
-            <option value="All">All channels</option>
-            <option value="Email">Email</option>
-            <option value="SMS">SMS</option>
-          </select>
+            + New Template
+          </button>
         </div>
-        <button
-          onClick={openCreate}
-          className="shrink-0 rounded-lg bg-forest-600 px-4 py-2 text-sm font-medium text-white hover:bg-forest-700 transition-colors"
-        >
-          + New Template
-        </button>
+        <p className="text-xs text-gray-400">
+          Showing {filtered.length} of {templates.length} template{templates.length !== 1 ? "s" : ""}
+        </p>
       </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 py-16 text-center">
           <p className="text-sm text-gray-500">
-            {templates.length === 0 ? "No templates yet — create one to get started." : "No templates match your search."}
+            {templates.length === 0 ? "No templates yet — create one to get started." : "No templates match your filters."}
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Channel</th>
+                <th className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-gray-800" onClick={() => toggleSort("name")}>
+                  Name <SortIcon col="name" />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-gray-800" onClick={() => toggleSort("channel")}>
+                  Channel <SortIcon col="channel" />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-gray-800 hidden lg:table-cell" onClick={() => toggleSort("owner")}>
+                  Owner <SortIcon col="owner" />
+                </th>
                 <th className="px-4 py-3 hidden md:table-cell">Subject</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Shared</th>
+                <th className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-gray-800 hidden sm:table-cell" onClick={() => toggleSort("shared")}>
+                  Visibility <SortIcon col="shared" />
+                </th>
+                <th className="px-4 py-3 cursor-pointer select-none whitespace-nowrap hover:text-gray-800 hidden sm:table-cell" onClick={() => toggleSort("createdAt")}>
+                  Created <SortIcon col="createdAt" />
+                </th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {filtered.map(t => (
-                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", CHANNEL_PILLS[t.channel])}>
-                      {t.channel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell text-gray-500 max-w-xs truncate">
-                    {t.channel === "Email" ? (t.subject || <span className="text-gray-300 italic">No subject</span>) : "—"}
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell text-gray-500">
-                    {t.shared ? (
-                      <span className="text-forest-600 font-medium">Shared</span>
-                    ) : (
-                      <span className="text-gray-400">Private</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openEdit(t)}
-                        className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(t.id)}
-                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map(t => {
+                const isOwn = t.ownerClerkId === currentUserId;
+                const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" }) : "—";
+                return (
+                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900 max-w-[200px] truncate">{t.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", CHANNEL_PILLS[t.channel])}>
+                        {t.channel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-gray-500 whitespace-nowrap">
+                      {isOwn ? <span className="text-forest-600 font-medium">You</span> : ownerName(t.ownerClerkId)}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell text-gray-500 max-w-xs truncate">
+                      {t.channel === "Email" ? (t.subject || <span className="text-gray-300 italic">No subject</span>) : "—"}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {t.shared ? (
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-forest-50 text-forest-700">Shared</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">Private</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell text-gray-500 whitespace-nowrap text-xs">{createdDate}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEdit(t)}
+                          className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(t.id)}
+                          className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
