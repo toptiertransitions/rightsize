@@ -5658,13 +5658,25 @@ export async function createOutreachTemplate(data: Omit<OutreachTemplate, "id" |
     CtaLabel: data.ctaLabel ?? "",
     AttachmentUrl: data.attachmentUrl ?? "",
   };
-  // Subject field must be added to the OutreachTemplates table before writing it
   if (data.subject) fields.Subject = data.subject;
 
-  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, "", {
+  let res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
   });
+  // If Subject field doesn't exist yet in Airtable, retry without it
+  if (!res.ok && data.subject) {
+    const errText = await res.text();
+    if (errText.includes("UNKNOWN_FIELD_NAME") || res.status === 422) {
+      delete fields.Subject;
+      res = await crmFetch(AIRTABLE_TABLES.OUTREACH_TEMPLATES, "", {
+        method: "POST",
+        body: JSON.stringify({ fields }),
+      });
+    } else {
+      throw new Error(errText);
+    }
+  }
   if (!res.ok) throw new Error(await res.text());
   return mapOutreachTemplate(await res.json());
 }

@@ -108,18 +108,23 @@ Email requirements:
     return NextResponse.json({ error: "Incomplete JSON from Claude" }, { status: 500 });
   }
 
-  await createOutreachTemplate({
-    name: item.title,
-    channel: "Email",
-    subject: parsed.subject,
-    body: parsed.html,
-    ownerClerkId: userId,
-    shared: true,
-    emailType: "branded",
-    ctaLink,
-    ctaLabel,
-    attachmentUrl: item.fileUrl ?? "",
-  });
+  try {
+    await createOutreachTemplate({
+      name: item.title,
+      channel: "Email",
+      subject: parsed.subject,
+      body: parsed.html,
+      ownerClerkId: userId,
+      shared: true,
+      emailType: "branded",
+      ctaLink,
+      ctaLabel,
+      attachmentUrl: item.fileUrl ?? "",
+    });
+  } catch (saveErr) {
+    console.error("[auto-template] Airtable save failed:", saveErr);
+    return NextResponse.json({ error: `Airtable save failed: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}` }, { status: 500 });
+  }
 
   console.log(`[auto-template] template created for "${item.title}"`);
   return NextResponse.json({ success: true, templateName: item.title });

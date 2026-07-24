@@ -883,6 +883,7 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [pendingEditFocusId, setPendingEditFocusId] = useState<string | null>(null);
+  const [templateBanner, setTemplateBanner] = useState<{ type: "generating" | "success" | "error"; msg: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -1001,13 +1002,26 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
       });
       const d = await res.json();
       setItems(prev => [d.item, ...prev]);
-      // Fire-and-forget: trigger AI template generation for referral partner content
+      // Trigger AI template generation for referral partner content
       if (d.item?.audience === "ReferralPartners") {
+        setTemplateBanner({ type: "generating", msg: "Generating branded email template…" });
         fetch("/api/content/items/auto-template", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ itemId: d.item.id }),
-        }).catch(() => {});
+        })
+          .then(r => r.json())
+          .then((result: { success?: boolean; templateName?: string; error?: string; skipped?: boolean }) => {
+            if (result.success) {
+              setTemplateBanner({ type: "success", msg: `Email template "${result.templateName}" created — check the Templates tab.` });
+              setTimeout(() => setTemplateBanner(null), 8000);
+            } else {
+              setTemplateBanner({ type: "error", msg: `Template generation failed: ${result.error ?? "unknown error"}` });
+            }
+          })
+          .catch(err => {
+            setTemplateBanner({ type: "error", msg: `Template generation request failed: ${String(err)}` });
+          });
       }
     }
     setEditingItem(null);
@@ -1053,6 +1067,30 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
 
   return (
     <div className="space-y-4">
+      {/* Template generation banner */}
+      {templateBanner && (
+        <div className={cn(
+          "flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-medium",
+          templateBanner.type === "generating" && "bg-forest-50 text-forest-700 border border-forest-200",
+          templateBanner.type === "success" && "bg-green-50 text-green-700 border border-green-200",
+          templateBanner.type === "error" && "bg-red-50 text-red-700 border border-red-200",
+        )}>
+          <div className="flex items-center gap-2">
+            {templateBanner.type === "generating" && (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            )}
+            <span>{templateBanner.msg}</span>
+          </div>
+          <button onClick={() => setTemplateBanner(null)} className="text-current opacity-50 hover:opacity-100">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
