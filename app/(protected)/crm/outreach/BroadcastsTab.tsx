@@ -922,6 +922,9 @@ function ComposeWizard({
   const [brandedGist, setBrandedGist] = useState("");
   const [generatingBranded, setGeneratingBranded] = useState(false);
   const [brandedError, setBrandedError] = useState("");
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+  const templateInputRef = useRef<HTMLInputElement>(null);
 
   // Step 3 / result
   const [sending, setSending] = useState(false);
@@ -930,9 +933,32 @@ function ComposeWizard({
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<"sent" | "error" | null>(null);
 
-  const emailTemplates = templates.filter(t => t.channel === "Email");
-  const smsTemplates = templates.filter(t => t.channel === "SMS");
-  const relevantTemplates = channel === "Email" ? emailTemplates : smsTemplates;
+  function fmtTemplateDate(iso: string): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function templateLabel(t: OutreachTemplate): string {
+    const date = fmtTemplateDate(t.createdAt);
+    return date ? `${date} - ${t.name}` : t.name;
+  }
+
+  const relevantTemplates = useMemo(() => {
+    const all = templates.filter(t =>
+      t.channel === channel &&
+      (t.shared || t.ownerClerkId === currentUserId)
+    );
+    return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [templates, channel, currentUserId]);
+
+  const filteredTemplates = useMemo(() => {
+    const q = templateSearch.trim().toLowerCase();
+    if (!q) return relevantTemplates;
+    return relevantTemplates.filter(t => templateLabel(t).toLowerCase().includes(q));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relevantTemplates, templateSearch]);
   const salesStaff = staffMembers.filter(s => ["TTTSales", "TTTAdmin", "TTTManager"].includes(s.role ?? ""));
   const currentUser = staffMembers.find(s => s.clerkUserId === currentUserId);
   const senderName = currentUser?.displayName || "Top Tier Transitions";
@@ -941,6 +967,8 @@ function ComposeWizard({
     setSelectedTemplateId(id);
     const t = templates.find(t => t.id === id);
     if (!t) return;
+    setTemplateSearch(templateLabel(t));
+    setTemplateMenuOpen(false);
     setSubject(t.subject);
     const tType = t.emailType ?? "text";
     setEmailType(tType);
@@ -1392,7 +1420,7 @@ function ComposeWizard({
                     onClick={() => {
                       setEmailType(t);
                       setBrandedError("");
-                      if (t !== "template") setSelectedTemplateId("");
+                      if (t !== "template") { setSelectedTemplateId(""); setTemplateSearch(""); }
                     }}
                     className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
                       emailType === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -1415,17 +1443,40 @@ function ComposeWizard({
               ) : (
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-gray-600">Choose a template</label>
-                  <select
-                    value={selectedTemplateId}
-                    onChange={e => applyTemplate(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">— Select a template —</option>
-                    {relevantTemplates.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-400">Selecting a template will load its content and switch to the appropriate editor.</p>
+                  <div className="relative">
+                    <input
+                      ref={templateInputRef}
+                      type="text"
+                      value={templateSearch}
+                      onChange={e => { setTemplateSearch(e.target.value); setTemplateMenuOpen(true); setSelectedTemplateId(""); }}
+                      onFocus={() => setTemplateMenuOpen(true)}
+                      onBlur={() => setTimeout(() => setTemplateMenuOpen(false), 150)}
+                      placeholder="Search templates…"
+                      className={inputCls}
+                      autoComplete="off"
+                    />
+                    {templateMenuOpen && filteredTemplates.length > 0 && (
+                      <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredTemplates.map(t => (
+                          <li
+                            key={t.id}
+                            onMouseDown={() => applyTemplate(t.id)}
+                            className="px-3 py-2 text-sm cursor-pointer hover:bg-forest-50 hover:text-forest-800 flex items-center gap-2"
+                          >
+                            <span className="text-xs text-gray-400 font-mono shrink-0">{fmtTemplateDate(t.createdAt)}</span>
+                            <span className="truncate">{t.name}</span>
+                            {!t.shared && <span className="ml-auto text-xs text-gray-400 shrink-0">Mine</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {templateMenuOpen && templateSearch.trim() && filteredTemplates.length === 0 && (
+                      <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
+                        No templates match your search.
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400">Shows shared templates and your own. Newest first.</p>
                 </div>
               )}
             </div>
