@@ -1086,8 +1086,8 @@ export default function ContentRepository({ isAdmin, currentUserId, staffMembers
       });
       const d = await res.json();
       setItems(prev => prev.map(i => i.id === editingItem.id ? d.item : i));
-      // Trigger when audience is explicitly being set to ReferralPartners on an edit
-      if (data.audience === "ReferralPartners" && d.item) {
+      // Only trigger on first-time transition TO ReferralPartners, not on subsequent edits
+      if (data.audience === "ReferralPartners" && editingItem.audience !== "ReferralPartners" && d.item) {
         triggerAutoTemplate(d.item.id, d.item.title);
       }
     } else {
