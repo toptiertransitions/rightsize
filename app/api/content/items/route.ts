@@ -103,37 +103,43 @@ Generate a complete standalone HTML email from a TTT team member to a referral p
 - No em dashes anywhere
 - Subject: short (6 words max), specific, human voice`;
 
-        // Build message content — attach the actual file when it's a PDF or image
-        type ContentBlock =
-          | { type: "text"; text: string }
-          | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } }
-          | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } };
-        const messageContent: ContentBlock[] = [];
+        // Build content blocks — use URL references so the API fetches the file
+        // directly rather than base64-encoding it in this serverless function
+        type Block = Anthropic.Messages.ContentBlockParam;
+        const blocks: Block[] = [];
         if (item.fileUrl && ["PDF", "Image"].includes(item.contentType)) {
-          try {
-            const fileRes = await fetch(item.fileUrl);
-            if (fileRes.ok) {
-              const rawMime = fileRes.headers.get("content-type") ?? "";
-              const mime = rawMime.split(";")[0].trim();
-              const base64 = Buffer.from(await fileRes.arrayBuffer()).toString("base64");
-              if (mime === "application/pdf" || item.contentType === "PDF") {
-                messageContent.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } });
-              } else if (mime.startsWith("image/")) {
-                const imgMime = (["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mime) ? mime : "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-                messageContent.push({ type: "image", source: { type: "base64", media_type: imgMime, data: base64 } });
-              }
-            }
-          } catch (e) {
-            console.error("[content/items] file fetch for AI failed:", e);
+          if (item.contentType === "PDF") {
+            blocks.push({ type: "document", source: { type: "url", url: item.fileUrl } });
+          } else {
+            blocks.push({ type: "image", source: { type: "url", url: item.fileUrl } });
           }
         }
-        messageContent.push({ type: "text", text: prompt });
+        blocks.push({ type: "text", text: prompt });
 
-        const message = await anthropic.messages.create({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 4000,
-          messages: [{ role: "user", content: messageContent as Parameters<typeof anthropic.messages.create>[0]["messages"][0]["content"] }],
-        });
+        // Try multimodal first; fall back to text-only if the model rejects the file block
+        let message: Awaited<ReturnType<typeof anthropic.messages.create>>;
+        if (blocks.length > 1) {
+          try {
+            message = await anthropic.messages.create({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 4000,
+              messages: [{ role: "user", content: blocks }],
+            });
+          } catch (multimodalErr) {
+            console.error("[content/items] multimodal call failed, falling back to text-only:", multimodalErr);
+            message = await anthropic.messages.create({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 4000,
+              messages: [{ role: "user", content: prompt }],
+            });
+          }
+        } else {
+          message = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 4000,
+            messages: [{ role: "user", content: prompt }],
+          });
+        }
 
         const raw = (message.content[0] as { type: string; text: string }).text.trim();
         const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
