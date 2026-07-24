@@ -390,7 +390,7 @@ function ContentPickerModal({
   }
 
   const TYPE_ICONS: Record<string, string> = {
-    PDF: "📄", Image: "🖼", Video: "▶", URL: "🔗", LinkedIn: "💼",
+    PDF: "📄", Image: "🖼", PartnerLogo: "🏢", URL: "🔗", LinkedIn: "💼",
   };
 
   if (!open) return null;

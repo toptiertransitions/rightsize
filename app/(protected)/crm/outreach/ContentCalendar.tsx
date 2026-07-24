@@ -60,7 +60,7 @@ function formatDayFull(iso: string): string {
 // ─── Content Pill ─────────────────────────────────────────────────────────────
 
 const TYPE_ICONS: Record<string, string> = {
-  PDF: "📄", Image: "🖼", Video: "▶", URL: "🔗", LinkedIn: "💼",
+  PDF: "📄", Image: "🖼", PartnerLogo: "🏢", URL: "🔗", LinkedIn: "💼",
 };
 
 function ContentPill({ item, category, compact, onClick }: {

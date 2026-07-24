@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const anthropic = new Anthropic();
-  const isFile = ["PDF", "Video", "Image", "Document"].includes(item.contentType);
+  const isFile = ["PDF", "Image", "PartnerLogo", "Document"].includes(item.contentType);
   const ctaLink = item.linkUrl ?? "";
   const ctaLabel = isFile ? "Download Resource" : "View Resource";
   const hasFile = !!(item.fileUrl && ["PDF", "Image"].includes(item.contentType));

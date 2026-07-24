@@ -1472,7 +1472,7 @@ export interface LoyaltyStatusResponse {
 
 // ─── Content Repository ───────────────────────────────────────────────────────
 
-export type ContentItemType = "PDF" | "Image" | "Video" | "URL" | "LinkedIn";
+export type ContentItemType = "PDF" | "Image" | "PartnerLogo" | "URL" | "LinkedIn";
 export type ContentAudience = "Clients" | "ReferralPartners" | "Both" | "InternalTraining";
 export type ContentStatus = "Draft" | "Active" | "Archived";
 export type ContentPipelineStage =

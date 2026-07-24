@@ -56,7 +56,7 @@ const TYPES: { key: ContentItemType | "All"; label: string; icon: string }[] = [
   { key: "All", label: "All Types", icon: "◈" },
   { key: "PDF", label: "PDF", icon: "📄" },
   { key: "Image", label: "Image", icon: "🖼" },
-  { key: "Video", label: "Video", icon: "▶" },
+  { key: "PartnerLogo", label: "Partner Logo", icon: "🏢" },
   { key: "URL", label: "Link", icon: "🔗" },
   { key: "LinkedIn", label: "LinkedIn", icon: "💼" },
 ];
@@ -64,7 +64,7 @@ const TYPES: { key: ContentItemType | "All"; label: string; icon: string }[] = [
 const TYPE_COLORS: Record<ContentItemType, string> = {
   PDF: "bg-red-50 text-red-700 border-red-200",
   Image: "bg-purple-50 text-purple-700 border-purple-200",
-  Video: "bg-blue-50 text-blue-700 border-blue-200",
+  PartnerLogo: "bg-teal-50 text-teal-700 border-teal-200",
   URL: "bg-gray-50 text-gray-700 border-gray-200",
   LinkedIn: "bg-sky-50 text-sky-700 border-sky-200",
 };
@@ -88,7 +88,7 @@ function audienceLabel(a: ContentAudience): string {
 // correct Content-Type and a clean title-based filename. Images are served
 // directly since their Cloudinary URLs already carry the right extension.
 
-const PROXIED_TYPES = new Set<ContentItemType>(["PDF", "Video"]);
+const PROXIED_TYPES = new Set<ContentItemType>(["PDF"]);
 
 function buildDownloadUrl(item: ContentItem): string {
   if (!item.fileUrl) return item.linkUrl ?? "";
@@ -113,7 +113,7 @@ function ContentThumbnail({ item, category, size = "lg" }: { item: ContentItem; 
     );
   }
 
-  const typeIcon = item.contentType === "PDF" ? "📄" : item.contentType === "Image" ? "🖼" : item.contentType === "Video" ? "▶" : item.contentType === "LinkedIn" ? "💼" : "🔗";
+  const typeIcon = item.contentType === "PDF" ? "📄" : item.contentType === "Image" ? "🖼" : item.contentType === "PartnerLogo" ? "🏢" : item.contentType === "LinkedIn" ? "💼" : "🔗";
   const initial = item.title.charAt(0).toUpperCase();
 
   if (size === "sm") {
@@ -476,8 +476,8 @@ function ContentFormModal({
   const [sharedWith, setSharedWith] = useState<string[]>(item?.sharedWith ?? []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const needsFile = contentType === "PDF" || contentType === "Image";
-  const needsLink = contentType === "URL" || contentType === "LinkedIn" || contentType === "Video";
+  const needsFile = contentType === "PDF" || contentType === "Image" || contentType === "PartnerLogo";
+  const needsLink = contentType === "URL" || contentType === "LinkedIn";
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -574,7 +574,7 @@ function ContentFormModal({
           {needsFile && (
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {contentType === "PDF" ? "Upload PDF" : "Upload Image"}
+                {contentType === "PDF" ? "Upload PDF" : contentType === "PartnerLogo" ? "Upload Logo (JPEG / PNG)" : "Upload Image"}
               </label>
               <div
                 onClick={() => fileInputRef.current?.click()}
@@ -604,7 +604,7 @@ function ContentFormModal({
           {needsLink && (
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {contentType === "LinkedIn" ? "LinkedIn Post URL" : contentType === "Video" ? "Video URL" : "Link URL"}
+                {contentType === "LinkedIn" ? "LinkedIn Post URL" : "Link URL"}
               </label>
               <input
                 type="url"
