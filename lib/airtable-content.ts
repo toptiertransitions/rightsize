@@ -259,6 +259,14 @@ export async function getLikesForUser(userClerkId: string, contentIds: string[])
   return new Set(records.map(r => String(r.fields["ContentId"] ?? "")));
 }
 
+export async function getAllLikedItemIds(userClerkId: string): Promise<string[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.CONTENT_LIKES)
+    .select({ filterByFormula: `{UserClerkId} = "${userClerkId}"` })
+    .all();
+  return records.map(r => String(r.fields["ContentId"] ?? "")).filter(Boolean);
+}
+
 export async function addLike(contentId: string, userClerkId: string): Promise<void> {
   const base = getBase();
   await base(AIRTABLE_TABLES.CONTENT_LIKES).create({

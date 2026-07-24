@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import type { OutreachTemplate, OutreachSequence, OutreachContactType } from "@/lib/types";
+import type { OutreachTemplate, OutreachSequence, OutreachContactType, ContentItem } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -312,6 +312,217 @@ function AttachmentUpload({ url, name, onChange }: {
         {uploading ? "Uploading…" : "Attach a file (optional)"}
       </button>
     </>
+  );
+}
+
+// ─── Content Picker Modal ──────────────────────────────────────────────────────
+function ContentPickerModal({
+  open, emailFormat, senderName, onClose, onApply,
+}: {
+  open: boolean;
+  emailFormat: "text" | "branded";
+  senderName: string;
+  onClose: () => void;
+  onApply: (subject: string, body?: string, html?: string) => void;
+}) {
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [selected, setSelected] = useState<ContentItem | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setSearch("");
+    setFavoritesOnly(false);
+    setSelected(null);
+    setGenerating(false);
+    setGenerateError("");
+    setLoading(true);
+    Promise.all([
+      fetch("/api/content/items").then(r => r.json()),
+      fetch("/api/content/items/liked").then(r => r.json()),
+    ]).then(([itemsData, likedData]) => {
+      setItems((itemsData.items ?? []).filter((i: ContentItem) => i.status === "Active"));
+      setLikedIds(new Set(likedData.ids ?? []));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    return items.filter(item => {
+      if (favoritesOnly && !likedIds.has(item.id)) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!item.title.toLowerCase().includes(q) && !(item.description ?? "").toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [items, likedIds, favoritesOnly, search]);
+
+  async function handleAiGenerate() {
+    if (!selected) return;
+    setGenerating(true);
+    setGenerateError("");
+    try {
+      const res = await fetch("/api/content/items/compose-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: selected.id, emailFormat, senderName }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setGenerateError(data.error ?? "Generation failed"); return; }
+      onApply(data.subject ?? "", data.body, data.html);
+      onClose();
+    } catch {
+      setGenerateError("Something went wrong. Try again.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function handleWriteOwn() {
+    if (!selected) return;
+    onApply(selected.title, selected.description ?? undefined);
+    onClose();
+  }
+
+  const TYPE_ICONS: Record<string, string> = {
+    PDF: "📄", Image: "🖼", Video: "▶", URL: "🔗", LinkedIn: "💼",
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Use Content</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Select a piece of content to base your email on</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Search + filter */}
+        <div className="px-5 py-3 border-b border-gray-100 shrink-0 flex gap-3 items-center">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by title or description…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              autoFocus
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setFavoritesOnly(f => !f)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap",
+              favoritesOnly ? "bg-red-50 border-red-200 text-red-600" : "border-gray-200 text-gray-500 hover:border-red-200 hover:text-red-500"
+            )}
+          >
+            <svg className="w-4 h-4" fill={favoritesOnly ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+            Favorites
+          </button>
+        </div>
+
+        {/* Item grid */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <svg className="w-5 h-5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 gap-2">
+              <p className="text-sm text-gray-400">
+                {favoritesOnly ? "No favorites yet — like content in the Content Repository." : "No content found."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filtered.map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelected(s => s?.id === item.id ? null : item)}
+                  className={cn(
+                    "text-left rounded-xl border p-3 transition-all",
+                    selected?.id === item.id
+                      ? "border-forest-400 bg-forest-50 ring-1 ring-forest-400"
+                      : "border-gray-200 hover:border-gray-300 hover:shadow-sm bg-white"
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    {item.thumbnailUrl ? (
+                      <img src={item.thumbnailUrl} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 text-xl">
+                        {TYPE_ICONS[item.contentType] ?? "📎"}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{item.contentType}</span>
+                        {likedIds.has(item.id) && (
+                          <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                        )}
+                        {selected?.id === item.id && (
+                          <svg className="w-3.5 h-3.5 text-forest-600 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{item.title}</p>
+                      {item.description && (
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{item.description}</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Action footer */}
+        {selected && (
+          <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl shrink-0 space-y-3">
+            <p className="text-xs text-gray-600">
+              Selected: <span className="font-semibold text-gray-800">{selected.title}</span>
+            </p>
+            {generateError && <p className="text-xs text-red-600">{generateError}</p>}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleWriteOwn}
+                disabled={generating}
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Write Own Email
+              </button>
+              <button
+                type="button"
+                onClick={handleAiGenerate}
+                disabled={generating}
+                className="flex-1 rounded-lg bg-forest-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-forest-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {generating ? (
+                  <><svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Writing with AI…</>
+                ) : "✦ Use AI to Write Email"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -925,6 +1136,7 @@ function ComposeWizard({
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const templateInputRef = useRef<HTMLInputElement>(null);
+  const [contentPickerOpen, setContentPickerOpen] = useState(false);
 
   // Step 3 / result
   const [sending, setSending] = useState(false);
@@ -959,6 +1171,19 @@ function ComposeWizard({
     return relevantTemplates.filter(t => templateLabel(t).toLowerCase().includes(q));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relevantTemplates, templateSearch]);
+
+  function handleContentApply(subject: string, body?: string, html?: string) {
+    setSubject(subject);
+    if (emailType === "branded" && html) {
+      setBrandedHtml(html);
+    } else if (emailType === "branded" && body) {
+      setBrandedGist(body);
+    } else {
+      setBodyText(body ?? "");
+      setEmailType("text");
+    }
+  }
+
   const salesStaff = staffMembers.filter(s => ["TTTSales", "TTTAdmin", "TTTManager"].includes(s.role ?? ""));
   const currentUser = staffMembers.find(s => s.clerkUserId === currentUserId);
   const senderName = currentUser?.displayName || "Top Tier Transitions";
@@ -1485,7 +1710,7 @@ function ComposeWizard({
           {/* Text email mode */}
           {emailType === "text" && (
             <>
-              {/* AI prompt panel */}
+              {/* AI prompt panel / action buttons */}
               {showAiPrompt ? (
                 <AiPromptPanel
                   channel={channel}
@@ -1494,16 +1719,30 @@ function ComposeWizard({
                   onClose={() => setShowAiPrompt(false)}
                 />
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowAiPrompt(true)}
-                  className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Prompt with AI
-                </button>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowAiPrompt(true)}
+                    className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Prompt with AI
+                  </button>
+                  {channel === "Email" && (
+                    <button
+                      type="button"
+                      onClick={() => setContentPickerOpen(true)}
+                      className="flex items-center gap-2 rounded-lg border border-forest-200 bg-forest-50 px-3 py-2 text-sm font-medium text-forest-700 hover:bg-forest-100 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                      Use Content
+                    </button>
+                  )}
+                </div>
               )}
 
               {channel === "Email" && (
@@ -1542,8 +1781,18 @@ function ComposeWizard({
           {/* Branded email mode */}
           {emailType === "branded" && channel === "Email" && (
             <div className="rounded-xl border border-[#2d4a3e]/20 bg-[#2d4a3e]/5 p-4 space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-[#2d4a3e]">✦ Branded Email Generator</span>
+                <button
+                  type="button"
+                  onClick={() => setContentPickerOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-forest-200 bg-white px-2.5 py-1.5 text-xs font-medium text-forest-700 hover:bg-forest-50 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Use Content
+                </button>
               </div>
               <textarea
                 value={brandedGist}
@@ -1651,6 +1900,14 @@ function ComposeWizard({
           </div>
         </div>
       )}
+
+      <ContentPickerModal
+        open={contentPickerOpen}
+        emailFormat={emailType === "branded" ? "branded" : "text"}
+        senderName={senderName}
+        onClose={() => setContentPickerOpen(false)}
+        onApply={handleContentApply}
+      />
 
       {/* ── Step 3: Review & Send ── */}
       {step === 3 && (
