@@ -989,6 +989,27 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
     setComments(prev => prev.filter(c => c.id !== commentId));
   }
 
+  function triggerAutoTemplate(itemId: string, itemTitle?: string) {
+    setTemplateBanner({ type: "generating", msg: "Generating branded email template…" });
+    fetch("/api/content/items/auto-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId }),
+    })
+      .then(r => r.json())
+      .then((result: { success?: boolean; templateName?: string; error?: string; skipped?: boolean }) => {
+        if (result.success) {
+          setTemplateBanner({ type: "success", msg: `Email template "${result.templateName ?? itemTitle}" created — check the Templates tab.` });
+          setTimeout(() => setTemplateBanner(null), 8000);
+        } else {
+          setTemplateBanner({ type: "error", msg: `Template generation failed: ${result.error ?? "unknown error"}` });
+        }
+      })
+      .catch(err => {
+        setTemplateBanner({ type: "error", msg: `Template generation request failed: ${String(err)}` });
+      });
+  }
+
   async function handleSaveItem(data: Partial<ContentItem> & { fileObj?: File }) {
     if (editingItem && editingItem !== "new") {
       const res = await fetch(`/api/content/items/${editingItem.id}`, {
@@ -996,32 +1017,18 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
       });
       const d = await res.json();
       setItems(prev => prev.map(i => i.id === editingItem.id ? d.item : i));
+      // Trigger when audience is explicitly being set to ReferralPartners on an edit
+      if (data.audience === "ReferralPartners" && d.item) {
+        triggerAutoTemplate(d.item.id, d.item.title);
+      }
     } else {
       const res = await fetch("/api/content/items", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
       });
       const d = await res.json();
       setItems(prev => [d.item, ...prev]);
-      // Trigger AI template generation for referral partner content
       if (d.item?.audience === "ReferralPartners") {
-        setTemplateBanner({ type: "generating", msg: "Generating branded email template…" });
-        fetch("/api/content/items/auto-template", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ itemId: d.item.id }),
-        })
-          .then(r => r.json())
-          .then((result: { success?: boolean; templateName?: string; error?: string; skipped?: boolean }) => {
-            if (result.success) {
-              setTemplateBanner({ type: "success", msg: `Email template "${result.templateName}" created — check the Templates tab.` });
-              setTimeout(() => setTemplateBanner(null), 8000);
-            } else {
-              setTemplateBanner({ type: "error", msg: `Template generation failed: ${result.error ?? "unknown error"}` });
-            }
-          })
-          .catch(err => {
-            setTemplateBanner({ type: "error", msg: `Template generation request failed: ${String(err)}` });
-          });
+        triggerAutoTemplate(d.item.id, d.item.title);
       }
     }
     setEditingItem(null);
