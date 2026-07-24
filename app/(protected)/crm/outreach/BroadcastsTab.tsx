@@ -954,7 +954,18 @@ function ComposeWizard({
     setCtaLink(t.ctaLink ?? "");
     setCtaLabel(t.ctaLabel ?? "");
     setAttachmentUrl(t.attachmentUrl ?? "");
-    setAttachmentName(t.attachmentUrl ? "Attached file" : "");
+    if (t.attachmentUrl) {
+      try {
+        const pathname = new URL(t.attachmentUrl).pathname;
+        const ext = pathname.match(/\.(\w{2,5})$/)?.[1] ?? "pdf";
+        const safeName = t.name.replace(/[^\w\s\-]/g, "").trim().replace(/\s+/g, " ");
+        setAttachmentName(`${safeName}.${ext}`);
+      } catch {
+        setAttachmentName(t.name || "Attached file");
+      }
+    } else {
+      setAttachmentName("");
+    }
   }
 
   // Build the filter payload for the API

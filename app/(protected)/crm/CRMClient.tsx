@@ -2842,7 +2842,7 @@ function ReferralPartnersTab({
                     )}
                     {getCompanyLastActivity(company.id) && (
                       <span className="text-gray-400">
-                        Last activity: {new Date(getCompanyLastActivity(company.id)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        Last activity: {new Date(getCompanyLastActivity(company.id)! + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </span>
                     )}
                   </div>
@@ -2902,7 +2902,7 @@ function ReferralPartnersTab({
                           </td>
                           <td className="py-1.5 text-xs text-gray-500">
                             {getEffectiveLastActivity(c.id, c.lastActivityDate)
-                              ? new Date(getEffectiveLastActivity(c.id, c.lastActivityDate)!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              ? new Date(getEffectiveLastActivity(c.id, c.lastActivityDate)! + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                               : "—"}
                           </td>
                           <td className="py-1.5 text-gray-500">{c.title || "—"}</td>

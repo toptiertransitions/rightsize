@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         const ctaLink = item.linkUrl ?? "";
         const ctaLabel = isFile ? "Download Resource" : "View Resource";
 
+        const hasAttachment = item.fileUrl && ["PDF", "Image"].includes(item.contentType);
         const prompt = `You are a world-class HTML email designer for Top Tier Transitions — a premium estate liquidation and move management company.
 
 Brand:
@@ -87,6 +88,7 @@ ${item.description ? `Description: ${item.description}` : ""}
 Content type: ${item.contentType}
 Audience: Referral Partners
 ${ctaLink ? `CTA label: "${ctaLabel}", URL: ${ctaLink}` : "No external link — resource will be attached to the email"}
+${hasAttachment ? "IMPORTANT: The actual file (PDF/image) is attached above — read it carefully and reference specific details, statistics, visuals, or key takeaways from the content in the email body to make it compelling and specific, not generic." : ""}
 
 Generate a complete standalone HTML email from a TTT team member to a referral partner sharing this resource. Requirements:
 - Return ONLY valid JSON (no markdown fences): {"subject": "...", "html": "..."}
@@ -101,10 +103,36 @@ Generate a complete standalone HTML email from a TTT team member to a referral p
 - No em dashes anywhere
 - Subject: short (6 words max), specific, human voice`;
 
+        // Build message content — attach the actual file when it's a PDF or image
+        type ContentBlock =
+          | { type: "text"; text: string }
+          | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } }
+          | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } };
+        const messageContent: ContentBlock[] = [];
+        if (item.fileUrl && ["PDF", "Image"].includes(item.contentType)) {
+          try {
+            const fileRes = await fetch(item.fileUrl);
+            if (fileRes.ok) {
+              const rawMime = fileRes.headers.get("content-type") ?? "";
+              const mime = rawMime.split(";")[0].trim();
+              const base64 = Buffer.from(await fileRes.arrayBuffer()).toString("base64");
+              if (mime === "application/pdf" || item.contentType === "PDF") {
+                messageContent.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } });
+              } else if (mime.startsWith("image/")) {
+                const imgMime = (["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mime) ? mime : "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+                messageContent.push({ type: "image", source: { type: "base64", media_type: imgMime, data: base64 } });
+              }
+            }
+          } catch (e) {
+            console.error("[content/items] file fetch for AI failed:", e);
+          }
+        }
+        messageContent.push({ type: "text", text: prompt });
+
         const message = await anthropic.messages.create({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 4000,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: messageContent as Parameters<typeof anthropic.messages.create>[0]["messages"][0]["content"] }],
         });
 
         const raw = (message.content[0] as { type: string; text: string }).text.trim();
