@@ -3530,7 +3530,8 @@ function DashboardTab({
   const activeCount = filteredOpps.filter((o) => activeStages.includes(o.stage)).length;
   const wonValue = filteredOpps.filter((o) => o.stage === "Won").reduce((s, o) => s + o.estimatedValue, 0);
   const wonCount = filteredOpps.filter((o) => o.stage === "Won").length;
-  const lostCount = filteredOpps.filter((o) => o.stage === "Lost").length;
+  const rejectedCount = filteredOpps.filter((o) => o.stage === "Lost" && o.lostReason === "Top Tier Rejected").length;
+  const lostCount = filteredOpps.filter((o) => o.stage === "Lost" && o.lostReason !== "Top Tier Rejected").length;
   const closedCount = wonCount + lostCount;
   const winRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
 
@@ -3858,7 +3859,7 @@ function DashboardTab({
           <p className={cn("text-2xl font-bold", winRate >= 50 ? "text-green-600" : winRate > 0 ? "text-amber-600" : "text-gray-400")}>
             {closedCount > 0 ? `${winRate}%` : "—"}
           </p>
-          <p className="text-xs text-gray-400 mt-1 group-hover:text-forest-600 transition-colors">{wonCount}W / {lostCount}L closed →</p>
+          <p className="text-xs text-gray-400 mt-1 group-hover:text-forest-600 transition-colors">{wonCount}W / {lostCount}L{rejectedCount > 0 ? ` / ${rejectedCount}R` : ""} closed →</p>
         </button>
       </div>
 
