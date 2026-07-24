@@ -1224,15 +1224,17 @@ export default function ContentRepository({ isAdmin, currentUserId, staffMembers
           ))}
         </div>
 
-        {/* Stage — options change based on selected audience */}
-        <div className="flex rounded-xl border border-gray-200 overflow-hidden">
-          {STAGES_BY_AUDIENCE[audienceFilter].map(s => (
-            <button key={s.key} onClick={() => setStageFilter(s.key as ContentPipelineStage | "All")}
-              className={cn("px-3 py-1 text-xs font-medium transition-colors", stageFilter === s.key ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {/* Stage — only shown for specific audiences */}
+        {audienceFilter !== "Both" && audienceFilter !== "All" && (
+          <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+            {STAGES_BY_AUDIENCE[audienceFilter].map(s => (
+              <button key={s.key} onClick={() => setStageFilter(s.key as ContentPipelineStage | "All")}
+                className={cn("px-3 py-1 text-xs font-medium transition-colors", stageFilter === s.key ? "bg-forest-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Type */}
         <div className="flex rounded-xl border border-gray-200 overflow-hidden">
