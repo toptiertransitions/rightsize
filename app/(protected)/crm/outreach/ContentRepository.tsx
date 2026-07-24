@@ -1001,6 +1001,14 @@ export default function ContentRepository({ isAdmin, currentUserId, focusItemId,
       });
       const d = await res.json();
       setItems(prev => [d.item, ...prev]);
+      // Fire-and-forget: trigger AI template generation for referral partner content
+      if (d.item?.audience === "ReferralPartners") {
+        fetch("/api/content/items/auto-template", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId: d.item.id }),
+        }).catch(() => {});
+      }
     }
     setEditingItem(null);
   }
