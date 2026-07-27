@@ -835,6 +835,8 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
   const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   async function add() {
     if (!newName.trim()) return;
@@ -869,6 +871,16 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
     onChange(updated);
   }
 
+  async function saveName(id: string) {
+    const trimmed = editingName.trim();
+    if (!trimmed) { setEditingId(null); return; }
+    await fetch(`/api/content/categories/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: trimmed }) });
+    const updated = list.map(c => c.id === id ? { ...c, name: trimmed } : c);
+    setList(updated);
+    onChange(updated);
+    setEditingId(null);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -889,7 +901,24 @@ function CategoryManagerModal({ categories, onClose, onChange }: {
                 <input type="color" value={cat.color} onChange={e => updateColor(cat.id, e.target.value)}
                   className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5" title="Change color" />
               </div>
-              <span className="flex-1 text-sm text-gray-800 font-medium">{cat.name}</span>
+              {editingId === cat.id ? (
+                <input
+                  autoFocus
+                  className="flex-1 text-sm border border-forest-400 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                  value={editingName}
+                  onChange={e => setEditingName(e.target.value)}
+                  onBlur={() => saveName(cat.id)}
+                  onKeyDown={e => { if (e.key === "Enter") saveName(cat.id); if (e.key === "Escape") setEditingId(null); }}
+                />
+              ) : (
+                <button
+                  className="flex-1 text-sm text-gray-800 font-medium text-left hover:text-forest-700 transition-colors"
+                  onClick={() => { setEditingId(cat.id); setEditingName(cat.name); }}
+                  title="Click to rename"
+                >
+                  {cat.name}
+                </button>
+              )}
               <button onClick={() => remove(cat.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
               </button>
