@@ -520,7 +520,11 @@ export default function ContentCalendar({ isAdmin, onViewInRepository, onEditInR
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scheduledDate: newDate }),
     });
-    const data = await res.json();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Failed to update calendar date: ${err.error ?? res.statusText}`);
+      return;
+    }
     if (newDate) {
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, scheduledDate: newDate } : i));
     } else {

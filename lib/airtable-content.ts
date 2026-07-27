@@ -226,7 +226,7 @@ export async function updateContentItem(id: string, data: Partial<{
   if (data.categoryId !== undefined) fields["CategoryId"] = data.categoryId ?? "";
   if (data.tags !== undefined) fields["Tags"] = JSON.stringify(data.tags);
   if (data.status !== undefined) fields["Status"] = data.status;
-  if (data.scheduledDate !== undefined) fields["ScheduledDate"] = data.scheduledDate ?? "";
+  if (data.scheduledDate !== undefined) (fields as Record<string, unknown>)["ScheduledDate"] = data.scheduledDate;
   if (data.sharedWith !== undefined) fields["SharedWithClerkIds"] = data.sharedWith.join(",");
   const record = await base(AIRTABLE_TABLES.CONTENT_ITEMS).update(id, fields);
   return mapItem(record);
