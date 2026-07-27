@@ -819,6 +819,10 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
   const [csvError, setCsvError] = useState("");
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvResult, setCsvResult] = useState<{ created: string[]; skipped: string[]; errors: string[] } | null>(null);
+  const [sortKey, setSortKey] = useState<"name" | "purchases" | "spend" | "lastPurchase" | "source">("spend");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sourceFilter, setSourceFilter] = useState<EstateSaleShopperSource | "All">("All");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     fetch("/api/admin/estate-shoppers")
@@ -901,19 +905,40 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
     }
   };
 
-  const filtered = shoppers.filter(s => {
-    if (!showOptedOut && s.optOut) return false;
-    const q = search.toLowerCase();
-    if (!q) return true;
-    return s.name.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q) ||
-      (s.city ?? "").toLowerCase().includes(q) ||
-      (s.zip ?? "").toLowerCase().includes(q);
-  });
+  const filtered = shoppers
+    .filter(s => {
+      if (!showOptedOut && s.optOut) return false;
+      if (sourceFilter !== "All" && s.source !== sourceFilter) return false;
+      const q = search.toLowerCase();
+      if (!q) return true;
+      return s.name.toLowerCase().includes(q) ||
+        s.email.toLowerCase().includes(q) ||
+        (s.city ?? "").toLowerCase().includes(q) ||
+        (s.zip ?? "").toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "name") cmp = a.name.localeCompare(b.name);
+      else if (sortKey === "purchases") cmp = a.purchaseCount - b.purchaseCount;
+      else if (sortKey === "spend") cmp = a.totalSpend - b.totalSpend;
+      else if (sortKey === "lastPurchase") cmp = (a.lastPurchaseDate ?? "").localeCompare(b.lastPurchaseDate ?? "");
+      else if (sortKey === "source") cmp = a.source.localeCompare(b.source);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+  const PAGE_SIZE = 25;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const totalSpend = shoppers.filter(s => !s.optOut).reduce((sum, s) => sum + s.totalSpend, 0);
   const activeCount = shoppers.filter(s => !s.optOut).length;
   const optedOutCount = shoppers.filter(s => s.optOut).length;
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) { setSortDir(d => d === "asc" ? "desc" : "asc"); }
+    else { setSortKey(key); setSortDir(key === "name" || key === "source" ? "asc" : "desc"); }
+    setPage(1);
+  }
 
   function openCreate() {
     setForm(EMPTY_SHOPPER_FORM);
@@ -1138,19 +1163,27 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
           </div>
         )}
 
-        <div className="flex gap-4 mb-4 flex-wrap items-center">
+        <div className="flex gap-3 mb-4 flex-wrap items-center">
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search by name, email, city, zip…"
-            className="w-full max-w-sm rounded-xl bg-gray-900 border border-gray-800 text-gray-200 placeholder-gray-600 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+            className="rounded-xl bg-gray-900 border border-gray-800 text-gray-200 placeholder-gray-600 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-[220px] flex-1 max-w-sm"
           />
+          <select
+            value={sourceFilter}
+            onChange={e => { setSourceFilter(e.target.value as EstateSaleShopperSource | "All"); setPage(1); }}
+            className="bg-gray-900 border border-gray-800 text-gray-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-500"
+          >
+            <option value="All">All Sources</option>
+            {SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
           <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={showOptedOut}
-              onChange={e => setShowOptedOut(e.target.checked)}
+              onChange={e => { setShowOptedOut(e.target.checked); setPage(1); }}
               className="rounded border-gray-600"
             />
             Show opted-out
@@ -1169,20 +1202,35 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
             ) : (
               <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="border-b border-gray-800">
+                  <thead className="border-b border-gray-800 bg-gray-900/80">
                     <tr className="text-xs text-gray-500 text-left">
-                      <th className="px-4 py-3 font-medium">Name / Email</th>
-                      <th className="px-4 py-3 font-medium">Location</th>
-                      <th className="px-4 py-3 font-medium">Source</th>
-                      <th className="px-4 py-3 font-medium text-right">Purchases</th>
-                      <th className="px-4 py-3 font-medium text-right">Spend</th>
-                      <th className="px-4 py-3 font-medium">Last Purchase</th>
-                      <th className="px-4 py-3 font-medium">Interests</th>
-                      <th className="px-4 py-3 font-medium"></th>
+                      {([
+                        { key: "name", label: "Name / Email", align: "left" },
+                        { key: null, label: "Location", align: "left" },
+                        { key: "source", label: "Source", align: "left" },
+                        { key: "purchases", label: "Purchases", align: "right" },
+                        { key: "spend", label: "Spend", align: "right" },
+                        { key: "lastPurchase", label: "Last Purchase", align: "left" },
+                        { key: null, label: "Interests", align: "left" },
+                        { key: null, label: "", align: "right" },
+                      ] as { key: typeof sortKey | null; label: string; align: string }[]).map((col, i) => (
+                        <th
+                          key={i}
+                          className={`px-4 py-3 font-medium whitespace-nowrap ${col.align === "right" ? "text-right" : ""} ${col.key ? "cursor-pointer select-none hover:text-gray-300 transition-colors" : ""}`}
+                          onClick={() => col.key && toggleSort(col.key)}
+                        >
+                          {col.label}
+                          {col.key && (
+                            <span className="ml-1 opacity-60">
+                              {sortKey === col.key ? (sortDir === "asc" ? "↑" : "↓") : "⇅"}
+                            </span>
+                          )}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
-                    {filtered.map(s => (
+                    {paginated.map(s => (
                       <tr
                         key={s.id}
                         onClick={() => openEdit(s)}
@@ -1209,6 +1257,30 @@ function ShoppersSection({ estates }: { estates: Estate[] }) {
                     ))}
                   </tbody>
                 </table>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
+                    <span className="text-xs text-gray-500">
+                      {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} shoppers
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="px-3 py-1 text-xs bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-xs text-gray-400 min-w-[60px] text-center">Page {page} / {totalPages}</span>
+                      <button
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="px-3 py-1 text-xs bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
