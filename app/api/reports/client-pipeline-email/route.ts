@@ -77,6 +77,11 @@ export async function POST() {
     .sort((a, b) => b.estimatedValue - a.estimatedValue)
     .map(toRow);
 
+  const lostRows = allOpps
+    .filter((o) => o.stage === "Lost" && o.lostAt && o.lostAt >= sevenDaysAgo)
+    .sort((a, b) => b.estimatedValue - a.estimatedValue)
+    .map((o) => ({ ...toRow(o), lostAt: o.lostAt, lostReason: o.lostReason, notes: o.notes || undefined }));
+
   const proposingRows = allOpps
     .filter((o) => o.stage === "Proposing")
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -107,6 +112,7 @@ export async function POST() {
     proposingRows,
     qualifyingRows,
     leadRows,
+    lostRows,
     generatedAt,
   });
 

@@ -3140,6 +3140,8 @@ export type ClientPipelineRow = {
   nextStepDate?: string;
   nextStepNote?: string;
   wonAt?: string;
+  lostAt?: string;
+  lostReason?: string;
   createdAt: string;
   notes?: string;
 };
@@ -3149,12 +3151,14 @@ export function buildClientPipelineEmail({
   proposingRows,
   qualifyingRows,
   leadRows,
+  lostRows,
   generatedAt,
 }: {
   wonRows: ClientPipelineRow[];
   proposingRows: ClientPipelineRow[];
   qualifyingRows: ClientPipelineRow[];
   leadRows: ClientPipelineRow[];
+  lostRows: ClientPipelineRow[];
   generatedAt: string;
 }): string {
   const today = new Date();
@@ -3257,6 +3261,53 @@ export function buildClientPipelineEmail({
       </td></tr>`;
   }
 
+  function lostSection(): string {
+    if (lostRows.length === 0) return "";
+    return `
+      <tr><td style="padding:28px 0 10px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="border-top:2px solid #e5e7eb;"></td>
+          <td style="padding:0 14px;white-space:nowrap;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Lost Last 7 Days</td>
+          <td style="border-top:2px solid #e5e7eb;"></td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:0 0 10px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="border-left:4px solid #dc2626;padding-left:12px;">
+            <span style="font-size:15px;font-weight:700;color:#1f2937;">Lost</span>
+            <span style="font-size:12px;color:#9ca3af;margin-left:8px;">${lostRows.length} opp${lostRows.length !== 1 ? "s" : ""}</span>
+            <span style="font-size:12px;font-weight:600;color:#dc2626;margin-left:10px;">· ${fmtMoney(lostRows.reduce((s, r) => s + r.value, 0))} pipeline lost</span>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #fecaca;border-radius:8px;overflow:hidden;">
+          <thead><tr style="background:#fef2f2;">
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Client</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Location</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Value</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Referral Source</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Owner</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Lost Date</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Lost Reason</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Notes</th>
+          </tr></thead>
+          <tbody>
+            ${lostRows.map(r => `<tr style="background:#ffffff;border-bottom:1px solid #fecaca;">
+              <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#1f2937;white-space:nowrap;vertical-align:top;">${r.clientName}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#6b7280;white-space:nowrap;vertical-align:top;">${r.location || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#2d4a3e;white-space:nowrap;vertical-align:top;">${fmtMoney(r.value)}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#374151;vertical-align:top;">${r.referralSource || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#374151;white-space:nowrap;vertical-align:top;">${r.ownerName || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#dc2626;white-space:nowrap;vertical-align:top;font-weight:500;">${fmtDate(r.lostAt)}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#7f1d1d;white-space:nowrap;vertical-align:top;font-weight:500;">${r.lostReason || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#374151;max-width:220px;vertical-align:top;">${r.notes || "—"}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </td></tr>`;
+  }
+
   const wonSection = wonRows.length > 0 ? sectionBlock("Won", wonRows, true) : "";
   const wonDivider = wonRows.length > 0 ? `<tr><td style="padding:8px 0 4px;">
     <table width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -3303,13 +3354,18 @@ export function buildClientPipelineEmail({
                 <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#2d4a3e;">${fmtMoney(totalPipelineValue)}</p>
                 <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${totalOpps} open opp${totalOpps !== 1 ? "s" : ""}</p>
               </td>
-              <td style="padding:16px 32px;">
+              <td style="padding:16px 32px;border-right:1px solid #e5e7eb;">
                 <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">By Stage</p>
                 <p style="margin:6px 0 0;font-size:12px;color:#374151;line-height:1.8;">
                   <span style="color:#C9A96E;font-weight:600;">Proposing:</span> ${proposingRows.length} &nbsp;
                   <span style="color:#f97316;font-weight:600;">Qualifying:</span> ${qualifyingRows.length} &nbsp;
                   <span style="color:#6b7280;font-weight:600;">Lead:</span> ${leadRows.length}
                 </p>
+              </td>
+              <td style="padding:16px 32px;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Lost Last 7 Days</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#dc2626;">${lostRows.length > 0 ? fmtMoney(lostRows.reduce((s, r) => s + r.value, 0)) : "—"}</p>
+                <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${lostRows.length} deal${lostRows.length !== 1 ? "s" : ""}</p>
               </td>
             </tr>
           </table>
@@ -3322,6 +3378,7 @@ export function buildClientPipelineEmail({
             ${wonDivider}
             ${pipelineSections}
             ${emptySections}
+            ${lostSection()}
           </table>
         </td></tr>
 
