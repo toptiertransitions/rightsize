@@ -480,7 +480,7 @@ function OpportunitiesTab({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-700">
-                  {opp.estimatedValue ? `$${opp.estimatedValue.toLocaleString()}` : "—"}
+                  {opp.estimatedValue ? fmtExact(opp.estimatedValue) : "—"}
                 </td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{opp.expectedCloseDate || "—"}</td>
                 <td className="px-4 py-3 text-gray-600">{opp.nextStepDate || "—"}</td>
@@ -3442,10 +3442,22 @@ const COMPANY_TYPE_COLORS: Record<string, string> = {
   "Other": "bg-gray-100 text-gray-600",
 };
 
+// Abbreviated format for aggregate totals (column headers, KPI cards)
 function fmt(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toLocaleString()}`;
+  if (n >= 1_000_000) {
+    const m = Math.round(n / 100_000) / 10;
+    return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
+  }
+  if (n >= 1_000) {
+    const k = Math.round(n / 100) / 10;
+    return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}K`;
+  }
+  return `$${Math.round(n).toLocaleString("en-US")}`;
+}
+
+// Exact format for individual deal values so they add up to the displayed totals
+function fmtExact(n: number) {
+  return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
 
@@ -3929,7 +3941,7 @@ function DashboardTab({
                     >
                       <p className="text-xs font-medium text-gray-800 truncate">{getContactName(o.clientContactId)}</p>
                       <p className="text-xs text-gray-400">
-                        {o.estimatedValue > 0 ? fmt(o.estimatedValue) : "No value"}
+                        {o.estimatedValue > 0 ? fmtExact(o.estimatedValue) : "No value"}
                         {o.nextStepDate ? ` · ${new Date(o.nextStepDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
                         {oppOwner ? ` · ${oppOwner}` : ""}
                       </p>
@@ -4430,7 +4442,7 @@ function DashboardTab({
                             {o.lostReason && <span className="ml-2 text-xs text-gray-400">· {o.lostReason}</span>}
                           </div>
                           <div className="flex items-center gap-3 text-xs text-gray-400">
-                            {o.estimatedValue > 0 && <span>{fmt(o.estimatedValue)}</span>}
+                            {o.estimatedValue > 0 && <span>{fmtExact(o.estimatedValue)}</span>}
                             {o.lostAt && <span>{new Date(o.lostAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
                           </div>
                         </div>
