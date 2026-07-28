@@ -540,6 +540,9 @@ function OpportunityPanel({
 }) {
   const router = useRouter();
   const [clientContactId, setClientContactId] = useState(opportunity?.clientContactId || initialContactId || "");
+  const [contactQuery, setContactQuery] = useState("");
+  const [contactOpen, setContactOpen] = useState(false);
+  const contactInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<OpportunityStage>(opportunity?.stage || "Lead");
   const [estimatedValue, setEstimatedValue] = useState(String(opportunity?.estimatedValue || ""));
   const [notes, setNotes] = useState(opportunity?.notes || "");
@@ -844,16 +847,39 @@ function OpportunityPanel({
           {/* Client Contact */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Client Contact</label>
-            <select
-              value={clientContactId}
-              onChange={(e) => setClientContactId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">— Select contact —</option>
-              {clientContacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                ref={contactInputRef}
+                type="text"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                placeholder="Search contacts…"
+                value={contactOpen ? contactQuery : (clientContacts.find(c => c.id === clientContactId)?.name ?? contactQuery)}
+                onFocus={() => { setContactOpen(true); setContactQuery(""); }}
+                onBlur={() => setTimeout(() => setContactOpen(false), 150)}
+                onChange={e => { setContactQuery(e.target.value); setClientContactId(""); }}
+              />
+              {contactOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  {(() => {
+                    const q = contactQuery.trim().toLowerCase();
+                    const matches = q
+                      ? clientContacts.filter(c => c.name.toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q))
+                      : clientContacts;
+                    if (matches.length === 0) return <div className="px-3 py-2 text-sm text-gray-400">No contacts match</div>;
+                    return matches.map(c => (
+                      <div
+                        key={c.id}
+                        onMouseDown={() => { setClientContactId(c.id); setContactQuery(""); setContactOpen(false); }}
+                        className={`px-3 py-2 text-sm cursor-pointer hover:bg-forest-50 flex items-center justify-between gap-2 ${c.id === clientContactId ? "bg-forest-50 text-forest-700 font-medium" : "text-gray-800"}`}
+                      >
+                        <span>{c.name}</span>
+                        {c.email && <span className="text-xs text-gray-400 truncate max-w-[160px]">{c.email}</span>}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+            </div>
             {ownerName && (
               <p className="text-xs text-gray-500 mt-1">Owner: <span className="font-medium text-gray-700">{ownerName}</span></p>
             )}
