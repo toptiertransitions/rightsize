@@ -3438,15 +3438,21 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
 }
 
 export async function getOpportunities(filters?: { stage?: string; assignedTo?: string }): Promise<ClientOpportunity[]> {
-  const parts: string[] = [];
+  const parts: string[] = ["NOT({Deleted})"];
   if (filters?.stage) parts.push(`{Stage} = "${filters.stage}"`);
   if (filters?.assignedTo) parts.push(`{AssignedToClerkId} = "${filters.assignedTo}"`);
-  const filterStr = parts.length === 1 ? parts[0] : parts.length > 1 ? `AND(${parts.join(", ")})` : "";
-  const qs = filterStr
-    ? `?filterByFormula=${encodeURIComponent(filterStr)}&sort[0][field]=CreatedAt&sort[0][direction]=desc`
-    : `?sort[0][field]=CreatedAt&sort[0][direction]=desc`;
+  const filterStr = parts.length === 1 ? parts[0] : `AND(${parts.join(", ")})`;
+  const qs = `?filterByFormula=${encodeURIComponent(filterStr)}&sort[0][field]=CreatedAt&sort[0][direction]=desc`;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, qs);
   if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapOpportunity);
+}
+
+export async function getDeletedOpportunities(since: string): Promise<ClientOpportunity[]> {
+  const formula = encodeURIComponent(`AND({Deleted}, {DeletedAt} >= "${since}")`);
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula}&sort[0][field]=DeletedAt&sort[0][direction]=desc`);
+  if (!res.ok) return [];
   const data = await res.json();
   return (data.records as AirtableRecord[]).map(mapOpportunity);
 }
@@ -3458,7 +3464,7 @@ export async function getOpportunityById(id: string): Promise<ClientOpportunity 
 }
 
 export async function getOpportunitiesForTenant(tenantId: string): Promise<ClientOpportunity[]> {
-  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const formula = encodeURIComponent(`AND({TenantId} = "${tenantId}", NOT({Deleted}))`);
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula}`);
   if (!res.ok) return [];
   const data = await res.json();
@@ -3466,7 +3472,7 @@ export async function getOpportunitiesForTenant(tenantId: string): Promise<Clien
 }
 
 export async function getOpportunitiesForContact(clientContactId: string): Promise<ClientOpportunity[]> {
-  const formula = encodeURIComponent(`{ClientContactId} = "${clientContactId}"`);
+  const formula = encodeURIComponent(`AND({ClientContactId} = "${clientContactId}", NOT({Deleted}))`);
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `?filterByFormula=${formula}`);
   if (!res.ok) return [];
   const data = await res.json();
@@ -3587,7 +3593,11 @@ export async function updateOpportunity(
 }
 
 export async function deleteOpportunity(id: string): Promise<void> {
-  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, { method: "DELETE" });
+  const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { Deleted: true, DeletedAt: new Date().toISOString() } }),
+  });
   if (!res.ok) throw new Error(await res.text());
 }
 

@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import {
   getSystemRole,
   getOpportunities,
+  getDeletedOpportunities,
   getClientContacts,
   getStaffMembers,
   getReferralContacts,
@@ -25,9 +26,12 @@ export async function POST() {
   const userEmail = clerkUser.emailAddresses[0]?.emailAddress;
   if (!userEmail) return NextResponse.json({ error: "No email on account" }, { status: 400 });
 
-  const [allOpps, clientContacts, staffMembers, referralContacts, referralCompanies] =
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  const [allOpps, deletedOpps, clientContacts, staffMembers, referralContacts, referralCompanies] =
     await Promise.all([
       getOpportunities(),
+      getDeletedOpportunities(sevenDaysAgo),
       getClientContacts(),
       getStaffMembers(),
       getReferralContacts(),
@@ -38,8 +42,6 @@ export async function POST() {
   const staffMap = new Map(staffMembers.map((s) => [s.clerkUserId, s.displayName]));
   const referralContactMap = new Map(referralContacts.map((r) => [r.id, r]));
   const referralCompanyMap = new Map(referralCompanies.map((c) => [c.id, c]));
-
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
   function toRow(opp: (typeof allOpps)[number]): ClientPipelineRow {
     const contact = contactMap.get(opp.clientContactId);
@@ -97,6 +99,10 @@ export async function POST() {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map(toRow);
 
+  const deletedRows = deletedOpps
+    .sort((a, b) => (b.lostAt ?? b.createdAt).localeCompare(a.lostAt ?? a.createdAt))
+    .map((o) => ({ ...toRow(o), lostAt: o.lostAt, lostReason: o.lostReason, notes: o.notes || undefined }));
+
   const generatedAt = new Date().toLocaleString("en-US", {
     timeZone: "America/New_York",
     month: "short",
@@ -113,6 +119,7 @@ export async function POST() {
     qualifyingRows,
     leadRows,
     lostRows,
+    deletedRows,
     generatedAt,
   });
 

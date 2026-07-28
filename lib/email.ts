@@ -3152,6 +3152,7 @@ export function buildClientPipelineEmail({
   qualifyingRows,
   leadRows,
   lostRows,
+  deletedRows,
   generatedAt,
 }: {
   wonRows: ClientPipelineRow[];
@@ -3159,6 +3160,7 @@ export function buildClientPipelineEmail({
   qualifyingRows: ClientPipelineRow[];
   leadRows: ClientPipelineRow[];
   lostRows: ClientPipelineRow[];
+  deletedRows: ClientPipelineRow[];
   generatedAt: string;
 }): string {
   const today = new Date();
@@ -3308,6 +3310,51 @@ export function buildClientPipelineEmail({
       </td></tr>`;
   }
 
+  function deletedSection(): string {
+    if (deletedRows.length === 0) return "";
+    return `
+      <tr><td style="padding:28px 0 10px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="border-top:2px solid #e5e7eb;"></td>
+          <td style="padding:0 14px;white-space:nowrap;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Deleted Last 7 Days</td>
+          <td style="border-top:2px solid #e5e7eb;"></td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:0 0 10px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="border-left:4px solid #7f1d1d;padding-left:12px;">
+            <span style="font-size:15px;font-weight:700;color:#1f2937;">Deleted</span>
+            <span style="font-size:12px;color:#9ca3af;margin-left:8px;">${deletedRows.length} opp${deletedRows.length !== 1 ? "s" : ""}</span>
+            <span style="font-size:12px;font-weight:600;color:#7f1d1d;margin-left:10px;">· ${fmtMoney(deletedRows.reduce((s, r) => s + r.value, 0))} removed</span>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #fca5a5;border-radius:8px;overflow:hidden;">
+          <thead><tr style="background:#fee2e2;">
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Client</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Location</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Value</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Referral Source</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Owner</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Stage at Deletion</th>
+            <th style="padding:8px 12px;font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:left;white-space:nowrap;">Notes</th>
+          </tr></thead>
+          <tbody>
+            ${deletedRows.map(r => `<tr style="background:#ffffff;border-bottom:1px solid #fca5a5;">
+              <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#1f2937;white-space:nowrap;vertical-align:top;">${r.clientName}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#6b7280;white-space:nowrap;vertical-align:top;">${r.location || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#2d4a3e;white-space:nowrap;vertical-align:top;">${fmtMoney(r.value)}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#374151;vertical-align:top;">${r.referralSource || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#374151;white-space:nowrap;vertical-align:top;">${r.ownerName || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#7f1d1d;white-space:nowrap;vertical-align:top;font-weight:500;">${r.lostReason || "—"}</td>
+              <td style="padding:9px 12px;font-size:12px;color:#374151;max-width:220px;vertical-align:top;">${r.notes || "—"}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </td></tr>`;
+  }
+
   const wonSection = wonRows.length > 0 ? sectionBlock("Won", wonRows, true) : "";
   const wonDivider = wonRows.length > 0 ? `<tr><td style="padding:8px 0 4px;">
     <table width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -3379,6 +3426,7 @@ export function buildClientPipelineEmail({
             ${pipelineSections}
             ${emptySections}
             ${lostSection()}
+            ${deletedSection()}
           </table>
         </td></tr>
 
