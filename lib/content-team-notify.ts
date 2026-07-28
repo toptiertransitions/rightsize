@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
 import { getStaffMembers } from "./airtable";
+import { isTTTAdmin } from "./config";
 import type { ContentItem } from "./types";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
@@ -142,7 +143,9 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
 
   const staff = await getStaffMembers();
   const recipients = staff
-    .filter(s => s.isActive && s.email && ["TTTAdmin", "TTTSales"].includes(s.role ?? ""))
+    .filter(s => s.isActive && s.email && (
+      ["TTTAdmin", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
+    ))
     .map(s => s.email as string);
   if (recipients.length === 0) return;
 
