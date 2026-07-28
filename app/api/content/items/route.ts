@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { getContentItems, createContentItem } from "@/lib/airtable-content";
+import { notifyTeamNewContent } from "@/lib/content-team-notify";
 import type { ContentItemType, ContentAudience, ContentPipelineStage, ContentStatus } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
@@ -59,6 +60,11 @@ export async function POST(req: NextRequest) {
     scheduledDate: body.scheduledDate,
     sharedWith: Array.isArray(body.sharedWith) ? body.sharedWith : [],
   });
+
+  // Fire-and-forget team notification for new Active content
+  if (item.status === "Active") {
+    notifyTeamNewContent(item).catch(e => console.error("[content/items POST] notify failed:", e));
+  }
 
   return NextResponse.json({ item });
 }

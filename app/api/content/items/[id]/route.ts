@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
-import { updateContentItem, deleteContentItem } from "@/lib/airtable-content";
+import { updateContentItem, deleteContentItem, getContentItemById } from "@/lib/airtable-content";
+import { notifyTeamNewContent } from "@/lib/content-team-notify";
 import type { ContentItemType, ContentAudience, ContentPipelineStage, ContentStatus } from "@/lib/types";
 
 interface Context { params: Promise<{ id: string }> }
@@ -17,6 +18,11 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+
+  // Snapshot previous status before update to detect Active transition
+  const prevItem = body.status === "Active"
+    ? await getContentItemById(id).catch(() => null)
+    : null;
 
   const item = await updateContentItem(id, {
     title: body.title,
@@ -35,6 +41,11 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     scheduledDate: body.scheduledDate,
     sharedWith: Array.isArray(body.sharedWith) ? body.sharedWith : undefined,
   });
+  // Notify team when status first transitions to Active
+  if (item.status === "Active" && prevItem && prevItem.status !== "Active") {
+    notifyTeamNewContent(item).catch(e => console.error("[content/items PATCH] notify failed:", e));
+  }
+
   return NextResponse.json({ item });
 }
 

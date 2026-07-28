@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import {
@@ -23,15 +24,17 @@ export default async function OutreachPage() {
   ]);
 
   return (
-    <OutreachClient
-      currentUserId={userId}
-      systemRole={sysRole ?? ""}
-      gmailConnected={!!gmailToken}
-      hasSendScope={gmailToken?.hasSendScope ?? false}
-      gmailEmail={gmailToken?.email}
-      initialTemplates={templates}
-      companies={companies}
-      staffMembers={staffMembers}
-    />
+    <Suspense>
+      <OutreachClient
+        currentUserId={userId}
+        systemRole={sysRole ?? ""}
+        gmailConnected={!!gmailToken}
+        hasSendScope={gmailToken?.hasSendScope ?? false}
+        gmailEmail={gmailToken?.email}
+        initialTemplates={templates}
+        companies={companies}
+        staffMembers={staffMembers}
+      />
+    </Suspense>
   );
 }

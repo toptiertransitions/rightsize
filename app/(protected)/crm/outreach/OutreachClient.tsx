@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { OutreachTemplate, OutreachTemplateChannel } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
@@ -844,10 +845,24 @@ export default function OutreachClient({
   companies,
   staffMembers,
 }: OutreachClientProps) {
-  const [tab, setTab] = useState<OutreachTab>("myday");
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<OutreachTab>(() => {
+    const t = searchParams.get("tab") as OutreachTab | null;
+    return t && ["myday","broadcasts","sequences","templates","repository","contentcal"].includes(t) ? t : "myday";
+  });
   const [templates, setTemplates] = useState(initialTemplates);
-  const [repoFocusItemId, setRepoFocusItemId] = useState<string | null>(null);
+  const [repoFocusItemId, setRepoFocusItemId] = useState<string | null>(() => searchParams.get("item"));
   const [repoEditItemId, setRepoEditItemId] = useState<string | null>(null);
+
+  // Clear URL params after consuming them so refreshing doesn't re-trigger
+  useEffect(() => {
+    if (searchParams.get("tab") || searchParams.get("item")) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tab");
+      url.searchParams.delete("item");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   const isAdmin = systemRole === "TTTAdmin";
 
