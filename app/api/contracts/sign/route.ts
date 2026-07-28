@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers } from "@/lib/airtable";
+import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers, getContractsForTenant } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { isTTTAdmin } from "@/lib/config";
@@ -119,9 +119,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Update tenant estimatedHours to the signed contract total hours
+  // Update tenant estimatedHours to the sum of ALL signed contracts' hours
   try {
-    const totalContractHours = contract.rightsizingHours + contract.packingHours + contract.unpackingHours;
+    const allContracts = await getContractsForTenant(contract.tenantId).catch(() => []);
+    const signedContracts = allContracts.filter(c => c.status === "Signed" || c.id === contract.id);
+    const totalContractHours = signedContracts.reduce((s, c) => {
+      if (c.lineItems && c.lineItems.length > 0) return s + c.lineItems.reduce((h, li) => h + li.hours, 0);
+      return s + c.rightsizingHours + c.packingHours + c.unpackingHours;
+    }, 0);
     await updateTenant(contract.tenantId, { estimatedHours: totalContractHours });
   } catch (e) {
     console.error("Failed to update tenant estimatedHours on sign:", e);

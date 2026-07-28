@@ -280,10 +280,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getStaffMembers().catch(() => []),
   ]);
 
-  // The current primary quote is the most-recently-signed Signed contract
-  const primaryContract = contracts
-    .filter((c) => c.status === "Signed")
-    .sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt))[0] ?? null;
+  const signedContracts = contracts.filter((c) => c.status === "Signed");
 
   if (!tenant) redirect("/home");
   const resolvedRole = role ?? sysRole;
@@ -392,7 +389,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         tenantOptions={tenantOptions}
         currentTenantId={tenantId}
         services={serviceNames}
-        primaryContract={primaryContract}
+        signedContracts={signedContracts}
         isManager={isManagerOrAdmin}
         isStaff={isTTTStaff}
         isTTT={tenant.isTTT === true}

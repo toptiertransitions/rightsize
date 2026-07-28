@@ -18,8 +18,14 @@ function getContractServiceHours(contract: Contract): ServiceHours[] {
   return legacy;
 }
 
-function getContractTotalHours(contract: Contract): number {
-  return getContractServiceHours(contract).reduce((s, li) => s + li.hours, 0);
+function mergeContractServiceHours(contracts: Contract[]): ServiceHours[] {
+  const map = new Map<string, number>();
+  for (const c of contracts) {
+    for (const sh of getContractServiceHours(c)) {
+      map.set(sh.serviceName, (map.get(sh.serviceName) ?? 0) + sh.hours);
+    }
+  }
+  return Array.from(map.entries()).map(([serviceName, hours]) => ({ serviceName, hours }));
 }
 
 function ChevronIcon({ open }: { open: boolean }) {
@@ -237,17 +243,19 @@ interface Props {
   canEditEstimate?: boolean; // defaults to isAdmin; pass false in "All Projects" modes
   planEntries?: PlanEntry[];
   services?: string[];
-  primaryContract?: Contract | null;
+  signedContracts?: Contract[];
   isTTT?: boolean;
   tenantName?: string;
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, primaryContract, isTTT, tenantName }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, signedContracts, isTTT, tenantName }: Props) {
   const serviceList = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
 
-  // Derive estimated hours from signed primary contract if available
-  const contractServiceHours = primaryContract ? getContractServiceHours(primaryContract) : [];
-  const contractTotalHours = primaryContract ? getContractTotalHours(primaryContract) : 0;
+  // Derive estimated hours from all signed contracts combined
+  const contractServiceHours = signedContracts && signedContracts.length > 0
+    ? mergeContractServiceHours(signedContracts)
+    : [];
+  const contractTotalHours = contractServiceHours.reduce((s, sh) => s + sh.hours, 0);
   const isLockedByContract = contractTotalHours > 0;
 
   // Per-service breakdown: contract takes precedence; fall back to calculator estimate
@@ -474,7 +482,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
           )}
           {isLockedByContract && (
             <p className="text-[10px] text-gray-400 mt-1 leading-tight">
-              Locked by signed quote
+              {(signedContracts?.length ?? 0) > 1 ? `${signedContracts!.length} signed quotes` : "Locked by signed quote"}
             </p>
           )}
           {/* Per-service accordion — managers see contract breakdown, clients see calculator estimate */}

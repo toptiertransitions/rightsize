@@ -54,14 +54,14 @@ export function InvoiceCreatorModal({
   const [depositMode, setDepositMode] = useState<DepositMode>("percent");
   const [depositPercent, setDepositPercent] = useState(40);
   const [depositAmount, setDepositAmount] = useState("");
-  const [selectedContractId, setSelectedContractId] = useState(contracts[0]?.id ?? "");
+  const [selectedContractId, setSelectedContractId] = useState(contracts.length > 1 ? "__all__" : (contracts[0]?.id ?? ""));
   const [depositServiceId, setDepositServiceId] = useState(
     (services.find((s) => s.name.toLowerCase() === "services") ?? services[0])?.id ?? ""
   );
 
   // Full invoice state
   const [fullSource, setFullSource] = useState<FullSource>("contract");
-  const [fullContractId, setFullContractId] = useState(contracts[0]?.id ?? "");
+  const [fullContractId, setFullContractId] = useState(contracts.length > 1 ? "__all__" : (contracts[0]?.id ?? ""));
   const [specificAmount, setSpecificAmount] = useState("");
   const [specificServiceId, setSpecificServiceId] = useState(services[0]?.id ?? "");
 
@@ -136,7 +136,9 @@ export function InvoiceCreatorModal({
 
   // Deposit calc
   const selectedContract = contracts.find((c) => c.id === selectedContractId);
-  const contractTotal = selectedContract?.totalCost ?? 0;
+  const contractTotal = selectedContractId === "__all__"
+    ? contracts.reduce((s, c) => s + c.totalCost, 0)
+    : (selectedContract?.totalCost ?? 0);
   const depositAmountCalc =
     depositMode === "percent"
       ? Math.round((depositPercent / 100) * contractTotal * 100) / 100
@@ -144,12 +146,20 @@ export function InvoiceCreatorModal({
 
   // Full invoice calc
   const fullContract = contracts.find((c) => c.id === fullContractId);
-  const contractLineItems = fullContract?.lineItems ?? [];
+  const contractLineItems = fullContractId === "__all__"
+    ? contracts.flatMap((c) => c.lineItems ?? [])
+    : (fullContract?.lineItems ?? []);
   const contractNetTotal = contractLineItems.reduce((s, li) => s + li.hours * li.rate, 0);
-  const fullContractDiscount = fullSource === "contract" ? (fullContract?.discountAmount ?? 0) : 0;
+  const fullContractDiscount = fullSource === "contract"
+    ? (fullContractId === "__all__"
+        ? contracts.reduce((s, c) => s + (c.discountAmount ?? 0), 0)
+        : (fullContract?.discountAmount ?? 0))
+    : 0;
   const discountLineItem = fullContractDiscount > 0 ? {
     serviceId: "",
-    serviceName: `Discount — ${fullContract?.discountCode ?? "Code Applied"}`,
+    serviceName: fullContractId === "__all__"
+      ? "Discounts Applied"
+      : `Discount — ${fullContract?.discountCode ?? "Code Applied"}`,
     hours: 1,
     rate: -fullContractDiscount,
   } : null;
@@ -197,9 +207,10 @@ export function InvoiceCreatorModal({
   const finalAmount = tab === "Deposit" ? depositAmountCalc : fullAmount;
 
   useEffect(() => {
-    if (contracts[0]?.id) {
-      setSelectedContractId(contracts[0].id);
-      setFullContractId(contracts[0].id);
+    if (contracts.length > 0) {
+      const defaultId = contracts.length > 1 ? "__all__" : contracts[0].id;
+      setSelectedContractId(defaultId);
+      setFullContractId(defaultId);
     }
     if (services.length > 0) {
       const servicesEntry = services.find((s) => s.name.toLowerCase() === "services") ?? services[0];
@@ -250,7 +261,7 @@ export function InvoiceCreatorModal({
           serviceName: selectedDepositService?.name ?? "",
           depositType: depositMode === "percent" ? "PercentOfEstimate" : "SpecificAmount",
           depositPercent: depositMode === "percent" ? depositPercent : undefined,
-          contractId: depositMode === "percent" ? selectedContractId : undefined,
+          contractId: depositMode === "percent" && selectedContractId !== "__all__" ? selectedContractId : undefined,
         };
       } else {
         // Full invoice
@@ -272,7 +283,7 @@ export function InvoiceCreatorModal({
             ...body,
             serviceId: svc?.id ?? "",
             serviceName: svc?.name ?? "Services",
-            contractId: fullContractId,
+            contractId: fullContractId !== "__all__" ? fullContractId : undefined,
             lineItems,
           };
         } else if (fullSource === "logged") {
@@ -398,6 +409,9 @@ export function InvoiceCreatorModal({
                         onChange={(e) => setSelectedContractId(e.target.value)}
                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
                       >
+                        {contracts.length > 1 && (
+                          <option value="__all__">All Contracts (Combined) — {fmt(contracts.reduce((s, c) => s + c.totalCost, 0))}</option>
+                        )}
                         {contracts.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.signedAt ? new Date(c.signedAt).toLocaleDateString() : "Signed"} — {fmt(c.totalCost)}
@@ -519,6 +533,9 @@ export function InvoiceCreatorModal({
                         onChange={(e) => setFullContractId(e.target.value)}
                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
                       >
+                        {contracts.length > 1 && (
+                          <option value="__all__">All Contracts (Combined) — {fmt(contracts.reduce((s, c) => s + c.totalCost, 0))}</option>
+                        )}
                         {contracts.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.signedAt ? new Date(c.signedAt).toLocaleDateString() : "Signed"} — {fmt(c.totalCost)}

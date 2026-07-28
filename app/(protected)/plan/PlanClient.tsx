@@ -1007,7 +1007,7 @@ interface TenantOption {
 }
 
 interface PlanClientProps {
-  primaryContract?: Contract | null;
+  signedContracts?: Contract[];
   isManager?: boolean;
   isStaff?: boolean;
   entries: PlanEntry[];
@@ -1026,7 +1026,7 @@ interface PlanClientProps {
   isTTT?: boolean;
 }
 
-export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, primaryContract, isManager, isStaff, isTTT }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -1569,7 +1569,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
         canEditEstimate={!isAllProjectsMode}
         planEntries={liveEntries}
         services={services}
-        primaryContract={primaryContract}
+        signedContracts={signedContracts}
         isManager={isManager}
         isTTT={isTTT}
         tenantName={tenantName}

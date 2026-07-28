@@ -708,11 +708,11 @@ export async function POST(req: NextRequest) {
     .filter((e) => e.date >= sevenDaysAgoStr && e.date < todayStr)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const primaryContract = contracts
-    .filter((c) => c.status === "Signed")
-    .sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt))[0] ?? null;
-
-  const contractedHours = primaryContract?.lineItems?.reduce((s, li) => s + li.hours, 0) ?? 0;
+  const signedContracts = contracts.filter((c) => c.status === "Signed");
+  const contractedHours = signedContracts.reduce((s, c) => {
+    if (c.lineItems && c.lineItems.length > 0) return s + c.lineItems.reduce((h, li) => h + li.hours, 0);
+    return s + c.rightsizingHours + c.packingHours + c.unpackingHours;
+  }, 0);
   const workedHours = timeEntries.filter((e) => !e.nonBillable).reduce((s, e) => s + e.durationMinutes, 0) / 60;
 
   let html: string;
