@@ -101,16 +101,18 @@ export async function POST(req: NextRequest) {
       } else {
         // Full: build from explicit lineItems, or fall back to a single line for "specific amount" invoices
         if (lineItems && lineItems.length > 0) {
-          // Exclude internal credit/adjustment lines (deposit applied, discount credits) from QBO.
-          // In QBO the deposit is a separate invoice applied as a payment — negative line items
-          // that bring the total to $0 or below cause a QBO ValidationFault.
-          // Exclude internal credit/adjustment lines (deposit applied, discount credits) from QBO.
-          // In QBO the deposit is a separate invoice applied as a payment — negative line items
-          // that bring the total to $0 or below cause a QBO ValidationFault.
-          const qboEligibleItems = (lineItems as Array<{ serviceId: string; serviceName: string; hours: number; rate: number }>)
-            .filter((item) => !(item.serviceId === "" && item.hours * item.rate < 0));
+          const typedLineItems = lineItems as Array<{ serviceId: string; serviceName: string; hours: number; rate: number }>;
+          const lineItemsTotal = typedLineItems.reduce((s, li) => s + li.hours * li.rate, 0);
+
+          // QBO rejects invoices whose total is below $0. Only strip credit/adjustment
+          // lines (serviceId="", negative net) when they push the total negative — for
+          // normal invoices with a positive balance the deposit credit line is valid and
+          // should flow through so QBO reflects the correct amount owed.
+          const qboEligibleItems = lineItemsTotal < 0
+            ? typedLineItems.filter((item) => !(item.serviceId === "" && item.hours * item.rate < 0))
+            : typedLineItems;
+
           if (qboEligibleItems.length === 0) {
-            // Nothing positive to push — skip QBO for this invoice
             qboLineItems = [];
           } else {
             qboLineItems = qboEligibleItems.map((item) => ({
