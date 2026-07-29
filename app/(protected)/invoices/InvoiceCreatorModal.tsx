@@ -245,7 +245,7 @@ export function InvoiceCreatorModal({
       let body: Record<string, unknown> = {
         tenantId: tenant.id,
         type: tab,
-        amount: finalAmount,
+        amount: Math.max(0, finalAmount),
         tenantName: tenant.name,
         pushToQBO,
         sendEmail,
@@ -834,7 +834,7 @@ export function InvoiceCreatorModal({
             <div>
               <span className="text-sm font-medium text-forest-800">Invoice Total</span>
               {finalAmount < 0 && (
-                <p className="text-xs text-blue-600 mt-0.5">Credits exceed charges — invoice will be $0.00</p>
+                <p className="text-xs text-emerald-600 mt-0.5">Credits cover full balance — will create as $0.00 Paid</p>
               )}
             </div>
             <span className="text-xl font-bold text-forest-700">{fmt(Math.max(0, finalAmount))}</span>
@@ -927,7 +927,7 @@ export function InvoiceCreatorModal({
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleSubmit}
-              disabled={submitting || Math.max(0, finalAmount) <= 0}
+              disabled={submitting}
               className="flex-1 py-2.5 rounded-xl bg-forest-600 text-white font-semibold text-sm hover:bg-forest-700 disabled:opacity-50 transition-colors"
             >
               {submitting ? "Creating…" : "Create Invoice"}

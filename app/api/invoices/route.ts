@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     customerName,
   } = body;
 
-  if (!tenantId || !type || !amount) {
+  if (!tenantId || !type || amount == null) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -143,6 +143,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // When credits (deposits) exceed charges the net amount is ≤ 0 — clamp to $0
+  // and auto-mark as Paid since nothing is owed.
+  const clampedAmount = Math.max(0, amount);
+  const isZeroInvoice = clampedAmount === 0;
+  const zeroPaidAt = isZeroInvoice ? new Date().toISOString() : undefined;
+
   // Create invoice first so we have the ID for the payment URL
   let invoice = await createInvoice({
     tenantId,
@@ -152,7 +158,7 @@ export async function POST(req: NextRequest) {
     serviceName: serviceName || "",
     depositType,
     depositPercent,
-    amount,
+    amount: clampedAmount,
     contractId,
     lineItems,
     expenseItems: expenseItems?.length ? expenseItems : undefined,
@@ -161,8 +167,16 @@ export async function POST(req: NextRequest) {
     sentToEmail,
     ccEmail,
     emailSent: false,
+    status: isZeroInvoice ? "Paid" : "Unpaid",
+    paidAt: zeroPaidAt,
+    paidAmount: isZeroInvoice ? 0 : undefined,
     createdByClerkId: userId,
   });
+
+  // Auto-award partner point for $0 invoices created as Paid
+  if (isZeroInvoice) {
+    autoAwardPartnerPoint(invoice.id, tenantId).catch(() => {});
+  }
 
   // Send email with a link back to the platform payment page.
   // Only fires when "Send Email" is explicitly checked — not when pushing to QBO

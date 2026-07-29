@@ -4151,6 +4151,9 @@ export async function createInvoice(data: {
   sentToEmail?: string;
   ccEmail?: string;
   emailSent?: boolean;
+  status?: string;
+  paidAt?: string;
+  paidAmount?: number;
   createdByClerkId: string;
 }): Promise<Invoice> {
   const fields: Record<string, unknown> = {
@@ -4160,10 +4163,12 @@ export async function createInvoice(data: {
     ServiceId: data.serviceId,
     ServiceName: data.serviceName,
     Amount: data.amount,
-    Status: "Unpaid",
+    Status: data.status ?? "Unpaid",
     CreatedByClerkId: data.createdByClerkId,
     CreatedAt: new Date().toISOString(),
   };
+  if (data.paidAt) fields["PaidAt"] = data.paidAt;
+  if (data.paidAmount !== undefined) fields["PaidAmount"] = data.paidAmount;
   if (data.depositType) fields["DepositType"] = data.depositType;
   if (data.depositPercent !== undefined) fields["DepositPercent"] = data.depositPercent;
   if (data.contractId) fields["ContractId"] = data.contractId;
