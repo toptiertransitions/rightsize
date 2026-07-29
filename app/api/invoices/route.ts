@@ -101,12 +101,25 @@ export async function POST(req: NextRequest) {
       } else {
         // Full: build from explicit lineItems, or fall back to a single line for "specific amount" invoices
         if (lineItems && lineItems.length > 0) {
-          qboLineItems = lineItems.map((item: { serviceId: string; serviceName: string; hours: number; rate: number }) => ({
-            serviceName: item.serviceName,
-            hours: item.hours,
-            rate: item.rate,
-            qboItemId: serviceMap.get(item.serviceId)?.qboItemId,
-          }));
+          // Exclude internal credit/adjustment lines (deposit applied, discount credits) from QBO.
+          // In QBO the deposit is a separate invoice applied as a payment — negative line items
+          // that bring the total to $0 or below cause a QBO ValidationFault.
+          // Exclude internal credit/adjustment lines (deposit applied, discount credits) from QBO.
+          // In QBO the deposit is a separate invoice applied as a payment — negative line items
+          // that bring the total to $0 or below cause a QBO ValidationFault.
+          const qboEligibleItems = (lineItems as Array<{ serviceId: string; serviceName: string; hours: number; rate: number }>)
+            .filter((item) => !(item.serviceId === "" && item.hours * item.rate < 0));
+          if (qboEligibleItems.length === 0) {
+            // Nothing positive to push — skip QBO for this invoice
+            qboLineItems = [];
+          } else {
+            qboLineItems = qboEligibleItems.map((item) => ({
+              serviceName: item.serviceName,
+              hours: item.hours,
+              rate: item.rate,
+              qboItemId: serviceMap.get(item.serviceId)?.qboItemId,
+            }));
+          }
         } else {
           // Specific-amount invoice with no explicit line items — create a single line
           const svc = serviceMap.get(serviceId);
@@ -130,13 +143,17 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const qboResult = await createQBOInvoice({
-        customerName: customerName || tenantName || "Client",
-        lineItems: qboLineItems,
-        memo: `Invoice ${invoiceNumber}`,
-      });
-      qboInvoiceId = qboResult.id;
-      qboDocNumber = qboResult.docNumber;
+      if (qboLineItems.length === 0) {
+        qboError = "No billable line items to push to QuickBooks (all charges are covered by credits).";
+      } else {
+        const qboResult = await createQBOInvoice({
+          customerName: customerName || tenantName || "Client",
+          lineItems: qboLineItems,
+          memo: `Invoice ${invoiceNumber}`,
+        });
+        qboInvoiceId = qboResult.id;
+        qboDocNumber = qboResult.docNumber;
+      }
     } catch (e) {
       console.error("QBO invoice creation failed:", e);
       qboError = e instanceof Error ? e.message : "QBO invoice creation failed";
