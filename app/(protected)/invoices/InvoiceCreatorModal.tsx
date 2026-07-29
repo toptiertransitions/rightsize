@@ -186,8 +186,11 @@ export function InvoiceCreatorModal({
   for (const [svcId, group] of loggedGroups) {
     if (group.hours <= 0) loggedGroups.delete(svcId);
   }
+  // Round hours to 2 decimal places here so loggedTotal matches the line items
+  // that are actually submitted (which also round to 2dp). Without this, the
+  // displayed/stored invoice amount diverges from the sum of line item values.
   const loggedTotal = Array.from(loggedGroups.values()).reduce(
-    (s, g) => s + g.service.hourlyRate * g.hours,
+    (s, g) => s + g.service.hourlyRate * (Math.round(g.hours * 100) / 100),
     0
   );
 
