@@ -9,7 +9,7 @@ const ACTIVE_PARTNER_QUARTERLY_GOAL: Record<ReferralPriority, number> = {
   High: 9, Medium: 3, Low: 0, "": 0,
 };
 const CONVERSION_TARGET_QUARTERLY_GOAL: Record<ReferralPriority, number> = {
-  High: 6, Medium: 3, Low: 3, "": 3,
+  High: 3, Medium: 2, Low: 1, "": 1,
 };
 const STAGE_PRIORITY: Record<ReferralContactStage, number> = {
   "Inactive Referral": 0, "Identified": 1, "Met": 2,
