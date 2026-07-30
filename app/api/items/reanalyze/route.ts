@@ -21,8 +21,12 @@ export async function POST(req: NextRequest) {
 
   let analysis;
   try {
-    analysis = await analyzeItemPhoto({ url: photoUrl });
+    // Fetch image server-side and pass as base64 — more reliable than having
+    // Anthropic fetch the URL directly (avoids HEIC and CDN-restriction issues).
+    const { data, mimeType } = await fetchImageAsBase64(photoUrl);
+    analysis = await analyzeItemPhoto(data, mimeType);
   } catch (e) {
+    console.error("[reanalyze] error:", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Analysis failed" },
       { status: 500 }
@@ -38,4 +42,25 @@ export async function POST(req: NextRequest) {
     listingDescriptionEbay: analysis.listing_description_ebay,
     staffTips: analysis.staff_tips,
   });
+}
+
+async function fetchImageAsBase64(url: string): Promise<{
+  data: string;
+  mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+}> {
+  // Cloudinary HEIC/HEIF URLs: swap the extension so Cloudinary auto-converts to JPEG
+  const fetchUrl = /res\.cloudinary\.com/.test(url)
+    ? url.replace(/\.(heic|heif)$/i, ".jpg")
+    : url;
+
+  const res = await fetch(fetchUrl, { signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`Image fetch failed: ${res.status} ${res.statusText}`);
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const contentType = res.headers.get("content-type") ?? "image/jpeg";
+
+  const supported = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+  const mimeType = supported.find(t => contentType.startsWith(t)) ?? "image/jpeg";
+
+  return { data: buffer.toString("base64"), mimeType };
 }

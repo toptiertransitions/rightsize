@@ -184,6 +184,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [reanalyzeError, setReanalyzeError] = useState("");
   const [reassignTenantId, setReassignTenantId] = useState(item.tenantId);
 
   // Photo management
@@ -312,17 +313,17 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
 
   const handleReanalyze = async () => {
     const primaryPhoto = photos[0]?.url || item.photoUrl;
-    if (!primaryPhoto) { setError("No photo available for AI analysis."); return; }
+    if (!primaryPhoto) { setReanalyzeError("No photo available for AI analysis."); return; }
     setReanalyzing(true);
-    setError("");
+    setReanalyzeError("");
     try {
       const res = await fetch("/api/items/reanalyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl: primaryPhoto }),
       });
-      if (!res.ok) throw new Error("AI analysis failed");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI analysis failed");
       setForm(prev => ({
         ...prev,
         itemName: data.itemName || prev.itemName,
@@ -333,7 +334,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
         staffTips: data.staffTips ?? prev.staffTips,
       }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "AI analysis failed");
+      setReanalyzeError(e instanceof Error ? e.message : "AI analysis failed");
     } finally {
       setReanalyzing(false);
     }
@@ -533,7 +534,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 type="button"
                 onClick={handleReanalyze}
                 disabled={reanalyzing || !!(photos[0]?.url || item.photoUrl) === false}
-                title="Re-analyze with AI using the primary photo"
+                title={!(photos[0]?.url || item.photoUrl) ? "Add a photo first to use AI analysis" : "Re-analyze with AI using the primary photo"}
                 className="flex-shrink-0 h-10 px-3 rounded-xl border border-forest-300 text-forest-700 text-xs font-medium hover:bg-forest-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 whitespace-nowrap"
               >
                 {reanalyzing ? (
@@ -554,6 +555,9 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 )}
               </button>
             </div>
+            {reanalyzeError && (
+              <p className="text-xs text-red-600 -mt-1">{reanalyzeError}</p>
+            )}
             <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
               <Select label="Condition" value={form.condition ?? "Good"}
                 onChange={e => set("condition", e.target.value as ItemCondition)}
