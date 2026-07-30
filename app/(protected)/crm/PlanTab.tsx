@@ -384,18 +384,32 @@ function PortalStatusBadge({ status }: { status: "active" | "invited" | "none" }
 
 // ─── Company Contacts Panel (lazy-loaded accordion detail) ────────────────────
 
-function CompanyContactsPanel({ companyId, quarterId }: { companyId: string; quarterId: string }) {
-  const [contacts, setContacts] = useState<ContactDetail[] | null>(null);
+function CompanyContactsPanel({
+  companyId,
+  quarterId,
+  excludeStages,
+}: {
+  companyId: string;
+  quarterId: string;
+  excludeStages?: string[];
+}) {
+  const [rawContacts, setRawContacts] = useState<ContactDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setContacts(null);
+    setRawContacts(null);
     setError(null);
     fetch(`/api/crm/plan/company-contacts?companyId=${companyId}&quarterId=${quarterId}`)
       .then((r) => r.json())
-      .then((d) => setContacts(d.contacts ?? []))
+      .then((d) => setRawContacts(d.contacts ?? []))
       .catch((e) => setError(String(e)));
   }, [companyId, quarterId]);
+
+  const contacts = rawContacts
+    ? (excludeStages?.length
+        ? rawContacts.filter((c) => !excludeStages.includes(c.stage))
+        : rawContacts)
+    : null;
 
   if (error) return (
     <div className="px-6 py-3 text-xs text-red-500 bg-red-50">Failed to load contacts: {error}</div>
@@ -992,7 +1006,7 @@ function RepView({
                       {isOpen && (
                         <tr>
                           <td colSpan={6} className="p-0">
-                            <CompanyContactsPanel companyId={p.companyId} quarterId={quarter.id} />
+                            <CompanyContactsPanel companyId={p.companyId} quarterId={quarter.id} excludeStages={["Identified"]} />
                           </td>
                         </tr>
                       )}
