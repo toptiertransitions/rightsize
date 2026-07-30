@@ -89,3 +89,25 @@ export async function POST(req: NextRequest) {
   const data = await res.json();
   return NextResponse.json({ quarter: mapQuarter(data) });
 }
+
+export async function PATCH(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const sysRole = await getSystemRole(userId);
+  if (sysRole !== "TTTAdmin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const body = await req.json();
+  const { id, label, startDate, endDate } = body as { id: string; label: string; startDate: string; endDate: string };
+  if (!id || !label || !startDate || !endDate) {
+    return NextResponse.json({ error: "id, label, startDate, endDate required" }, { status: 400 });
+  }
+
+  const res = await atFetch(AIRTABLE_TABLES.QUARTERS, `/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: { Label: label, StartDate: startDate, EndDate: endDate } }),
+  });
+  if (!res.ok) return NextResponse.json({ error: "Failed to update quarter" }, { status: 500 });
+  const data = await res.json();
+  return NextResponse.json({ quarter: mapQuarter(data) });
+}

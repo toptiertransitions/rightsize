@@ -144,6 +144,70 @@ function AddQuarterModal({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
+// ─── Edit Quarter Modal ───────────────────────────────────────────────────────
+
+function EditQuarterModal({ quarter, onClose, onSaved }: { quarter: Quarter; onClose: () => void; onSaved: (q: Quarter) => void }) {
+  const [label, setLabel] = useState(quarter.label);
+  const [startDate, setStartDate] = useState(quarter.startDate);
+  const [endDate, setEndDate] = useState(quarter.endDate);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/crm/quarters", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: quarter.id, label, startDate, endDate }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      onSaved(data.quarter);
+    } catch {
+      setError("Failed to save. Please try again.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Edit Quarter</h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} required
+              className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 text-sm bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50">
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KPICard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -561,6 +625,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [quartersLoading, setQuartersLoading] = useState(true);
   const [showAddQuarter, setShowAddQuarter] = useState(false);
+  const [showEditQuarter, setShowEditQuarter] = useState(false);
   const [viewMode, setViewMode] = useState<"team" | string>("team");
 
   const isAdmin = sysRole === "TTTAdmin";
@@ -637,6 +702,12 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
     setShowAddQuarter(false);
   }
 
+  function handleQuarterSaved(q: Quarter) {
+    setQuarters((prev) => prev.map((existing) => existing.id === q.id ? q : existing));
+    setShowEditQuarter(false);
+    if (selectedQuarterId === q.id) loadPlan(q.id);
+  }
+
   const selectedQuarter = quarters.find((q) => q.id === selectedQuarterId);
   const today = new Date().toISOString().slice(0, 10);
   const isPast = selectedQuarter ? selectedQuarter.endDate < today : false;
@@ -686,9 +757,16 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
               )}
             >
               {q.label}
+              {!q.startDate && <span className="ml-1 text-amber-300 text-xs">!</span>}
             </button>
           ))}
         </div>
+        {isAdmin && selectedQuarter && (
+          <button onClick={() => setShowEditQuarter(true)}
+            className="text-sm border border-gray-300 text-gray-500 hover:text-forest-600 hover:border-forest-400 rounded-lg px-3 py-1.5 transition-colors">
+            Edit Dates
+          </button>
+        )}
         {isAdmin && (
           <button onClick={() => setShowAddQuarter(true)}
             className="text-sm border border-dashed border-gray-300 text-gray-500 hover:text-forest-600 hover:border-forest-400 rounded-lg px-3 py-1.5 transition-colors">
@@ -696,6 +774,19 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
           </button>
         )}
       </div>
+
+      {/* Missing dates warning */}
+      {selectedQuarter && (!selectedQuarter.startDate || !selectedQuarter.endDate) && (
+        <div className="mb-5 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          <span>This quarter has no date range set — referral counts can&apos;t be filtered by quarter.</span>
+          {isAdmin && (
+            <button onClick={() => setShowEditQuarter(true)}
+              className="ml-auto shrink-0 text-sm font-medium text-amber-700 underline hover:text-amber-900">
+              Set dates
+            </button>
+          )}
+        </div>
+      )}
 
       {/* View switcher (Team + individual TTTSales reps only) */}
       {viewOptions.length > 1 && (
@@ -736,6 +827,9 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
       )}
 
       {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />}
+      {showEditQuarter && selectedQuarter && (
+        <EditQuarterModal quarter={selectedQuarter} onClose={() => setShowEditQuarter(false)} onSaved={handleQuarterSaved} />
+      )}
     </div>
   );
 }
