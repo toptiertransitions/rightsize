@@ -132,13 +132,13 @@ export function InvoiceCreatorModal({
   }, [tab, totalPaidDeposit]);
 
   // Shared
-  const [sendEmail, setSendEmail] = useState(false);
+  const [sendEmail, setSendEmail] = useState(true);
   const [toRecipient, setToRecipient] = useState(recipientOptions[0]?.email ?? "__custom__");
   const [customToEmail, setCustomToEmail] = useState("");
   const [ccEmail, setCcEmail] = useState(currentUserEmail);
   const useCustomTo = toRecipient === "__custom__";
   const sentToEmail = useCustomTo ? customToEmail : toRecipient;
-  const [pushToQBO, setPushToQBO] = useState(false);
+  const [pushToQBO, setPushToQBO] = useState(true);
 
   // Deposit calc
   const selectedContract = contracts.find((c) => c.id === selectedContractId);

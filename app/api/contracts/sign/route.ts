@@ -4,6 +4,7 @@ import { getContractByToken, updateContract, updateTenant, getTenantById, create
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { isTTTAdmin } from "@/lib/config";
+import { createQBOInvoice } from "@/lib/qbo";
 import { Resend } from "resend";
 
 export async function POST(req: NextRequest) {
@@ -65,6 +66,23 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       console.error("Failed to auto-create deposit invoice:", e);
+    }
+  }
+
+  // If autoSendDeposit: push deposit invoice to QuickBooks
+  if (contract.autoSendDeposit && createdInvoice) {
+    try {
+      await createQBOInvoice({
+        customerName: signerName.trim(),
+        lineItems: [{
+          serviceName: createdInvoice.serviceName || "Services",
+          hours: 1,
+          rate: createdInvoice.amount,
+        }],
+        memo: `Invoice ${createdInvoice.invoiceNumber}`,
+      });
+    } catch (e) {
+      console.error("Failed to push deposit to QBO on sign:", e);
     }
   }
 
