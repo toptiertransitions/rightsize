@@ -341,6 +341,15 @@ function fmtDollar(n: number): string {
   return "$" + n.toLocaleString("en-US");
 }
 
+const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2, "": 3 };
+
+function sortByPriorityThenName<T extends { priority: ReferralPriority; companyName: string }>(arr: T[]): T[] {
+  return [...arr].sort((a, b) => {
+    const diff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+    return diff !== 0 ? diff : a.companyName.localeCompare(b.companyName);
+  });
+}
+
 // ─── Stage Badge ─────────────────────────────────────────────────────────────
 
 function StageBadge({ stage }: { stage: string }) {
@@ -1008,7 +1017,7 @@ function RepAccordionItem({
                   </tr>
                 </thead>
                 <tbody>
-                  {rep.activePartners.map((p) => {
+                  {sortByPriorityThenName(rep.activePartners).map((p) => {
                     const ppct = calcVsPace(p.actual, p.goal, pacePct);
                     return (
                       <tr key={p.companyId} className="border-t border-gray-200 first:border-0">
@@ -1037,10 +1046,11 @@ function RepAccordionItem({
 
             {rep.conversionTargets.length > 0 ? (
               <div className="overflow-x-auto mb-3">
-                <table className="text-xs" style={{ minWidth: 680 }}>
+                <table className="text-xs" style={{ minWidth: 760 }}>
                   <thead>
                     <tr className="text-gray-400 uppercase tracking-wide">
                       <th className="text-left pb-1.5 pr-3 font-medium">Company</th>
+                      <th className="text-left pb-1.5 pr-3 font-medium">Priority</th>
                       <th className="text-left pb-1.5 pr-3 font-medium">Start Stage</th>
                       <th className="text-left pb-1.5 pr-3 font-medium">Current Stage</th>
                       <th className="text-center pb-1.5 pr-3 font-medium">Stage Age</th>
@@ -1052,9 +1062,10 @@ function RepAccordionItem({
                     </tr>
                   </thead>
                   <tbody>
-                    {rep.conversionTargets.map((t) => (
+                    {sortByPriorityThenName(rep.conversionTargets).map((t) => (
                       <tr key={t.companyId} className="border-t border-gray-200 first:border-0">
                         <td className="py-1.5 pr-3 font-medium text-gray-800 whitespace-nowrap">{t.companyName}</td>
+                        <td className="py-1.5 pr-3"><PriorityBadge priority={t.priority} /></td>
                         <td className="py-1.5 pr-3"><StageBadge stage={t.startingStage || "—"} /></td>
                         <td className="py-1.5 pr-3"><StageBadge stage={t.bestStage} /></td>
                         <td className="py-1.5 pr-3 text-center text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
@@ -1308,7 +1319,7 @@ function RepView({
                 </tr>
               </thead>
               <tbody>
-                {rep.activePartners.map((p) => {
+                {sortByPriorityThenName(rep.activePartners).map((p) => {
                   const pct = calcVsPace(p.actual, p.goal, pacePct);
                   const isOpen = expandedCompanies.has(p.companyId);
                   return (
@@ -1358,10 +1369,11 @@ function RepView({
 
         {rep.conversionTargets.length > 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-3">
-            <table className="text-sm" style={{ minWidth: 800 }}>
+            <table className="text-sm" style={{ minWidth: 880 }}>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Priority</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Start Stage</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Current Stage</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
@@ -1374,9 +1386,9 @@ function RepView({
                 </tr>
               </thead>
               <tbody>
-                {rep.conversionTargets.map((t) => {
+                {sortByPriorityThenName(rep.conversionTargets).map((t) => {
                   const isOpen = expandedCompanies.has(t.companyId);
-                  const colCount = isPast ? 9 : 10;
+                  const colCount = isPast ? 10 : 11;
                   return (
                     <Fragment key={t.companyId}>
                       <tr
@@ -1384,6 +1396,7 @@ function RepView({
                         onClick={() => toggleCompany(t.companyId)}
                       >
                         <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
+                        <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                         <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
                         <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
                         <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
