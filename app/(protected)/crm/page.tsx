@@ -38,6 +38,7 @@ export default async function CRMPage() {
       gmailTokenRevoked={gmailTokenRevoked}
       tenants={tenants}
       currentUserId={userId}
+      sysRole={sysRole ?? ""}
     />
   );
 }
