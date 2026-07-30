@@ -231,7 +231,13 @@ export async function GET(req: NextRequest) {
         }));
 
       const conversionTargetRows = myCompanies
-        .filter((c) => conversionTargetMap.has(`${c.id}::${rep.clerkUserId}`) && companyBestStage.get(c.id) !== "Active Referral")
+        .filter((c) => {
+          const stage = companyBestStage.get(c.id);
+          return conversionTargetMap.has(`${c.id}::${rep.clerkUserId}`)
+            && stage !== "Active Referral"
+            && stage !== "Inactive Referral"
+            && stage !== "Identified";
+        })
         .map((c) => {
           const key = `${c.id}::${rep.clerkUserId}`;
           return {

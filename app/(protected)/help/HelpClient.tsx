@@ -284,9 +284,95 @@ interface HelpClientProps {
   userTypeLabel: string;
   isStaff: boolean;
   isClient: boolean;
+  isAdmin?: boolean;
 }
 
-export function HelpClient({ userEmail, userName: _userName, userTypeLabel, isStaff, isClient }: HelpClientProps) {
+// ─── Role Capabilities Reference ─────────────────────────────────────────────
+
+const ADMIN_CAPABILITIES = [
+  {
+    area: "CRM Plan — Quarters",
+    admin: "Create new quarters, edit date ranges",
+    sales: "View only",
+  },
+  {
+    area: "CRM Plan — Rep Goals",
+    admin: "Set and edit quarterly referral goals for each sales rep",
+    sales: "View own goal",
+  },
+  {
+    area: "CRM Plan — Not Yet Referring",
+    admin: "Add companies from any rep's pipeline to their Not Yet Referring list; Remove targets for any rep",
+    sales: "Remove companies from own Not Yet Referring list",
+  },
+  {
+    area: "CRM Plan — Team View",
+    admin: "Full leaderboard with all rep data, inline goal editing",
+    sales: "Read-only leaderboard",
+  },
+  {
+    area: "CRM Plan — Rep View",
+    admin: "Can open any rep's individual view",
+    sales: "Own view only (default on page load)",
+  },
+  {
+    area: "CRM Plan — Quarter's Plan",
+    admin: "Edit Key Meetings, Key Resources, Monthly Goals for any company",
+    sales: "Edit for own assigned companies",
+  },
+  {
+    area: "CRM Contacts & Activities",
+    admin: "View, log, edit, and delete activities for all contacts",
+    sales: "View, log, and edit own contacts",
+  },
+  {
+    area: "Gmail Sync",
+    admin: "Sync all reps' email from Settings",
+    sales: "Sync own Gmail from Settings",
+  },
+  {
+    area: "Outreach / Broadcasts",
+    admin: "Create and send broadcasts to all referral contacts",
+    sales: "View broadcasts",
+  },
+  {
+    area: "Admin Tools (/admin/*)",
+    admin: "Full access: staff management, estates, routing rules, expenses, etc.",
+    sales: "No access",
+  },
+  {
+    area: "Quoting",
+    admin: "Create and edit quotes for any project",
+    sales: "View quotes for assigned projects",
+  },
+];
+
+function AdminCapabilitiesTable() {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-1/3">Feature / Area</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-forest-700 uppercase tracking-wide w-1/3">TTTAdmin</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-blue-600 uppercase tracking-wide w-1/3">TTTSales</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {ADMIN_CAPABILITIES.map((row, i) => (
+            <tr key={i} className="hover:bg-gray-50/60">
+              <td className="px-4 py-3 font-medium text-gray-800 align-top">{row.area}</td>
+              <td className="px-4 py-3 text-gray-600 align-top">{row.admin}</td>
+              <td className="px-4 py-3 text-gray-500 align-top">{row.sales}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function HelpClient({ userEmail, userName: _userName, userTypeLabel, isStaff, isClient, isAdmin }: HelpClientProps) {
   const faqs = isStaff ? STAFF_FAQS : CLIENT_FAQS;
   const faqLabel = isStaff ? "Staff" : "Client";
 
@@ -312,6 +398,22 @@ export function HelpClient({ userEmail, userName: _userName, userTypeLabel, isSt
         </div>
         <Accordion items={faqs} />
       </section>
+
+      {/* Admin Capabilities Reference */}
+      {isAdmin && (
+        <section className="mb-10">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-4 h-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <h2 className="text-base font-bold text-gray-900">Admin vs Sales — Role Capabilities</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Reference guide for what TTTAdmin and TTTSales users can do across the platform.
+          </p>
+          <AdminCapabilitiesTable />
+        </section>
+      )}
 
       {/* Divider */}
       <div className="flex items-center gap-3 mb-10">

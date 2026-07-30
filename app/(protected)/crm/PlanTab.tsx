@@ -1103,7 +1103,7 @@ function RepAccordionItem({
             )}
 
             {/* Add from pipeline */}
-            {canManage && !isPast && rep.availableToConvert.length > 0 && (
+            {isAdmin && !isPast && rep.availableToConvert.length > 0 && (
               <div>
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Add from pipeline</p>
                 <div className="flex flex-wrap gap-2">
@@ -1227,12 +1227,14 @@ function RepView({
   rep,
   quarter,
   isPast,
+  isAdmin,
   onAddTarget,
   onRemoveTarget,
 }: {
   rep: RepPlan;
   quarter: Quarter;
   isPast: boolean;
+  isAdmin: boolean;
   onAddTarget: (companyId: string, currentStage: string, forClerkUserId?: string) => Promise<void>;
   onRemoveTarget: (targetId: string) => Promise<void>;
 }) {
@@ -1252,7 +1254,7 @@ function RepView({
     setToggling(companyId);
     try {
       if (currentTargetId) await onRemoveTarget(currentTargetId);
-      else await onAddTarget(companyId, currentStage);
+      else await onAddTarget(companyId, currentStage, rep.clerkUserId);
     } finally {
       setToggling(null);
     }
@@ -1429,7 +1431,7 @@ function RepView({
                       {isOpen && (
                         <tr>
                           <td colSpan={colCount} className="p-0">
-                            <CompanyContactsPanel companyId={t.companyId} quarterId={quarter.id} companyName={t.companyName} competitors={t.competitors} />
+                            <CompanyContactsPanel companyId={t.companyId} quarterId={quarter.id} excludeStages={["Inactive Referral", "Identified"]} companyName={t.companyName} competitors={t.competitors} />
                           </td>
                         </tr>
                       )}
@@ -1443,7 +1445,7 @@ function RepView({
           <p className="text-sm text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
         )}
 
-        {!isPast && (
+        {!isPast && isAdmin && (
           <div>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">
               Add from your pipeline
@@ -1487,10 +1489,10 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const [quartersLoading, setQuartersLoading] = useState(true);
   const [showAddQuarter, setShowAddQuarter] = useState(false);
   const [showEditQuarter, setShowEditQuarter] = useState(false);
-  const [viewMode, setViewMode] = useState<"team" | string>("team");
-
   const isAdmin = sysRole === "TTTAdmin";
   const isSalesOnly = sysRole === "TTTSales";
+
+  const [viewMode, setViewMode] = useState<"team" | string>(isSalesOnly ? currentUserId : "team");
 
   useEffect(() => {
     fetch("/api/crm/quarters")
@@ -1535,7 +1537,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
 
   useEffect(() => {
     if (isSalesOnly && viewMode !== "team" && viewMode !== currentUserId) {
-      setViewMode("team");
+      setViewMode(currentUserId);
     }
   }, [isSalesOnly, viewMode, currentUserId]);
 
@@ -1701,6 +1703,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
           rep={activeRep}
           quarter={planData.quarter}
           isPast={isPast}
+          isAdmin={isAdmin}
           onAddTarget={handleAddTarget}
           onRemoveTarget={handleRemoveTarget}
         />

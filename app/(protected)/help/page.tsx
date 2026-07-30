@@ -43,6 +43,7 @@ export default async function HelpPage() {
       userTypeLabel={userTypeLabel}
       isStaff={isStaff || isSales}
       isClient={isClient}
+      isAdmin={isAdmin}
     />
   );
 }
