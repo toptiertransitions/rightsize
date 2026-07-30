@@ -206,7 +206,7 @@ export function EstimatorSection({
   const recipientEmail = useCustom ? customEmail : selectedRecipient;
 
   // Auto-send deposit invoice toggle
-  const [autoSendDeposit, setAutoSendDeposit] = useState(false);
+  const [autoSendDeposit, setAutoSendDeposit] = useState(true);
 
   // Show service descriptions in the quote table (UI-only)
   const [showDescriptions, setShowDescriptions] = useState(false);
