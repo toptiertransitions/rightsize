@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { cn } from "@/lib/utils";
 import type { ReferralPriority } from "@/lib/types";
 
@@ -282,6 +282,36 @@ function PriorityBadge({ priority }: { priority: ReferralPriority }) {
   );
 }
 
+// ─── Contact detail types (company-contacts API) ─────────────────────────────
+
+interface QuarterReferral {
+  clientName: string;
+  city: string | null;
+  state: string | null;
+  oppStage: string;
+  oppValue: number;
+  referredAt: string;
+}
+
+interface ContactDetail {
+  id: string;
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  stage: string;
+  dateIntroduced: string | null;
+  lastActivityDate: string | null;
+  activityCount: number;
+  nextStepDate: string | null;
+  nextStepNote: string | null;
+  portalStatus: "active" | "invited" | "none";
+  quarterReferrals: QuarterReferral[];
+  allTimeTotalReferred: number;
+  allTimeWonCount: number;
+  allTimeWonValue: number;
+}
+
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
 function fmtDays(days: number | null): string {
@@ -304,6 +334,11 @@ function fmtDate(d: string | null | undefined): string {
   });
 }
 
+function fmtDollar(n: number): string {
+  if (n === 0) return "$0";
+  return "$" + n.toLocaleString("en-US");
+}
+
 // ─── Stage Badge ─────────────────────────────────────────────────────────────
 
 function StageBadge({ stage }: { stage: string }) {
@@ -320,6 +355,143 @@ function StageBadge({ stage }: { stage: string }) {
     <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap", color)}>
       {stage || "—"}
     </span>
+  );
+}
+
+// ─── Opp Stage Badge ─────────────────────────────────────────────────────────
+
+function OppStageBadge({ stage }: { stage: string }) {
+  const cls =
+    stage === "Won" ? "bg-green-100 text-green-700" :
+    stage === "Lost" ? "bg-red-100 text-red-600" :
+    "bg-blue-100 text-blue-700";
+  return <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap", cls)}>{stage}</span>;
+}
+
+// ─── Portal Status Badge ──────────────────────────────────────────────────────
+
+function PortalStatusBadge({ status }: { status: "active" | "invited" | "none" }) {
+  if (status === "none") return null;
+  return (
+    <span className={cn(
+      "text-xs px-1.5 py-0.5 rounded font-medium",
+      status === "active" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+    )}>
+      {status === "active" ? "Portal Active" : "Invite Sent"}
+    </span>
+  );
+}
+
+// ─── Company Contacts Panel (lazy-loaded accordion detail) ────────────────────
+
+function CompanyContactsPanel({ companyId, quarterId }: { companyId: string; quarterId: string }) {
+  const [contacts, setContacts] = useState<ContactDetail[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setContacts(null);
+    setError(null);
+    fetch(`/api/crm/plan/company-contacts?companyId=${companyId}&quarterId=${quarterId}`)
+      .then((r) => r.json())
+      .then((d) => setContacts(d.contacts ?? []))
+      .catch((e) => setError(String(e)));
+  }, [companyId, quarterId]);
+
+  if (error) return (
+    <div className="px-6 py-3 text-xs text-red-500 bg-red-50">Failed to load contacts: {error}</div>
+  );
+  if (!contacts) return (
+    <div className="px-6 py-3 text-xs text-gray-400 italic">Loading contacts...</div>
+  );
+  if (contacts.length === 0) return (
+    <div className="px-6 py-3 text-xs text-gray-400 italic">No referral contacts recorded for this company.</div>
+  );
+
+  return (
+    <div className="bg-slate-50 border-t border-slate-200 px-5 py-4 space-y-3">
+      {contacts.map((c) => (
+        <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
+          {/* Contact header */}
+          <div className="flex items-start justify-between gap-4 mb-2.5">
+            <div className="min-w-0">
+              <div className="flex items-center flex-wrap gap-2 mb-1">
+                <span className="font-semibold text-gray-900">{c.name}</span>
+                {c.title && <span className="text-xs text-gray-500">{c.title}</span>}
+                <StageBadge stage={c.stage} />
+                <PortalStatusBadge status={c.portalStatus} />
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                {c.dateIntroduced && <span>Introduced: {fmtDate(c.dateIntroduced)}</span>}
+                {c.email && <span>{c.email}</span>}
+                {c.phone && <span>{c.phone}</span>}
+              </div>
+            </div>
+            <div className="text-right text-xs text-gray-500 shrink-0">
+              <div className="font-medium">{c.activityCount} activities</div>
+              {c.lastActivityDate && <div className="text-gray-400">Last: {fmtDate(c.lastActivityDate)}</div>}
+            </div>
+          </div>
+
+          {/* Next step */}
+          {c.nextStepDate && (
+            <div className="mb-3 text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              <span className="font-semibold text-amber-800">Next Step: {fmtDate(c.nextStepDate)}</span>
+              {c.nextStepNote && <span className="text-amber-700"> — {c.nextStepNote}</span>}
+            </div>
+          )}
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+            {/* Quarter referrals */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                This Quarter &mdash; {c.quarterReferrals.length} referral{c.quarterReferrals.length !== 1 ? "s" : ""}
+                {c.quarterReferrals.length > 0 && (
+                  <span className="text-gray-500 normal-case font-normal ml-1">
+                    ({fmtDollar(c.quarterReferrals.reduce((s, r) => s + r.oppValue, 0))} value)
+                  </span>
+                )}
+              </p>
+              {c.quarterReferrals.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">None yet</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {c.quarterReferrals.map((r, i) => (
+                    <div key={i} className="text-xs flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-800">{r.clientName}</span>
+                        {(r.city || r.state) && (
+                          <span className="text-gray-400"> · {[r.city, r.state].filter(Boolean).join(", ")}</span>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        {r.oppValue > 0 && <span className="font-medium text-gray-900">{fmtDollar(r.oppValue)}</span>}
+                        <OppStageBadge stage={r.oppStage} />
+                        <span className="text-gray-400">{fmtDate(r.referredAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* All-time stats */}
+            <div className="border-l border-gray-100 pl-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">All Time</p>
+              <div className="space-y-1 text-xs">
+                <div className="text-gray-600">{c.allTimeTotalReferred} total referred</div>
+                <div className="text-gray-600">
+                  {c.allTimeWonCount} won
+                  {c.allTimeWonValue > 0 && (
+                    <span className="text-green-700 font-semibold ml-1">{fmtDollar(c.allTimeWonValue)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -710,6 +882,15 @@ function RepView({
   onRemoveTarget: (targetId: string) => Promise<void>;
 }) {
   const [toggling, setToggling] = useState<string | null>(null);
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+
+  function toggleCompany(companyId: string) {
+    setExpandedCompanies((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      return next;
+    });
+  }
 
   async function handleToggleTarget(companyId: string, currentTargetId: string | null, currentStage: string) {
     if (isPast) return;
@@ -779,28 +960,43 @@ function RepView({
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Q Goal</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">vs Goal</th>
+                  <th className="px-2 py-2.5 w-8" />
                 </tr>
               </thead>
               <tbody>
                 {rep.activePartners.map((p) => {
                   const pct = p.goal > 0 ? Math.round((p.actual / p.goal) * 100) : null;
+                  const isOpen = expandedCompanies.has(p.companyId);
                   return (
-                    <tr key={p.companyId} className="border-b border-gray-100 last:border-0">
-                      <td className="px-4 py-3 font-medium text-gray-900">{p.companyName}</td>
-                      <td className="px-4 py-3"><PriorityBadge priority={p.priority} /></td>
-                      <td className="px-4 py-3 text-center text-gray-600">{p.goal}</td>
-                      <td className="px-4 py-3 text-center font-medium text-gray-900">{p.actual}</td>
-                      <td className="px-4 py-3 text-center">
-                        {pct === null ? (
-                          <span className="text-gray-400 text-xs">—</span>
-                        ) : (
-                          <span className={cn("text-xs font-medium",
-                            pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500")}>
-                            {pct}%
-                          </span>
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={p.companyId}>
+                      <tr
+                        className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => toggleCompany(p.companyId)}
+                      >
+                        <td className="px-4 py-3 font-medium text-gray-900">{p.companyName}</td>
+                        <td className="px-4 py-3"><PriorityBadge priority={p.priority} /></td>
+                        <td className="px-4 py-3 text-center text-gray-600">{p.goal}</td>
+                        <td className="px-4 py-3 text-center font-medium text-gray-900">{p.actual}</td>
+                        <td className="px-4 py-3 text-center">
+                          {pct === null ? (
+                            <span className="text-gray-400 text-xs">—</span>
+                          ) : (
+                            <span className={cn("text-xs font-medium",
+                              pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500")}>
+                              {pct}%
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 text-center text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={6} className="p-0">
+                            <CompanyContactsPanel companyId={p.companyId} quarterId={quarter.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -818,7 +1014,7 @@ function RepView({
 
         {rep.conversionTargets.length > 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-3">
-            <table className="text-sm" style={{ minWidth: 780 }}>
+            <table className="text-sm" style={{ minWidth: 800 }}>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
@@ -830,41 +1026,59 @@ function RepView({
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Rcvd</th>
                   {!isPast && <th className="px-4 py-2.5" />}
+                  <th className="px-2 py-2.5 w-8" />
                 </tr>
               </thead>
               <tbody>
-                {rep.conversionTargets.map((t) => (
-                  <tr key={t.companyId} className="border-b border-gray-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
-                    <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
-                    <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
-                    <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
-                    <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
-                    <td className="px-4 py-3 max-w-[200px]">
-                      {t.nextStepDate ? (
-                        <div>
-                          <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
-                          {t.nextStepNote && (
-                            <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>
-                          )}
-                        </div>
-                      ) : <span className="text-gray-400 text-sm">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
-                    <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
-                    {!isPast && (
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => handleToggleTarget(t.companyId, t.targetId, t.bestStage)}
-                          disabled={toggling === t.companyId}
-                          className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                {rep.conversionTargets.map((t) => {
+                  const isOpen = expandedCompanies.has(t.companyId);
+                  const colCount = isPast ? 9 : 10;
+                  return (
+                    <Fragment key={t.companyId}>
+                      <tr
+                        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => toggleCompany(t.companyId)}
+                      >
+                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
+                        <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
+                        <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
+                        <td className="px-4 py-3 max-w-[200px]">
+                          {t.nextStepDate ? (
+                            <div>
+                              <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
+                              {t.nextStepNote && (
+                                <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-400 text-sm">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
+                        <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
+                        {!isPast && (
+                          <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleToggleTarget(t.companyId, t.targetId, t.bestStage)}
+                              disabled={toggling === t.companyId}
+                              className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        )}
+                        <td className="px-2 py-3 text-center text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={colCount} className="p-0">
+                            <CompanyContactsPanel companyId={t.companyId} quarterId={quarter.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
