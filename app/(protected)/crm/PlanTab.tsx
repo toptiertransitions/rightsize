@@ -503,7 +503,10 @@ function QuarterlyPlanSection({
 
   const hasPlanItems = [plan.meeting1, plan.meeting2, plan.meeting3, plan.resource1, plan.resource2, plan.resource3].some(Boolean);
 
-  function cellClass(actual: number, goal: number) {
+  const todayMonthKey = new Date().toISOString().slice(0, 7);
+
+  function cellClass(actual: number, goal: number, monthKey: string) {
+    if (monthKey > todayMonthKey) return "bg-gray-50 text-gray-300";
     if (goal === 0) return "bg-gray-50 text-gray-400";
     if (actual >= goal) return "bg-green-100 text-green-800 font-semibold";
     if (actual * 2 >= goal) return "bg-amber-50 text-amber-700";
@@ -635,19 +638,25 @@ function QuarterlyPlanSection({
               <tbody>
                 <tr>
                   <td className="pr-3 py-1 text-gray-500 font-medium whitespace-nowrap">In-Person Mtgs</td>
-                  {actStats.map((m) => (
-                    <td key={m.key} className={cn("text-center px-2 py-1 rounded", cellClass(m.meetings, plan.monthlyMeetingGoal))}>
-                      {plan.monthlyMeetingGoal > 0 ? `${m.meetings} / ${plan.monthlyMeetingGoal}` : m.meetings || "—"}
-                    </td>
-                  ))}
+                  {actStats.map((m) => {
+                    const isFuture = m.key > todayMonthKey;
+                    return (
+                      <td key={m.key} className={cn("text-center px-2 py-1 rounded", cellClass(m.meetings, plan.monthlyMeetingGoal, m.key))}>
+                        {isFuture ? "—" : plan.monthlyMeetingGoal > 0 ? `${m.meetings} / ${plan.monthlyMeetingGoal}` : m.meetings || "—"}
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr>
                   <td className="pr-3 py-1 text-gray-500 font-medium whitespace-nowrap">Checkins</td>
-                  {actStats.map((m) => (
-                    <td key={m.key} className={cn("text-center px-2 py-1 rounded", cellClass(m.checkins, plan.monthlyCheckinGoal))}>
-                      {plan.monthlyCheckinGoal > 0 ? `${m.checkins} / ${plan.monthlyCheckinGoal}` : m.checkins || "—"}
-                    </td>
-                  ))}
+                  {actStats.map((m) => {
+                    const isFuture = m.key > todayMonthKey;
+                    return (
+                      <td key={m.key} className={cn("text-center px-2 py-1 rounded", cellClass(m.checkins, plan.monthlyCheckinGoal, m.key))}>
+                        {isFuture ? "—" : plan.monthlyCheckinGoal > 0 ? `${m.checkins} / ${plan.monthlyCheckinGoal}` : m.checkins || "—"}
+                      </td>
+                    );
+                  })}
                 </tr>
               </tbody>
             </table>

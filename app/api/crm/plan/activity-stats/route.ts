@@ -68,8 +68,11 @@ export async function GET(req: NextRequest) {
 
   if (contactIds.length > 0) {
     const orParts = contactIds.map((id) => `{ClientContactId} = "${id}"`);
-    const orFormula = contactIds.length === 1 ? orParts[0] : `OR(${orParts.join(", ")})`;
-    const formula = encodeURIComponent(orFormula);
+    const contactFilter = contactIds.length === 1 ? orParts[0] : `OR(${orParts.join(", ")})`;
+    // Bound to the quarter date range in the Airtable query itself
+    const formula = encodeURIComponent(
+      `AND(NOT(IS_BEFORE({ActivityDate}, "${quarter.startDate}")), NOT(IS_AFTER({ActivityDate}, "${quarter.endDate}")), ${contactFilter})`
+    );
 
     let offset: string | undefined;
     do {
@@ -83,7 +86,7 @@ export async function GET(req: NextRequest) {
         const dateStr = String(f["ActivityDate"] ?? "").slice(0, 10);
         if (!dateStr) continue;
         const d = new Date(dateStr + "T12:00:00.000Z");
-        if (d < qStart || d > qEnd) continue;
+        if (isNaN(d.getTime()) || d < qStart || d > qEnd) continue;
         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
         if (!counts[key]) continue;
         if (type === "Meeting") {
