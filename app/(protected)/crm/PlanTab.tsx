@@ -63,19 +63,17 @@ interface PlanTabProps {
 function suggestNextQuarter(): { label: string; startDate: string; endDate: string } {
   const today = new Date();
   const year = today.getFullYear();
-  const month = today.getMonth(); // 0-indexed
+  const month = today.getMonth();
   const quarterIndex = Math.floor(month / 3);
-  // Suggest the NEXT quarter from the current one
   const nextQIdx = (quarterIndex + 1) % 4;
   const nextQYear = quarterIndex === 3 ? year + 1 : year;
   const startMonths = [0, 3, 6, 9];
   const startMonth = startMonths[nextQIdx];
   const endMonth = startMonths[nextQIdx] + 2;
   const startDate = new Date(nextQYear, startMonth, 1);
-  const endDate = new Date(nextQYear, endMonth + 1, 0); // last day of end month
+  const endDate = new Date(nextQYear, endMonth + 1, 0);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const qLabel = `Q${nextQIdx + 1} ${nextQYear}`;
-  return { label: qLabel, startDate: fmt(startDate), endDate: fmt(endDate) };
+  return { label: `Q${nextQIdx + 1} ${nextQYear}`, startDate: fmt(startDate), endDate: fmt(endDate) };
 }
 
 function AddQuarterModal({ onClose, onCreated }: { onClose: () => void; onCreated: (q: Quarter) => void }) {
@@ -96,7 +94,7 @@ function AddQuarterModal({ onClose, onCreated }: { onClose: () => void; onCreate
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label, startDate, endDate }),
       });
-      if (!res.ok) throw new Error("Failed to create quarter");
+      if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       onCreated(data.quarter);
     } catch {
@@ -123,35 +121,20 @@ function AddQuarterModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
-              />
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
             </div>
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                required
-                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
-              />
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
             </div>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50"
-            >
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 text-sm bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50">
               {saving ? "Creating..." : "Create Quarter"}
             </button>
           </div>
@@ -183,7 +166,6 @@ function PacingBar({ quarter, actual, goal }: { quarter: Quarter; actual: number
   const elapsedDays = Math.min(totalDays, Math.max(0, (today.getTime() - start.getTime()) / 86400000));
   const pacePct = elapsedDays / totalDays;
   const fillPct = goal > 0 ? Math.min(1, actual / goal) : 0;
-
   const isPast = today > end;
   const isFuture = today < start;
 
@@ -196,30 +178,195 @@ function PacingBar({ quarter, actual, goal }: { quarter: Quarter; actual: number
         </span>
       </div>
       <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
-        {/* Actual fill */}
         <div
-          className={cn(
-            "absolute inset-y-0 left-0 rounded-full transition-all",
-            fillPct >= pacePct ? "bg-green-500" : "bg-amber-400"
-          )}
+          className={cn("absolute inset-y-0 left-0 rounded-full transition-all", fillPct >= pacePct ? "bg-green-500" : "bg-amber-400")}
           style={{ width: `${fillPct * 100}%` }}
         />
-        {/* Expected pace marker */}
         {!isPast && !isFuture && (
-          <div
-            className="absolute inset-y-0 w-0.5 bg-gray-500 opacity-60"
-            style={{ left: `${pacePct * 100}%` }}
-          />
+          <div className="absolute inset-y-0 w-0.5 bg-gray-500 opacity-60" style={{ left: `${pacePct * 100}%` }} />
         )}
       </div>
       <div className="flex justify-between text-xs text-gray-400 mt-1">
         <span>{actual} received</span>
         <span>
-          {!isPast && !isFuture && goal > 0 && (
-            <>Expected pace: {(pacePct * goal).toFixed(1)} &nbsp;·&nbsp;</>
-          )}
+          {!isPast && !isFuture && goal > 0 && <>{(pacePct * goal).toFixed(1)} expected &nbsp;·&nbsp;</>}
           Goal: {goal}
         </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Priority Badge ───────────────────────────────────────────────────────────
+
+function PriorityBadge({ priority }: { priority: ReferralPriority }) {
+  return (
+    <span className={cn(
+      "text-xs px-2 py-0.5 rounded-full font-medium",
+      priority === "High" ? "bg-red-100 text-red-700" :
+      priority === "Medium" ? "bg-amber-100 text-amber-700" :
+      "bg-gray-100 text-gray-600"
+    )}>
+      {priority || "—"}
+    </span>
+  );
+}
+
+// ─── Team View ────────────────────────────────────────────────────────────────
+
+function TeamView({ planData }: { planData: PlanData }) {
+  const { quarter, reps } = planData;
+  const totalGoal = reps.reduce((s, r) => s + r.goal, 0);
+  const totalActual = reps.reduce((s, r) => s + r.actual, 0);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const today = new Date();
+  const start = new Date(quarter.startDate);
+  const end = new Date(quarter.endDate);
+  const totalDays = Math.max(1, (end.getTime() - start.getTime()) / 86400000);
+  const elapsedDays = Math.min(totalDays, Math.max(0, (today.getTime() - start.getTime()) / 86400000));
+  const pacePct = elapsedDays / totalDays;
+
+  function toggle(clerkUserId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(clerkUserId)) next.delete(clerkUserId);
+      else next.add(clerkUserId);
+      return next;
+    });
+  }
+
+  const sortedReps = [...reps].sort((a, b) => b.actual - a.actual);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-3 gap-3">
+        <KPICard label="Team Goal" value={totalGoal} sub="referrals targeted" />
+        <KPICard
+          label="Team Received"
+          value={totalActual}
+          sub={`${totalGoal > 0 ? Math.round((totalActual / totalGoal) * 100) : 0}% of goal`}
+        />
+        <KPICard
+          label="Expected Pace"
+          value={totalGoal > 0 ? (pacePct * totalGoal).toFixed(1) : "—"}
+          sub={today > end ? "quarter ended" : today < start ? "not started" : `${Math.round(pacePct * 100)}% through quarter`}
+        />
+      </div>
+
+      <PacingBar quarter={quarter} actual={totalActual} goal={totalGoal} />
+
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Rep Leaderboard</h3>
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          {sortedReps.map((rep, idx) => {
+            const pct = rep.goal > 0 ? Math.round((rep.actual / rep.goal) * 100) : null;
+            const isOpen = expanded.has(rep.clerkUserId);
+            const allPartners = [
+              ...rep.activePartners.map((p) => ({ ...p, type: "Active" as const })),
+              ...rep.conversionTargets.map((p) => ({ ...p, type: "Converting" as const })),
+            ];
+
+            return (
+              <div key={rep.clerkUserId} className={idx > 0 ? "border-t border-gray-100" : ""}>
+                {/* Summary row */}
+                <button
+                  onClick={() => toggle(rep.clerkUserId)}
+                  className="w-full text-left hover:bg-gray-50 transition-colors"
+                >
+                  <div className="grid grid-cols-[1fr_60px_60px_70px_80px_80px_32px] items-center px-4 py-3 text-sm">
+                    <span className="font-medium text-gray-900">{rep.displayName}</span>
+                    <span className="text-center text-gray-600">{rep.goal}</span>
+                    <span className="text-center font-semibold text-gray-900">{rep.actual}</span>
+                    <span className="text-center">
+                      {pct === null ? (
+                        <span className="text-gray-400 text-xs">—</span>
+                      ) : (
+                        <span className={cn(
+                          "text-xs font-medium",
+                          pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500"
+                        )}>
+                          {pct}%
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-center text-gray-500 text-xs">{rep.activePartners.length} active</span>
+                    <span className="text-center text-gray-500 text-xs">{rep.conversionTargets.length} converting</span>
+                    <span className="text-gray-400 text-xs text-center">{isOpen ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+
+                {/* Accordion detail */}
+                {isOpen && (
+                  <div className="border-t border-gray-100 bg-gray-50 px-4 pb-4 pt-3">
+                    {allPartners.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">No active or converting partners.</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-400 uppercase tracking-wide">
+                            <th className="text-left pb-1.5 font-medium">Company</th>
+                            <th className="text-left pb-1.5 font-medium">Type</th>
+                            <th className="text-left pb-1.5 font-medium">Priority</th>
+                            <th className="text-center pb-1.5 font-medium">Goal</th>
+                            <th className="text-center pb-1.5 font-medium">Received</th>
+                            <th className="text-center pb-1.5 font-medium">vs Goal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allPartners.map((p) => {
+                            const ppct = p.goal > 0 ? Math.round((p.actual / p.goal) * 100) : null;
+                            return (
+                              <tr key={p.companyId} className="border-t border-gray-200 first:border-0">
+                                <td className="py-1.5 pr-3 font-medium text-gray-800">{p.companyName}</td>
+                                <td className="py-1.5 pr-3">
+                                  <span className={cn(
+                                    "px-1.5 py-0.5 rounded text-xs font-medium",
+                                    p.type === "Active" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                                  )}>
+                                    {p.type}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 pr-3"><PriorityBadge priority={p.priority} /></td>
+                                <td className="py-1.5 text-center text-gray-600">{p.goal}</td>
+                                <td className="py-1.5 text-center font-semibold text-gray-900">{p.actual}</td>
+                                <td className="py-1.5 text-center">
+                                  {ppct === null ? <span className="text-gray-400">—</span> : (
+                                    <span className={cn(
+                                      "font-medium",
+                                      ppct >= 100 ? "text-green-600" : ppct >= 66 ? "text-amber-600" : "text-red-500"
+                                    )}>
+                                      {ppct}%
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Table header — rendered as the first row since we have custom rows */}
+          {sortedReps.length > 0 && (
+            <div className="border-t border-gray-200 bg-gray-50">
+              <div className="grid grid-cols-[1fr_60px_60px_70px_80px_80px_32px] px-4 py-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
+                <span>Rep</span>
+                <span className="text-center">Goal</span>
+                <span className="text-center">Rcvd</span>
+                <span className="text-center">vs Goal</span>
+                <span className="text-center">Partners</span>
+                <span className="text-center">Converting</span>
+                <span />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -246,11 +393,8 @@ function RepView({
     if (isPast) return;
     setToggling(companyId);
     try {
-      if (currentTargetId) {
-        await onRemoveTarget(currentTargetId);
-      } else {
-        await onAddTarget(companyId);
-      }
+      if (currentTargetId) await onRemoveTarget(currentTargetId);
+      else await onAddTarget(companyId);
     } finally {
       setToggling(null);
     }
@@ -265,13 +409,8 @@ function RepView({
 
   return (
     <div className="space-y-6">
-      {/* KPI row */}
       <div className="grid grid-cols-3 gap-3">
-        <KPICard
-          label="Quarter Goal"
-          value={rep.goal}
-          sub="referrals targeted"
-        />
+        <KPICard label="Quarter Goal" value={rep.goal} sub="referrals targeted" />
         <KPICard
           label="Received"
           value={rep.actual}
@@ -287,9 +426,11 @@ function RepView({
       <PacingBar quarter={quarter} actual={rep.actual} goal={rep.goal} />
 
       {/* Active Partners */}
-      {rep.activePartners.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Active Referral Partners</h3>
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Active Referral Partners</h3>
+        {rep.activePartners.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">No Active Referral partners assigned yet.</p>
+        ) : (
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -307,16 +448,7 @@ function RepView({
                   return (
                     <tr key={p.companyId} className="border-b border-gray-100 last:border-0">
                       <td className="px-4 py-3 font-medium text-gray-900">{p.companyName}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn(
-                          "text-xs px-2 py-0.5 rounded-full font-medium",
-                          p.priority === "High" ? "bg-red-100 text-red-700" :
-                          p.priority === "Medium" ? "bg-amber-100 text-amber-700" :
-                          "bg-gray-100 text-gray-600"
-                        )}>
-                          {p.priority}
-                        </span>
-                      </td>
+                      <td className="px-4 py-3"><PriorityBadge priority={p.priority} /></td>
                       <td className="px-4 py-3 text-center text-gray-600">{p.goal}</td>
                       <td className="px-4 py-3 text-center font-medium text-gray-900">{p.actual}</td>
                       <td className="px-4 py-3 text-center">
@@ -337,12 +469,8 @@ function RepView({
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {rep.activePartners.length === 0 && (
-        <div className="text-sm text-gray-400 italic">No Active Referral partners assigned yet.</div>
-      )}
+        )}
+      </div>
 
       {/* Converting This Quarter */}
       <div>
@@ -357,10 +485,10 @@ function RepView({
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Current Stage</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Stage</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
-                  {!isPast && <th className="px-4 py-2.5"></th>}
+                  {!isPast && <th className="px-4 py-2.5" />}
                 </tr>
               </thead>
               <tbody>
@@ -390,7 +518,6 @@ function RepView({
           <p className="text-sm text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
         )}
 
-        {/* Available to convert */}
         {!isPast && rep.availableToConvert.length > 0 && (
           <div>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Available to add</p>
@@ -416,89 +543,6 @@ function RepView({
   );
 }
 
-// ─── Team View ────────────────────────────────────────────────────────────────
-
-function TeamView({ planData }: { planData: PlanData }) {
-  const { quarter, reps } = planData;
-  const totalGoal = reps.reduce((s, r) => s + r.goal, 0);
-  const totalActual = reps.reduce((s, r) => s + r.actual, 0);
-
-  const today = new Date();
-  const start = new Date(quarter.startDate);
-  const end = new Date(quarter.endDate);
-  const totalDays = Math.max(1, (end.getTime() - start.getTime()) / 86400000);
-  const elapsedDays = Math.min(totalDays, Math.max(0, (today.getTime() - start.getTime()) / 86400000));
-  const pacePct = elapsedDays / totalDays;
-
-  return (
-    <div className="space-y-6">
-      {/* Team KPI row */}
-      <div className="grid grid-cols-3 gap-3">
-        <KPICard label="Team Goal" value={totalGoal} sub="referrals targeted" />
-        <KPICard
-          label="Team Received"
-          value={totalActual}
-          sub={`${totalGoal > 0 ? Math.round((totalActual / totalGoal) * 100) : 0}% of goal`}
-        />
-        <KPICard
-          label="Expected Pace"
-          value={totalGoal > 0 ? (pacePct * totalGoal).toFixed(1) : "—"}
-          sub={today > end ? "quarter ended" : today < start ? "not started" : `${Math.round(pacePct * 100)}% through quarter`}
-        />
-      </div>
-
-      <PacingBar quarter={quarter} actual={totalActual} goal={totalGoal} />
-
-      {/* Leaderboard */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Rep Leaderboard</h3>
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Rep</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">vs Goal</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Active Partners</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Converting</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reps
-                .sort((a, b) => b.actual - a.actual)
-                .map((rep) => {
-                  const pct = rep.goal > 0 ? Math.round((rep.actual / rep.goal) * 100) : null;
-                  return (
-                    <tr key={rep.clerkUserId} className="border-b border-gray-100 last:border-0">
-                      <td className="px-4 py-3 font-medium text-gray-900">{rep.displayName}</td>
-                      <td className="px-4 py-3 text-center text-gray-600">{rep.goal}</td>
-                      <td className="px-4 py-3 text-center font-semibold text-gray-900">{rep.actual}</td>
-                      <td className="px-4 py-3 text-center">
-                        {pct === null ? (
-                          <span className="text-gray-400 text-xs">—</span>
-                        ) : (
-                          <span className={cn(
-                            "text-xs font-medium",
-                            pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500"
-                          )}>
-                            {pct}%
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center text-gray-600">{rep.activePartners.length}</td>
-                      <td className="px-4 py-3 text-center text-gray-600">{rep.conversionTargets.length}</td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main PlanTab ─────────────────────────────────────────────────────────────
 
 export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
@@ -508,20 +552,17 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const [loading, setLoading] = useState(false);
   const [quartersLoading, setQuartersLoading] = useState(true);
   const [showAddQuarter, setShowAddQuarter] = useState(false);
-  const [viewMode, setViewMode] = useState<"team" | string>("team"); // "team" or clerkUserId
+  const [viewMode, setViewMode] = useState<"team" | string>("team");
 
   const isAdmin = sysRole === "TTTAdmin";
   const isSalesOnly = sysRole === "TTTSales";
 
-  // Load quarters on mount
   useEffect(() => {
-    setQuartersLoading(true);
     fetch("/api/crm/quarters")
       .then((r) => r.json())
       .then((data) => {
         const qs: Quarter[] = data.quarters ?? [];
         setQuarters(qs);
-        // Default to the current quarter or the most recent one
         if (qs.length > 0) {
           const today = new Date().toISOString().slice(0, 10);
           const current = qs.find((q) => q.startDate <= today && q.endDate >= today);
@@ -532,15 +573,13 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
       .finally(() => setQuartersLoading(false));
   }, []);
 
-  // Load plan data when quarter changes
   const loadPlan = useCallback(async (quarterId: string) => {
     setLoading(true);
     setPlanData(null);
     try {
       const res = await fetch(`/api/crm/plan?quarterId=${quarterId}`);
-      if (!res.ok) throw new Error("Failed to load plan");
-      const data = await res.json();
-      setPlanData(data);
+      if (!res.ok) throw new Error("Failed");
+      setPlanData(await res.json());
     } catch (e) {
       console.error(e);
     } finally {
@@ -552,7 +591,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
     if (selectedQuarterId) loadPlan(selectedQuarterId);
   }, [selectedQuarterId, loadPlan]);
 
-  // For TTTSales: force team view or own view only
+  // TTTSales can only see team view or their own individual view
   useEffect(() => {
     if (isSalesOnly && viewMode !== "team" && viewMode !== currentUserId) {
       setViewMode("team");
@@ -566,13 +605,13 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ quarterId: selectedQuarterId, companyId }),
     });
-    if (!res.ok) throw new Error("Failed to add target");
+    if (!res.ok) throw new Error("Failed");
     await loadPlan(selectedQuarterId);
   }
 
   async function handleRemoveTarget(targetId: string) {
     const res = await fetch(`/api/crm/plan/conversion-targets?id=${targetId}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("Failed to remove target");
+    if (!res.ok) throw new Error("Failed");
     if (selectedQuarterId) await loadPlan(selectedQuarterId);
   }
 
@@ -586,21 +625,19 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const today = new Date().toISOString().slice(0, 10);
   const isPast = selectedQuarter ? selectedQuarter.endDate < today : false;
 
-  // View switcher options
-  const viewOptions: { key: string; label: string }[] = [{ key: "team", label: "Team" }];
-  if (planData) {
-    for (const rep of planData.reps) {
-      if (isSalesOnly && rep.clerkUserId !== currentUserId) continue;
-      viewOptions.push({ key: rep.clerkUserId, label: rep.displayName });
-    }
-  }
+  // View tabs: Team + only TTTSales reps (individual views)
+  const repOptions = planData?.reps ?? [];
+  const viewOptions: { key: string; label: string }[] = [
+    { key: "team", label: "Team" },
+    ...repOptions
+      .filter((r) => !isSalesOnly || r.clerkUserId === currentUserId)
+      .map((r) => ({ key: r.clerkUserId, label: r.displayName })),
+  ];
 
   const activeRep = planData?.reps.find((r) => r.clerkUserId === viewMode);
 
   if (quartersLoading) {
-    return (
-      <div className="py-12 text-center text-sm text-gray-400">Loading quarters...</div>
-    );
+    return <div className="py-12 text-center text-sm text-gray-400">Loading quarters...</div>;
   }
 
   if (quarters.length === 0) {
@@ -608,23 +645,19 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
       <div className="py-12 text-center">
         <p className="text-sm text-gray-500 mb-4">No quarters set up yet.</p>
         {isAdmin && (
-          <button
-            onClick={() => setShowAddQuarter(true)}
-            className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700"
-          >
+          <button onClick={() => setShowAddQuarter(true)}
+            className="text-sm bg-forest-600 text-white rounded-lg px-4 py-2 hover:bg-forest-700">
             + Create First Quarter
           </button>
         )}
-        {showAddQuarter && (
-          <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />
-        )}
+        {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />}
       </div>
     );
   }
 
   return (
     <div>
-      {/* Quarter tab row */}
+      {/* Quarter tabs */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
           {quarters.map((q) => (
@@ -633,9 +666,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
               onClick={() => setSelectedQuarterId(q.id)}
               className={cn(
                 "px-3 py-1.5 text-sm font-medium transition-colors",
-                q.id === selectedQuarterId
-                  ? "bg-forest-600 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                q.id === selectedQuarterId ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-50"
               )}
             >
               {q.label}
@@ -643,16 +674,14 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
           ))}
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setShowAddQuarter(true)}
-            className="text-sm border border-dashed border-gray-300 text-gray-500 hover:text-forest-600 hover:border-forest-400 rounded-lg px-3 py-1.5 transition-colors"
-          >
+          <button onClick={() => setShowAddQuarter(true)}
+            className="text-sm border border-dashed border-gray-300 text-gray-500 hover:text-forest-600 hover:border-forest-400 rounded-lg px-3 py-1.5 transition-colors">
             + Add Quarter
           </button>
         )}
       </div>
 
-      {/* View switcher */}
+      {/* View switcher (Team + individual TTTSales reps only) */}
       {viewOptions.length > 1 && (
         <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white w-fit mb-5">
           {viewOptions.map((v) => (
@@ -661,9 +690,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
               onClick={() => setViewMode(v.key)}
               className={cn(
                 "px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === v.key
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                viewMode === v.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
               )}
             >
               {v.label}
@@ -672,14 +699,9 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
         </div>
       )}
 
-      {/* Content */}
-      {loading && (
-        <div className="py-12 text-center text-sm text-gray-400">Loading plan data...</div>
-      )}
+      {loading && <div className="py-12 text-center text-sm text-gray-400">Loading plan data...</div>}
 
-      {!loading && planData && viewMode === "team" && (
-        <TeamView planData={planData} />
-      )}
+      {!loading && planData && viewMode === "team" && <TeamView planData={planData} />}
 
       {!loading && planData && activeRep && (
         <RepView
@@ -691,9 +713,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
         />
       )}
 
-      {showAddQuarter && (
-        <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />
-      )}
+      {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />}
     </div>
   );
 }
