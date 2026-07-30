@@ -3623,14 +3623,23 @@ function mapCRMActivity(record: AirtableRecord): CRMActivity {
 }
 
 export async function getActivitiesForOpportunity(opportunityId: string): Promise<CRMActivity[]> {
-  const formula = encodeURIComponent(`{OpportunityId} = "${opportunityId}"`);
-  const res = await crmFetch(
-    AIRTABLE_TABLES.CRM_ACTIVITIES,
-    `?filterByFormula=${formula}&sort[0][field]=ActivityDate&sort[0][direction]=desc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapCRMActivity);
+  // Also fetch by clientContactId so Gmail sync-all activities (which only set ClientContactId) appear here too.
+  const opp = await getOpportunityById(opportunityId);
+  const clientContactId = opp?.clientContactId;
+  const formula = clientContactId
+    ? encodeURIComponent(`OR({OpportunityId} = "${opportunityId}", {ClientContactId} = "${clientContactId}")`)
+    : encodeURIComponent(`{OpportunityId} = "${opportunityId}"`);
+  const all: CRMActivity[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}&sort[0][field]=ActivityDate&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapCRMActivity));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function getAllActivities(): Promise<CRMActivity[]> {
