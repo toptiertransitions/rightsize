@@ -558,6 +558,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const [selectedQuarterId, setSelectedQuarterId] = useState<string | null>(null);
   const [planData, setPlanData] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [quartersLoading, setQuartersLoading] = useState(true);
   const [showAddQuarter, setShowAddQuarter] = useState(false);
   const [viewMode, setViewMode] = useState<"team" | string>("team");
@@ -584,12 +585,19 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const loadPlan = useCallback(async (quarterId: string) => {
     setLoading(true);
     setPlanData(null);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/crm/plan?quarterId=${quarterId}`);
-      if (!res.ok) throw new Error("Failed");
-      setPlanData(await res.json());
+      const data = await res.json();
+      if (!res.ok) {
+        setLoadError(data?.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      if (data.debug) console.log("[PlanTab] debug:", data.debug);
+      setPlanData(data);
     } catch (e) {
-      console.error(e);
+      setLoadError(String(e));
+      console.error("[PlanTab] load error:", e);
     } finally {
       setLoading(false);
     }
@@ -708,6 +716,12 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
       )}
 
       {loading && <div className="py-12 text-center text-sm text-gray-400">Loading plan data...</div>}
+
+      {!loading && loadError && (
+        <div className="py-8 text-center text-sm text-red-500">
+          Failed to load plan: {loadError}
+        </div>
+      )}
 
       {!loading && planData && viewMode === "team" && <TeamView planData={planData} />}
 
