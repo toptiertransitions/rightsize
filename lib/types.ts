@@ -883,6 +883,7 @@ export interface ReferralContact {
   clerkUserId?: string;
   isFormerEmployee?: boolean;
   portalInviteSent?: boolean;
+  stageChangedAt?: string;
 }
 
 export interface ClientContact {

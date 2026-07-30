@@ -30,6 +30,10 @@ interface ConversionTarget {
   targetId: string;
   bestStage: string;
   startingStage: string;
+  lastActivityDate: string | null;
+  nextStepDate: string | null;
+  nextStepNote: string | null;
+  stageDurationDays: number | null;
 }
 
 interface AvailableCompany {
@@ -278,6 +282,28 @@ function PriorityBadge({ priority }: { priority: ReferralPriority }) {
   );
 }
 
+// ─── Formatting helpers ───────────────────────────────────────────────────────
+
+function fmtDays(days: number | null): string {
+  if (days === null) return "—";
+  if (days === 0) return "today";
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.round(days / 7)}wk`;
+  if (days < 365) return `${Math.round(days / 30)}mo`;
+  return `${(days / 365).toFixed(1)}yr`;
+}
+
+function fmtDate(d: string | null | undefined): string {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return "—";
+  const sameYear = dt.getFullYear() === new Date().getFullYear();
+  return dt.toLocaleDateString("en-US", {
+    month: "short", day: "numeric",
+    ...(sameYear ? {} : { year: "2-digit" }),
+  });
+}
+
 // ─── Stage Badge ─────────────────────────────────────────────────────────────
 
 function StageBadge({ stage }: { stage: string }) {
@@ -495,44 +521,57 @@ function RepAccordionItem({
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Not Yet Referring</p>
 
             {rep.conversionTargets.length > 0 ? (
-              <table className="w-full text-xs mb-3">
-                <thead>
-                  <tr className="text-gray-400 uppercase tracking-wide">
-                    <th className="text-left pb-1.5 font-medium">Company</th>
-                    <th className="text-left pb-1.5 font-medium">Start Stage</th>
-                    <th className="text-left pb-1.5 font-medium">Current Stage</th>
-                    <th className="text-center pb-1.5 font-medium">Q Goal</th>
-                    <th className="text-center pb-1.5 font-medium">Received</th>
-                    {canManage && !isPast && <th className="pb-1.5" />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rep.conversionTargets.map((t) => (
-                    <tr key={t.companyId} className="border-t border-gray-200 first:border-0">
-                      <td className="py-1.5 pr-3 font-medium text-gray-800">{t.companyName}</td>
-                      <td className="py-1.5 pr-3">
-                        <StageBadge stage={t.startingStage || "—"} />
-                      </td>
-                      <td className="py-1.5 pr-3">
-                        <StageBadge stage={t.bestStage} />
-                      </td>
-                      <td className="py-1.5 text-center text-gray-600">{t.goal}</td>
-                      <td className="py-1.5 text-center font-semibold text-gray-900">{t.actual}</td>
-                      {canManage && !isPast && (
-                        <td className="py-1.5 text-right">
-                          <button
-                            onClick={() => handleToggle(t.companyId, t.targetId, t.bestStage)}
-                            disabled={toggling === t.companyId}
-                            className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      )}
+              <div className="overflow-x-auto mb-3">
+                <table className="text-xs" style={{ minWidth: 680 }}>
+                  <thead>
+                    <tr className="text-gray-400 uppercase tracking-wide">
+                      <th className="text-left pb-1.5 pr-3 font-medium">Company</th>
+                      <th className="text-left pb-1.5 pr-3 font-medium">Start Stage</th>
+                      <th className="text-left pb-1.5 pr-3 font-medium">Current Stage</th>
+                      <th className="text-center pb-1.5 pr-3 font-medium">Stage Age</th>
+                      <th className="text-center pb-1.5 pr-3 font-medium">Last Activity</th>
+                      <th className="text-left pb-1.5 pr-3 font-medium">Next Step</th>
+                      <th className="text-center pb-1.5 pr-3 font-medium">Goal</th>
+                      <th className="text-center pb-1.5 font-medium">Rcvd</th>
+                      {canManage && !isPast && <th className="pb-1.5" />}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rep.conversionTargets.map((t) => (
+                      <tr key={t.companyId} className="border-t border-gray-200 first:border-0">
+                        <td className="py-1.5 pr-3 font-medium text-gray-800 whitespace-nowrap">{t.companyName}</td>
+                        <td className="py-1.5 pr-3"><StageBadge stage={t.startingStage || "—"} /></td>
+                        <td className="py-1.5 pr-3"><StageBadge stage={t.bestStage} /></td>
+                        <td className="py-1.5 pr-3 text-center text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
+                        <td className="py-1.5 pr-3 text-center text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
+                        <td className="py-1.5 pr-3 max-w-[160px]">
+                          {t.nextStepDate ? (
+                            <div>
+                              <span className="text-gray-700 whitespace-nowrap">{fmtDate(t.nextStepDate)}</span>
+                              {t.nextStepNote && (
+                                <p className="text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="py-1.5 pr-3 text-center text-gray-600">{t.goal}</td>
+                        <td className="py-1.5 text-center font-semibold text-gray-900">{t.actual}</td>
+                        {canManage && !isPast && (
+                          <td className="py-1.5 pl-2 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => handleToggle(t.companyId, t.targetId, t.bestStage)}
+                              disabled={toggling === t.companyId}
+                              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p className="text-xs text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
             )}
@@ -778,28 +817,43 @@ function RepView({
         </div>
 
         {rep.conversionTargets.length > 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-3">
-            <table className="w-full text-sm">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-3">
+            <table className="text-sm" style={{ minWidth: 780 }}>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Start Stage</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Current Stage</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Q Goal</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Rcvd</th>
                   {!isPast && <th className="px-4 py-2.5" />}
                 </tr>
               </thead>
               <tbody>
                 {rep.conversionTargets.map((t) => (
                   <tr key={t.companyId} className="border-b border-gray-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-gray-900">{t.companyName}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
                     <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
                     <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
+                    <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
+                    <td className="px-4 py-3 text-center text-sm text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
+                    <td className="px-4 py-3 max-w-[200px]">
+                      {t.nextStepDate ? (
+                        <div>
+                          <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
+                          {t.nextStepNote && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>
+                          )}
+                        </div>
+                      ) : <span className="text-gray-400 text-sm">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
                     <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
                     {!isPast && (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button
                           onClick={() => handleToggleTarget(t.companyId, t.targetId, t.bestStage)}
                           disabled={toggling === t.companyId}

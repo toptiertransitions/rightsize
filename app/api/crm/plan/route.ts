@@ -155,6 +155,45 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Per-company contact rollups for Not Yet Referring display
+    const companyLastActivityDate = new Map<string, string>();
+    const companyNextStepDate = new Map<string, string>();
+    const companyNextStepNote = new Map<string, string>();
+    const companyStageDays = new Map<string, number>();
+    const todayMs = Date.now();
+
+    for (const rc of referralContacts) {
+      if (!rc.referralCompanyId) continue;
+      const cid = rc.referralCompanyId;
+
+      // lastActivityDate: latest across all contacts
+      if (rc.lastActivityDate) {
+        const existing = companyLastActivityDate.get(cid);
+        if (!existing || rc.lastActivityDate > existing) companyLastActivityDate.set(cid, rc.lastActivityDate);
+      }
+
+      // nextStepDate: earliest upcoming (most urgent)
+      if (rc.nextStepDate) {
+        const existing = companyNextStepDate.get(cid);
+        if (!existing || rc.nextStepDate < existing) {
+          companyNextStepDate.set(cid, rc.nextStepDate);
+          companyNextStepNote.set(cid, rc.nextStepNote ?? "");
+        }
+      }
+
+      // stageDuration: from best-stage contacts, use stageChangedAt → dateIntroduced → createdAt
+      const cBestStage = companyBestStage.get(cid);
+      if (rc.stage === cBestStage) {
+        const refStr = rc.stageChangedAt || rc.dateIntroduced || rc.createdAt;
+        const refMs = refStr ? new Date(refStr).getTime() : NaN;
+        if (!isNaN(refMs)) {
+          const days = Math.floor((todayMs - refMs) / 86400000);
+          const existing = companyStageDays.get(cid);
+          if (existing === undefined || days > existing) companyStageDays.set(cid, days);
+        }
+      }
+    }
+
     // Conversion targets: keyed by companyId::repClerkUserId
     const conversionTargetMap = new Map<string, string>();
     const startingStageMap = new Map<string, string>();
@@ -196,6 +235,10 @@ export async function GET(req: NextRequest) {
             targetId: conversionTargetMap.get(key) ?? "",
             bestStage: companyBestStage.get(c.id) ?? "Identified",
             startingStage: startingStageMap.get(key) ?? "",
+            lastActivityDate: companyLastActivityDate.get(c.id) ?? null,
+            nextStepDate: companyNextStepDate.get(c.id) ?? null,
+            nextStepNote: companyNextStepNote.get(c.id) ?? null,
+            stageDurationDays: companyStageDays.get(c.id) ?? null,
           };
         });
 

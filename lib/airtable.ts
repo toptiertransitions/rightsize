@@ -3175,6 +3175,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     clerkUserId: toStr(f["ClerkUserId"]) || undefined,
     isFormerEmployee: !!f["IsFormerEmployee"],
     portalInviteSent: !!f["PortalInviteSent"],
+    stageChangedAt: toStr(f["StageChangedAt"]) || undefined,
   };
 }
 
