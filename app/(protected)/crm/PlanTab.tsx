@@ -889,9 +889,16 @@ interface RepAccordionItemProps {
   sysRole: string;
   currentUserId: string;
   isPast: boolean;
+  pacePct: number;
   onSetRepGoal: (clerkUserId: string, goal: number) => Promise<void>;
   onAddTarget: (companyId: string, currentStage: string, forClerkUserId: string) => Promise<void>;
   onRemoveTarget: (targetId: string) => Promise<void>;
+}
+
+function calcVsPace(actual: number, goal: number, pacePct: number): number | null {
+  if (goal <= 0 || pacePct <= 0) return null;
+  const pacingGoal = goal * Math.min(1, pacePct);
+  return Math.round((actual / pacingGoal) * 100);
 }
 
 function RepAccordionItem({
@@ -900,6 +907,7 @@ function RepAccordionItem({
   sysRole,
   currentUserId,
   isPast,
+  pacePct,
   onSetRepGoal,
   onAddTarget,
   onRemoveTarget,
@@ -907,7 +915,7 @@ function RepAccordionItem({
   const [isOpen, setIsOpen] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
 
-  const pct = rep.goal > 0 ? Math.round((rep.actual / rep.goal) * 100) : null;
+  const pct = calcVsPace(rep.actual, rep.goal, pacePct);
   const activeGoalSum = rep.activePartners.reduce((s, p) => s + p.goal, 0);
   const notAccountedFor = Math.max(0, rep.goal - activeGoalSum);
 
@@ -996,12 +1004,12 @@ function RepAccordionItem({
                     <th className="text-left pb-1.5 font-medium">Priority</th>
                     <th className="text-center pb-1.5 font-medium">Q Goal</th>
                     <th className="text-center pb-1.5 font-medium">Received</th>
-                    <th className="text-center pb-1.5 font-medium">vs Goal</th>
+                    <th className="text-center pb-1.5 font-medium">vs Pace</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rep.activePartners.map((p) => {
-                    const ppct = p.goal > 0 ? Math.round((p.actual / p.goal) * 100) : null;
+                    const ppct = calcVsPace(p.actual, p.goal, pacePct);
                     return (
                       <tr key={p.companyId} className="border-t border-gray-200 first:border-0">
                         <td className="py-1.5 pr-3 font-medium text-gray-800">{p.companyName}</td>
@@ -1171,7 +1179,7 @@ function TeamView({
             <span>Rep</span>
             <span className="text-center">{isAdmin ? "Goal (click ✏)" : "Goal"}</span>
             <span className="text-center">Rcvd</span>
-            <span className="text-center">vs Goal</span>
+            <span className="text-center">vs Pace</span>
             <span className="text-center">Active</span>
             <span className="text-center">Targeting</span>
             <span />
@@ -1185,6 +1193,7 @@ function TeamView({
                 sysRole={sysRole}
                 currentUserId={currentUserId}
                 isPast={isPast}
+                pacePct={pacePct}
                 onSetRepGoal={onSetRepGoal}
                 onAddTarget={onAddTarget}
                 onRemoveTarget={onRemoveTarget}
@@ -1294,13 +1303,13 @@ function RepView({
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Priority</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Q Goal</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">vs Goal</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">vs Pace</th>
                   <th className="px-2 py-2.5 w-8" />
                 </tr>
               </thead>
               <tbody>
                 {rep.activePartners.map((p) => {
-                  const pct = p.goal > 0 ? Math.round((p.actual / p.goal) * 100) : null;
+                  const pct = calcVsPace(p.actual, p.goal, pacePct);
                   const isOpen = expandedCompanies.has(p.companyId);
                   return (
                     <Fragment key={p.companyId}>
