@@ -101,28 +101,30 @@ export async function GET(req: NextRequest) {
       refContactIdsByCompany.set(rc.referralCompanyId, s);
     }
 
-    // Parse quarter date range
-    const qStartDate = quarter.startDate ? new Date(quarter.startDate + "T00:00:00.000Z") : null;
-    const qEndDate = quarter.endDate ? new Date(quarter.endDate + "T23:59:59.999Z") : null;
+    // Parse quarter date range — dates are required; empty/invalid means count nothing
+    const qStartDate = new Date((quarter.startDate || "9999-01-01") + "T00:00:00.000Z");
+    const qEndDate = new Date((quarter.endDate || "9999-01-01") + "T23:59:59.999Z");
+    const datesValid = quarter.startDate && quarter.endDate &&
+      !isNaN(qStartDate.getTime()) && !isNaN(qEndDate.getTime());
 
     // Count referrals per company — mirror active-referral-report's exact pattern
     // A "referral" = a ClientContact created in the quarter whose referralPartnerId
     // belongs to one of this company's referral contacts
     const referralCountByCompany = new Map<string, number>();
-    for (const company of companies) {
-      const refContactIds = refContactIdsByCompany.get(company.id) ?? new Set<string>();
-      if (refContactIds.size === 0) continue;
-      let count = 0;
-      for (const cc of clientContacts) {
-        if (!cc.referralPartnerId || !refContactIds.has(cc.referralPartnerId)) continue;
-        if (qStartDate && qEndDate) {
+    if (datesValid) {
+      for (const company of companies) {
+        const refContactIds = refContactIdsByCompany.get(company.id) ?? new Set<string>();
+        if (refContactIds.size === 0) continue;
+        let count = 0;
+        for (const cc of clientContacts) {
+          if (!cc.referralPartnerId || !refContactIds.has(cc.referralPartnerId)) continue;
           if (!cc.createdAt) continue;
           const d = new Date(cc.createdAt);
           if (isNaN(d.getTime()) || d < qStartDate || d > qEndDate) continue;
+          count++;
         }
-        count++;
+        if (count > 0) referralCountByCompany.set(company.id, count);
       }
-      if (count > 0) referralCountByCompany.set(company.id, count);
     }
 
     // Conversion targets map
@@ -175,8 +177,9 @@ export async function GET(req: NextRequest) {
       quarterStartDate: quarter.startDate,
       quarterEndDate: quarter.endDate,
       quarterRawFields: quarter._rawFields,
-      qStartParsed: qStartDate?.toISOString() ?? "INVALID",
-      qEndParsed: qEndDate?.toISOString() ?? "INVALID",
+      datesValid,
+      qStartParsed: datesValid ? qStartDate.toISOString() : "INVALID/MISSING",
+      qEndParsed: datesValid ? qEndDate.toISOString() : "INVALID/MISSING",
       totalCompanies: companies.length,
       totalReferralContacts: referralContacts.length,
       totalClientContacts: clientContacts.length,
