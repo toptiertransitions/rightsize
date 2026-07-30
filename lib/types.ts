@@ -851,6 +851,7 @@ export interface ReferralCompany {
   assignedToClerkId: string;
   createdAt: string;
   lastActivityDate?: string;
+  competitors?: string;
 }
 
 export type ReferralContactStage =

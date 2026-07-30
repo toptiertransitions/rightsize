@@ -112,6 +112,12 @@ export async function GET(req: NextRequest) {
       getRepQuarterlyGoals(quarterId).catch(() => []),
     ]);
 
+    // competitors lookup
+    const competitorsByCompanyId = new Map<string, string>();
+    for (const c of companies) {
+      if (c.competitors) competitorsByCompanyId.set(c.id, c.competitors);
+    }
+
     // bestStage per company
     const companyBestStage = new Map<string, ReferralContactStage>();
     for (const rc of referralContacts) {
@@ -221,6 +227,7 @@ export async function GET(req: NextRequest) {
           priority: c.priority as ReferralPriority,
           goal: ACTIVE_PARTNER_QUARTERLY_GOAL[c.priority as ReferralPriority] ?? 0,
           actual: referralCountByCompany.get(c.id) ?? 0,
+          competitors: competitorsByCompanyId.get(c.id) ?? null,
         }));
 
       const conversionTargetRows = myCompanies
@@ -239,6 +246,7 @@ export async function GET(req: NextRequest) {
             nextStepDate: companyNextStepDate.get(c.id) ?? null,
             nextStepNote: companyNextStepNote.get(c.id) ?? null,
             stageDurationDays: companyStageDays.get(c.id) ?? null,
+            competitors: competitorsByCompanyId.get(c.id) ?? null,
           };
         });
 

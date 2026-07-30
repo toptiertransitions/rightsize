@@ -19,6 +19,7 @@ interface ActivePartner {
   priority: ReferralPriority;
   goal: number;
   actual: number;
+  competitors: string | null;
 }
 
 interface ConversionTarget {
@@ -34,6 +35,7 @@ interface ConversionTarget {
   nextStepDate: string | null;
   nextStepNote: string | null;
   stageDurationDays: number | null;
+  competitors: string | null;
 }
 
 interface AvailableCompany {
@@ -382,16 +384,323 @@ function PortalStatusBadge({ status }: { status: "active" | "invited" | "none" }
   );
 }
 
+// ─── Quarterly Plan Section ───────────────────────────────────────────────────
+
+interface CompanyPlan {
+  meeting1: string; meeting2: string; meeting3: string;
+  resource1: string; resource2: string; resource3: string;
+  monthlyMeetingGoal: number;
+  monthlyCheckinGoal: number;
+}
+
+interface MonthStat {
+  key: string;
+  label: string;
+  meetings: number;
+  checkins: number;
+}
+
+interface CompareResult {
+  item: string;
+  status: "done" | "in-progress" | "not-started";
+  note: string;
+}
+
+function QuarterlyPlanSection({
+  companyId,
+  quarterId,
+  companyName,
+  competitors,
+}: {
+  companyId: string;
+  quarterId: string;
+  companyName: string;
+  competitors?: string | null;
+}) {
+  const [plan, setPlan] = useState<CompanyPlan>({
+    meeting1: "", meeting2: "", meeting3: "",
+    resource1: "", resource2: "", resource3: "",
+    monthlyMeetingGoal: 0, monthlyCheckinGoal: 0,
+  });
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [meetingGoalStr, setMeetingGoalStr] = useState("");
+  const [checkinGoalStr, setCheckinGoalStr] = useState("");
+  const [actStats, setActStats] = useState<MonthStat[] | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareResults, setCompareResults] = useState<{ results: CompareResult[]; summary: string } | null>(null);
+  const [compareError, setCompareError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoaded(false);
+    setActStats(null);
+    fetch(`/api/crm/plan/company-plan?companyId=${companyId}&quarterId=${quarterId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.plan) {
+          setPlan(d.plan);
+          setMeetingGoalStr(d.plan.monthlyMeetingGoal > 0 ? String(d.plan.monthlyMeetingGoal) : "");
+          setCheckinGoalStr(d.plan.monthlyCheckinGoal > 0 ? String(d.plan.monthlyCheckinGoal) : "");
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+
+    fetch(`/api/crm/plan/activity-stats?companyId=${companyId}&quarterId=${quarterId}`)
+      .then((r) => r.json())
+      .then((d) => setActStats(d.months ?? []))
+      .catch(() => setActStats([]));
+  }, [companyId, quarterId]);
+
+  async function saveField(field: keyof Pick<CompanyPlan, "meeting1"|"meeting2"|"meeting3"|"resource1"|"resource2"|"resource3">, value: string) {
+    setSaving(field);
+    try {
+      await fetch("/api/crm/plan/company-plan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, quarterId, [field]: value }),
+      });
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveNumericField(field: "monthlyMeetingGoal" | "monthlyCheckinGoal", value: number) {
+    setPlan((p) => ({ ...p, [field]: value }));
+    const airtableKey = field === "monthlyMeetingGoal" ? "monthlyMeetingGoal" : "monthlyCheckinGoal";
+    await fetch("/api/crm/plan/company-plan", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyId, quarterId, [airtableKey]: value }),
+    });
+  }
+
+  async function handleCompare() {
+    setComparing(true);
+    setCompareResults(null);
+    setCompareError(null);
+    try {
+      const res = await fetch("/api/crm/plan/compare-activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId, quarterId, companyName,
+          meetings: [plan.meeting1, plan.meeting2, plan.meeting3],
+          resources: [plan.resource1, plan.resource2, plan.resource3],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Compare failed");
+      setCompareResults(data);
+    } catch (e) {
+      setCompareError(String(e));
+    } finally {
+      setComparing(false);
+    }
+  }
+
+  if (!loaded) return <div className="px-5 pt-4 pb-2 text-xs text-gray-400 italic">Loading plan...</div>;
+
+  const hasPlanItems = [plan.meeting1, plan.meeting2, plan.meeting3, plan.resource1, plan.resource2, plan.resource3].some(Boolean);
+
+  function cellClass(actual: number, goal: number) {
+    if (goal === 0) return "bg-gray-50 text-gray-400";
+    if (actual >= goal) return "bg-green-100 text-green-800 font-semibold";
+    if (actual * 2 >= goal) return "bg-amber-50 text-amber-700";
+    return "bg-red-50 text-red-600";
+  }
+
+  const statusColor = (s: string) =>
+    s === "done" ? "bg-green-50 border-green-200 text-green-700" :
+    s === "in-progress" ? "bg-amber-50 border-amber-200 text-amber-700" :
+    "bg-red-50 border-red-200 text-red-500";
+
+  const statusDot = (s: string) =>
+    s === "done" ? "bg-green-500" :
+    s === "in-progress" ? "bg-amber-400" :
+    "bg-red-400";
+
+  return (
+    <div className="bg-white border-b border-slate-200 px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quarter&apos;s Plan</h4>
+        <button
+          onClick={handleCompare}
+          disabled={comparing || !hasPlanItems}
+          className="text-xs bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700 disabled:opacity-40 transition-colors"
+        >
+          {comparing ? "Analyzing..." : "Compare Activity"}
+        </button>
+      </div>
+
+      {/* Key Meetings + Key Resources */}
+      <div className="grid grid-cols-2 gap-4 mb-3">
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Key Meetings</p>
+          <div className="space-y-1.5">
+            {(["meeting1", "meeting2", "meeting3"] as const).map((f, i) => (
+              <input
+                key={f}
+                type="text"
+                value={plan[f]}
+                placeholder={`Meeting ${i + 1}`}
+                onChange={(e) => setPlan((p) => ({ ...p, [f]: e.target.value }))}
+                onBlur={(e) => saveField(f, e.target.value)}
+                className={cn(
+                  "w-full border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400",
+                  saving === f ? "border-forest-300 bg-forest-50" : "border-gray-200"
+                )}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Key Resources to Use</p>
+          <div className="space-y-1.5">
+            {(["resource1", "resource2", "resource3"] as const).map((f, i) => (
+              <input
+                key={f}
+                type="text"
+                value={plan[f]}
+                placeholder={`Resource ${i + 1}`}
+                onChange={(e) => setPlan((p) => ({ ...p, [f]: e.target.value }))}
+                onBlur={(e) => saveField(f, e.target.value)}
+                className={cn(
+                  "w-full border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400",
+                  saving === f ? "border-forest-300 bg-forest-50" : "border-gray-200"
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Goals */}
+      <div className="flex gap-4 mb-3">
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1">Monthly In-Person Meetings Goal</p>
+          <input
+            type="number"
+            min="0"
+            value={meetingGoalStr}
+            placeholder="0"
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setMeetingGoalStr(e.target.value)}
+            onBlur={(e) => {
+              const n = parseInt(e.target.value, 10);
+              const val = isNaN(n) || n < 0 ? 0 : n;
+              setMeetingGoalStr(val > 0 ? String(val) : "");
+              saveNumericField("monthlyMeetingGoal", val);
+            }}
+            className="w-24 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400"
+          />
+        </div>
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1">Monthly Checkins Goal</p>
+          <input
+            type="number"
+            min="0"
+            value={checkinGoalStr}
+            placeholder="0"
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setCheckinGoalStr(e.target.value)}
+            onBlur={(e) => {
+              const n = parseInt(e.target.value, 10);
+              const val = isNaN(n) || n < 0 ? 0 : n;
+              setCheckinGoalStr(val > 0 ? String(val) : "");
+              saveNumericField("monthlyCheckinGoal", val);
+            }}
+            className="w-24 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400"
+          />
+        </div>
+        <div className="self-end pb-1.5">
+          <p className="text-xs text-gray-400">Checkins = Calls, Emails &amp; Texts</p>
+        </div>
+      </div>
+
+      {/* Activity Tracker */}
+      {actStats && actStats.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Activity vs Goals</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr>
+                  <th className="text-left pr-3 pb-1 font-medium text-gray-400 w-24" />
+                  {actStats.map((m) => (
+                    <th key={m.key} className="text-center px-2 pb-1 font-medium text-gray-500 whitespace-nowrap">{m.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="pr-3 py-1 text-gray-500 font-medium whitespace-nowrap">In-Person Mtgs</td>
+                  {actStats.map((m) => (
+                    <td key={m.key} className={cn("text-center px-2 py-1 rounded", cellClass(m.meetings, plan.monthlyMeetingGoal))}>
+                      {plan.monthlyMeetingGoal > 0 ? `${m.meetings} / ${plan.monthlyMeetingGoal}` : m.meetings || "—"}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="pr-3 py-1 text-gray-500 font-medium whitespace-nowrap">Checkins</td>
+                  {actStats.map((m) => (
+                    <td key={m.key} className={cn("text-center px-2 py-1 rounded", cellClass(m.checkins, plan.monthlyCheckinGoal))}>
+                      {plan.monthlyCheckinGoal > 0 ? `${m.checkins} / ${plan.monthlyCheckinGoal}` : m.checkins || "—"}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Competitors */}
+      {competitors && (
+        <div className="mb-3">
+          <p className="text-xs font-medium text-gray-500 mb-1">Competitors</p>
+          <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">{competitors}</p>
+        </div>
+      )}
+
+      {/* Compare Results */}
+      {compareError && (
+        <div className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2">{compareError}</div>
+      )}
+      {compareResults && (
+        <div className="mt-3 space-y-2">
+          {compareResults.summary && (
+            <p className="text-xs text-gray-600 italic mb-2">{compareResults.summary}</p>
+          )}
+          {compareResults.results.map((r, i) => (
+            <div key={i} className={cn("flex items-start gap-2 border rounded-lg px-3 py-2", statusColor(r.status))}>
+              <div className={cn("mt-0.5 w-2 h-2 rounded-full shrink-0", statusDot(r.status))} />
+              <div className="min-w-0">
+                <p className="text-xs font-medium leading-snug">{r.item}</p>
+                {r.note && <p className="text-xs opacity-80 mt-0.5">{r.note}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Company Contacts Panel (lazy-loaded accordion detail) ────────────────────
 
 function CompanyContactsPanel({
   companyId,
   quarterId,
   excludeStages,
+  companyName,
+  competitors,
 }: {
   companyId: string;
   quarterId: string;
   excludeStages?: string[];
+  companyName: string;
+  competitors?: string | null;
 }) {
   const [rawContacts, setRawContacts] = useState<ContactDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -414,14 +723,15 @@ function CompanyContactsPanel({
   if (error) return (
     <div className="px-6 py-3 text-xs text-red-500 bg-red-50">Failed to load contacts: {error}</div>
   );
-  if (!contacts) return (
-    <div className="px-6 py-3 text-xs text-gray-400 italic">Loading contacts...</div>
-  );
-  if (contacts.length === 0) return (
-    <div className="px-6 py-3 text-xs text-gray-400 italic">No referral contacts recorded for this company.</div>
-  );
 
   return (
+    <>
+      <QuarterlyPlanSection companyId={companyId} quarterId={quarterId} companyName={companyName} competitors={competitors} />
+      {!contacts ? (
+        <div className="px-6 py-3 text-xs text-gray-400 italic">Loading contacts...</div>
+      ) : contacts.length === 0 ? (
+        <div className="px-6 py-3 text-xs text-gray-400 italic">No referral contacts recorded for this company.</div>
+      ) : (
     <div className="bg-slate-50 border-t border-slate-200 px-5 py-4 space-y-3">
       {contacts.map((c) => (
         <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
@@ -506,6 +816,8 @@ function CompanyContactsPanel({
         </div>
       ))}
     </div>
+      )}
+    </>
   );
 }
 
@@ -1006,7 +1318,7 @@ function RepView({
                       {isOpen && (
                         <tr>
                           <td colSpan={6} className="p-0">
-                            <CompanyContactsPanel companyId={p.companyId} quarterId={quarter.id} excludeStages={["Identified"]} />
+                            <CompanyContactsPanel companyId={p.companyId} quarterId={quarter.id} excludeStages={["Identified"]} companyName={p.companyName} competitors={p.competitors} />
                           </td>
                         </tr>
                       )}
@@ -1086,7 +1398,7 @@ function RepView({
                       {isOpen && (
                         <tr>
                           <td colSpan={colCount} className="p-0">
-                            <CompanyContactsPanel companyId={t.companyId} quarterId={quarter.id} />
+                            <CompanyContactsPanel companyId={t.companyId} quarterId={quarter.id} companyName={t.companyName} competitors={t.competitors} />
                           </td>
                         </tr>
                       )}

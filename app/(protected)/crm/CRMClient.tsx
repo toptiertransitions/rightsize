@@ -2210,7 +2210,7 @@ function ReferralPartnersTab({
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
   const [companyModal, setCompanyModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<ReferralCompany | null>(null);
-  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", website: "", assignedToClerkId: "" });
+  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", website: "", assignedToClerkId: "", competitors: "" });
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "", nextStepDate: "", nextStepNote: "" });
@@ -2472,13 +2472,13 @@ function ReferralPartnersTab({
 
   function openNewCompany() {
     setEditingCompany(null);
-    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", website: "", assignedToClerkId: "" });
+    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", website: "", assignedToClerkId: "", competitors: "" });
     setCompanyModal(true);
   }
 
   function openEditCompany(c: ReferralCompany) {
     setEditingCompany(c);
-    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, website: c.website || "", assignedToClerkId: c.assignedToClerkId || "" });
+    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, website: c.website || "", assignedToClerkId: c.assignedToClerkId || "", competitors: c.competitors || "" });
     setCompanyModal(true);
   }
 
@@ -2497,6 +2497,7 @@ function ReferralPartnersTab({
         notes: companyForm.notes,
         website: companyForm.website,
         assignedToClerkId: companyForm.assignedToClerkId,
+        competitors: companyForm.competitors,
       };
       if (editingCompany) {
         const res = await fetch("/api/crm/companies", {
@@ -3114,6 +3115,10 @@ function ReferralPartnersTab({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
               <textarea value={companyForm.notes} onChange={(e) => setCompanyForm((f) => ({ ...f, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Competitors</label>
+              <textarea value={companyForm.competitors} onChange={(e) => setCompanyForm((f) => ({ ...f, competitors: e.target.value }))} rows={2} placeholder="e.g. Competitor A, Competitor B" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setCompanyModal(false)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>

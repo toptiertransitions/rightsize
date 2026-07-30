@@ -95,6 +95,7 @@ export const AIRTABLE_TABLES = {
   QUARTERS: process.env.AIRTABLE_QUARTERS_TABLE || "Quarters",
   QUARTERLY_CONVERSION_TARGETS: process.env.AIRTABLE_QUARTERLY_CONVERSION_TARGETS_TABLE || "QuarterlyConversionTargets",
   REP_QUARTERLY_GOALS: process.env.AIRTABLE_REP_QUARTERLY_GOALS_TABLE || "RepQuarterlyGoals",
+  QUARTERLY_COMPANY_PLANS: process.env.AIRTABLE_QUARTERLY_COMPANY_PLANS_TABLE || "QuarterlyCompanyPlans",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
