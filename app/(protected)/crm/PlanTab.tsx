@@ -29,6 +29,7 @@ interface ConversionTarget {
   actual: number;
   targetId: string;
   bestStage: string;
+  startingStage: string;
 }
 
 interface AvailableCompany {
@@ -43,6 +44,7 @@ interface RepPlan {
   displayName: string;
   goal: number;
   actual: number;
+  repGoal: number | null;
   activePartners: ActivePartner[];
   conversionTargets: ConversionTarget[];
   availableToConvert: AvailableCompany[];
@@ -276,13 +278,317 @@ function PriorityBadge({ priority }: { priority: ReferralPriority }) {
   );
 }
 
+// ─── Stage Badge ─────────────────────────────────────────────────────────────
+
+function StageBadge({ stage }: { stage: string }) {
+  const color =
+    stage === "Active Referral" ? "bg-green-100 text-green-700" :
+    stage === "Shared Leads" ? "bg-teal-100 text-teal-700" :
+    stage === "Agreed to Refer" ? "bg-blue-100 text-blue-700" :
+    stage === "Met" ? "bg-indigo-100 text-indigo-700" :
+    stage === "Identified" ? "bg-slate-100 text-slate-600" :
+    stage === "Inactive Referral" ? "bg-red-100 text-red-600" :
+    "bg-gray-100 text-gray-500";
+
+  return (
+    <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap", color)}>
+      {stage || "—"}
+    </span>
+  );
+}
+
+// ─── Inline Goal Editor (admin only) ─────────────────────────────────────────
+
+function InlineGoalEditor({
+  currentGoal,
+  onSave,
+}: {
+  currentGoal: number;
+  onSave: (goal: number) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(currentGoal));
+  const [saving, setSaving] = useState(false);
+
+  async function commit() {
+    const n = parseInt(value, 10);
+    if (!isNaN(n) && n >= 0) {
+      setSaving(true);
+      try { await onSave(n); } finally { setSaving(false); }
+    }
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        min="0"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+        className="w-14 h-6 text-center text-sm border border-forest-400 rounded px-1 focus:outline-none"
+        disabled={saving}
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); setEditing(true); setValue(String(currentGoal)); }}
+      className="group inline-flex items-center gap-1 text-sm text-gray-700 hover:text-forest-600"
+      title="Click to set rep quarterly goal"
+    >
+      {currentGoal}
+      <span className="opacity-0 group-hover:opacity-60 text-xs text-gray-400">✏</span>
+    </button>
+  );
+}
+
+// ─── Rep Accordion Item (used in Team View) ───────────────────────────────────
+
+interface RepAccordionItemProps {
+  rep: RepPlan;
+  isAdmin: boolean;
+  sysRole: string;
+  currentUserId: string;
+  isPast: boolean;
+  onSetRepGoal: (clerkUserId: string, goal: number) => Promise<void>;
+  onAddTarget: (companyId: string, currentStage: string, forClerkUserId: string) => Promise<void>;
+  onRemoveTarget: (targetId: string) => Promise<void>;
+}
+
+function RepAccordionItem({
+  rep,
+  isAdmin,
+  sysRole,
+  currentUserId,
+  isPast,
+  onSetRepGoal,
+  onAddTarget,
+  onRemoveTarget,
+}: RepAccordionItemProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const pct = rep.goal > 0 ? Math.round((rep.actual / rep.goal) * 100) : null;
+  const activeGoalSum = rep.activePartners.reduce((s, p) => s + p.goal, 0);
+  const notAccountedFor = Math.max(0, rep.goal - activeGoalSum);
+
+  // Can this current user add/remove targets for this rep?
+  const canManage = isAdmin || sysRole === "TTTManager" || currentUserId === rep.clerkUserId;
+
+  async function handleToggle(companyId: string, targetId: string | null, currentStage: string) {
+    if (isPast || !canManage) return;
+    setToggling(companyId);
+    try {
+      if (targetId) await onRemoveTarget(targetId);
+      else await onAddTarget(companyId, currentStage, rep.clerkUserId);
+    } finally {
+      setToggling(null);
+    }
+  }
+
+  return (
+    <div>
+      {/* Summary row */}
+      <button
+        onClick={() => setIsOpen((o) => !o)}
+        className="w-full text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="grid grid-cols-[1fr_90px_60px_65px_55px_60px_32px] items-center px-4 py-3 text-sm">
+          <span className="font-medium text-gray-900 truncate">{rep.displayName}</span>
+
+          {/* Goal — admin can click to edit */}
+          <div className="text-center" onClick={(e) => e.stopPropagation()}>
+            {isAdmin && !isPast ? (
+              <InlineGoalEditor
+                currentGoal={rep.goal}
+                onSave={(g) => onSetRepGoal(rep.clerkUserId, g)}
+              />
+            ) : (
+              <span className="text-gray-600 text-sm">{rep.goal}</span>
+            )}
+          </div>
+
+          <span className="text-center font-semibold text-gray-900">{rep.actual}</span>
+
+          <span className="text-center">
+            {pct === null ? (
+              <span className="text-gray-400 text-xs">—</span>
+            ) : (
+              <span className={cn(
+                "text-xs font-medium",
+                pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500"
+              )}>
+                {pct}%
+              </span>
+            )}
+          </span>
+
+          <span className="text-center text-gray-500 text-xs">{rep.activePartners.length} active</span>
+          <span className="text-center text-gray-500 text-xs">{rep.conversionTargets.length} targeting</span>
+          <span className="text-gray-400 text-xs text-center">{isOpen ? "▲" : "▼"}</span>
+        </div>
+      </button>
+
+      {/* Accordion detail */}
+      {isOpen && (
+        <div className="border-t border-gray-100 bg-gray-50 px-4 pb-5 pt-4 space-y-5">
+
+          {/* Not Accounted For banner — only when admin has set a rep goal */}
+          {rep.repGoal !== null && (
+            <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs">
+              <span className="font-semibold text-amber-800">Not Accounted For</span>
+              <span className="text-amber-900 font-bold text-base">{notAccountedFor}</span>
+              <span className="text-amber-600">
+                Rep goal {rep.goal} &minus; active partner goals {activeGoalSum}
+              </span>
+            </div>
+          )}
+
+          {/* Active Referral Partners */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Active Referral Partners</p>
+            {rep.activePartners.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No active referral partners.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-400 uppercase tracking-wide">
+                    <th className="text-left pb-1.5 font-medium">Company</th>
+                    <th className="text-left pb-1.5 font-medium">Priority</th>
+                    <th className="text-center pb-1.5 font-medium">Q Goal</th>
+                    <th className="text-center pb-1.5 font-medium">Received</th>
+                    <th className="text-center pb-1.5 font-medium">vs Goal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rep.activePartners.map((p) => {
+                    const ppct = p.goal > 0 ? Math.round((p.actual / p.goal) * 100) : null;
+                    return (
+                      <tr key={p.companyId} className="border-t border-gray-200 first:border-0">
+                        <td className="py-1.5 pr-3 font-medium text-gray-800">{p.companyName}</td>
+                        <td className="py-1.5 pr-3"><PriorityBadge priority={p.priority} /></td>
+                        <td className="py-1.5 text-center text-gray-600">{p.goal}</td>
+                        <td className="py-1.5 text-center font-semibold text-gray-900">{p.actual}</td>
+                        <td className="py-1.5 text-center">
+                          {ppct === null ? <span className="text-gray-400">—</span> : (
+                            <span className={cn("font-medium", ppct >= 100 ? "text-green-600" : ppct >= 66 ? "text-amber-600" : "text-red-500")}>
+                              {ppct}%
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Not Yet Referring */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Not Yet Referring</p>
+
+            {rep.conversionTargets.length > 0 ? (
+              <table className="w-full text-xs mb-3">
+                <thead>
+                  <tr className="text-gray-400 uppercase tracking-wide">
+                    <th className="text-left pb-1.5 font-medium">Company</th>
+                    <th className="text-left pb-1.5 font-medium">Start Stage</th>
+                    <th className="text-left pb-1.5 font-medium">Current Stage</th>
+                    <th className="text-center pb-1.5 font-medium">Q Goal</th>
+                    <th className="text-center pb-1.5 font-medium">Received</th>
+                    {canManage && !isPast && <th className="pb-1.5" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rep.conversionTargets.map((t) => (
+                    <tr key={t.companyId} className="border-t border-gray-200 first:border-0">
+                      <td className="py-1.5 pr-3 font-medium text-gray-800">{t.companyName}</td>
+                      <td className="py-1.5 pr-3">
+                        <StageBadge stage={t.startingStage || "—"} />
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <StageBadge stage={t.bestStage} />
+                      </td>
+                      <td className="py-1.5 text-center text-gray-600">{t.goal}</td>
+                      <td className="py-1.5 text-center font-semibold text-gray-900">{t.actual}</td>
+                      {canManage && !isPast && (
+                        <td className="py-1.5 text-right">
+                          <button
+                            onClick={() => handleToggle(t.companyId, t.targetId, t.bestStage)}
+                            disabled={toggling === t.companyId}
+                            className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-xs text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
+            )}
+
+            {/* Add from pipeline */}
+            {canManage && !isPast && rep.availableToConvert.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Add from pipeline</p>
+                <div className="flex flex-wrap gap-2">
+                  {rep.availableToConvert.map((c) => (
+                    <button
+                      key={c.companyId}
+                      onClick={() => handleToggle(c.companyId, null, c.bestStage)}
+                      disabled={toggling === c.companyId}
+                      className="inline-flex items-center gap-1.5 text-xs border border-dashed border-gray-300 text-gray-500 rounded-lg px-2.5 py-1.5 hover:border-forest-400 hover:text-forest-600 hover:bg-forest-50 transition-colors disabled:opacity-40"
+                    >
+                      <span className="text-gray-400">+</span>
+                      {c.companyName}
+                      <span className="text-gray-300">·</span>
+                      <StageBadge stage={c.bestStage} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Team View ────────────────────────────────────────────────────────────────
 
-function TeamView({ planData }: { planData: PlanData }) {
+function TeamView({
+  planData,
+  isAdmin,
+  sysRole,
+  currentUserId,
+  isPast,
+  onSetRepGoal,
+  onAddTarget,
+  onRemoveTarget,
+}: {
+  planData: PlanData;
+  isAdmin: boolean;
+  sysRole: string;
+  currentUserId: string;
+  isPast: boolean;
+  onSetRepGoal: (clerkUserId: string, goal: number) => Promise<void>;
+  onAddTarget: (companyId: string, currentStage: string, forClerkUserId: string) => Promise<void>;
+  onRemoveTarget: (targetId: string) => Promise<void>;
+}) {
   const { quarter, reps } = planData;
   const totalGoal = reps.reduce((s, r) => s + r.goal, 0);
   const totalActual = reps.reduce((s, r) => s + r.actual, 0);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const today = new Date();
   const start = new Date(quarter.startDate);
@@ -290,15 +596,6 @@ function TeamView({ planData }: { planData: PlanData }) {
   const totalDays = Math.max(1, (end.getTime() - start.getTime()) / 86400000);
   const elapsedDays = Math.min(totalDays, Math.max(0, (today.getTime() - start.getTime()) / 86400000));
   const pacePct = elapsedDays / totalDays;
-
-  function toggle(clerkUserId: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(clerkUserId)) next.delete(clerkUserId);
-      else next.add(clerkUserId);
-      return next;
-    });
-  }
 
   const sortedReps = [...reps].sort((a, b) => b.actual - a.actual);
 
@@ -323,112 +620,34 @@ function TeamView({ planData }: { planData: PlanData }) {
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-2">Rep Leaderboard</h3>
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {sortedReps.map((rep, idx) => {
-            const pct = rep.goal > 0 ? Math.round((rep.actual / rep.goal) * 100) : null;
-            const isOpen = expanded.has(rep.clerkUserId);
-            const allPartners = [
-              ...rep.activePartners.map((p) => ({ ...p, type: "Active" as const })),
-              ...rep.conversionTargets.map((p) => ({ ...p, type: "Converting" as const })),
-            ];
+          {/* Header */}
+          <div className="grid grid-cols-[1fr_90px_60px_65px_55px_60px_32px] px-4 py-2 text-xs font-medium text-gray-400 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
+            <span>Rep</span>
+            <span className="text-center">{isAdmin ? "Goal (click ✏)" : "Goal"}</span>
+            <span className="text-center">Rcvd</span>
+            <span className="text-center">vs Goal</span>
+            <span className="text-center">Active</span>
+            <span className="text-center">Targeting</span>
+            <span />
+          </div>
 
-            return (
-              <div key={rep.clerkUserId} className={idx > 0 ? "border-t border-gray-100" : ""}>
-                {/* Summary row */}
-                <button
-                  onClick={() => toggle(rep.clerkUserId)}
-                  className="w-full text-left hover:bg-gray-50 transition-colors"
-                >
-                  <div className="grid grid-cols-[1fr_60px_60px_70px_80px_80px_32px] items-center px-4 py-3 text-sm">
-                    <span className="font-medium text-gray-900">{rep.displayName}</span>
-                    <span className="text-center text-gray-600">{rep.goal}</span>
-                    <span className="text-center font-semibold text-gray-900">{rep.actual}</span>
-                    <span className="text-center">
-                      {pct === null ? (
-                        <span className="text-gray-400 text-xs">—</span>
-                      ) : (
-                        <span className={cn(
-                          "text-xs font-medium",
-                          pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500"
-                        )}>
-                          {pct}%
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-center text-gray-500 text-xs">{rep.activePartners.length} active</span>
-                    <span className="text-center text-gray-500 text-xs">{rep.conversionTargets.length} converting</span>
-                    <span className="text-gray-400 text-xs text-center">{isOpen ? "▲" : "▼"}</span>
-                  </div>
-                </button>
-
-                {/* Accordion detail */}
-                {isOpen && (
-                  <div className="border-t border-gray-100 bg-gray-50 px-4 pb-4 pt-3">
-                    {allPartners.length === 0 ? (
-                      <p className="text-xs text-gray-400 italic">No active or converting partners.</p>
-                    ) : (
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-gray-400 uppercase tracking-wide">
-                            <th className="text-left pb-1.5 font-medium">Company</th>
-                            <th className="text-left pb-1.5 font-medium">Type</th>
-                            <th className="text-left pb-1.5 font-medium">Priority</th>
-                            <th className="text-center pb-1.5 font-medium">Goal</th>
-                            <th className="text-center pb-1.5 font-medium">Received</th>
-                            <th className="text-center pb-1.5 font-medium">vs Goal</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allPartners.map((p) => {
-                            const ppct = p.goal > 0 ? Math.round((p.actual / p.goal) * 100) : null;
-                            return (
-                              <tr key={p.companyId} className="border-t border-gray-200 first:border-0">
-                                <td className="py-1.5 pr-3 font-medium text-gray-800">{p.companyName}</td>
-                                <td className="py-1.5 pr-3">
-                                  <span className={cn(
-                                    "px-1.5 py-0.5 rounded text-xs font-medium",
-                                    p.type === "Active" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                                  )}>
-                                    {p.type}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 pr-3"><PriorityBadge priority={p.priority} /></td>
-                                <td className="py-1.5 text-center text-gray-600">{p.goal}</td>
-                                <td className="py-1.5 text-center font-semibold text-gray-900">{p.actual}</td>
-                                <td className="py-1.5 text-center">
-                                  {ppct === null ? <span className="text-gray-400">—</span> : (
-                                    <span className={cn(
-                                      "font-medium",
-                                      ppct >= 100 ? "text-green-600" : ppct >= 66 ? "text-amber-600" : "text-red-500"
-                                    )}>
-                                      {ppct}%
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Table header — rendered as the first row since we have custom rows */}
-          {sortedReps.length > 0 && (
-            <div className="border-t border-gray-200 bg-gray-50">
-              <div className="grid grid-cols-[1fr_60px_60px_70px_80px_80px_32px] px-4 py-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
-                <span>Rep</span>
-                <span className="text-center">Goal</span>
-                <span className="text-center">Rcvd</span>
-                <span className="text-center">vs Goal</span>
-                <span className="text-center">Partners</span>
-                <span className="text-center">Converting</span>
-                <span />
-              </div>
+          {sortedReps.map((rep, idx) => (
+            <div key={rep.clerkUserId} className={idx > 0 ? "border-t border-gray-100" : ""}>
+              <RepAccordionItem
+                rep={rep}
+                isAdmin={isAdmin}
+                sysRole={sysRole}
+                currentUserId={currentUserId}
+                isPast={isPast}
+                onSetRepGoal={onSetRepGoal}
+                onAddTarget={onAddTarget}
+                onRemoveTarget={onRemoveTarget}
+              />
             </div>
+          ))}
+
+          {sortedReps.length === 0 && (
+            <p className="px-4 py-6 text-sm text-gray-400 italic text-center">No sales reps found.</p>
           )}
         </div>
       </div>
@@ -448,17 +667,17 @@ function RepView({
   rep: RepPlan;
   quarter: Quarter;
   isPast: boolean;
-  onAddTarget: (companyId: string) => Promise<void>;
+  onAddTarget: (companyId: string, currentStage: string, forClerkUserId?: string) => Promise<void>;
   onRemoveTarget: (targetId: string) => Promise<void>;
 }) {
   const [toggling, setToggling] = useState<string | null>(null);
 
-  async function handleToggleTarget(companyId: string, currentTargetId: string | null) {
+  async function handleToggleTarget(companyId: string, currentTargetId: string | null, currentStage: string) {
     if (isPast) return;
     setToggling(companyId);
     try {
       if (currentTargetId) await onRemoveTarget(currentTargetId);
-      else await onAddTarget(companyId);
+      else await onAddTarget(companyId, currentStage);
     } finally {
       setToggling(null);
     }
@@ -470,6 +689,9 @@ function RepView({
   const totalDays = Math.max(1, (end.getTime() - start.getTime()) / 86400000);
   const elapsedDays = Math.min(totalDays, Math.max(0, (today.getTime() - start.getTime()) / 86400000));
   const pacePct = elapsedDays / totalDays;
+
+  const activeGoalSum = rep.activePartners.reduce((s, p) => s + p.goal, 0);
+  const notAccountedFor = rep.repGoal !== null ? Math.max(0, rep.goal - activeGoalSum) : null;
 
   return (
     <div className="space-y-6">
@@ -489,6 +711,20 @@ function RepView({
 
       <PacingBar quarter={quarter} actual={rep.actual} goal={rep.goal} />
 
+      {/* Not Accounted For — only shown when admin has set a rep-level goal */}
+      {notAccountedFor !== null && (
+        <div className="flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
+          <div>
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Not Accounted For</p>
+            <p className="text-2xl font-bold text-amber-900">{notAccountedFor}</p>
+          </div>
+          <p className="text-xs text-amber-600">
+            {rep.goal} total goal &minus; {activeGoalSum} from active partners
+            = {notAccountedFor} referrals not yet covered by active referring companies
+          </p>
+        </div>
+      )}
+
       {/* Active Partners */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-2">Active Referral Partners</h3>
@@ -501,7 +737,7 @@ function RepView({
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Partner</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Priority</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Q Goal</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">vs Goal</th>
                 </tr>
@@ -519,10 +755,8 @@ function RepView({
                         {pct === null ? (
                           <span className="text-gray-400 text-xs">—</span>
                         ) : (
-                          <span className={cn(
-                            "text-xs font-medium",
-                            pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500"
-                          )}>
+                          <span className={cn("text-xs font-medium",
+                            pct >= 100 ? "text-green-600" : pct >= 66 ? "text-amber-600" : "text-red-500")}>
                             {pct}%
                           </span>
                         )}
@@ -536,10 +770,10 @@ function RepView({
         )}
       </div>
 
-      {/* Converting This Quarter */}
+      {/* Not Yet Referring */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <h3 className="text-sm font-semibold text-gray-700">Converting This Quarter</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Not Yet Referring</h3>
           {isPast && <span className="text-xs text-gray-400">(read-only)</span>}
         </div>
 
@@ -549,8 +783,9 @@ function RepView({
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Stage</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Start Stage</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Current Stage</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Q Goal</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Received</th>
                   {!isPast && <th className="px-4 py-2.5" />}
                 </tr>
@@ -559,13 +794,14 @@ function RepView({
                 {rep.conversionTargets.map((t) => (
                   <tr key={t.companyId} className="border-b border-gray-100 last:border-0">
                     <td className="px-4 py-3 font-medium text-gray-900">{t.companyName}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{t.bestStage}</td>
+                    <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
+                    <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
                     <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
                     <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
                     {!isPast && (
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => handleToggleTarget(t.companyId, t.targetId)}
+                          onClick={() => handleToggleTarget(t.companyId, t.targetId, t.bestStage)}
                           disabled={toggling === t.companyId}
                           className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
                         >
@@ -596,14 +832,14 @@ function RepView({
                 {rep.availableToConvert.map((c) => (
                   <button
                     key={c.companyId}
-                    onClick={() => handleToggleTarget(c.companyId, null)}
+                    onClick={() => handleToggleTarget(c.companyId, null, c.bestStage)}
                     disabled={toggling === c.companyId}
                     className="inline-flex items-center gap-1.5 text-xs border border-dashed border-gray-300 text-gray-500 rounded-lg px-2.5 py-1.5 hover:border-forest-400 hover:text-forest-600 hover:bg-forest-50 transition-colors disabled:opacity-40"
                   >
                     <span className="text-gray-400">+</span>
                     {c.companyName}
                     <span className="text-gray-300">·</span>
-                    <span className="text-gray-400">{c.bestStage}</span>
+                    <StageBadge stage={c.bestStage} />
                   </button>
                 ))}
               </div>
@@ -672,19 +908,18 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
     if (selectedQuarterId) loadPlan(selectedQuarterId);
   }, [selectedQuarterId, loadPlan]);
 
-  // TTTSales can only see team view or their own individual view
   useEffect(() => {
     if (isSalesOnly && viewMode !== "team" && viewMode !== currentUserId) {
       setViewMode("team");
     }
   }, [isSalesOnly, viewMode, currentUserId]);
 
-  async function handleAddTarget(companyId: string) {
+  async function handleAddTarget(companyId: string, currentStage: string, forClerkUserId?: string) {
     if (!selectedQuarterId) return;
     const res = await fetch("/api/crm/plan/conversion-targets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quarterId: selectedQuarterId, companyId }),
+      body: JSON.stringify({ quarterId: selectedQuarterId, companyId, startingStage: currentStage, forClerkUserId }),
     });
     if (!res.ok) throw new Error("Failed");
     await loadPlan(selectedQuarterId);
@@ -694,6 +929,16 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
     const res = await fetch(`/api/crm/plan/conversion-targets?id=${targetId}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed");
     if (selectedQuarterId) await loadPlan(selectedQuarterId);
+  }
+
+  async function handleSetRepGoal(clerkUserId: string, goal: number) {
+    if (!selectedQuarterId) return;
+    await fetch("/api/crm/plan/rep-goals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quarterId: selectedQuarterId, clerkUserId, goal }),
+    });
+    await loadPlan(selectedQuarterId);
   }
 
   function handleQuarterCreated(q: Quarter) {
@@ -712,7 +957,6 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const today = new Date().toISOString().slice(0, 10);
   const isPast = selectedQuarter ? selectedQuarter.endDate < today : false;
 
-  // View tabs: Team + only TTTSales reps (individual views)
   const repOptions = planData?.reps ?? [];
   const viewOptions: { key: string; label: string }[] = [
     { key: "team", label: "Team" },
@@ -788,7 +1032,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
         </div>
       )}
 
-      {/* View switcher (Team + individual TTTSales reps only) */}
+      {/* View switcher */}
       {viewOptions.length > 1 && (
         <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white w-fit mb-5">
           {viewOptions.map((v) => (
@@ -814,7 +1058,18 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
         </div>
       )}
 
-      {!loading && planData && viewMode === "team" && <TeamView planData={planData} />}
+      {!loading && planData && viewMode === "team" && (
+        <TeamView
+          planData={planData}
+          isAdmin={isAdmin}
+          sysRole={sysRole}
+          currentUserId={currentUserId}
+          isPast={isPast}
+          onSetRepGoal={handleSetRepGoal}
+          onAddTarget={handleAddTarget}
+          onRemoveTarget={handleRemoveTarget}
+        />
+      )}
 
       {!loading && planData && activeRep && (
         <RepView

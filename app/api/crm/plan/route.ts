@@ -4,11 +4,12 @@ import { getSystemRole, getReferralCompanies, getReferralContacts, getClientCont
 import { AIRTABLE_TABLES } from "@/lib/config";
 import type { ReferralContactStage, ReferralPriority } from "@/lib/types";
 
+// Quarterly goals per company by priority
 const ACTIVE_PARTNER_QUARTERLY_GOAL: Record<ReferralPriority, number> = {
-  High: 3, Medium: 1, Low: 0, "": 0,
+  High: 9, Medium: 3, Low: 0, "": 0,
 };
 const CONVERSION_TARGET_QUARTERLY_GOAL: Record<ReferralPriority, number> = {
-  High: 2, Medium: 1, Low: 1, "": 1,
+  High: 6, Medium: 3, Low: 3, "": 3,
 };
 const STAGE_PRIORITY: Record<ReferralContactStage, number> = {
   "Inactive Referral": 0, "Identified": 1, "Met": 2,
@@ -24,7 +25,13 @@ function atFetch(table: string, path: string, options?: RequestInit) {
   });
 }
 
-interface ConversionTargetRecord { id: string; companyId: string; quarterId: string; selectedByClerkId: string; }
+interface ConversionTargetRecord {
+  id: string;
+  companyId: string;
+  quarterId: string;
+  selectedByClerkId: string;
+  startingStage: string;
+}
 
 async function getConversionTargets(quarterId: string): Promise<ConversionTargetRecord[]> {
   const formula = encodeURIComponent(`{QuarterId} = "${quarterId}"`);
@@ -36,8 +43,31 @@ async function getConversionTargets(quarterId: string): Promise<ConversionTarget
     if (!res.ok) break;
     const data = await res.json();
     all.push(...(data.records as { id: string; fields: Record<string, string> }[]).map((r) => ({
-      id: r.id, companyId: r.fields["CompanyId"] ?? "",
-      quarterId: r.fields["QuarterId"] ?? "", selectedByClerkId: r.fields["SelectedByClerkId"] ?? "",
+      id: r.id,
+      companyId: r.fields["CompanyId"] ?? "",
+      quarterId: r.fields["QuarterId"] ?? "",
+      selectedByClerkId: r.fields["SelectedByClerkId"] ?? "",
+      startingStage: r.fields["StartingStage"] ?? "",
+    })));
+    offset = data.offset as string | undefined;
+  } while (offset);
+  return all;
+}
+
+interface RepGoalRecord { clerkUserId: string; goal: number; }
+
+async function getRepQuarterlyGoals(quarterId: string): Promise<RepGoalRecord[]> {
+  const formula = encodeURIComponent(`{QuarterId} = "${quarterId}"`);
+  const all: RepGoalRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`;
+    const res = await atFetch(AIRTABLE_TABLES.REP_QUARTERLY_GOALS, qs);
+    if (!res.ok) break;
+    const data = await res.json();
+    all.push(...(data.records as { id: string; fields: Record<string, unknown> }[]).map((r) => ({
+      clerkUserId: String(r.fields["ClerkUserId"] ?? ""),
+      goal: Number(r.fields["Goal"] ?? 0),
     })));
     offset = data.offset as string | undefined;
   } while (offset);
@@ -48,7 +78,6 @@ async function getQuarterById(quarterId: string) {
   const res = await atFetch(AIRTABLE_TABLES.QUARTERS, `/${quarterId}`);
   if (!res.ok) return null;
   const r = await res.json() as { id: string; fields: Record<string, unknown> };
-  // Return raw fields too so client can diagnose field name issues
   return {
     id: r.id,
     label: String(r.fields["Label"] ?? ""),
@@ -74,12 +103,13 @@ export async function GET(req: NextRequest) {
     const quarter = await getQuarterById(quarterId);
     if (!quarter) return NextResponse.json({ error: "Quarter not found" }, { status: 404 });
 
-    const [companies, referralContacts, clientContacts, staffMembers, conversionTargets] = await Promise.all([
+    const [companies, referralContacts, clientContacts, staffMembers, conversionTargets, repGoalRecords] = await Promise.all([
       getReferralCompanies().catch((e) => { console.error("getReferralCompanies failed", e); return []; }),
       getReferralContacts().catch((e) => { console.error("getReferralContacts failed", e); return []; }),
       getClientContacts().catch((e) => { console.error("getClientContacts failed", e); return []; }),
       getStaffMembers().catch((e) => { console.error("getStaffMembers failed", e); return []; }),
       getConversionTargets(quarterId).catch(() => []),
+      getRepQuarterlyGoals(quarterId).catch(() => []),
     ]);
 
     // bestStage per company
@@ -101,15 +131,13 @@ export async function GET(req: NextRequest) {
       refContactIdsByCompany.set(rc.referralCompanyId, s);
     }
 
-    // Parse quarter date range — dates are required; empty/invalid means count nothing
+    // Parse quarter date range
     const qStartDate = new Date((quarter.startDate || "9999-01-01") + "T00:00:00.000Z");
     const qEndDate = new Date((quarter.endDate || "9999-01-01") + "T23:59:59.999Z");
     const datesValid = quarter.startDate && quarter.endDate &&
       !isNaN(qStartDate.getTime()) && !isNaN(qEndDate.getTime());
 
-    // Count referrals per company — mirror active-referral-report's exact pattern
-    // A "referral" = a ClientContact created in the quarter whose referralPartnerId
-    // belongs to one of this company's referral contacts
+    // Count referrals per company within the quarter date range
     const referralCountByCompany = new Map<string, number>();
     if (datesValid) {
       for (const company of companies) {
@@ -127,10 +155,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Conversion targets map
+    // Conversion targets: keyed by companyId::repClerkUserId
     const conversionTargetMap = new Map<string, string>();
+    const startingStageMap = new Map<string, string>();
     for (const ct of conversionTargets) {
-      conversionTargetMap.set(`${ct.companyId}::${ct.selectedByClerkId}`, ct.id);
+      const key = `${ct.companyId}::${ct.selectedByClerkId}`;
+      conversionTargetMap.set(key, ct.id);
+      startingStageMap.set(key, ct.startingStage);
+    }
+
+    // Rep quarterly goals
+    const repGoalMap = new Map<string, number>();
+    for (const rg of repGoalRecords) {
+      if (rg.clerkUserId) repGoalMap.set(rg.clerkUserId, rg.goal);
     }
 
     const salesReps = staffMembers.filter((s) => s.role === "TTTSales");
@@ -149,14 +186,18 @@ export async function GET(req: NextRequest) {
 
       const conversionTargetRows = myCompanies
         .filter((c) => conversionTargetMap.has(`${c.id}::${rep.clerkUserId}`) && companyBestStage.get(c.id) !== "Active Referral")
-        .map((c) => ({
-          companyId: c.id, companyName: c.name,
-          priority: c.priority as ReferralPriority,
-          goal: CONVERSION_TARGET_QUARTERLY_GOAL[c.priority as ReferralPriority] ?? 1,
-          actual: referralCountByCompany.get(c.id) ?? 0,
-          targetId: conversionTargetMap.get(`${c.id}::${rep.clerkUserId}`) ?? "",
-          bestStage: companyBestStage.get(c.id) ?? "Identified",
-        }));
+        .map((c) => {
+          const key = `${c.id}::${rep.clerkUserId}`;
+          return {
+            companyId: c.id, companyName: c.name,
+            priority: c.priority as ReferralPriority,
+            goal: CONVERSION_TARGET_QUARTERLY_GOAL[c.priority as ReferralPriority] ?? 3,
+            actual: referralCountByCompany.get(c.id) ?? 0,
+            targetId: conversionTargetMap.get(key) ?? "",
+            bestStage: companyBestStage.get(c.id) ?? "Identified",
+            startingStage: startingStageMap.get(key) ?? "",
+          };
+        });
 
       const availableToConvert = myCompanies
         .filter((c) => companyBestStage.get(c.id) !== "Active Referral" && !conversionTargetMap.has(`${c.id}::${rep.clerkUserId}`))
@@ -166,13 +207,23 @@ export async function GET(req: NextRequest) {
           bestStage: companyBestStage.get(c.id) ?? "No contacts yet",
         }));
 
-      const goal = activePartners.reduce((s, p) => s + p.goal, 0) + conversionTargetRows.reduce((s, p) => s + p.goal, 0);
+      const computedGoal = activePartners.reduce((s, p) => s + p.goal, 0) + conversionTargetRows.reduce((s, p) => s + p.goal, 0);
+      const repGoal = repGoalMap.has(rep.clerkUserId) ? repGoalMap.get(rep.clerkUserId)! : null;
+      const goal = repGoal ?? computedGoal;
       const actual = activePartners.reduce((s, p) => s + p.actual, 0) + conversionTargetRows.reduce((s, p) => s + p.actual, 0);
 
-      return { clerkUserId: rep.clerkUserId, displayName: rep.displayName, goal, actual, activePartners, conversionTargets: conversionTargetRows, availableToConvert };
+      return {
+        clerkUserId: rep.clerkUserId,
+        displayName: rep.displayName,
+        goal,
+        actual,
+        repGoal,
+        activePartners,
+        conversionTargets: conversionTargetRows,
+        availableToConvert,
+      };
     });
 
-    // Debug info included in response so it's visible in browser Network tab
     const debug = {
       quarterStartDate: quarter.startDate,
       quarterEndDate: quarter.endDate,
@@ -183,16 +234,15 @@ export async function GET(req: NextRequest) {
       totalCompanies: companies.length,
       totalReferralContacts: referralContacts.length,
       totalClientContacts: clientContacts.length,
-      clientContactsWithReferralPartnerId: clientContacts.filter(cc => !!cc.referralPartnerId).length,
-      sampleClientContacts: clientContacts.filter(cc => !!cc.referralPartnerId).slice(0, 3).map(cc => ({
-        id: cc.id, name: cc.name, referralPartnerId: cc.referralPartnerId, createdAt: cc.createdAt,
-      })),
-      companiesWithRefContacts: refContactIdsByCompany.size,
       referralCountByCompany: Object.fromEntries(referralCountByCompany),
-      salesReps: salesReps.map(r => ({ displayName: r.displayName, clerkUserId: r.clerkUserId, assignedCompanies: companies.filter(c => c.assignedToClerkId === r.clerkUserId).length })),
+      salesReps: salesReps.map(r => ({ displayName: r.displayName, clerkUserId: r.clerkUserId })),
     };
 
-    return NextResponse.json({ quarter: { id: quarter.id, label: quarter.label, startDate: quarter.startDate, endDate: quarter.endDate }, reps, debug });
+    return NextResponse.json({
+      quarter: { id: quarter.id, label: quarter.label, startDate: quarter.startDate, endDate: quarter.endDate },
+      reps,
+      debug,
+    });
   } catch (err) {
     console.error("[plan/route] unhandled error:", err);
     return NextResponse.json({ error: String(err), reps: [], quarter: null }, { status: 500 });

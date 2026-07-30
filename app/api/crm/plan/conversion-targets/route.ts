@@ -16,20 +16,29 @@ function atFetch(table: string, path: string, options?: RequestInit) {
   });
 }
 
-async function requireCRMAccess(userId: string) {
-  const sysRole = await getSystemRole(userId);
-  return ["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "");
-}
-
-// Add a company as a conversion target for this quarter
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await req.json() as { quarterId: string; companyId: string };
-  const { quarterId, companyId } = body;
+  const sysRole = await getSystemRole(userId);
+  if (!["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json() as {
+    quarterId: string;
+    companyId: string;
+    startingStage?: string;
+    forClerkUserId?: string;
+  };
+  const { quarterId, companyId, startingStage, forClerkUserId } = body;
   if (!quarterId || !companyId) return NextResponse.json({ error: "quarterId and companyId required" }, { status: 400 });
+
+  // Only admin/manager can add on behalf of another rep
+  const selectedByClerkId =
+    forClerkUserId && (sysRole === "TTTAdmin" || sysRole === "TTTManager")
+      ? forClerkUserId
+      : userId;
 
   const res = await atFetch(AIRTABLE_TABLES.QUARTERLY_CONVERSION_TARGETS, "", {
     method: "POST",
@@ -37,8 +46,9 @@ export async function POST(req: NextRequest) {
       fields: {
         QuarterId: quarterId,
         CompanyId: companyId,
-        SelectedByClerkId: userId,
+        SelectedByClerkId: selectedByClerkId,
         SelectedAt: new Date().toISOString(),
+        StartingStage: startingStage ?? "",
       },
     }),
   });
@@ -50,15 +60,19 @@ export async function POST(req: NextRequest) {
       quarterId: data.fields["QuarterId"] ?? "",
       companyId: data.fields["CompanyId"] ?? "",
       selectedByClerkId: data.fields["SelectedByClerkId"] ?? "",
+      startingStage: data.fields["StartingStage"] ?? "",
     },
   });
 }
 
-// Remove a company from conversion targets for this quarter
 export async function DELETE(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const sysRole = await getSystemRole(userId);
+  if (!["TTTAdmin", "TTTManager", "TTTSales"].includes(sysRole ?? "")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const targetId = req.nextUrl.searchParams.get("id");
   if (!targetId) return NextResponse.json({ error: "id required" }, { status: 400 });
