@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import type { ReferralPriority, ReferralContactStage } from "@/lib/types";
+import type { ReferralPriority } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,14 +28,14 @@ interface ConversionTarget {
   goal: number;
   actual: number;
   targetId: string;
-  bestStage: ReferralContactStage;
+  bestStage: string;
 }
 
 interface AvailableCompany {
   companyId: string;
   companyName: string;
   priority: ReferralPriority;
-  bestStage: ReferralContactStage;
+  bestStage: string;
 }
 
 interface RepPlan {
@@ -518,24 +518,32 @@ function RepView({
           <p className="text-sm text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
         )}
 
-        {!isPast && rep.availableToConvert.length > 0 && (
+        {!isPast && (
           <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Available to add</p>
-            <div className="flex flex-wrap gap-2">
-              {rep.availableToConvert.map((c) => (
-                <button
-                  key={c.companyId}
-                  onClick={() => handleToggleTarget(c.companyId, null)}
-                  disabled={toggling === c.companyId}
-                  className="inline-flex items-center gap-1.5 text-xs border border-dashed border-gray-300 text-gray-500 rounded-lg px-2.5 py-1.5 hover:border-forest-400 hover:text-forest-600 hover:bg-forest-50 transition-colors disabled:opacity-40"
-                >
-                  <span className="text-gray-400">+</span>
-                  {c.companyName}
-                  <span className="text-gray-300">·</span>
-                  <span className="text-gray-400">{c.bestStage}</span>
-                </button>
-              ))}
-            </div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">
+              Add from your pipeline
+            </p>
+            {rep.availableToConvert.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">
+                No other companies are assigned to you — assign companies in the Referral Partners tab to track them here.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {rep.availableToConvert.map((c) => (
+                  <button
+                    key={c.companyId}
+                    onClick={() => handleToggleTarget(c.companyId, null)}
+                    disabled={toggling === c.companyId}
+                    className="inline-flex items-center gap-1.5 text-xs border border-dashed border-gray-300 text-gray-500 rounded-lg px-2.5 py-1.5 hover:border-forest-400 hover:text-forest-600 hover:bg-forest-50 transition-colors disabled:opacity-40"
+                  >
+                    <span className="text-gray-400">+</span>
+                    {c.companyName}
+                    <span className="text-gray-300">·</span>
+                    <span className="text-gray-400">{c.bestStage}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
