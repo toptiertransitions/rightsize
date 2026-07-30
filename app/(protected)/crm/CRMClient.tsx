@@ -555,6 +555,7 @@ function OpportunityPanel({
   const [newPersonName, setNewPersonName] = useState("");
   const [newPersonRelationship, setNewPersonRelationship] = useState("");
   const [newPersonEmail, setNewPersonEmail] = useState("");
+  const [newPersonPhone, setNewPersonPhone] = useState("");
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [activityType, setActivityType] = useState<CRMActivityType>("Note");
   const [activityNote, setActivityNote] = useState("");
@@ -663,11 +664,17 @@ function OpportunityPanel({
     if (!newPersonName) return;
     setKeyPeople((prev) => [
       ...prev,
-      { name: newPersonName, relationship: newPersonRelationship, email: newPersonEmail || undefined },
+      {
+        name: newPersonName,
+        relationship: newPersonRelationship,
+        email: newPersonEmail || undefined,
+        phone: newPersonPhone || undefined,
+      },
     ]);
     setNewPersonName("");
     setNewPersonRelationship("");
     setNewPersonEmail("");
+    setNewPersonPhone("");
   }
 
   async function logActivity() {
@@ -1019,13 +1026,14 @@ function OpportunityPanel({
             <div className="flex flex-wrap gap-2 mb-2">
               {keyPeople.map((p, i) => (
                 <span key={i} className="flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full">
-                  {p.name} · {p.relationship}
+                  {p.name}{p.relationship ? ` · ${p.relationship}` : ""}
                   {p.email && <span className="text-gray-400 ml-0.5">· {p.email}</span>}
+                  {p.phone && <span className="text-gray-400 ml-0.5">· {p.phone}</span>}
                   <button onClick={() => setKeyPeople((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 ml-1">×</button>
                 </span>
               ))}
             </div>
-            <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <input
                 value={newPersonName}
                 onChange={(e) => setNewPersonName(e.target.value)}
@@ -1043,6 +1051,13 @@ function OpportunityPanel({
                 value={newPersonEmail}
                 onChange={(e) => setNewPersonEmail(e.target.value)}
                 placeholder="Email (optional)"
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+              />
+              <input
+                type="tel"
+                value={newPersonPhone}
+                onChange={(e) => setNewPersonPhone(e.target.value)}
+                placeholder="Phone (optional)"
                 className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
               />
             </div>

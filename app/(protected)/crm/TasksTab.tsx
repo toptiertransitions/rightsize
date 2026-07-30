@@ -70,6 +70,8 @@ interface ConfirmState {
   activityType: ActivityType;
   activityDate: string;
   activityNote: string;
+  nextStepNote: string;
+  nextStepDate: string;
 }
 
 export default function TasksTab({ referralContacts, companies, currentUserId, staffMembers, onContactUpdated }: Props) {
@@ -198,6 +200,8 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
       activityType: "Call",
       activityDate: firstTask.date <= today ? today : firstTask.date,
       activityNote: tasks.length === 1 ? firstTask.note : `Completed ${tasks.length} tasks`,
+      nextStepNote: "",
+      nextStepDate: "",
     });
     setSaveError("");
   }
@@ -224,14 +228,16 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
           throw new Error(`Failed to log activity: ${err}`);
         }
 
-        // 2. Clear next step fields + update lastActivityDate on the referral contact
+        // 2. Update next step fields + lastActivityDate on the referral contact.
+        // If the user entered a new next step, save it; otherwise clear.
+        const hasNewNextStep = !!(confirm.nextStepNote || confirm.nextStepDate);
         const contactRes = await fetch("/api/crm/contacts", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: task.contactId,
-            nextStepDate: null,
-            nextStepNote: "",
+            nextStepDate: hasNewNextStep ? (confirm.nextStepDate || null) : null,
+            nextStepNote: hasNewNextStep ? confirm.nextStepNote : "",
             lastActivityDate: confirm.activityDate,
           }),
         });
@@ -243,8 +249,8 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
         // 3. Optimistically update parent state — no page refresh needed
         onContactUpdated(task.contactId, {
           lastActivityDate: confirm.activityDate,
-          nextStepDate: undefined,
-          nextStepNote: undefined,
+          nextStepDate: hasNewNextStep ? (confirm.nextStepDate || undefined) : undefined,
+          nextStepNote: hasNewNextStep ? confirm.nextStepNote : undefined,
         });
       }
 
@@ -630,6 +636,30 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
                   placeholder="What happened?"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
                 />
+              </div>
+
+              {/* Next Step */}
+              <div className="border-t border-gray-100 pt-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Next Step (optional)</p>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Next Step Note</label>
+                  <textarea
+                    rows={2}
+                    value={confirm.nextStepNote}
+                    onChange={e => setConfirm(c => c ? { ...c, nextStepNote: e.target.value } : c)}
+                    placeholder="What needs to happen next?"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Next Step Date</label>
+                  <input
+                    type="date"
+                    value={confirm.nextStepDate}
+                    onChange={e => setConfirm(c => c ? { ...c, nextStepDate: e.target.value } : c)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                  />
+                </div>
               </div>
 
               {saveError && <p className="text-sm text-red-600">{saveError}</p>}

@@ -909,6 +909,7 @@ export interface KeyPerson {
   name: string;
   relationship: string;
   email?: string;
+  phone?: string;
   referralContactId?: string;
 }
 
