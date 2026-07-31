@@ -149,8 +149,12 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
     .map(s => s.email as string);
   if (recipients.length === 0) return;
 
+  const fallbackSummary = item.description?.trim() || `A new ${item.contentType} has been added to the content library.`;
   const [summary, pdfBuffer] = await Promise.all([
-    generateSummary(item),
+    generateSummary(item).catch(e => {
+      console.error("[content-team-notify] generateSummary failed, using fallback:", e);
+      return fallbackSummary;
+    }),
     item.contentType === "PDF" && item.fileUrl
       ? fetch(item.fileUrl).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null)
       : Promise.resolve(null),
