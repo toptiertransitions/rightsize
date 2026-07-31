@@ -50,12 +50,11 @@ export function buildUnpaidLineItems(
     if (item.status !== "Sold") continue;
     if (pfEvItemIds.has(item.id)) continue; // covered by Square events above
     let payout = 0;
-    if (pfVendorMatch && pfVendorMatch.consignmentTake > 0 && item.salePrice && item.salePrice > 0) {
-      // Best: LocalVendor rate applied to the actual sale price
-      payout = item.salePrice * (1 - pfVendorMatch.consignmentTake / 100);
-    } else if (item.salePrice && item.salePrice > 0 && item.clientSharePercent) {
-      // Fallback: clientSharePercent of actual sale price
+    if (item.clientSharePercent != null && item.clientSharePercent > 0 && item.salePrice && item.salePrice > 0) {
+      // Per-item override takes priority — matches computeCalcPayout display logic
       payout = item.salePrice * (item.clientSharePercent / 100);
+    } else if (pfVendorMatch && pfVendorMatch.consignmentTake > 0 && item.salePrice && item.salePrice > 0) {
+      payout = item.salePrice * (1 - pfVendorMatch.consignmentTake / 100);
     } else {
       // Last resort: stored consignorPayout (may be stale)
       payout = item.consignorPayout ?? 0;
@@ -76,11 +75,13 @@ export function buildUnpaidLineItems(
   for (const item of items) {
     if (!consignmentRoutes.includes(item.primaryRoute)) continue;
     if (item.status !== "Sold") continue;
-    // Calculate payout
+    // Calculate payout — per-item clientSharePercent overrides vendor rate (matches computeCalcPayout)
     let payout = 0;
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
     const match = localVendors.find(lv => norm(lv.vendorName) === norm(item.primaryRoute));
-    if (match && item.salePrice && match.consignmentTake > 0) {
+    if (item.clientSharePercent != null && item.clientSharePercent > 0 && item.salePrice && item.salePrice > 0) {
+      payout = item.salePrice * (item.clientSharePercent / 100);
+    } else if (match && item.salePrice && match.consignmentTake > 0) {
       payout = item.salePrice * (1 - match.consignmentTake / 100);
     } else {
       payout = item.consignorPayout ?? 0;
