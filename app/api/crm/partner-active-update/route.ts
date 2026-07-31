@@ -28,11 +28,11 @@ export async function POST(req: NextRequest) {
 
   const contact = await getReferralContactById(referralContactId).catch(() => null);
   if (!contact) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
-  if (!contact.email) return NextResponse.json({ error: "Contact has no email address" }, { status: 400 });
-
-  // Sender's display name for the email footer
+  // Send to the logged-in TTT user who clicked the button
   const clerk = await clerkClient();
   const senderUser = await clerk.users.getUser(userId).catch(() => null);
+  const toEmail = senderUser?.emailAddresses?.[0]?.emailAddress;
+  if (!toEmail) return NextResponse.json({ error: "Could not determine sender email" }, { status: 400 });
   const sentByName = [senderUser?.firstName, senderUser?.lastName].filter(Boolean).join(" ") || undefined;
 
   const companyId = contact.referralCompanyId || null;
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
   await resend.emails.send({
     from: `Top Tier Transitions <${fromEmail}>`,
-    to: contact.email,
+    to: toEmail,
     subject: `Active Project Update — ${companyName}`,
     html,
   });

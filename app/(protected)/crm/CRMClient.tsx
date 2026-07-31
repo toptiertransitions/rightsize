@@ -4345,9 +4345,8 @@ function DashboardTab({
                       setActiveUpdateSending(false);
                     }
                   }}
-                  disabled={activeUpdateSending || activeUpdateSent || !spotlightContact.email}
+                  disabled={activeUpdateSending || activeUpdateSent}
                   className="min-h-[36px] px-4 text-sm font-semibold rounded-lg border border-forest-600 text-forest-700 hover:bg-forest-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                  title={!spotlightContact.email ? "No email address on file for this contact" : undefined}
                 >
                   {activeUpdateSending ? (
                     <>
