@@ -60,25 +60,33 @@ export async function PATCH(req: NextRequest) {
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   try {
-    // Detect newly added key people before saving so we can create notes for them
+    // Fetch current opportunity once if we need to diff key people or detect first project link
+    const needsPrefetch = (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) || !!data.tenantId;
+    const current = needsPrefetch ? await getOpportunityById(id).catch(() => null) : null;
+
+    // Case A: New key people added while a project is already linked
     let addedKeyPeople: KeyPerson[] = [];
     if (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) {
-      const current = await getOpportunityById(id).catch(() => null);
       const existingNames = new Set((current?.keyPeople ?? []).map((p: KeyPerson) => p.name.toLowerCase().trim()));
       addedKeyPeople = (data.keyPeople as KeyPerson[]).filter(p => !existingNames.has(p.name.toLowerCase().trim()));
     }
 
+    // Case B: tenantId being set for the first time → backfill all existing key people as notes
+    const isFirstProjectLink = !!data.tenantId && !!current && !current.tenantId;
+    const firstLinkKeyPeople: KeyPerson[] = isFirstProjectLink ? (current!.keyPeople ?? []) : [];
+
     const opportunity = await updateOpportunity(id, data);
 
-    // Create an internal Plan note for each newly added key person
-    if (addedKeyPeople.length > 0 && opportunity.tenantId) {
+    // Create internal Plan notes for key people (Case A: new additions; Case B: first project link backfill)
+    const peopleToNote = firstLinkKeyPeople.length > 0 ? firstLinkKeyPeople : addedKeyPeople;
+    if (peopleToNote.length > 0 && opportunity.tenantId) {
       try {
         const clerk = await clerkClient();
         const user = await clerk.users.getUser(userId).catch(() => null);
         const authorName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "TTT Staff";
         const authorPhotoUrl = user?.imageUrl || undefined;
 
-        await Promise.all(addedKeyPeople.map(person => {
+        await Promise.all(peopleToNote.map(person => {
           const lines = [`Key Person Added: ${person.name} (${person.relationship})`];
           if (person.email) lines.push(`Email: ${person.email}`);
           if (person.phone) lines.push(`Phone: ${person.phone}`);
