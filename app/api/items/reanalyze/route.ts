@@ -41,6 +41,9 @@ export async function POST(req: NextRequest) {
     listingTitleEbay: analysis.listing_title_ebay,
     listingDescriptionEbay: analysis.listing_description_ebay,
     staffTips: analysis.staff_tips,
+    valueLow: analysis.value_low ?? null,
+    valueMid: analysis.value_mid ?? null,
+    valueHigh: analysis.value_high ?? null,
   });
 }
 

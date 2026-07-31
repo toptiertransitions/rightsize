@@ -332,6 +332,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
         listingTitleEbay: data.listingTitleEbay ?? prev.listingTitleEbay,
         listingDescriptionEbay: data.listingDescriptionEbay ?? prev.listingDescriptionEbay,
         staffTips: data.staffTips ?? prev.staffTips,
+        // Only fill value fields when currently blank — never overwrite existing values
+        valueLow:  (!prev.valueLow  && data.valueLow  != null) ? Math.round(data.valueLow  * 0.6) : prev.valueLow,
+        valueMid:  (!prev.valueMid  && data.valueMid  != null) ? Math.round(data.valueMid  * 0.6) : prev.valueMid,
+        valueHigh: (!prev.valueHigh && data.valueHigh != null) ? Math.round(data.valueHigh * 0.6) : prev.valueHigh,
       }));
     } catch (e) {
       setReanalyzeError(e instanceof Error ? e.message : "AI analysis failed");
