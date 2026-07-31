@@ -144,7 +144,7 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
   const staff = await getStaffMembers();
   const recipients = staff
     .filter(s => s.isActive && s.email && (
-      ["TTTAdmin", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
+      ["TTTAdmin", "TTTManager", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
     ))
     .map(s => s.email as string);
   if (recipients.length === 0) return;
