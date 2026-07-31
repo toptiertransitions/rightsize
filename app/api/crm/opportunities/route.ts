@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity, getClientContactById, getTenantById, updateTenant } from "@/lib/airtable";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getSystemRole, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity, getClientContactById, getTenantById, updateTenant, getOpportunityById } from "@/lib/airtable";
+import { createProjectNote } from "@/lib/airtable-notes";
+import type { KeyPerson } from "@/lib/types";
 
 async function requireCRMAccess(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -58,7 +60,38 @@ export async function PATCH(req: NextRequest) {
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   try {
+    // Detect newly added key people before saving so we can create notes for them
+    let addedKeyPeople: KeyPerson[] = [];
+    if (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) {
+      const current = await getOpportunityById(id).catch(() => null);
+      const existingNames = new Set((current?.keyPeople ?? []).map((p: KeyPerson) => p.name.toLowerCase().trim()));
+      addedKeyPeople = (data.keyPeople as KeyPerson[]).filter(p => !existingNames.has(p.name.toLowerCase().trim()));
+    }
+
     const opportunity = await updateOpportunity(id, data);
+
+    // Create an internal Plan note for each newly added key person
+    if (addedKeyPeople.length > 0 && opportunity.tenantId) {
+      try {
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId).catch(() => null);
+        const authorName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "TTT Staff";
+        const authorPhotoUrl = user?.imageUrl || undefined;
+
+        await Promise.all(addedKeyPeople.map(person => {
+          const lines = [`Key Person Added: ${person.name} (${person.relationship})`];
+          if (person.email) lines.push(`Email: ${person.email}`);
+          if (person.phone) lines.push(`Phone: ${person.phone}`);
+          return createProjectNote({
+            tenantId: opportunity.tenantId!,
+            authorClerkId: userId,
+            authorName,
+            authorPhotoUrl,
+            content: lines.join("\n"),
+          });
+        }));
+      } catch { /* non-fatal — note creation shouldn't block the save */ }
+    }
 
     // Sync origin/destination address fields to the linked project when changed.
     const originChanged = ["address", "addressUnitNumber", "city", "state", "zip"].some(f => f in data);
