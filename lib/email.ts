@@ -3445,3 +3445,100 @@ export function buildClientPipelineEmail({
 </body>
 </html>`;
 }
+
+// ─── Partner Active Project Update Email ─────────────────────────────────────
+export function buildPartnerActiveUpdateEmail({
+  contactFirstName,
+  companyName,
+  projects,
+  sentByName,
+  sentDate,
+}: {
+  contactFirstName: string;
+  companyName: string;
+  projects: Array<{
+    name: string;
+    city?: string;
+    state?: string;
+    timeline: Array<{ date: string; label: string; isKeyDate: boolean }>;
+  }>;
+  sentByName?: string;
+  sentDate: string;
+}): string {
+  function fmtDate(d: string): string {
+    const dt = new Date(d + "T12:00:00");
+    return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  function timelineRows(timeline: Array<{ date: string; label: string; isKeyDate: boolean }>): string {
+    return timeline.map((item, i) => {
+      const alt = i % 2 === 1;
+      if (item.isKeyDate) {
+        return `<tr style="background:${alt ? "#f0fdf9" : "#ffffff"};">
+          <td style="padding:11px 16px;border-top:1px solid #f3f4f6;">
+            <table cellpadding="0" cellspacing="0" style="width:100%;"><tr>
+              <td style="width:72px;vertical-align:middle;padding-right:12px;">
+                <span style="display:inline-block;background:#dcfce7;color:#065f46;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:2px 8px;border-radius:4px;white-space:nowrap;">Key Date</span>
+              </td>
+              <td style="font-size:14px;color:#111827;font-weight:600;">${item.label}</td>
+              <td style="font-size:12px;color:#6b7280;white-space:nowrap;text-align:right;padding-left:12px;">${fmtDate(item.date)}</td>
+            </tr></table>
+          </td>
+        </tr>`;
+      } else {
+        return `<tr style="background:${alt ? "#fafafa" : "#ffffff"};">
+          <td style="padding:10px 16px;border-top:1px solid #f3f4f6;">
+            <table cellpadding="0" cellspacing="0" style="width:100%;"><tr>
+              <td style="width:72px;vertical-align:middle;padding-right:12px;">
+                <span style="display:inline-block;background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:2px 8px;border-radius:4px;white-space:nowrap;">Service</span>
+              </td>
+              <td style="font-size:13px;color:#374151;">${item.label}</td>
+              <td style="font-size:12px;color:#9ca3af;white-space:nowrap;text-align:right;padding-left:12px;">${fmtDate(item.date)}</td>
+            </tr></table>
+          </td>
+        </tr>`;
+      }
+    }).join("");
+  }
+
+  function projectCard(p: { name: string; city?: string; state?: string; timeline: Array<{ date: string; label: string; isKeyDate: boolean }> }): string {
+    const loc = [p.city, p.state].filter(Boolean).join(", ");
+    const rows = timelineRows(p.timeline);
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <tr><td style="background:#f8faf9;padding:14px 16px;border-bottom:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:15px;font-weight:700;color:#111827;">${p.name}</p>
+        ${loc ? `<p style="margin:3px 0 0;font-size:12px;color:#9ca3af;">${loc}</p>` : ""}
+      </td></tr>
+      ${rows || `<tr><td style="padding:13px 16px;font-size:13px;color:#9ca3af;font-style:italic;">Scheduling in progress — dates will appear here as your project gets underway.</td></tr>`}
+    </table>`;
+  }
+
+  const bodyContent = projects.length > 0
+    ? projects.map(projectCard).join("")
+    : `<p style="padding:20px 0;margin:0 0 28px;font-size:14px;color:#9ca3af;text-align:center;">No active projects at this time — we&rsquo;ll keep you posted as things develop.</p>`;
+
+  const signOff = sentByName
+    ? `Questions? Simply reply to this email or reach out to <strong style="color:#374151;">${sentByName}</strong> on our team.`
+    : `Questions? Simply reply to this email and we&rsquo;ll be happy to help.`;
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Active Project Update &mdash; ${companyName}</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+  <tr><td style="background:#2d4a3e;padding:28px 32px;border-radius:12px 12px 0 0;">
+    <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Top Tier Transitions</p>
+    <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;font-weight:500;">Active Project Update &mdash; ${companyName}</p>
+    <p style="margin:5px 0 0;color:rgba(255,255,255,0.35);font-size:11px;">${sentDate}</p>
+  </td></tr>
+  <tr><td style="background:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.65;">Hi <strong>${contactFirstName}</strong>, here&rsquo;s a project status update for the referrals you&rsquo;ve sent our way.</p>
+    ${bodyContent}
+    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;line-height:1.6;">${signOff}</p>
+    <p style="margin:28px 0 0;font-size:12px;color:#d1d5db;text-align:center;border-top:1px solid #f3f4f6;padding-top:20px;">Top Tier Transitions &middot; toptiertransitions.com</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}

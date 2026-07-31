@@ -3528,6 +3528,9 @@ function DashboardTab({
   const [rewardEmailSending, setRewardEmailSending] = useState(false);
   const [rewardEmailSent, setRewardEmailSent] = useState(false);
   const [rewardEmailError, setRewardEmailError] = useState("");
+  const [activeUpdateSending, setActiveUpdateSending] = useState(false);
+  const [activeUpdateSent, setActiveUpdateSent] = useState(false);
+  const [activeUpdateError, setActiveUpdateError] = useState("");
   const [spotlightQuery, setSpotlightQuery] = useState<string>("");
   const [spotlightOpen, setSpotlightOpen] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
@@ -3540,6 +3543,13 @@ function DashboardTab({
   // Loyalty spotlight state
   const [spotlightPoints, setSpotlightPoints] = useState<{ earned: number; redeemed: number; balance: number; earnedYTD: number } | null>(null);
   const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+
+  useEffect(() => {
+    setRewardEmailSent(false);
+    setRewardEmailError("");
+    setActiveUpdateSent(false);
+    setActiveUpdateError("");
+  }, [spotlightId]);
 
   useEffect(() => {
     if (!spotlightId) { setSpotlightPoints(null); return; }
@@ -4309,6 +4319,51 @@ function DashboardTab({
                   )}
                 </button>
                 {rewardEmailError && <p className="text-xs text-red-500">{rewardEmailError}</p>}
+              </div>
+
+              {/* Active Project Update Email → sent directly to the partner */}
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    setActiveUpdateSending(true);
+                    setActiveUpdateError("");
+                    setActiveUpdateSent(false);
+                    try {
+                      const res = await fetch("/api/crm/partner-active-update", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ referralContactId: spotlightContact.id }),
+                      });
+                      if (!res.ok) {
+                        const d = await res.json().catch(() => ({}));
+                        throw new Error(d.error || "Failed to send");
+                      }
+                      setActiveUpdateSent(true);
+                    } catch (e) {
+                      setActiveUpdateError(e instanceof Error ? e.message : "Failed to send — please try again.");
+                    } finally {
+                      setActiveUpdateSending(false);
+                    }
+                  }}
+                  disabled={activeUpdateSending || activeUpdateSent || !spotlightContact.email}
+                  className="min-h-[36px] px-4 text-sm font-semibold rounded-lg border border-forest-600 text-forest-700 hover:bg-forest-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title={!spotlightContact.email ? "No email address on file for this contact" : undefined}
+                >
+                  {activeUpdateSending ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Sending…
+                    </>
+                  ) : activeUpdateSent ? (
+                    "Update Sent to Partner"
+                  ) : (
+                    `${spotlightContact.name} — Active Project Update`
+                  )}
+                </button>
+                {activeUpdateError && <p className="text-xs text-red-500">{activeUpdateError}</p>}
               </div>
 
               {/* Bio details */}
