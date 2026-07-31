@@ -156,6 +156,11 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
       if (estateMode && ai?.primary_route && ESTATE_OVERRIDE_ROUTES.has(ai.primary_route)) {
         ai.primary_route = "Estate Sale";
       }
+      // Estate Sale is TTT-only and only valid when the project has the Estate Sale flag on.
+      // Strip it from the AI suggestion so preview-route can assign the correct route.
+      if (!estateMode && ai?.primary_route === "Estate Sale") {
+        ai.primary_route = "FB/Marketplace";
+      }
       setAnalysis(ai);
 
       const scaledMid = ai.value_mid != null ? Math.round(ai.value_mid * 0.6) : ai.value_mid;

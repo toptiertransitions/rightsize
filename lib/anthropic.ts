@@ -41,7 +41,7 @@ Field rules:
 - value_low: integer USD — low-end estimate based on condition and current market (NEVER null or a string)
 - value_mid: integer USD — realistic selling price (NEVER null or a string)
 - value_high: integer USD — best-case price for a patient seller (NEVER null or a string)
-- primary_route: MUST be exactly one of: To Be Moved | Family to Take | Storage Unit - Offsite | Leaving with Home | ProFoundFinds Consignment | FB/Marketplace | Online Marketplace | Other Consignment | Donate | Discard
+- primary_route: MUST be exactly one of: To Be Moved | Family to Take | Storage Unit - Offsite | Leaving with Home | ProFoundFinds Consignment | FB/Marketplace | Online Marketplace | Other Consignment | Donate | Discard (never use "Estate Sale" — that is assigned by the system, not AI)
 - route_reasoning: 1-2 sentences explaining why this route is best
 - consignment_category: best shop sub-category if consignment-worthy (e.g., "Victorian Walnut Furniture"), else empty string
 - listing_title_ebay: SEO-optimized eBay title under 80 chars with key details
