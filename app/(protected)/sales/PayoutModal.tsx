@@ -188,10 +188,10 @@ export function buildPayoutMarkData(
   for (const item of items.filter(i => i.primaryRoute === "ProFoundFinds Consignment")) {
     if (item.status !== "Sold" || pfEvItemIds.has(item.id)) continue;
     let payout = 0;
-    if (pfVendorMatch2 && pfVendorMatch2.consignmentTake > 0 && item.salePrice && item.salePrice > 0) {
-      payout = item.salePrice * (1 - pfVendorMatch2.consignmentTake / 100);
-    } else if (item.salePrice && item.salePrice > 0 && item.clientSharePercent) {
+    if (item.clientSharePercent != null && item.clientSharePercent > 0 && item.salePrice && item.salePrice > 0) {
       payout = item.salePrice * (item.clientSharePercent / 100);
+    } else if (pfVendorMatch2 && pfVendorMatch2.consignmentTake > 0 && item.salePrice && item.salePrice > 0) {
+      payout = item.salePrice * (1 - pfVendorMatch2.consignmentTake / 100);
     } else {
       payout = item.consignorPayout ?? 0;
     }
@@ -206,10 +206,14 @@ export function buildPayoutMarkData(
   for (const item of items) {
     if (!consignmentRoutes.includes(item.primaryRoute) || item.status !== "Sold") continue;
     const match = localVendors.find(lv => norm(lv.vendorName) === norm(item.primaryRoute));
-    const payout =
-      match && item.salePrice && match.consignmentTake > 0
-        ? item.salePrice * (1 - match.consignmentTake / 100)
-        : (item.consignorPayout ?? 0);
+    let payout = 0;
+    if (item.clientSharePercent != null && item.clientSharePercent > 0 && item.salePrice && item.salePrice > 0) {
+      payout = item.salePrice * (item.clientSharePercent / 100);
+    } else if (match && item.salePrice && match.consignmentTake > 0) {
+      payout = item.salePrice * (1 - match.consignmentTake / 100);
+    } else {
+      payout = item.consignorPayout ?? 0;
+    }
     if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
       itemsToMark.push({ id: item.id, amount: payout });
     }
