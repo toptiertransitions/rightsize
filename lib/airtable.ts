@@ -2010,6 +2010,7 @@ export function applyRoutingRules(
   const projectCentroid = getZipCentroid(projectZip);
 
   for (const item of items) {
+    if (item.primaryRoute) continue; // only assign to genuinely unrouted items
     if (item.assignedVendorId) continue; // already vendor-assigned
     if (!["Pending Review", "Approved"].includes(item.status)) continue;
     // Skip items with no size class — routing relies on it and silently defaulting

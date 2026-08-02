@@ -1640,6 +1640,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   };
 
   const handleAutoRoute = async () => {
+    if (!confirm("Auto-route will assign recommended routes to items that currently have no route. Items that already have a route will not be changed. Continue?")) return;
     setAutoRouting(true);
     setAutoRouteMsg("");
     try {
