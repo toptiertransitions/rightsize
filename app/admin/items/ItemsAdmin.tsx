@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ItemPriceHistory, PriceChangeType } from "@/lib/types";
-import type { ItemRouteHistory, ItemStatusHistory } from "@/lib/airtable";
+import type { ItemRouteHistory, ItemStatusHistory, FlaggedDonateItem } from "@/lib/airtable";
 
 interface Project { id: string; name: string; }
 
@@ -10,6 +10,7 @@ interface Props {
   history: ItemPriceHistory[];
   routeHistory: ItemRouteHistory[];
   statusHistory: ItemStatusHistory[];
+  flaggedItems: FlaggedDonateItem[];
   projects: Project[];
   selectedTenantId: string;
 }
@@ -53,9 +54,9 @@ function SourceChip({ source }: { source: string }) {
   return <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{source}</span>;
 }
 
-export function ItemsAdmin({ history, routeHistory, statusHistory, projects, selectedTenantId }: Props) {
+export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems, projects, selectedTenantId }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"price" | "route" | "status">("price");
+  const [tab, setTab] = useState<"price" | "route" | "status" | "issues">("issues");
   const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
 
   function toggleItem(itemId: string) {
@@ -76,7 +77,41 @@ export function ItemsAdmin({ history, routeHistory, statusHistory, projects, sel
   const projectMap: Record<string, string> = {};
   for (const p of projects) projectMap[p.id] = p.name;
 
+  const [flagged, setFlagged] = useState(flaggedItems);
+  const [clearingId, setClearingId] = useState<string | null>(null);
+
+  const handleClearRoute = async (item: FlaggedDonateItem) => {
+    if (!confirm(`Clear the Donate route for "${item.itemName}"?`)) return;
+    setClearingId(item.id);
+    try {
+      const res = await fetch("/api/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, tenantId: item.tenantId, primaryRoute: null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setFlagged(prev => prev.filter(i => i.id !== item.id));
+    } catch {
+      alert("Failed to clear route. Try again.");
+    } finally {
+      setClearingId(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm(`Clear the Donate route on all ${flagged.length} flagged items? This cannot be undone.`)) return;
+    for (const item of flagged) {
+      await fetch("/api/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, tenantId: item.tenantId, primaryRoute: null }),
+      }).catch(() => {});
+    }
+    setFlagged([]);
+  };
+
   const TABS = [
+    { id: "issues" as const, label: `Route Issues${flagged.length > 0 ? ` (${flagged.length})` : ""}` },
     { id: "price" as const,  label: "Item Price History" },
     { id: "route" as const,  label: "Route Audit" },
     { id: "status" as const, label: "Statuses" },
@@ -109,6 +144,68 @@ export function ItemsAdmin({ history, routeHistory, statusHistory, projects, sel
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
+
+      {tab === "issues" && (
+        <>
+          <div className="flex items-center justify-between -mt-3">
+            <p className="text-sm text-gray-400">
+              {flagged.length === 0
+                ? "No route issues found."
+                : `${flagged.length} item${flagged.length !== 1 ? "s" : ""} with Good/Excellent condition stuck on Donate route (Pending Review).`}
+            </p>
+            {flagged.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="h-8 px-3 rounded-lg bg-red-900/50 border border-red-700/50 text-red-300 text-xs font-medium hover:bg-red-900 transition-colors"
+              >
+                Clear All Routes
+              </button>
+            )}
+          </div>
+          {flagged.length === 0 ? (
+            <div className="bg-gray-900 rounded-2xl p-12 text-center">
+              <p className="text-gray-500">All clear — no route issues detected.</p>
+            </div>
+          ) : (
+            <div className="bg-gray-900 rounded-2xl overflow-hidden border border-gray-800">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left px-5 py-3 text-gray-500 font-medium text-xs">Item</th>
+                    <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Project</th>
+                    <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Condition</th>
+                    <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Created</th>
+                    <th className="px-3 py-3 pr-5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {flagged.map(item => (
+                    <tr key={item.id} className="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30">
+                      <td className="px-5 py-2.5 text-sm text-white font-medium max-w-[200px] truncate">{item.itemName}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-400">{projectMap[item.tenantId] ?? item.tenantId}</td>
+                      <td className="px-3 py-2.5">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">
+                          {item.condition}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">{fmtDate(item.createdAt)}</td>
+                      <td className="px-3 py-2.5 pr-5 text-right">
+                        <button
+                          onClick={() => handleClearRoute(item)}
+                          disabled={clearingId === item.id}
+                          className="h-7 px-3 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                        >
+                          {clearingId === item.id ? "Clearing…" : "Clear Route"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
 
       {tab === "price" && (
         <>

@@ -871,6 +871,38 @@ export async function getItemPriceHistory(options?: {
   }));
 }
 
+export interface FlaggedDonateItem {
+  id: string;
+  itemName: string;
+  tenantId: string;
+  condition: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function getFlaggedDonateItems(): Promise<FlaggedDonateItem[]> {
+  const base = getBase();
+  const formula = `AND(
+    {PrimaryRoute} = "Donate",
+    OR({Condition} = "Good", {Condition} = "Excellent"),
+    {Status} = "Pending Review",
+    {CompletedDate} = ""
+  )`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const records = await base(AIRTABLE_TABLES.ITEMS).select({
+    filterByFormula: formula,
+    sort: [{ field: "CreatedAt", direction: "desc" }],
+  } as any).all();
+  return records.map(r => ({
+    id: r.id,
+    itemName: toStr(r.fields["Name"] || r.fields["ItemName"]) || "Untitled",
+    tenantId: toStr(r.fields["TenantID"] || r.fields["TenantId"]),
+    condition: toStr(r.fields["Condition"]),
+    status: toStr(r.fields["Status"]),
+    createdAt: toStr(r.fields["CreatedAt"]),
+  }));
+}
+
 export async function logItemRouteChange(data: {
   itemId: string;
   itemName: string;
