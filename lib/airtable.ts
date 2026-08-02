@@ -871,6 +871,124 @@ export async function getItemPriceHistory(options?: {
   }));
 }
 
+export async function logItemRouteChange(data: {
+  itemId: string;
+  itemName: string;
+  tenantId: string;
+  oldRoute: string;
+  newRoute: string;
+  changedBy: string;
+  source: string;
+}): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.ITEM_ROUTE_HISTORY).create({
+    ItemId: data.itemId,
+    ItemName: data.itemName,
+    TenantId: data.tenantId,
+    OldRoute: data.oldRoute,
+    NewRoute: data.newRoute,
+    ChangedBy: data.changedBy,
+    ChangedAt: new Date().toISOString(),
+    Source: data.source,
+  }, { typecast: true });
+}
+
+export async function logItemStatusChange(data: {
+  itemId: string;
+  itemName: string;
+  tenantId: string;
+  oldStatus: string;
+  newStatus: string;
+  changedBy: string;
+  source: string;
+}): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.ITEM_STATUS_HISTORY).create({
+    ItemId: data.itemId,
+    ItemName: data.itemName,
+    TenantId: data.tenantId,
+    OldStatus: data.oldStatus,
+    NewStatus: data.newStatus,
+    ChangedBy: data.changedBy,
+    ChangedAt: new Date().toISOString(),
+    Source: data.source,
+  }, { typecast: true });
+}
+
+export interface ItemRouteHistory {
+  id: string;
+  itemId: string;
+  itemName: string;
+  tenantId: string;
+  oldRoute: string;
+  newRoute: string;
+  changedBy: string;
+  changedAt: string;
+  source: string;
+}
+
+export interface ItemStatusHistory {
+  id: string;
+  itemId: string;
+  itemName: string;
+  tenantId: string;
+  oldStatus: string;
+  newStatus: string;
+  changedBy: string;
+  changedAt: string;
+  source: string;
+}
+
+export async function getItemRouteHistory(options?: {
+  tenantId?: string;
+  limit?: number;
+}): Promise<ItemRouteHistory[]> {
+  const base = getBase();
+  const selectOpts: Record<string, unknown> = {
+    sort: [{ field: "ChangedAt", direction: "desc" }],
+    maxRecords: options?.limit ?? 1000,
+  };
+  if (options?.tenantId) selectOpts.filterByFormula = `{TenantId} = "${options.tenantId}"`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const records = await base(AIRTABLE_TABLES.ITEM_ROUTE_HISTORY).select(selectOpts as any).all();
+  return records.map(r => ({
+    id: r.id,
+    itemId: toStr(r.fields["ItemId"]),
+    itemName: toStr(r.fields["ItemName"]),
+    tenantId: toStr(r.fields["TenantId"]),
+    oldRoute: toStr(r.fields["OldRoute"]),
+    newRoute: toStr(r.fields["NewRoute"]),
+    changedBy: toStr(r.fields["ChangedBy"]),
+    changedAt: toStr(r.fields["ChangedAt"]),
+    source: toStr(r.fields["Source"]),
+  }));
+}
+
+export async function getItemStatusHistory(options?: {
+  tenantId?: string;
+  limit?: number;
+}): Promise<ItemStatusHistory[]> {
+  const base = getBase();
+  const selectOpts: Record<string, unknown> = {
+    sort: [{ field: "ChangedAt", direction: "desc" }],
+    maxRecords: options?.limit ?? 1000,
+  };
+  if (options?.tenantId) selectOpts.filterByFormula = `{TenantId} = "${options.tenantId}"`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const records = await base(AIRTABLE_TABLES.ITEM_STATUS_HISTORY).select(selectOpts as any).all();
+  return records.map(r => ({
+    id: r.id,
+    itemId: toStr(r.fields["ItemId"]),
+    itemName: toStr(r.fields["ItemName"]),
+    tenantId: toStr(r.fields["TenantId"]),
+    oldStatus: toStr(r.fields["OldStatus"]),
+    newStatus: toStr(r.fields["NewStatus"]),
+    changedBy: toStr(r.fields["ChangedBy"]),
+    changedAt: toStr(r.fields["ChangedAt"]),
+    source: toStr(r.fields["Source"]),
+  }));
+}
+
 export async function createStorefrontBuyer(data: {
   buyerName: string;
   buyerEmail: string;

@@ -1417,6 +1417,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           items: selectedItems.map(i => ({
             id: i.id,
             itemName: i.itemName,
+            tenantId: i.tenantId,
             status: i.status,
             primaryRoute: i.primaryRoute,
             valueMid: i.valueMid,
@@ -1446,10 +1447,22 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     setRouteLoading(true);
     try {
       const tid = tenantId ?? items.find(i => selected.has(i.id))?.tenantId;
+      const selectedItems = [...selected]
+        .map(id => items.find(i => i.id === id))
+        .filter((i): i is Item => !!i);
       const res = await fetch("/api/items/bulk-route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds: [...selected], tenantId: tid, primaryRoute: routeModalValue }),
+        body: JSON.stringify({
+          items: selectedItems.map(i => ({
+            id: i.id,
+            itemName: i.itemName,
+            tenantId: i.tenantId,
+            currentRoute: i.primaryRoute,
+          })),
+          tenantId: tid,
+          primaryRoute: routeModalValue,
+        }),
       });
       if (!res.ok) throw new Error("Failed to update routes");
       const route = routeModalValue as PrimaryRoute;

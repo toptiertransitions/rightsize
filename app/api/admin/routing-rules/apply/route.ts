@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import {
   getSystemRole,
   getTenants,
@@ -8,6 +8,7 @@ import {
   getRoutingRules,
   applyRoutingRules,
   updateItem,
+  logItemRouteChange,
 } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { Resend } from "resend";
@@ -37,10 +38,13 @@ export async function POST(req: NextRequest) {
   }
 
   let assigned = 0;
-  // Track new assignments per vendor: vendorId -> count
   const vendorAssignmentCounts = new Map<string, number>();
 
-  const processAssignments = async (assignments: Array<{ itemId: string; vendorId?: string; primaryRoute: string }>) => {
+  const processAssignments = async (
+    assignments: Array<{ itemId: string; vendorId?: string; primaryRoute: string }>,
+    itemsById: Map<string, { itemName: string; tenantId: string; primaryRoute: string }>,
+    changedBy: string,
+  ) => {
     for (const { itemId, vendorId, primaryRoute } of assignments) {
       const updates: Record<string, unknown> = { primaryRoute };
       if (vendorId) {
@@ -50,11 +54,30 @@ export async function POST(req: NextRequest) {
       }
       await updateItem(itemId, updates as never);
       assigned++;
+      const existing = itemsById.get(itemId);
+      if (existing && existing.primaryRoute !== primaryRoute) {
+        logItemRouteChange({
+          itemId,
+          itemName: existing.itemName,
+          tenantId: existing.tenantId,
+          oldRoute: existing.primaryRoute,
+          newRoute: primaryRoute,
+          changedBy,
+          source: "Auto-Routing",
+        }).catch(() => {});
+      }
     }
   };
 
+  const changedBy = await (async () => {
+    try {
+      const cl = await clerkClient();
+      const u = await cl.users.getUser(userId);
+      return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
+    } catch { return userId; }
+  })();
+
   if (tenantId) {
-    // Single-tenant mode
     const { getTenantById } = await import("@/lib/airtable");
     const [tenant, items] = await Promise.all([
       getTenantById(tenantId).catch(() => null),
@@ -62,16 +85,17 @@ export async function POST(req: NextRequest) {
     ]);
     const projectZip = tenant?.zip ?? "";
     const assignments = applyRoutingRules(items, vendors, activeRules, projectZip);
-    await processAssignments(assignments);
+    const itemsById = new Map(items.map(i => [i.id, { itemName: i.itemName, tenantId: i.tenantId, primaryRoute: i.primaryRoute ?? "" }]));
+    await processAssignments(assignments, itemsById, changedBy);
   } else {
-    // All active tenants
     const tenants = await getTenants().catch(() => []);
     const activeTenants = tenants.filter(t => !t.isArchived);
     for (const tenant of activeTenants) {
       const items = await getItemsForTenant(tenant.id).catch(() => []);
       const projectZip = tenant.zip ?? "";
       const assignments = applyRoutingRules(items, vendors, activeRules, projectZip);
-      await processAssignments(assignments);
+      const itemsById = new Map(items.map(i => [i.id, { itemName: i.itemName, tenantId: i.tenantId, primaryRoute: i.primaryRoute ?? "" }]));
+      await processAssignments(assignments, itemsById, changedBy);
     }
   }
 

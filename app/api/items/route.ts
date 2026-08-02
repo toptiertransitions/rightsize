@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange } from "@/lib/airtable";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange } from "@/lib/airtable";
 import { buildVendorAssignmentEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { Resend } from "resend";
@@ -221,8 +221,7 @@ export async function PATCH(req: NextRequest) {
   // barcode assignment, or route-driven vendor clear
   const newVendorId = updates.assignedVendorId as string | undefined;
   const needsExisting = newVendorId !== undefined || updates.status !== undefined
-    || resolvedNewRoute === "ProFoundFinds Consignment"
-    || (resolvedNewRoute !== undefined && !VENDOR_ROUTES.has(resolvedNewRoute))
+    || resolvedNewRoute !== undefined
     || updates.valueMid !== undefined
     || updates.clientSharePercent !== undefined;
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
@@ -404,6 +403,36 @@ export async function PATCH(req: NextRequest) {
       return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
     } catch { return userId; }
   };
+
+  // Log route change
+  if (resolvedNewRoute && existing && existing.primaryRoute !== resolvedNewRoute) {
+    resolveChangerName().then(changedBy =>
+      logItemRouteChange({
+        itemId: item.id,
+        itemName: item.itemName,
+        tenantId: item.tenantId,
+        oldRoute: existing.primaryRoute ?? "",
+        newRoute: resolvedNewRoute,
+        changedBy,
+        source: "Manual Edit",
+      }).catch(() => {})
+    );
+  }
+
+  // Log status change
+  if (newStatus && existing && existing.status !== newStatus) {
+    resolveChangerName().then(changedBy =>
+      logItemStatusChange({
+        itemId: item.id,
+        itemName: item.itemName,
+        tenantId: item.tenantId,
+        oldStatus: existing.status ?? "",
+        newStatus,
+        changedBy,
+        source: "Manual Edit",
+      }).catch(() => {})
+    );
+  }
 
   // Log price change when status → Listed (OriginalValue snapshot)
   if (newStatus === "Listed" && existing?.status !== "Listed") {

@@ -69,6 +69,8 @@ export const AIRTABLE_TABLES = {
   ESTATES: process.env.AIRTABLE_ESTATES_TABLE || "Estates",
   STOREFRONT_BUYERS: process.env.AIRTABLE_STOREFRONT_BUYERS_TABLE || "StorefrontBuyers",
   ITEM_PRICE_HISTORY: process.env.AIRTABLE_ITEM_PRICE_HISTORY_TABLE || "ItemPriceHistory",
+  ITEM_ROUTE_HISTORY: process.env.AIRTABLE_ITEM_ROUTE_HISTORY_TABLE || "ItemRouteHistory",
+  ITEM_STATUS_HISTORY: process.env.AIRTABLE_ITEM_STATUS_HISTORY_TABLE || "ItemStatusHistory",
   OUTREACH_TEMPLATES: "OutreachTemplates",
   OUTREACH_AUDIENCES: "OutreachAudiences",
   OUTREACH_SEQUENCES: "OutreachSequences",

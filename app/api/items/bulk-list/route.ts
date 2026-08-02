@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, updateItem } from "@/lib/airtable";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getSystemRole, getStaffMembers, updateItem, logItemStatusChange } from "@/lib/airtable";
 import { upsertSquareCatalogItem } from "@/lib/square";
 
 const TERMINAL_STATUSES = ["Sold", "Donated", "Discarded", "Rejected / Revisit"];
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     items: Array<{
       id: string;
       itemName: string;
+      tenantId: string;
       status: string;
       primaryRoute: string;
       valueMid?: number;
@@ -32,11 +33,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No items provided" }, { status: 400 });
   }
 
+  const resolveChangerName = async (): Promise<string> => {
+    const staffList = await getStaffMembers().catch(() => []);
+    const staff = staffList.find(s => s.clerkUserId === userId);
+    if (staff?.displayName) return staff.displayName;
+    try {
+      const client = await clerkClient();
+      const u = await client.users.getUser(userId);
+      return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
+    } catch { return userId; }
+  };
+
   const locationId = process.env.SQUARE_LOCATION_ID;
   const errors: Array<{ id: string; name: string; reason: string }> = [];
   const squareErrors: Array<{ id: string; name: string; error: string }> = [];
   let listed = 0;
   let skipped = 0;
+  let changedBy: string | null = null;
 
   for (const item of items) {
     if (TERMINAL_STATUSES.includes(item.status)) {
@@ -50,6 +63,17 @@ export async function POST(req: NextRequest) {
 
     await updateItem(item.id, { status: "Listed", storefrontActive: true });
     listed++;
+
+    if (!changedBy) changedBy = await resolveChangerName();
+    logItemStatusChange({
+      itemId: item.id,
+      itemName: item.itemName,
+      tenantId: item.tenantId,
+      oldStatus: item.status,
+      newStatus: "Listed",
+      changedBy,
+      source: "Bulk List",
+    }).catch(() => {});
 
     if (item.primaryRoute === "ProFoundFinds Consignment" && locationId && item.barcodeNumber) {
       try {
