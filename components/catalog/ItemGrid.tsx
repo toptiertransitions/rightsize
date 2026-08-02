@@ -1187,6 +1187,20 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [sendToPFLoading, setSendToPFLoading] = useState(false);
   const [sendToPFError, setSendToPFError] = useState<string | null>(null);
 
+  // ── Bulk List ─────────────────────────────────────────────────────────────
+  const [listLoading, setListLoading] = useState(false);
+  const [listResultModal, setListResultModal] = useState<{
+    listed: number;
+    skipped: number;
+    errors: Array<{ id: string; name: string; reason: string }>;
+    squareErrors: Array<{ id: string; name: string; error: string }>;
+  } | null>(null);
+
+  // ── Bulk Route ────────────────────────────────────────────────────────────
+  const [routeModalOpen, setRouteModalOpen] = useState(false);
+  const [routeModalValue, setRouteModalValue] = useState("");
+  const [routeLoading, setRouteLoading] = useState(false);
+
   // ── Bulk Assign to Estate Sale ────────────────────────────────────────────
   const [estateSaleModalOpen, setEstateSaleModalOpen] = useState(false);
   const [estates, setEstates] = useState<{ id: string; name: string; status: string }[]>([]);
@@ -1386,6 +1400,67 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       setSelected(new Set());
     } finally {
       setBulkLoading(false);
+    }
+  };
+
+  const handleBulkList = async () => {
+    if (selected.size === 0) return;
+    setListLoading(true);
+    try {
+      const selectedItems = [...selected]
+        .map(id => items.find(i => i.id === id))
+        .filter((i): i is Item => !!i);
+      const res = await fetch("/api/items/bulk-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: selectedItems.map(i => ({
+            id: i.id,
+            itemName: i.itemName,
+            status: i.status,
+            primaryRoute: i.primaryRoute,
+            valueMid: i.valueMid,
+            barcodeNumber: i.barcodeNumber,
+            squareCatalogItemId: i.squareCatalogItemId,
+            squareCatalogVariationId: i.squareCatalogVariationId,
+          })),
+        }),
+      });
+      const data = await res.json();
+      const errored = new Set((data.errors ?? []).map((e: { id: string }) => e.id));
+      setItems(prev => prev.map(i => {
+        if (!selected.has(i.id) || errored.has(i.id)) return i;
+        return { ...i, status: "Listed" as const, storefrontActive: true };
+      }));
+      setListResultModal(data);
+      setSelected(new Set());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to list items");
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  const handleBulkRoute = async () => {
+    if (selected.size === 0 || !routeModalValue) return;
+    setRouteLoading(true);
+    try {
+      const tid = tenantId ?? items.find(i => selected.has(i.id))?.tenantId;
+      const res = await fetch("/api/items/bulk-route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: [...selected], tenantId: tid, primaryRoute: routeModalValue }),
+      });
+      if (!res.ok) throw new Error("Failed to update routes");
+      const route = routeModalValue as PrimaryRoute;
+      setItems(prev => prev.map(i => selected.has(i.id) ? { ...i, primaryRoute: route } : i));
+      setRouteModalOpen(false);
+      setRouteModalValue("");
+      setSelected(new Set());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to update routes");
+    } finally {
+      setRouteLoading(false);
     }
   };
 
@@ -1774,6 +1849,110 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         </div>
       )}
 
+      {/* Bulk List Result Modal */}
+      {listResultModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">List Items — Results</h2>
+            </div>
+            <div className="px-6 py-4 space-y-3 max-h-80 overflow-y-auto">
+              {listResultModal.listed > 0 && (
+                <p className="text-sm text-forest-700 font-medium">
+                  {listResultModal.listed} item{listResultModal.listed !== 1 ? "s" : ""} marked as Listed.
+                </p>
+              )}
+              {listResultModal.skipped > 0 && (
+                <p className="text-sm text-gray-500">
+                  {listResultModal.skipped} item{listResultModal.skipped !== 1 ? "s" : ""} already Listed — left unchanged.
+                </p>
+              )}
+              {listResultModal.errors.length > 0 && (
+                <div>
+                  <p className="text-sm text-red-600 font-medium mb-1">
+                    {listResultModal.errors.length} item{listResultModal.errors.length !== 1 ? "s" : ""} skipped (terminal status):
+                  </p>
+                  <ul className="text-sm text-red-600 space-y-0.5 list-disc list-inside">
+                    {listResultModal.errors.map(e => (
+                      <li key={e.id}>{e.name} — {e.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {listResultModal.squareErrors.length > 0 && (
+                <div>
+                  <p className="text-sm text-amber-600 font-medium mb-1">
+                    {listResultModal.squareErrors.length} item{listResultModal.squareErrors.length !== 1 ? "s" : ""} listed but Square sync failed:
+                  </p>
+                  <ul className="text-sm text-amber-600 space-y-0.5 list-disc list-inside">
+                    {listResultModal.squareErrors.map(e => (
+                      <li key={e.id}>{e.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex justify-end">
+              <button
+                onClick={() => setListResultModal(null)}
+                className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Route Modal */}
+      {routeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Change Route</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Set route for {selected.size} selected item{selected.size !== 1 ? "s" : ""}.
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <select
+                value={routeModalValue}
+                onChange={e => setRouteModalValue(e.target.value)}
+                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                autoFocus
+              >
+                <option value="">Select a route…</option>
+                <option value="To Be Moved">To Be Moved</option>
+                <option value="Family to Take">Family to Take</option>
+                <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
+                <option value="Leaving with Home">Leaving with Home</option>
+                {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
+                <option value="FB/Marketplace">FB/Marketplace</option>
+                <option value="Online Marketplace">Online Marketplace</option>
+                <option value="Other Consignment">Other Consignment</option>
+                <option value="Donate">Donate</option>
+                <option value="Discard">Discard</option>
+              </select>
+            </div>
+            <div className="px-6 pb-6 flex items-center gap-3 justify-end">
+              <button
+                onClick={() => { setRouteModalOpen(false); setRouteModalValue(""); }}
+                className="h-9 px-4 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkRoute}
+                disabled={!routeModalValue || routeLoading}
+                className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
+              >
+                {routeLoading ? "Saving…" : `Update ${selected.size} Item${selected.size !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 mb-5">
         {/* Search */}
@@ -2087,6 +2266,30 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
             >
               {bulkLoading ? "Approving…" : "Approve Route"}
             </button>
+            {isTTTUser && (
+              <button
+                onClick={handleBulkList}
+                disabled={listLoading}
+                className="h-8 px-3 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                {listLoading ? "Listing…" : "List"}
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => { setRouteModalValue(""); setRouteModalOpen(true); }}
+                disabled={routeLoading}
+                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Route
+              </button>
+            )}
             {localVendors && localVendors.length > 0 && (
               <button
                 onClick={() => setVendorFileOpen(true)}
@@ -2107,7 +2310,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              {pdfLoading ? "Generating…" : "Create PDF for Movers"}
+              {pdfLoading ? "Generating…" : "Create Mover PDF"}
             </button>
             {isTTTUser && [...selected].some(id => items.find(i => i.id === id)?.primaryRoute === "ProFoundFinds Consignment") && (
               <button
@@ -2118,7 +2321,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5l4.586 4.586a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-4-4a2 2 0 010-2.828L7 3z" />
                 </svg>
-                Print PF Labels
+                Print Labels
               </button>
             )}
             {isTTTUser && (
