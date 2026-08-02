@@ -1927,6 +1927,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
                 <option value="Leaving with Home">Leaving with Home</option>
                 {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
+                {isTTT && <option value="Estate Sale">Estate Sale</option>}
                 <option value="FB/Marketplace">FB/Marketplace</option>
                 <option value="Online Marketplace">Online Marketplace</option>
                 <option value="Other Consignment">Other Consignment</option>
