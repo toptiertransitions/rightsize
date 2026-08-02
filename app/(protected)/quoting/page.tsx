@@ -17,6 +17,7 @@ import {
   getClientContacts,
   getInvoicesForTenant,
   getItemsByIds,
+  getProjectFiles,
 } from "@/lib/airtable";
 import { QuotingClient } from "./QuotingClient";
 import { QuotingProjectPicker } from "./QuotingProjectPicker";
@@ -40,7 +41,7 @@ export default async function QuotingPage({ searchParams }: PageProps) {
     return <QuotingProjectPicker tenants={sorted} />;
   }
 
-  const [tenant, rooms, contractSettings, contractTemplates, existingContracts, memberships, services, invoiceSettings, timeEntries, opportunities, clientContacts, invoices] =
+  const [tenant, rooms, contractSettings, contractTemplates, existingContracts, memberships, services, invoiceSettings, timeEntries, opportunities, clientContacts, invoices, allProjectFiles] =
     await Promise.all([
       getTenantById(tenantId).catch(() => null),
       getRoomsForTenant(tenantId).catch(() => []),
@@ -54,6 +55,7 @@ export default async function QuotingPage({ searchParams }: PageProps) {
       getOpportunitiesForTenant(tenantId).catch(() => []),
       getClientContacts().catch(() => []),
       getInvoicesForTenant(tenantId).catch(() => []),
+      getProjectFiles(tenantId).catch(() => []),
     ]);
 
   const assessedItems = tenant?.quoteAssessmentItemIds?.length
@@ -61,6 +63,8 @@ export default async function QuotingPage({ searchParams }: PageProps) {
     : [];
 
   if (!tenant) redirect("/home");
+
+  const initialClientFiles = allProjectFiles.filter(f => f.fileTag === "Client File");
 
   // Resolve the project Owner's email only (not all members)
   let ownerEmail = "";
@@ -121,6 +125,7 @@ export default async function QuotingPage({ searchParams }: PageProps) {
       currentUserEmail={currentUserEmail}
       invoices={invoices}
       initialAssessedItems={assessedItems}
+      initialClientFiles={initialClientFiles}
     />
   );
 }

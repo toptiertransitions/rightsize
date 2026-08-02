@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { EstimatorSection } from "@/app/(protected)/rooms/EstimatorSection";
 import { AddRoomButton } from "@/app/(protected)/rooms/RoomsClient";
-import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus, ItemPhoto, Item } from "@/lib/types";
+import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus, ItemPhoto, Item, ProjectFile } from "@/lib/types";
 import { ROOM_TYPES } from "@/lib/types";
 
 interface Props {
@@ -22,6 +22,7 @@ interface Props {
   currentUserEmail?: string;
   invoices?: Invoice[];
   initialAssessedItems?: Item[];
+  initialClientFiles?: ProjectFile[];
 }
 
 // ─── Deposit Invoice Panel ────────────────────────────────────────────────────
@@ -1040,6 +1041,157 @@ const ROUTE_BADGE: Record<string, string> = {
 };
 
 // ─── Quote Photos Section ─────────────────────────────────────────────────────
+// ─── Client Files Section ─────────────────────────────────────────────────────
+
+function FileIcon({ fileName }: { fileName: string }) {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  if (["doc", "docx"].includes(ext)) {
+    return (
+      <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM9 13h6v1H9zm0 2h6v1H9zm0 2h4v1H9z"/>
+      </svg>
+    );
+  }
+  if (ext === "pdf") {
+    return (
+      <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM8.5 17.5c-.3 0-.5-.2-.5-.5s.2-.5.5-.5.5.2.5.5-.2.5-.5.5zm0-2c-.8 0-1.5.7-1.5 1.5S7.7 18.5 8.5 18.5 10 17.8 10 17s-.7-1.5-1.5-1.5zm3.5-1h-1v3h1v-3zm2 0h-1v3h1v-1.5H15v-1h-1v-.5zm-5 0H7v3h1v-1h1c.6 0 1-.4 1-1s-.4-1-1-1zm0 1H8v-.5h1v.5z"/>
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+  );
+}
+
+function ClientFilesSection({
+  tenantId,
+  initialFiles,
+}: {
+  tenantId: string;
+  initialFiles: ProjectFile[];
+}) {
+  const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(fileList)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("tenantId", tenantId);
+        fd.append("tag", "Client File");
+        const res = await fetch("/api/files", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        setFiles(prev => [...prev, data.file as ProjectFile]);
+      }
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function handleDelete(file: ProjectFile) {
+    setDeletingId(file.id);
+    try {
+      const params = new URLSearchParams({
+        id: file.id,
+        publicId: file.cloudinaryPublicId,
+        resourceType: file.resourceType,
+        tenantId,
+        tag: "Client File",
+      });
+      const res = await fetch(`/api/files?${params}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      setFiles(prev => prev.filter(f => f.id !== file.id));
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
+
+  return (
+    <div className="mt-12 border-t border-gray-100 pt-10">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Client Files</h2>
+          <p className="text-sm text-gray-500 mt-0.5">PDFs, Word docs, and other documents from this client. Files appear on the Plan page automatically.</p>
+        </div>
+        <label className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${uploading ? "bg-gray-100 text-gray-400 pointer-events-none" : "bg-forest-600 text-white hover:bg-forest-700"}`}>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          {uploading ? "Uploading…" : "Upload File"}
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={e => handleFiles(e.target.files)}
+          />
+        </label>
+      </div>
+
+      {uploadError && <p className="text-sm text-red-600 mb-3">{uploadError}</p>}
+
+      {files.length === 0 && !uploading ? (
+        <div className="border-2 border-dashed border-gray-200 rounded-2xl py-10 text-center">
+          <svg className="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <p className="text-sm text-gray-400">No client files yet. Upload a PDF, Word doc, or other document.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 overflow-hidden">
+          {files.map(f => (
+            <li key={f.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
+              <FileIcon fileName={f.fileName} />
+              <a
+                href={f.cloudinaryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-sm text-gray-800 font-medium hover:text-forest-700 hover:underline truncate"
+              >
+                {f.fileName}
+              </a>
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+              <button
+                onClick={() => handleDelete(f)}
+                disabled={deletingId === f.id}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                title="Delete file"
+              >
+                {deletingId === f.id ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function QuotePhotosSection({
   tenantId,
   initialPhotos,
@@ -1402,7 +1554,7 @@ function QuotePhotosSection({
 }
 
 // ─── Main Client ──────────────────────────────────────────────────────────────
-export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices, initialAssessedItems = [] }: Props) {
+export function QuotingClient({ tenant, rooms, settings, templates, existingContracts, recipients, services, invoiceSettings, signedContracts, timeEntries, ownerEmail, currentUserEmail, invoices: initialInvoices, initialAssessedItems = [], initialClientFiles = [] }: Props) {
   const [mode, setMode] = useState<Mode>("quick");
   const [highSqFt, setHighSqFt] = useState(tenant.originHighSqFt ?? 0);
   const [avgSqFt, setAvgSqFt] = useState(tenant.originMedSqFt ?? tenant.originSqFt ?? 0);
@@ -1850,6 +2002,9 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
           initialAssessedItems={initialAssessedItems}
         />
       </div>
+
+      {/* ─── Client Files ─────────────────────────────────────────────────────── */}
+      <ClientFilesSection tenantId={tenant.id} initialFiles={initialClientFiles} />
     </div>
   );
 }

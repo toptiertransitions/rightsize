@@ -27,8 +27,9 @@ const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
   "Damage Image": { label: "Damage Image", color: "bg-red-100 text-red-800" },
   "Vendor File":  { label: "Vendor File",  color: "bg-gray-100 text-gray-700" },
   "Payment Proof": { label: "Payment Proof", color: "bg-teal-100 text-teal-700" },
+  "Client File":  { label: "Client File",  color: "bg-amber-100 text-amber-800" },
 };
-const TAG_ORDER: FileTag[] = ["Floorplan", "Room Image", "Layout Image", "Damage Image"];
+const TAG_ORDER: FileTag[] = ["Floorplan", "Room Image", "Layout Image", "Damage Image", "Client File"];
 
 // ─── Sort helper ──────────────────────────────────────────────────────────────
 function sortFiles(files: ProjectFile[]): ProjectFile[] {

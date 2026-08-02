@@ -681,7 +681,7 @@ export interface LocalVendor {
 }
 
 // ─── Project Files ────────────────────────────────────────────────────────────
-export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File" | "Payment Proof";
+export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File" | "Payment Proof" | "Client File";
 
 export interface ProjectFile {
   id: string;
