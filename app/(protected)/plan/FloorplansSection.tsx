@@ -354,9 +354,10 @@ function FileCard({ file, canEdit, onEdit, projectName }: FileCardProps) {
       className={`relative group${isDragging ? " opacity-50" : ""}`}
     >
       <a
-        href={file.cloudinaryUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={file.resourceType === "image" ? file.cloudinaryUrl : file.cloudinaryUrl.replace("/upload/", "/upload/fl_attachment/")}
+        target={file.resourceType === "image" ? "_blank" : undefined}
+        rel={file.resourceType === "image" ? "noopener noreferrer" : undefined}
+        download={file.resourceType !== "image" ? file.fileName : undefined}
         className="block bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
       >
         {/* Thumbnail / placeholder */}

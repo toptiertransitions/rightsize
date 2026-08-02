@@ -1157,9 +1157,8 @@ function ClientFilesSection({
             <li key={f.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
               <FileIcon fileName={f.fileName} />
               <a
-                href={f.cloudinaryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={f.cloudinaryUrl.replace("/upload/", "/upload/fl_attachment/")}
+                download={f.fileName}
                 className="flex-1 text-sm text-gray-800 font-medium hover:text-forest-700 hover:underline truncate"
               >
                 {f.fileName}

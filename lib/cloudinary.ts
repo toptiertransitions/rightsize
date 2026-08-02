@@ -82,6 +82,7 @@ export async function uploadFile(
     mimeType?: string;
     resourceType?: "raw" | "image" | "video" | "auto";
     publicId?: string;
+    originalFileName?: string;
   } = {}
 ): Promise<FileUploadResult> {
   const folder = options.folder || `rightsize/${options.tenantId || "shared"}/files`;
@@ -93,12 +94,21 @@ export async function uploadFile(
     options.resourceType ??
     (mime.startsWith("image/") || mime.startsWith("video/") ? "auto" : "raw");
 
+  // Build a meaningful public_id from the original filename so the Cloudinary
+  // URL and downloaded file retain the original name and extension.
+  let resolvedPublicId: string | undefined = options.publicId;
+  if (!resolvedPublicId && options.originalFileName) {
+    const nameWithoutExt = options.originalFileName.replace(/\.[^.]+$/, "");
+    const safe = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_{2,}/g, "_").slice(0, 80);
+    resolvedPublicId = `${folder}/${Date.now()}_${safe}`;
+  }
+
   const result = await cloudinary.uploader.upload(
     `data:${mime};base64,${buffer.toString("base64")}`,
     {
-      folder,
+      folder: resolvedPublicId ? undefined : folder,
       resource_type: resourceType,
-      ...(options.publicId ? { public_id: options.publicId } : {}),
+      ...(resolvedPublicId ? { public_id: resolvedPublicId } : {}),
     }
   );
 
