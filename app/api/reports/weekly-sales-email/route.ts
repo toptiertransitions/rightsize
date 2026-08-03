@@ -59,7 +59,14 @@ function parseDate(s: string | undefined): Date | null {
 }
 
 function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  // Always resolve in CT so invoice/contract dates match how curMonthKey is derived.
+  // A July 31 CT invoice stored as a UTC datetime can read as Aug 1 UTC without this.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago", year: "numeric", month: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")!.value;
+  const m = parts.find((p) => p.type === "month")!.value;
+  return `${y}-${m}`;
 }
 
 function daysInMonth(year: number, month: number): number {
@@ -291,6 +298,12 @@ interface ActivityRepRow {
   byType: Record<string, number>;
 }
 
+interface BilledDetail {
+  clientName: string;
+  invoiceDate: string;
+  amount: number;
+}
+
 function buildEmail({
   reportDate,
   currentMonthLabel,
@@ -308,6 +321,7 @@ function buildEmail({
   pipelineRows,
   activityRows,
   weekLabel,
+  priorBilledDetails,
 }: {
   reportDate: string;
   currentMonthLabel: string;
@@ -334,6 +348,7 @@ function buildEmail({
   pipelineRows: PipelineRow[];
   activityRows: ActivityRepRow[];
   weekLabel: string;
+  priorBilledDetails: BilledDetail[];
 }): string {
   const SAGE  = "#2d4a3e";
   const TINT  = "#f0f4f0";
@@ -576,6 +591,8 @@ function buildEmail({
             <td style="border-left:1px solid #e5e7eb;padding-left:24px;">
               <p style="margin:0;font-size:11px;color:${MUTED};">Earned</p>
               <p style="margin:2px 0 0;font-size:15px;font-weight:700;color:${priorBColor};">${fmtMoney(priorBilledActual)} <span style="font-size:11px;font-weight:400;color:#9ca3af;">/ ${priorBilledGoal > 0 ? fmtMoney(priorBilledGoal) : "no goal"} ${priorBilledGoal > 0 ? `(${priorBPct}%)` : ""}</span></p>
+              ${priorBilledDetails.length > 0 ? `<p style="margin:6px 0 0;font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">${priorBilledDetails.length} invoice${priorBilledDetails.length !== 1 ? "s" : ""} counted:</p>
+              ${priorBilledDetails.map(d => `<p style="margin:2px 0 0;font-size:10px;color:#6b7280;">${d.clientName} &middot; ${d.invoiceDate} &middot; ${fmtMoneyFull(d.amount)}</p>`).join("")}` : `<p style="margin:4px 0 0;font-size:10px;color:#9ca3af;">No invoices found for this month.</p>`}
             </td>
           </tr></table>
         </td></tr>
@@ -774,9 +791,17 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const priorSignedActual = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === priorMonthKey)
     .reduce((s, { c }) => s + c.totalCost, 0);
-  const priorBilledActual = allInvoices
-    .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === priorMonthKey)
+  const priorBilledInvoices = allInvoices
+    .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === priorMonthKey);
+  const priorBilledActual = priorBilledInvoices
     .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0);
+  const priorBilledDetails: BilledDetail[] = priorBilledInvoices
+    .map(({ tenantId, inv }) => ({
+      clientName: tenantMap.get(tenantId)?.name ?? "Unknown",
+      invoiceDate: fmtDate(inv.createdAt),
+      amount: grossInvoiceAmount(inv),
+    }))
+    .sort((a, b) => b.amount - a.amount);
 
   const signedMTD = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === curMonthKey)
@@ -935,6 +960,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     woWBilledCurr, woWBilledPrev,
     signedRows, billedRows, pipelineRows,
     activityRows, weekLabel,
+    priorBilledDetails,
   });
 
   return { html, reportDate };
