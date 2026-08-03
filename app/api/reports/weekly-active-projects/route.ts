@@ -61,11 +61,8 @@ function scheduledHoursFromEntries(entries: PlanEntry[]): number {
   return Math.round(total * 10) / 10;
 }
 
-// Match Plan page: only use the most recently signed contract
-function signedContract(contracts: Contract[]): Contract | null {
-  const signed = contracts.filter(c => c.status === "Signed");
-  if (!signed.length) return null;
-  return signed.sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt))[0];
+function signedContracts(contracts: Contract[]): Contract[] {
+  return contracts.filter(c => c.status === "Signed");
 }
 
 // Match Plan page: lineItems → legacy hours fields → 0
@@ -462,11 +459,12 @@ export async function POST() {
     const planEntries = planByTenant.get(tenant.id) ?? [];
     const timeEntries = timeByTenant.get(tenant.id) ?? [];
 
-    const contract = signedContract(contracts);
-    const quoteAmount = (contract?.totalCost ?? 0) > 0 ? contract!.totalCost : null;
+    const signed = signedContracts(contracts);
+    const totalQuote = signed.reduce((s, c) => s + (c.totalCost ?? 0), 0);
+    const quoteAmount = totalQuote > 0 ? totalQuote : null;
 
-    // Estimated hours: match Plan page (lineItems → legacy contract fields → tenant field)
-    const contractHours = contractEstimatedHours(contract);
+    // Sum estimated hours across ALL signed contracts, matching the Plan page
+    const contractHours = signed.reduce((s, c) => s + contractEstimatedHours(c), 0);
     const estimatedHours = contractHours > 0 ? contractHours : (tenant.estimatedHours ?? 0);
 
     // Logged hours: ALL entries including nonBillable, matching Plan page
