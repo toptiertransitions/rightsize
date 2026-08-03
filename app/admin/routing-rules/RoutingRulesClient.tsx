@@ -368,6 +368,14 @@ export function RoutingRulesClient({ initialRules, vendors: _vendors }: Props) {
           <p>· Items in Fair / Poor / For Parts condition are auto-routed to <span className="text-teal-400">Donate</span> (≥$100 target value) or <span className="text-red-400">Discard</span> (&lt;$100)</p>
         </div>
 
+        {/* Estate Sale override notice */}
+        <div className="mb-6 p-3 bg-amber-900/20 border border-amber-700/50 rounded-xl text-xs text-amber-300/80 space-y-0.5">
+          <p className="font-semibold text-amber-300">Estate Sale project override:</p>
+          <p>· For projects with the <span className="font-medium text-white">Estate Sale flag</span> enabled, any rule that would assign <span className="text-blue-300">FB/Marketplace</span> or <span className="text-sky-300">eBay</span> is automatically redirected to <span className="text-amber-400">Estate Sale</span>.</p>
+          <p>· For non-Estate Sale projects, those routes work normally as configured below.</p>
+          <p>· You only need one set of rules — the estate sale redirect is applied automatically at the project level.</p>
+        </div>
+
         {applyResult && <div className="mb-4 p-3 bg-green-900/30 border border-green-700 rounded-xl text-sm text-green-400">{applyResult}</div>}
         {applyError && <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-xl text-sm text-red-400">{applyError}</div>}
         {seedResult && <div className="mb-4 p-3 bg-amber-900/30 border border-amber-700 rounded-xl text-sm text-amber-300">{seedResult}</div>}

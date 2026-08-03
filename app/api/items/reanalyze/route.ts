@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
           primaryRoute: undefined, // clear so rules engine considers this item
         } as unknown as Item;
 
-        const assignments = applyRoutingRules([mockItem], localVendors, routingRules, projectZip);
+        const assignments = applyRoutingRules([mockItem], localVendors, routingRules, projectZip, tenant?.isEstateSale ?? false);
         if (assignments[0]?.primaryRoute) {
           primaryRoute = assignments[0].primaryRoute;
         }

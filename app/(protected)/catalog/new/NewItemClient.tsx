@@ -153,11 +153,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
       if (!isTTT && ai?.primary_route === "ProFoundFinds Consignment") {
         ai.primary_route = "Other Consignment";
       }
-      if (estateMode && ai?.primary_route && ESTATE_OVERRIDE_ROUTES.has(ai.primary_route)) {
-        ai.primary_route = "Estate Sale";
-      }
-      // Estate Sale is TTT-only and only valid when the project has the Estate Sale flag on.
-      // Strip it from the AI suggestion so preview-route can assign the correct route.
+      // AI sometimes suggests "Estate Sale" for non-estate-sale projects. Strip it
+      // here so the fallback is FB/Marketplace; routing rules will correctly assign
+      // Estate Sale for projects that have the Estate Sale flag on.
       if (!estateMode && ai?.primary_route === "Estate Sale") {
         ai.primary_route = "FB/Marketplace";
       }
@@ -171,9 +169,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
         value_high: ai.value_high != null ? Math.round(ai.value_high * 0.6) : ai.value_high,
       };
 
-      // Apply routing rules preview — same logic as server uses on save
-      // so the displayed route matches what will actually be assigned
-      if (!estateMode && ai.size_class) {
+      // Apply routing rules preview — always run so estate sale and non-estate sale
+      // projects both get the correct route (preview-route now handles the estate flag)
+      if (ai.size_class) {
         try {
           const previewRes = await fetch("/api/items/preview-route", {
             method: "POST",

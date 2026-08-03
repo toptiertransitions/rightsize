@@ -2036,11 +2036,14 @@ function conditionMeetsThreshold(
   return true;
 }
 
+const ESTATE_SALE_REDIRECT_ROUTES: PrimaryRoute[] = ["FB/Marketplace", "Online Marketplace"];
+
 export function applyRoutingRules(
   items: Item[],
   localVendors: LocalVendor[],
   rules: RoutingRule[],
-  projectZip: string
+  projectZip: string,
+  isEstateSale?: boolean
 ): Array<{ itemId: string; vendorId?: string; primaryRoute: PrimaryRoute }> {
   const assignments: Array<{ itemId: string; vendorId?: string; primaryRoute: PrimaryRoute }> = [];
   const activeRules = rules.filter(r => r.isActive).sort((a, b) => a.priority - b.priority);
@@ -2128,11 +2131,17 @@ export function applyRoutingRules(
         return a.consignmentTake - b.consignmentTake;
       });
 
+      // Estate Sale projects: FB/Marketplace and Online Marketplace redirect to Estate Sale
+      const assignedRoute: PrimaryRoute =
+        isEstateSale && ESTATE_SALE_REDIRECT_ROUTES.includes(rule.primaryRoute)
+          ? "Estate Sale"
+          : rule.primaryRoute;
+
       assignments.push({
         itemId: item.id,
-        primaryRoute: rule.primaryRoute,
-        // Donate items stay unassigned — vendor is set manually by staff
-        vendorId: rule.primaryRoute === "Donate" ? undefined : candidates[0]?.id,
+        primaryRoute: assignedRoute,
+        // Donate/Estate Sale items stay unassigned — vendor is set manually by staff
+        vendorId: (assignedRoute === "Donate" || assignedRoute === "Estate Sale") ? undefined : candidates[0]?.id,
       });
       break; // first matching rule wins
     }

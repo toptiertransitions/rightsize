@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getRoutingRules, getAllLocalVendors, applyRoutingRules } from "@/lib/airtable";
+import { getRoutingRules, getAllLocalVendors, applyRoutingRules, getTenantById } from "@/lib/airtable";
 import type { Item } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -13,9 +13,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ primaryRoute: null });
   }
 
-  const [routingRules, localVendors] = await Promise.all([
+  const [routingRules, localVendors, tenant] = await Promise.all([
     getRoutingRules().catch(() => []),
     getAllLocalVendors().catch(() => []),
+    tenantId ? getTenantById(tenantId).catch(() => null) : Promise.resolve(null),
   ]);
 
   const activeRules = routingRules.filter(r => r.isActive);
@@ -23,7 +24,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ primaryRoute: null });
   }
 
-  // Build a minimal Item-shaped object for the routing engine
   const mockItem = {
     id: "__preview__",
     status: "Pending Review",
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     assignedVendorId: undefined,
   } as unknown as Item;
 
-  const assignments = applyRoutingRules([mockItem], localVendors, activeRules, "");
+  const assignments = applyRoutingRules([mockItem], localVendors, activeRules, "", tenant?.isEstateSale ?? false);
   const primaryRoute = assignments[0]?.primaryRoute ?? null;
 
   return NextResponse.json({ primaryRoute });

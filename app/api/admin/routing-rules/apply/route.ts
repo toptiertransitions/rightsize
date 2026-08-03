@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       getItemsForTenant(tenantId).catch(() => []),
     ]);
     const projectZip = tenant?.zip ?? "";
-    const assignments = applyRoutingRules(items, vendors, activeRules, projectZip);
+    const assignments = applyRoutingRules(items, vendors, activeRules, projectZip, tenant?.isEstateSale ?? false);
     const itemsById = new Map(items.map(i => [i.id, { itemName: i.itemName, tenantId: i.tenantId, primaryRoute: i.primaryRoute ?? "" }]));
     await processAssignments(assignments, itemsById, changedBy);
   } else {
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     for (const tenant of activeTenants) {
       const items = await getItemsForTenant(tenant.id).catch(() => []);
       const projectZip = tenant.zip ?? "";
-      const assignments = applyRoutingRules(items, vendors, activeRules, projectZip);
+      const assignments = applyRoutingRules(items, vendors, activeRules, projectZip, tenant.isEstateSale ?? false);
       const itemsById = new Map(items.map(i => [i.id, { itemName: i.itemName, tenantId: i.tenantId, primaryRoute: i.primaryRoute ?? "" }]));
       await processAssignments(assignments, itemsById, changedBy);
     }

@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Apply routing rules (same logic as POST /api/items)
     if (activeRules.length > 0) {
       try {
-        const assignments = applyRoutingRules([item], localVendors, activeRules, projectZip);
+        const assignments = applyRoutingRules([item], localVendors, activeRules, projectZip, tenant.isEstateSale ?? false);
         if (assignments.length > 0) {
           const { primaryRoute: ruleRoute, vendorId } = assignments[0];
           const ruleShare = isNonTTT && NON_TTT_SHARE[ruleRoute] !== undefined
