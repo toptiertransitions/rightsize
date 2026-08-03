@@ -58,9 +58,18 @@ function parseDate(s: string | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function monthKey(d: Date): string {
-  // Always resolve in CT so invoice/contract dates match how curMonthKey is derived.
-  // A July 31 CT invoice stored as a UTC datetime can read as Aug 1 UTC without this.
+function monthKey(d: Date | string): string {
+  // Date-only strings (YYYY-MM-DD) represent the user's local calendar date.
+  // Parsing them as Date objects would convert through UTC midnight → CT gives the
+  // previous day. Slice directly instead.
+  if (typeof d === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.slice(0, 7);
+    const parsed = new Date(d);
+    if (isNaN(parsed.getTime())) return "0000-00";
+    d = parsed;
+  }
+  // For full datetime values, resolve in CT so e.g. a July 31 11pm CT invoice
+  // stored as Aug 1 UTC doesn't get bucketed into August.
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Chicago", year: "numeric", month: "2-digit",
   }).formatToParts(d);
@@ -304,6 +313,12 @@ interface BilledDetail {
   amount: number;
 }
 
+interface SignedDetail {
+  clientName: string;
+  signedAt: string;
+  amount: number;
+}
+
 function buildEmail({
   reportDate,
   currentMonthLabel,
@@ -322,6 +337,7 @@ function buildEmail({
   activityRows,
   weekLabel,
   priorBilledDetails,
+  priorSignedDetails,
 }: {
   reportDate: string;
   currentMonthLabel: string;
@@ -349,6 +365,7 @@ function buildEmail({
   activityRows: ActivityRepRow[];
   weekLabel: string;
   priorBilledDetails: BilledDetail[];
+  priorSignedDetails: SignedDetail[];
 }): string {
   const SAGE  = "#2d4a3e";
   const TINT  = "#f0f4f0";
@@ -587,6 +604,8 @@ function buildEmail({
             <td style="padding-right:24px;">
               <p style="margin:0;font-size:11px;color:${MUTED};">Signed</p>
               <p style="margin:2px 0 0;font-size:15px;font-weight:700;color:${priorSColor};">${fmtMoney(priorSignedActual)} <span style="font-size:11px;font-weight:400;color:#9ca3af;">/ ${priorSignedGoal > 0 ? fmtMoney(priorSignedGoal) : "no goal"} ${priorSignedGoal > 0 ? `(${priorSPct}%)` : ""}</span></p>
+              ${priorSignedDetails.length > 0 ? `<p style="margin:6px 0 0;font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">${priorSignedDetails.length} contract${priorSignedDetails.length !== 1 ? "s" : ""} signed:</p>
+              ${priorSignedDetails.map(d => `<p style="margin:2px 0 0;font-size:10px;color:#6b7280;">${d.clientName} &middot; ${d.signedAt} &middot; ${fmtMoneyFull(d.amount)}</p>`).join("")}` : `<p style="margin:4px 0 0;font-size:10px;color:#9ca3af;">No contracts found for this month.</p>`}
             </td>
             <td style="border-left:1px solid #e5e7eb;padding-left:24px;">
               <p style="margin:0;font-size:11px;color:${MUTED};">Earned</p>
@@ -715,9 +734,13 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   });
 
   // ── Prior month key ──
-  const priorMonthDate = new Date(year, month - 2, 1); // month is 1-indexed, so -2 goes back one month
-  const priorMonthKey  = monthKey(priorMonthDate);
-  const priorMonthLabel = priorMonthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  // Compute directly from year/month to avoid any Date object UTC-vs-CT ambiguity.
+  const priorYear = month === 1 ? year - 1 : year;
+  const priorMonthNum = month === 1 ? 12 : month - 1;
+  const priorMonthKey = `${priorYear}-${String(priorMonthNum).padStart(2, "0")}`;
+  // Use the 15th to safely get a mid-month date — no timezone edge cases.
+  const priorMonthLabel = new Date(priorYear, priorMonthNum - 1, 15)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   // ── Fetch all reference data in parallel (including sales goals) ──
   const [allTenants, opps, contacts, refCompanies, refContacts, staffMembers, allSalesGoals] = await Promise.all([
@@ -788,11 +811,18 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const priorGoal         = salesGoalMap.get(priorMonthKey);
   const priorSignedGoal   = priorGoal?.signedGoal ?? 0;
   const priorBilledGoal   = priorGoal?.billedGoal ?? 0;
-  const priorSignedActual = allSignedContracts
-    .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === priorMonthKey)
-    .reduce((s, { c }) => s + c.totalCost, 0);
+  const priorSignedContracts = allSignedContracts
+    .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === priorMonthKey);
+  const priorSignedActual = priorSignedContracts.reduce((s, { c }) => s + c.totalCost, 0);
+  const priorSignedDetails: SignedDetail[] = priorSignedContracts
+    .map(({ tenantId, c }) => ({
+      clientName: tenantMap.get(tenantId)?.name ?? "Unknown",
+      signedAt: fmtDate(c.signedAt),
+      amount: c.totalCost,
+    }))
+    .sort((a, b) => a.signedAt.localeCompare(b.signedAt));
   const priorBilledInvoices = allInvoices
-    .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === priorMonthKey);
+    .filter(({ inv }) => monthKey(inv.createdAt) === priorMonthKey);
   const priorBilledActual = priorBilledInvoices
     .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0);
   const priorBilledDetails: BilledDetail[] = priorBilledInvoices
@@ -804,10 +834,10 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     .sort((a, b) => b.amount - a.amount);
 
   const signedMTD = allSignedContracts
-    .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === curMonthKey)
+    .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === curMonthKey)
     .reduce((s, { c }) => s + c.totalCost, 0);
   const billedMTD = allInvoices
-    .filter(({ inv }) => monthKey(new Date(inv.createdAt)) === curMonthKey)
+    .filter(({ inv }) => monthKey(inv.createdAt) === curMonthKey)
     .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0);
 
   // ── Week-over-week trend ──
@@ -861,7 +891,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   // ── Signed this month rows ──
   const signedRows: SignedRow[] = allSignedContracts
-    .filter(({ c }) => c.signedAt && monthKey(new Date(c.signedAt)) === curMonthKey)
+    .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === curMonthKey)
     .map(({ tenantId, c }) => {
       const tenant = tenantMap.get(tenantId);
       const opp    = oppByTenant.get(tenantId);
@@ -892,7 +922,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   const billedRows: BilledRow[] = [];
   for (const [tenantId, { total, latestCreatedAt }] of invoiceSumByTenant) {
-    if (monthKey(new Date(latestCreatedAt)) !== curMonthKey) continue;
+    if (monthKey(latestCreatedAt) !== curMonthKey) continue;
     const tenant = tenantMap.get(tenantId);
     const opp    = oppByTenant.get(tenantId);
     billedRows.push({
@@ -961,6 +991,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     signedRows, billedRows, pipelineRows,
     activityRows, weekLabel,
     priorBilledDetails,
+    priorSignedDetails,
   });
 
   return { html, reportDate };
