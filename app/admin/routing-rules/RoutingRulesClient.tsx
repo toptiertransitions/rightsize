@@ -8,7 +8,9 @@ import type { RoutingRule, LocalVendor, PrimaryRoute, VendorType } from "@/lib/t
 const PRIMARY_ROUTES: PrimaryRoute[] = [
   "To Be Moved", "Family to Take", "Storage Unit - Offsite", "Leaving with Home",
   "ProFoundFinds Consignment", "FB/Marketplace",
-  "Online Marketplace", "Other Consignment", "Estate Sale", "Donate", "Discard",
+  "Online Marketplace", "Other Consignment", "Donate", "Discard",
+  // "Estate Sale" is intentionally excluded — it is auto-inferred from FB/Marketplace
+  // and Online Marketplace for projects with the Estate Sale flag enabled.
 ];
 
 const ROUTE_DISPLAY: Partial<Record<PrimaryRoute, string>> = {
