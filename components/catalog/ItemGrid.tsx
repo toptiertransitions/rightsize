@@ -320,15 +320,11 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       const res = await fetch("/api/items/reanalyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoUrl: primaryPhoto }),
+        body: JSON.stringify({ photoUrl: primaryPhoto, itemId: item.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "AI analysis failed");
       setForm(prev => {
-        const noAIInfo = !prev.valueLow && !prev.valueMid && !prev.valueHigh && !prev.listingDescriptionEbay;
-        const isDonateDefault = prev.primaryRoute === "Donate" && noAIInfo;
-        let aiRoute = data.primaryRoute as string | undefined;
-        if (aiRoute === "Estate Sale") aiRoute = "FB/Marketplace";
         return {
           ...prev,
           itemName: data.itemName || prev.itemName,
@@ -337,7 +333,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
           listingTitleEbay: data.listingTitleEbay ?? prev.listingTitleEbay,
           listingDescriptionEbay: data.listingDescriptionEbay ?? prev.listingDescriptionEbay,
           staffTips: data.staffTips ?? prev.staffTips,
-          primaryRoute: (isDonateDefault && aiRoute) ? aiRoute as PrimaryRoute : prev.primaryRoute,
+          // Routing rules (applied server-side) are authoritative — always update route
+          primaryRoute: (data.primaryRoute as PrimaryRoute) ?? prev.primaryRoute,
           // Only fill value fields when currently blank — never overwrite existing values
           valueLow:  (!prev.valueLow  && data.valueLow  != null) ? Math.round(data.valueLow  * 0.6) : prev.valueLow,
           valueMid:  (!prev.valueMid  && data.valueMid  != null) ? Math.round(data.valueMid  * 0.6) : prev.valueMid,
@@ -1475,15 +1472,10 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         const res = await fetch("/api/items/reanalyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ photoUrl: item.photoUrl }),
+          body: JSON.stringify({ photoUrl: item.photoUrl, itemId: item.id }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Analysis failed");
-
-        const noAIInfo = !item.valueLow && !item.valueMid && !item.valueHigh && !item.listingDescriptionEbay;
-        const isDonateDefault = item.primaryRoute === "Donate" && noAIInfo;
-        let aiRoute = data.primaryRoute as string | null;
-        if (aiRoute === "Estate Sale") aiRoute = "FB/Marketplace";
 
         const patch: Record<string, unknown> = {
           id: item.id,
@@ -1497,7 +1489,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           valueLow:  (!item.valueLow  && data.valueLow  != null) ? Math.round(data.valueLow  * 0.6) : item.valueLow,
           valueMid:  (!item.valueMid  && data.valueMid  != null) ? Math.round(data.valueMid  * 0.6) : item.valueMid,
           valueHigh: (!item.valueHigh && data.valueHigh != null) ? Math.round(data.valueHigh * 0.6) : item.valueHigh,
-          ...(isDonateDefault && aiRoute ? { primaryRoute: aiRoute } : {}),
+          // Routing rules (applied server-side) are authoritative — always update route
+          ...(data.primaryRoute ? { primaryRoute: data.primaryRoute } : {}),
         };
 
         const saveRes = await fetch("/api/items", {
