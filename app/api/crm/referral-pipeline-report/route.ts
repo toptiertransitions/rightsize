@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getSystemRole, getReferralCompanies, getReferralContacts, getAllActivitiesWithContactId, getStaffMembers } from "@/lib/airtable";
-import { buildReferralPipelineEmail, type ReferralPipelineRow } from "@/lib/email";
+import { buildReferralPipelineEmail, type ReferralPipelineRow, type StageChangeRow } from "@/lib/email";
 
 export async function POST() {
   const { userId } = await auth();
@@ -77,6 +77,31 @@ export async function POST() {
     return a.contactName.localeCompare(b.contactName);
   });
 
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const cutoff = sevenDaysAgo.toISOString();
+
+  const progressRows: StageChangeRow[] = allContacts
+    .filter(c => c.stageChangedAt && c.stageChangedAt >= cutoff && c.previousStage)
+    .map(c => {
+      const company = companyMap.get(c.referralCompanyId);
+      const ownerClerkId = company?.assignedToClerkId;
+      return {
+        contactName: c.name,
+        contactTitle: c.title || undefined,
+        companyName: company?.name ?? "Unknown",
+        priority: company?.priority ?? "",
+        ownerName: ownerClerkId ? (staffNameByClerkId.get(ownerClerkId) ?? "") : "",
+        previousStage: c.previousStage!,
+        currentStage: c.stage,
+        stageChangedAt: c.stageChangedAt!,
+        lastActivityDate: latestActivityByContact.get(c.id),
+        nextStepDate: c.nextStepDate,
+        nextStepNote: c.nextStepNote,
+      };
+    })
+    .sort((a, b) => b.stageChangedAt.localeCompare(a.stageChangedAt));
+
   const generatedAt = new Date().toLocaleString("en-US", {
     timeZone: "America/New_York",
     month: "short",
@@ -87,7 +112,7 @@ export async function POST() {
     timeZoneName: "short",
   });
 
-  const html = buildReferralPipelineEmail({ rows, generatedAt });
+  const html = buildReferralPipelineEmail({ rows, generatedAt, progressRows });
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const { error } = await resend.emails.send({

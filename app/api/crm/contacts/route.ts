@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getReferralContacts, createReferralContact, updateReferralContact, deleteReferralContact, findReferralContactByName } from "@/lib/airtable";
+import { getSystemRole, getReferralContacts, getReferralContactById, createReferralContact, updateReferralContact, deleteReferralContact, findReferralContactByName } from "@/lib/airtable";
 
 async function requireCRMAccess(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -49,6 +49,14 @@ export async function PATCH(req: NextRequest) {
   // Never overwrite email/phone with empty string — blank values are ignored
   if (data.email === "") delete data.email;
   if (data.phone === "") delete data.phone;
+  // Track stage changes: capture previousStage and stageChangedAt when stage actually changes
+  if (data.stage) {
+    const current = await getReferralContactById(id);
+    if (current && current.stage !== data.stage) {
+      data.previousStage = current.stage;
+      data.stageChangedAt = new Date().toISOString();
+    }
+  }
   const contact = await updateReferralContact(id, data);
   return NextResponse.json({ contact });
 }

@@ -1636,6 +1636,20 @@ export function buildSubcontractorAddedEmail({
 </html>`;
 }
 
+export type StageChangeRow = {
+  contactName: string;
+  contactTitle?: string;
+  companyName: string;
+  priority: string;
+  ownerName: string;
+  previousStage: string;
+  currentStage: string;
+  stageChangedAt: string;
+  lastActivityDate?: string;
+  nextStepDate?: string;
+  nextStepNote?: string;
+};
+
 export type ReferralPipelineRow = {
   priority: string;
   ownerName: string;
@@ -1652,9 +1666,11 @@ export type ReferralPipelineRow = {
 export function buildReferralPipelineEmail({
   rows,
   generatedAt,
+  progressRows,
 }: {
   rows: ReferralPipelineRow[];
   generatedAt: string;
+  progressRows?: StageChangeRow[];
 }): string {
   const STAGE_ORDER = ["Shared Leads", "Agreed to Refer", "Met", "Identified"];
 
@@ -1765,6 +1781,59 @@ export function buildReferralPipelineEmail({
   const hmSections = STAGE_ORDER.map(s => stageBlock(s, hmByStage.get(s)!, "#C9A96E")).join("");
   const lowSections = STAGE_ORDER.map(s => stageBlock(s, lowByStage.get(s)!, "#d1d5db")).join("");
 
+  const STAGE_BADGE: Record<string, string> = {
+    "Shared Leads": "background:#dcfce7;color:#166534;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;",
+    "Agreed to Refer": "background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;",
+    "Met": "background:#fef9c3;color:#92400e;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;",
+    "Identified": "background:#f3f4f6;color:#374151;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;",
+    "Active Referral": "background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;",
+  };
+
+  function stageBadgeHtml(stage: string): string {
+    const style = STAGE_BADGE[stage] ?? "background:#f3f4f6;color:#374151;padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;";
+    return `<span style="${style}">${stage}</span>`;
+  }
+
+  const weeklyProgressSection = progressRows && progressRows.length > 0 ? `
+        <tr>
+          <td style="padding:16px 32px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #d1fae5;border-radius:8px;overflow:hidden;">
+              <thead>
+                <tr style="background:#ecfdf5;">
+                  <td colspan="8" style="padding:12px 16px;font-size:13px;font-weight:700;color:#065f46;border-bottom:1px solid #d1fae5;">
+                    Weekly Progress &mdash; Stage Changes in Last 7 Days (${progressRows.length})
+                  </td>
+                </tr>
+                <tr style="background:#f0fdf4;">
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;border-bottom:1px solid #d1fae5;">Company</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;border-bottom:1px solid #d1fae5;">Contact</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;border-bottom:1px solid #d1fae5;">Owner</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;border-bottom:1px solid #d1fae5;">Stage Change</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;border-bottom:1px solid #d1fae5;">Changed</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:center;white-space:nowrap;border-bottom:1px solid #d1fae5;">Last Activity</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;border-bottom:1px solid #d1fae5;">Next Step</th>
+                  <th style="padding:8px 10px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;text-align:left;white-space:nowrap;border-bottom:1px solid #d1fae5;">Next Step Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${progressRows.map(r => {
+                  const priorityBadge = `<span style="${PRIORITY_BADGE[r.priority] ?? ""}">${r.priority}</span>`;
+                  return `<tr style="border-bottom:1px solid #d1fae5;">
+                    <td style="padding:8px 10px;font-size:12px;color:#374151;font-weight:500;white-space:nowrap;">${priorityBadge} ${r.companyName}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#374151;white-space:nowrap;">${r.contactName}${r.contactTitle ? `<br><span style="color:#9ca3af;font-size:11px;">${r.contactTitle}</span>` : ""}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#6b7280;white-space:nowrap;">${r.ownerName || "—"}</td>
+                    <td style="padding:8px 10px;font-size:12px;white-space:nowrap;">${stageBadgeHtml(r.previousStage)} <span style="color:#9ca3af;margin:0 4px;">&rarr;</span> ${stageBadgeHtml(r.currentStage)}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#6b7280;text-align:center;white-space:nowrap;">${fmtDate(r.stageChangedAt?.slice(0, 10))}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#6b7280;text-align:center;white-space:nowrap;">${fmtDate(r.lastActivityDate)}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#374151;white-space:nowrap;">${fmtDate(r.nextStepDate)}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#374151;max-width:180px;">${r.nextStepNote || "—"}</td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </td>
+        </tr>` : "";
+
   const lowDivider = totalLow > 0 ? `
     <tr><td style="padding:28px 0 4px;">
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -1794,6 +1863,7 @@ export function buildReferralPipelineEmail({
             <p style="margin:0;font-size:13px;color:#374151;">${stageCounts}</p>
           </td>
         </tr>
+        ${weeklyProgressSection}
         <tr><td style="padding:16px 32px 32px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             ${hmSections}

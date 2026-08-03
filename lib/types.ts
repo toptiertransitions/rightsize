@@ -885,6 +885,7 @@ export interface ReferralContact {
   isFormerEmployee?: boolean;
   portalInviteSent?: boolean;
   stageChangedAt?: string;
+  previousStage?: string;
 }
 
 export interface ClientContact {

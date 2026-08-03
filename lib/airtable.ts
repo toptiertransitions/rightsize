@@ -3343,6 +3343,7 @@ function mapReferralContact(record: AirtableRecord): ReferralContact {
     isFormerEmployee: !!f["IsFormerEmployee"],
     portalInviteSent: !!f["PortalInviteSent"],
     stageChangedAt: toStr(f["StageChangedAt"]) || undefined,
+    previousStage: toStr(f["PreviousStage"]) || undefined,
   };
 }
 
@@ -3419,7 +3420,7 @@ export async function createReferralContact(data: {
 
 export async function updateReferralContact(
   id: string,
-  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string; nextStepDate: string | null; nextStepNote: string; isFormerEmployee: boolean; portalInviteSent: boolean }>
+  data: Partial<{ name: string; title: string; email: string; phone: string; referralCompanyId: string; notes: string; stage: string; dateIntroduced: string; interests: string; coffeeOrder: string; orgsGroups: string; lastActivityDate: string; nextStepDate: string | null; nextStepNote: string; isFormerEmployee: boolean; portalInviteSent: boolean; previousStage: string; stageChangedAt: string }>
 ): Promise<ReferralContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -3438,6 +3439,8 @@ export async function updateReferralContact(
   if (data.nextStepNote !== undefined) fields["NextStepNote"] = data.nextStepNote;
   if (data.isFormerEmployee !== undefined) fields["IsFormerEmployee"] = data.isFormerEmployee;
   if (data.portalInviteSent !== undefined) fields["PortalInviteSent"] = data.portalInviteSent;
+  if (data.previousStage !== undefined) fields["PreviousStage"] = data.previousStage || null;
+  if (data.stageChangedAt !== undefined) fields["StageChangedAt"] = data.stageChangedAt || null;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -3449,6 +3452,14 @@ export async function updateReferralContact(
 export async function deleteReferralContact(id: string): Promise<void> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CONTACTS, `/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+export async function getReferralContactsWithRecentStageChange(days: number): Promise<ReferralContact[]> {
+  const all = await getReferralContacts();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString();
+  return all.filter(c => c.stageChangedAt && c.stageChangedAt >= cutoffStr && c.previousStage);
 }
 
 // ─── CRM Client Contacts ──────────────────────────────────────────────────────

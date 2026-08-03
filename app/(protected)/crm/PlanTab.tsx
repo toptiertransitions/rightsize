@@ -6,6 +6,21 @@ import type { ReferralPriority } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface StageChangeRow {
+  contactId: string;
+  contactName: string;
+  contactTitle: string | null;
+  companyName: string;
+  priority: string;
+  ownerName: string;
+  previousStage: string;
+  currentStage: string;
+  stageChangedAt: string;
+  lastActivityDate: string | null;
+  nextStepDate: string | null;
+  nextStepNote: string | null;
+}
+
 interface Quarter {
   id: string;
   label: string;
@@ -1493,6 +1508,17 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
   const isSalesOnly = sysRole === "TTTSales";
 
   const [viewMode, setViewMode] = useState<"team" | string>(isSalesOnly ? currentUserId : "team");
+  const [stageChanges, setStageChanges] = useState<StageChangeRow[]>([]);
+  const [stageChangesLoading, setStageChangesLoading] = useState(false);
+
+  useEffect(() => {
+    setStageChangesLoading(true);
+    fetch("/api/crm/stage-changes?days=30")
+      .then(r => r.json())
+      .then(d => setStageChanges(d.rows ?? []))
+      .catch(() => {})
+      .finally(() => setStageChangesLoading(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/crm/quarters")
@@ -1674,6 +1700,58 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
               {v.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Recent Stage Progress — Last 30 Days */}
+      {!stageChangesLoading && stageChanges.length > 0 && (
+        <div className="mb-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-green-50 border-b border-green-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-green-900">Recent Progress — Stage Changes (Last 30 Days)</h3>
+            <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">{stageChanges.length}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="text-xs w-full" style={{ minWidth: 780 }}>
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">Company</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">Contact</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">Owner</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">Stage Change</th>
+                  <th className="text-center px-4 py-2.5 font-medium text-gray-500">Changed</th>
+                  <th className="text-center px-4 py-2.5 font-medium text-gray-500">Last Activity</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">Next Step</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stageChanges.map((c) => (
+                  <tr key={c.contactId} className="border-b border-gray-100 last:border-0">
+                    <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{c.companyName}</td>
+                    <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">
+                      {c.contactName}
+                      {c.contactTitle && <span className="text-gray-400 block text-[10px]">{c.contactTitle}</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{c.ownerName || "—"}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      <StageBadge stage={c.previousStage} />
+                      <span className="mx-1.5 text-gray-400">→</span>
+                      <StageBadge stage={c.currentStage} />
+                    </td>
+                    <td className="px-4 py-2.5 text-center text-gray-500 whitespace-nowrap">{fmtDate(c.stageChangedAt?.slice(0, 10))}</td>
+                    <td className="px-4 py-2.5 text-center text-gray-500 whitespace-nowrap">{c.lastActivityDate ? fmtDate(c.lastActivityDate) : "—"}</td>
+                    <td className="px-4 py-2.5 text-gray-700 max-w-[180px]">
+                      {c.nextStepDate ? (
+                        <div>
+                          <span className="whitespace-nowrap">{fmtDate(c.nextStepDate)}</span>
+                          {c.nextStepNote && <p className="text-gray-400 truncate mt-0.5">{c.nextStepNote}</p>}
+                        </div>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
