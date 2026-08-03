@@ -877,6 +877,8 @@ export interface FlaggedDonateItem {
   tenantId: string;
   condition: string;
   status: string;
+  primaryRoute: string;
+  createdBy: string;
   createdAt: string;
 }
 
@@ -886,7 +888,8 @@ export async function getFlaggedDonateItems(): Promise<FlaggedDonateItem[]> {
     {PrimaryRoute} = "Donate",
     OR({Condition} = "Good", {Condition} = "Excellent"),
     {Status} = "Pending Review",
-    {CompletedDate} = ""
+    {CompletedDate} = "",
+    IS_AFTER({CreatedAt}, "2026-07-28")
   )`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const records = await base(AIRTABLE_TABLES.ITEMS).select({
@@ -899,6 +902,8 @@ export async function getFlaggedDonateItems(): Promise<FlaggedDonateItem[]> {
     tenantId: toStr(r.fields["TenantID"] || r.fields["TenantId"]),
     condition: toStr(r.fields["Condition"]),
     status: toStr(r.fields["Status"]),
+    primaryRoute: toStr(r.fields["PrimaryRoute"]) || "Donate",
+    createdBy: toStr(r.fields["StaffSellerName"]) || "—",
     createdAt: toStr(r.fields["CreatedAt"]),
   }));
 }

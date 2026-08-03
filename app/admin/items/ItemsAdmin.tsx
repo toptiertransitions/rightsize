@@ -173,7 +173,9 @@ export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems,
                   <tr className="border-b border-gray-800">
                     <th className="text-left px-5 py-3 text-gray-500 font-medium text-xs">Item</th>
                     <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Project</th>
+                    <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Route</th>
                     <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Condition</th>
+                    <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Added By</th>
                     <th className="text-left px-3 py-3 text-gray-500 font-medium text-xs">Created</th>
                     <th className="px-3 py-3 pr-5" />
                   </tr>
@@ -181,13 +183,15 @@ export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems,
                 <tbody>
                   {flagged.map(item => (
                     <tr key={item.id} className="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30">
-                      <td className="px-5 py-2.5 text-sm text-white font-medium max-w-[200px] truncate">{item.itemName}</td>
+                      <td className="px-5 py-2.5 text-sm text-white font-medium max-w-[180px] truncate">{item.itemName}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-400">{projectMap[item.tenantId] ?? item.tenantId}</td>
+                      <td className="px-3 py-2.5 text-xs text-amber-400 font-medium">{item.primaryRoute}</td>
                       <td className="px-3 py-2.5">
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">
                           {item.condition}
                         </span>
                       </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-400">{item.createdBy}</td>
                       <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">{fmtDate(item.createdAt)}</td>
                       <td className="px-3 py-2.5 pr-5 text-right">
                         <button
