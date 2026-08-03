@@ -3519,8 +3519,10 @@ function DashboardTab({
   onNavigate: (tab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string; refContactStage?: ReferralContactStage | ""; refType?: string }) => void;
 }) {
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
-  type DateRange = "all" | "month" | "quarter" | "year";
+  type DateRange = "all" | "month" | "quarter" | "custom";
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
   const [lbDays, setLbDays] = useState<30 | 60 | 90 | 180 | 365>(90);
@@ -3575,17 +3577,28 @@ function DashboardTab({
   // Won opps: use wonAt (signed date). Lost opps: use lostAt. Active pipeline: use createdAt.
   // An opp is included if its relevant date falls within the period.
   const dateFilteredOpps = (() => {
+    const oppDate = (o: ClientOpportunity) => {
+      if (o.stage === "Won") return o.wonAt || o.createdAt;
+      if (o.stage === "Lost") return o.lostAt || o.createdAt;
+      return o.createdAt;
+    };
     if (dateRange === "all") return opportunities;
+    if (dateRange === "custom") {
+      const start = customStart ? new Date(customStart) : null;
+      const end = customEnd ? new Date(customEnd + "T23:59:59") : null;
+      if (!start && !end) return opportunities;
+      return opportunities.filter(o => {
+        const d = new Date(oppDate(o));
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+      });
+    }
     const now = new Date();
     let cutoff: Date;
     if (dateRange === "month") cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
-    else if (dateRange === "quarter") cutoff = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-    else cutoff = new Date(now.getFullYear(), 0, 1);
-    return opportunities.filter(o => {
-      if (o.stage === "Won") return o.wonAt ? new Date(o.wonAt) >= cutoff : new Date(o.createdAt) >= cutoff;
-      if (o.stage === "Lost") return o.lostAt ? new Date(o.lostAt) >= cutoff : new Date(o.createdAt) >= cutoff;
-      return new Date(o.createdAt) >= cutoff;
-    });
+    else cutoff = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    return opportunities.filter(o => new Date(oppDate(o)) >= cutoff);
   })();
 
   // Apply owner filter (multi-select)
@@ -3728,7 +3741,7 @@ function DashboardTab({
     { key: "all", label: "All Time" },
     { key: "month", label: "This Month" },
     { key: "quarter", label: "This Quarter" },
-    { key: "year", label: "This Year" },
+    { key: "custom", label: "Custom" },
   ];
 
   // ── Referral Leaderboard data ───────────────────────────────────────────
@@ -3844,7 +3857,7 @@ function DashboardTab({
       {/* Filters row */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         {/* Date range filter */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Period:</span>
           {dateRangeOptions.map(({ key, label }) => (
             <button
@@ -3860,6 +3873,23 @@ function DashboardTab({
               {label}
             </button>
           ))}
+          {dateRange === "custom" && (
+            <>
+              <input
+                type="date"
+                value={customStart}
+                onChange={e => setCustomStart(e.target.value)}
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+              />
+              <span className="text-xs text-gray-400">–</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+              />
+            </>
+          )}
         </div>
 
         {/* Owner filter (multi-select) */}
