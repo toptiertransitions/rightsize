@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     valueLow: analysis.value_low ?? null,
     valueMid: analysis.value_mid ?? null,
     valueHigh: analysis.value_high ?? null,
+    primaryRoute: analysis.primary_route ?? null,
   });
 }
 

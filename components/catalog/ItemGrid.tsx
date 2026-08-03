@@ -324,19 +324,26 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "AI analysis failed");
-      setForm(prev => ({
-        ...prev,
-        itemName: data.itemName || prev.itemName,
-        category: data.category || prev.category,
-        conditionNotes: data.conditionNotes ?? prev.conditionNotes,
-        listingTitleEbay: data.listingTitleEbay ?? prev.listingTitleEbay,
-        listingDescriptionEbay: data.listingDescriptionEbay ?? prev.listingDescriptionEbay,
-        staffTips: data.staffTips ?? prev.staffTips,
-        // Only fill value fields when currently blank — never overwrite existing values
-        valueLow:  (!prev.valueLow  && data.valueLow  != null) ? Math.round(data.valueLow  * 0.6) : prev.valueLow,
-        valueMid:  (!prev.valueMid  && data.valueMid  != null) ? Math.round(data.valueMid  * 0.6) : prev.valueMid,
-        valueHigh: (!prev.valueHigh && data.valueHigh != null) ? Math.round(data.valueHigh * 0.6) : prev.valueHigh,
-      }));
+      setForm(prev => {
+        const noAIInfo = !prev.valueLow && !prev.valueMid && !prev.valueHigh && !prev.listingDescriptionEbay;
+        const isDonateDefault = prev.primaryRoute === "Donate" && noAIInfo;
+        let aiRoute = data.primaryRoute as string | undefined;
+        if (aiRoute === "Estate Sale") aiRoute = "FB/Marketplace";
+        return {
+          ...prev,
+          itemName: data.itemName || prev.itemName,
+          category: data.category || prev.category,
+          conditionNotes: data.conditionNotes ?? prev.conditionNotes,
+          listingTitleEbay: data.listingTitleEbay ?? prev.listingTitleEbay,
+          listingDescriptionEbay: data.listingDescriptionEbay ?? prev.listingDescriptionEbay,
+          staffTips: data.staffTips ?? prev.staffTips,
+          primaryRoute: (isDonateDefault && aiRoute) ? aiRoute as PrimaryRoute : prev.primaryRoute,
+          // Only fill value fields when currently blank — never overwrite existing values
+          valueLow:  (!prev.valueLow  && data.valueLow  != null) ? Math.round(data.valueLow  * 0.6) : prev.valueLow,
+          valueMid:  (!prev.valueMid  && data.valueMid  != null) ? Math.round(data.valueMid  * 0.6) : prev.valueMid,
+          valueHigh: (!prev.valueHigh && data.valueHigh != null) ? Math.round(data.valueHigh * 0.6) : prev.valueHigh,
+        };
+      });
     } catch (e) {
       setReanalyzeError(e instanceof Error ? e.message : "AI analysis failed");
     } finally {
@@ -1187,6 +1194,11 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [sendToPFLoading, setSendToPFLoading] = useState(false);
   const [sendToPFError, setSendToPFError] = useState<string | null>(null);
 
+  // ── Bulk AI ───────────────────────────────────────────────────────────────
+  const [bulkAILoading, setBulkAILoading] = useState(false);
+  const [bulkAIProgress, setBulkAIProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [bulkAIResult, setBulkAIResult] = useState<{ updated: number; skipped: number; errors: string[] } | null>(null);
+
   // ── Bulk List ─────────────────────────────────────────────────────────────
   const [listLoading, setListLoading] = useState(false);
   const [listResultModal, setListResultModal] = useState<{
@@ -1440,6 +1452,73 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     } finally {
       setListLoading(false);
     }
+  };
+
+  const handleBulkAI = async () => {
+    const selectedItems = [...selected]
+      .map(id => items.find(i => i.id === id))
+      .filter((i): i is Item => !!i && !!(i.photoUrl));
+    if (selectedItems.length === 0) {
+      alert("No selected items have a photo for AI analysis.");
+      return;
+    }
+    setBulkAILoading(true);
+    setBulkAIResult(null);
+    let updated = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (let idx = 0; idx < selectedItems.length; idx++) {
+      const item = selectedItems[idx];
+      setBulkAIProgress({ done: idx, total: selectedItems.length, current: item.itemName });
+      try {
+        const res = await fetch("/api/items/reanalyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photoUrl: item.photoUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Analysis failed");
+
+        const noAIInfo = !item.valueLow && !item.valueMid && !item.valueHigh && !item.listingDescriptionEbay;
+        const isDonateDefault = item.primaryRoute === "Donate" && noAIInfo;
+        let aiRoute = data.primaryRoute as string | null;
+        if (aiRoute === "Estate Sale") aiRoute = "FB/Marketplace";
+
+        const patch: Record<string, unknown> = {
+          id: item.id,
+          tenantId: item.tenantId,
+          itemName: data.itemName || item.itemName,
+          category: data.category || item.category,
+          conditionNotes: data.conditionNotes ?? item.conditionNotes,
+          listingTitleEbay: data.listingTitleEbay ?? item.listingTitleEbay,
+          listingDescriptionEbay: data.listingDescriptionEbay ?? item.listingDescriptionEbay,
+          staffTips: data.staffTips ?? item.staffTips,
+          valueLow:  (!item.valueLow  && data.valueLow  != null) ? Math.round(data.valueLow  * 0.6) : item.valueLow,
+          valueMid:  (!item.valueMid  && data.valueMid  != null) ? Math.round(data.valueMid  * 0.6) : item.valueMid,
+          valueHigh: (!item.valueHigh && data.valueHigh != null) ? Math.round(data.valueHigh * 0.6) : item.valueHigh,
+          ...(isDonateDefault && aiRoute ? { primaryRoute: aiRoute } : {}),
+        };
+
+        const saveRes = await fetch("/api/items", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!saveRes.ok) throw new Error("Save failed");
+        const saved = await saveRes.json();
+        setItems(prev => prev.map(i => i.id === item.id ? saved.item : i));
+        updated++;
+      } catch (e) {
+        errors.push(`${item.itemName}: ${e instanceof Error ? e.message : "failed"}`);
+        skipped++;
+      }
+    }
+
+    setBulkAIProgress(null);
+    setBulkAILoading(false);
+    setBulkAIResult({ updated, skipped, errors });
+    setSelected(new Set());
   };
 
   const handleBulkRoute = async () => {
@@ -1968,6 +2047,52 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         </div>
       )}
 
+      {/* Bulk AI Progress Overlay */}
+      {bulkAIProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center space-y-4">
+            <svg className="w-8 h-8 text-forest-600 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Analyzing with AI…</p>
+              <p className="text-xs text-gray-500 mt-1 truncate">{bulkAIProgress.current}</p>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div
+                className="bg-forest-600 h-2 rounded-full transition-all"
+                style={{ width: `${(bulkAIProgress.done / bulkAIProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400">{bulkAIProgress.done} of {bulkAIProgress.total}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk AI Result Modal */}
+      {bulkAIResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">AI Analysis Complete</h2>
+            </div>
+            <div className="px-6 py-4 space-y-2 max-h-72 overflow-y-auto">
+              <p className="text-sm text-forest-700 font-medium">{bulkAIResult.updated} item{bulkAIResult.updated !== 1 ? "s" : ""} updated.</p>
+              {bulkAIResult.skipped > 0 && (
+                <p className="text-sm text-red-600 font-medium">{bulkAIResult.skipped} item{bulkAIResult.skipped !== 1 ? "s" : ""} failed:</p>
+              )}
+              {bulkAIResult.errors.map((e, i) => (
+                <p key={i} className="text-xs text-red-500 ml-2">{e}</p>
+              ))}
+            </div>
+            <div className="px-6 pb-6 flex justify-end">
+              <button onClick={() => setBulkAIResult(null)} className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 mb-5">
         {/* Search */}
@@ -2291,6 +2416,18 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
                 {listLoading ? "Listing…" : "List"}
+              </button>
+            )}
+            {isTTTUser && (
+              <button
+                onClick={handleBulkAI}
+                disabled={bulkAILoading}
+                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                AI
               </button>
             )}
             {canEdit && (
