@@ -15,6 +15,7 @@ import {
   getSoldItems,
 } from "@/lib/airtable";
 import type { Tenant, Contract, Invoice } from "@/lib/types";
+import { ctDateStr } from "@/lib/date-ct";
 
 async function batchContracts(tenants: Tenant[]): Promise<Map<string, Contract[]>> {
   const map = new Map<string, Contract[]>();
@@ -113,7 +114,7 @@ export async function GET() {
       signedContracts.push({
         id: c.id,
         tenantId,
-        signedAt: c.signedAt.slice(0, 10),
+        signedAt: ctDateStr(c.signedAt),
         totalCost: c.totalCost,
         salesRepClerkId: salesRepByTenant.get(tenantId) ?? null,
         referralContactId: refCid,
@@ -131,7 +132,7 @@ export async function GET() {
       invoicesFlat.push({
         id: inv.id,
         tenantId,
-        date: inv.createdAt.slice(0, 10),
+        date: ctDateStr(inv.createdAt),
         amount: grossAmt(inv),
         salesRepClerkId: salesRepByTenant.get(tenantId) ?? null,
         referralContactId: refCid,
@@ -159,7 +160,7 @@ export async function GET() {
       const refCid = cc?.referralPartnerId ?? null;
       const refCo  = refCid ? (refContactByIdMap.get(refCid)?.referralCompanyId ?? null) : null;
       return {
-        date: a.activityDate.slice(0, 10),
+        date: ctDateStr(a.activityDate),
         type: a.type,
         createdByClerkId: a.createdByClerkId,
         referralContactId: refCid,

@@ -59,11 +59,14 @@ function bucketKey(dateStr: string, period: Period): string {
   const [y, mo, d] = s.split("-").map(Number);
   if (period === "M") return `${y}-${String(mo).padStart(2, "0")}`;
   if (period === "Q") return `${y}-Q${Math.ceil(mo / 3)}`;
+  // Weekly: find Monday of the week.
+  // Use new Date(y, mo-1, d) to stay in LOCAL timezone, then format with
+  // en-CA locale (YYYY-MM-DD) instead of toISOString() which would shift to UTC.
   const date = new Date(y, mo - 1, d);
   const dow = date.getDay();
   const daysBack = dow === 0 ? 6 : dow - 1;
   date.setDate(d - daysBack);
-  return date.toISOString().slice(0, 10);
+  return date.toLocaleDateString("en-CA"); // YYYY-MM-DD in local (CT) timezone
 }
 
 function bucketLabel(key: string, period: Period): string {
@@ -85,7 +88,10 @@ function lastBuckets(n: number, period: Period): string[] {
     if (period === "W") d.setDate(now.getDate() - i * 7);
     else if (period === "M") d.setMonth(now.getMonth() - i);
     else d.setMonth(now.getMonth() - i * 3);
-    keys.push(bucketKey(d.toISOString().slice(0, 10), period));
+    // Use toLocaleDateString("en-CA") to get YYYY-MM-DD in the browser's local
+    // timezone (CT for this app) instead of toISOString() which is UTC and can
+    // shift the date backward for CT users.
+    keys.push(bucketKey(d.toLocaleDateString("en-CA"), period));
   }
   return [...new Set(keys)];
 }

@@ -12,6 +12,7 @@ import {
 } from "@/lib/airtable";
 import { getProjectNotes } from "@/lib/airtable-notes";
 import type { Tenant, Contract, PlanEntry, TimeEntry } from "@/lib/types";
+import { ctToday } from "@/lib/date-ct";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const HOURLY_RATE = 85;
@@ -39,7 +40,7 @@ function fmtFullDate(iso: string): string {
 }
 
 function today(): string {
-  return new Date().toISOString().split("T")[0];
+  return ctToday();
 }
 
 function scheduledHoursFromEntries(entries: PlanEntry[]): number {

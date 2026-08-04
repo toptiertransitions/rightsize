@@ -11,6 +11,7 @@ import {
   getClientContacts,
 } from "@/lib/airtable";
 import { buildActiveReferralEmail, type ActiveReferralContactRow } from "@/lib/email";
+import { ctNow, ctDateStr } from "@/lib/date-ct";
 
 export async function POST() {
   const { userId } = await auth();
@@ -87,18 +88,22 @@ export async function POST() {
   }
 
   // ── Monthly referral goal calculations ────────────────────────────────────────
-  const now = new Date();
-  const thisYear = now.getFullYear();
-  const thisMonth = now.getMonth(); // 0-indexed
-  const dayOfMonth = now.getDate();
-  const daysInMonth = new Date(thisYear, thisMonth + 1, 0).getDate();
+  // Use CT (not server UTC) for all date comparisons.
+  const ct = ctNow();
+  const thisYear    = ct.year;
+  const thisMonth   = ct.month;    // 1-indexed
+  const dayOfMonth  = ct.day;
+  const daysInMonth = new Date(thisYear, thisMonth, 0).getDate(); // last day of thisMonth
 
-  const lastMonthDate = new Date(thisYear, thisMonth - 1, 1);
-  const lastMonthYear = lastMonthDate.getFullYear();
-  const lastMonthMonth = lastMonthDate.getMonth();
+  const lastMonthYear  = thisMonth === 1 ? thisYear - 1 : thisYear;
+  const lastMonthMonth = thisMonth === 1 ? 12 : thisMonth - 1; // 1-indexed
 
-  const thisMonthLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
-  const lastMonthLabel = lastMonthDate.toLocaleString("en-US", { month: "short", year: "numeric" });
+  // Build YYYY-MM keys for comparing against ctDateStr() output
+  const thisMonthKey = `${thisYear}-${String(thisMonth).padStart(2, "0")}`;
+  const lastMonthKey = `${lastMonthYear}-${String(lastMonthMonth).padStart(2, "0")}`;
+
+  const thisMonthLabel = new Date(thisYear, thisMonth - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" });
+  const lastMonthLabel = new Date(lastMonthYear, lastMonthMonth - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" });
 
   const MONTHLY_GOALS: Record<string, number> = { High: 3, Medium: 1, Low: 0 };
 
@@ -131,15 +136,15 @@ export async function POST() {
 
     for (const cc of clientContacts) {
       if (!cc.referralPartnerId || !refContactIds.has(cc.referralPartnerId)) continue;
-      const d = new Date(cc.createdAt);
+      const mk = ctDateStr(cc.createdAt).slice(0, 7); // YYYY-MM in CT
       const ccOpps = oppsByClientContactId.get(cc.id) ?? [];
       const oppsValue = ccOpps.reduce((s, o) => s + o.estimatedValue, 0);
-      if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) {
+      if (mk === thisMonthKey) {
         thisMonthCount++;
         thisMonthValue += oppsValue;
         const oppWithCity = ccOpps.find(o => o.city);
         thisMonthReferrals.push({ clientName: cc.name, city: oppWithCity?.city, state: oppWithCity?.state, value: oppsValue });
-      } else if (d.getFullYear() === lastMonthYear && d.getMonth() === lastMonthMonth) {
+      } else if (mk === lastMonthKey) {
         lastMonthCount++;
         lastMonthValue += oppsValue;
       }

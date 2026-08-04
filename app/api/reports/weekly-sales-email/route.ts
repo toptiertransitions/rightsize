@@ -15,6 +15,7 @@ import {
   getAllActivities,
 } from "@/lib/airtable";
 import type { Tenant, Contract, Invoice, ClientOpportunity, ClientContact, ReferralCompany, ReferralContact } from "@/lib/types";
+import { ctDateStr, ctNow } from "@/lib/date-ct";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -58,24 +59,12 @@ function parseDate(s: string | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Returns YYYY-MM in CT for any date-only or full datetime string.
 function monthKey(d: Date | string): string {
-  // Date-only strings (YYYY-MM-DD) represent the user's local calendar date.
-  // Parsing them as Date objects would convert through UTC midnight → CT gives the
-  // previous day. Slice directly instead.
-  if (typeof d === "string") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.slice(0, 7);
-    const parsed = new Date(d);
-    if (isNaN(parsed.getTime())) return "0000-00";
-    d = parsed;
+  if (d instanceof Date) {
+    return d.toLocaleDateString("en-CA", { timeZone: "America/Chicago" }).slice(0, 7);
   }
-  // For full datetime values, resolve in CT so e.g. a July 31 11pm CT invoice
-  // stored as Aug 1 UTC doesn't get bucketed into August.
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Chicago", year: "numeric", month: "2-digit",
-  }).formatToParts(d);
-  const y = parts.find((p) => p.type === "year")!.value;
-  const m = parts.find((p) => p.type === "month")!.value;
-  return `${y}-${m}`;
+  return ctDateStr(d).slice(0, 7);
 }
 
 function daysInMonth(year: number, month: number): number {
@@ -716,17 +705,12 @@ function buildEmail({
 // ─── Shared builder (used by both GET preview and POST send) ─────────────────
 
 async function buildReportHtml(_userId: string): Promise<{ html: string; reportDate: string }> {
-  // ── Dates ──
+  // ── Dates — all in CT ──
   const now = new Date();
-  const ctNow = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(now);
-  const year  = parseInt(ctNow.find((p) => p.type === "year")!.value);
-  const month = parseInt(ctNow.find((p) => p.type === "month")!.value);
-  const day   = parseInt(ctNow.find((p) => p.type === "day")!.value);
-  const curMonthKey = `${year}-${String(month).padStart(2, "0")}`;
-  const daysTotal   = daysInMonth(year, month);
-  const reportDate  = now.toLocaleDateString("en-US", {
+  const { year, month, day } = ctNow();
+  const curMonthKey       = `${year}-${String(month).padStart(2, "0")}`;
+  const daysTotal         = daysInMonth(year, month);
+  const reportDate        = now.toLocaleDateString("en-US", {
     timeZone: "America/Chicago", weekday: "long", month: "long", day: "numeric", year: "numeric",
   });
   const currentMonthLabel = now.toLocaleDateString("en-US", {
@@ -936,15 +920,15 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   }
 
   // ── Weekly activity by rep ──
-  // Rolling 7-day window ending today (inclusive on both ends).
-  // e.g. if today is Jun 8, window is Jun 1 – Jun 8.
-  const todayStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const sevenDaysAgoDate = new Date(Date.UTC(year, month - 1, day - 6));
-  const weekStartStr = sevenDaysAgoDate.toISOString().slice(0, 10);
+  // Rolling 7-day window ending today CT (inclusive on both ends).
+  const todayStr    = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  // Compute 6 days before today using local calendar arithmetic (avoids UTC shift).
+  const weekStart   = new Date(year, month - 1, day - 6);
+  const weekStartStr = weekStart.toLocaleDateString("en-CA"); // YYYY-MM-DD local
   const weekLabel =
-    sevenDaysAgoDate.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" }) +
+    weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
     " – " +
-    new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+    new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   const oppContactMap = new Map(opps.map((o) => [o.id, o.clientContactId]));
 
