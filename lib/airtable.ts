@@ -3786,7 +3786,7 @@ export async function deleteOpportunity(id: string): Promise<void> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields: { Deleted: true, DeletedAt: new Date().toISOString() } }),
+    body: JSON.stringify({ fields: { Deleted: true, DeletedAt: new Date().toISOString().slice(0, 10) } }),
   });
   if (!res.ok) throw new Error(await res.text());
 }
