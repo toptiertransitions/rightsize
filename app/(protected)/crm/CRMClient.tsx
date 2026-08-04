@@ -520,6 +520,132 @@ function OpportunitiesTab({
   );
 }
 
+// ─── Address Validation Modal ────────────────────────────────────────────────
+type AddrModalState = {
+  kind: "save" | "convert";
+  status: "suggestion" | "not_found";
+  entered: { address: string; city: string; state: string; zip: string };
+  suggested?: { address: string; city: string; state: string; zip: string };
+  suggestedFormatted?: string;
+  lat?: number;
+  lng?: number;
+};
+
+function AddressValidationModal({
+  modal,
+  onConfirm,
+  onCancel,
+}: {
+  modal: AddrModalState;
+  onConfirm: (choice: "suggested" | "as_entered" | "anyway") => void;
+  onCancel: () => void;
+}) {
+  const [choice, setChoice] = useState<"suggested" | "as_entered">("suggested");
+  const enteredFmt = [modal.entered.address, modal.entered.city, modal.entered.state, modal.entered.zip].filter(Boolean).join(", ");
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        {modal.status === "not_found" ? (
+          <>
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </span>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Address not verified</h3>
+                <p className="text-sm text-gray-500 mt-1">Google Maps could not locate <span className="font-medium text-gray-700">{enteredFmt}</span>. Double-check the address before saving.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => onConfirm("anyway")}
+                className="flex-1 bg-amber-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-amber-600"
+              >
+                Save anyway
+              </button>
+              <button
+                onClick={onCancel}
+                className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel & edit
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="text-base font-semibold text-gray-900">Confirm address</h3>
+            <p className="text-sm text-gray-500">Google Maps found a variation. Choose which address to save:</p>
+
+            {modal.lat && modal.lng && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/crm/address-map?lat=${modal.lat}&lng=${modal.lng}`}
+                alt="Map preview"
+                className="w-full rounded-lg object-cover h-36 bg-gray-100"
+              />
+            )}
+
+            <div className="space-y-2">
+              {modal.suggested && (
+                <label className="flex items-start gap-3 p-3 rounded-lg border border-green-300 bg-green-50 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="addr_choice"
+                    value="suggested"
+                    checked={choice === "suggested"}
+                    onChange={() => setChoice("suggested")}
+                    className="mt-0.5 accent-green-600"
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-green-800 mb-0.5 uppercase tracking-wide">Suggested</p>
+                    <p className="text-sm text-gray-800">
+                      {modal.suggestedFormatted ??
+                        [modal.suggested.address, modal.suggested.city, modal.suggested.state, modal.suggested.zip].filter(Boolean).join(", ")}
+                    </p>
+                  </div>
+                </label>
+              )}
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 cursor-pointer">
+                <input
+                  type="radio"
+                  name="addr_choice"
+                  value="as_entered"
+                  checked={choice === "as_entered"}
+                  onChange={() => setChoice("as_entered")}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">As entered</p>
+                  <p className="text-sm text-gray-700">{enteredFmt}</p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => onConfirm(choice)}
+                className="flex-1 bg-forest-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-forest-700"
+              >
+                Confirm & save
+              </button>
+              <button
+                onClick={onCancel}
+                className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Opportunity Panel ────────────────────────────────────────────────────────
 function OpportunityPanel({
   opportunity,
@@ -581,6 +707,8 @@ function OpportunityPanel({
     linkedTenant ? { id: linkedTenant.id, name: linkedTenant.name } : null
   );
   const [gmailSyncMsg, setGmailSyncMsg] = useState<string | null>(null);
+  const [addrValidating, setAddrValidating] = useState(false);
+  const [addrModal, setAddrModal] = useState<AddrModalState | null>(null);
 
   // Derive owner from the selected contact; fall back to existing opportunity owner
   const derivedOwnerClerkId = clientContacts.find(c => c.id === clientContactId)?.assignedToClerkId || opportunity?.assignedToClerkId || "";
@@ -599,7 +727,7 @@ function OpportunityPanel({
     loadActivities();
   }, [loadActivities]);
 
-  async function handleSave() {
+  async function doSave(addrOverride?: { address: string; city: string; state: string; zip: string }) {
     if (!clientContactId) return;
     setSaving(true);
     setSaveError(null);
@@ -616,11 +744,11 @@ function OpportunityPanel({
         wonAt: stage === "Won" && !opportunity?.wonAt ? new Date().toISOString() : opportunity?.wonAt,
         lostAt: stage === "Lost" && !opportunity?.lostAt ? new Date().toISOString() : opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
-        address: oppAddress,
+        address: addrOverride?.address ?? oppAddress,
         addressUnitNumber: oppAddressUnit,
-        city: oppCity,
-        state: oppState,
-        zip: oppZip,
+        city: addrOverride?.city ?? oppCity,
+        state: addrOverride?.state ?? oppState,
+        zip: addrOverride?.zip ?? oppZip,
         destAddress: oppDestAddress,
         destAddressUnitNumber: oppDestAddressUnit,
         destCity: oppDestCity,
@@ -657,6 +785,59 @@ function OpportunityPanel({
       setSaveError(err instanceof Error ? err.message : "Failed to save. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!clientContactId) return;
+    if (oppAddress) {
+      setAddrValidating(true);
+      try {
+        const res = await fetch("/api/crm/validate-address", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: oppAddress, city: oppCity, state: oppState, zip: oppZip }),
+        });
+        const data = await res.json();
+        if (data.status !== "match") {
+          setAddrModal({
+            kind: "save",
+            status: data.status as "suggestion" | "not_found",
+            entered: { address: oppAddress, city: oppCity, state: oppState, zip: oppZip },
+            suggested: data.suggestedAddress ? {
+              address: data.suggestedAddress,
+              city: data.suggestedCity,
+              state: data.suggestedState,
+              zip: data.suggestedZip,
+            } : undefined,
+            suggestedFormatted: data.suggestedFormatted,
+            lat: data.lat,
+            lng: data.lng,
+          });
+          setAddrValidating(false);
+          return;
+        }
+      } catch { /* skip validation on error */ }
+      setAddrValidating(false);
+    }
+    await doSave();
+  }
+
+  async function handleModalConfirm(choice: "suggested" | "as_entered" | "anyway") {
+    const modal = addrModal!;
+    setAddrModal(null);
+    let addrOverride: { address: string; city: string; state: string; zip: string } | undefined;
+    if (choice === "suggested" && modal.suggested) {
+      addrOverride = modal.suggested;
+      setOppAddress(modal.suggested.address);
+      setOppCity(modal.suggested.city);
+      setOppState(modal.suggested.state);
+      setOppZip(modal.suggested.zip);
+    }
+    if (modal.kind === "save") {
+      await doSave(addrOverride);
+    } else {
+      await doConvert(addrOverride);
     }
   }
 
@@ -730,13 +911,18 @@ function OpportunityPanel({
     }
   }
 
-  async function handleConvert() {
+  async function doConvert(addrOverride?: { address: string; city: string; state: string; zip: string }) {
     if (convertedProject) return; // already converted — guard against duplicates
     const contact = clientContacts.find((c) => c.id === clientContactId);
     if (!contact) return;
     setConverting(true);
     setSaveError(null);
     try {
+      const resolvedAddress = addrOverride?.address ?? oppAddress;
+      const resolvedCity = addrOverride?.city ?? oppCity;
+      const resolvedState = addrOverride?.state ?? oppState;
+      const resolvedZip = addrOverride?.zip ?? oppZip;
+
       // Step 1: Save/update the opportunity
       const oppPayload = {
         clientContactId,
@@ -750,11 +936,11 @@ function OpportunityPanel({
         wonAt: opportunity?.wonAt,
         lostAt: opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
-        address: oppAddress,
+        address: resolvedAddress,
         addressUnitNumber: oppAddressUnit,
-        city: oppCity,
-        state: oppState,
-        zip: oppZip,
+        city: resolvedCity,
+        state: resolvedState,
+        zip: resolvedZip,
         destAddress: oppDestAddress,
         destAddressUnitNumber: oppDestAddressUnit,
         destCity: oppDestCity,
@@ -799,11 +985,11 @@ function OpportunityPanel({
           displayName: contact.name,
           clientEmail: contact.email || undefined,
           clientPhone: contact.phone || undefined,
-          address: oppAddress || undefined,
+          address: resolvedAddress || undefined,
           addressUnitNumber: oppAddressUnit || undefined,
-          city: oppCity || undefined,
-          state: oppState || undefined,
-          zip: oppZip || undefined,
+          city: resolvedCity || undefined,
+          state: resolvedState || undefined,
+          zip: resolvedZip || undefined,
           destAddress: oppDestAddress || undefined,
           destAddressUnitNumber: oppDestAddressUnit || undefined,
           destCity: oppDestCity || undefined,
@@ -835,6 +1021,41 @@ function OpportunityPanel({
     } finally {
       setConverting(false);
     }
+  }
+
+  async function handleConvert() {
+    if (convertedProject || !clientContactId) return;
+    if (oppAddress) {
+      setAddrValidating(true);
+      try {
+        const res = await fetch("/api/crm/validate-address", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: oppAddress, city: oppCity, state: oppState, zip: oppZip }),
+        });
+        const data = await res.json();
+        if (data.status !== "match") {
+          setAddrModal({
+            kind: "convert",
+            status: data.status as "suggestion" | "not_found",
+            entered: { address: oppAddress, city: oppCity, state: oppState, zip: oppZip },
+            suggested: data.suggestedAddress ? {
+              address: data.suggestedAddress,
+              city: data.suggestedCity,
+              state: data.suggestedState,
+              zip: data.suggestedZip,
+            } : undefined,
+            suggestedFormatted: data.suggestedFormatted,
+            lat: data.lat,
+            lng: data.lng,
+          });
+          setAddrValidating(false);
+          return;
+        }
+      } catch { /* skip validation on error */ }
+      setAddrValidating(false);
+    }
+    await doConvert();
   }
 
   return (
@@ -1123,10 +1344,10 @@ function OpportunityPanel({
 
           <button
             onClick={handleSave}
-            disabled={saving || !clientContactId}
+            disabled={saving || addrValidating || !clientContactId}
             className="w-full bg-forest-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-forest-700 disabled:opacity-50"
           >
-            {saving ? "Saving…" : opportunity ? "Update Opportunity" : "Create Opportunity"}
+            {addrValidating ? "Checking address…" : saving ? "Saving…" : opportunity ? "Update Opportunity" : "Create Opportunity"}
           </button>
           {saveError && (
             <p className="text-xs text-red-600 mt-1">{saveError}</p>
@@ -1145,10 +1366,10 @@ function OpportunityPanel({
             ) : stage === "Proposing" ? (
               <button
                 onClick={handleConvert}
-                disabled={converting || !clientContactId}
+                disabled={converting || addrValidating || !clientContactId}
                 className="w-full border border-purple-400 bg-purple-50 text-purple-700 rounded-lg py-2 text-sm font-medium hover:bg-purple-100 disabled:opacity-50 transition-colors"
               >
-                {converting ? "Saving & creating project…" : "Convert to Project and Update Opp →"}
+                {converting ? "Saving & creating project…" : addrValidating ? "Checking address…" : "Convert to Project and Update Opp →"}
               </button>
             ) : null
           )}
@@ -1249,6 +1470,14 @@ function OpportunityPanel({
           )}
         </div>
       </div>
+
+      {addrModal && (
+        <AddressValidationModal
+          modal={addrModal}
+          onConfirm={handleModalConfirm}
+          onCancel={() => setAddrModal(null)}
+        />
+      )}
 
       {editingActivity && (
         <ActivityEditModal
