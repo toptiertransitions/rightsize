@@ -406,7 +406,7 @@ export default function OwnerDashboardClient() {
     }), [data, salesRepFilter, refCompanyFilter, refContactFilter]);
 
   const lostReasons = useMemo(() =>
-    [...new Set(oppsRows.filter(o => o.lostReason).map(o => o.lostReason!))].sort(),
+    [...new Set(oppsRows.filter(o => o.stage === "Lost").map(o => o.lostReason ?? "Unknown"))].sort(),
     [oppsRows]);
 
   const oppsCreatedData = useMemo(() => {
@@ -443,8 +443,10 @@ export default function OwnerDashboardClient() {
   const oppsLostData = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
     for (const o of oppsRows) {
-      if (!o.lostAt) continue;
-      const k = bucketKey(o.lostAt, period);
+      if (o.stage !== "Lost") continue;
+      const dateStr = o.lostAt || o.createdAt;
+      if (!dateStr) continue;
+      const k = bucketKey(dateStr, period);
       const reason = o.lostReason ?? "Unknown";
       if (!map[k]) map[k] = {};
       map[k][reason] = (map[k][reason] ?? 0) + 1;

@@ -3610,7 +3610,7 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     estimatedValue: typeof f["EstimatedValue"] === "number" ? f["EstimatedValue"] : 0,
     wonAt: toStr(f["WonAt"]) || undefined,
     lostAt: toStr(f["LostAt"]) || undefined,
-    lostReason: toStr(f["Lost Reason"]) || undefined,
+    lostReason: toStr(f["LostReason"]) || undefined,
     assignedToClerkId: toStr(f["AssignedToClerkId"]),
     createdAt: toStr(f["CreatedAt"]),
     address: toStr(f["Address"]) || undefined,
@@ -3761,7 +3761,7 @@ export async function updateOpportunity(
   if (data.estimatedValue !== undefined) fields["EstimatedValue"] = data.estimatedValue;
   if (data.wonAt !== undefined) fields["WonAt"] = data.wonAt;
   if (data.lostAt !== undefined) fields["LostAt"] = data.lostAt;
-  if (data.lostReason !== undefined) fields["Lost Reason"] = data.lostReason;
+  if (data.lostReason !== undefined) fields["LostReason"] = data.lostReason;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   if (data.address !== undefined) fields["Address"] = data.address;
   if (data.addressUnitNumber !== undefined) fields["AddressUnitNumber"] = data.addressUnitNumber;
