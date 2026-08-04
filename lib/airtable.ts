@@ -1610,6 +1610,17 @@ export async function getAllItems(): Promise<Item[]> {
   return records.map(mapItem);
 }
 
+export async function getSoldItems(): Promise<Item[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({
+      filterByFormula: `{Status} = "Sold"`,
+      sort: [{ field: "SaleDate", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapItem);
+}
+
 export async function getItemsByPrimaryRoute(route: string): Promise<Item[]> {
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
