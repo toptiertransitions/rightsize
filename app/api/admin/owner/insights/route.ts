@@ -53,20 +53,30 @@ export async function POST(req: NextRequest) {
     ? `${Math.round(kpis.oppsWon / (kpis.oppsWon + kpis.oppsLost) * 100)}%`
     : "n/a";
 
-  const revLines = revData.map(r =>
+  // Drop the last bucket — it is always the current partial period and would skew trend comparisons
+  const currentPeriodLabel = revData.length > 0 ? String(revData[revData.length - 1].label) : null;
+  const rev           = revData.slice(0, -1);
+  const oppsCreated   = oppsCreatedData.slice(0, -1);
+  const oppsWon       = oppsWonData.slice(0, -1);
+  const oppsLost      = oppsLostData.slice(0, -1);
+  const act           = actData.slice(0, -1);
+  const partners      = activePartnersData.slice(0, -1);
+  const items         = itemSalesData.slice(0, -1);
+
+  const revLines = rev.map(r =>
     `  ${r.label}: Signed=${fmt$(r.Signed as number)}, Earned=${fmt$(r.Earned as number)}`
   ).join("\n");
 
-  const oppsCreatedLines = oppsCreatedData.map(r =>
+  const oppsCreatedLines = oppsCreated.map(r =>
     `  ${r.label}: ${r.Count} opps, ${fmt$(r["Est. Value"] as number)}`
   ).join("\n");
 
-  const oppsWonLines = oppsWonData.map(r =>
+  const oppsWonLines = oppsWon.map(r =>
     `  ${r.label}: ${r.Count} won, ${fmt$(r["Est. Value"] as number)}`
   ).join("\n");
 
   const oppsLostSection = lostReasons.length > 0
-    ? `OPPORTUNITIES LOST BY REASON:\n` + oppsLostData
+    ? `OPPORTUNITIES LOST BY REASON:\n` + oppsLost
         .map(r => {
           const parts = lostReasons
             .map(reason => `${reason}=${r[reason] ?? 0}`)
@@ -77,7 +87,7 @@ export async function POST(req: NextRequest) {
         .join("\n")
     : "";
 
-  const actLines = actData.slice(-6).map(r => {
+  const actLines = act.slice(-6).map(r => {
     const types = activityTypes
       .map(t => `${t}=${r[t] ?? 0}`)
       .filter(s => !s.endsWith("=0"))
@@ -85,11 +95,11 @@ export async function POST(req: NextRequest) {
     return `  ${r.label}: ${types || "none"}`;
   }).join("\n");
 
-  const partnerLines = activePartnersData.map(r =>
+  const partnerLines = partners.map(r =>
     `  ${r.label}: ${r["Active Partners"]} partners`
   ).join("\n");
 
-  const itemLines = itemSalesData.slice(-6).map(r => {
+  const itemLines = items.slice(-6).map(r => {
     const chRevs = channels
       .map(ch => `${ch}=${fmt$(r[`rev_${ch}`] as number ?? 0)}`)
       .filter(s => !s.endsWith("=$0"))
@@ -100,6 +110,7 @@ export async function POST(req: NextRequest) {
   const prompt = `You are a sharp business analyst reviewing performance data for Top Tier Transitions (TTT), a senior downsizing and estate transitions company in the Chicago area. TTT helps families downsize by cataloging, routing, and selling household items. Revenue has two streams: (1) service contracts — signed upfront, earned/invoiced as work is completed; (2) item sales — consignment and direct sales via Facebook Marketplace, eBay, estate sales, ProFound Finds storefront, Square, and Stripe. TTT has a referral partner network (realtors, senior advisors, financial planners) who refer clients. The CRM tracks opportunities through a pipeline.
 
 CURRENT VIEW: ${period} periods${filterSummary ? ` | Filters: ${filterSummary}` : " | No filters (all data)"}
+NOTE: The current in-progress ${period.toLowerCase()} period${currentPeriodLabel ? ` ("${currentPeriodLabel}")` : ""} has been excluded from all trend data below because it is partial and would skew comparisons. All figures below reflect only fully completed periods.
 
 KPI TOTALS (all shown periods combined):
 - Signed Contract Value: ${fmt$(kpis.totalSigned)}
