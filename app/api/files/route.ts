@@ -11,6 +11,7 @@ import {
 } from "@/lib/airtable";
 import type { FileTag } from "@/lib/types";
 
+export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];

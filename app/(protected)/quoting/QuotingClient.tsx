@@ -1090,8 +1090,11 @@ function ClientFilesSection({
         fd.append("tenantId", tenantId);
         fd.append("tag", "Client File");
         const res = await fetch("/api/files", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
+        const data = await res.json().catch(() => ({})) as { file?: ProjectFile; error?: string };
+        if (!res.ok) {
+          if (res.status === 413) throw new Error("File is too large to upload.");
+          throw new Error(data.error || "Upload failed. Please try again.");
+        }
         setFiles(prev => [...prev, data.file as ProjectFile]);
       }
     } catch (e) {
