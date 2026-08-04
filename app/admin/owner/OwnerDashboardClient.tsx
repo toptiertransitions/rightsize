@@ -399,6 +399,7 @@ export default function OwnerDashboardClient() {
 
   const oppsRows = useMemo(() =>
     (data?.opportunities ?? []).filter(r => {
+      if (!r.estimatedValue) return false; // exclude $0 / null estimates
       if (salesRepFilter.length   && !salesRepFilter.includes(r.salesRepClerkId    ?? "")) return false;
       if (refCompanyFilter.length && !refCompanyFilter.includes(r.referralCompanyId ?? "")) return false;
       if (refContactFilter.length && !refContactFilter.includes(r.referralContactId ?? "")) return false;
