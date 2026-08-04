@@ -168,6 +168,27 @@ export async function GET() {
       };
     });
 
+  // ── Opportunities ─────────────────────────────────────────────────────────────
+  const oppsFlat = opps
+    .filter(o => o.createdAt)
+    .map(o => {
+      const cc = contactMap.get(o.clientContactId);
+      const refCid = cc?.referralPartnerId ?? null;
+      const refCo  = refCid ? (refContactByIdMap.get(refCid)?.referralCompanyId ?? null) : null;
+      return {
+        id: o.id,
+        createdAt:      ctDateStr(o.createdAt),
+        wonAt:          o.wonAt     ? ctDateStr(o.wonAt)  : null,
+        lostAt:         o.lostAt    ? ctDateStr(o.lostAt) : null,
+        stage:          o.stage,
+        estimatedValue: o.estimatedValue ?? 0,
+        lostReason:     o.lostReason ?? null,
+        salesRepClerkId: o.assignedToClerkId ?? null,
+        referralContactId: refCid,
+        referralCompanyId: refCo,
+      };
+    });
+
   const soldFlat = soldItems
     .filter(item => item.saleDate && (item.salePrice ?? 0) > 0)
     .map(item => {
@@ -213,5 +234,6 @@ export async function GET() {
     timeEntries: timeFlat,
     activities: activitiesFlat,
     soldItems: soldFlat,
+    opportunities: oppsFlat,
   });
 }

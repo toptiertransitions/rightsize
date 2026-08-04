@@ -36,6 +36,11 @@ interface DashboardData {
     saleDate: string; salePrice: number; companyTake: number; channel: string;
     staffSellerId: string | null; salesRepClerkId: string | null;
   }>;
+  opportunities: Array<{
+    id: string; createdAt: string; wonAt: string | null; lostAt: string | null;
+    stage: string; estimatedValue: number; lostReason: string | null;
+    salesRepClerkId: string | null; referralContactId: string | null; referralCompanyId: string | null;
+  }>;
 }
 
 type Period = "W" | "M" | "Q";
@@ -116,6 +121,8 @@ const CHANNEL_COLORS: Record<string, string> = {
   "Stripe":       "#635BFF",
   "Other":        "#9ca3af",
 };
+
+const LOST_REASON_COLORS = ["#ef4444", "#f97316", "#eab308", "#6366f1", "#14b8a6", "#ec4899", "#8b5cf6", "#84cc16"];
 
 // ─── Autocomplete MultiSelect ─────────────────────────────────────────────────
 
@@ -281,6 +288,19 @@ function HoursTip({ active, payload, label }: TipProps) {
     </div>
   );
 }
+function OppsTip({ active, payload, label }: TipProps) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs">
+      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color }}>
+          {p.name}: {p.name.includes("Value") ? fmt$(p.value) : fmtNum(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 
@@ -376,6 +396,64 @@ export default function OwnerDashboardClient() {
   const channelColorMap = useMemo(() =>
     Object.fromEntries(channels.map(ch => [ch, CHANNEL_COLORS[ch] ?? "#9ca3af"])),
     [channels]);
+
+  const oppsRows = useMemo(() =>
+    (data?.opportunities ?? []).filter(r => {
+      if (salesRepFilter.length   && !salesRepFilter.includes(r.salesRepClerkId    ?? "")) return false;
+      if (refCompanyFilter.length && !refCompanyFilter.includes(r.referralCompanyId ?? "")) return false;
+      if (refContactFilter.length && !refContactFilter.includes(r.referralContactId ?? "")) return false;
+      return true;
+    }), [data, salesRepFilter, refCompanyFilter, refContactFilter]);
+
+  const lostReasons = useMemo(() =>
+    [...new Set(oppsRows.filter(o => o.lostReason).map(o => o.lostReason!))].sort(),
+    [oppsRows]);
+
+  const oppsCreatedData = useMemo(() => {
+    const countMap: Record<string, number> = {};
+    const valueMap: Record<string, number> = {};
+    for (const o of oppsRows) {
+      const k = bucketKey(o.createdAt, period);
+      countMap[k] = (countMap[k] ?? 0) + 1;
+      valueMap[k] = (valueMap[k] ?? 0) + o.estimatedValue;
+    }
+    return buckets.map(k => ({
+      label: bucketLabel(k, period),
+      Count: countMap[k] ?? 0,
+      "Est. Value": Math.round(valueMap[k] ?? 0),
+    }));
+  }, [oppsRows, period, buckets]);
+
+  const oppsWonData = useMemo(() => {
+    const countMap: Record<string, number> = {};
+    const valueMap: Record<string, number> = {};
+    for (const o of oppsRows) {
+      if (!o.wonAt) continue;
+      const k = bucketKey(o.wonAt, period);
+      countMap[k] = (countMap[k] ?? 0) + 1;
+      valueMap[k] = (valueMap[k] ?? 0) + o.estimatedValue;
+    }
+    return buckets.map(k => ({
+      label: bucketLabel(k, period),
+      Count: countMap[k] ?? 0,
+      "Est. Value": Math.round(valueMap[k] ?? 0),
+    }));
+  }, [oppsRows, period, buckets]);
+
+  const oppsLostData = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
+    for (const o of oppsRows) {
+      if (!o.lostAt) continue;
+      const k = bucketKey(o.lostAt, period);
+      const reason = o.lostReason ?? "Unknown";
+      if (!map[k]) map[k] = {};
+      map[k][reason] = (map[k][reason] ?? 0) + 1;
+    }
+    return buckets.map(k => ({
+      label: bucketLabel(k, period),
+      ...Object.fromEntries(lostReasons.map(r => [r, map[k]?.[r] ?? 0])),
+    }));
+  }, [oppsRows, period, buckets, lostReasons]);
 
   const revData = useMemo(() => {
     const signedMap: Record<string, number> = {};
@@ -637,6 +715,39 @@ export default function OwnerDashboardClient() {
           </ChartCard>
         </div>
 
+        {/* Opportunities Created + Won */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <ChartCard title="Opportunities Created" subtitle="New opps per period — count (bars) & estimated value (line)">
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={oppsCreatedData} margin={{ top: 4, right: 56, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={moneyTick} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} width={52} />
+                <Tooltip content={<OppsTip />} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                <Bar yAxisId="left" dataKey="Count" fill={SAGE} fillOpacity={0.85} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="Est. Value" stroke={GOLD} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title="Opportunities Won" subtitle="Won opps per period — count (bars) & value at close (line)">
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={oppsWonData} margin={{ top: 4, right: 56, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={moneyTick} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} width={52} />
+                <Tooltip content={<OppsTip />} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                <Bar yAxisId="left" dataKey="Count" fill="#16a34a" fillOpacity={0.85} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="Est. Value" stroke={GOLD} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+
         {/* Row 2: Hours + Active Partners */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <ChartCard title="Billable Hours by Staff" subtitle="Hours logged per period, stacked by team member">
@@ -731,6 +842,24 @@ export default function OwnerDashboardClient() {
                   fill={`url(#grad_${ch.replace(/\W/g, "_")})`} dot={false} />
               ))}
             </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* Opportunities Lost by Reason */}
+        <ChartCard title="Opportunities Lost by Reason" subtitle="Lost opps per period, stacked by lost reason">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={oppsLostData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip content={<CountTip />} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+              {lostReasons.map((r, i) => (
+                <Bar key={r} dataKey={r} stackId="a"
+                  fill={LOST_REASON_COLORS[i % LOST_REASON_COLORS.length]}
+                  radius={i === lostReasons.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+              ))}
+            </BarChart>
           </ResponsiveContainer>
         </ChartCard>
 
