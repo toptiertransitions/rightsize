@@ -533,8 +533,6 @@ type AddrModalState = {
   entered: { address: string; city: string; state: string; zip: string };
   suggested?: { address: string; city: string; state: string; zip: string };
   suggestedFormatted?: string;
-  lat?: number;
-  lng?: number;
 };
 
 function AddressValidationModal({
@@ -585,15 +583,6 @@ function AddressValidationModal({
           <>
             <h3 className="text-base font-semibold text-gray-900">Confirm address</h3>
             <p className="text-sm text-gray-500">Google Maps found a variation. Choose which address to save:</p>
-
-            {modal.lat && modal.lng && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`/api/crm/address-map?lat=${modal.lat}&lng=${modal.lng}`}
-                alt="Map preview"
-                className="w-full rounded-lg object-cover h-36 bg-gray-100"
-              />
-            )}
 
             <div className="space-y-2">
               {modal.suggested && (
@@ -817,8 +806,6 @@ function OpportunityPanel({
               zip: data.suggestedZip,
             } : undefined,
             suggestedFormatted: data.suggestedFormatted,
-            lat: data.lat,
-            lng: data.lng,
           });
           setAddrValidating(false);
           return;
@@ -1052,8 +1039,6 @@ function OpportunityPanel({
               zip: data.suggestedZip,
             } : undefined,
             suggestedFormatted: data.suggestedFormatted,
-            lat: data.lat,
-            lng: data.lng,
           });
           setAddrValidating(false);
           return;
