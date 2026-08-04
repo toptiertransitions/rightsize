@@ -319,6 +319,8 @@ export default function OwnerDashboardClient() {
   const [staffFilter,     setStaffFilter]     = useState<string[]>([]);
   const [refCompanyFilter,setRefCompanyFilter]= useState<string[]>([]);
   const [refContactFilter,setRefContactFilter]= useState<string[]>([]);
+  const [insights,        setInsights]        = useState<string[]>([]);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   useEffect(() => {
     if (!authed) return;
@@ -543,13 +545,27 @@ export default function OwnerDashboardClient() {
   }, [soldRows, period, buckets, channels]);
 
   // KPI totals
-  const totalSigned       = useMemo(() => contracts.reduce((s, c) => s + c.totalCost, 0), [contracts]);
-  const totalEarned       = useMemo(() => invoices.reduce((s, i)  => s + i.amount,    0), [invoices]);
-  const totalHours        = useMemo(() => timeRows.reduce((s, e)  => s + e.durationMinutes, 0), [timeRows]);
-  const totalItemRevenue  = useMemo(() => soldRows.reduce((s, i)  => s + i.salePrice,  0), [soldRows]);
-  const totalCompanyTake  = useMemo(() => soldRows.reduce((s, i)  => s + i.companyTake, 0), [soldRows]);
-  const activePartnerCount = useMemo(() =>
+  const totalSigned          = useMemo(() => contracts.reduce((s, c) => s + c.totalCost, 0), [contracts]);
+  const totalEarned          = useMemo(() => invoices.reduce((s, i)  => s + i.amount,    0), [invoices]);
+  const totalHours           = useMemo(() => timeRows.reduce((s, e)  => s + e.durationMinutes, 0), [timeRows]);
+  const totalItemRevenue     = useMemo(() => soldRows.reduce((s, i)  => s + i.salePrice,  0), [soldRows]);
+  const totalCompanyTake     = useMemo(() => soldRows.reduce((s, i)  => s + i.companyTake, 0), [soldRows]);
+  const activePartnerCount   = useMemo(() =>
     new Set(actRows.map(a => a.referralCompanyId).filter(Boolean)).size, [actRows]);
+  const totalOppsCreated     = useMemo(() => oppsRows.length, [oppsRows]);
+  const totalOppsCreatedValue= useMemo(() => oppsRows.reduce((s, o) => s + o.estimatedValue, 0), [oppsRows]);
+  const totalOppsWon         = useMemo(() => oppsRows.filter(o => o.stage === "Won").length, [oppsRows]);
+  const totalOppsWonValue    = useMemo(() => oppsRows.filter(o => o.stage === "Won").reduce((s, o) => s + o.estimatedValue, 0), [oppsRows]);
+  const totalOppsLost        = useMemo(() => oppsRows.filter(o => o.stage === "Lost").length, [oppsRows]);
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (salesRepFilter.length)   parts.push(`Sales Rep: ${salesRepFilter.map(id => data?.salesReps.find(s => s.id === id)?.name ?? id).join(", ")}`);
+    if (staffFilter.length)      parts.push(`Staff: ${staffFilter.map(id => data?.staff.find(s => s.id === id)?.name ?? id).join(", ")}`);
+    if (refCompanyFilter.length) parts.push(`Referral Company: ${refCompanyFilter.map(id => data?.referralCompanies.find(c => c.id === id)?.name ?? id).join(", ")}`);
+    if (refContactFilter.length) parts.push(`Referral Contact: ${refContactFilter.map(id => data?.referralContacts.find(c => c.id === id)?.name ?? id).join(", ")}`);
+    return parts.join(" | ");
+  }, [data, salesRepFilter, staffFilter, refCompanyFilter, refContactFilter]);
 
   // ── Early returns (all hooks are above) ──────────────────────────────────────
 
@@ -620,6 +636,43 @@ export default function OwnerDashboardClient() {
 
   const moneyTick = (v: number) => fmt$(v);
 
+  async function handleGenerateInsights() {
+    setInsightsLoading(true);
+    setInsights([]);
+    try {
+      const res = await fetch("/api/admin/owner/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          period: PERIOD_LABELS[period],
+          filterSummary,
+          kpis: {
+            totalSigned, totalEarned, totalHours,
+            totalActivities: actRows.length,
+            activePartners: activePartnerCount,
+            oppsCreated: totalOppsCreated,
+            oppsCreatedValue: totalOppsCreatedValue,
+            oppsWon: totalOppsWon,
+            oppsWonValue: totalOppsWonValue,
+            oppsLost: totalOppsLost,
+            itemsSold: soldRows.length,
+            totalItemRevenue, totalCompanyTake,
+          },
+          revData, oppsCreatedData, oppsWonData, oppsLostData,
+          actData, activePartnersData, itemSalesData,
+          lostReasons, activityTypes, channels,
+        }),
+      });
+      const d = await res.json();
+      if (Array.isArray(d.insights)) setInsights(d.insights);
+      else setInsights(["Unable to parse insights. Please try again."]);
+    } catch {
+      setInsights(["Failed to generate insights. Please try again."]);
+    } finally {
+      setInsightsLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f5f7] text-gray-900">
 
@@ -627,7 +680,7 @@ export default function OwnerDashboardClient() {
       <div className="bg-gradient-to-r from-[#1a2f25] to-[#2d4a3e] px-8 py-5 flex items-center justify-between">
         <div>
           <p className="text-xs font-bold tracking-[0.2em] text-emerald-400 uppercase mb-0.5">Top Tier Transitions</p>
-          <h1 className="text-xl font-bold text-white">Owner Financial Dashboard</h1>
+          <h1 className="text-xl font-bold text-white">Executive Financial Dashboard</h1>
         </div>
         <div className="flex items-center gap-2">
           {(["W", "M", "Q"] as Period[]).map(p => (
@@ -651,6 +704,28 @@ export default function OwnerDashboardClient() {
         <MultiSelect label="Staff"            options={data.staff}               selected={staffFilter}      onChange={setStaffFilter}      />
         <MultiSelect label="Referral Company" options={data.referralCompanies}   selected={refCompanyFilter} onChange={setRefCompanyFilter} />
         <MultiSelect label="Referral Contact" options={data.referralContacts.map(c => ({ id: c.id, name: c.name }))} selected={refContactFilter} onChange={setRefContactFilter} />
+        <button
+          onClick={handleGenerateInsights}
+          disabled={insightsLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-300 bg-violet-50 text-violet-800 text-sm font-semibold hover:bg-violet-100 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {insightsLoading ? (
+            <>
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              Analyzing…
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              Generate AI Insights
+            </>
+          )}
+        </button>
         {anyFilterActive && (
           <button
             onClick={() => { setSalesRepFilter([]); setStaffFilter([]); setRefCompanyFilter([]); setRefContactFilter([]); }}
@@ -674,6 +749,42 @@ export default function OwnerDashboardClient() {
           <KpiCard label="Item Revenue"    value={fmt$(totalItemRevenue)}    color="gold"    />
           <KpiCard label="Company Take"    value={fmt$(totalCompanyTake)}    color="emerald" />
         </div>
+
+        {/* AI Insights */}
+        {(insights.length > 0 || insightsLoading) && (
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center flex-shrink-0">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <p className="text-sm font-bold text-violet-900">AI Insights</p>
+              {filterSummary && <p className="text-xs text-violet-500 ml-1">— {filterSummary}</p>}
+              {insights.length > 0 && (
+                <button onClick={() => setInsights([])} className="ml-auto text-xs text-violet-400 hover:text-violet-700">Dismiss</button>
+              )}
+            </div>
+            {insightsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-violet-600">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Reviewing data and generating insights…
+              </div>
+            ) : (
+              <ul className="space-y-2.5">
+                {insights.map((insight, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 w-5 h-5 rounded-full bg-violet-200 text-violet-800 text-xs font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                    <p className="text-sm text-gray-700 leading-relaxed">{insight}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Row 1: Revenue + CRM Activity */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
