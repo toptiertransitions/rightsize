@@ -139,6 +139,11 @@ export async function DELETE(req: NextRequest) {
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  await deleteOpportunity(id);
+  try {
+    await deleteOpportunity(id);
+  } catch (e) {
+    console.error("[deleteOpportunity] error:", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

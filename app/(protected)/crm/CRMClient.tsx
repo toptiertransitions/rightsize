@@ -361,7 +361,13 @@ function OpportunitiesTab({
   async function handleDelete(id: string) {
     if (!confirm("Delete this opportunity?")) return;
     const res = await fetch(`/api/crm/opportunities?id=${id}`, { method: "DELETE" });
-    if (res.ok) setOpportunities((prev) => prev.filter((o) => o.id !== id));
+    if (res.ok) {
+      setOpportunities((prev) => prev.filter((o) => o.id !== id));
+      if (panelOpen && panelOpp?.id === id) setPanelOpen(false);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(`Failed to delete: ${data.error ?? res.status}`);
+    }
   }
 
   function SortTh({ col, label, className }: { col: OppSortCol; label: string; className?: string }) {
