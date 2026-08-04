@@ -16,13 +16,79 @@ import {
   getClientContactById,
   getReferralContactById,
   getTenantById,
+  getStaffMember,
 } from "@/lib/airtable";
+import { getProjectNotes } from "@/lib/airtable-notes";
+import { getAdminEmails } from "@/lib/admin-notifications";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { createQBOInvoice } from "@/lib/qbo";
-import { buildInvoiceEmail } from "@/lib/email";
+import { buildInvoiceEmail, buildWrappedNotificationEmail } from "@/lib/email";
 import { Resend } from "resend";
+import type { Invoice } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+async function sendWrapNotification(invoice: Invoice) {
+  if (!invoice.tenantId) return;
+
+  const [tenant, opportunities, notes, adminEmails] = await Promise.all([
+    getTenantById(invoice.tenantId),
+    getOpportunitiesForTenant(invoice.tenantId),
+    getProjectNotes(invoice.tenantId).catch(() => []),
+    getAdminEmails().catch(() => [] as string[]),
+  ]);
+  if (!tenant) return;
+
+  const wonOpp = opportunities
+    .filter(o => o.stage === "Won")
+    .sort((a, b) => (b.wonAt ?? "").localeCompare(a.wonAt ?? ""))[0];
+
+  const salesRepClerkId = wonOpp?.assignedToClerkId;
+  if (!salesRepClerkId) return;
+
+  const [salesRep, teamLead, clientContact] = await Promise.all([
+    getStaffMember(salesRepClerkId),
+    tenant.teamLeadClerkId ? getStaffMember(tenant.teamLeadClerkId) : Promise.resolve(null),
+    wonOpp?.clientContactId ? getClientContactById(wonOpp.clientContactId) : Promise.resolve(null),
+  ]);
+  if (!salesRep?.email) return;
+
+  let referralPartner: { name: string; email?: string; phone?: string } | undefined;
+  if (clientContact?.referralPartnerId) {
+    const rc = await getReferralContactById(clientContact.referralPartnerId).catch(() => null);
+    if (rc) referralPartner = { name: rc.name, email: rc.email || undefined, phone: rc.phone || undefined };
+  }
+
+  const lineItems = invoice.lineItems ?? [];
+  const invoicedServicesAmount = lineItems.length > 0
+    ? lineItems.reduce((sum, li) => sum + li.hours * li.rate, 0)
+    : invoice.amount;
+
+  const html = buildWrappedNotificationEmail({
+    tenantName: tenant.name,
+    invoiceNumber: invoice.invoiceNumber,
+    estimatedValue: wonOpp?.estimatedValue ?? 0,
+    invoicedServicesAmount,
+    salesRepName: salesRep.displayName,
+    teamLeadName: teamLead?.displayName,
+    referralPartner,
+    internalNotes: notes.slice(0, 5).map(n => ({
+      authorName: n.authorName,
+      content: n.content,
+      createdAt: n.createdAt,
+    })),
+  });
+
+  const ccEmails = adminEmails.filter(e => e.toLowerCase() !== salesRep.email!.toLowerCase());
+
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: salesRep.email,
+    cc: ccEmails.length > 0 ? ccEmails : undefined,
+    subject: `Internal Notification - ${tenant.name} Just Wrapped`,
+    html,
+  });
+}
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -279,6 +345,13 @@ export async function PATCH(req: NextRequest) {
       };
       await resend.emails.send(emailOpts);
       invoice = await updateInvoice(invoice.id, { emailSent: true });
+
+      // Fire internal wrap notification when a Full Invoice goes out
+      if (invoice.type === "Full") {
+        sendWrapNotification(invoice).catch(e =>
+          console.error("[wrapNotification] error:", e)
+        );
+      }
     } catch (e) {
       console.error("Invoice email send failed:", e);
     }

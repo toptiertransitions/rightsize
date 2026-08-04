@@ -3746,3 +3746,91 @@ export function buildEmailChangeNotificationEmail({
 </body>
 </html>`;
 }
+
+// ─── Internal Wrap Notification (sent to TTTSales when Full Invoice is sent) ──
+export function buildWrappedNotificationEmail({
+  tenantName,
+  invoiceNumber,
+  estimatedValue,
+  invoicedServicesAmount,
+  salesRepName,
+  teamLeadName,
+  referralPartner,
+  internalNotes,
+}: {
+  tenantName: string;
+  invoiceNumber: string;
+  estimatedValue: number;
+  invoicedServicesAmount: number;
+  salesRepName: string;
+  teamLeadName?: string;
+  referralPartner?: { name: string; email?: string; phone?: string };
+  internalNotes: Array<{ authorName: string; content: string; createdAt: string }>;
+}): string {
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+  const variance = invoicedServicesAmount - estimatedValue;
+  const varianceLabel = variance >= 0 ? "Overage" : "Underage";
+  const varianceColor = variance >= 0 ? "#15803d" : "#b91c1c";
+  const varianceBg = variance >= 0 ? "#f0fdf4" : "#fef2f2";
+  const varianceSign = variance >= 0 ? "+" : "";
+
+  const notesHtml = internalNotes.length === 0
+    ? `<p style="margin:0;font-size:13px;color:#6b7280;font-style:italic;">No internal notes on file.</p>`
+    : internalNotes.map(n => {
+        const date = n.createdAt
+          ? new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+          : "";
+        return `<div style="padding:10px 12px;background:#f9fafb;border-left:3px solid #1a3d2b;border-radius:0 6px 6px 0;margin-bottom:8px;"><p style="margin:0 0 4px;font-size:11px;color:#6b7280;">${n.authorName}${date ? ` &middot; ${date}` : ""}</p><p style="margin:0;font-size:13px;color:#111827;white-space:pre-line;">${n.content.length > 400 ? n.content.slice(0, 400) + "..." : n.content}</p></div>`;
+      }).join("");
+
+  const referralHtml = referralPartner
+    ? `<tr><td style="padding:0 0 20px;"><p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Referral Partner</p><table style="border-collapse:collapse;width:100%;"><tr><td style="padding:10px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;"><p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${referralPartner.name}</p>${referralPartner.email ? `<p style="margin:4px 0 0;font-size:13px;color:#374151;">${referralPartner.email}</p>` : ""}${referralPartner.phone ? `<p style="margin:4px 0 0;font-size:13px;color:#374151;">${referralPartner.phone}</p>` : ""}</td></tr></table></td></tr>`
+    : `<tr><td style="padding:0 0 20px;"><p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Referral Partner</p><p style="margin:0;font-size:13px;color:#6b7280;font-style:italic;">No referral partner on this project.</p></td></tr>`;
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+        <tr><td style="background:#1a3d2b;padding:28px 32px;">
+          <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#86efac;text-transform:uppercase;letter-spacing:.1em;">Internal Notification</p>
+          <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">${tenantName} Just Wrapped</h1>
+          <p style="margin:6px 0 0;font-size:13px;color:#a7f3d0;">Invoice ${invoiceNumber} sent to client</p>
+        </td></tr>
+        <tr><td style="background:#ffffff;padding:28px 32px;">
+          <table style="border-collapse:collapse;width:100%;">
+            <tr><td style="padding:0 0 24px;">
+              <p style="margin:0 0 12px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Project Financials</p>
+              <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+                <tr style="background:#f9fafb;"><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #e5e7eb;">Budget / Estimated Value</td><td style="padding:10px 14px;font-size:13px;font-weight:600;color:#111827;text-align:right;border-bottom:1px solid #e5e7eb;">${fmt(estimatedValue)}</td></tr>
+                <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #e5e7eb;">Final Services Invoiced</td><td style="padding:10px 14px;font-size:13px;font-weight:600;color:#111827;text-align:right;border-bottom:1px solid #e5e7eb;">${fmt(invoicedServicesAmount)}</td></tr>
+                <tr style="background:${varianceBg};"><td style="padding:10px 14px;font-size:13px;font-weight:600;color:${varianceColor};">${varianceLabel}</td><td style="padding:10px 14px;font-size:14px;font-weight:700;color:${varianceColor};text-align:right;">${varianceSign}${fmt(Math.abs(variance))}</td></tr>
+              </table>
+            </td></tr>
+            <tr><td style="padding:0 0 20px;">
+              <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Team</p>
+              <table style="border-collapse:collapse;width:100%;">
+                <tr><td style="padding:8px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px 8px 0 0;border-bottom:none;font-size:12px;color:#6b7280;">Sales Owner</td><td style="padding:8px 14px;background:#f9fafb;border-top:1px solid #e5e7eb;border-right:1px solid #e5e7eb;border-bottom:none;border-radius:0 8px 0 0;font-size:13px;font-weight:600;color:#111827;text-align:right;">${salesRepName}</td></tr>
+                <tr><td style="padding:8px 14px;background:#ffffff;border:1px solid #e5e7eb;border-radius:0 0 0 8px;font-size:12px;color:#6b7280;">Team Lead</td><td style="padding:8px 14px;background:#ffffff;border-top:1px solid #e5e7eb;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;border-radius:0 0 8px 0;font-size:13px;font-weight:600;color:#111827;text-align:right;">${teamLeadName || "&#8212;"}</td></tr>
+              </table>
+            </td></tr>
+            ${referralHtml}
+            <tr><td style="padding:0;">
+              <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Internal Notes (Plan Page)</p>
+              ${notesHtml}
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Top Tier Transitions &middot; Internal Use Only</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
