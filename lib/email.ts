@@ -3612,3 +3612,137 @@ export function buildPartnerActiveUpdateEmail({
 </td></tr></table>
 </body></html>`;
 }
+
+export function buildEmailChangeNotificationEmail({
+  fullName,
+  oldEmail,
+  newEmail,
+  changedAt,
+}: {
+  fullName: string;
+  oldEmail: string;
+  newEmail: string;
+  changedAt: string;
+}): string {
+  const initials = fullName
+    .split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase() || "?";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Address Changed — Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions</p>
+                  <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">Email Address Changed</p>
+                </td>
+                <td align="right" style="vertical-align:top;">
+                  <p style="margin:0;font-size:12px;color:#a8d4bc;">${changedAt}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+              <!-- User chip -->
+              <tr>
+                <td style="padding-bottom:24px;">
+                  <table cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="width:48px;height:48px;border-radius:50%;background:#2E6B4F;font-size:18px;font-weight:700;color:#ffffff;text-align:center;line-height:48px;vertical-align:middle;">${initials}</td>
+                      <td style="padding-left:14px;vertical-align:middle;">
+                        <p style="margin:0;font-size:16px;font-weight:700;color:#111827;">${fullName}</p>
+                        <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">updated their email address</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Old email -->
+              <tr>
+                <td style="padding-bottom:10px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
+                    <tr>
+                      <td style="padding:14px 18px;">
+                        <p style="margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#ef4444;">Previous Email</p>
+                        <p style="margin:0;font-size:14px;color:#374151;font-family:monospace;">${oldEmail}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- New email -->
+              <tr>
+                <td style="padding-bottom:24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
+                    <tr>
+                      <td style="padding:14px 18px;">
+                        <p style="margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#16a34a;">New Email</p>
+                        <p style="margin:0;font-size:14px;color:#374151;font-family:monospace;">${newEmail}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Info note -->
+              <tr>
+                <td style="padding-bottom:24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                    <tr>
+                      <td style="padding:14px 18px;">
+                        <p style="margin:0;font-size:13px;color:#475569;line-height:1.6;">
+                          Airtable has been <strong>automatically updated</strong> to reflect the new email. Shift invitations going forward will use the new address.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- CTA -->
+              <tr>
+                <td align="center" style="padding-bottom:28px;">
+                  <a href="https://app.toptiertransitions.com/admin/users"
+                     style="display:inline-block;background:#1a3d2b;color:#ffffff;font-size:13px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
+                    View in Admin Users
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="border-top:1px solid #f3f4f6;padding-top:20px;">
+                  <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Top Tier Transitions &middot; toptiertransitions.com</p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

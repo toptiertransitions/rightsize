@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { clerkClient } from "@clerk/nextjs/server";
+import { Resend } from "resend";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import { findReferralContactByEmail, setReferralContactClerkUserId } from "@/lib/airtable";
-import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
+import { sendNewUserAdminNotification, getAdminEmails } from "@/lib/admin-notifications";
+import { buildEmailChangeNotificationEmail } from "@/lib/email";
 
 const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}`;
 const AT_HEADERS = {
@@ -11,20 +13,23 @@ const AT_HEADERS = {
   "Content-Type": "application/json",
 };
 
-async function updateStaffDisplayName(clerkUserId: string, firstName: string | null, lastName: string | null, email: string | null) {
+// Returns the old email if it was just changed (so caller can notify admins), otherwise null.
+async function updateStaffDisplayName(clerkUserId: string, firstName: string | null, lastName: string | null, email: string | null): Promise<string | null> {
   const displayName = [firstName, lastName].filter(Boolean).join(" ") || email || "";
-  if (!displayName) return;
+  if (!displayName) return null;
 
   const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
   const res = await fetch(
     `${BASE_URL}/${encodeURIComponent(AIRTABLE_TABLES.STAFF_ROLES)}?filterByFormula=${formula}&maxRecords=1`,
     { headers: AT_HEADERS }
   );
-  if (!res.ok) return;
+  if (!res.ok) return null;
   const data = await res.json();
-  if (!data.records?.length) return;
+  if (!data.records?.length) return null;
 
   const recordId = data.records[0].id;
+  const oldEmail = (data.records[0].fields["Email"] as string) || "";
+
   const fields: Record<string, string> = { DisplayName: displayName };
   if (email) fields["Email"] = email;
 
@@ -33,6 +38,12 @@ async function updateStaffDisplayName(clerkUserId: string, firstName: string | n
     headers: AT_HEADERS,
     body: JSON.stringify({ fields }),
   });
+
+  // Return old email only if it actually changed
+  if (email && oldEmail && oldEmail.toLowerCase() !== email.toLowerCase()) {
+    return oldEmail;
+  }
+  return null;
 }
 
 async function getStaffRoleRecord(clerkUserId: string): Promise<{ role: string; displayName: string } | null> {
@@ -113,7 +124,26 @@ export async function POST(req: NextRequest) {
     const primaryEmail = emails?.find(e => e.id === primaryEmailId)?.email_address ?? emails?.[0]?.email_address ?? null;
     const imageUrl = (d.image_url as string | null) ?? null;
 
-    await updateStaffDisplayName(clerkUserId, firstName, lastName, primaryEmail);
+    const oldEmail = await updateStaffDisplayName(clerkUserId, firstName, lastName, primaryEmail);
+
+    // If this is an update and the primary email changed, notify all admins
+    if (event.type === "user.updated" && oldEmail && primaryEmail) {
+      const fullName = [firstName, lastName].filter(Boolean).join(" ") || primaryEmail;
+      const changedAt = new Date().toLocaleString("en-US", {
+        timeZone: "America/Chicago", month: "short", day: "numeric",
+        year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+      });
+      const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+      if (adminEmails.length > 0) {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+          to: adminEmails,
+          subject: `Email Changed — ${fullName}`,
+          html: buildEmailChangeNotificationEmail({ fullName, oldEmail, newEmail: primaryEmail, changedAt }),
+        }).catch(() => {});
+      }
+    }
 
     // Link Clerk ID to referral contact if email matches (enables Partner Portal access).
     // Linking is also handled by /api/partner/activate (the post-signup redirect).
