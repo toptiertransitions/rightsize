@@ -69,8 +69,8 @@ export default async function AdminUsersPage() {
 
   const users: AdminUser[] = clerkRes.data.map(u => ({
     clerkUserId: u.id,
-    email: u.emailAddresses[0]?.emailAddress ?? "",
-    name: (`${u.firstName ?? ""} ${u.lastName ?? ""}`).trim() || (u.emailAddresses[0]?.emailAddress ?? "Unknown"),
+    email: (u.emailAddresses.find(e => e.id === u.primaryEmailAddressId) ?? u.emailAddresses[0])?.emailAddress ?? "",
+    name: (`${u.firstName ?? ""} ${u.lastName ?? ""}`).trim() || ((u.emailAddresses.find(e => e.id === u.primaryEmailAddressId) ?? u.emailAddresses[0])?.emailAddress ?? "Unknown"),
     imageUrl: u.imageUrl,
     createdAt: new Date(u.createdAt).toISOString(),
     lastActiveAt: (u.lastActiveAt ?? u.lastSignInAt)

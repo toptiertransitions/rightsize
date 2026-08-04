@@ -203,12 +203,15 @@ export async function POST(req: NextRequest) {
         firstName: (firstName ?? "").trim() || undefined,
         lastName: (lastName ?? "").trim() || undefined,
       });
-      // 2. Update Airtable StaffMembers if this is a staff user
+      // 2. Update Airtable StaffMembers if this is a staff user — also sync primary Clerk email
       if (staffMemberId) {
         const displayName = [firstName, lastName].filter((s: string) => s?.trim()).join(" ").trim();
+        const clerkUser = await client.users.getUser(clerkUserId);
+        const primaryEmail = (clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId) ?? clerkUser.emailAddresses[0])?.emailAddress;
         await updateStaffMember(staffMemberId, {
           displayName: displayName || (firstName ?? "").trim(),
           phone: (phone ?? "").trim() || undefined,
+          ...(primaryEmail ? { email: primaryEmail } : {}),
         });
         revalidateTag("staff-members");
       }
