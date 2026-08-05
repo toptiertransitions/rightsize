@@ -327,7 +327,11 @@ export default function OwnerDashboardClient() {
     setLoading(true);
     fetch("/api/admin/owner/data")
       .then(r => r.json())
-      .then(d  => { setData(d); setLoading(false); })
+      .then(d => {
+        if (d?.error) { setFetchError(d.error); }
+        else { setData(d); }
+        setLoading(false);
+      })
       .catch(e => { setFetchError(String(e)); setLoading(false); });
   }, [authed]);
 
