@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
-  getSystemRole,
   getTenants,
   getContractsForTenant,
   getInvoicesForTenant,
@@ -56,10 +55,6 @@ function grossAmt(inv: Invoice): number {
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const role = await getSystemRole(userId);
-  if (role !== "TTTAdmin" && role !== "TTTManager") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const [allTenants, staffMembers, refCompanies, refContacts, opps, contacts, activities] = await Promise.all([
     getTenants().catch(() => [] as Tenant[]),
