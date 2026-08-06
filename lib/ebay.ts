@@ -278,6 +278,10 @@ export async function publishEbayListing(
   if (!item.listingTitleEbay && !item.itemName) {
     throw new Error("Item has no title — set an eBay listing title before publishing.");
   }
+  const hasWeight = (item.weightPounds ?? 0) > 0 || (item.weightOunces ?? 0) > 0;
+  if (!hasWeight) {
+    throw new Error("Weight is required for calculated shipping — fill in Weight (lbs/oz) on the item before publishing.");
+  }
 
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
