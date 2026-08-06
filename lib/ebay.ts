@@ -63,48 +63,79 @@ function ebayFetch(
   });
 }
 
-// ── Category suggestion (auto-detect best leaf category from item title) ──────
-async function suggestCategoryId(title: string, token: string): Promise<string | null> {
-  const q = encodeURIComponent(title.slice(0, 80));
+// ── Application token (client credentials — for public APIs like Taxonomy) ────
+let _cachedAppToken: { token: string; expiresAt: number } | null = null;
+
+async function getAppToken(): Promise<string | null> {
+  if (_cachedAppToken && Date.now() < _cachedAppToken.expiresAt - 60_000) {
+    return _cachedAppToken.token;
+  }
+  const clientId     = process.env.EBAY_CLIENT_ID;
+  const clientSecret = process.env.EBAY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const res = await ebayFetch(EBAY_TOKEN_URL, {
+    method:  "POST",
+    headers: { "Authorization": `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body:    new URLSearchParams({
+      grant_type: "client_credentials",
+      scope:      "https://api.ebay.com/oauth/api_scope",
+    }).toString(),
+  });
+  if (!res.ok) return null;
+  const data = await res.json() as { access_token: string; expires_in: number };
+  _cachedAppToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  return _cachedAppToken.token;
+}
+
+// ── Category suggestion (uses App token — Taxonomy API requires base scope) ───
+async function suggestCategoryId(title: string): Promise<string | null> {
+  const appToken = await getAppToken();
+  if (!appToken) return null;
+  const q = encodeURIComponent(title.trim().slice(0, 80));
   const res = await ebayFetch(
     `https://api.ebay.com/commerce/taxonomy/v1/category_tree/0/get_category_suggestions?q=${q}`,
-    { method: "GET", headers: { "Authorization": `Bearer ${token}` } }
+    { method: "GET", headers: { "Authorization": `Bearer ${appToken}` } }
   );
   if (!res.ok) return null;
   const data = await res.json() as {
-    categorySuggestions?: { category: { categoryId: string } }[]
+    categorySuggestions?: { category: { categoryId: string; categoryName: string } }[]
   };
-  return data.categorySuggestions?.[0]?.category?.categoryId ?? null;
+  const id = data.categorySuggestions?.[0]?.category?.categoryId ?? null;
+  if (id) console.log("[ebay] category suggestion:", data.categorySuggestions?.[0]?.category?.categoryName, id);
+  return id;
 }
 
-// ── Category map (fallback when suggestion API fails) ─────────────────────────
+// ── Category map (leaf-node fallbacks when Taxonomy suggestion API fails) ─────
+// All IDs must be eBay leaf categories (getCategorySuggestions is the preferred path).
 export const EBAY_CATEGORY_MAP: Record<string, string> = {
-  "Seating":                           "261990",
-  "Tables & Desks":                    "261991",
-  "Cabinets, Dressers & Shelving":     "183321",
-  "Beds & Bedroom":                    "175748",
-  "Fine Art & Paintings":              "360",
-  "Prints & Framed Art":               "10786",
-  "Sculpture & Figurines":             "4707",
-  "Mirrors":                           "20580",
-  "Lamps & Lighting":                  "20697",
-  "Rugs & Textiles":                   "160736",
-  "Vases, Bowls & Decorative Objects": "49019",
-  "Fine China & Dinnerware":           "870",
-  "Glassware & Crystal":               "898",
-  "Silver & Serveware":                "20096",
-  "Kitchenware & Cookware":            "20625",
-  "Jewelry & Watches":                 "281",
-  "Handbags & Accessories":            "169291",
-  "Clothing & Furs":                   "15724",
-  "Books & Media":                     "267",
-  "Collectibles & Memorabilia":        "1",
-  "Toys, Games & Dolls":               "220",
-  "Musical Instruments":               "619",
-  "Electronics":                       "293",
-  "Tools, Outdoor & Garage":           "631",
-  "Holiday & Seasonal":                "34",
-  "Other":                             "99",
+  "Seating":                           "3138",    // Antiques > Furniture > Chairs
+  "Tables & Desks":                    "261991",  // Home & Garden > Furniture > Tables
+  "Cabinets, Dressers & Shelving":     "103480",  // Home & Garden > Furniture > Cabinets & Cupboards
+  "Beds & Bedroom":                    "175748",  // Home & Garden > Furniture > Beds & Bed Frames
+  "Fine Art & Paintings":              "551",     // Art > Paintings
+  "Prints & Framed Art":               "10786",   // Art > Prints
+  "Sculpture & Figurines":             "4707",    // Art > Sculpture
+  "Mirrors":                           "20580",   // Home & Garden > Home Décor > Mirrors
+  "Lamps & Lighting":                  "112581",  // Home & Garden > Lamps, Lighting > Table Lamps
+  "Rugs & Textiles":                   "160736",  // Home & Garden > Rugs & Carpets
+  "Vases, Bowls & Decorative Objects": "3744",    // Pottery & Glass > Pottery & China > Vases
+  "Fine China & Dinnerware":           "870",     // Pottery & Glass > Pottery & China > Dinnerware
+  "Glassware & Crystal":               "10723",   // Pottery & Glass > Glass > Glassware
+  "Silver & Serveware":                "20096",   // Antiques > Silver > Flatware & Silverware
+  "Kitchenware & Cookware":            "20625",   // Home & Garden > Kitchen > Cookware
+  "Jewelry & Watches":                 "10968",   // Jewelry & Watches > Fashion Jewelry > Necklaces
+  "Handbags & Accessories":            "169291",  // Clothing > Women > Bags & Handbags
+  "Clothing & Furs":                   "15724",   // Clothing > Women > Coats & Jackets
+  "Books & Media":                     "29792",   // Books > Antiquarian & Collectible
+  "Collectibles & Memorabilia":        "29223",   // Antiques > Other
+  "Toys, Games & Dolls":               "19009",   // Toys & Hobbies > Vintage & Antique Toys
+  "Musical Instruments":               "619",     // Musical Instruments > Other
+  "Electronics":                       "293",     // Consumer Electronics > Other
+  "Tools, Outdoor & Garage":           "631",     // Home & Garden > Tools & Workshop > Other
+  "Holiday & Seasonal":                "34",      // Collectibles > Holiday > Other
+  "Other":                             "29223",   // Antiques > Other (leaf)
 };
 
 // ── Condition map ─────────────────────────────────────────────────────────────
@@ -253,9 +284,9 @@ export async function publishEbayListing(
 
   // Resolve the best eBay leaf category for this item
   const itemTitle  = item.listingTitleEbay || item.itemName;
-  const categoryId = (await suggestCategoryId(itemTitle, token))
+  const categoryId = (await suggestCategoryId(itemTitle))
     ?? EBAY_CATEGORY_MAP[item.category]
-    ?? "99";
+    ?? "29223"; // Antiques > Other (leaf fallback)
 
   const jsonHeaders = {
     "Authorization":    `Bearer ${token}`,
@@ -298,6 +329,12 @@ export async function publishEbayListing(
     if (existing?.errorId === 25002) {
       offerId = existing.parameters?.find(p => p.name === "offerId")?.value ?? "";
       if (!offerId) throw new Error("eBay offer already exists but returned no offerId");
+      // Update the existing offer so it gets the current category / price
+      await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+        method:  "PUT",
+        headers: jsonHeaders,
+        body:    JSON.stringify(buildOffer(item, sku, categoryId)),
+      });
     } else {
       throw new Error(`eBay offer creation error (${offerRes.status}): ${JSON.stringify(errData)}`);
     }
@@ -330,9 +367,9 @@ export async function updateEbayListing(item: Item): Promise<void> {
   const sku   = `ttt-${item.id}`;
 
   const itemTitle  = item.listingTitleEbay || item.itemName;
-  const categoryId = (await suggestCategoryId(itemTitle, token))
+  const categoryId = (await suggestCategoryId(itemTitle))
     ?? EBAY_CATEGORY_MAP[item.category]
-    ?? "99";
+    ?? "29223"; // Antiques > Other (leaf fallback)
 
   const jsonHeaders = {
     "Authorization":    `Bearer ${token}`,
