@@ -1,6 +1,7 @@
 import { request as httpsRequest } from "node:https";
 import { URL } from "node:url";
 import type { Item } from "@/lib/types";
+import { EBAY_CATEGORY_MAP } from "@/lib/ebay-categories";
 
 const EBAY_API_BASE = "https://api.ebay.com";
 const EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token";
@@ -106,37 +107,6 @@ async function suggestCategoryId(title: string): Promise<string | null> {
   if (id) console.log("[ebay] category suggestion:", data.categorySuggestions?.[0]?.category?.categoryName, id);
   return id;
 }
-
-// ── Category map (leaf-node fallbacks when Taxonomy suggestion API fails) ─────
-// All IDs must be eBay leaf categories (getCategorySuggestions is the preferred path).
-export const EBAY_CATEGORY_MAP: Record<string, string> = {
-  "Seating":                           "3138",    // Antiques > Furniture > Chairs
-  "Tables & Desks":                    "261991",  // Home & Garden > Furniture > Tables
-  "Cabinets, Dressers & Shelving":     "103480",  // Home & Garden > Furniture > Cabinets & Cupboards
-  "Beds & Bedroom":                    "175748",  // Home & Garden > Furniture > Beds & Bed Frames
-  "Fine Art & Paintings":              "551",     // Art > Paintings
-  "Prints & Framed Art":               "10786",   // Art > Prints
-  "Sculpture & Figurines":             "4707",    // Art > Sculpture
-  "Mirrors":                           "20580",   // Home & Garden > Home Décor > Mirrors
-  "Lamps & Lighting":                  "112581",  // Home & Garden > Lamps, Lighting > Table Lamps
-  "Rugs & Textiles":                   "160736",  // Home & Garden > Rugs & Carpets
-  "Vases, Bowls & Decorative Objects": "3744",    // Pottery & Glass > Pottery & China > Vases
-  "Fine China & Dinnerware":           "870",     // Pottery & Glass > Pottery & China > Dinnerware
-  "Glassware & Crystal":               "10723",   // Pottery & Glass > Glass > Glassware
-  "Silver & Serveware":                "20096",   // Antiques > Silver > Flatware & Silverware
-  "Kitchenware & Cookware":            "20625",   // Home & Garden > Kitchen > Cookware
-  "Jewelry & Watches":                 "10968",   // Jewelry & Watches > Fashion Jewelry > Necklaces
-  "Handbags & Accessories":            "169291",  // Clothing > Women > Bags & Handbags
-  "Clothing & Furs":                   "15724",   // Clothing > Women > Coats & Jackets
-  "Books & Media":                     "29792",   // Books > Antiquarian & Collectible
-  "Collectibles & Memorabilia":        "29223",   // Antiques > Other
-  "Toys, Games & Dolls":               "19009",   // Toys & Hobbies > Vintage & Antique Toys
-  "Musical Instruments":               "619",     // Musical Instruments > Other
-  "Electronics":                       "293",     // Consumer Electronics > Other
-  "Tools, Outdoor & Garage":           "631",     // Home & Garden > Tools & Workshop > Other
-  "Holiday & Seasonal":                "34",      // Collectibles > Holiday > Other
-  "Other":                             "29223",   // Antiques > Other (leaf)
-};
 
 // ── Condition map ─────────────────────────────────────────────────────────────
 // Keys cover all known Airtable values (case-sensitive). Default is USED_EXCELLENT
