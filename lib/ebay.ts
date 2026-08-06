@@ -67,15 +67,16 @@ async function getAccessToken(): Promise<string> {
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const res = await fetch(EBAY_TOKEN_URL, {
     method: "POST",
-    headers: {
+    headers: new Headers({
       "Authorization": `Basic ${credentials}`,
       "Content-Type": "application/x-www-form-urlencoded",
-    },
+    }),
     body: new URLSearchParams({
       grant_type:    "refresh_token",
       refresh_token: refreshToken,
       scope:         EBAY_SCOPES,
     }).toString(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -174,12 +175,13 @@ export async function publishEbayListing(
     `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     {
       method:  "PUT",
-      headers: {
+      headers: new Headers({
         "Authorization":   `Bearer ${token}`,
         "Content-Type":    "application/json",
         "Accept-Language": "en-US",
-      },
+      }),
       body: JSON.stringify(buildInventoryItem(item)),
+      cache: "no-store",
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -190,11 +192,13 @@ export async function publishEbayListing(
   // 2. Create offer
   const offerRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
     method:  "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type":  "application/json",
-    },
+    headers: new Headers({
+      "Authorization":   `Bearer ${token}`,
+      "Content-Type":    "application/json",
+      "Accept-Language": "en-US",
+    }),
     body: JSON.stringify(buildOffer(item, sku)),
+    cache: "no-store",
   });
   if (!offerRes.ok) {
     const text = await offerRes.text();
@@ -207,7 +211,12 @@ export async function publishEbayListing(
     `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
     {
       method:  "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Accept-Language": "en-US" },
+      headers: new Headers({
+        "Authorization":   `Bearer ${token}`,
+        "Content-Type":    "application/json",
+        "Accept-Language": "en-US",
+      }),
+      cache: "no-store",
     }
   );
   if (!pubRes.ok) {
@@ -233,12 +242,13 @@ export async function updateEbayListing(item: Item): Promise<void> {
     `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     {
       method:  "PUT",
-      headers: {
+      headers: new Headers({
         "Authorization":   `Bearer ${token}`,
         "Content-Type":    "application/json",
         "Accept-Language": "en-US",
-      },
+      }),
       body: JSON.stringify(buildInventoryItem(item)),
+      cache: "no-store",
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -251,8 +261,13 @@ export async function updateEbayListing(item: Item): Promise<void> {
     `${EBAY_API_BASE}/sell/inventory/v1/offer/${item.ebayOfferId}`,
     {
       method:  "PUT",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Accept-Language": "en-US" },
+      headers: new Headers({
+        "Authorization":   `Bearer ${token}`,
+        "Content-Type":    "application/json",
+        "Accept-Language": "en-US",
+      }),
       body: JSON.stringify(buildOffer(item, sku)),
+      cache: "no-store",
     }
   );
   if (!offerRes.ok) {
@@ -282,15 +297,16 @@ export async function exchangeEbayCode(
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const res = await fetch(EBAY_TOKEN_URL, {
     method:  "POST",
-    headers: {
+    headers: new Headers({
       "Authorization": `Basic ${credentials}`,
       "Content-Type":  "application/x-www-form-urlencoded",
-    },
+    }),
     body: new URLSearchParams({
       grant_type:   "authorization_code",
       code,
       redirect_uri: ruName,
     }).toString(),
+    cache: "no-store",
   });
 
   if (!res.ok) {

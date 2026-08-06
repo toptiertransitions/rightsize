@@ -43,7 +43,7 @@ export async function POST() {
       headers: {
         "Authorization": `Bearer ${access_token}`,
         "Content-Type":  "application/json",
-        "Content-Language": "en-US",
+        "Accept-Language": "en-US",
       },
       body: JSON.stringify({
         location: {
