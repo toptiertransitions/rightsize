@@ -188,22 +188,59 @@ async function transloadImageToEPS(sourceUrl: string, token: string): Promise<st
   const cached = _epsUrlCache.get(sourceUrl);
   if (cached) { console.log("[ebay] EPS cache hit:", sourceUrl); return cached; }
   try {
-    const res = await ebayFetch("https://api.ebay.com/commerce/media/v1/image/createImageFromUrl", {
+    // Step 1: upload source URL to eBay Media API
+    const uploadRes = await ebayFetch("https://api.ebay.com/commerce/media/v1/image/createImageFromUrl", {
       method:  "POST",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body:    JSON.stringify({ imageUrl: sourceUrl }),
     });
-    if (!res.ok) {
-      console.warn("[ebay] image transload failed", res.status, sourceUrl);
+    if (!uploadRes.ok) {
+      console.warn("[ebay] image transload upload failed", uploadRes.status, sourceUrl);
       return null;
     }
-    if (!res.location) {
+    if (!uploadRes.location) {
       console.warn("[ebay] image transload: no Location header for", sourceUrl);
       return null;
     }
-    _epsUrlCache.set(sourceUrl, res.location);
-    console.log("[ebay] transloaded to EPS:", res.location);
-    return res.location;
+
+    console.log("[ebay] transload Location header:", uploadRes.location);
+
+    // Step 2: if Location is a resource URI (not a direct image URL), GET it to extract
+    // the actual hosted imageUrl. eBay returns /commerce/media/v1/image/{id} in Location,
+    // not the i.ebayimg.com URL directly.
+    let epsUrl: string;
+    if (uploadRes.location.includes("ebayimg.com")) {
+      epsUrl = uploadRes.location;
+    } else {
+      const resourceUrl = uploadRes.location.startsWith("http")
+        ? uploadRes.location
+        : `https://api.ebay.com${uploadRes.location}`;
+      const getRes = await ebayFetch(resourceUrl, {
+        method:  "GET",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!getRes.ok) {
+        console.warn("[ebay] image transload GET resource failed", getRes.status, resourceUrl);
+        return null;
+      }
+      const data = await getRes.json() as { imageUrl?: string };
+      console.log("[ebay] transload resource response:", JSON.stringify(data).slice(0, 200));
+      if (!data.imageUrl) {
+        console.warn("[ebay] image transload: no imageUrl in resource response for", sourceUrl);
+        return null;
+      }
+      epsUrl = data.imageUrl;
+    }
+
+    // Guard: only accept actual EPS image URLs — never store a resource/API URI as an imageUrl
+    if (!epsUrl.includes("ebayimg.com")) {
+      console.warn("[ebay] image transload: resolved URL is not an EPS URL, skipping:", epsUrl);
+      return null;
+    }
+
+    _epsUrlCache.set(sourceUrl, epsUrl);
+    console.log("[ebay] transloaded to EPS:", epsUrl);
+    return epsUrl;
   } catch (e) {
     console.warn("[ebay] image transload error:", sourceUrl, e instanceof Error ? e.message : e);
     return null;
