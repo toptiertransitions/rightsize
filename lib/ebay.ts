@@ -178,11 +178,24 @@ async function getAccessToken(): Promise<string> {
 
 // ── Payload builders ──────────────────────────────────────────────────────────
 function buildInventoryItem(item: Item): object {
-  const imageUrls = (item.photos ?? [])
-    .map(p => p.url)
-    .filter(Boolean)
+  const rawUrls = [
+    ...(item.photos ?? []).map(p => p.url),
+    ...(!item.photos?.length && item.photoUrl ? [item.photoUrl] : []),
+  ].filter(Boolean) as string[];
+
+  const imageUrls = rawUrls
+    .map(url => {
+      if (url.startsWith("https://")) return url;
+      if (url.startsWith("http://")) {
+        const upgraded = "https://" + url.slice(7);
+        console.warn("[ebay] upgraded HTTP image URL to HTTPS:", upgraded);
+        return upgraded;
+      }
+      console.warn("[ebay] skipping image with non-HTTP(S) URL:", url);
+      return null;
+    })
+    .filter((url): url is string => url !== null)
     .slice(0, 24);
-  if (!imageUrls.length && item.photoUrl) imageUrls.push(item.photoUrl);
 
   let condition = CONDITION_MAP[item.condition] ?? "USED_EXCELLENT";
   if (APPAREL_CATEGORIES.has(item.category ?? "")) {
