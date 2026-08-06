@@ -14,6 +14,7 @@ const EBAY_SCOPES = [
 interface EbayResponse {
   ok: boolean;
   status: number;
+  location: string | null;
   text(): Promise<string>;
   json(): Promise<unknown>;
 }
@@ -47,11 +48,13 @@ function ebayFetch(
           if (status < 200 || status >= 300) {
             console.log("[ebayFetch] error", status, parsed.pathname, raw.slice(0, 500));
           }
+          const rawLoc = res.headers["location"];
           resolve({
-            ok:     status >= 200 && status < 300,
+            ok:       status >= 200 && status < 300,
             status,
-            text:   () => Promise.resolve(raw),
-            json:   () => Promise.resolve(JSON.parse(raw)),
+            location: typeof rawLoc === "string" ? rawLoc : null,
+            text:     () => Promise.resolve(raw),
+            json:     () => Promise.resolve(JSON.parse(raw)),
           });
         });
         res.on("error", reject);
@@ -176,26 +179,77 @@ async function getAccessToken(): Promise<string> {
   return _cachedToken.token;
 }
 
-// ── Payload builders ──────────────────────────────────────────────────────────
-function buildInventoryItem(item: Item): object {
-  const rawUrls = [
+// ── EPS image transload (Commerce Media API) ──────────────────────────────────
+// Cache survives warm lambda invocations — avoids duplicate EPS copies when the
+// same Cloudinary URL is transloaded again on a listing update.
+const _epsUrlCache = new Map<string, string>();
+
+async function transloadImageToEPS(sourceUrl: string, token: string): Promise<string | null> {
+  const cached = _epsUrlCache.get(sourceUrl);
+  if (cached) { console.log("[ebay] EPS cache hit:", sourceUrl); return cached; }
+  try {
+    const res = await ebayFetch("https://api.ebay.com/commerce/media/v1/image/createImageFromUrl", {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body:    JSON.stringify({ imageUrl: sourceUrl }),
+    });
+    if (!res.ok) {
+      console.warn("[ebay] image transload failed", res.status, sourceUrl);
+      return null;
+    }
+    if (!res.location) {
+      console.warn("[ebay] image transload: no Location header for", sourceUrl);
+      return null;
+    }
+    _epsUrlCache.set(sourceUrl, res.location);
+    console.log("[ebay] transloaded to EPS:", res.location);
+    return res.location;
+  } catch (e) {
+    console.warn("[ebay] image transload error:", sourceUrl, e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function resolveEpsImageUrls(item: Item, token: string): Promise<string[]> {
+  const sourceUrls = [
     ...(item.photos ?? []).map(p => p.url),
     ...(!item.photos?.length && item.photoUrl ? [item.photoUrl] : []),
-  ].filter(Boolean) as string[];
+  ].filter((u): u is string => typeof u === "string" && u.startsWith("https://")).slice(0, 24);
 
-  const imageUrls = rawUrls
-    .map(url => {
-      if (url.startsWith("https://")) return url;
-      if (url.startsWith("http://")) {
-        const upgraded = "https://" + url.slice(7);
-        console.warn("[ebay] upgraded HTTP image URL to HTTPS:", upgraded);
-        return upgraded;
-      }
-      console.warn("[ebay] skipping image with non-HTTP(S) URL:", url);
+  const settled = await Promise.allSettled(sourceUrls.map(url => transloadImageToEPS(url, token)));
+  return settled
+    .map((r, i) => {
+      if (r.status === "fulfilled" && r.value) return r.value;
+      console.warn("[ebay] skipping image — transload failed:", sourceUrls[i]);
       return null;
     })
-    .filter((url): url is string => url !== null)
-    .slice(0, 24);
+    .filter((u): u is string => u !== null);
+}
+
+// ── Payload builders ──────────────────────────────────────────────────────────
+function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
+  let imageUrls: string[];
+  if (epsImageUrls !== undefined) {
+    imageUrls = epsImageUrls;
+  } else {
+    const rawUrls = [
+      ...(item.photos ?? []).map(p => p.url),
+      ...(!item.photos?.length && item.photoUrl ? [item.photoUrl] : []),
+    ].filter(Boolean) as string[];
+    imageUrls = rawUrls
+      .map(url => {
+        if (url.startsWith("https://")) return url;
+        if (url.startsWith("http://")) {
+          const upgraded = "https://" + url.slice(7);
+          console.warn("[ebay] upgraded HTTP image URL to HTTPS:", upgraded);
+          return upgraded;
+        }
+        console.warn("[ebay] skipping image with non-HTTP(S) URL:", url);
+        return null;
+      })
+      .filter((url): url is string => url !== null)
+      .slice(0, 24);
+  }
 
   let condition = CONDITION_MAP[item.condition] ?? "USED_EXCELLENT";
   if (APPAREL_CATEGORIES.has(item.category ?? "")) {
@@ -279,8 +333,9 @@ export async function publishEbayListing(
     throw new Error("Barcode / item number is required before publishing to eBay — assign one in Rightsize first.");
   }
 
-  const token = await getAccessToken();
-  const sku   = String(item.barcodeNumber);
+  const token        = await getAccessToken();
+  const sku          = String(item.barcodeNumber);
+  const epsImageUrls = await resolveEpsImageUrls(item, token);
 
   // Resolve eBay leaf category — staff-assigned Rightsize category takes priority;
   // getCategorySuggestions is only used when category is unmapped/Other (it
@@ -304,7 +359,7 @@ export async function publishEbayListing(
     {
       method:  "PUT",
       headers: jsonHeaders,
-      body:    JSON.stringify(buildInventoryItem(item)),
+      body:    JSON.stringify(buildInventoryItem(item, epsImageUrls.length ? epsImageUrls : undefined)),
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -370,8 +425,9 @@ export async function updateEbayListing(item: Item): Promise<void> {
     throw new Error("No eBay offer ID on record — cannot update.");
   }
 
-  const token = await getAccessToken();
-  const sku   = item.barcodeNumber ? String(item.barcodeNumber) : `ttt-${item.id}`;
+  const token        = await getAccessToken();
+  const sku          = item.barcodeNumber ? String(item.barcodeNumber) : `ttt-${item.id}`;
+  const epsImageUrls = await resolveEpsImageUrls(item, token);
 
   const itemTitle      = item.listingTitleEbay || item.itemName;
   const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
@@ -392,7 +448,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
     {
       method:  "PUT",
       headers: jsonHeaders,
-      body:    JSON.stringify(buildInventoryItem(item)),
+      body:    JSON.stringify(buildInventoryItem(item, epsImageUrls.length ? epsImageUrls : undefined)),
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
