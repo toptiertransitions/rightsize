@@ -65,7 +65,6 @@ export async function GET() {
   const clientId     = process.env.EBAY_CLIENT_ID!;
   const clientSecret = process.env.EBAY_CLIENT_SECRET!;
   const refreshToken = process.env.EBAY_REFRESH_TOKEN!;
-  const configuredPolicyId = process.env.EBAY_FULFILLMENT_POLICY_ID ?? "(not set)";
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const tokenRes = await nodePost(
@@ -90,60 +89,42 @@ export async function GET() {
 
   const { access_token } = JSON.parse(tokenRes.body) as { access_token: string };
 
-  // Fetch all fulfillment policies for this account
-  const policiesRes = await nodeGet(
-    "https://api.ebay.com/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US",
-    access_token
-  );
+  // Fetch all three policy types in parallel
+  const [fulfillmentRes, paymentRes, returnRes] = await Promise.all([
+    nodeGet("https://api.ebay.com/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US", access_token),
+    nodeGet("https://api.ebay.com/sell/account/v1/payment_policy?marketplace_id=EBAY_US", access_token),
+    nodeGet("https://api.ebay.com/sell/account/v1/return_policy?marketplace_id=EBAY_US", access_token),
+  ]);
 
-  interface ShippingService {
-    shippingServiceCode?: string;
-    shippingCostType?: string;
-    buyerResponsibleForShipping?: boolean;
+  function pickId(res: { ok: boolean; body: string }, key: string) {
+    if (!res.ok) return [];
+    const data = JSON.parse(res.body) as Record<string, { name?: string; [k: string]: unknown }[]>;
+    return (data[key] ?? []).map((p) => ({
+      id:   (p as Record<string, string>)[key.replace(/s$/, "Id").replace("fulfillmentPolic", "fulfillmentPolicyI").replace("paymentPolic", "paymentPolicyI").replace("returnPolic", "returnPolicyI")] ?? (p as Record<string, string>)[Object.keys(p).find(k => k.endsWith("Id")) ?? ""],
+      name: p.name,
+    }));
   }
 
-  interface ShippingOption {
-    optionType?: string;
-    costType?: string;
-    shippingServices?: ShippingService[];
+  // Parse each list simply
+  function parseList(res: { ok: boolean; status: number; body: string }, listKey: string, idKey: string) {
+    if (!res.ok) return { error: res.body.slice(0, 200), status: res.status };
+    const data = JSON.parse(res.body) as Record<string, Record<string, string>[]>;
+    return (data[listKey] ?? []).map(p => ({ id: p[idKey], name: p.name }));
   }
 
-  interface FulfillmentPolicy {
-    fulfillmentPolicyId?: string;
-    name?: string;
-    shippingOptions?: ShippingOption[];
-    globalShipping?: boolean;
-    pickupDropOff?: boolean;
-    freightShipping?: boolean;
-    description?: string;
-  }
-
-  let policies: FulfillmentPolicy[] = [];
-  if (policiesRes.ok) {
-    const data = JSON.parse(policiesRes.body) as { fulfillmentPolicies?: FulfillmentPolicy[] };
-    policies = data.fulfillmentPolicies ?? [];
-  }
-
-  // Summarize each policy clearly
-  const summary = policies.map(p => ({
-    id:              p.fulfillmentPolicyId,
-    name:            p.name,
-    isConfiguredId:  p.fulfillmentPolicyId === configuredPolicyId,
-    shippingOptions: (p.shippingOptions ?? []).map(opt => ({
-      type:     opt.optionType,
-      costType: opt.costType,
-      services: (opt.shippingServices ?? []).map(s => ({
-        code:       s.shippingServiceCode,
-        calculated: s.buyerResponsibleForShipping ?? (opt.costType === "CALCULATED"),
-      })),
-    })),
-  }));
+  const configured = {
+    EBAY_FULFILLMENT_POLICY_ID: process.env.EBAY_FULFILLMENT_POLICY_ID ?? "(not set)",
+    EBAY_PAYMENT_POLICY_ID:     process.env.EBAY_PAYMENT_POLICY_ID     ?? "(not set)",
+    EBAY_RETURN_POLICY_ID:      process.env.EBAY_RETURN_POLICY_ID      ?? "(not set)",
+    EBAY_MERCHANT_LOCATION_KEY: process.env.EBAY_MERCHANT_LOCATION_KEY ?? "(not set — defaults to TTT_CHICAGO)",
+  };
 
   return NextResponse.json({
-    configuredPolicyId,
-    totalPolicies: policies.length,
-    policies: summary,
-    rawPoliciesStatus: policiesRes.status,
-    ...(policiesRes.ok ? {} : { rawError: policiesRes.body }),
+    configured,
+    fulfillmentPolicies: parseList(fulfillmentRes, "fulfillmentPolicies", "fulfillmentPolicyId"),
+    paymentPolicies:     parseList(paymentRes,     "paymentPolicies",     "paymentPolicyId"),
+    returnPolicies:      parseList(returnRes,       "returnPolicies",      "returnPolicyId"),
   });
+
+  void pickId; // suppress unused warning
 }
