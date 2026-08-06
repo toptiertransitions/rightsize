@@ -286,10 +286,13 @@ export async function publishEbayListing(
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
 
-  // Resolve the best eBay leaf category for this item
-  const itemTitle  = item.listingTitleEbay || item.itemName;
-  const categoryId = (await suggestCategoryId(itemTitle))
-    ?? EBAY_CATEGORY_MAP[item.category]
+  // Resolve eBay leaf category — staff-assigned Rightsize category takes priority;
+  // getCategorySuggestions is only used when category is unmapped/Other (it
+  // misclassifies items whose titles contain words like "suite" as clothing).
+  const itemTitle      = item.listingTitleEbay || item.itemName;
+  const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
+  const categoryId     = staticCategory
+    ?? (await suggestCategoryId(itemTitle))
     ?? "29223"; // Antiques > Other (leaf fallback)
 
   const jsonHeaders = {
@@ -374,10 +377,11 @@ export async function updateEbayListing(item: Item): Promise<void> {
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
 
-  const itemTitle  = item.listingTitleEbay || item.itemName;
-  const categoryId = (await suggestCategoryId(itemTitle))
-    ?? EBAY_CATEGORY_MAP[item.category]
-    ?? "29223"; // Antiques > Other (leaf fallback)
+  const itemTitle      = item.listingTitleEbay || item.itemName;
+  const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
+  const categoryId     = staticCategory
+    ?? (await suggestCategoryId(itemTitle))
+    ?? "29223";
 
   const jsonHeaders = {
     "Authorization":    `Bearer ${token}`,
