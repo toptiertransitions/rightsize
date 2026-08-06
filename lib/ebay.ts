@@ -198,18 +198,20 @@ function buildInventoryItem(item: Item): object {
     };
   }
 
+  const qty = Math.max(item.quantity ?? 1, 1);
+
   return {
     product: {
-      title:       (item.listingTitleEbay || item.itemName).trim().slice(0, 80),
-      description: item.listingDescriptionEbay || "",
+      title: (item.listingTitleEbay || item.itemName).trim().slice(0, 80),
+      ...(item.listingDescriptionEbay ? { description: item.listingDescriptionEbay } : {}),
       ...(imageUrls.length ? { imageUrls } : {}),
     },
     condition,
-    ...(item.conditionNotes
-      ? { conditionDescription: item.conditionNotes.slice(0, 1000) }
+    ...(item.conditionNotes?.trim()
+      ? { conditionDescription: item.conditionNotes.trim().slice(0, 1000) }
       : {}),
     availability: {
-      shipToLocationAvailability: { quantity: item.quantity ?? 1 },
+      shipToLocationAvailability: { quantity: qty },
     },
     ...(Object.keys(pkg).length ? { packageWeightAndSize: pkg } : {}),
   };
@@ -220,7 +222,7 @@ function buildOffer(item: Item, sku: string, categoryId: string): object {
     sku,
     marketplaceId:      "EBAY_US",
     format:             "FIXED_PRICE",
-    availableQuantity:  item.quantity ?? 1,
+    availableQuantity:  Math.max(item.quantity ?? 1, 1),
     categoryId,
     pricingSummary: {
       price: { value: (item.valueMid ?? 0).toFixed(2), currency: "USD" },
