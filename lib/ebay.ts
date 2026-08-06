@@ -462,15 +462,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
     throw new Error("No eBay offer ID on record — cannot update.");
   }
 
-  const token        = await getAccessToken();
-  const sku          = item.barcodeNumber ? String(item.barcodeNumber) : `ttt-${item.id}`;
-  const epsImageUrls = await resolveEpsImageUrls(item, token);
-
-  const itemTitle      = item.listingTitleEbay || item.itemName;
-  const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
-  const categoryId     = staticCategory
-    ?? (await suggestCategoryId(itemTitle))
-    ?? "29223";
+  const token = await getAccessToken();
 
   const jsonHeaders = {
     "Authorization":    `Bearer ${token}`,
@@ -478,6 +470,29 @@ export async function updateEbayListing(item: Item): Promise<void> {
     "Content-Language": "en-US",
     "Accept-Language":  "en-US",
   };
+
+  // Fetch the existing offer to get the SKU it was originally created with.
+  // The offer's SKU is the canonical identifier for its linked inventory item —
+  // sending a different SKU in the update body causes error 25604.
+  const offerGetRes = await ebayFetch(
+    `${EBAY_API_BASE}/sell/inventory/v1/offer/${item.ebayOfferId}`,
+    { method: "GET", headers: jsonHeaders }
+  );
+  if (!offerGetRes.ok) {
+    const text = await offerGetRes.text();
+    throw new Error(`eBay offer fetch error (${offerGetRes.status}): ${text}`);
+  }
+  const offerData = await offerGetRes.json() as { sku: string };
+  const sku = offerData.sku;
+  if (!sku) throw new Error("eBay offer returned no SKU — cannot update inventory item.");
+
+  const epsImageUrls = await resolveEpsImageUrls(item, token);
+
+  const itemTitle      = item.listingTitleEbay || item.itemName;
+  const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
+  const categoryId     = staticCategory
+    ?? (await suggestCategoryId(itemTitle))
+    ?? "29223";
 
   // Update inventory item (title, description, condition, photos, dimensions)
   const invRes = await ebayFetch(
