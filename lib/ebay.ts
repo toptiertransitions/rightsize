@@ -334,11 +334,15 @@ export async function publishEbayListing(
       offerId = existing.parameters?.find(p => p.name === "offerId")?.value ?? "";
       if (!offerId) throw new Error("eBay offer already exists but returned no offerId");
       // Update the existing offer so it gets the current category / price
-      await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+      const updateRes = await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
         method:  "PUT",
         headers: jsonHeaders,
         body:    JSON.stringify(buildOffer(item, sku, categoryId)),
       });
+      if (!updateRes.ok) {
+        const t = await updateRes.text();
+        console.log("[ebay] offer update warning (continuing):", updateRes.status, t.slice(0, 300));
+      }
     } else {
       throw new Error(`eBay offer creation error (${offerRes.status}): ${JSON.stringify(errData)}`);
     }
