@@ -128,10 +128,16 @@ export async function POST(req: NextRequest) {
 
       const rsvps = await syncCalendarEventRSVPs(entry.googleEventId);
 
-      // Merge latest status + comment back into helpers
+      // Merge latest status + comment back into helpers.
+      // Only overwrite the Rightsize status when Google Calendar gives a definitive
+      // answer (accepted / declined). If Google returns "pending" (needsAction), the
+      // attendee hasn't responded yet — preserve whatever status Rightsize already has
+      // so that a manager's manual "accepted" override isn't silently undone.
       const updatedHelpers: PlanHelper[] = (entry.helpers || []).map((h) => {
         const rsvp = rsvps.find((r) => r.email === h.email.toLowerCase());
-        return rsvp ? { ...h, status: rsvp.status, comment: rsvp.comment } : h;
+        if (!rsvp) return h;
+        if (rsvp.status === "pending") return { ...h, comment: rsvp.comment };
+        return { ...h, status: rsvp.status, comment: rsvp.comment };
       });
 
       // Detect helpers that newly transitioned to "declined"
