@@ -102,12 +102,20 @@ export const EBAY_CATEGORY_MAP: Record<string, string> = {
 };
 
 // ── Condition map ─────────────────────────────────────────────────────────────
+// Keys cover all known Airtable values (case-sensitive). Default is USED_EXCELLENT
+// because it's broadly accepted across eBay categories; USED_GOOD is rejected by
+// some categories (Fine Art, Antiques) and causes eBay to silently list as NEW.
 const CONDITION_MAP: Record<string, string> = {
-  "Excellent":  "USED_EXCELLENT",
-  "Good":       "USED_GOOD",
-  "Fair":       "USED_ACCEPTABLE",
-  "Poor":       "USED_ACCEPTABLE",
-  "For Parts":  "FOR_PARTS_OR_NOT_WORKING",
+  "Excellent":      "USED_EXCELLENT",
+  "Good":           "USED_GOOD",
+  "Fair":           "USED_ACCEPTABLE",
+  "Poor":           "USED_ACCEPTABLE",
+  "For Parts":      "FOR_PARTS_OR_NOT_WORKING",
+  // Additional values that may exist in Airtable
+  "Like New":       "USED_EXCELLENT",
+  "Very Good":      "USED_GOOD",
+  "Acceptable":     "USED_ACCEPTABLE",
+  "Parts Only":     "FOR_PARTS_OR_NOT_WORKING",
 };
 
 // ── Access token cache (per serverless instance) ──────────────────────────────
@@ -165,7 +173,7 @@ function buildInventoryItem(item: Item): object {
     .slice(0, 24);
   if (!imageUrls.length && item.photoUrl) imageUrls.push(item.photoUrl);
 
-  const condition = CONDITION_MAP[item.condition] ?? "USED_GOOD";
+  const condition = CONDITION_MAP[item.condition] ?? "USED_EXCELLENT";
 
   const hasWeight     = (item.weightPounds ?? 0) > 0 || (item.weightOunces ?? 0) > 0;
   const hasDimensions = (item.widthInches ?? 0) > 0 || (item.heightInches ?? 0) > 0 || (item.depthInches ?? 0) > 0;
@@ -186,7 +194,7 @@ function buildInventoryItem(item: Item): object {
 
   return {
     product: {
-      title:       (item.listingTitleEbay || item.itemName).slice(0, 80),
+      title:       (item.listingTitleEbay || item.itemName).trim().slice(0, 80),
       description: item.listingDescriptionEbay || "",
       ...(imageUrls.length ? { imageUrls } : {}),
     },
