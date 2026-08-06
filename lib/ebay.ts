@@ -275,8 +275,12 @@ export async function publishEbayListing(
     throw new Error("Weight is required for calculated shipping — fill in Weight (lbs/oz) on the item before publishing.");
   }
 
+  if (!item.barcodeNumber) {
+    throw new Error("Barcode / item number is required before publishing to eBay — assign one in Rightsize first.");
+  }
+
   const token = await getAccessToken();
-  const sku   = `ttt-${item.id}`;
+  const sku   = String(item.barcodeNumber);
 
   // Resolve eBay leaf category — staff-assigned Rightsize category takes priority;
   // getCategorySuggestions is only used when category is unmapped/Other (it
@@ -367,7 +371,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
   }
 
   const token = await getAccessToken();
-  const sku   = `ttt-${item.id}`;
+  const sku   = item.barcodeNumber ? String(item.barcodeNumber) : `ttt-${item.id}`;
 
   const itemTitle      = item.listingTitleEbay || item.itemName;
   const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
