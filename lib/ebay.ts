@@ -57,7 +57,21 @@ function ebayFetch(
   });
 }
 
-// ── Category map ──────────────────────────────────────────────────────────────
+// ── Category suggestion (auto-detect best leaf category from item title) ──────
+async function suggestCategoryId(title: string, token: string): Promise<string | null> {
+  const q = encodeURIComponent(title.slice(0, 80));
+  const res = await ebayFetch(
+    `https://api.ebay.com/commerce/taxonomy/v1/category_tree/0/get_category_suggestions?q=${q}`,
+    { method: "GET", headers: { "Authorization": `Bearer ${token}` } }
+  );
+  if (!res.ok) return null;
+  const data = await res.json() as {
+    categorySuggestions?: { category: { categoryId: string } }[]
+  };
+  return data.categorySuggestions?.[0]?.category?.categoryId ?? null;
+}
+
+// ── Category map (fallback when suggestion API fails) ─────────────────────────
 export const EBAY_CATEGORY_MAP: Record<string, string> = {
   "Seating":                           "261990",
   "Tables & Desks":                    "261991",
@@ -187,13 +201,13 @@ function buildInventoryItem(item: Item): object {
   };
 }
 
-function buildOffer(item: Item, sku: string): object {
+function buildOffer(item: Item, sku: string, categoryId: string): object {
   return {
     sku,
     marketplaceId:      "EBAY_US",
     format:             "FIXED_PRICE",
     availableQuantity:  item.quantity ?? 1,
-    categoryId:         EBAY_CATEGORY_MAP[item.category] ?? "99",
+    categoryId,
     pricingSummary: {
       price: { value: (item.valueMid ?? 0).toFixed(2), currency: "USD" },
     },
@@ -220,6 +234,13 @@ export async function publishEbayListing(
 
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
+
+  // Resolve the best eBay leaf category for this item
+  const itemTitle  = item.listingTitleEbay || item.itemName;
+  const categoryId = (await suggestCategoryId(itemTitle, token))
+    ?? EBAY_CATEGORY_MAP[item.category]
+    ?? "99";
+
   const jsonHeaders = {
     "Authorization":   `Bearer ${token}`,
     "Content-Type":    "application/json",
@@ -244,7 +265,7 @@ export async function publishEbayListing(
   const offerRes = await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
     method:  "POST",
     headers: jsonHeaders,
-    body:    JSON.stringify(buildOffer(item, sku)),
+    body:    JSON.stringify(buildOffer(item, sku, categoryId)),
   });
   if (!offerRes.ok) {
     const text = await offerRes.text();
@@ -277,6 +298,12 @@ export async function updateEbayListing(item: Item): Promise<void> {
 
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
+
+  const itemTitle  = item.listingTitleEbay || item.itemName;
+  const categoryId = (await suggestCategoryId(itemTitle, token))
+    ?? EBAY_CATEGORY_MAP[item.category]
+    ?? "99";
+
   const jsonHeaders = {
     "Authorization":   `Bearer ${token}`,
     "Content-Type":    "application/json",
@@ -303,7 +330,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
     {
       method:  "PUT",
       headers: jsonHeaders,
-      body:    JSON.stringify(buildOffer(item, sku)),
+      body:    JSON.stringify(buildOffer(item, sku, categoryId)),
     }
   );
   if (!offerRes.ok) {
