@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isTTTAdmin } from "@/lib/config";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
+import { CreateLocationButton } from "./CreateLocationButton";
 
 interface Props {
   searchParams: Promise<{ refresh_token?: string; error?: string }>;
@@ -134,28 +135,13 @@ EBAY_MERCHANT_LOCATION_KEY=TTT_CHICAGO`}
         {/* Step 4: Merchant location (one-time) */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Step 4 — Merchant Location</h2>
-          <p className="text-gray-300 text-sm mb-3">
-            eBay requires a merchant location before offers can be published. Run this once after OAuth is complete
-            (replace the token with a valid access token from the eBay developer console or generate one via the API):
+          <p className="text-gray-300 text-sm mb-4">
+            eBay requires a warehouse location before offers can be published. Click below to create it — only needs to be done once.
           </p>
-          <pre className="bg-gray-800 rounded-xl p-4 text-xs text-gray-300 overflow-x-auto">
-{`curl -X POST https://api.ebay.com/sell/inventory/v1/location/TTT_CHICAGO \\
-  -H "Authorization: Bearer {ACCESS_TOKEN}" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "location": {
-      "address": {
-        "city": "Chicago",
-        "stateOrProvince": "IL",
-        "postalCode": "60601",
-        "country": "US"
-      }
-    },
-    "locationTypes": ["WAREHOUSE"],
-    "name": "Top Tier Transitions Chicago",
-    "merchantLocationStatus": "ENABLED"
-  }'`}
-          </pre>
+          {fullyConfigured
+            ? <CreateLocationButton />
+            : <p className="text-amber-400 text-sm">Complete Steps 1–3 first.</p>
+          }
         </div>
       </main>
     </div>
