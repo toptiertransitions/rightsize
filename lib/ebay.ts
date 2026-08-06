@@ -188,8 +188,8 @@ async function transloadImageToEPS(sourceUrl: string, token: string): Promise<st
   const cached = _epsUrlCache.get(sourceUrl);
   if (cached) { console.log("[ebay] EPS cache hit:", sourceUrl); return cached; }
   try {
-    // Step 1: upload source URL to eBay Media API
-    const uploadRes = await ebayFetch("https://api.ebay.com/commerce/media/v1/image/createImageFromUrl", {
+    // Step 1: upload source URL to eBay Media API (endpoint is v1_beta, not v1)
+    const uploadRes = await ebayFetch("https://api.ebay.com/commerce/media/v1_beta/image/createImageFromUrl", {
       method:  "POST",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body:    JSON.stringify({ imageUrl: sourceUrl }),
