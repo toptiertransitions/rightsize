@@ -369,6 +369,12 @@ export interface Item {
   claimedByVendorId?: string;
   vendorQueue?: string[];   // parsed from JSON stored in Airtable Long Text
   vendorOutreachSentAt?: string;
+  // eBay listing
+  ebayListingId?: string;
+  ebayOfferId?: string;
+  ebayListingStatus?: "Active" | "Ended" | "Error" | "Pending";
+  ebayLastSyncedAt?: string;
+  ebaySyncError?: string;
 }
 
 export type PriceChangeType = "Listed" | "Manual Edit" | "Price Drop 1" | "Price Drop 2" | "Reverted" | "Sale Price";

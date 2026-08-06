@@ -3834,3 +3834,71 @@ export function buildWrappedNotificationEmail({
 </body>
 </html>`;
 }
+
+// ── eBay listing notification ─────────────────────────────────────────────────
+export function buildEbayListingEmail(p: {
+  itemName: string;
+  category: string;
+  condition: string;
+  price: number;
+  listingId: string;
+  listingUrl: string;
+  rightsizeUrl: string;
+}): string {
+  const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>eBay Listing Published</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+        <tr><td style="background:#1a3d2b;padding:28px 32px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:.1em;">Top Tier Transitions</p>
+          <p style="margin:6px 0 0;font-size:20px;font-weight:700;color:#ffffff;">eBay Listing Published</p>
+        </td></tr>
+        <tr><td style="padding:28px 32px;">
+          <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+            <tr style="background:#f9fafb;"><td colspan="2" style="padding:10px 14px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Item Details</td></tr>
+            <tr style="border-top:1px solid #e5e7eb;">
+              <td style="padding:10px 14px;font-size:13px;color:#374151;">Title</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:600;color:#111827;text-align:right;">${p.itemName}</td>
+            </tr>
+            <tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+              <td style="padding:10px 14px;font-size:13px;color:#374151;">Category</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:600;color:#111827;text-align:right;">${p.category}</td>
+            </tr>
+            <tr style="border-top:1px solid #e5e7eb;">
+              <td style="padding:10px 14px;font-size:13px;color:#374151;">Condition</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:600;color:#111827;text-align:right;">${p.condition}</td>
+            </tr>
+            <tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+              <td style="padding:10px 14px;font-size:13px;color:#374151;">List Price</td>
+              <td style="padding:10px 14px;font-size:14px;font-weight:700;color:#1a3d2b;text-align:right;">$${fmt(p.price)}</td>
+            </tr>
+            <tr style="border-top:1px solid #e5e7eb;">
+              <td style="padding:10px 14px;font-size:13px;color:#374151;">eBay Listing ID</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:600;color:#111827;text-align:right;font-family:monospace;">${p.listingId}</td>
+            </tr>
+          </table>
+
+          <table role="presentation" width="100%" style="margin-top:24px;">
+            <tr>
+              <td style="padding-right:8px;">
+                <a href="${p.listingUrl}" style="display:block;text-align:center;padding:11px 0;background:#e43137;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;border-radius:10px;">View on eBay</a>
+              </td>
+              <td style="padding-left:8px;">
+                <a href="${p.rightsizeUrl}" style="display:block;text-align:center;padding:11px 0;background:#1a3d2b;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;border-radius:10px;">View in Rightsize</a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;">
+          <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Top Tier Transitions &middot; Internal Use Only</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

@@ -5,6 +5,72 @@ import Image from "next/image";
 import type { Item, ItemStatus } from "@/lib/types";
 import { Pagination } from "../components/Pagination";
 
+// ─── eBay action button ───────────────────────────────────────────────────────
+function EbayActionButton({ item, onUpdate }: { item: Item; onUpdate: (updated: Item) => void }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    setLoading(true);
+    const isUpdate = !!item.ebayListingId;
+    try {
+      const res = await fetch("/api/ebay/listing", {
+        method:  isUpdate ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ itemId: item.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "eBay operation failed");
+      onUpdate(data.item as Item);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "eBay error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (item.ebayListingStatus === "Pending" || loading) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1">
+        <svg className="w-3.5 h-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <span className="text-xs text-gray-400">Publishing…</span>
+      </div>
+    );
+  }
+
+  if (item.ebayListingId) {
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          onClick={handleClick}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-forest-800 hover:bg-forest-700 text-forest-200 border border-forest-600 transition-colors whitespace-nowrap"
+        >
+          Edit eBay Listing
+        </button>
+        {item.ebayListingStatus === "Error" && item.ebaySyncError && (
+          <span className="text-[10px] text-red-400 px-1 max-w-[140px] truncate" title={item.ebaySyncError}>
+            {item.ebaySyncError}
+          </span>
+        )}
+        {item.ebayLastSyncedAt && item.ebayListingStatus === "Active" && (
+          <span className="text-[10px] text-gray-500 px-1">synced {item.ebayLastSyncedAt}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 border border-indigo-700 transition-colors whitespace-nowrap"
+    >
+      Publish to eBay
+    </button>
+  );
+}
+
 const PAGE_SIZE = 25;
 const PF_STATUSES: ItemStatus[] = ["Listed", "Sold", "Discarded"];
 
@@ -301,6 +367,10 @@ function BulkBar({ count, onClear, onBulkStatus, onBulkShare, onBulkStaffSeller,
 // ─── Main component ───────────────────────────────────────────────────────────
 export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffMembers }: Props) {
   const [items, setItems] = useState<Item[]>(initialItems);
+
+  function updateItemInList(updated: Item) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+  }
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [flash, setFlash] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
@@ -514,6 +584,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                   <th className="px-3 py-3 text-right w-24">{thBtn("staffTime", "Staff Time", "justify-end")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("soldDate", "Sold Date")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
+                  <th className="px-3 py-3 text-left min-w-[160px]"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">eBay</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -683,6 +754,11 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                         {item.payoutPaidAt && (
                           <p className="text-[10px] text-green-400 px-2">{fmtDate(item.payoutPaidAt)}</p>
                         )}
+                      </td>
+
+                      {/* eBay */}
+                      <td className="px-3 py-2.5">
+                        <EbayActionButton item={item} onUpdate={updateItemInList} />
                       </td>
                     </tr>
                   );

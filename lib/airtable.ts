@@ -769,6 +769,12 @@ export async function updateItem(
     claimedByVendorId: "ClaimedByVendorId",
     vendorQueue: "",  // handled specially below
     vendorOutreachSentAt: "VendorOutreachSentAt",
+    // eBay listing
+    ebayListingId: "EbayListingId",
+    ebayOfferId: "EbayOfferId",
+    ebayListingStatus: "EbayListingStatus",
+    ebayLastSyncedAt: "EbayLastSyncedAt",
+    ebaySyncError: "EbaySyncError",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -1287,6 +1293,11 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
       try { return JSON.parse(raw) as string[]; } catch { return undefined; }
     })(),
     vendorOutreachSentAt: toStr(f["VendorOutreachSentAt"]) || undefined,
+    ebayListingId: toStr(f["EbayListingId"]) || undefined,
+    ebayOfferId: toStr(f["EbayOfferId"]) || undefined,
+    ebayListingStatus: (toStr(f["EbayListingStatus"]) || undefined) as "Active" | "Ended" | "Error" | "Pending" | undefined,
+    ebayLastSyncedAt: toStr(f["EbayLastSyncedAt"]) || undefined,
+    ebaySyncError: toStr(f["EbaySyncError"]) || undefined,
   };
 }
 
