@@ -175,8 +175,9 @@ export async function publishEbayListing(
     {
       method:  "PUT",
       headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type":  "application/json",
+        "Authorization":   `Bearer ${token}`,
+        "Content-Type":    "application/json",
+        "Accept-Language": "en-US",
       },
       body: JSON.stringify(buildInventoryItem(item)),
     }
@@ -206,7 +207,7 @@ export async function publishEbayListing(
     `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
     {
       method:  "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Accept-Language": "en-US" },
     }
   );
   if (!pubRes.ok) {
@@ -233,8 +234,9 @@ export async function updateEbayListing(item: Item): Promise<void> {
     {
       method:  "PUT",
       headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type":  "application/json",
+        "Authorization":   `Bearer ${token}`,
+        "Content-Type":    "application/json",
+        "Accept-Language": "en-US",
       },
       body: JSON.stringify(buildInventoryItem(item)),
     }
@@ -249,7 +251,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
     `${EBAY_API_BASE}/sell/inventory/v1/offer/${item.ebayOfferId}`,
     {
       method:  "PUT",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Accept-Language": "en-US" },
       body: JSON.stringify(buildOffer(item, sku)),
     }
   );
