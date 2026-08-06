@@ -28,6 +28,7 @@ function ebayFetch(
     if (bodyBuf) headers["content-length"] = String(bodyBuf.length);
 
     console.log("[ebayFetch]", init.method, parsed.pathname, "headers:", Object.keys(headers).join(", "));
+    if (init.body) console.log("[ebayFetch] body preview:", init.body.slice(0, 300));
 
     const req = httpsRequest(
       {
@@ -42,6 +43,9 @@ function ebayFetch(
         res.on("end", () => {
           const raw    = Buffer.concat(chunks).toString("utf8");
           const status = res.statusCode ?? 0;
+          if (status < 200 || status >= 300) {
+            console.log("[ebayFetch] error", status, parsed.pathname, raw.slice(0, 500));
+          }
           resolve({
             ok:     status >= 200 && status < 300,
             status,
