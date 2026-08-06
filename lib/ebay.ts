@@ -308,7 +308,7 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
 
   return {
     product: {
-      title: (item.listingTitleEbay || item.itemName).trim().slice(0, 80),
+      title: (item.itemName || item.listingTitleEbay || "").trim().slice(0, 80),
       ...(item.listingDescriptionEbay ? { description: item.listingDescriptionEbay } : {}),
       ...(imageUrls.length ? { imageUrls } : {}),
     },
@@ -350,8 +350,8 @@ export async function publishEbayListing(
   if (!item.valueMid || item.valueMid <= 0) {
     throw new Error("Set a target price before publishing to eBay.");
   }
-  if (!item.listingTitleEbay && !item.itemName) {
-    throw new Error("Item has no title — set an eBay listing title before publishing.");
+  if (!item.itemName && !item.listingTitleEbay) {
+    throw new Error("Item has no name — fill in the Item Name before publishing.");
   }
   const hasWeight = (item.weightPounds ?? 0) > 0 || (item.weightOunces ?? 0) > 0;
   if (!hasWeight) {
@@ -369,7 +369,7 @@ export async function publishEbayListing(
   // Resolve eBay leaf category — staff-assigned Rightsize category takes priority;
   // getCategorySuggestions is only used when category is unmapped/Other (it
   // misclassifies items whose titles contain words like "suite" as clothing).
-  const itemTitle      = item.listingTitleEbay || item.itemName;
+  const itemTitle      = item.itemName || item.listingTitleEbay || "";
   const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
   const categoryId     = staticCategory
     ?? (await suggestCategoryId(itemTitle))
@@ -480,7 +480,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
 
   const epsImageUrls = await resolveEpsImageUrls(item, token);
 
-  const itemTitle      = item.listingTitleEbay || item.itemName;
+  const itemTitle      = item.itemName || item.listingTitleEbay || "";
   const staticCategory = item.category !== "Other" ? EBAY_CATEGORY_MAP[item.category] : undefined;
   const categoryId     = staticCategory
     ?? (await suggestCategoryId(itemTitle))
