@@ -16,8 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "EBAY_DELETION_TOKEN not configured" }, { status: 500 });
   }
 
-  // Derive endpoint URL from the request itself so it exactly matches what eBay is calling
-  const endpointUrl = req.url.split("?")[0];
+  const endpointUrl = "https://app.toptiertransitions.com/api/ebay/account-deletion";
 
   const hash = createHash("sha256");
   hash.update(challengeCode);
