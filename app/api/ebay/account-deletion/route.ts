@@ -12,17 +12,20 @@ export async function GET(req: NextRequest) {
   }
 
   const verificationToken = process.env.EBAY_DELETION_TOKEN;
-  const endpointUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://rightsize.vercel.app"}/api/ebay/account-deletion`;
-
   if (!verificationToken) {
     return NextResponse.json({ error: "EBAY_DELETION_TOKEN not configured" }, { status: 500 });
   }
 
-  const hash = createHash("sha256")
-    .update(challengeCode + verificationToken + endpointUrl)
-    .digest("hex");
+  // Derive endpoint URL from the request itself so it exactly matches what eBay is calling
+  const endpointUrl = req.url.split("?")[0];
 
-  return NextResponse.json({ challengeResponse: hash });
+  const hash = createHash("sha256");
+  hash.update(challengeCode);
+  hash.update(verificationToken);
+  hash.update(endpointUrl);
+  const challengeResponse = hash.digest("hex");
+
+  return NextResponse.json({ challengeResponse });
 }
 
 export async function POST() {
