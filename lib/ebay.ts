@@ -1,3 +1,5 @@
+import { request as httpsRequest } from "node:https";
+import { URL } from "node:url";
 import type { Item } from "@/lib/types";
 
 const EBAY_API_BASE = "https://api.ebay.com";
@@ -6,6 +8,54 @@ const EBAY_SCOPES = [
   "https://api.ebay.com/oauth/api_scope/sell.inventory",
   "https://api.ebay.com/oauth/api_scope/sell.account",
 ].join(" ");
+
+// ── Raw HTTPS helper (bypasses Next.js patched fetch) ─────────────────────────
+interface EbayResponse {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
+function ebayFetch(
+  url: string,
+  init: { method: string; headers: Record<string, string>; body?: string }
+): Promise<EbayResponse> {
+  return new Promise((resolve, reject) => {
+    const parsed   = new URL(url);
+    const bodyBuf  = init.body ? Buffer.from(init.body, "utf8") : undefined;
+    const headers  = { ...init.headers };
+    if (bodyBuf) headers["content-length"] = String(bodyBuf.length);
+
+    const req = httpsRequest(
+      {
+        hostname: parsed.hostname,
+        path:     parsed.pathname + parsed.search,
+        method:   init.method,
+        headers,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          const raw    = Buffer.concat(chunks).toString("utf8");
+          const status = res.statusCode ?? 0;
+          resolve({
+            ok:     status >= 200 && status < 300,
+            status,
+            text:   () => Promise.resolve(raw),
+            json:   () => Promise.resolve(JSON.parse(raw)),
+          });
+        });
+        res.on("error", reject);
+      }
+    );
+
+    req.on("error", reject);
+    if (bodyBuf) req.write(bodyBuf);
+    req.end();
+  });
+}
 
 // ── Category map ──────────────────────────────────────────────────────────────
 export const EBAY_CATEGORY_MAP: Record<string, string> = {
@@ -65,18 +115,19 @@ async function getAccessToken(): Promise<string> {
   }
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetch(EBAY_TOKEN_URL, {
-    method: "POST",
-    headers: new Headers({
+  const body = new URLSearchParams({
+    grant_type:    "refresh_token",
+    refresh_token: refreshToken,
+    scope:         EBAY_SCOPES,
+  }).toString();
+
+  const res = await ebayFetch(EBAY_TOKEN_URL, {
+    method:  "POST",
+    headers: {
       "Authorization": `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    }),
-    body: new URLSearchParams({
-      grant_type:    "refresh_token",
-      refresh_token: refreshToken,
-      scope:         EBAY_SCOPES,
-    }).toString(),
-    cache: "no-store",
+      "Content-Type":  "application/x-www-form-urlencoded",
+    },
+    body,
   });
 
   if (!res.ok) {
@@ -84,10 +135,10 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`eBay token refresh failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
+  const data = await res.json() as { access_token: string; expires_in: number };
   _cachedToken = {
-    token:     data.access_token as string,
-    expiresAt: Date.now() + (data.expires_in as number) * 1000,
+    token:     data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
   };
   return _cachedToken.token;
 }
@@ -169,19 +220,19 @@ export async function publishEbayListing(
 
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
+  const jsonHeaders = {
+    "Authorization":   `Bearer ${token}`,
+    "Content-Type":    "application/json",
+    "Accept-Language": "en-US",
+  };
 
   // 1. Create / overwrite inventory item
-  const invRes = await fetch(
+  const invRes = await ebayFetch(
     `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     {
       method:  "PUT",
-      headers: new Headers({
-        "Authorization":   `Bearer ${token}`,
-        "Content-Type":    "application/json",
-        "Accept-Language": "en-US",
-      }),
-      body: JSON.stringify(buildInventoryItem(item)),
-      cache: "no-store",
+      headers: jsonHeaders,
+      body:    JSON.stringify(buildInventoryItem(item)),
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -190,15 +241,10 @@ export async function publishEbayListing(
   }
 
   // 2. Create offer
-  const offerRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
+  const offerRes = await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
     method:  "POST",
-    headers: new Headers({
-      "Authorization":   `Bearer ${token}`,
-      "Content-Type":    "application/json",
-      "Accept-Language": "en-US",
-    }),
-    body: JSON.stringify(buildOffer(item, sku)),
-    cache: "no-store",
+    headers: jsonHeaders,
+    body:    JSON.stringify(buildOffer(item, sku)),
   });
   if (!offerRes.ok) {
     const text = await offerRes.text();
@@ -207,16 +253,11 @@ export async function publishEbayListing(
   const { offerId } = await offerRes.json() as { offerId: string };
 
   // 3. Publish offer → gets listing ID
-  const pubRes = await fetch(
+  const pubRes = await ebayFetch(
     `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
     {
       method:  "POST",
-      headers: new Headers({
-        "Authorization":   `Bearer ${token}`,
-        "Content-Type":    "application/json",
-        "Accept-Language": "en-US",
-      }),
-      cache: "no-store",
+      headers: jsonHeaders,
     }
   );
   if (!pubRes.ok) {
@@ -236,19 +277,19 @@ export async function updateEbayListing(item: Item): Promise<void> {
 
   const token = await getAccessToken();
   const sku   = `ttt-${item.id}`;
+  const jsonHeaders = {
+    "Authorization":   `Bearer ${token}`,
+    "Content-Type":    "application/json",
+    "Accept-Language": "en-US",
+  };
 
   // Update inventory item (title, description, condition, photos, dimensions)
-  const invRes = await fetch(
+  const invRes = await ebayFetch(
     `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     {
       method:  "PUT",
-      headers: new Headers({
-        "Authorization":   `Bearer ${token}`,
-        "Content-Type":    "application/json",
-        "Accept-Language": "en-US",
-      }),
-      body: JSON.stringify(buildInventoryItem(item)),
-      cache: "no-store",
+      headers: jsonHeaders,
+      body:    JSON.stringify(buildInventoryItem(item)),
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -257,17 +298,12 @@ export async function updateEbayListing(item: Item): Promise<void> {
   }
 
   // Update offer (price, quantity, category)
-  const offerRes = await fetch(
+  const offerRes = await ebayFetch(
     `${EBAY_API_BASE}/sell/inventory/v1/offer/${item.ebayOfferId}`,
     {
       method:  "PUT",
-      headers: new Headers({
-        "Authorization":   `Bearer ${token}`,
-        "Content-Type":    "application/json",
-        "Accept-Language": "en-US",
-      }),
-      body: JSON.stringify(buildOffer(item, sku)),
-      cache: "no-store",
+      headers: jsonHeaders,
+      body:    JSON.stringify(buildOffer(item, sku)),
     }
   );
   if (!offerRes.ok) {
@@ -295,18 +331,17 @@ export async function exchangeEbayCode(
   const ruName       = process.env.EBAY_RUNAME!;
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetch(EBAY_TOKEN_URL, {
+  const res = await ebayFetch(EBAY_TOKEN_URL, {
     method:  "POST",
-    headers: new Headers({
+    headers: {
       "Authorization": `Basic ${credentials}`,
       "Content-Type":  "application/x-www-form-urlencoded",
-    }),
+    },
     body: new URLSearchParams({
       grant_type:   "authorization_code",
       code,
       redirect_uri: ruName,
     }).toString(),
-    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -314,9 +349,9 @@ export async function exchangeEbayCode(
     throw new Error(`eBay code exchange failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
+  const data = await res.json() as { access_token: string; refresh_token: string };
   return {
-    accessToken:  data.access_token  as string,
-    refreshToken: data.refresh_token as string,
+    accessToken:  data.access_token,
+    refreshToken: data.refresh_token,
   };
 }
