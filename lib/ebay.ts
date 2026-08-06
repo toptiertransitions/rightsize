@@ -125,6 +125,10 @@ const CONDITION_MAP: Record<string, string> = {
   "Parts Only":     "FOR_PARTS_OR_NOT_WORKING",
 };
 
+// eBay clothing/apparel categories only allow conditions up to "Pre-owned" (ID 3000,
+// equivalent to USED_EXCELLENT). USED_GOOD (5000) and below are rejected with 25021.
+const APPAREL_CATEGORIES = new Set(["Handbags & Accessories", "Clothing & Furs"]);
+
 // ── Access token cache (per serverless instance) ──────────────────────────────
 let _cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -180,7 +184,12 @@ function buildInventoryItem(item: Item): object {
     .slice(0, 24);
   if (!imageUrls.length && item.photoUrl) imageUrls.push(item.photoUrl);
 
-  const condition = CONDITION_MAP[item.condition] ?? "USED_EXCELLENT";
+  let condition = CONDITION_MAP[item.condition] ?? "USED_EXCELLENT";
+  if (APPAREL_CATEGORIES.has(item.category ?? "")) {
+    if (condition === "USED_GOOD" || condition === "USED_ACCEPTABLE" || condition === "FOR_PARTS_OR_NOT_WORKING") {
+      condition = "USED_EXCELLENT";
+    }
+  }
 
   const hasWeight     = (item.weightPounds ?? 0) > 0 || (item.weightOunces ?? 0) > 0;
   const hasDimensions = (item.widthInches ?? 0) > 0 || (item.heightInches ?? 0) > 0 || (item.depthInches ?? 0) > 0;
