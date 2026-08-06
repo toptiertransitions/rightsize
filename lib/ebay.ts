@@ -398,6 +398,33 @@ export async function updateEbayListing(item: Item): Promise<void> {
   }
 }
 
+// ── Health check (used by daily cron) ────────────────────────────────────────
+const EBAY_REQUIRED_VARS = [
+  "EBAY_CLIENT_ID",
+  "EBAY_CLIENT_SECRET",
+  "EBAY_REFRESH_TOKEN",
+  "EBAY_FULFILLMENT_POLICY_ID",
+  "EBAY_PAYMENT_POLICY_ID",
+  "EBAY_RETURN_POLICY_ID",
+];
+
+export async function checkEbayConnection(): Promise<{
+  ok: boolean;
+  missingVars?: string[];
+  error?: string;
+}> {
+  const missing = EBAY_REQUIRED_VARS.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    return { ok: false, missingVars: missing, error: `Missing env vars: ${missing.join(", ")}` };
+  }
+  try {
+    await getAccessToken();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // ── OAuth helpers (used by setup routes) ─────────────────────────────────────
 export function getEbayAuthUrl(): string {
   const clientId = process.env.EBAY_CLIENT_ID;

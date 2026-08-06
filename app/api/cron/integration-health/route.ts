@@ -12,6 +12,7 @@ import {
 } from "@/lib/airtable";
 import { getValidQBOToken } from "@/lib/qbo";
 import { getSquareLocationName } from "@/lib/square";
+import { checkEbayConnection } from "@/lib/ebay";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -242,10 +243,11 @@ function buildHealthEmail(
   gmailResults: GmailCheckResult[],
   qboResult: { ok: boolean; companyName: string; realmId?: string; wasRefreshed?: boolean; error?: string },
   squareResult: { ok: boolean; locationName: string; error?: string },
+  ebayResult: { ok: boolean; missingVars?: string[]; error?: string },
   checkedAt: string
 ): string {
-  const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok && squareResult.ok;
-  const failCount = (calResult.ok ? 0 : 1) + gmailResults.filter((r) => !r.ok).length + (qboResult.ok ? 0 : 1) + (squareResult.ok ? 0 : 1);
+  const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok && squareResult.ok && ebayResult.ok;
+  const failCount = (calResult.ok ? 0 : 1) + gmailResults.filter((r) => !r.ok).length + (qboResult.ok ? 0 : 1) + (squareResult.ok ? 0 : 1) + (ebayResult.ok ? 0 : 1);
 
   const statusBadge = (ok: boolean) =>
     ok
@@ -349,6 +351,29 @@ function buildHealthEmail(
         </tbody>
       </table>
 
+      <!-- eBay Integration -->
+      <h2 style="font-family:Georgia,serif;font-size:17px;font-weight:400;color:#1f2937;margin:28px 0 16px;">eBay Marketplace</h2>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Account</th>
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Status</th>
+            <th style="padding:10px 16px;text-align:left;font-family:Inter,sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:12px 16px;font-family:Inter,sans-serif;font-size:14px;color:#1f2937;">Top Tier Transitions eBay</td>
+            <td style="padding:12px 16px;">${statusBadge(ebayResult.ok)}</td>
+            <td style="padding:12px 16px;font-family:Inter,sans-serif;font-size:13px;color:#dc2626;">${ebayResult.error || ""}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${ebayResult.missingVars && ebayResult.missingVars.length > 0 ? `
+      <p style="margin:8px 0 0;font-family:Inter,sans-serif;font-size:12px;color:#6b7280;">
+        Missing vars: <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;">${ebayResult.missingVars.join(", ")}</code>
+      </p>` : ""}
+
       <!-- Square Integration -->
       <h2 style="font-family:Georgia,serif;font-size:17px;font-weight:400;color:#1f2937;margin:28px 0 16px;">Square (POS / ProFoundFinds)</h2>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
@@ -377,6 +402,7 @@ function buildHealthEmail(
           <li><strong>Gmail:</strong> The affected staff member should go to their profile page and click "Connect Gmail"</li>
           <li><strong>QuickBooks:</strong> Go to <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/invoicing" style="color:#92400e;">/admin/invoicing</a> and click "Connect QuickBooks"</li>
           <li><strong>Square:</strong> Verify <code>SQUARE_ACCESS_TOKEN</code>, <code>SQUARE_LOCATION_ID</code>, and <code>SQUARE_WEBHOOK_SIGNATURE_KEY</code> are set correctly in Vercel environment variables</li>
+          <li><strong>eBay:</strong> Go to <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/ebay-setup" style="color:#92400e;">/admin/ebay-setup</a> and complete the OAuth flow to get a new refresh token. eBay refresh tokens expire after 18 months.</li>
         </ul>
       </div>` : ""}
 
@@ -386,6 +412,7 @@ function buildHealthEmail(
         <p style="margin:0;font-family:Inter,sans-serif;font-size:13px;color:#64748b;line-height:1.6;">
           This check runs daily at 6AM CST. Gmail tokens expiring within 8 hours are proactively refreshed automatically.
           QBO tokens are proactively refreshed every 6 hours by the token keepalive job.
+          eBay refresh tokens last 18 months — this daily check verifies the token is still valid each morning.
           If you see frequent disconnections, the Google OAuth app may need to be verified/published in Google Cloud Console
           (unverified apps are limited to 7-day refresh tokens).
         </p>
@@ -452,11 +479,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Run checks in parallel
-    const [calResult, gmailResults, qboResult, squareResult] = await Promise.all([
+    const [calResult, gmailResults, qboResult, squareResult, ebayResult] = await Promise.all([
       checkCalendarIntegration(),
       checkAndRefreshGmailTokens(staffByClerkId, staffMembers),
       checkQuickBooksIntegration(),
       checkSquareIntegration(),
+      checkEbayConnection(),
     ]);
 
     // Supplement admin email lookup with Gmail token emails for env-var admins
@@ -483,12 +511,12 @@ export async function GET(req: NextRequest) {
       hour12: true,
     });
 
-    const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok && squareResult.ok;
+    const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok && squareResult.ok && ebayResult.ok;
     const subject = allOk
       ? `✓ Integrations OK — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
       : `⚠ Integration Alert — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-    const html = buildHealthEmail(calResult, gmailResults, qboResult, squareResult, checkedAt);
+    const html = buildHealthEmail(calResult, gmailResults, qboResult, squareResult, ebayResult, checkedAt);
 
     if (adminEmails.length > 0) {
       await resend.emails.send({
@@ -506,6 +534,7 @@ export async function GET(req: NextRequest) {
       gmail: gmailResults.map((r) => ({ displayName: r.displayName, ok: r.ok, wasRefreshed: r.wasRefreshed, error: r.error })),
       quickbooks: { ok: qboResult.ok, companyName: qboResult.companyName, wasRefreshed: qboResult.wasRefreshed, error: qboResult.error },
       square: { ok: squareResult.ok, locationName: squareResult.locationName, error: squareResult.error },
+      ebay: { ok: ebayResult.ok, error: ebayResult.error, missingVars: ebayResult.missingVars },
       emailsSentTo: adminEmails,
       allOk,
     };
