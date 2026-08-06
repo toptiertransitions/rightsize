@@ -175,9 +175,8 @@ export async function publishEbayListing(
     {
       method:  "PUT",
       headers: {
-        "Authorization":    `Bearer ${token}`,
-        "Content-Type":     "application/json",
-        "Content-Language": "en-US",
+        "Authorization": `Bearer ${token}`,
+        "Content-Type":  "application/json",
       },
       body: JSON.stringify(buildInventoryItem(item)),
     }
@@ -234,9 +233,8 @@ export async function updateEbayListing(item: Item): Promise<void> {
     {
       method:  "PUT",
       headers: {
-        "Authorization":    `Bearer ${token}`,
-        "Content-Type":     "application/json",
-        "Content-Language": "en-US",
+        "Authorization": `Bearer ${token}`,
+        "Content-Type":  "application/json",
       },
       body: JSON.stringify(buildInventoryItem(item)),
     }
