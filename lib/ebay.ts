@@ -27,6 +27,8 @@ function ebayFetch(
     const headers  = { ...init.headers };
     if (bodyBuf) headers["content-length"] = String(bodyBuf.length);
 
+    console.log("[ebayFetch]", init.method, parsed.pathname, "headers:", Object.keys(headers).join(", "));
+
     const req = httpsRequest(
       {
         hostname: parsed.hostname,
@@ -250,9 +252,8 @@ export async function publishEbayListing(
     ?? "99";
 
   const jsonHeaders = {
-    "Authorization":   `Bearer ${token}`,
-    "Content-Type":    "application/json",
-    "Accept-Language": "en-US",
+    "Authorization": `Bearer ${token}`,
+    "Content-Type":  "application/json",
   };
 
   // 1. Create / overwrite inventory item
@@ -313,9 +314,8 @@ export async function updateEbayListing(item: Item): Promise<void> {
     ?? "99";
 
   const jsonHeaders = {
-    "Authorization":   `Bearer ${token}`,
-    "Content-Type":    "application/json",
-    "Accept-Language": "en-US",
+    "Authorization": `Bearer ${token}`,
+    "Content-Type":  "application/json",
   };
 
   // Update inventory item (title, description, condition, photos, dimensions)
