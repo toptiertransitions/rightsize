@@ -278,17 +278,30 @@ export async function publishEbayListing(
     throw new Error(`eBay inventory item error (${invRes.status}): ${text}`);
   }
 
-  // 2. Create offer
+  // 2. Create offer (recover gracefully if one already exists for this SKU)
   const offerRes = await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
     method:  "POST",
     headers: jsonHeaders,
     body:    JSON.stringify(buildOffer(item, sku, categoryId)),
   });
-  if (!offerRes.ok) {
-    const text = await offerRes.text();
-    throw new Error(`eBay offer creation error (${offerRes.status}): ${text}`);
+
+  let offerId: string;
+  if (offerRes.ok) {
+    const data = await offerRes.json() as { offerId: string };
+    offerId = data.offerId;
+  } else {
+    // 25002 = offer already exists — eBay returns the existing offerId in the error
+    const errData = await offerRes.json() as {
+      errors?: { errorId: number; parameters?: { name: string; value: string }[] }[]
+    };
+    const existing = errData.errors?.[0];
+    if (existing?.errorId === 25002) {
+      offerId = existing.parameters?.find(p => p.name === "offerId")?.value ?? "";
+      if (!offerId) throw new Error("eBay offer already exists but returned no offerId");
+    } else {
+      throw new Error(`eBay offer creation error (${offerRes.status}): ${JSON.stringify(errData)}`);
+    }
   }
-  const { offerId } = await offerRes.json() as { offerId: string };
 
   // 3. Publish offer → gets listing ID
   const pubRes = await ebayFetch(
