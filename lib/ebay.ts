@@ -252,8 +252,10 @@ export async function publishEbayListing(
     ?? "99";
 
   const jsonHeaders = {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type":  "application/json",
+    "Authorization":    `Bearer ${token}`,
+    "Content-Type":     "application/json",
+    "Content-Language": "en-US",
+    "Accept-Language":  "en-US",
   };
 
   // 1. Create / overwrite inventory item
@@ -314,8 +316,10 @@ export async function updateEbayListing(item: Item): Promise<void> {
     ?? "99";
 
   const jsonHeaders = {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type":  "application/json",
+    "Authorization":    `Bearer ${token}`,
+    "Content-Type":     "application/json",
+    "Content-Language": "en-US",
+    "Accept-Language":  "en-US",
   };
 
   // Update inventory item (title, description, condition, photos, dimensions)
