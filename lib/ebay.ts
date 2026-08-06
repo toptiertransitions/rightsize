@@ -188,53 +188,45 @@ async function transloadImageToEPS(sourceUrl: string, token: string): Promise<st
   const cached = _epsUrlCache.get(sourceUrl);
   if (cached) { console.log("[ebay] EPS cache hit:", sourceUrl); return cached; }
   try {
-    // Step 1: upload source URL to eBay Media API (endpoint is v1_beta, not v1)
-    const uploadRes = await ebayFetch("https://api.ebay.com/commerce/media/v1_beta/image/createImageFromUrl", {
+    // eBay Commerce Media API has no URL-based image upload endpoint.
+    // Use the Trading API's UploadSiteHostedPictures with ExternalPictureURL —
+    // eBay fetches the source URL and returns an i.ebayimg.com EPS URL.
+    const xml = [
+      '<?xml version="1.0" encoding="utf-8"?>',
+      '<UploadSiteHostedPicturesRequest xmlns="urn:ebay:apis:eBLBaseComponents">',
+      `<ExternalPictureURL>${sourceUrl}</ExternalPictureURL>`,
+      '</UploadSiteHostedPicturesRequest>',
+    ].join("");
+
+    const res = await ebayFetch("https://api.ebay.com/ws/api.dll", {
       method:  "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body:    JSON.stringify({ imageUrl: sourceUrl }),
+      headers: {
+        "X-EBAY-API-CALL-NAME":           "UploadSiteHostedPictures",
+        "X-EBAY-API-SITEID":              "0",
+        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
+        "X-EBAY-API-IAF-TOKEN":           token,
+        "Content-Type":                   "text/xml",
+      },
+      body: xml,
     });
-    if (!uploadRes.ok) {
-      console.warn("[ebay] image transload upload failed", uploadRes.status, sourceUrl);
+
+    const body = await res.text();
+
+    if (!res.ok || body.includes("<Ack>Failure</Ack>")) {
+      const errMsg = body.match(/<LongMessage>([^<]+)<\/LongMessage>/)?.[1] ?? body.slice(0, 200);
+      console.warn("[ebay] UploadSiteHostedPictures failed", res.status, errMsg, sourceUrl);
       return null;
     }
-    if (!uploadRes.location) {
-      console.warn("[ebay] image transload: no Location header for", sourceUrl);
+
+    const match = body.match(/<FullURL>([^<]+)<\/FullURL>/);
+    if (!match) {
+      console.warn("[ebay] UploadSiteHostedPictures: no FullURL in response for", sourceUrl);
       return null;
     }
 
-    console.log("[ebay] transload Location header:", uploadRes.location);
-
-    // Step 2: if Location is a resource URI (not a direct image URL), GET it to extract
-    // the actual hosted imageUrl. eBay returns /commerce/media/v1/image/{id} in Location,
-    // not the i.ebayimg.com URL directly.
-    let epsUrl: string;
-    if (uploadRes.location.includes("ebayimg.com")) {
-      epsUrl = uploadRes.location;
-    } else {
-      const resourceUrl = uploadRes.location.startsWith("http")
-        ? uploadRes.location
-        : `https://api.ebay.com${uploadRes.location}`;
-      const getRes = await ebayFetch(resourceUrl, {
-        method:  "GET",
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      if (!getRes.ok) {
-        console.warn("[ebay] image transload GET resource failed", getRes.status, resourceUrl);
-        return null;
-      }
-      const data = await getRes.json() as { imageUrl?: string };
-      console.log("[ebay] transload resource response:", JSON.stringify(data).slice(0, 200));
-      if (!data.imageUrl) {
-        console.warn("[ebay] image transload: no imageUrl in resource response for", sourceUrl);
-        return null;
-      }
-      epsUrl = data.imageUrl;
-    }
-
-    // Guard: only accept actual EPS image URLs — never store a resource/API URI as an imageUrl
+    const epsUrl = match[1];
     if (!epsUrl.includes("ebayimg.com")) {
-      console.warn("[ebay] image transload: resolved URL is not an EPS URL, skipping:", epsUrl);
+      console.warn("[ebay] UploadSiteHostedPictures: URL is not EPS:", epsUrl);
       return null;
     }
 
