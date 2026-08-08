@@ -3902,3 +3902,196 @@ export function buildEbayListingEmail(p: {
 </body>
 </html>`;
 }
+
+export function buildItemSoldEmail({
+  itemName,
+  photoUrl,
+  projectName,
+  itemId,
+  barcodeNumber,
+  primaryRoute,
+  salePrice,
+  staffSellerName,
+  buyerName,
+  consignorPayout,
+  saleDate,
+  catalogUrl,
+  zelleMatch,
+}: {
+  itemName: string;
+  photoUrl?: string;
+  projectName: string;
+  itemId: string;
+  barcodeNumber?: string;
+  primaryRoute: string;
+  salePrice: number;
+  staffSellerName?: string;
+  buyerName?: string;
+  consignorPayout?: number;
+  saleDate: string;
+  catalogUrl: string;
+  zelleMatch?: { payerName: string; amount: number; sentOn: string; memo?: string };
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtDate = (d: string) => {
+    const parsed = new Date(d);
+    return isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  };
+
+  const photoHtml = photoUrl
+    ? `<img src="${photoUrl}" alt="${itemName}" width="120" height="120"
+         style="display:block;width:120px;height:120px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;" />`
+    : `<div style="width:120px;height:120px;background:#e5e7eb;border-radius:10px;"></div>`;
+
+  const detailRow = (label: string, value: string, highlight = false) => `
+    <tr>
+      <td style="padding:10px 16px;font-size:13px;font-weight:600;color:#6b7280;width:40%;border-bottom:1px solid #f3f4f6;">${label}</td>
+      <td style="padding:10px 16px;font-size:13px;color:${highlight ? "#166534" : "#111827"};font-weight:${highlight ? "700" : "400"};border-bottom:1px solid #f3f4f6;">${value}</td>
+    </tr>`;
+
+  const rows = [
+    detailRow("Project", projectName),
+    detailRow("Item ID / Barcode", barcodeNumber ? `#${barcodeNumber} &nbsp;<span style="color:#9ca3af;font-size:11px;">${itemId}</span>` : itemId),
+    detailRow("Route", primaryRoute),
+    detailRow("Sale Price", fmt(salePrice), true),
+    ...(staffSellerName ? [detailRow("Staff Seller", staffSellerName)] : []),
+    ...(buyerName ? [detailRow("Customer", buyerName)] : []),
+    detailRow("Payout Owed to Client", consignorPayout != null && consignorPayout > 0 ? fmt(consignorPayout) : "N/A"),
+    detailRow("Date of Sale", fmtDate(saleDate)),
+  ].join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Item Sold &mdash; Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions &nbsp;&bull;&nbsp; Internal Notification</p>
+            <p style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">Item Sold</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#a8d4bc;">${projectName}</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+              <!-- Item card -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                    <tr>
+                      <td style="padding:20px 24px;">
+                        <table cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="padding-right:20px;vertical-align:top;">${photoHtml}</td>
+                            <td style="vertical-align:middle;">
+                              <span style="display:inline-block;background:#dcfce7;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;margin-bottom:8px;">SOLD</span>
+                              <p style="margin:0;font-size:17px;font-weight:700;color:#111827;line-height:1.3;">${itemName}</p>
+                              <p style="margin:8px 0 0;font-size:22px;font-weight:800;color:#166534;">${fmt(salePrice)}</p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Details table -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                    <tr style="background:#f9fafb;">
+                      <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Transaction Details</td>
+                    </tr>
+                    ${rows}
+                  </table>
+                </td>
+              </tr>
+
+              ${zelleMatch ? `
+              <!-- Zelle match -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;border:1px solid #fde047;border-radius:10px;overflow:hidden;">
+                    <tr>
+                      <td style="padding:12px 16px;border-bottom:1px solid #fde047;">
+                        <table width="100%" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td>
+                              <span style="font-size:11px;font-weight:700;color:#854d0e;text-transform:uppercase;letter-spacing:.6px;">&#9888; Potential Zelle Payment Match</span>
+                            </td>
+                            <td align="right">
+                              <span style="font-size:11px;color:#a16207;">Amount matches sale price</span>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:14px 16px;">
+                        <table width="100%" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="padding-bottom:6px;">
+                              <span style="font-size:13px;font-weight:700;color:#1c1917;">${zelleMatch.payerName}</span>
+                              <span style="font-size:13px;color:#78716c;"> &nbsp;sent&nbsp; </span>
+                              <span style="font-size:13px;font-weight:700;color:#166534;">$${zelleMatch.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding-bottom:${zelleMatch.memo ? "6px" : "0"};">
+                              <span style="font-size:12px;color:#78716c;">Sent on: ${new Date(zelleMatch.sentOn).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                            </td>
+                          </tr>
+                          ${zelleMatch.memo ? `
+                          <tr>
+                            <td>
+                              <span style="font-size:12px;color:#78716c;">Memo: &ldquo;${zelleMatch.memo}&rdquo;</span>
+                            </td>
+                          </tr>` : ""}
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>` : ""}
+
+              <!-- CTA -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <a href="${catalogUrl}"
+                     style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
+                    View Item in Catalog &rarr;
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+                  <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;line-height:1.6;">Top Tier Transitions &nbsp;&middot;&nbsp; <a href="https://app.toptiertransitions.com" style="color:#2E6B4F;text-decoration:none;">app.toptiertransitions.com</a></p>
+                  <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;text-align:center;">Internal use only &mdash; sent automatically when an item is marked Sold.</p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

@@ -6,8 +6,14 @@ import {
   createItemSaleEvent,
   applySquareSaleToItem,
   getSaleEventBySquarePaymentId,
+  getStaffMembers,
+  getTenantById,
 } from "@/lib/airtable";
 import { validateSquareWebhookSignature, getSquareOrder } from "@/lib/square";
+import { Resend } from "resend";
+import { buildItemSoldEmail } from "@/lib/email";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -119,7 +125,7 @@ export async function POST(req: NextRequest) {
       });
       console.log(`[square/webhook] created sale event for item=${item.id}`);
 
-      await applySquareSaleToItem({
+      const updatedItem = await applySquareSaleToItem({
         itemId: item.id,
         quantitySold: li.quantity,
         currentQuantity: item.quantity ?? 0,
@@ -128,6 +134,50 @@ export async function POST(req: NextRequest) {
         clientPayout,
       });
       console.log(`[square/webhook] applied sale to item=${item.id}`);
+
+      if (updatedItem.status === "Sold" && updatedItem.primaryRoute !== "Estate Sale") {
+        (async () => {
+          try {
+            const [staff, tenant] = await Promise.all([
+              getStaffMembers().catch(() => []),
+              getTenantById(updatedItem.tenantId).catch(() => null),
+            ]);
+            const adminEmails = staff
+              .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
+              .map(s => s.email);
+            if (!adminEmails.length) return;
+
+            const projectName = tenant?.name ?? "Unknown Project";
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+            const searchParam = updatedItem.barcodeNumber ? encodeURIComponent(updatedItem.barcodeNumber) : "";
+            const catalogUrl = `${appUrl}/catalog?tenantId=${updatedItem.tenantId}${searchParam ? `&search=${searchParam}` : ""}`;
+            const salePrice = unitPriceDollars;
+            const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+            const html = buildItemSoldEmail({
+              itemName: updatedItem.itemName,
+              photoUrl: updatedItem.photos?.[0]?.url || updatedItem.photoUrl || undefined,
+              projectName,
+              itemId: updatedItem.id,
+              barcodeNumber: updatedItem.barcodeNumber,
+              primaryRoute: updatedItem.primaryRoute ?? "",
+              salePrice,
+              consignorPayout: clientPayout || undefined,
+              saleDate: paymentDate,
+              catalogUrl,
+            });
+
+            await resend.emails.send({
+              from: "Rightsize Alerts <notifications@toptiertransitions.com>",
+              to: adminEmails,
+              subject: `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`,
+              html,
+            });
+          } catch (e) {
+            console.error("[square/webhook] item-sold notification failed:", e);
+          }
+        })();
+      }
 
       processed++;
     }

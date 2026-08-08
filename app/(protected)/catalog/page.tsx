@@ -20,7 +20,7 @@ import { CatalogHeader } from "./CatalogHeader";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
-  searchParams: Promise<{ tenantId?: string }>;
+  searchParams: Promise<{ tenantId?: string; search?: string }>;
 }
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
@@ -29,7 +29,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { tenantId } = await searchParams;
+  const { tenantId, search: initialSearch } = await searchParams;
 
   // ── All-projects sentinel mode (TTT staff only) ───────────────────────────────
   const SENTINEL_VIEWS = ["__all_active__", "__all_archived__", "__all_time__"];
@@ -129,6 +129,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           isTTT={tenant.isTTT ?? true}
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
+          initialSearch={initialSearch}
         />
       </div>
     );

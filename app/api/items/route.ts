@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange } from "@/lib/airtable";
-import { buildVendorAssignmentEmail } from "@/lib/email";
+import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
+import { buildVendorAssignmentEmail, buildItemSoldEmail } from "@/lib/email";
 import { upsertSquareCatalogItem } from "@/lib/square";
+import { getValidAccessToken, fetchZellePayments } from "@/lib/gmail";
 import { Resend } from "resend";
 import { isValidCategory, LEGACY_CATEGORY_MAP, migrateCategoryByKeyword } from "@/lib/categories";
 
@@ -372,6 +373,73 @@ export async function PATCH(req: NextRequest) {
         console.error(`[auto-square-sync] Failed for item ${item.id}:`, e);
       }
     }
+  }
+
+  // Internal notification when any non-Estate-Sale item is marked Sold
+  if (newStatus === "Sold" && item.primaryRoute !== "Estate Sale") {
+    (async () => {
+      try {
+        const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
+        const salePrice = item.salePrice ?? item.valueMid ?? 0;
+
+        const [staff, tenant, zellePayments] = await Promise.all([
+          getStaffMembers().catch(() => []),
+          getTenantById(item.tenantId).catch(() => null),
+          // Zelle lookup only for FB/eBay routes
+          (ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
+            ? (async () => {
+                try {
+                  const zelleEmail = process.env.ZELLE_GMAIL_EMAIL;
+                  const token = zelleEmail
+                    ? await getGmailTokenByEmail(zelleEmail)
+                    : await getAnyGmailToken();
+                  if (!token) return [];
+                  const accessToken = await getValidAccessToken(token.clerkUserId);
+                  return await fetchZellePayments(accessToken, 7);
+                } catch { return []; }
+              })()
+            : Promise.resolve([]),
+        ]);
+
+        const adminEmails = staff
+          .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
+          .map(s => s.email);
+        if (!adminEmails.length) return;
+
+        const zelleMatch = zellePayments.find(p => Math.abs(p.amount - salePrice) < 0.01) ?? undefined;
+
+        const projectName = tenant?.name ?? "Unknown Project";
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+        const searchParam = item.barcodeNumber ? encodeURIComponent(item.barcodeNumber) : "";
+        const catalogUrl = `${appUrl}/catalog?tenantId=${item.tenantId}${searchParam ? `&search=${searchParam}` : ""}`;
+        const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        const html = buildItemSoldEmail({
+          itemName: item.itemName,
+          photoUrl: item.photos?.[0]?.url || item.photoUrl || undefined,
+          projectName,
+          itemId: item.id,
+          barcodeNumber: item.barcodeNumber,
+          primaryRoute: item.primaryRoute ?? "",
+          salePrice,
+          staffSellerName: item.staffSellerName || undefined,
+          buyerName: item.buyerName || undefined,
+          consignorPayout: item.consignorPayout || undefined,
+          saleDate: item.saleDate || new Date().toISOString(),
+          catalogUrl,
+          zelleMatch: zelleMatch ? { payerName: zelleMatch.payerName, amount: zelleMatch.amount, sentOn: zelleMatch.sentOn, memo: zelleMatch.memo || undefined } : undefined,
+        });
+
+        await resend.emails.send({
+          from: "Rightsize Alerts <notifications@toptiertransitions.com>",
+          to: adminEmails,
+          subject: `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`,
+          html,
+        });
+      } catch (e) {
+        console.error("[items/PATCH] item-sold notification failed:", e);
+      }
+    })();
   }
 
   // Vendor assignment email — currently suppressed

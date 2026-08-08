@@ -29,6 +29,7 @@ interface ItemGridProps {
   isTTT?: boolean;
   staffMembers?: StaffMember[];
   isTTTUser?: boolean;
+  initialSearch?: string;
 }
 
 const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "green" | "teal" | "gray" | "red"; label: string }> = {
@@ -1164,14 +1165,14 @@ function BoxIdBadge({ item, onSaved }: { item: Item; onSaved: (updated: Item) =>
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, initialSearch = "" }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [autoRouting, setAutoRouting] = useState(false);
   const [autoRouteMsg, setAutoRouteMsg] = useState("");
   const [view, setView] = useState<"grid" | "table">("grid");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState("");
   const [routeFilter, setRouteFilter] = useState("");
   const [staffSellerFilter, setStaffSellerFilter] = useState("");
