@@ -5831,6 +5831,139 @@ export async function deleteShopper(id: string): Promise<void> {
   await shopperFetch(`/${id}`, { method: "DELETE" });
 }
 
+// ── Shopper category-interest computation ─────────────────────────────────────
+// Tallies all StorefrontBuyer purchases for an email, looks up item categories,
+// and writes the top 5 (by purchase count) back to CategoryInterests.
+export async function updateShopperCategoryInterests(email: string): Promise<void> {
+  const base = getBase();
+  const normalizedEmail = email.toLowerCase().trim().replace(/"/g, "");
+
+  // 1. Collect all itemIds purchased by this email
+  const itemIds: string[] = [];
+  await base(AIRTABLE_TABLES.STOREFRONT_BUYERS)
+    .select({
+      filterByFormula: `LOWER(TRIM({BuyerEmail})) = "${normalizedEmail}"`,
+      fields: ["ItemId"],
+    })
+    .eachPage((page, next) => {
+      for (const r of page) {
+        const id = toStr(r.fields["ItemId"]);
+        if (id) itemIds.push(id);
+      }
+      next();
+    });
+
+  if (!itemIds.length) return;
+
+  // 2. Batch-fetch item categories (30 per query to stay under formula length limit)
+  const categoryByItemId = new Map<string, string>();
+  const CHUNK = 30;
+  for (let i = 0; i < itemIds.length; i += CHUNK) {
+    const chunk = itemIds.slice(i, i + CHUNK);
+    const formula = `OR(${chunk.map(id => `RECORD_ID()="${id}"`).join(",")})`;
+    await base(AIRTABLE_TABLES.ITEMS)
+      .select({ filterByFormula: formula, fields: ["Category"] })
+      .eachPage((page, next) => {
+        for (const r of page) {
+          const cat = toStr(r.fields["Category"]);
+          if (cat && cat !== "Other") categoryByItemId.set(r.id, cat);
+        }
+        next();
+      });
+  }
+
+  // 3. Count categories across all purchases
+  const counts = new Map<string, number>();
+  for (const itemId of itemIds) {
+    const cat = categoryByItemId.get(itemId);
+    if (cat) counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+
+  if (!counts.size) return;
+
+  // 4. Top 5 by count
+  const top5 = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([cat]) => cat)
+    .join(", ");
+
+  // 5. Write to shopper record
+  const shopper = await getShopperByEmail(normalizedEmail);
+  if (!shopper) return;
+  await updateShopper(shopper.id, { categoryInterests: top5 });
+}
+
+// Backfill: recomputes category interests for ALL shoppers who have purchases.
+// Returns { updated, errors } for reporting.
+export async function backfillAllShopperCategoryInterests(): Promise<{ updated: number; errors: number }> {
+  const base = getBase();
+
+  // 1. Collect all purchases → build { email → itemId[] } and itemId → category maps
+  const purchasesByEmail = new Map<string, string[]>();
+  await base(AIRTABLE_TABLES.STOREFRONT_BUYERS)
+    .select({ fields: ["BuyerEmail", "ItemId"] })
+    .eachPage((page, next) => {
+      for (const r of page) {
+        const email = toStr(r.fields["BuyerEmail"]).toLowerCase().trim();
+        const itemId = toStr(r.fields["ItemId"]);
+        if (!email || !itemId) continue;
+        if (!purchasesByEmail.has(email)) purchasesByEmail.set(email, []);
+        purchasesByEmail.get(email)!.push(itemId);
+      }
+      next();
+    });
+
+  if (!purchasesByEmail.size) return { updated: 0, errors: 0 };
+
+  // 2. Fetch categories for all unique item IDs in one batch pass
+  const allItemIds = [...new Set([...purchasesByEmail.values()].flat())];
+  const categoryByItemId = new Map<string, string>();
+  const CHUNK = 30;
+  for (let i = 0; i < allItemIds.length; i += CHUNK) {
+    const chunk = allItemIds.slice(i, i + CHUNK);
+    const formula = `OR(${chunk.map(id => `RECORD_ID()="${id}"`).join(",")})`;
+    await base(AIRTABLE_TABLES.ITEMS)
+      .select({ filterByFormula: formula, fields: ["Category"] })
+      .eachPage((page, next) => {
+        for (const r of page) {
+          const cat = toStr(r.fields["Category"]);
+          if (cat && cat !== "Other") categoryByItemId.set(r.id, cat);
+        }
+        next();
+      });
+  }
+
+  // 3. For each email: compute top 5 and update shopper
+  let updated = 0;
+  let errors = 0;
+  for (const [email, itemIds] of purchasesByEmail) {
+    try {
+      const counts = new Map<string, number>();
+      for (const itemId of itemIds) {
+        const cat = categoryByItemId.get(itemId);
+        if (cat) counts.set(cat, (counts.get(cat) ?? 0) + 1);
+      }
+      if (!counts.size) continue;
+
+      const top5 = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([cat]) => cat)
+        .join(", ");
+
+      const shopper = await getShopperByEmail(email);
+      if (!shopper) continue;
+      await updateShopper(shopper.id, { categoryInterests: top5 });
+      updated++;
+    } catch (e) {
+      console.error(`[backfillShopperInterests] failed for ${email}:`, e);
+      errors++;
+    }
+  }
+  return { updated, errors };
+}
+
 // ─── Outreach Templates ───────────────────────────────────────────────────────
 function mapOutreachTemplate(record: AirtableRecord): OutreachTemplate {
   const f = record.fields;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getItemById, updateItem, createItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer, upsertShopperFromPurchase } from "@/lib/airtable";
+import { getItemById, updateItem, createItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer, upsertShopperFromPurchase, updateShopperCategoryInterests } from "@/lib/airtable";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -159,6 +159,11 @@ async function attemptRecordSale(data: {
   } catch (e) {
     console.error("[storefront/sale] upsertShopperFromPurchase failed (non-fatal):", e);
   }
+
+  // Update shopper's top-5 category interests based on all purchases (fire-and-forget)
+  updateShopperCategoryInterests(data.buyerEmail).catch(e =>
+    console.error("[storefront/sale] updateShopperCategoryInterests failed (non-fatal):", e)
+  );
 
   return { estateSlug, estateSaleId, estateName };
 }
