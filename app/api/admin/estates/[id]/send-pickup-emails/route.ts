@@ -57,8 +57,8 @@ export async function POST(
 
   for (const [, buyerRecords] of byEmail) {
     const first = buyerRecords[0];
-    const buyerEmail = first.buyerEmail;
-    const buyerName = first.buyerName;
+    const buyerEmail = first.buyerEmail.trim();
+    const buyerName = first.buyerName.trim();
 
     const emailItems = buyerRecords.map(b => ({
       itemName: b.itemName,
