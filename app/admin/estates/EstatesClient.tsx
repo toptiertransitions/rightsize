@@ -105,6 +105,8 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
   const [emailResult, setEmailResult] = useState<{ id: string; sent: number; total: number; failed?: { email: string; error?: string }[] } | null>(null);
   const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
+  const [backfillingInterests, setBackfillingInterests] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ updated: number; errors: number } | null>(null);
 
   const tenantMap = Object.fromEntries(tenants.map(t => [t.id, t.name]));
 
@@ -284,6 +286,21 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
     }
   }
 
+  async function handleBackfillInterests() {
+    if (!confirm("Backfill category interests for all shoppers based on their purchase history? This may take up to a minute.")) return;
+    setBackfillingInterests(true);
+    setBackfillResult(null);
+    try {
+      const res = await fetch("/api/admin/shoppers/backfill-interests", { method: "POST" });
+      const data = await res.json() as { updated: number; errors: number };
+      setBackfillResult(data);
+    } catch {
+      alert("Backfill failed. Check server logs.");
+    } finally {
+      setBackfillingInterests(false);
+    }
+  }
+
   async function handleImageUpload(file: File) {
     setUploadingImage(true);
     try {
@@ -313,12 +330,22 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
             <h1 className="text-2xl font-bold text-white">Estate Sales</h1>
             <p className="text-gray-400 text-sm mt-1">{estates.length} estates</p>
           </div>
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors"
-          >
-            + New Estate
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBackfillInterests}
+              disabled={backfillingInterests}
+              className="px-3 py-2 text-sm text-gray-400 border border-gray-700 rounded-lg hover:border-gray-500 hover:text-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Recompute top-5 category interests for all shoppers from purchase history"
+            >
+              {backfillingInterests ? "Backfilling…" : backfillResult ? `Backfill Done (${backfillResult.updated} updated${backfillResult.errors ? `, ${backfillResult.errors} errors` : ""})` : "Backfill Interests"}
+            </button>
+            <button
+              onClick={openCreate}
+              className="px-4 py-2 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 transition-colors"
+            >
+              + New Estate
+            </button>
+          </div>
         </div>
 
         {estates.length === 0 ? (
