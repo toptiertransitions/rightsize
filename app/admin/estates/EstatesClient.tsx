@@ -101,7 +101,8 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
   const [error, setError] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [emailingId, setEmailingId] = useState<string | null>(null);
-  const [emailResult, setEmailResult] = useState<{ id: string; sent: number; total: number } | null>(null);
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+  const [emailResult, setEmailResult] = useState<{ id: string; sent: number; total: number; failed?: { email: string; error?: string }[] } | null>(null);
   const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
 
@@ -207,12 +208,39 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
     setEmailResult(null);
     try {
       const res = await fetch(`/api/admin/estates/${id}/send-pickup-emails`, { method: "POST" });
-      const data = await res.json() as { sent: number; total: number; message?: string };
-      setEmailResult({ id, sent: data.sent, total: data.total ?? data.sent });
+      const data = await res.json() as { sent: number; total: number; failed?: { email: string; error?: string }[]; message?: string };
+      setEmailResult({ id, sent: data.sent, total: data.total ?? data.sent, failed: data.failed });
     } catch {
       alert("Failed to send emails. Check server logs.");
     } finally {
       setEmailingId(null);
+    }
+  }
+
+  async function handleResendToOne(estateId: string, buyerEmail: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setResendingEmail(buyerEmail);
+    try {
+      const res = await fetch(`/api/admin/estates/${estateId}/send-pickup-emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetEmail: buyerEmail }),
+      });
+      const data = await res.json() as { sent: number; failed?: { email: string; error?: string }[] };
+      if (data.sent === 1) {
+        // Remove from failed list on success
+        setEmailResult(prev => prev ? {
+          ...prev,
+          sent: prev.sent + 1,
+          failed: prev.failed?.filter(f => f.email.toLowerCase() !== buyerEmail.toLowerCase()),
+        } : prev);
+      } else {
+        alert(`Failed to resend to ${buyerEmail}. Check server logs.`);
+      }
+    } catch {
+      alert(`Failed to resend to ${buyerEmail}.`);
+    } finally {
+      setResendingEmail(null);
     }
   }
 
@@ -374,7 +402,9 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                           </svg>
-                          {emailResult?.id === estate.id ? `Sent (${emailResult.sent}/${emailResult.total})` : "Email Details"}
+                          {emailResult?.id === estate.id
+                            ? `Sent (${emailResult.sent}/${emailResult.total})${(emailResult.failed?.length ?? 0) > 0 ? ` · ${emailResult.failed!.length} failed` : ""}`
+                            : "Email Details"}
                         </>
                       )}
                     </button>
@@ -407,6 +437,34 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                       Delete
                     </button>
                   </div>
+                  {/* Failed buyer resend panel */}
+                  {emailResult?.id === estate.id && (emailResult.failed?.length ?? 0) > 0 && (
+                    <div className="mt-2 ml-0 px-3 py-2 bg-red-950/40 border border-red-800/50 rounded-lg" onClick={e => e.stopPropagation()}>
+                      <p className="text-xs text-red-400 font-medium mb-1.5">Failed to send — click to retry:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {emailResult.failed!.map(f => (
+                          <button
+                            key={f.email}
+                            onClick={e => handleResendToOne(estate.id, f.email, e)}
+                            disabled={resendingEmail === f.email}
+                            title={f.error}
+                            className="text-xs px-2 py-1 rounded border border-red-700 text-red-300 hover:bg-red-900/50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            {resendingEmail === f.email ? (
+                              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            )}
+                            {f.email}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

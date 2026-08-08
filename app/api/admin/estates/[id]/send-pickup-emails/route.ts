@@ -8,13 +8,14 @@ import {
   getEstateById,
   getStorefrontBuyersByEstate,
   getItemsForEstateSale,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { buildPickupDetailsEmail } from "@/lib/email";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { userId } = await auth();
@@ -27,6 +28,11 @@ export async function POST(
 
   const { id } = await params;
 
+  // Optional: only send to a single buyer email (resend flow)
+  let body: { targetEmail?: string } = {};
+  try { body = await req.json(); } catch { /* no body is fine */ }
+  const targetEmail = body.targetEmail?.toLowerCase().trim() || null;
+
   const [estate, buyers, items] = await Promise.all([
     getEstateById(id).catch(() => null),
     getStorefrontBuyersByEstate(id).catch(() => []),
@@ -36,7 +42,7 @@ export async function POST(
   if (!estate) return NextResponse.json({ error: "Estate not found" }, { status: 404 });
 
   if (buyers.length === 0) {
-    return NextResponse.json({ sent: 0, message: "No buyers found for this estate." });
+    return NextResponse.json({ sent: 0, total: 0, message: "No buyers found for this estate." });
   }
 
   // Build item photo map: itemId → photoUrl
@@ -55,7 +61,10 @@ export async function POST(
 
   const results: { email: string; ok: boolean; error?: string }[] = [];
 
-  for (const [, buyerRecords] of byEmail) {
+  for (const [emailKey, buyerRecords] of byEmail) {
+    // If resending to one buyer, skip all others
+    if (targetEmail && emailKey !== targetEmail) continue;
+
     const first = buyerRecords[0];
     const buyerEmail = first.buyerEmail.trim();
     const buyerName = first.buyerName.trim();
@@ -109,6 +118,32 @@ export async function POST(
 
   const sent = results.filter(r => r.ok).length;
   const failed = results.filter(r => !r.ok);
+
+  // Notify TTTAdmins of any failures (fire-and-forget)
+  if (failed.length > 0) {
+    (async () => {
+      try {
+        const staff = await getStaffMembers();
+        const adminEmails = staff
+          .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
+          .map(s => s.email);
+        if (!adminEmails.length) return;
+
+        const failureList = failed
+          .map(f => `<li>${f.email}${f.error ? ` — ${f.error}` : ""}</li>`)
+          .join("");
+
+        await resend.emails.send({
+          from: "Rightsize Alerts <notifications@toptiertransitions.com>",
+          to: adminEmails,
+          subject: `Pickup Email Failures — ${estate.name}`,
+          html: `<p>${failed.length} pickup email${failed.length > 1 ? "s" : ""} failed to send for <strong>${estate.name}</strong>:</p><ul>${failureList}</ul><p>${sent} of ${results.length} sent successfully.</p>`,
+        });
+      } catch (e) {
+        console.error("[send-pickup-emails] admin failure notification error:", e);
+      }
+    })();
+  }
 
   return NextResponse.json({
     sent,
