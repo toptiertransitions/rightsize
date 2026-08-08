@@ -86,15 +86,20 @@ export async function POST(
     const subject = `Your Pickup Details — ${estate.name}`;
 
     try {
-      await resend.emails.send({
+      const { error: sendError } = await resend.emails.send({
         from: "ProFound Finds <orders@profoundfinds.com>",
         to: buyerEmail,
         cc: ["info@profoundfinds.com"],
         subject,
         html,
       });
-      results.push({ email: buyerEmail, ok: true });
-      console.log(`[send-pickup-emails] Sent to ${buyerEmail} (${emailItems.length} item${emailItems.length > 1 ? "s" : ""})`);
+      if (sendError) {
+        results.push({ email: buyerEmail, ok: false, error: sendError.message });
+        console.error(`[send-pickup-emails] Resend error for ${buyerEmail}:`, sendError.message);
+      } else {
+        results.push({ email: buyerEmail, ok: true });
+        console.log(`[send-pickup-emails] Sent to ${buyerEmail} (${emailItems.length} item${emailItems.length > 1 ? "s" : ""})`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ email: buyerEmail, ok: false, error: msg });
