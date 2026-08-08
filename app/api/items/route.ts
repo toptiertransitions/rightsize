@@ -403,12 +403,17 @@ export async function PATCH(req: NextRequest) {
           : Promise.resolve([]),
       ]);
 
-      const adminEmails = staff
+      console.log(`[items/PATCH] item-sold raw staff=${JSON.stringify(staff.map(s => ({ name: s.displayName, role: s.role, isActive: s.isActive, hasEmail: !!s.email })))}`);
+      const staffAdminEmails = staff
         .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
         .map(s => s.email);
+      // Fallback: NOTIFICATION_ADMIN_EMAILS env var (comma-separated)
+      const envFallback = (process.env.NOTIFICATION_ADMIN_EMAILS ?? "")
+        .split(",").map(e => e.trim()).filter(Boolean);
+      const adminEmails = staffAdminEmails.length ? staffAdminEmails : envFallback;
       console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)}`);
       if (!adminEmails.length) {
-        console.warn("[items/PATCH] item-sold notification skipped — no active TTTAdmin emails found");
+        console.warn("[items/PATCH] item-sold notification skipped — no active TTTAdmin emails found and NOTIFICATION_ADMIN_EMAILS not set");
       } else {
         const zelleMatch = zellePayments.find(p => Math.abs(p.amount - salePrice) < 0.01) ?? undefined;
         const projectName = tenant?.name ?? "Unknown Project";
