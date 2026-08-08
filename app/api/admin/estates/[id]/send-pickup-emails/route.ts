@@ -60,32 +60,32 @@ export async function POST(
     const buyerEmail = first.buyerEmail.trim();
     const buyerName = first.buyerName.trim();
 
-    const emailItems = buyerRecords.map(b => ({
-      itemName: b.itemName,
-      purchaseAmount: b.purchaseAmount,
-      photoUrl: photoMap.get(b.itemId),
-    }));
-
-    const html = buildPickupDetailsEmail({
-      buyerName,
-      buyerEmail,
-      estateName: estate.name,
-      cityRegion: estate.cityRegion || undefined,
-      items: emailItems,
-      pickupAddress: estate.pickupAddress || undefined,
-      pickupWindowStart: estate.pickupWindowStart || undefined,
-      pickupWindowEnd: estate.pickupWindowEnd || undefined,
-      pickupWindowStartTime: estate.pickupWindowStartTime || undefined,
-      pickupWindowEndTime: estate.pickupWindowEndTime || undefined,
-      contactEmail: estate.contactEmail || undefined,
-      contactPhone: estate.contactPhone || undefined,
-      terms: estate.terms || undefined,
-      pickupNotes: estate.pickupNotes || undefined,
-    });
-
-    const subject = `Your Pickup Details — ${estate.name}`;
-
     try {
+      const emailItems = buyerRecords.map(b => ({
+        itemName: b.itemName,
+        purchaseAmount: b.purchaseAmount,
+        photoUrl: photoMap.get(b.itemId),
+      }));
+
+      const html = buildPickupDetailsEmail({
+        buyerName,
+        buyerEmail,
+        estateName: estate.name,
+        cityRegion: estate.cityRegion || undefined,
+        items: emailItems,
+        pickupAddress: estate.pickupAddress || undefined,
+        pickupWindowStart: estate.pickupWindowStart || undefined,
+        pickupWindowEnd: estate.pickupWindowEnd || undefined,
+        pickupWindowStartTime: estate.pickupWindowStartTime || undefined,
+        pickupWindowEndTime: estate.pickupWindowEndTime || undefined,
+        contactEmail: estate.contactEmail || undefined,
+        contactPhone: estate.contactPhone || undefined,
+        terms: estate.terms || undefined,
+        pickupNotes: estate.pickupNotes || undefined,
+      });
+
+      const subject = `Your Pickup Details — ${estate.name}`;
+
       const { error: sendError } = await resend.emails.send({
         from: "ProFound Finds <orders@profoundfinds.com>",
         to: buyerEmail,
