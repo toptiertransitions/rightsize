@@ -18,6 +18,7 @@ const ROLE_LABELS: Record<string, string> = {
   TTTStaff:   "Staff",
   TTTManager: "Manager",
   TTTSales:   "Sales",
+  TTTAdmin:   "Admin",
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -414,7 +415,9 @@ export function StaffClient({ initialStaff }: Props) {
                   <td className="px-4 py-3 text-gray-400">{m.email}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      m.role === "TTTManager"
+                      m.role === "TTTAdmin"
+                        ? "bg-red-900/50 text-red-300"
+                        : m.role === "TTTManager"
                         ? "bg-purple-900/50 text-purple-300"
                         : m.role === "TTTSales"
                         ? "bg-blue-900/50 text-blue-300"
