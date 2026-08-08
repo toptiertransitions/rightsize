@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
 import { buildVendorAssignmentEmail, buildItemSoldEmail } from "@/lib/email";
@@ -377,7 +377,7 @@ export async function PATCH(req: NextRequest) {
 
   // Internal notification when any non-Estate-Sale item is marked Sold
   if (newStatus === "Sold" && item.primaryRoute !== "Estate Sale") {
-    (async () => {
+    after(async () => {
       try {
         const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
         const salePrice = item.salePrice ?? item.valueMid ?? 0;
@@ -439,7 +439,7 @@ export async function PATCH(req: NextRequest) {
       } catch (e) {
         console.error("[items/PATCH] item-sold notification failed:", e);
       }
-    })();
+    });
   }
 
   // Vendor assignment email — currently suppressed

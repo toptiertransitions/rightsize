@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import {
   getItemBySquareVariationId,
   createItemSaleEvent,
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       console.log(`[square/webhook] applied sale to item=${item.id}`);
 
       if (updatedItem.status === "Sold" && updatedItem.primaryRoute !== "Estate Sale") {
-        (async () => {
+        after(async () => {
           try {
             const [staff, tenant] = await Promise.all([
               getStaffMembers().catch(() => []),
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
           } catch (e) {
             console.error("[square/webhook] item-sold notification failed:", e);
           }
-        })();
+        });
       }
 
       processed++;
