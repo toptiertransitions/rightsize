@@ -5,36 +5,38 @@ import { isTTTAdmin } from "./config";
 import { buildNewUserAdminEmail } from "./email";
 
 export async function getAdminEmails(): Promise<string[]> {
-  // 1. Airtable StaffRoles — active TTTAdmin users
+  const collected = new Set<string>();
+
+  // 1. Airtable StaffRoles — staff whose Clerk ID is in TTT_ADMIN_USER_IDS
   try {
     const staff = await getStaffMembers();
-    const emails = staff
+    staff
       .filter(s => s.isActive && s.email && (s.role === "TTTAdmin" || isTTTAdmin(s.clerkUserId)))
-      .map(s => s.email as string);
-    if (emails.length > 0) return emails;
-  } catch { /* fall through */ }
+      .forEach(s => collected.add((s.email as string).toLowerCase()));
+  } catch { /* non-fatal */ }
 
-  // 2. TTT_ADMIN_USER_IDS env var → Clerk lookup
+  // 2. TTT_ADMIN_USER_IDS → Clerk lookup (catches admins with no/incomplete Airtable record)
   const adminIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
     .split(",").map(s => s.trim()).filter(Boolean);
   if (adminIds.length > 0) {
     try {
       const clerk = await clerkClient();
-      const emails: string[] = [];
       for (const id of adminIds) {
         const u = await clerk.users.getUser(id).catch(() => null);
         const email =
           u?.emailAddresses.find(e => e.id === u.primaryEmailAddressId)?.emailAddress ??
           u?.emailAddresses[0]?.emailAddress;
-        if (email) emails.push(email);
+        if (email) collected.add(email.toLowerCase());
       }
-      if (emails.length > 0) return emails;
-    } catch { /* fall through */ }
+    } catch { /* non-fatal */ }
   }
 
   // 3. Hard-coded env var fallback
-  return (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
-    .split(",").map(s => s.trim()).filter(Boolean);
+  (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
+    .split(",").map(s => s.trim()).filter(Boolean)
+    .forEach(e => collected.add(e.toLowerCase()));
+
+  return [...collected];
 }
 
 export async function sendNewUserAdminNotification(params: {
