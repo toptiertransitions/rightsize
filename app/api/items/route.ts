@@ -379,37 +379,38 @@ export async function PATCH(req: NextRequest) {
 
   // Internal notification when any non-Estate-Sale item is marked Sold
   if (newStatus === "Sold" && item.primaryRoute !== "Estate Sale") {
-    after(async () => {
-      try {
-        const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
-        const salePrice = item.salePrice ?? item.valueMid ?? 0;
+    try {
+      console.log(`[items/PATCH] item-sold notification start — item=${item.id} route=${item.primaryRoute}`);
 
-        const [staff, tenant, zellePayments] = await Promise.all([
-          getStaffMembers().catch(() => []),
-          getTenantById(item.tenantId).catch(() => null),
-          // Zelle lookup only for FB/eBay routes
-          (ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
-            ? (async () => {
-                try {
-                  const zelleEmail = process.env.ZELLE_GMAIL_EMAIL;
-                  const token = zelleEmail
-                    ? await getGmailTokenByEmail(zelleEmail)
-                    : await getAnyGmailToken();
-                  if (!token) return [];
-                  const accessToken = await getValidAccessToken(token.clerkUserId);
-                  return await fetchZellePayments(accessToken, 7);
-                } catch { return []; }
-              })()
-            : Promise.resolve([]),
-        ]);
+      const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
+      const salePrice = item.salePrice ?? item.valueMid ?? 0;
 
-        const adminEmails = staff
-          .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
-          .map(s => s.email);
-        if (!adminEmails.length) return;
+      const [staff, tenant, zellePayments] = await Promise.all([
+        getStaffMembers().catch(() => []),
+        getTenantById(item.tenantId).catch(() => null),
+        (ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
+          ? (async () => {
+              try {
+                const zelleEmail = process.env.ZELLE_GMAIL_EMAIL;
+                const token = zelleEmail
+                  ? await getGmailTokenByEmail(zelleEmail)
+                  : await getAnyGmailToken();
+                if (!token) return [];
+                const accessToken = await getValidAccessToken(token.clerkUserId);
+                return await fetchZellePayments(accessToken, 7);
+              } catch { return []; }
+            })()
+          : Promise.resolve([]),
+      ]);
 
+      const adminEmails = staff
+        .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
+        .map(s => s.email);
+      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)}`);
+      if (!adminEmails.length) {
+        console.warn("[items/PATCH] item-sold notification skipped — no active TTTAdmin emails found");
+      } else {
         const zelleMatch = zellePayments.find(p => Math.abs(p.amount - salePrice) < 0.01) ?? undefined;
-
         const projectName = tenant?.name ?? "Unknown Project";
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
         const searchParam = item.barcodeNumber ? encodeURIComponent(item.barcodeNumber) : "";
@@ -432,16 +433,21 @@ export async function PATCH(req: NextRequest) {
           zelleMatch: zelleMatch ? { payerName: zelleMatch.payerName, amount: zelleMatch.amount, sentOn: zelleMatch.sentOn, memo: zelleMatch.memo || undefined } : undefined,
         });
 
-        await resend.emails.send({
+        const { error: sendError } = await resend.emails.send({
           from: "Rightsize Alerts <notifications@toptiertransitions.com>",
           to: adminEmails,
           subject: `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`,
           html,
         });
-      } catch (e) {
-        console.error("[items/PATCH] item-sold notification failed:", e);
+        if (sendError) {
+          console.error("[items/PATCH] item-sold Resend error:", sendError);
+        } else {
+          console.log(`[items/PATCH] item-sold notification sent to ${adminEmails.join(", ")}`);
+        }
       }
-    });
+    } catch (e) {
+      console.error("[items/PATCH] item-sold notification failed:", e);
+    }
   }
 
   // Vendor assignment email — currently suppressed
