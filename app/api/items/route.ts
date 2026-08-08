@@ -4,6 +4,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
 import { buildVendorAssignmentEmail, buildItemSoldEmail } from "@/lib/email";
+import { getAdminEmails } from "@/lib/admin-notifications";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { getValidAccessToken, fetchZellePayments } from "@/lib/gmail";
 import { Resend } from "resend";
@@ -385,8 +386,8 @@ export async function PATCH(req: NextRequest) {
       const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
       const salePrice = item.salePrice ?? item.valueMid ?? 0;
 
-      const [staff, tenant, zellePayments] = await Promise.all([
-        getStaffMembers().catch(() => []),
+      const [adminEmails, tenant, zellePayments] = await Promise.all([
+        getAdminEmails().catch(() => [] as string[]),
         getTenantById(item.tenantId).catch(() => null),
         (ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
           ? (async () => {
@@ -403,17 +404,9 @@ export async function PATCH(req: NextRequest) {
           : Promise.resolve([]),
       ]);
 
-      console.log(`[items/PATCH] item-sold raw staff=${JSON.stringify(staff.map(s => ({ name: s.displayName, role: s.role, isActive: s.isActive, hasEmail: !!s.email })))}`);
-      const staffAdminEmails = staff
-        .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
-        .map(s => s.email);
-      // Fallback: NOTIFICATION_ADMIN_EMAILS env var (comma-separated)
-      const envFallback = (process.env.NOTIFICATION_ADMIN_EMAILS ?? "")
-        .split(",").map(e => e.trim()).filter(Boolean);
-      const adminEmails = staffAdminEmails.length ? staffAdminEmails : envFallback;
       console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)}`);
       if (!adminEmails.length) {
-        console.warn("[items/PATCH] item-sold notification skipped — no active TTTAdmin emails found and NOTIFICATION_ADMIN_EMAILS not set");
+        console.warn("[items/PATCH] item-sold notification skipped — no admin emails resolved");
       } else {
         const zelleMatch = zellePayments.find(p => Math.abs(p.amount - salePrice) < 0.01) ?? undefined;
         const projectName = tenant?.name ?? "Unknown Project";

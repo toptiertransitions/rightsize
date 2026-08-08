@@ -6,9 +6,9 @@ import {
   createItemSaleEvent,
   applySquareSaleToItem,
   getSaleEventBySquarePaymentId,
-  getStaffMembers,
   getTenantById,
 } from "@/lib/airtable";
+import { getAdminEmails } from "@/lib/admin-notifications";
 import { validateSquareWebhookSignature, getSquareOrder } from "@/lib/square";
 import { Resend } from "resend";
 import { buildItemSoldEmail } from "@/lib/email";
@@ -138,13 +138,10 @@ export async function POST(req: NextRequest) {
       if (updatedItem.status === "Sold" && updatedItem.primaryRoute !== "Estate Sale") {
         after(async () => {
           try {
-            const [staff, tenant] = await Promise.all([
-              getStaffMembers().catch(() => []),
+            const [adminEmails, tenant] = await Promise.all([
+              getAdminEmails().catch(() => [] as string[]),
               getTenantById(updatedItem.tenantId).catch(() => null),
             ]);
-            const adminEmails = staff
-              .filter(s => s.isActive && s.role === "TTTAdmin" && s.email)
-              .map(s => s.email);
             if (!adminEmails.length) return;
 
             const projectName = tenant?.name ?? "Unknown Project";
