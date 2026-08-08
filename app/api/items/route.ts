@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
