@@ -152,10 +152,10 @@ async function checkAndRefreshGmailTokens(
     }
   }
 
-  // Surface active TTTAdmin/TTTSales staff who have no token row at all
+  // Surface active TTTSales staff who have no token row at all
   for (const s of staffMembers) {
     if (!s.isActive) continue;
-    if (!["TTTAdmin", "TTTSales"].includes(s.role)) continue;
+    if (s.role !== "TTTSales") continue;
     if (/test/i.test(s.displayName)) continue;
     if (seenClerkIds.has(s.clerkUserId)) continue;
     results.push({
@@ -499,6 +499,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Gmail/CRM section only shows TTTSales users — admin Gmail integrations are internal
+    const staffRoleByClerkId = new Map(staffMembers.map((s) => [s.clerkUserId, s.role]));
+    const gmailResultsDisplay = gmailResults.filter(
+      (r) => staffRoleByClerkId.get(r.clerkUserId) === "TTTSales"
+    );
+
     // Build and send email
     const now = new Date();
     const checkedAt = now.toLocaleString("en-US", {
@@ -511,12 +517,12 @@ export async function GET(req: NextRequest) {
       hour12: true,
     });
 
-    const allOk = calResult.ok && gmailResults.every((r) => r.ok) && qboResult.ok && squareResult.ok && ebayResult.ok;
+    const allOk = calResult.ok && gmailResultsDisplay.every((r) => r.ok) && qboResult.ok && squareResult.ok && ebayResult.ok;
     const subject = allOk
       ? `✓ Integrations OK — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
       : `⚠ Integration Alert — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-    const html = buildHealthEmail(calResult, gmailResults, qboResult, squareResult, ebayResult, checkedAt);
+    const html = buildHealthEmail(calResult, gmailResultsDisplay, qboResult, squareResult, ebayResult, checkedAt);
 
     if (adminEmails.length > 0) {
       await resend.emails.send({
@@ -531,7 +537,7 @@ export async function GET(req: NextRequest) {
 
     const summary = {
       calendar: { ok: calResult.ok, error: calResult.error },
-      gmail: gmailResults.map((r) => ({ displayName: r.displayName, ok: r.ok, wasRefreshed: r.wasRefreshed, error: r.error })),
+      gmail: gmailResultsDisplay.map((r) => ({ displayName: r.displayName, ok: r.ok, wasRefreshed: r.wasRefreshed, error: r.error })),
       quickbooks: { ok: qboResult.ok, companyName: qboResult.companyName, wasRefreshed: qboResult.wasRefreshed, error: qboResult.error },
       square: { ok: squareResult.ok, locationName: squareResult.locationName, error: squareResult.error },
       ebay: { ok: ebayResult.ok, error: ebayResult.error, missingVars: ebayResult.missingVars },
