@@ -83,6 +83,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
 
   // Build recipient options from the CRM opportunity linked to this project
   const recipientOptions: { label: string; email: string }[] = [];
+  let defaultBillToName = tenant.name;
   try {
     const opportunities = await getOpportunitiesForTenant(tenantId);
     const seen = new Set<string>();
@@ -97,6 +98,10 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
         if (contact?.email && !seen.has(contact.email)) {
           seen.add(contact.email);
           recipientOptions.push({ label: `${contact.name} (Contact)`, email: contact.email });
+          // First contact name becomes the default Bill To name
+          if (defaultBillToName === tenant.name && contact.name) {
+            defaultBillToName = contact.name;
+          }
         }
       }
       // Key people with emails
@@ -128,6 +133,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
       agreements={agreements}
       timeEntries={timeEntries}
       recipientOptions={recipientOptions}
+      defaultBillToName={defaultBillToName}
       currentUserEmail={currentUserEmail}
     />
   );

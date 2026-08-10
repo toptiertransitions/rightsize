@@ -1042,6 +1042,7 @@ export interface Invoice {
   ccEmail?: string;
   emailSent?: boolean;
   notes?: string;
+  billToName?: string;
   createdAt: string;
   createdByClerkId: string;
 }

@@ -4316,6 +4316,7 @@ function mapInvoice(record: AirtableRecord): Invoice {
     ccEmail: toStr(f["CcEmail"]) || undefined,
     emailSent: f["EmailSent"] === true,
     notes: toStr(f["Notes"]) || undefined,
+    billToName: toStr(f["BillToName"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
     createdByClerkId: toStr(f["CreatedByClerkId"]),
   };
@@ -4364,6 +4365,7 @@ export async function createInvoice(data: {
   status?: string;
   paidAt?: string;
   paidAmount?: number;
+  billToName?: string;
   createdByClerkId: string;
 }): Promise<Invoice> {
   const fields: Record<string, unknown> = {
@@ -4389,6 +4391,7 @@ export async function createInvoice(data: {
   if (data.sentToEmail) fields["SentToEmail"] = data.sentToEmail;
   if (data.ccEmail) fields["CcEmail"] = data.ccEmail;
   if (data.emailSent !== undefined) fields["EmailSent"] = data.emailSent;
+  if (data.billToName) fields["BillToName"] = data.billToName;
 
   const res = await invoicesFetch("", {
     method: "POST",

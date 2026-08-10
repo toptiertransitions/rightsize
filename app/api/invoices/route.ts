@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
     ccEmail,
     tenantName,
     customerName,
+    billToName,
   } = body;
 
   if (!tenantId || !type || amount == null) {
@@ -215,7 +216,7 @@ export async function POST(req: NextRequest) {
         qboError = "No billable line items to push to QuickBooks (all charges are covered by credits).";
       } else {
         const qboResult = await createQBOInvoice({
-          customerName: customerName || tenantName || "Client",
+          customerName: billToName || customerName || tenantName || "Client",
           lineItems: qboLineItems,
           memo: `Invoice ${invoiceNumber}`,
         });
@@ -255,6 +256,7 @@ export async function POST(req: NextRequest) {
     status: isZeroInvoice ? "Paid" : "Unpaid",
     paidAt: zeroPaidAt,
     paidAmount: isZeroInvoice ? 0 : undefined,
+    billToName: billToName || undefined,
     createdByClerkId: userId,
   });
 

@@ -16,6 +16,7 @@ interface Props {
   currentUserEmail: string;
   invoiceSettings: InvoiceSettings | null;
   invoices?: Invoice[];
+  defaultBillToName?: string;
 }
 
 type Tab = "Deposit" | "Full";
@@ -41,6 +42,7 @@ export function InvoiceCreatorModal({
   currentUserEmail,
   invoiceSettings,
   invoices = [],
+  defaultBillToName,
 }: Props) {
   const recipientOptions = recipientOptionsProp.length > 0
     ? recipientOptionsProp
@@ -130,6 +132,9 @@ export function InvoiceCreatorModal({
   useEffect(() => {
     if (tab === "Full") setApplyDeposit(totalPaidDeposit > 0);
   }, [tab, totalPaidDeposit]);
+
+  // Bill To
+  const [billToName, setBillToName] = useState(defaultBillToName ?? tenant.name);
 
   // Shared
   const [sendEmail, setSendEmail] = useState(true);
@@ -245,7 +250,7 @@ export function InvoiceCreatorModal({
     }
   }, [contracts, services]);
 
-  // Reset email + promo fields only when the modal opens (not on every render)
+  // Reset email + promo + billTo fields only when the modal opens (not on every render)
   useEffect(() => {
     if (isOpen) {
       setToRecipient(recipientOptions[0]?.email ?? "__custom__");
@@ -254,6 +259,7 @@ export function InvoiceCreatorModal({
       setPromoCode("");
       setPromoResult(null);
       setPromoError(null);
+      setBillToName(defaultBillToName ?? tenant.name);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -311,6 +317,7 @@ export function InvoiceCreatorModal({
         type: tab,
         amount: Math.max(0, finalAmount),
         tenantName: tenant.name,
+        billToName: billToName.trim() || tenant.name,
         pushToQBO,
         sendEmail,
         sentToEmail: sendEmail ? sentToEmail : undefined,
@@ -439,6 +446,21 @@ export function InvoiceCreatorModal({
                 {t === "Full" ? "Full Invoice" : "Deposit"}
               </button>
             ))}
+          </div>
+
+          {/* Bill To */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Bill To
+            </label>
+            <input
+              type="text"
+              value={billToName}
+              onChange={(e) => setBillToName(e.target.value)}
+              placeholder={tenant.name}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Project: {tenant.name}</p>
           </div>
 
           {/* DEPOSIT TAB */}

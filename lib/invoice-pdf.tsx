@@ -175,11 +175,12 @@ function fmt(n: number) {
 interface InvoicePDFProps {
   invoice: Invoice;
   tenantName: string;
+  billToName?: string;
   settings: InvoiceSettings;
   payUrl?: string;
 }
 
-export function InvoicePDF({ invoice, tenantName, settings, payUrl }: InvoicePDFProps) {
+export function InvoicePDF({ invoice, tenantName, billToName, settings, payUrl }: InvoicePDFProps) {
   const dateStr = new Date(invoice.createdAt).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -243,7 +244,10 @@ export function InvoicePDF({ invoice, tenantName, settings, payUrl }: InvoicePDF
         {/* Bill To */}
         <View style={styles.toBlock}>
           <Text style={styles.toLabel}>Bill To</Text>
-          <Text style={styles.toValue}>{tenantName}</Text>
+          <Text style={styles.toValue}>{billToName || tenantName}</Text>
+          {billToName && billToName !== tenantName && (
+            <Text style={styles.companyDetail}>Project: {tenantName}</Text>
+          )}
         </View>
 
         {/* Line Items Table */}

@@ -14,6 +14,7 @@ interface Props {
   agreements: Contract[];
   timeEntries: TimeEntry[];
   recipientOptions: { label: string; email: string }[];
+  defaultBillToName: string;
   currentUserEmail: string;
 }
 
@@ -362,6 +363,7 @@ export function InvoicesClient({
   agreements,
   timeEntries,
   recipientOptions,
+  defaultBillToName,
   currentUserEmail,
 }: Props) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
@@ -452,6 +454,7 @@ export function InvoicesClient({
           timeEntries={timeEntries}
           invoices={invoices}
           recipientOptions={recipientOptions}
+          defaultBillToName={defaultBillToName}
           currentUserEmail={currentUserEmail}
           invoiceSettings={invoiceSettings}
         />

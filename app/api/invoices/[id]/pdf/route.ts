@@ -54,6 +54,7 @@ export async function GET(
   const pdfBuffer = await renderInvoicePDF({
     invoice,
     tenantName: tenant?.name || "Client",
+    billToName: invoice.billToName,
     settings: settings ?? defaultSettings,
     payUrl,
   });
