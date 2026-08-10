@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
@@ -213,7 +214,7 @@ export async function POST(req: NextRequest) {
 <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com"}/api/crm/gmail/auth" style="background:#166534;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Reconnect Gmail →</a></p>
 <p style="color:#6b7280;font-size:12px;margin-top:24px">After reconnecting, you can resend this broadcast from the Outreach tab.</p>
 <p style="color:#6b7280;font-size:12px">Top Tier Transitions · Rightsize</p>`,
-            }).catch(() => {});
+            }).catch((e) => console.error("[broadcasts] Resend scope-error notification failed:", e));
           }
           await updateOutreachSequence(sequence.id, {
             triggerConfigJson: JSON.stringify({
@@ -236,13 +237,18 @@ export async function POST(req: NextRequest) {
               rep_first_name: user.firstName ?? "",
               company: enrollment.company ?? "",
             });
+            // Ensure the body is a complete HTML document so tracking pixel injection
+            // works correctly and Gmail doesn't silently filter bare HTML fragments.
+            const htmlDoc = /^\s*<!DOCTYPE|^\s*<html/i.test(mergedHtml)
+              ? mergedHtml
+              : `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222;line-height:1.65;max-width:600px;margin:0 auto;padding:24px 20px">${mergedHtml}</body></html>`;
             const result = await sendGmailMessage({
               accessToken,
               to: enrollment.contactEmail,
               fromName,
               fromEmail,
               subject,
-              htmlBody: injectTracking(mergedHtml, enrollment.id, baseUrl),
+              htmlBody: injectTracking(htmlDoc, enrollment.id, baseUrl),
               attachment,
             });
             await createOutreachSend({
@@ -306,7 +312,7 @@ ${failed > 0 ? `
   <tbody>${failureRows}</tbody>
 </table>` : ""}
 <p style="color:#6b7280;font-size:12px;margin-top:24px">Top Tier Transitions · Rightsize</p>`,
-          }).catch(() => {});
+          }).catch((e) => console.error("[broadcasts] Resend confirmation failed:", e));
         }
 
         // Write final sent/failed counts back into triggerConfigJson
