@@ -298,14 +298,20 @@ export async function PATCH(req: NextRequest) {
     await Promise.all(unpaid.map(e => deleteItemSaleEvent(e.id).catch(() => null)));
   }
 
-  // Auto-set completedDate when status → Sold/Donated/Discarded; clear when reverting
+  // Auto-set completedDate when status → Sold/Donated/Discarded; clear when reverting.
+  // Always derive from saleDate so the two fields stay in sync.
   const newStatus = updates.status as string | undefined;
   const explicitCompletedDate = (updates as Record<string, unknown>).completedDate;
   if (explicitCompletedDate === undefined) {
+    const finalSaleDate = (updates as Record<string, unknown>).saleDate as string | undefined;
     if (newStatus && COMPLETED_STATUSES.includes(newStatus)) {
-      (updates as Record<string, unknown>).completedDate = new Date().toISOString().split("T")[0];
+      const dateSource = finalSaleDate || new Date().toISOString();
+      (updates as Record<string, unknown>).completedDate = dateSource.split("T")[0];
     } else if (newStatus && !COMPLETED_STATUSES.includes(newStatus)) {
       (updates as Record<string, unknown>).completedDate = null;
+    } else if (finalSaleDate !== undefined && existing?.status === "Sold") {
+      // Manual saleDate edit on an already-Sold item — keep completedDate in sync
+      (updates as Record<string, unknown>).completedDate = finalSaleDate ? finalSaleDate.split("T")[0] : null;
     }
   }
 

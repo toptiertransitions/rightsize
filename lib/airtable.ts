@@ -5129,7 +5129,9 @@ export async function applySquareSaleToItem(opts: {
   };
   if (newStatus) {
     fields["Status"] = newStatus;
-    fields["SaleDate"] = new Date().toISOString();
+    const saleDateIso = new Date().toISOString();
+    fields["SaleDate"] = saleDateIso;
+    fields["CompletedDate"] = saleDateIso.split("T")[0];
     if (opts.salePrice != null) fields["SalePrice"] = opts.salePrice;
     if (opts.clientPayout != null) fields["ConsignorPayout"] = opts.clientPayout;
   }
