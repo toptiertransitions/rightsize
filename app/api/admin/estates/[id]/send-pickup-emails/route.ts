@@ -83,6 +83,7 @@ export async function POST(
         cityRegion: estate.cityRegion || undefined,
         items: emailItems,
         pickupAddress: estate.pickupAddress || undefined,
+        pickupWindowsJson: estate.pickupWindowsJson || undefined,
         pickupWindowStart: estate.pickupWindowStart || undefined,
         pickupWindowEnd: estate.pickupWindowEnd || undefined,
         pickupWindowStartTime: estate.pickupWindowStartTime || undefined,

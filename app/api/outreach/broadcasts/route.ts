@@ -237,11 +237,9 @@ export async function POST(req: NextRequest) {
               rep_first_name: user.firstName ?? "",
               company: enrollment.company ?? "",
             });
-            // Ensure the body is a complete HTML document so tracking pixel injection
-            // works correctly and Gmail doesn't silently filter bare HTML fragments.
             const htmlDoc = /^\s*<!DOCTYPE|^\s*<html/i.test(mergedHtml)
               ? mergedHtml
-              : `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222;line-height:1.65;max-width:600px;margin:0 auto;padding:24px 20px">${mergedHtml}</body></html>`;
+              : `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${mergedHtml}</body></html>`;
             const result = await sendGmailMessage({
               accessToken,
               to: enrollment.contactEmail,

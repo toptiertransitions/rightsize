@@ -2,7 +2,22 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import type { ContentItem, ContentCategory } from "@/lib/types";
+import type { ContentItem, ContentCategory, ContentItemType } from "@/lib/types";
+
+// ─── Download URL builder ─────────────────────────────────────────────────────
+// PDFs from Cloudinary have no extension and use a random internal ID as the
+// filename. Route those through our proxy so the browser gets the correct
+// Content-Type and a clean title-based filename.
+
+const PROXIED_TYPES = new Set<ContentItemType>(["PDF"]);
+
+function buildDownloadUrl(item: ContentItem): string {
+  if (!item.fileUrl) return item.linkUrl ?? "";
+  if (PROXIED_TYPES.has(item.contentType)) {
+    return `/api/content/items/${item.id}/file`;
+  }
+  return item.fileUrl;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,7 +301,9 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEditInReposito
   const color = category?.color ?? "#6b7280";
   const today = toISO(new Date());
   const isAvailable = !item.scheduledDate || item.scheduledDate <= today;
-  const url = item.fileUrl || item.linkUrl;
+  const downloadUrl = buildDownloadUrl(item);
+  const url = downloadUrl || item.linkUrl;
+  const isExternal = !item.fileUrl;
   const hasContent = !!(item.fileUrl || item.linkUrl);
 
   return (
@@ -399,12 +416,21 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEditInReposito
 
           {/* Download / Open Link */}
           {url && isAvailable && (
-            <a href={url} target="_blank" rel="noreferrer"
-              className="flex items-center justify-center gap-2 bg-forest-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-700 transition-colors">
-              {item.fileUrl ? (
-                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download</>
-              ) : (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => {
+                if (!isExternal) {
+                  fetch(`/api/content/items/${item.id}/download`, { method: "POST" }).catch(() => {});
+                }
+              }}
+              className="flex items-center justify-center gap-2 bg-forest-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-700 transition-colors"
+            >
+              {isExternal ? (
                 <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>Open Link</>
+              ) : (
+                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download</>
               )}
             </a>
           )}

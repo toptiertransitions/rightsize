@@ -151,7 +151,7 @@ function CompanyMultiselect({
 
 // ─── ContactPicker ────────────────────────────────────────────────────────────
 function ContactPicker({
-  contactType, ownerClerkId, companies, staffMembers, selectedIds, onChange,
+  contactType, ownerClerkId, companies, staffMembers, selectedIds, onChange, onContactsLoaded,
 }: {
   contactType: OutreachContactType;
   ownerClerkId: string;
@@ -159,6 +159,7 @@ function ContactPicker({
   staffMembers: StaffMember[];
   selectedIds: Set<string>;
   onChange: (ids: Set<string>) => void;
+  onContactsLoaded?: (contacts: ContactItem[]) => void;
 }) {
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -181,7 +182,11 @@ function ContactPicker({
       }),
     })
       .then(r => r.json())
-      .then(data => setContacts(data.contacts ?? []))
+      .then(data => {
+        const loaded = data.contacts ?? [];
+        setContacts(loaded);
+        onContactsLoaded?.(loaded);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1115,6 +1120,8 @@ function ComposeWizard({
   const [filter, setFilter] = useState<AudienceFilter>({ ...EMPTY_FILTER, ownerClerkId: isSalesOnly ? currentUserId : "" });
   const [audienceMode, setAudienceMode] = useState<"filter" | "manual">("filter");
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  const [loadedContacts, setLoadedContacts] = useState<ContactItem[]>([]);
+  const [audienceOpen, setAudienceOpen] = useState(false);
   const [preview, setPreview] = useState<{ count: number; sample: string[] } | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
@@ -1558,6 +1565,7 @@ function ComposeWizard({
               staffMembers={staffMembers}
               selectedIds={selectedContactIds}
               onChange={setSelectedContactIds}
+              onContactsLoaded={setLoadedContacts}
             />
           )}
 
@@ -1930,20 +1938,43 @@ function ComposeWizard({
               <span className="text-gray-500">Broadcast name</span>
               <span className="font-medium text-gray-900">{broadcastName}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Audience</span>
-              <span className="font-medium text-gray-900 text-right max-w-xs">
-                {audienceMode === "manual"
-                  ? `${selectedContactIds.size} hand-picked contact${selectedContactIds.size !== 1 ? "s" : ""}`
-                  : <>
-                    {filter.contactType === "ReferralContacts" ? "Referral Partners" : "Clients"}
-                    {filter.stages.length ? ` · ${filter.stages.join(", ")}` : ""}
-                    {filter.companyIds.length ? ` · ${filter.companyIds.length} co.` : ""}
-                    {filter.ownerClerkId ? ` · ${salesStaff.find(s => s.clerkUserId === filter.ownerClerkId)?.displayName ?? ""}` : ""}
-                    {filter.tags ? ` · tag: ${filter.tags}` : ""}
-                  </>
-                }
-              </span>
+            <div className="flex justify-between items-start">
+              <span className="text-gray-500 shrink-0">Audience</span>
+              {audienceMode === "manual" ? (
+                <div className="text-right min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setAudienceOpen(o => !o)}
+                    className="inline-flex items-center gap-1 font-medium text-gray-900 hover:text-forest-700 transition-colors"
+                  >
+                    <span>{selectedContactIds.size} hand-picked contact{selectedContactIds.size !== 1 ? "s" : ""}</span>
+                    <svg
+                      className={cn("w-3.5 h-3.5 text-gray-400 transition-transform shrink-0", audienceOpen && "rotate-180")}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {audienceOpen && (
+                    <div className="mt-2 border-t border-gray-200 pt-2 space-y-1.5 text-left">
+                      {loadedContacts.filter(c => selectedContactIds.has(c.id)).map(c => (
+                        <div key={c.id} className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-medium text-gray-800 truncate">{c.name}</span>
+                          <span className="text-xs text-gray-400 shrink-0">{c.email}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span className="font-medium text-gray-900 text-right max-w-xs">
+                  {filter.contactType === "ReferralContacts" ? "Referral Partners" : "Clients"}
+                  {filter.stages.length ? ` · ${filter.stages.join(", ")}` : ""}
+                  {filter.companyIds.length ? ` · ${filter.companyIds.length} co.` : ""}
+                  {filter.ownerClerkId ? ` · ${salesStaff.find(s => s.clerkUserId === filter.ownerClerkId)?.displayName ?? ""}` : ""}
+                  {filter.tags ? ` · tag: ${filter.tags}` : ""}
+                </span>
+              )}
             </div>
             {preview && audienceMode === "filter" && (
               <div className="flex justify-between">

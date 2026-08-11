@@ -378,10 +378,37 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Internal notification when any non-Estate-Sale item is marked Sold
+  // Internal notification when any non-Estate-Sale item is marked Sold (new sale or adjustment)
   if (newStatus === "Sold" && item.primaryRoute !== "Estate Sale") {
     try {
       console.log(`[items/PATCH] item-sold notification start — item=${item.id} route=${item.primaryRoute}`);
+
+      const isAdjustment = existing?.status === "Sold";
+
+      // Resolve who triggered this change
+      const markedSoldBy = await (async () => {
+        const staffList = await getStaffMembers().catch(() => []);
+        const staff = staffList.find((s) => s.clerkUserId === userId);
+        if (staff?.displayName) return staff.displayName;
+        try {
+          const client = await clerkClient();
+          const u = await client.users.getUser(userId);
+          return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || userId;
+        } catch { return userId; }
+      })();
+
+      // Compute what changed (only relevant for adjustments)
+      const changedFields: Array<{ label: string; oldValue: string; newValue: string }> = [];
+      if (isAdjustment && existing) {
+        const fmtPrice = (n?: number | null) => n != null ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+        const oldPrice = existing.salePrice ?? existing.valueMid ?? 0;
+        const newPrice = item.salePrice ?? item.valueMid ?? 0;
+        if (Math.abs(oldPrice - newPrice) >= 0.01) changedFields.push({ label: "Sale Price", oldValue: fmtPrice(oldPrice), newValue: fmtPrice(newPrice) });
+        if ((existing.primaryRoute ?? "") !== (item.primaryRoute ?? "")) changedFields.push({ label: "Route / Channel", oldValue: existing.primaryRoute || "—", newValue: item.primaryRoute || "—" });
+        if ((existing.staffSellerName ?? "") !== (item.staffSellerName ?? "")) changedFields.push({ label: "Staff Seller", oldValue: existing.staffSellerName || "—", newValue: item.staffSellerName || "—" });
+        if ((existing.buyerName ?? "") !== (item.buyerName ?? "")) changedFields.push({ label: "Customer", oldValue: existing.buyerName || "—", newValue: item.buyerName || "—" });
+        if (Math.abs((existing.consignorPayout ?? 0) - (item.consignorPayout ?? 0)) >= 0.01) changedFields.push({ label: "Consignor Payout", oldValue: fmtPrice(existing.consignorPayout), newValue: fmtPrice(item.consignorPayout) });
+      }
 
       const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
       const salePrice = item.salePrice ?? item.valueMid ?? 0;
@@ -389,7 +416,7 @@ export async function PATCH(req: NextRequest) {
       const [adminEmails, tenant, zellePayments] = await Promise.all([
         getAdminEmails().catch(() => [] as string[]),
         getTenantById(item.tenantId).catch(() => null),
-        (ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
+        (!isAdjustment && ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
           ? (async () => {
               try {
                 const zelleEmail = process.env.ZELLE_GMAIL_EMAIL;
@@ -404,7 +431,7 @@ export async function PATCH(req: NextRequest) {
           : Promise.resolve([]),
       ]);
 
-      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)}`);
+      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)} isAdjustment=${isAdjustment}`);
       if (!adminEmails.length) {
         console.warn("[items/PATCH] item-sold notification skipped — no admin emails resolved");
       } else {
@@ -429,12 +456,20 @@ export async function PATCH(req: NextRequest) {
           saleDate: item.saleDate || new Date().toISOString(),
           catalogUrl,
           zelleMatch: zelleMatch ? { payerName: zelleMatch.payerName, amount: zelleMatch.amount, sentOn: zelleMatch.sentOn, memo: zelleMatch.memo || undefined } : undefined,
+          markedSoldBy,
+          markedSoldBySource: "Manual",
+          isAdjustment,
+          changedFields,
         });
+
+        const subject = isAdjustment
+          ? `Sale Record Updated — ${projectName}: ${item.itemName}`
+          : `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`;
 
         const { error: sendError } = await resend.emails.send({
           from: "Rightsize Alerts <notifications@toptiertransitions.com>",
           to: adminEmails,
-          subject: `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`,
+          subject,
           html,
         });
         if (sendError) {

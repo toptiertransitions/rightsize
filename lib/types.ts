@@ -453,6 +453,7 @@ export interface Estate {
   pickupWindowStartTime?: string;  // e.g. "10:00 AM" — single-line text field in Airtable
   pickupWindowEndTime?: string;
   pickupNotes: string;
+  pickupWindowsJson?: string;  // JSON array of {date, startTime, endTime} — up to 5 individual pickup dates
   shippingAvailable: boolean;
   shippingNotes: string;
   hideSoldItems: boolean;

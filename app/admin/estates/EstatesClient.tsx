@@ -63,6 +63,7 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   pickupWindowEnd: "",
   pickupWindowStartTime: "",
   pickupWindowEndTime: "",
+  pickupWindowsJson: "",
   shippingAvailable: false,
   shippingNotes: "",
   pickupNotes: "",
@@ -107,17 +108,49 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
   const [backfillingInterests, setBackfillingInterests] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ updated: number; errors: number } | null>(null);
+  const [pickupDates, setPickupDates] = useState<Array<{ date: string; startTime: string; endTime: string }>>([{ date: "", startTime: "", endTime: "" }]);
 
   const tenantMap = Object.fromEntries(tenants.map(t => [t.id, t.name]));
 
   function openCreate() {
     setForm(EMPTY_FORM);
+    setPickupDates([{ date: "", startTime: "", endTime: "" }]);
     setEditing(null);
     setCreating(true);
     setError("");
   }
 
   function openEdit(estate: Estate) {
+    // Populate pickupDates: prefer new JSON field, fall back to old single-window fields
+    let initialPickupDates: Array<{ date: string; startTime: string; endTime: string }>;
+    if (estate.pickupWindowsJson) {
+      try {
+        const parsed = JSON.parse(estate.pickupWindowsJson);
+        initialPickupDates = Array.isArray(parsed) && parsed.length > 0
+          ? parsed
+          : [{ date: "", startTime: "", endTime: "" }];
+      } catch {
+        initialPickupDates = [{ date: "", startTime: "", endTime: "" }];
+      }
+    } else if (estate.pickupWindowStart) {
+      // Migrate old range to individual date entries (one per day in range, max 5)
+      const startDate = estate.pickupWindowStart.slice(0, 10);
+      const endDate = estate.pickupWindowEnd ? estate.pickupWindowEnd.slice(0, 10) : startDate;
+      const startTime = estate.pickupWindowStartTime || "";
+      const endTime = estate.pickupWindowEndTime || "";
+      const dates: Array<{ date: string; startTime: string; endTime: string }> = [];
+      const cur = new Date(startDate + "T00:00:00");
+      const end = new Date(endDate + "T00:00:00");
+      while (cur <= end && dates.length < 5) {
+        dates.push({ date: cur.toISOString().slice(0, 10), startTime, endTime });
+        cur.setDate(cur.getDate() + 1);
+      }
+      initialPickupDates = dates.length > 0 ? dates : [{ date: "", startTime: "", endTime: "" }];
+    } else {
+      initialPickupDates = [{ date: "", startTime: "", endTime: "" }];
+    }
+    setPickupDates(initialPickupDates);
+
     setForm({
       name: estate.name,
       slug: estate.slug,
@@ -137,6 +170,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
       pickupWindowEnd: estate.pickupWindowEnd,
       pickupWindowStartTime: estate.pickupWindowStartTime ?? "",
       pickupWindowEndTime: estate.pickupWindowEndTime ?? "",
+      pickupWindowsJson: estate.pickupWindowsJson || "",
       shippingAvailable: estate.shippingAvailable,
       shippingNotes: estate.shippingNotes,
       pickupNotes: estate.pickupNotes,
@@ -167,11 +201,16 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
     setSaving(true);
     setError("");
     try {
+      const validPickupDates = pickupDates.filter(d => d.date);
+      const body = {
+        ...form,
+        pickupWindowsJson: validPickupDates.length > 0 ? JSON.stringify(validPickupDates) : "",
+      };
       if (creating) {
         const res = await fetch("/api/admin/estates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Save failed");
         const { estate } = await res.json();
@@ -180,7 +219,7 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
         const res = await fetch(`/api/admin/estates/${editing.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Save failed");
         const { estate } = await res.json();
@@ -658,40 +697,63 @@ export function EstatesClient({ estates: initial, tenants }: EstatesClientProps)
                 />
               </Field>
 
-              <Field label="Pickup Window Start">
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    className={inputCls}
-                    value={form.pickupWindowStart ? form.pickupWindowStart.slice(0, 10) : ""}
-                    onChange={e => setForm(f => ({ ...f, pickupWindowStart: e.target.value }))}
-                  />
-                  <input
-                    type="text"
-                    className={`${inputCls} w-36 flex-shrink-0`}
-                    value={form.pickupWindowStartTime ?? ""}
-                    onChange={e => setForm(f => ({ ...f, pickupWindowStartTime: e.target.value }))}
-                    placeholder="e.g. 10:00 AM"
-                  />
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">Pickup Dates</span>
+                  {pickupDates.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const prev = pickupDates[pickupDates.length - 1];
+                        setPickupDates(d => [...d, { date: "", startTime: prev?.startTime || "", endTime: prev?.endTime || "" }]);
+                      }}
+                      className="text-xs text-forest-400 hover:text-forest-300 transition-colors"
+                    >
+                      + Add date
+                    </button>
+                  )}
                 </div>
-              </Field>
-              <Field label="Pickup Window End">
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    className={inputCls}
-                    value={form.pickupWindowEnd ? form.pickupWindowEnd.slice(0, 10) : ""}
-                    onChange={e => setForm(f => ({ ...f, pickupWindowEnd: e.target.value }))}
-                  />
-                  <input
-                    type="text"
-                    className={`${inputCls} w-36 flex-shrink-0`}
-                    value={form.pickupWindowEndTime ?? ""}
-                    onChange={e => setForm(f => ({ ...f, pickupWindowEndTime: e.target.value }))}
-                    placeholder="e.g. 4:00 PM"
-                  />
+                <div className="space-y-2">
+                  {pickupDates.map((pd, i) => (
+                    <div key={i} className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-gray-500">Date {i + 1}</span>
+                        {pickupDates.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPickupDates(d => d.filter((_, j) => j !== i))}
+                            className="text-gray-600 hover:text-red-400 transition-colors text-sm leading-none"
+                            title="Remove this date"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="date"
+                        className={inputCls}
+                        value={pd.date}
+                        onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="time"
+                          className={`${inputCls} flex-1`}
+                          value={to24h(pd.startTime)}
+                          onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, startTime: to12h(e.target.value) } : x))}
+                        />
+                        <span className="text-gray-500 text-sm flex-shrink-0">–</span>
+                        <input
+                          type="time"
+                          className={`${inputCls} flex-1`}
+                          value={to24h(pd.endTime)}
+                          onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, endTime: to12h(e.target.value) } : x))}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </Field>
+              </div>
 
               <Field label="Pickup Notes">
                 <textarea

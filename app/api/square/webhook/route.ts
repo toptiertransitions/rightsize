@@ -162,6 +162,7 @@ export async function POST(req: NextRequest) {
               consignorPayout: clientPayout || undefined,
               saleDate: paymentDate,
               catalogUrl,
+              markedSoldBySource: "Square",
             });
 
             await resend.emails.send({

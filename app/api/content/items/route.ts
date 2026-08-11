@@ -25,7 +25,19 @@ export async function GET(req: NextRequest) {
   const scheduledDateTo = searchParams.get("to") ?? undefined;
 
   const items = await getContentItems({ status, audience, pipelineStage, categoryId, scheduledDateFrom, scheduledDateTo });
-  return NextResponse.json({ items });
+
+  // Admins and managers can see all content (they manage the library).
+  // Sales reps only see: public items + items shared with them + their own content.
+  const isManager = role === "TTTAdmin" || role === "TTTManager";
+  const visibleItems = isManager
+    ? items
+    : items.filter(item => {
+        if (item.sharedWith[0] === "__private__") return item.authorClerkId === userId;
+        if (item.sharedWith.length > 0) return item.authorClerkId === userId || item.sharedWith.includes(userId);
+        return true;
+      });
+
+  return NextResponse.json({ items: visibleItems });
 }
 
 export async function POST(req: NextRequest) {

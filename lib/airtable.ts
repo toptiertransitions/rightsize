@@ -5495,9 +5495,10 @@ function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
     pickupWindowEnd: toStr(f["PickupWindowEnd"]),
     pickupWindowStartTime: toStr(f["PickupWindowStartTime"]) || undefined,
     pickupWindowEndTime: toStr(f["PickupWindowEndTime"]) || undefined,
+    pickupNotes: toStr(f["PickupNotes"]),
+    pickupWindowsJson: toStr(f["PickupWindowsJson"]) || undefined,
     shippingAvailable: f["ShippingAvailable"] === true,
     shippingNotes: toStr(f["ShippingNotes"]),
-    pickupNotes: toStr(f["PickupNotes"]),
     hideSoldItems: f["HideSoldItems"] === true,
     terms: toStr(f["Terms"]),
     contactEmail: toStr(f["ContactEmail"]),
@@ -5591,6 +5592,7 @@ export async function createEstate(
       ShippingAvailable: data.shippingAvailable,
       ShippingNotes: data.shippingNotes,
       PickupNotes: data.pickupNotes || "",
+      PickupWindowsJson: data.pickupWindowsJson || "",
       HideSoldItems: data.hideSoldItems ?? false,
       Terms: data.terms,
       ContactEmail: data.contactEmail,
@@ -5634,6 +5636,7 @@ export async function updateEstate(
   if (data.shippingAvailable !== undefined) fields["ShippingAvailable"] = data.shippingAvailable;
   if (data.shippingNotes !== undefined) fields["ShippingNotes"] = data.shippingNotes;
   if (data.pickupNotes !== undefined) fields["PickupNotes"] = data.pickupNotes;
+  if (data.pickupWindowsJson !== undefined) fields["PickupWindowsJson"] = data.pickupWindowsJson;
   if (data.hideSoldItems !== undefined) fields["HideSoldItems"] = data.hideSoldItems;
   if (data.terms !== undefined) fields["Terms"] = data.terms;
   if (data.contactEmail !== undefined) fields["ContactEmail"] = data.contactEmail;
@@ -6548,6 +6551,10 @@ export interface ResolvedOutreachContact {
 
 export async function resolveOutreachContacts(filter: OutreachContactFilter): Promise<ResolvedOutreachContact[]> {
   if (filter.contactType === "ReferralContacts") {
+    // Fetch all companies once so we can attach company names without N+1 lookups
+    const companies = await getReferralCompanies().catch(() => [] as ReferralCompany[]);
+    const companyNameById = new Map(companies.map(c => [c.id, c.name]));
+
     // If specific contact IDs provided, fetch exactly those
     if (filter.contactIds?.length) {
       const idOr = filter.contactIds.map(id => `RECORD_ID()="${id}"`).join(",");
@@ -6557,7 +6564,7 @@ export async function resolveOutreachContacts(filter: OutreachContactFilter): Pr
       const data = await res.json();
       return (data.records as AirtableRecord[]).map(r => {
         const c = mapReferralContact(r);
-        return { id: c.id, name: c.name, email: c.email };
+        return { id: c.id, name: c.name, email: c.email, company: companyNameById.get(c.referralCompanyId) || "" };
       }).filter(c => c.email);
     }
 
@@ -6595,7 +6602,7 @@ export async function resolveOutreachContacts(filter: OutreachContactFilter): Pr
       for (const r of data.records as AirtableRecord[]) {
         const c = mapReferralContact(r);
         if (filter.tags && !(c.tags || "").toLowerCase().includes(filter.tags.toLowerCase())) continue;
-        all.push({ id: c.id, name: c.name, email: c.email });
+        all.push({ id: c.id, name: c.name, email: c.email, company: companyNameById.get(c.referralCompanyId) || "" });
       }
       offset = data.offset;
     } while (offset);

@@ -66,7 +66,7 @@ function EbayActionButton({ item, onUpdate }: { item: Item; onUpdate: (updated: 
       onClick={handleClick}
       className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 border border-indigo-700 transition-colors whitespace-nowrap"
     >
-      Publish to eBay
+      List It
     </button>
   );
 }
@@ -229,7 +229,7 @@ function PhotoCell({ item, onUpload }: { item: Item; onUpload: (url: string, pub
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
-type SortCol = "itemName" | "status" | "client" | "quantity" | "quantitySold" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate" | "payoutPaidAt";
+type SortCol = "itemName" | "status" | "client" | "quantity" | "quantitySold" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate" | "payoutPaidAt" | "barcodeNumber";
 
 function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; sortDir: "asc" | "desc" }) {
   const active = col === sortCol;
@@ -376,8 +376,8 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [sortCol, setSortCol] = useState<SortCol>("itemName");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortCol, setSortCol] = useState<SortCol>("barcodeNumber");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tttFilter, setTttFilter] = useState<"all" | "ttt" | "client">("all");
 
@@ -457,6 +457,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
       }
       case "soldDate": return dir * ((a.saleDate ?? "").localeCompare(b.saleDate ?? ""));
       case "payoutPaidAt": return dir * (a.payoutPaidAt ?? "").localeCompare(b.payoutPaidAt ?? "");
+      case "barcodeNumber": return dir * (Number(a.barcodeNumber ?? 0) - Number(b.barcodeNumber ?? 0));
       default: return 0;
     }
   });
@@ -569,12 +570,11 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                       className="rounded border-gray-600 bg-gray-700 text-forest-500 focus:ring-forest-500 focus:ring-offset-gray-900 cursor-pointer"
                     />
                   </th>
-                  <th className="px-3 py-3 text-left w-10"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">#</span></th>
+                  <th className="px-3 py-3 text-left w-20">{thBtn("barcodeNumber", "Item ID")}</th>
                   <th className="px-3 py-3 text-left w-12"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Photo</span></th>
                   <th className="px-3 py-3 text-left min-w-[180px]">{thBtn("itemName", "Item Name")}</th>
                   <th className="px-3 py-3 text-left w-24">{thBtn("status", "Status")}</th>
                   <th className="px-3 py-3 text-left min-w-[140px]">{thBtn("client", "Client")}</th>
-                  <th className="px-3 py-3 text-left w-16"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Type</span></th>
                   <th className="px-3 py-3 text-right w-20">{thBtn("quantitySold", "Qty", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-28">{thBtn("valueMid", "Price", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-24">{thBtn("clientSharePercent", "Client Share", "justify-end")}</th>
@@ -584,11 +584,11 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                   <th className="px-3 py-3 text-right w-24">{thBtn("staffTime", "Staff Time", "justify-end")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("soldDate", "Sold Date")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
-                  <th className="px-3 py-3 text-left min-w-[160px]"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">eBay</span></th>
+                  <th className="px-3 py-3 text-left min-w-[120px]"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">List It</span></th>
                 </tr>
               </thead>
               <tbody>
-                {sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item, idx) => {
+                {sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item) => {
                   const tenant = tenantInfoMap[item.tenantId];
                   const isSaving = saving[item.id];
                   const isFlashing = flash[item.id];
@@ -597,7 +597,6 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                   const commissionDollars = item.status === "Sold" && item.staffCommissionPercent != null && item.valueMid
                     ? (item.staffCommissionPercent / 100) * item.valueMid
                     : null;
-                  const globalIdx = (page - 1) * PAGE_SIZE + idx;
 
                   return (
                     <tr key={item.id} className={`border-b border-gray-800/60 transition-colors ${
@@ -610,7 +609,7 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                         />
                       </td>
 
-                      <td className="px-3 py-2.5 text-gray-600 text-xs">{globalIdx + 1}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-xs font-mono">{item.barcodeNumber || "—"}</td>
 
                       {/* Photo */}
                       <td className="px-3 py-2.5">
@@ -645,17 +644,6 @@ export function EbayInventoryClient({ items: initialItems, tenantInfoMap, staffM
                             <p className="text-gray-500 text-[10px] truncate max-w-[130px]">{tenant.ownerEmail}</p>
                           </div>
                         ) : <span className="text-gray-600 text-xs">—</span>}
-                      </td>
-
-                      {/* TTT Type */}
-                      <td className="px-3 py-2.5">
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                          (tenant?.isTTT ?? true)
-                            ? "bg-green-900/40 text-green-400 border-green-700"
-                            : "bg-gray-800 text-gray-400 border-gray-600"
-                        }`}>
-                          {(tenant?.isTTT ?? true) ? "TTT" : "Client"}
-                        </span>
                       </td>
 
                       {/* Qty */}

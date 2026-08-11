@@ -477,9 +477,15 @@ function ContentFormModal({
   const [generatingIcon, setGeneratingIcon] = useState(false);
   const [iconError, setIconError] = useState("");
   const [shareMode, setShareMode] = useState<"all" | "specific" | "private">(
-    item ? (item.sharedWith?.length ? "specific" : "all") : "all"
+    item
+      ? item.sharedWith?.[0] === "__private__" ? "private"
+        : item.sharedWith?.length ? "specific"
+        : "all"
+      : "all"
   );
-  const [sharedWith, setSharedWith] = useState<string[]>(item?.sharedWith ?? []);
+  const [sharedWith, setSharedWith] = useState<string[]>(
+    item?.sharedWith?.[0] === "__private__" ? [] : (item?.sharedWith ?? [])
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const needsFile = contentType === "PDF" || contentType === "Image" || contentType === "PartnerLogo";
@@ -544,7 +550,7 @@ function ContentFormModal({
       filePublicId: uploadedPublicId || undefined,
       thumbnailUrl: thumbnailUrl || undefined,
       thumbnailPublicId: thumbnailPublicId || undefined,
-      sharedWith: shareMode === "specific" ? sharedWith : [],
+      sharedWith: shareMode === "specific" ? sharedWith : shareMode === "private" ? ["__private__"] : [],
     });
     setSaving(false);
   }

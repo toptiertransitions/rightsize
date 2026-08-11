@@ -5,6 +5,72 @@ import Image from "next/image";
 import type { Item, ItemStatus } from "@/lib/types";
 import { Pagination } from "../components/Pagination";
 
+// ─── eBay/FB list-it button ───────────────────────────────────────────────────
+function EbayActionButton({ item, onUpdate }: { item: Item; onUpdate: (updated: Item) => void }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    setLoading(true);
+    const isUpdate = !!item.ebayListingId;
+    try {
+      const res = await fetch("/api/ebay/listing", {
+        method:  isUpdate ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ itemId: item.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Listing operation failed");
+      onUpdate(data.item as Item);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Listing error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (item.ebayListingStatus === "Pending" || loading) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1">
+        <svg className="w-3.5 h-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <span className="text-xs text-gray-400">Publishing…</span>
+      </div>
+    );
+  }
+
+  if (item.ebayListingId) {
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          onClick={handleClick}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-forest-800 hover:bg-forest-700 text-forest-200 border border-forest-600 transition-colors whitespace-nowrap"
+        >
+          Edit Listing
+        </button>
+        {item.ebayListingStatus === "Error" && item.ebaySyncError && (
+          <span className="text-[10px] text-red-400 px-1 max-w-[140px] truncate" title={item.ebaySyncError}>
+            {item.ebaySyncError}
+          </span>
+        )}
+        {item.ebayLastSyncedAt && item.ebayListingStatus === "Active" && (
+          <span className="text-[10px] text-gray-500 px-1">synced {item.ebayLastSyncedAt}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 border border-indigo-700 transition-colors whitespace-nowrap"
+    >
+      List It
+    </button>
+  );
+}
+
 const PAGE_SIZE = 25;
 const PF_STATUSES: ItemStatus[] = ["Listed", "Sold", "Discarded"];
 
@@ -229,7 +295,7 @@ function PhotoCell({ item, onUpload }: { item: Item; onUpload: (url: string, pub
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
-type SortCol = "itemName" | "status" | "client" | "quantity" | "quantitySold" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate" | "payoutPaidAt";
+type SortCol = "itemName" | "status" | "client" | "quantity" | "quantitySold" | "valueMid" | "clientSharePercent" | "staffSellerName" | "staffCommissionPercent" | "staffTime" | "staffCommissionDollars" | "soldDate" | "payoutPaidAt" | "barcodeNumber";
 
 function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; sortDir: "asc" | "desc" }) {
   const active = col === sortCol;
@@ -372,8 +438,12 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [sortCol, setSortCol] = useState<SortCol>("itemName");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortCol, setSortCol] = useState<SortCol>("barcodeNumber");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function updateItemInList(updated: Item) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+  }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tttFilter, setTttFilter] = useState<"all" | "ttt" | "client">("all");
 
@@ -453,6 +523,7 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
       }
       case "soldDate": return dir * ((a.saleDate ?? "").localeCompare(b.saleDate ?? ""));
       case "payoutPaidAt": return dir * (a.payoutPaidAt ?? "").localeCompare(b.payoutPaidAt ?? "");
+      case "barcodeNumber": return dir * (Number(a.barcodeNumber ?? 0) - Number(b.barcodeNumber ?? 0));
       default: return 0;
     }
   });
@@ -565,12 +636,11 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                       className="rounded border-gray-600 bg-gray-700 text-forest-500 focus:ring-forest-500 focus:ring-offset-gray-900 cursor-pointer"
                     />
                   </th>
-                  <th className="px-3 py-3 text-left w-10"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">#</span></th>
+                  <th className="px-3 py-3 text-left w-20">{thBtn("barcodeNumber", "Item ID")}</th>
                   <th className="px-3 py-3 text-left w-12"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Photo</span></th>
                   <th className="px-3 py-3 text-left min-w-[180px]">{thBtn("itemName", "Item Name")}</th>
                   <th className="px-3 py-3 text-left w-24">{thBtn("status", "Status")}</th>
                   <th className="px-3 py-3 text-left min-w-[140px]">{thBtn("client", "Client")}</th>
-                  <th className="px-3 py-3 text-left w-16"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Type</span></th>
                   <th className="px-3 py-3 text-right w-20">{thBtn("quantitySold", "Qty", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-28">{thBtn("valueMid", "Price / Label", "justify-end")}</th>
                   <th className="px-3 py-3 text-right w-24">{thBtn("clientSharePercent", "Client Share", "justify-end")}</th>
@@ -581,10 +651,11 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                   <th className="px-3 py-3 text-left w-28">{thBtn("soldDate", "Sold Date")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
                   <th className="px-3 py-3 text-left w-28"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">FB Listing</span></th>
+                  <th className="px-3 py-3 text-left min-w-[120px]"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">List It</span></th>
                 </tr>
               </thead>
               <tbody>
-                {sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item, idx) => {
+                {sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((item) => {
                   const tenant = tenantInfoMap[item.tenantId];
                   const isSaving = saving[item.id];
                   const isFlashing = flash[item.id];
@@ -593,7 +664,6 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                   const commissionDollars = item.status === "Sold" && item.staffCommissionPercent != null && item.valueMid
                     ? (item.staffCommissionPercent / 100) * item.valueMid
                     : null;
-                  const globalIdx = (page - 1) * PAGE_SIZE + idx;
 
                   return (
                     <tr key={item.id} className={`border-b border-gray-800/60 transition-colors ${
@@ -606,7 +676,7 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                         />
                       </td>
 
-                      <td className="px-3 py-2.5 text-gray-600 text-xs">{globalIdx + 1}</td>
+                      <td className="px-3 py-2.5 text-gray-400 text-xs font-mono">{item.barcodeNumber || "—"}</td>
 
                       {/* Photo */}
                       <td className="px-3 py-2.5">
@@ -641,17 +711,6 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                             <p className="text-gray-500 text-[10px] truncate max-w-[130px]">{tenant.ownerEmail}</p>
                           </div>
                         ) : <span className="text-gray-600 text-xs">—</span>}
-                      </td>
-
-                      {/* TTT Type */}
-                      <td className="px-3 py-2.5">
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                          (tenant?.isTTT ?? true)
-                            ? "bg-green-900/40 text-green-400 border-green-700"
-                            : "bg-gray-800 text-gray-400 border-gray-600"
-                        }`}>
-                          {(tenant?.isTTT ?? true) ? "TTT" : "Client"}
-                        </span>
                       </td>
 
                       {/* Qty */}
@@ -755,6 +814,11 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
                       {/* Copy for FB */}
                       <td className="px-3 py-2.5">
                         <CopyFBButton item={item} />
+                      </td>
+
+                      {/* List It */}
+                      <td className="px-3 py-2.5">
+                        <EbayActionButton item={item} onUpdate={updateItemInList} />
                       </td>
                     </tr>
                   );
