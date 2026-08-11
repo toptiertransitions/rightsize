@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         contractId: contract.id,
         lineItems: contract.lineItems,
         createdByClerkId: contract.sentByClerkId ?? "system",
+        billToName: signerName.trim(),
       });
     } catch (e) {
       console.error("Failed to auto-create deposit invoice:", e);
