@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
+import { clerkClient } from "@clerk/nextjs/server";
 import { getStaffMembers } from "./airtable";
 import { isTTTAdmin } from "./config";
 import type { ContentItem } from "./types";
@@ -150,17 +151,30 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
   const isPrivate = item.sharedWith.length > 0;
   const isTrulyPrivate = isPrivate && item.sharedWith[0] === "__private__";
 
+  // Resolve uploader email: staff table first, Clerk API as fallback (covers
+  // TTTAdmin users who exist only via TTT_ADMIN_USER_IDS env var, not in StaffMembers)
+  async function resolveUploaderEmail(): Promise<string | undefined> {
+    const fromStaff = staff.find(s => s.clerkUserId === item.authorClerkId)?.email;
+    if (fromStaff) return fromStaff;
+    try {
+      const clerk = await clerkClient();
+      const user = await clerk.users.getUser(item.authorClerkId);
+      return user.emailAddresses.find(e => e.id === user.primaryEmailAddressId)?.emailAddress
+        ?? user.emailAddresses[0]?.emailAddress;
+    } catch { return undefined; }
+  }
+
   let recipients: string[];
 
   if (isTrulyPrivate) {
-    const uploader = staff.find(s => s.clerkUserId === item.authorClerkId && s.email);
-    recipients = uploader?.email ? [uploader.email] : [];
+    const uploaderEmail = await resolveUploaderEmail();
+    recipients = uploaderEmail ? [uploaderEmail] : [];
   } else if (isPrivate) {
     const selectedIds = new Set(item.sharedWith);
     const selectedEmails = staff
       .filter(s => s.isActive && s.email && selectedIds.has(s.clerkUserId))
       .map(s => s.email as string);
-    const uploaderEmail = staff.find(s => s.clerkUserId === item.authorClerkId)?.email;
+    const uploaderEmail = await resolveUploaderEmail();
     recipients = [...new Set([...selectedEmails, ...(uploaderEmail ? [uploaderEmail] : [])])];
   } else {
     recipients = staff
