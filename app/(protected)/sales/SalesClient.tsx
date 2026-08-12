@@ -154,6 +154,7 @@ function SalesTableRow({
   onSalePriceSaved,
   onEdit,
   isNonTTT = false,
+  isTTTUser = false,
 }: {
   item: Item;
   canEditPayout: boolean;
@@ -163,6 +164,7 @@ function SalesTableRow({
   onSalePriceSaved: (itemId: string, price: number) => void;
   onEdit: (item: Item) => void;
   isNonTTT?: boolean;
+  isTTTUser?: boolean;
 }) {
   const [editingPayout, setEditingPayout] = useState(false);
   const [payoutInput, setPayoutInput] = useState(String(item.payoutPaidAmount ?? 0));
@@ -285,7 +287,7 @@ function SalesTableRow({
           {clientPayout != null ? (
             <div>
               <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
-              {previewCalcPayout && previewCalcPayout.vendorName && previewCalcPayout.rate > 0 && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
+              {isTTTUser && previewCalcPayout && previewCalcPayout.vendorName && previewCalcPayout.rate > 0 && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
             </div>
           ) : (
             <span className="text-gray-300">—</span>
@@ -371,6 +373,7 @@ function PFTableRow({
   localVendors,
   onEdit,
   onEventUpdated,
+  isTTTUser = false,
 }: {
   item: Item;
   initialEvents: ItemSaleEvent[];
@@ -379,6 +382,7 @@ function PFTableRow({
   localVendors: LocalVendor[];
   onEdit: (item: Item) => void;
   onEventUpdated: (updated: ItemSaleEvent) => void;
+  isTTTUser?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [localEvents, setLocalEvents] = useState<ItemSaleEvent[]>(initialEvents);
@@ -510,7 +514,7 @@ function PFTableRow({
             </div>
           ) : (() => {
             // No Square events — compute fallback payout for sold items
-            if (!isSold) return item.clientSharePercent != null
+            if (!isSold) return (isTTTUser && item.clientSharePercent != null)
               ? <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
               : <span className="text-gray-300">—</span>;
             const calc = computeCalcPayout(item, localVendors);
@@ -522,7 +526,7 @@ function PFTableRow({
               return (
                 <div>
                   <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
-                  {calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
+                  {isTTTUser && calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
                 </div>
               );
             }
@@ -643,6 +647,7 @@ function PFSalesSection({
   localVendors,
   onEdit,
   onEventUpdated,
+  isTTTUser = false,
 }: {
   items: Item[];
   allEvents: ItemSaleEvent[];
@@ -651,6 +656,7 @@ function PFSalesSection({
   localVendors: LocalVendor[];
   onEdit: (item: Item) => void;
   onEventUpdated: (updated: ItemSaleEvent) => void;
+  isTTTUser?: boolean;
 }) {
   type SortCol = "name" | "value" | "status" | "qty";
   const [open, setOpen] = useState(true);
@@ -711,7 +717,7 @@ function PFSalesSection({
           onClick={() => setOpen(v => !v)}
           className="flex items-center gap-2 hover:opacity-75 transition-opacity"
         >
-          <h2 className="text-base font-semibold text-gray-900">ProFoundFinds Consignment</h2>
+          <h2 className="text-base font-semibold text-gray-900">ProFoundFinds</h2>
           <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{items.length}</span>
           {totalQty > 0 && (
             <span className="text-xs text-gray-400">{totalSold} of {totalQty} sold</span>
@@ -747,6 +753,9 @@ function PFSalesSection({
           </div>
         )}
       </div>
+      {!isTTTUser && (
+        <p className="text-xs text-gray-400 mb-2 -mt-1">Includes an additional 3% fee due to credit card processing fees.</p>
+      )}
       {open && (
         <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
           <table className="w-full border-collapse">
@@ -774,6 +783,7 @@ function PFSalesSection({
                   localVendors={localVendors}
                   onEdit={onEdit}
                   onEventUpdated={onEventUpdated}
+                  isTTTUser={isTTTUser}
                 />
               ))}
             </tbody>
@@ -790,6 +800,12 @@ function PFSalesSection({
 
 // ─── Sales Table (FB, Online, Other Consignment) ──────────────────────────────
 
+const CLIENT_FEE_NOTES: Record<string, string> = {
+  "FB / Marketplace": "Includes an additional 10.5% fee to cover sales tax.",
+  "eBay": "Includes an additional 10.5% fee to cover sales tax.",
+  "Estate Sales": "Includes an additional 3% fee due to credit card processing fees.",
+};
+
 function SalesTable({
   title,
   items,
@@ -800,6 +816,7 @@ function SalesTable({
   onSalePriceSaved,
   onEdit,
   isNonTTT = false,
+  isTTTUser = false,
 }: {
   title: string;
   items: Item[];
@@ -810,6 +827,7 @@ function SalesTable({
   onSalePriceSaved: (id: string, price: number) => void;
   onEdit: (item: Item) => void;
   isNonTTT?: boolean;
+  isTTTUser?: boolean;
 }) {
   type SortCol = "name" | "category" | "status" | "value" | "salePrice" | "payout" | "paid" | "paidDate";
   const [open, setOpen] = useState(true);
@@ -893,6 +911,9 @@ function SalesTable({
           </div>
         )}
       </div>
+      {title && !isTTTUser && CLIENT_FEE_NOTES[title] && (
+        <p className="text-xs text-gray-400 mb-2 -mt-1">{CLIENT_FEE_NOTES[title]}</p>
+      )}
       {open && (
         <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
           <table className="w-full border-collapse">
@@ -921,6 +942,7 @@ function SalesTable({
                   onSalePriceSaved={onSalePriceSaved}
                   onEdit={onEdit}
                   isNonTTT={isNonTTT}
+                  isTTTUser={isTTTUser}
                 />
               ))}
             </tbody>
@@ -1784,6 +1806,7 @@ export function SalesClient({
             localVendors={localVendors}
             onEdit={setEditingItem}
             onEventUpdated={(updated) => setPfSaleEvents(prev => prev.map(e => e.id === updated.id ? updated : e))}
+            isTTTUser={isTTTUser}
           />
         )}
         <SalesTable
@@ -1796,6 +1819,7 @@ export function SalesClient({
           onSalePriceSaved={handleSalePriceSaved}
           onEdit={setEditingItem}
           isNonTTT={isNonTTT}
+          isTTTUser={isTTTUser}
         />
         <SalesTable
           title="eBay"
@@ -1807,6 +1831,7 @@ export function SalesClient({
           onSalePriceSaved={handleSalePriceSaved}
           onEdit={setEditingItem}
           isNonTTT={isNonTTT}
+          isTTTUser={isTTTUser}
         />
 
         {/* Other Consignment — grouped by vendor, each as a table */}
@@ -1861,7 +1886,7 @@ export function SalesClient({
           <div>
             <div className="flex items-center gap-3 mb-1">
               <button onClick={() => setOpenEstate(v => !v)} className="flex items-center gap-2 hover:opacity-75 transition-opacity">
-                <h2 className="text-base font-semibold text-gray-900">Estate Sales</h2>
+                <h2 className="text-base font-semibold text-gray-900">Estate Sale</h2>
                 <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{estateSaleItems.length}</span>
                 <svg
                   className={cn("w-4 h-4 text-gray-400 transition-transform duration-200", !openEstate && "-rotate-90")}
@@ -1871,6 +1896,9 @@ export function SalesClient({
                 </svg>
               </button>
             </div>
+            {!isTTTUser && (
+              <p className="text-xs text-gray-400 mb-2 mt-0.5">Includes an additional 3% fee due to credit card processing fees.</p>
+            )}
             {openEstate && (
               <div className="mt-3">
                 <SalesTable
@@ -1883,6 +1911,7 @@ export function SalesClient({
                   onSalePriceSaved={handleSalePriceSaved}
                   onEdit={setEditingItem}
                   isNonTTT={isNonTTT}
+                  isTTTUser={isTTTUser}
                 />
               </div>
             )}
