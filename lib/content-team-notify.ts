@@ -142,11 +142,34 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
   if (!resendKey) return;
 
   const staff = await getStaffMembers();
-  const recipients = staff
-    .filter(s => s.isActive && s.email && (
-      ["TTTAdmin", "TTTManager", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
-    ))
-    .map(s => s.email as string);
+
+  // Determine recipients based on visibility
+  // sharedWith=[] → public → all active admins/managers/sales
+  // sharedWith=["__private__"] → truly private → uploader only
+  // sharedWith=[id,...] → private with selected reps → those reps + uploader
+  const isPrivate = item.sharedWith.length > 0;
+  const isTrulyPrivate = isPrivate && item.sharedWith[0] === "__private__";
+
+  let recipients: string[];
+
+  if (isTrulyPrivate) {
+    const uploader = staff.find(s => s.clerkUserId === item.authorClerkId && s.email);
+    recipients = uploader?.email ? [uploader.email] : [];
+  } else if (isPrivate) {
+    const selectedIds = new Set(item.sharedWith);
+    const selectedEmails = staff
+      .filter(s => s.isActive && s.email && selectedIds.has(s.clerkUserId))
+      .map(s => s.email as string);
+    const uploaderEmail = staff.find(s => s.clerkUserId === item.authorClerkId)?.email;
+    recipients = [...new Set([...selectedEmails, ...(uploaderEmail ? [uploaderEmail] : [])])];
+  } else {
+    recipients = staff
+      .filter(s => s.isActive && s.email && (
+        ["TTTAdmin", "TTTManager", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
+      ))
+      .map(s => s.email as string);
+  }
+
   if (recipients.length === 0) return;
 
   const fallbackSummary = item.description?.trim() || `A new ${item.contentType} has been added to the content library.`;
