@@ -375,6 +375,9 @@ export interface Item {
   ebayListingStatus?: "Active" | "Ended" | "Error" | "Pending";
   ebayLastSyncedAt?: string;
   ebaySyncError?: string;
+  // Shipping label (eBay / FB sold items)
+  shippingLabelUrl?: string;
+  shippingLabelFileName?: string;
 }
 
 export type PriceChangeType = "Listed" | "Manual Edit" | "Price Drop 1" | "Price Drop 2" | "Reverted" | "Sale Price";

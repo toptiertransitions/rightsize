@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         tenantId: tenantId ?? "admin",
         mimeType: effectiveMimeType,
         resourceType: "raw",
+        originalFileName: file.name,
       });
       return NextResponse.json({ photoUrl: result.secureUrl, photoPublicId: result.publicId });
     } catch (e) {

@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
-import { buildVendorAssignmentEmail, buildItemSoldEmail } from "@/lib/email";
+import { buildVendorAssignmentEmail, buildItemSoldEmail, buildStaffItemSoldEmail } from "@/lib/email";
 import { getAdminEmails } from "@/lib/admin-notifications";
 import { upsertSquareCatalogItem } from "@/lib/square";
 import { getValidAccessToken, fetchZellePayments } from "@/lib/gmail";
@@ -227,7 +227,8 @@ export async function PATCH(req: NextRequest) {
   const needsExisting = newVendorId !== undefined || updates.status !== undefined
     || resolvedNewRoute !== undefined
     || updates.valueMid !== undefined
-    || updates.clientSharePercent !== undefined;
+    || updates.clientSharePercent !== undefined
+    || updates.shippingLabelUrl !== undefined;
   const existing = needsExisting ? await getItemById(id as string).catch(() => null) : null;
 
   // When route changes to one that doesn't support a vendor, auto-clear the assigned vendor
@@ -486,6 +487,71 @@ export async function PATCH(req: NextRequest) {
       }
     } catch (e) {
       console.error("[items/PATCH] item-sold notification failed:", e);
+    }
+  }
+
+  // Staff seller email — when a shipping label is first added to an eBay/FB sold item
+  const SELLER_LABEL_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
+  const labelJustSet = (updates as Record<string, unknown>).shippingLabelUrl as string | undefined;
+  const labelWasEmpty = !existing?.shippingLabelUrl;
+  if (
+    SELLER_LABEL_ROUTES.has(item.primaryRoute ?? "") &&
+    item.status === "Sold" &&
+    labelJustSet && labelWasEmpty &&
+    item.staffSellerId
+  ) {
+    try {
+      const staffList = await getStaffMembers().catch(() => []);
+      const seller = staffList.find(s => s.clerkUserId === item.staffSellerId && s.isActive && s.email);
+      if (seller?.email) {
+        const ccEmails = staffList
+          .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
+          .map(s => s.email as string);
+
+        const [tenant] = await Promise.all([getTenantById(item.tenantId).catch(() => null)]);
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+        const searchParam = item.barcodeNumber ? encodeURIComponent(item.barcodeNumber) : "";
+        const catalogUrl = `${appUrl}/catalog?tenantId=${item.tenantId}${searchParam ? `&search=${searchParam}` : ""}`;
+        const labelFileName = item.shippingLabelFileName || "shipping-label.pdf";
+
+        // Fetch PDF for attachment
+        let pdfAttachment: { filename: string; content: string } | undefined;
+        if (item.shippingLabelUrl) {
+          try {
+            const pdfRes = await fetch(item.shippingLabelUrl);
+            if (pdfRes.ok) {
+              const pdfBuf = await pdfRes.arrayBuffer();
+              pdfAttachment = { filename: labelFileName, content: Buffer.from(pdfBuf).toString("base64") };
+            }
+          } catch { /* non-fatal — send without attachment if fetch fails */ }
+        }
+
+        const html = buildStaffItemSoldEmail({
+          staffSellerName: seller.displayName || "Team",
+          itemName: item.itemName,
+          photoUrl: item.photos?.[0]?.url || item.photoUrl || undefined,
+          projectName: tenant?.name ?? "your project",
+          salePrice: item.salePrice ?? item.valueMid ?? 0,
+          primaryRoute: item.primaryRoute ?? "",
+          barcodeNumber: item.barcodeNumber,
+          catalogUrl,
+          labelFileName,
+        });
+
+        const emailPayload: Parameters<typeof resend.emails.send>[0] = {
+          from: "Top Tier Transitions <notifications@toptiertransitions.com>",
+          to: seller.email,
+          subject: `Item Sold — Shipping label attached: ${item.itemName}`,
+          html,
+        };
+        if (ccEmails.length > 0) emailPayload.cc = ccEmails;
+        if (pdfAttachment) emailPayload.attachments = [{ filename: pdfAttachment.filename, content: pdfAttachment.content }];
+
+        await resend.emails.send(emailPayload);
+        console.log(`[items/PATCH] staff-seller label email sent to ${seller.email}`);
+      }
+    } catch (e) {
+      console.error("[items/PATCH] staff seller label email failed:", e);
     }
   }
 

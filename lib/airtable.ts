@@ -775,6 +775,9 @@ export async function updateItem(
     ebayListingStatus: "EbayListingStatus",
     ebayLastSyncedAt: "EbayLastSyncedAt",
     ebaySyncError: "EbaySyncError",
+    // Shipping label
+    shippingLabelUrl: "ShippingLabelUrl",
+    shippingLabelFileName: "ShippingLabelFileName",
     // non-editable
     id: "id",
     airtableId: "airtableId",
@@ -1298,6 +1301,8 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     ebayListingStatus: (toStr(f["EbayListingStatus"]) || undefined) as "Active" | "Ended" | "Error" | "Pending" | undefined,
     ebayLastSyncedAt: toStr(f["EbayLastSyncedAt"]) || undefined,
     ebaySyncError: toStr(f["EbaySyncError"]) || undefined,
+    shippingLabelUrl: toStr(f["ShippingLabelUrl"]) || undefined,
+    shippingLabelFileName: toStr(f["ShippingLabelFileName"]) || undefined,
   };
 }
 

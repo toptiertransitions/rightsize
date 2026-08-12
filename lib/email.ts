@@ -4170,3 +4170,150 @@ export function buildItemSoldEmail({
 </body>
 </html>`;
 }
+
+export function buildStaffItemSoldEmail({
+  staffSellerName,
+  itemName,
+  photoUrl,
+  projectName,
+  salePrice,
+  primaryRoute,
+  barcodeNumber,
+  catalogUrl,
+  labelFileName,
+}: {
+  staffSellerName: string;
+  itemName: string;
+  photoUrl?: string;
+  projectName: string;
+  salePrice: number;
+  primaryRoute: string;
+  barcodeNumber?: string;
+  catalogUrl: string;
+  labelFileName: string;
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const routeLabel = primaryRoute === "Online Marketplace" ? "eBay" : primaryRoute;
+
+  const photoHtml = photoUrl
+    ? `<img src="${photoUrl}" alt="${itemName}" width="110" height="110"
+         style="display:block;width:110px;height:110px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;" />`
+    : `<div style="width:110px;height:110px;background:#e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;"></div>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Item Sold &mdash; Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions &nbsp;&bull;&nbsp; Staff Notification</p>
+            <p style="margin:8px 0 0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">Your item sold!</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#a8d4bc;">Hi ${staffSellerName} &mdash; great work on the sale.</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+              <!-- Item card -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                    <tr>
+                      <td style="padding:20px 24px;">
+                        <table cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td style="padding-right:18px;vertical-align:top;">${photoHtml}</td>
+                            <td style="vertical-align:middle;">
+                              <span style="display:inline-block;background:#dcfce7;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;margin-bottom:8px;">SOLD</span>
+                              <p style="margin:0;font-size:16px;font-weight:700;color:#111827;line-height:1.3;">${itemName}</p>
+                              ${barcodeNumber ? `<p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Item #${barcodeNumber}</p>` : ""}
+                              <p style="margin:10px 0 0;font-size:24px;font-weight:800;color:#166534;">${fmt(salePrice)}</p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Details -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                    <tr style="background:#f9fafb;">
+                      <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Sale Details</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:10px 16px;font-size:13px;font-weight:600;color:#6b7280;width:40%;border-bottom:1px solid #f3f4f6;">Project</td>
+                      <td style="padding:10px 16px;font-size:13px;color:#111827;border-bottom:1px solid #f3f4f6;">${projectName}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:10px 16px;font-size:13px;font-weight:600;color:#6b7280;width:40%;border-bottom:1px solid #f3f4f6;">Channel</td>
+                      <td style="padding:10px 16px;font-size:13px;color:#111827;border-bottom:1px solid #f3f4f6;">${routeLabel}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:10px 16px;font-size:13px;font-weight:600;color:#166534;width:40%;">Sale Price</td>
+                      <td style="padding:10px 16px;font-size:13px;font-weight:700;color:#166534;">${fmt(salePrice)}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Shipping label notice -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+                    <tr>
+                      <td style="padding:16px 20px;">
+                        <p style="margin:0;font-size:13px;font-weight:700;color:#1e40af;">&#128230;&nbsp; Shipping label attached</p>
+                        <p style="margin:6px 0 0;font-size:13px;color:#1e3a8a;line-height:1.5;">
+                          A shipping label (<strong>${labelFileName}</strong>) is attached to this email.
+                          Please print it and ship the item as soon as possible.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- CTA -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <a href="${catalogUrl}"
+                     style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
+                    View Item in Catalog &rarr;
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+                  <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;line-height:1.6;">Top Tier Transitions &nbsp;&middot;&nbsp; <a href="https://app.toptiertransitions.com" style="color:#2E6B4F;text-decoration:none;">app.toptiertransitions.com</a></p>
+                  <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;text-align:center;">Sent automatically when a shipping label is added to a sold item.</p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

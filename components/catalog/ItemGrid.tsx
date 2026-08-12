@@ -174,6 +174,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     staffSellerName: item.staffSellerName ?? "",
     completedDate: item.completedDate ?? "",
     approvedDate: item.approvedDate ?? "",
+    shippingLabelUrl: item.shippingLabelUrl ?? "",
+    shippingLabelFileName: item.shippingLabelFileName ?? "",
     widthInches: item.widthInches,
     heightInches: item.heightInches,
     depthInches: item.depthInches,
@@ -197,6 +199,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       : []
   );
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadingLabel, setUploadingLabel] = useState(false);
+  const labelFileRef = useRef<HTMLInputElement>(null);
   const [photoDragIdx, setPhotoDragIdx] = useState<number | null>(null);
   const [photoDropIdx, setPhotoDropIdx] = useState<number | null>(null);
   const [removingBgIdx, setRemovingBgIdx] = useState<number | null>(null);
@@ -274,6 +278,34 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       setError(e instanceof Error ? e.message : "Background removal failed");
     } finally {
       setRemovingBgIdx(null);
+    }
+  };
+
+  const handleLabelUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const file = files[0];
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+      setError("Shipping label must be a PDF file.");
+      return;
+    }
+    setUploadingLabel(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("tenantId", item.tenantId);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({})) as Record<string, unknown>;
+        throw new Error((errData.error as string) || "Upload failed");
+      }
+      const data = await res.json() as { photoUrl: string; photoPublicId: string };
+      setForm(prev => ({ ...prev, shippingLabelUrl: data.photoUrl, shippingLabelFileName: file.name }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingLabel(false);
+      if (labelFileRef.current) labelFileRef.current.value = "";
     }
   };
 
@@ -944,6 +976,52 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 onChange={(name, id) => setForm(f => ({ ...f, staffSellerName: name, staffSellerId: id }))}
                 staffMembers={staffMembers}
               />
+            )}
+
+            {/* Shipping Label — visible when eBay/FB item is Sold */}
+            {(form.primaryRoute === "FB/Marketplace" || form.primaryRoute === "Online Marketplace") && form.status === "Sold" && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Shipping Label</p>
+                  {form.shippingLabelUrl && (
+                    <span className="text-xs font-medium text-green-600">Uploaded</span>
+                  )}
+                </div>
+                {form.shippingLabelUrl ? (
+                  <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm text-gray-700 truncate flex-1">{form.shippingLabelFileName || "shipping-label.pdf"}</span>
+                    <a
+                      href={form.shippingLabelUrl.replace("/upload/", "/upload/fl_attachment/")}
+                      download={form.shippingLabelFileName || "shipping-label.pdf"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                    >
+                      Download
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-xs text-blue-500/80">No label uploaded yet. Upload a PDF to automatically email it to the staff seller.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => labelFileRef.current?.click()}
+                  disabled={uploadingLabel}
+                  className="w-full py-2 text-sm font-medium border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                >
+                  {uploadingLabel ? "Uploading…" : form.shippingLabelUrl ? "Replace Label" : "Upload Label (PDF)"}
+                </button>
+                <input
+                  ref={labelFileRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={e => handleLabelUpload(e.target.files)}
+                />
+              </div>
             )}
           </section>
 
