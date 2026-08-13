@@ -495,17 +495,20 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Staff seller email — when a shipping label is uploaded/replaced on an eBay/FB sold item
+  // Staff seller email — when a shipping label is uploaded/replaced on an eBay/FB sold item,
+  // OR when the item is marked Sold and already has a label (upload-before-save flow).
   const SELLER_LABEL_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
   const labelJustSet = (updates as Record<string, unknown>).shippingLabelUrl as string | undefined;
   const labelChanged = !!labelJustSet && labelJustSet !== existing?.shippingLabelUrl;
-  console.log(`[label-email] route="${item.primaryRoute}" status="${item.status}" labelChanged=${labelChanged} labelJustSet=${!!labelJustSet} existingLabel="${existing?.shippingLabelUrl ?? ''}" staffSellerId="${item.staffSellerId ?? ''}"`);
-  if (
+  const justMarkedSold = (updates as Record<string, unknown>).status === "Sold" && existing?.status !== "Sold";
+  const shouldSendLabelEmail =
     SELLER_LABEL_ROUTES.has(item.primaryRoute ?? "") &&
     item.status === "Sold" &&
-    labelChanged &&
-    item.staffSellerId
-  ) {
+    !!item.shippingLabelUrl &&
+    (labelChanged || justMarkedSold) &&
+    !!item.staffSellerId;
+  console.log(`[label-email] route="${item.primaryRoute}" status="${item.status}" labelChanged=${labelChanged} justMarkedSold=${justMarkedSold} labelUrl=${!!item.shippingLabelUrl} staffSellerId="${item.staffSellerId ?? ''}" → send=${shouldSendLabelEmail}`);
+  if (shouldSendLabelEmail) {
     try {
       const staffList = await getStaffMembers().catch(() => []);
       const seller = staffList.find(s => s.id === item.staffSellerId && s.isActive && s.email);
