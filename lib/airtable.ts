@@ -3077,6 +3077,7 @@ export async function updateContract(
     discountPercent: number;
     maxDiscount: number;
     discountAmount: number;
+    autoSendDeposit: boolean;
   }>
 ): Promise<Contract> {
   const table = AIRTABLE_TABLES.CONTRACTS;
@@ -3102,6 +3103,7 @@ export async function updateContract(
   if (data.discountPercent !== undefined) fields["DiscountPercent"] = data.discountPercent;
   if (data.maxDiscount !== undefined) fields["MaxDiscount"] = data.maxDiscount;
   if (data.discountAmount !== undefined) fields["DiscountAmount"] = data.discountAmount;
+  if (data.autoSendDeposit !== undefined) fields["AutoSendDeposit"] = data.autoSendDeposit;
   const res = await contractFetch(table, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

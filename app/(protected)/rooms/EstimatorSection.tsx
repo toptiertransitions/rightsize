@@ -447,6 +447,7 @@ export function EstimatorSection({
     lineItems: includedLineItems,
     includeServiceDescriptions,
     includeServiceHours,
+    autoSendDeposit,
     notInScope,
     discountCodeId: discountCodeActive && resolvedDiscount ? resolvedDiscount.id : undefined,
     discountCode: discountCodeActive && resolvedDiscount ? resolvedDiscount.code : undefined,
