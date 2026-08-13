@@ -507,7 +507,7 @@ export async function PATCH(req: NextRequest) {
   ) {
     try {
       const staffList = await getStaffMembers().catch(() => []);
-      const seller = staffList.find(s => s.clerkUserId === item.staffSellerId && s.isActive && s.email);
+      const seller = staffList.find(s => s.id === item.staffSellerId && s.isActive && s.email);
       if (seller?.email) {
         const ccEmails = staffList
           .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
