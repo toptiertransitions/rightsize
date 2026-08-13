@@ -30,10 +30,14 @@ export default async function PayPage({ params }: Props) {
   const prefillEmail = invoice.sentToEmail || tenant?.clientEmail || "";
 
   const lineItems = invoice.lineItems && invoice.lineItems.length > 0 ? invoice.lineItems : null;
+  const expenseItems = invoice.expenseItems && invoice.expenseItems.length > 0 ? invoice.expenseItems : null;
   const positiveItems = lineItems?.filter((li) => li.rate >= 0) ?? [];
   const creditItems = lineItems?.filter((li) => li.rate < 0) ?? [];
   const hasCredits = creditItems.length > 0;
-  const subtotalAmount = positiveItems.reduce((s, li) => s + li.hours * li.rate, 0);
+  const serviceSubtotal = positiveItems.reduce((s, li) => s + li.hours * li.rate, 0);
+  const expenseSubtotal = expenseItems?.reduce((s, ei) => s + ei.amount, 0) ?? 0;
+  const subtotalAmount = serviceSubtotal + expenseSubtotal;
+  const hasDetailedBreakdown = (lineItems && lineItems.length > 0) || (expenseItems && expenseItems.length > 0);
 
   return (
     <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center p-4">
@@ -75,12 +79,21 @@ export default async function PayPage({ params }: Props) {
           )}
 
           {/* Line items or single service */}
-          {lineItems && lineItems.length > 0 ? (
+          {hasDetailedBreakdown ? (
             <div className="mb-4 pb-4 border-b border-gray-100 space-y-1">
               {positiveItems.map((li, i) => (
                 <div key={i} className="flex justify-between text-sm">
                   <span className="text-gray-700">{li.serviceName}</span>
                   <span className="text-gray-900 font-medium">{fmt(li.hours * li.rate)}</span>
+                </div>
+              ))}
+              {expenseItems?.map((ei, i) => (
+                <div key={`exp-${i}`} className="flex justify-between text-sm">
+                  <span className="text-gray-700">
+                    {ei.description}{ei.vendor ? ` — ${ei.vendor}` : ""}
+                    {ei.date && <span className="text-gray-400 text-xs ml-1">({ei.date})</span>}
+                  </span>
+                  <span className="text-gray-900 font-medium">{fmt(ei.amount)}</span>
                 </div>
               ))}
               {hasCredits && (

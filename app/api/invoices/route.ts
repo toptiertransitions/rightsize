@@ -283,6 +283,7 @@ export async function POST(req: NextRequest) {
         companyName: settings?.companyName || "Top Tier Transitions",
         logoUrl: settings?.logoUrl,
         lineItems: lineItems ?? undefined,
+        expenseItems: expenseItems?.length ? expenseItems : undefined,
       });
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
         from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
@@ -337,6 +338,7 @@ export async function PATCH(req: NextRequest) {
         companyName: settings?.companyName || "Top Tier Transitions",
         logoUrl: settings?.logoUrl,
         lineItems: invoice.lineItems ?? undefined,
+        expenseItems: invoice.expenseItems?.length ? invoice.expenseItems : undefined,
       });
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
         from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",

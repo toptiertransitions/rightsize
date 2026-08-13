@@ -296,6 +296,7 @@ export function buildInvoiceEmail({
   companyName,
   logoUrl,
   lineItems,
+  expenseItems,
 }: {
   invoiceNumber: string;
   tenantName: string;
@@ -306,6 +307,7 @@ export function buildInvoiceEmail({
   companyName: string;
   logoUrl?: string;
   lineItems?: { serviceName: string; hours: number; rate: number }[];
+  expenseItems?: { vendor: string; description: string; date: string; amount: number }[];
 }): string {
   const fmt = (n: number) =>
     `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -317,24 +319,35 @@ export function buildInvoiceEmail({
   // Build detailed line-item table for Full invoices
   const positiveItems = (lineItems ?? []).filter((li) => li.rate >= 0);
   const creditItems = (lineItems ?? []).filter((li) => li.rate < 0);
-  const hasLineItems = positiveItems.length > 0;
+  const expenses = expenseItems ?? [];
+  const hasLineItems = positiveItems.length > 0 || expenses.length > 0;
   const hasCredits = creditItems.length > 0;
-  const subtotal = positiveItems.reduce((s, li) => s + li.hours * li.rate, 0);
+  const serviceSubtotal = positiveItems.reduce((s, li) => s + li.hours * li.rate, 0);
+  const expenseSubtotal = expenses.reduce((s, ei) => s + ei.amount, 0);
+  const subtotal = serviceSubtotal + expenseSubtotal;
   const totalLabel = hasCredits ? "Balance Owed" : "Total Due";
 
-  const lineItemRows = hasLineItems
-    ? positiveItems
-        .map(
-          (li, i) =>
-            `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
-              <td style="padding:9px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${li.serviceName}</td>
-              <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${li.hours % 1 === 0 ? li.hours : li.hours.toFixed(2)}</td>
-              <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.rate)}</td>
-              <td style="padding:9px 14px;font-size:13px;color:#374151;font-weight:600;border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.hours * li.rate)}</td>
-            </tr>`
-        )
-        .join("")
-    : "";
+  const lineItemRows = positiveItems
+    .map(
+      (li, i) =>
+        `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
+          <td style="padding:9px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${li.serviceName}</td>
+          <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${li.hours % 1 === 0 ? li.hours : li.hours.toFixed(2)}</td>
+          <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.rate)}</td>
+          <td style="padding:9px 14px;font-size:13px;color:#374151;font-weight:600;border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.hours * li.rate)}</td>
+        </tr>`
+    )
+    .join("");
+
+  const expenseRows = expenses
+    .map(
+      (ei) =>
+        `<tr>
+          <td colspan="3" style="padding:9px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${ei.description}${ei.vendor ? ` — ${ei.vendor}` : ""}${ei.date ? ` <span style="color:#9ca3af;font-size:12px;">(${ei.date})</span>` : ""}</td>
+          <td style="padding:9px 14px;font-size:13px;color:#374151;font-weight:600;border-top:1px solid #e5e7eb;text-align:right;">${fmt(ei.amount)}</td>
+        </tr>`
+    )
+    .join("");
 
   const subtotalRow = hasCredits
     ? `<tr style="background-color:#f9fafb;">
@@ -356,12 +369,13 @@ export function buildInvoiceEmail({
   const detailedTable = hasLineItems
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
         <tr style="background-color:#f9fafb;">
-          <th style="padding:9px 14px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Service</th>
+          <th style="padding:9px 14px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Service / Expense</th>
           <th style="padding:9px 14px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Hrs</th>
           <th style="padding:9px 14px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Rate</th>
           <th style="padding:9px 14px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Amount</th>
         </tr>
         ${lineItemRows}
+        ${expenseRows}
         ${subtotalRow}
         ${creditRows}
         <tr style="background-color:#f0fdf4;">
