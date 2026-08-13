@@ -317,6 +317,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       if (patchRes.ok) {
         const { item: saved } = await patchRes.json();
         onItemUpdated?.(saved);
+      } else {
+        const errData = await patchRes.json().catch(() => ({})) as Record<string, unknown>;
+        console.error("[label-upload] PATCH failed:", patchRes.status, errData);
+        throw new Error((errData.error as string) || `Save failed (${patchRes.status})`);
       }
       setForm(prev => ({ ...prev, shippingLabelUrl: data.photoUrl, shippingLabelFileName: file.name }));
     } catch (e) {

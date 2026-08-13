@@ -495,19 +495,21 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Staff seller email — when a shipping label is first added to an eBay/FB sold item
+  // Staff seller email — when a shipping label is uploaded/replaced on an eBay/FB sold item
   const SELLER_LABEL_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
   const labelJustSet = (updates as Record<string, unknown>).shippingLabelUrl as string | undefined;
-  const labelWasEmpty = !existing?.shippingLabelUrl;
+  const labelChanged = !!labelJustSet && labelJustSet !== existing?.shippingLabelUrl;
+  console.log(`[label-email] route="${item.primaryRoute}" status="${item.status}" labelChanged=${labelChanged} labelJustSet=${!!labelJustSet} existingLabel="${existing?.shippingLabelUrl ?? ''}" staffSellerId="${item.staffSellerId ?? ''}"`);
   if (
     SELLER_LABEL_ROUTES.has(item.primaryRoute ?? "") &&
     item.status === "Sold" &&
-    labelJustSet && labelWasEmpty &&
+    labelChanged &&
     item.staffSellerId
   ) {
     try {
       const staffList = await getStaffMembers().catch(() => []);
       const seller = staffList.find(s => s.id === item.staffSellerId && s.isActive && s.email);
+      console.log(`[label-email] staffList.length=${staffList.length} looking for id="${item.staffSellerId}" → found=${seller ? `${seller.displayName} <${seller.email}>` : "NOT FOUND"}`);
       if (seller?.email) {
         const ccEmails = staffList
           .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
@@ -527,8 +529,12 @@ export async function PATCH(req: NextRequest) {
             if (pdfRes.ok) {
               const pdfBuf = await pdfRes.arrayBuffer();
               pdfAttachment = { filename: labelFileName, content: Buffer.from(pdfBuf).toString("base64") };
+            } else {
+              console.error(`[label-email] PDF fetch failed: ${pdfRes.status}`);
             }
-          } catch { /* non-fatal — send without attachment if fetch fails */ }
+          } catch (fetchErr) {
+            console.error("[label-email] PDF fetch threw:", fetchErr);
+          }
         }
 
         const html = buildStaffItemSoldEmail({
@@ -546,18 +552,26 @@ export async function PATCH(req: NextRequest) {
         const emailPayload: Parameters<typeof resend.emails.send>[0] = {
           from: "Top Tier Transitions <notifications@toptiertransitions.com>",
           to: seller.email,
-          subject: `Item Sold — Shipping label attached: ${item.itemName}`,
+          subject: `Shipping label ready — ${item.itemName}`,
           html,
         };
         if (ccEmails.length > 0) emailPayload.cc = ccEmails;
         if (pdfAttachment) emailPayload.attachments = [{ filename: pdfAttachment.filename, content: pdfAttachment.content }];
 
-        await resend.emails.send(emailPayload);
-        console.log(`[items/PATCH] staff-seller label email sent to ${seller.email}`);
+        const { error: resendErr } = await resend.emails.send(emailPayload);
+        if (resendErr) {
+          console.error("[label-email] Resend error:", resendErr);
+        } else {
+          console.log(`[label-email] sent to ${seller.email} cc=${ccEmails.join(",")}`);
+        }
+      } else {
+        console.warn(`[label-email] seller not found or missing email — staffSellerId="${item.staffSellerId}" staffList ids=[${staffList.map(s => s.id).join(",")}]`);
       }
     } catch (e) {
-      console.error("[items/PATCH] staff seller label email failed:", e);
+      console.error("[label-email] unexpected error:", e);
     }
+  } else if (labelJustSet) {
+    console.log(`[label-email] skipped — route match=${SELLER_LABEL_ROUTES.has(item.primaryRoute ?? "")} status=${item.status} labelChanged=${labelChanged} staffSellerId="${item.staffSellerId ?? ''}"`);
   }
 
   // Vendor assignment email — currently suppressed
