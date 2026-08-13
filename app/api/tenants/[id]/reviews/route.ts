@@ -6,7 +6,6 @@ import {
   getReviewsForTenant,
   createGoogleReview,
   getTenantById,
-  getContractsForTenant,
   getOpportunitiesForTenant,
   getClientContactById,
   getReferralContactById,
@@ -68,9 +67,8 @@ export async function POST(
   const resendKey = process.env.RESEND_API_KEY;
   if (resendKey) {
     try {
-      const [tenant, contracts, opportunities, timeEntries, allStaff] = await Promise.all([
+      const [tenant, opportunities, timeEntries, allStaff] = await Promise.all([
         getTenantById(id).catch(() => null),
-        getContractsForTenant(id).catch(() => []),
         getOpportunitiesForTenant(id).catch(() => []),
         getTimeEntries({ tenantId: id }).catch(() => []),
         getStaffMembers().catch(() => []),
@@ -78,11 +76,11 @@ export async function POST(
 
       const projectName = tenant?.name ?? "Unknown Project";
 
-      // Seller = most recent signed contract's signer
-      const signedContract = contracts
-        .filter(c => c.status === "Signed")
-        .sort((a, b) => (b.signedAt ?? "").localeCompare(a.signedAt ?? ""))[0];
-      const sellerName = signedContract?.signedByName || undefined;
+      // Seller = TTT sales user who owns the Won opportunity (fallback to first opp)
+      const wonOpp = opportunities.find(o => o.stage === "Won") ?? opportunities[0] ?? null;
+      const sellerName = wonOpp?.assignedToClerkId
+        ? (allStaff.find(s => s.clerkUserId === wonOpp.assignedToClerkId)?.displayName || undefined)
+        : undefined;
 
       // Team lead from staff list
       const teamLeadName = tenant?.teamLeadClerkId
@@ -97,7 +95,6 @@ export async function POST(
       // Referral partner — Won opp → client contact → referral contact → company
       let referralPartnerName: string | undefined;
       let referralCompanyName: string | undefined;
-      const wonOpp = opportunities.find(o => o.stage === "Won") ?? opportunities[0] ?? null;
       if (wonOpp?.clientContactId) {
         const contact = await getClientContactById(wonOpp.clientContactId).catch(() => null);
         if (contact?.referralPartnerId) {
