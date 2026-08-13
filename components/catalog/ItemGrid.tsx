@@ -136,12 +136,13 @@ interface EditModalProps {
   isTTTUser?: boolean;
   onClose: () => void;
   onSaved: (item: Item) => void;
+  onItemUpdated?: (item: Item) => void;
   onDeleted?: () => void;
 }
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
-export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, onClose, onSaved, onDeleted }: EditModalProps) {
+export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, onClose, onSaved, onItemUpdated, onDeleted }: EditModalProps) {
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -315,7 +316,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
       });
       if (patchRes.ok) {
         const { item: saved } = await patchRes.json();
-        onSaved(saved);
+        onItemUpdated?.(saved);
       }
       setForm(prev => ({ ...prev, shippingLabelUrl: data.photoUrl, shippingLabelFileName: file.name }));
     } catch (e) {
@@ -1940,6 +1941,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           isTTTUser={isTTTUser}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
+          onItemUpdated={(savedItem) => setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i))}
           onDeleted={handleDeleted}
         />
       )}
