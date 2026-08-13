@@ -1,21 +1,22 @@
 import crypto from "crypto";
 import { Resend } from "resend";
 import { updateShopper } from "@/lib/airtable";
+import { getAdminEmails } from "@/lib/admin-notifications";
 
 export const runtime = "nodejs";
 
 function htmlResponse(title: string, message: string, isError = false): Response {
-  const accentColor = isError ? "#c0392b" : "#7A9E7E";
+  const accentColor = isError ? "#c0392b" : "#4a7c59";
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title} — ProFoundFinds</title>
+  <title>${title} — Top Tier Transitions</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #FAF8F5;
+      background: #f5f5f3;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: #2C2C2C;
       min-height: 100vh;
@@ -34,8 +35,8 @@ function htmlResponse(title: string, message: string, isError = false): Response
       text-align: center;
     }
     .logo {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 24px;
+      font-family: Georgia, serif;
+      font-size: 22px;
       font-weight: 700;
       color: #2d4a3e;
       letter-spacing: 0.5px;
@@ -53,7 +54,7 @@ function htmlResponse(title: string, message: string, isError = false): Response
       font-size: 28px;
     }
     h1 {
-      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-family: Georgia, serif;
       font-size: 22px;
       font-weight: 600;
       color: #2C2C2C;
@@ -80,13 +81,13 @@ function htmlResponse(title: string, message: string, isError = false): Response
 </head>
 <body>
   <div class="card">
-    <div class="logo">ProFoundFinds</div>
+    <div class="logo">Top Tier Transitions</div>
     <div class="icon">${isError ? "✕" : "✓"}</div>
     <h1>${title}</h1>
     <p>${message}</p>
     <hr class="divider" />
     <p class="footer-note">
-      Questions? Email us at <a href="mailto:info@profoundfinds.com">info@profoundfinds.com</a>
+      Questions? Email us at <a href="mailto:info@toptiertransitions.com">info@toptiertransitions.com</a>
     </p>
   </div>
 </body>
@@ -105,7 +106,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!id || !sig) {
     return htmlResponse(
       "Invalid Link",
-      "This unsubscribe link is missing required parameters. Please contact info@profoundfinds.com if you need to be removed from our list.",
+      "This unsubscribe link is missing required parameters. Please contact <a href=\"mailto:info@toptiertransitions.com\">info@toptiertransitions.com</a> if you need to be removed from our list.",
       true
     );
   }
@@ -116,7 +117,7 @@ export async function GET(request: Request): Promise<Response> {
   if (sig !== expectedSig) {
     return htmlResponse(
       "Invalid Link",
-      "This unsubscribe link is invalid or has been tampered with. Please contact info@profoundfinds.com to be removed from our list.",
+      "This unsubscribe link is invalid or has expired. Please contact <a href=\"mailto:info@toptiertransitions.com\">info@toptiertransitions.com</a> to be removed from our list.",
       true
     );
   }
@@ -129,27 +130,29 @@ export async function GET(request: Request): Promise<Response> {
     console.error("[unsubscribe] updateShopper failed:", err);
     return htmlResponse(
       "Something Went Wrong",
-      "We were unable to process your unsubscribe request. Please email info@profoundfinds.com directly and we will remove you immediately.",
+      "We were unable to process your request. Please email <a href=\"mailto:info@toptiertransitions.com\">info@toptiertransitions.com</a> directly and we will remove you immediately.",
       true
     );
   }
 
-  // Send opt-out notification
+  // Notify all TTT admins about the opt-out
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: `ProFoundFinds <${process.env.RESEND_FROM_EMAIL ?? "hello@profoundfinds.com"}>`,
-      to: ["info@profoundfinds.com"],
-      subject: `Opt-out: ${shopperName}`,
-      text: `${shopperName} (Airtable ID: ${id}) has unsubscribed from ProFoundFinds email blasts via the unsubscribe link.\n\nTheir optOut field has been set to true in Airtable.`,
-    });
+    const adminEmails = await getAdminEmails().catch(() => []);
+    if (adminEmails.length > 0) {
+      await resend.emails.send({
+        from: "Top Tier Transitions <notifications@toptiertransitions.com>",
+        to: adminEmails,
+        subject: `Estate Sale Shopper Opt-Out: ${shopperName}`,
+        text: `${shopperName} (Airtable Shopper ID: ${id}) has unsubscribed from estate sale email blasts via the unsubscribe link in a blast email.\n\nTheir record has been marked opt-out in the Shoppers CRM. No further blast emails will be sent to them.`,
+      });
+    }
   } catch (err) {
-    // Non-fatal — shopper is already opted out
-    console.error("[unsubscribe] notification email failed:", err);
+    console.error("[unsubscribe] admin notification email failed:", err);
   }
 
   return htmlResponse(
     "You've been unsubscribed",
-    "You won't receive further emails from ProFoundFinds. If this was a mistake, please email <a href=\"mailto:info@profoundfinds.com\">info@profoundfinds.com</a> and we'll add you back right away."
+    "Thank you — you won't receive further emails from us about estate sales. If this was a mistake, please email <a href=\"mailto:info@toptiertransitions.com\">info@toptiertransitions.com</a> and we'll add you back right away."
   );
 }

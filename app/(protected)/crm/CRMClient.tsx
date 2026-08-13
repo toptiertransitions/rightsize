@@ -3818,13 +3818,13 @@ function DashboardTab({
 
   // Two independent date filters applied together (AND)
   // Created Date: filters by o.createdAt
-  // Won/Lost Dates: filters Won by wonAt, Lost by lostAt, active by expectedCloseDate
+  // Won/Lost Dates: filters Won by wonAt, Lost by lostAt; active pipeline always passes
+  // (active pipeline has no close date — it's included regardless so the board stays complete)
   const dateFilteredOpps = opportunities.filter(o => {
     const passesCreated = inRange(o.createdAt, createdDateRange, createdCustomStart, createdCustomEnd);
-    const wonLostDate = o.stage === "Won" ? o.wonAt
-      : o.stage === "Lost" ? o.lostAt
-      : o.expectedCloseDate;
-    const passesWonLost = inRange(wonLostDate, wonLostDateRange, wonLostCustomStart, wonLostCustomEnd);
+    const isActive = o.stage !== "Won" && o.stage !== "Lost";
+    const wonLostDate = o.stage === "Won" ? o.wonAt : o.stage === "Lost" ? o.lostAt : null;
+    const passesWonLost = isActive || inRange(wonLostDate, wonLostDateRange, wonLostCustomStart, wonLostCustomEnd);
     return passesCreated && passesWonLost;
   });
 
@@ -4121,7 +4121,7 @@ function DashboardTab({
 
         {/* Won/Lost Dates filter */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Won/Lost Dates:</span>
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Won/Lost Close Date:</span>
           {dateRangeOptions.map(({ key, label }) => (
             <button
               key={key}

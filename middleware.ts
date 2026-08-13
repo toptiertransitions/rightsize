@@ -12,6 +12,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/square/webhook",
   "/api/ebay/account-deletion",
   "/api/storefront/(.*)",
+  "/api/shoppers/unsubscribe",
   "/api/contracts/sign",
   "/api/cron/(.*)",
   "/api/track/(.*)",
