@@ -3799,7 +3799,7 @@ function DashboardTab({
   // Helper: check if a date string falls within a DateRange selection
   function inRange(dateStr: string | undefined | null, range: DateRange, customS: string, customE: string): boolean {
     if (range === "all") return true;
-    if (!dateStr) return true; // no date field → pass through
+    if (!dateStr) return false; // no date field → exclude when a filter is active
     const d = new Date(dateStr);
     if (range === "custom") {
       const start = customS ? new Date(customS) : null;
@@ -3818,8 +3818,8 @@ function DashboardTab({
 
   // Two independent date filters applied together (AND)
   // Created Date: filters by o.createdAt
-  // Close Date filter: active pipeline uses expectedCloseDate; Won uses wonAt; Lost uses lostAt
-  // (active pipeline has no close date — it's included regardless so the board stays complete)
+  // Close Date filter: active pipeline by expectedCloseDate; Won by wonAt; Lost by lostAt
+  // Opps without the relevant date field are excluded when a filter is active
   const dateFilteredOpps = opportunities.filter(o => {
     const passesCreated = inRange(o.createdAt, createdDateRange, createdCustomStart, createdCustomEnd);
     const isActive = o.stage !== "Won" && o.stage !== "Lost";
