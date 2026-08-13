@@ -805,13 +805,24 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
                           <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
                           <td className="px-4 py-3 text-right">
                             {(isManager || isAdmin) && editingId !== tenant.id && (
-                              <button
-                                onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
-                                disabled={archiving === tenant.id}
-                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
-                              >
-                                {archiving === tenant.id ? "…" : "Archive"}
-                              </button>
+                              <div className="flex items-center gap-3 justify-end opacity-0 group-hover:opacity-100">
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => requestConfirm(`Mark "${tenant.name}" as Lost Deal? It will be hidden from all project dropdowns and can only be restored to Archived.`, () => setLostDeal(tenant.id))}
+                                    disabled={archiving === tenant.id}
+                                    className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                                  >
+                                    Lost Deal
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => requestConfirm(`Archive "${tenant.name}"?`, () => setArchived(tenant.id, true))}
+                                  disabled={archiving === tenant.id}
+                                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                                >
+                                  {archiving === tenant.id ? "…" : "Archive"}
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -998,24 +1009,13 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
                           <td className="px-4 py-3 text-gray-400">{location || "—"}</td>
                           <td className="px-4 py-3 text-gray-400">{createdDisplay}</td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex items-center gap-3 justify-end">
-                              {isAdmin && (
-                                <button
-                                  onClick={() => requestConfirm(`Mark "${tenant.name}" as Lost Deal? It will be hidden from all project dropdowns and can only be restored to Archived.`, () => setLostDeal(tenant.id))}
-                                  disabled={archiving === tenant.id}
-                                  className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                                >
-                                  Lost Deal
-                                </button>
-                              )}
-                              <button
-                                onClick={() => requestConfirm(`Unarchive "${tenant.name}"?`, () => setArchived(tenant.id, false))}
-                                disabled={archiving === tenant.id}
-                                className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
-                              >
-                                {archiving === tenant.id ? "Restoring…" : "Unarchive"}
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => requestConfirm(`Unarchive "${tenant.name}"?`, () => setArchived(tenant.id, false))}
+                              disabled={archiving === tenant.id}
+                              className="text-xs text-forest-600 hover:text-forest-700 font-medium transition-colors disabled:opacity-50"
+                            >
+                              {archiving === tenant.id ? "Restoring…" : "Unarchive"}
+                            </button>
                           </td>
                         </tr>
                       );
