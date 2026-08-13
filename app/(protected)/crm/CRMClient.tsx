@@ -3800,7 +3800,9 @@ function DashboardTab({
   function inRange(dateStr: string | undefined | null, range: DateRange, customS: string, customE: string): boolean {
     if (range === "all") return true;
     if (!dateStr) return false;
-    const d = new Date(dateStr);
+    // Parse YYYY-MM-DD as local midnight (new Date("YYYY-MM-DD") is UTC, causing timezone drift)
+    const parts = dateStr.slice(0, 10).split("-").map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
     if (range === "custom") {
       const start = customS ? new Date(customS) : null;
       const end = customE ? new Date(customE + "T23:59:59") : null;
