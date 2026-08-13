@@ -4317,3 +4317,127 @@ export function buildStaffItemSoldEmail({
 </body>
 </html>`;
 }
+
+export function buildGoogleReviewNotificationEmail({
+  projectName,
+  stars,
+  reviewText,
+  sellerName,
+  referralPartnerName,
+  referralCompanyName,
+  teamLeadName,
+  teamMemberNames,
+  planUrl,
+}: {
+  projectName: string;
+  stars: number;
+  reviewText: string;
+  sellerName?: string;
+  referralPartnerName?: string;
+  referralCompanyName?: string;
+  teamLeadName?: string;
+  teamMemberNames: string[];
+  planUrl: string;
+}): string {
+  const filledStar = `<span style="color:#f59e0b;font-size:22px;line-height:1;">&#9733;</span>`;
+  const emptyStar = `<span style="color:#d1d5db;font-size:22px;line-height:1;">&#9733;</span>`;
+  const starsHtml = Array.from({ length: 5 }, (_, i) => i < stars ? filledStar : emptyStar).join("");
+
+  const row = (label: string, value: string, last = false) => `
+    <tr style="${last ? "" : "border-bottom:1px solid #f3f4f6;"}">
+      <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;width:38%;vertical-align:top;">${label}</td>
+      <td style="padding:11px 16px;font-size:13px;color:#111827;vertical-align:top;">${value}</td>
+    </tr>`;
+
+  const referralDisplay = referralPartnerName
+    ? (referralCompanyName ? `${referralPartnerName} &mdash; ${referralCompanyName}` : referralPartnerName)
+    : "&mdash;";
+
+  const teamMembersDisplay = teamMemberNames.length > 0
+    ? teamMemberNames.join(", ")
+    : "&mdash;";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Google Review — Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">New Google Review</p>
+            <p style="margin:6px 0 0;font-size:14px;color:#a8d4bc;">${projectName}</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+              <!-- Star rating + review text -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;">
+                    <tr>
+                      <td style="padding:20px 24px;">
+                        <div style="margin:0 0 10px;">${starsHtml}</div>
+                        <p style="margin:0;font-size:15px;color:#374151;line-height:1.65;font-style:italic;">&ldquo;${reviewText}&rdquo;</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Project details table -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                    <tr style="background:#f9fafb;">
+                      <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Project Details</td>
+                    </tr>
+                    ${row("Project", projectName)}
+                    ${row("Seller", sellerName ?? "&mdash;")}
+                    ${row("Referral Partner", referralDisplay)}
+                    ${row("Team Lead", teamLeadName ?? "&mdash;")}
+                    ${row("Team Members", teamMembersDisplay, true)}
+                  </table>
+                </td>
+              </tr>
+
+              <!-- CTA -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <a href="${planUrl}"
+                     style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
+                    View Project Plan &rarr;
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+                  <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;line-height:1.6;">Top Tier Transitions &nbsp;&middot;&nbsp; <a href="https://app.toptiertransitions.com" style="color:#2E6B4F;text-decoration:none;">app.toptiertransitions.com</a></p>
+                  <p style="margin:4px 0 0;font-size:11px;color:#d1d5db;text-align:center;">Sent automatically when a Google Review is added to a project.</p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

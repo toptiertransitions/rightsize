@@ -417,6 +417,10 @@ export async function PATCH(req: NextRequest) {
         if (Math.abs((existing.consignorPayout ?? 0) - (item.consignorPayout ?? 0)) >= 0.01) changedFields.push({ label: "Consignor Payout", oldValue: fmtPrice(existing.consignorPayout), newValue: fmtPrice(item.consignorPayout) });
       }
 
+      if (isAdjustment && changedFields.length === 0) {
+        console.log(`[items/PATCH] item-sold adjustment skipped — no tracked fields changed for ${item.id}`);
+      } else {
+
       const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
       const salePrice = item.salePrice ?? item.valueMid ?? 0;
 
@@ -485,6 +489,7 @@ export async function PATCH(req: NextRequest) {
           console.log(`[items/PATCH] item-sold notification sent to ${adminEmails.join(", ")}`);
         }
       }
+      } // end else (changedFields not empty)
     } catch (e) {
       console.error("[items/PATCH] item-sold notification failed:", e);
     }
