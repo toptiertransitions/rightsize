@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, LabelList,
 } from "recharts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -301,6 +301,48 @@ function OppsTip({ active, payload, label }: TipProps) {
     </div>
   );
 }
+type CycleTipPayload = { name: string; value: number | null; color: string; payload: { wonCount: number; lostCount: number } };
+function CycleTip({ active, payload, label }: { active?: boolean; payload?: CycleTipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs min-w-[160px]">
+      <p className="font-semibold text-gray-700 mb-1.5">{label}</p>
+      {payload.filter(p => p.value != null).map((p, i) => (
+        <p key={i} style={{ color: p.color }}>{p.name}: <span className="font-medium">{p.value}d</span></p>
+      ))}
+      <p className="text-gray-400 mt-1.5 border-t border-gray-100 pt-1.5">
+        {row.wonCount} won · {row.lostCount} lost
+      </p>
+    </div>
+  );
+}
+function CycleRepTip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; payload: { rep: string; wonCount: number; lostCount: number } }> }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs min-w-[160px]">
+      <p className="font-semibold text-gray-700 mb-1.5">{row.rep}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color }}>{p.name}: <span className="font-medium">{p.value}d</span></p>
+      ))}
+      <p className="text-gray-400 mt-1.5 border-t border-gray-100 pt-1.5">
+        {row.wonCount} won · {row.lostCount} lost
+      </p>
+    </div>
+  );
+}
+function LostReasonTip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { fullReason: string; count: number; avgDays: number } }> }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs min-w-[180px]">
+      <p className="font-semibold text-gray-700 mb-1.5">{row.fullReason}</p>
+      <p className="text-red-500">{row.count} {row.count === 1 ? "loss" : "losses"}</p>
+      <p className="text-amber-600">{row.avgDays}d avg to lose</p>
+    </div>
+  );
+}
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 
@@ -319,8 +361,11 @@ export default function OwnerDashboardClient() {
   const [staffFilter,     setStaffFilter]     = useState<string[]>([]);
   const [refCompanyFilter,setRefCompanyFilter]= useState<string[]>([]);
   const [refContactFilter,setRefContactFilter]= useState<string[]>([]);
-  const [insights,        setInsights]        = useState<string[]>([]);
-  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insights,              setInsights]              = useState<string[]>([]);
+  const [insightsLoading,       setInsightsLoading]       = useState(false);
+  const [cycleLostReasonFilter, setCycleLostReasonFilter] = useState<string[]>([]);
+  const [cycleMonthFrom,        setCycleMonthFrom]        = useState("");
+  const [cycleMonthTo,          setCycleMonthTo]          = useState("");
 
   useEffect(() => {
     if (!authed) return;
@@ -415,6 +460,113 @@ export default function OwnerDashboardClient() {
   const lostReasons = useMemo(() =>
     [...new Set(oppsRows.filter(o => o.stage === "Lost").map(o => o.lostReason ?? "Unknown"))].sort(),
     [oppsRows]);
+
+  // ── Sales Cycle Duration data ────────────────────────────────────────────────
+  const cycleOpps = useMemo(() => {
+    const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
+    const rows = (data?.opportunities ?? []).filter(r => {
+      if (salesRepFilter.length   && !salesRepFilter.includes(r.salesRepClerkId    ?? "")) return false;
+      if (refCompanyFilter.length && !refCompanyFilter.includes(r.referralCompanyId ?? "")) return false;
+      if (refContactFilter.length && !refContactFilter.includes(r.referralContactId ?? "")) return false;
+      if (r.stage !== "Won" && r.stage !== "Lost") return false;
+      const closeDate = r.stage === "Won" ? r.wonAt : r.lostAt;
+      if (!closeDate) return false;
+      const dur = Math.round((new Date(closeDate).getTime() - new Date(r.createdAt).getTime()) / 86400000);
+      if (dur < 0) return false;
+      const month = r.createdAt.slice(0, 7);
+      if (cycleMonthFrom && month < cycleMonthFrom) return false;
+      if (cycleMonthTo   && month > cycleMonthTo)   return false;
+      if (cycleLostReasonFilter.length > 0 && r.stage === "Lost" &&
+          !cycleLostReasonFilter.includes(r.lostReason ?? "Unknown")) return false;
+      return true;
+    });
+    void avg; // used below
+    return rows.map(r => {
+      const closeDate = (r.stage === "Won" ? r.wonAt : r.lostAt)!;
+      const duration = Math.round((new Date(closeDate).getTime() - new Date(r.createdAt).getTime()) / 86400000);
+      return {
+        id: r.id,
+        stage: r.stage as "Won" | "Lost",
+        duration,
+        month: r.createdAt.slice(0, 7),
+        repId: r.salesRepClerkId ?? "",
+        repName: data?.salesReps.find(s => s.id === (r.salesRepClerkId ?? ""))?.name ?? "—",
+        refName: data?.referralContacts.find(s => s.id === (r.referralContactId ?? ""))?.name ?? "—",
+        lostReason: r.lostReason ?? "Unknown",
+        estimatedValue: r.estimatedValue,
+      };
+    });
+  }, [data, salesRepFilter, refCompanyFilter, refContactFilter, cycleLostReasonFilter, cycleMonthFrom, cycleMonthTo]);
+
+  const cycleMonthlyData = useMemo(() => {
+    const byMonth = new Map<string, { won: number[]; lost: number[] }>();
+    for (const o of cycleOpps) {
+      if (!byMonth.has(o.month)) byMonth.set(o.month, { won: [], lost: [] });
+      const m = byMonth.get(o.month)!;
+      (o.stage === "Won" ? m.won : m.lost).push(o.duration);
+    }
+    const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+    return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, { won, lost }]) => ({
+      month,
+      label: new Date(month + "-15").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+      wonAvg: avg(won),
+      lostAvg: avg(lost),
+      overallAvg: avg([...won, ...lost]),
+      wonCount: won.length,
+      lostCount: lost.length,
+    }));
+  }, [cycleOpps]);
+
+  const cycleByRep = useMemo(() => {
+    const byRep = new Map<string, { repName: string; won: number[]; lost: number[] }>();
+    for (const o of cycleOpps) {
+      if (!byRep.has(o.repId)) byRep.set(o.repId, { repName: o.repName, won: [], lost: [] });
+      const r = byRep.get(o.repId)!;
+      (o.stage === "Won" ? r.won : r.lost).push(o.duration);
+    }
+    const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
+    return [...byRep.values()].map(({ repName, won, lost }) => ({
+      rep: repName,
+      wonAvg: avg(won),
+      lostAvg: avg(lost),
+      overall: avg([...won, ...lost]),
+      wonCount: won.length,
+      lostCount: lost.length,
+    })).sort((a, b) => b.overall - a.overall);
+  }, [cycleOpps]);
+
+  const cycleByLostReason = useMemo(() => {
+    const byReason = new Map<string, number[]>();
+    for (const o of cycleOpps.filter(o => o.stage === "Lost")) {
+      const r = o.lostReason || "Unknown";
+      if (!byReason.has(r)) byReason.set(r, []);
+      byReason.get(r)!.push(o.duration);
+    }
+    return [...byReason.entries()].map(([reason, durations]) => ({
+      reason: reason.length > 22 ? reason.slice(0, 22) + "…" : reason,
+      fullReason: reason,
+      count: durations.length,
+      avgDays: Math.round(durations.reduce((s, v) => s + v, 0) / durations.length),
+    })).sort((a, b) => b.avgDays - a.avgDays);
+  }, [cycleOpps]);
+
+  const allCycleLostReasons = useMemo(() => {
+    const reasons = new Set<string>();
+    for (const o of (data?.opportunities ?? []).filter(o => o.stage === "Lost")) {
+      reasons.add(o.lostReason ?? "Unknown");
+    }
+    return [...reasons].sort();
+  }, [data]);
+
+  const cycleWonAvg = useMemo(() => {
+    const won = cycleOpps.filter(o => o.stage === "Won").map(o => o.duration);
+    return won.length ? Math.round(won.reduce((s, v) => s + v, 0) / won.length) : null;
+  }, [cycleOpps]);
+
+  const cycleLostAvg = useMemo(() => {
+    const lost = cycleOpps.filter(o => o.stage === "Lost").map(o => o.duration);
+    return lost.length ? Math.round(lost.reduce((s, v) => s + v, 0) / lost.length) : null;
+  }, [cycleOpps]);
 
   const oppsCreatedData = useMemo(() => {
     const countMap: Record<string, number> = {};
@@ -980,6 +1132,129 @@ export default function OwnerDashboardClient() {
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
+
+        {/* ─── Sales Cycle Duration ─────────────────────────────────────────── */}
+        <div className="border-t border-gray-100 pt-2">
+
+          {/* Section header + local filters */}
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+            <div>
+              <p className="text-sm font-bold text-gray-800">Sales Cycle Duration</p>
+              <p className="text-xs text-gray-500 mt-0.5">Days from opportunity created → Won/Lost close — closed deals only</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Month range */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Created:</span>
+                <input type="month" value={cycleMonthFrom} onChange={e => setCycleMonthFrom(e.target.value)}
+                  className="h-7 px-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <span className="text-xs text-gray-400">–</span>
+                <input type="month" value={cycleMonthTo} onChange={e => setCycleMonthTo(e.target.value)}
+                  className="h-7 px-2 text-xs border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+              </div>
+              {/* Lost reason filter */}
+              {allCycleLostReasons.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Lost Reason:</span>
+                  <button onClick={() => setCycleLostReasonFilter([])}
+                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors ${cycleLostReasonFilter.length === 0 ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"}`}>
+                    All
+                  </button>
+                  {allCycleLostReasons.map(r => (
+                    <button key={r}
+                      onClick={() => setCycleLostReasonFilter(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])}
+                      className={`h-6 px-2.5 text-xs rounded-full border transition-colors ${cycleLostReasonFilter.includes(r) ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-medium" : "border-gray-200 text-gray-500 hover:border-gray-400"}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(cycleMonthFrom || cycleMonthTo || cycleLostReasonFilter.length > 0) && (
+                <button onClick={() => { setCycleMonthFrom(""); setCycleMonthTo(""); setCycleLostReasonFilter([]); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
+              )}
+            </div>
+          </div>
+
+          {/* KPI mini row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            <KpiCard label="Avg Days to Win"  value={cycleWonAvg  != null ? `${cycleWonAvg}d`  : "—"} color="emerald" />
+            <KpiCard label="Avg Days to Lose" value={cycleLostAvg != null ? `${cycleLostAvg}d` : "—"} color="slate"   />
+            <KpiCard label="Closed Won"  value={String(cycleOpps.filter(o => o.stage === "Won").length)}  color="emerald" />
+            <KpiCard label="Closed Lost" value={String(cycleOpps.filter(o => o.stage === "Lost").length)} color="slate"   />
+          </div>
+
+          {/* Chart row: monthly trend + by rep */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+            {/* Monthly avg duration */}
+            <ChartCard
+              title="Cycle Duration by Month Created"
+              subtitle="Avg days Won (green) · Lost (red) · Overall avg (line)"
+            >
+              {cycleMonthlyData.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No closed deal data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={cycleMonthlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={v => `${v}d`} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} width={38} />
+                    <Tooltip content={<CycleTip />} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="wonAvg"  name="Won avg"     fill="#16a34a" fillOpacity={0.85} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="lostAvg" name="Lost avg"    fill="#ef4444" fillOpacity={0.75} radius={[3, 3, 0, 0]} />
+                    <Line dataKey="overallAvg" name="Overall avg" type="monotone" stroke="#334155" strokeWidth={2} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            {/* By Sales Rep */}
+            <ChartCard
+              title="Avg Cycle Duration by Sales Rep"
+              subtitle="Won (green) vs. Lost (red) — sorted longest overall first"
+            >
+              {cycleByRep.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No closed deal data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(180, cycleByRep.length * 52)}>
+                  <BarChart data={cycleByRep} layout="vertical" margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                    <XAxis type="number" tickFormatter={v => `${v}d`} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="rep" tick={{ fontSize: 11, fill: SLATE }} tickLine={false} axisLine={false} width={84} />
+                    <Tooltip content={<CycleRepTip />} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="wonAvg"  name="Won avg (days)"  fill="#16a34a" fillOpacity={0.85} radius={[0, 3, 3, 0]} barSize={14} />
+                    <Bar dataKey="lostAvg" name="Lost avg (days)" fill="#ef4444" fillOpacity={0.75} radius={[0, 3, 3, 0]} barSize={14} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+          </div>
+
+          {/* Lost Reason breakdown */}
+          <ChartCard
+            title="Lost Reason Analysis"
+            subtitle="Average days-to-loss per reason (bar length) · loss count annotated — reveals quick vs. drawn-out rejections"
+          >
+            {cycleByLostReason.length === 0 ? (
+              <div className="flex items-center justify-center h-40 text-gray-400 text-sm">No lost deal data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(140, cycleByLostReason.length * 44)}>
+                <BarChart data={cycleByLostReason} layout="vertical" margin={{ top: 4, right: 80, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                  <XAxis type="number" tickFormatter={v => `${v}d`} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="reason" tick={{ fontSize: 11, fill: SLATE }} tickLine={false} axisLine={false} width={118} />
+                  <Tooltip content={<LostReasonTip />} />
+                  <Bar dataKey="avgDays" name="Avg days to loss" fill="#ef4444" fillOpacity={0.75} radius={[0, 4, 4, 0]} barSize={18}>
+                    <LabelList dataKey="count" position="right" formatter={(v: unknown) => { const n = Number(v); return `${n} ${n === 1 ? "loss" : "losses"}`; }}
+                      style={{ fontSize: 10, fill: SLATE }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+        </div>
 
         {/* Footer */}
         <div className="text-center pb-4">
