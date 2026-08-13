@@ -3799,7 +3799,7 @@ function DashboardTab({
   // Helper: check if a date string falls within a DateRange selection
   function inRange(dateStr: string | undefined | null, range: DateRange, customS: string, customE: string): boolean {
     if (range === "all") return true;
-    if (!dateStr) return false; // no date field → exclude when a filter is active
+    if (!dateStr) return false;
     const d = new Date(dateStr);
     if (range === "custom") {
       const start = customS ? new Date(customS) : null;
@@ -3818,13 +3818,21 @@ function DashboardTab({
 
   // Two independent date filters applied together (AND)
   // Created Date: filters by o.createdAt
-  // Close Date filter: active pipeline by expectedCloseDate; Won by wonAt; Lost by lostAt
-  // Opps without the relevant date field are excluded when a filter is active
+  // Close Date filter: Won by wonAt (fallback createdAt), Lost by lostAt (fallback createdAt),
+  //   active pipeline by expectedCloseDate (pass through if unset — no reliable fallback)
   const dateFilteredOpps = opportunities.filter(o => {
     const passesCreated = inRange(o.createdAt, createdDateRange, createdCustomStart, createdCustomEnd);
+    if (wonLostDateRange === "all") return passesCreated;
     const isActive = o.stage !== "Won" && o.stage !== "Lost";
-    const dateForFilter = isActive ? o.expectedCloseDate : o.stage === "Won" ? o.wonAt : o.lostAt;
-    const passesWonLost = inRange(dateForFilter, wonLostDateRange, wonLostCustomStart, wonLostCustomEnd);
+    let passesWonLost: boolean;
+    if (isActive) {
+      // Pass through active opps with no expected close date — they can't be excluded
+      passesWonLost = !o.expectedCloseDate || inRange(o.expectedCloseDate, wonLostDateRange, wonLostCustomStart, wonLostCustomEnd);
+    } else {
+      // Won/Lost: prefer the actual close date, fall back to createdAt so these always filter
+      const closeDate = o.stage === "Won" ? (o.wonAt || o.createdAt) : (o.lostAt || o.createdAt);
+      passesWonLost = inRange(closeDate, wonLostDateRange, wonLostCustomStart, wonLostCustomEnd);
+    }
     return passesCreated && passesWonLost;
   });
 
