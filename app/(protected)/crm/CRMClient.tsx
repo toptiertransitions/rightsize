@@ -3740,9 +3740,12 @@ function DashboardTab({
 }) {
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
   type DateRange = "all" | "month" | "quarter" | "custom";
-  const [dateRange, setDateRange] = useState<DateRange>("all");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [createdDateRange, setCreatedDateRange] = useState<DateRange>("all");
+  const [createdCustomStart, setCreatedCustomStart] = useState("");
+  const [createdCustomEnd, setCreatedCustomEnd] = useState("");
+  const [wonLostDateRange, setWonLostDateRange] = useState<DateRange>("all");
+  const [wonLostCustomStart, setWonLostCustomStart] = useState("");
+  const [wonLostCustomEnd, setWonLostCustomEnd] = useState("");
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
   const [lbDays, setLbDays] = useState<30 | 60 | 90 | 180 | 365>(90);
@@ -3793,33 +3796,37 @@ function DashboardTab({
       .finally(() => setActivitiesLoading(false));
   }, []);
 
-  // Date range filter
-  // Won opps: use wonAt (signed date). Lost opps: use lostAt. Active pipeline: use createdAt.
-  // An opp is included if its relevant date falls within the period.
-  const dateFilteredOpps = (() => {
-    const oppDate = (o: ClientOpportunity) => {
-      if (o.stage === "Won") return o.wonAt || o.createdAt;
-      if (o.stage === "Lost") return o.lostAt || o.createdAt;
-      return o.createdAt;
-    };
-    if (dateRange === "all") return opportunities;
-    if (dateRange === "custom") {
-      const start = customStart ? new Date(customStart) : null;
-      const end = customEnd ? new Date(customEnd + "T23:59:59") : null;
-      if (!start && !end) return opportunities;
-      return opportunities.filter(o => {
-        const d = new Date(oppDate(o));
-        if (start && d < start) return false;
-        if (end && d > end) return false;
-        return true;
-      });
+  // Helper: check if a date string falls within a DateRange selection
+  function inRange(dateStr: string | undefined | null, range: DateRange, customS: string, customE: string): boolean {
+    if (range === "all") return true;
+    if (!dateStr) return true; // no date field → pass through
+    const d = new Date(dateStr);
+    if (range === "custom") {
+      const start = customS ? new Date(customS) : null;
+      const end = customE ? new Date(customE + "T23:59:59") : null;
+      if (!start && !end) return true;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
     }
     const now = new Date();
-    let cutoff: Date;
-    if (dateRange === "month") cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
-    else cutoff = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-    return opportunities.filter(o => new Date(oppDate(o)) >= cutoff);
-  })();
+    const cutoff = range === "month"
+      ? new Date(now.getFullYear(), now.getMonth(), 1)
+      : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    return d >= cutoff;
+  }
+
+  // Two independent date filters applied together (AND)
+  // Created Date: filters by o.createdAt
+  // Won/Lost Dates: filters Won by wonAt, Lost by lostAt, active by expectedCloseDate
+  const dateFilteredOpps = opportunities.filter(o => {
+    const passesCreated = inRange(o.createdAt, createdDateRange, createdCustomStart, createdCustomEnd);
+    const wonLostDate = o.stage === "Won" ? o.wonAt
+      : o.stage === "Lost" ? o.lostAt
+      : o.expectedCloseDate;
+    const passesWonLost = inRange(wonLostDate, wonLostDateRange, wonLostCustomStart, wonLostCustomEnd);
+    return passesCreated && passesWonLost;
+  });
 
   // Apply owner filter (multi-select)
   const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
@@ -4076,16 +4083,16 @@ function DashboardTab({
     <div className="space-y-8">
       {/* Filters row */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        {/* Date range filter */}
+        {/* Created Date filter */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Period:</span>
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Created Date:</span>
           {dateRangeOptions.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setDateRange(key)}
+              onClick={() => setCreatedDateRange(key)}
               className={cn(
                 "h-7 px-3 text-xs rounded-full border transition-colors",
-                dateRange === key
+                createdDateRange === key
                   ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
                   : "border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"
               )}
@@ -4093,19 +4100,55 @@ function DashboardTab({
               {label}
             </button>
           ))}
-          {dateRange === "custom" && (
+          {createdDateRange === "custom" && (
             <>
               <input
                 type="date"
-                value={customStart}
-                onChange={e => setCustomStart(e.target.value)}
+                value={createdCustomStart}
+                onChange={e => setCreatedCustomStart(e.target.value)}
                 className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
               />
               <span className="text-xs text-gray-400">–</span>
               <input
                 type="date"
-                value={customEnd}
-                onChange={e => setCustomEnd(e.target.value)}
+                value={createdCustomEnd}
+                onChange={e => setCreatedCustomEnd(e.target.value)}
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+              />
+            </>
+          )}
+        </div>
+
+        {/* Won/Lost Dates filter */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-1">Won/Lost Dates:</span>
+          {dateRangeOptions.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setWonLostDateRange(key)}
+              className={cn(
+                "h-7 px-3 text-xs rounded-full border transition-colors",
+                wonLostDateRange === key
+                  ? "border-forest-600 bg-forest-50 text-forest-700 font-medium"
+                  : "border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          {wonLostDateRange === "custom" && (
+            <>
+              <input
+                type="date"
+                value={wonLostCustomStart}
+                onChange={e => setWonLostCustomStart(e.target.value)}
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+              />
+              <span className="text-xs text-gray-400">–</span>
+              <input
+                type="date"
+                value={wonLostCustomEnd}
+                onChange={e => setWonLostCustomEnd(e.target.value)}
                 className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
               />
             </>
