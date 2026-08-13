@@ -3810,10 +3810,16 @@ function DashboardTab({
       return true;
     }
     const now = new Date();
-    const cutoff = range === "month"
-      ? new Date(now.getFullYear(), now.getMonth(), 1)
-      : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-    return d >= cutoff;
+    let start: Date, end: Date;
+    if (range === "month") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    } else {
+      const q = Math.floor(now.getMonth() / 3);
+      start = new Date(now.getFullYear(), q * 3, 1);
+      end = new Date(now.getFullYear(), (q + 1) * 3, 0, 23, 59, 59);
+    }
+    return d >= start && d <= end;
   }
 
   // Two independent date filters applied together (AND)
