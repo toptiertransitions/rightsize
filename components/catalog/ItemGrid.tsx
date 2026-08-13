@@ -300,6 +300,23 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
         throw new Error((errData.error as string) || "Upload failed");
       }
       const data = await res.json() as { photoUrl: string; photoPublicId: string };
+
+      // Immediately PATCH the item so the server-side email fires on upload,
+      // not deferred until the user manually clicks Save.
+      const patchRes = await fetch("/api/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          tenantId: item.tenantId,
+          shippingLabelUrl: data.photoUrl,
+          shippingLabelFileName: file.name,
+        }),
+      });
+      if (patchRes.ok) {
+        const { item: saved } = await patchRes.json();
+        onSaved(saved);
+      }
       setForm(prev => ({ ...prev, shippingLabelUrl: data.photoUrl, shippingLabelFileName: file.name }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
