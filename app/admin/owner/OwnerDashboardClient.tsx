@@ -40,10 +40,17 @@ interface DashboardData {
     id: string; createdAt: string; wonAt: string | null; lostAt: string | null;
     stage: string; estimatedValue: number; lostReason: string | null;
     salesRepClerkId: string | null; referralContactId: string | null; referralCompanyId: string | null;
+    clientContactName: string | null;
   }>;
 }
 
 type Period = "W" | "M" | "Q";
+
+type CycleFilter =
+  | { type: "stage"; stage: "Won" | "Lost"; label: string }
+  | { type: "month"; month: string; stage: "Won" | "Lost"; label: string }
+  | { type: "rep"; repId: string; repName: string; stage: "Won" | "Lost"; label: string }
+  | { type: "reason"; reason: string; label: string };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -229,7 +236,10 @@ function MultiSelect({
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, color = "emerald" }: { label: string; value: string; color?: string }) {
+function KpiCard({ label, value, color = "emerald", onClick, active }: {
+  label: string; value: string; color?: string;
+  onClick?: () => void; active?: boolean;
+}) {
   const colors: Record<string, string> = {
     emerald: "from-emerald-50 to-emerald-100/50 border-emerald-200",
     gold:    "from-amber-50 to-amber-100/50 border-amber-200",
@@ -238,7 +248,12 @@ function KpiCard({ label, value, color = "emerald" }: { label: string; value: st
     slate:   "from-slate-50 to-slate-100/50 border-slate-200",
   };
   return (
-    <div className={`bg-gradient-to-br ${colors[color] ?? colors.emerald} border rounded-xl p-4`}>
+    <div
+      onClick={onClick}
+      className={`bg-gradient-to-br ${colors[color] ?? colors.emerald} border rounded-xl p-4 transition-all ${
+        onClick ? "cursor-pointer hover:shadow-md hover:scale-[1.02]" : ""
+      } ${active ? "ring-2 ring-emerald-500 shadow-md" : ""}`}
+    >
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">{label}</p>
       <p className="text-2xl font-bold text-gray-900">{value}</p>
     </div>
@@ -366,6 +381,7 @@ export default function OwnerDashboardClient() {
   const [cycleLostReasonFilter, setCycleLostReasonFilter] = useState<string[]>([]);
   const [cycleMonthFrom,        setCycleMonthFrom]        = useState("");
   const [cycleMonthTo,          setCycleMonthTo]          = useState("");
+  const [cycleFilter,           setCycleFilter]           = useState<CycleFilter | null>(null);
 
   useEffect(() => {
     if (!authed) return;
@@ -488,12 +504,15 @@ export default function OwnerDashboardClient() {
         id: r.id,
         stage: r.stage as "Won" | "Lost",
         duration,
+        createdAt: r.createdAt,
+        closeDate,
         month: r.createdAt.slice(0, 7),
         repId: r.salesRepClerkId ?? "",
         repName: data?.salesReps.find(s => s.id === (r.salesRepClerkId ?? ""))?.name ?? "—",
         refName: data?.referralContacts.find(s => s.id === (r.referralContactId ?? ""))?.name ?? "—",
         lostReason: r.lostReason ?? "Unknown",
         estimatedValue: r.estimatedValue,
+        clientContactName: r.clientContactName ?? null,
       };
     });
   }, [data, salesRepFilter, refCompanyFilter, refContactFilter, cycleLostReasonFilter, cycleMonthFrom, cycleMonthTo]);
@@ -518,15 +537,16 @@ export default function OwnerDashboardClient() {
   }, [cycleOpps]);
 
   const cycleByRep = useMemo(() => {
-    const byRep = new Map<string, { repName: string; won: number[]; lost: number[] }>();
+    const byRep = new Map<string, { repId: string; repName: string; won: number[]; lost: number[] }>();
     for (const o of cycleOpps) {
-      if (!byRep.has(o.repId)) byRep.set(o.repId, { repName: o.repName, won: [], lost: [] });
+      if (!byRep.has(o.repId)) byRep.set(o.repId, { repId: o.repId, repName: o.repName, won: [], lost: [] });
       const r = byRep.get(o.repId)!;
       (o.stage === "Won" ? r.won : r.lost).push(o.duration);
     }
     const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
-    return [...byRep.values()].map(({ repName, won, lost }) => ({
+    return [...byRep.values()].map(({ repId, repName, won, lost }) => ({
       rep: repName,
+      repId,
       wonAvg: avg(won),
       lostAvg: avg(lost),
       overall: avg([...won, ...lost]),
@@ -567,6 +587,17 @@ export default function OwnerDashboardClient() {
     const lost = cycleOpps.filter(o => o.stage === "Lost").map(o => o.duration);
     return lost.length ? Math.round(lost.reduce((s, v) => s + v, 0) / lost.length) : null;
   }, [cycleOpps]);
+
+  const cycleListOpps = useMemo(() => {
+    if (!cycleFilter) return [];
+    return cycleOpps.filter(o => {
+      if (cycleFilter.type === "stage") return o.stage === cycleFilter.stage;
+      if (cycleFilter.type === "month") return o.month === cycleFilter.month && o.stage === cycleFilter.stage;
+      if (cycleFilter.type === "rep")   return o.repId === cycleFilter.repId && o.stage === cycleFilter.stage;
+      if (cycleFilter.type === "reason") return o.stage === "Lost" && o.lostReason === cycleFilter.reason;
+      return false;
+    }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [cycleOpps, cycleFilter]);
 
   const oppsCreatedData = useMemo(() => {
     const countMap: Record<string, number> = {};
@@ -1178,10 +1209,18 @@ export default function OwnerDashboardClient() {
 
           {/* KPI mini row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            <KpiCard label="Avg Days to Win"  value={cycleWonAvg  != null ? `${cycleWonAvg}d`  : "—"} color="emerald" />
-            <KpiCard label="Avg Days to Lose" value={cycleLostAvg != null ? `${cycleLostAvg}d` : "—"} color="slate"   />
-            <KpiCard label="Closed Won"  value={String(cycleOpps.filter(o => o.stage === "Won").length)}  color="emerald" />
-            <KpiCard label="Closed Lost" value={String(cycleOpps.filter(o => o.stage === "Lost").length)} color="slate"   />
+            <KpiCard label="Avg Days to Win"  value={cycleWonAvg  != null ? `${cycleWonAvg}d`  : "—"} color="emerald"
+              active={cycleFilter?.type === "stage" && cycleFilter.stage === "Won"}
+              onClick={() => setCycleFilter(f => f?.type === "stage" && f.stage === "Won" ? null : { type: "stage", stage: "Won", label: "All Won Deals" })} />
+            <KpiCard label="Avg Days to Lose" value={cycleLostAvg != null ? `${cycleLostAvg}d` : "—"} color="slate"
+              active={cycleFilter?.type === "stage" && cycleFilter.stage === "Lost"}
+              onClick={() => setCycleFilter(f => f?.type === "stage" && f.stage === "Lost" ? null : { type: "stage", stage: "Lost", label: "All Lost Deals" })} />
+            <KpiCard label="Closed Won"  value={String(cycleOpps.filter(o => o.stage === "Won").length)}  color="emerald"
+              active={cycleFilter?.type === "stage" && cycleFilter.stage === "Won"}
+              onClick={() => setCycleFilter(f => f?.type === "stage" && f.stage === "Won" ? null : { type: "stage", stage: "Won", label: "All Won Deals" })} />
+            <KpiCard label="Closed Lost" value={String(cycleOpps.filter(o => o.stage === "Lost").length)} color="slate"
+              active={cycleFilter?.type === "stage" && cycleFilter.stage === "Lost"}
+              onClick={() => setCycleFilter(f => f?.type === "stage" && f.stage === "Lost" ? null : { type: "stage", stage: "Lost", label: "All Lost Deals" })} />
           </div>
 
           {/* Chart row: monthly trend + by rep */}
@@ -1201,8 +1240,10 @@ export default function OwnerDashboardClient() {
                     <YAxis tickFormatter={v => `${v}d`} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} width={38} />
                     <Tooltip content={<CycleTip />} />
                     <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="wonAvg"  name="Won avg"     fill="#16a34a" fillOpacity={0.85} radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="lostAvg" name="Lost avg"    fill="#ef4444" fillOpacity={0.75} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="wonAvg"  name="Won avg"  fill="#16a34a" fillOpacity={0.85} radius={[3, 3, 0, 0]} style={{ cursor: "pointer" }}
+                      onClick={(d: unknown) => { const row = d as { month: string; label: string }; setCycleFilter(f => f?.type === "month" && f.month === row.month && f.stage === "Won" ? null : { type: "month", month: row.month, stage: "Won", label: `Won — ${row.label}` }); }} />
+                    <Bar dataKey="lostAvg" name="Lost avg" fill="#ef4444" fillOpacity={0.75} radius={[3, 3, 0, 0]} style={{ cursor: "pointer" }}
+                      onClick={(d: unknown) => { const row = d as { month: string; label: string }; setCycleFilter(f => f?.type === "month" && f.month === row.month && f.stage === "Lost" ? null : { type: "month", month: row.month, stage: "Lost", label: `Lost — ${row.label}` }); }} />
                     <Line dataKey="overallAvg" name="Overall avg" type="monotone" stroke="#334155" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1224,8 +1265,10 @@ export default function OwnerDashboardClient() {
                     <YAxis type="category" dataKey="rep" tick={{ fontSize: 11, fill: SLATE }} tickLine={false} axisLine={false} width={84} />
                     <Tooltip content={<CycleRepTip />} />
                     <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="wonAvg"  name="Won avg (days)"  fill="#16a34a" fillOpacity={0.85} radius={[0, 3, 3, 0]} barSize={14} />
-                    <Bar dataKey="lostAvg" name="Lost avg (days)" fill="#ef4444" fillOpacity={0.75} radius={[0, 3, 3, 0]} barSize={14} />
+                    <Bar dataKey="wonAvg"  name="Won avg (days)"  fill="#16a34a" fillOpacity={0.85} radius={[0, 3, 3, 0]} barSize={14} style={{ cursor: "pointer" }}
+                      onClick={(d: unknown) => { const row = d as { rep: string; repId: string }; setCycleFilter(f => f?.type === "rep" && f.repId === row.repId && f.stage === "Won" ? null : { type: "rep", repId: row.repId, repName: row.rep, stage: "Won", label: `${row.rep} — Won` }); }} />
+                    <Bar dataKey="lostAvg" name="Lost avg (days)" fill="#ef4444" fillOpacity={0.75} radius={[0, 3, 3, 0]} barSize={14} style={{ cursor: "pointer" }}
+                      onClick={(d: unknown) => { const row = d as { rep: string; repId: string }; setCycleFilter(f => f?.type === "rep" && f.repId === row.repId && f.stage === "Lost" ? null : { type: "rep", repId: row.repId, repName: row.rep, stage: "Lost", label: `${row.rep} — Lost` }); }} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1246,7 +1289,8 @@ export default function OwnerDashboardClient() {
                   <XAxis type="number" tickFormatter={v => `${v}d`} tick={{ fontSize: 10, fill: SLATE }} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="reason" tick={{ fontSize: 11, fill: SLATE }} tickLine={false} axisLine={false} width={118} />
                   <Tooltip content={<LostReasonTip />} />
-                  <Bar dataKey="avgDays" name="Avg days to loss" fill="#ef4444" fillOpacity={0.75} radius={[0, 4, 4, 0]} barSize={18}>
+                  <Bar dataKey="avgDays" name="Avg days to loss" fill="#ef4444" fillOpacity={0.75} radius={[0, 4, 4, 0]} barSize={18} style={{ cursor: "pointer" }}
+                    onClick={(d: unknown) => { const row = d as { fullReason: string }; setCycleFilter(f => f?.type === "reason" && f.reason === row.fullReason ? null : { type: "reason", reason: row.fullReason, label: `Lost: ${row.fullReason}` }); }}>
                     <LabelList dataKey="count" position="right" formatter={(v: unknown) => { const n = Number(v); return `${n} ${n === 1 ? "loss" : "losses"}`; }}
                       style={{ fontSize: 10, fill: SLATE }} />
                   </Bar>
@@ -1254,6 +1298,63 @@ export default function OwnerDashboardClient() {
               </ResponsiveContainer>
             )}
           </ChartCard>
+          {/* Drilldown list */}
+          {cycleFilter && (
+            <div className="mt-5 bg-white border border-gray-200 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-bold text-gray-800">Opportunities — {cycleFilter.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {cycleListOpps.length} deal{cycleListOpps.length !== 1 ? "s" : ""} · sorted by created date
+                  </p>
+                </div>
+                <button onClick={() => setCycleFilter(null)} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                  Clear
+                </button>
+              </div>
+
+              {cycleListOpps.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">No opportunities match this selection.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left font-semibold text-gray-500 uppercase tracking-wide py-2 pr-4">Client</th>
+                        <th className="text-left font-semibold text-gray-500 uppercase tracking-wide py-2 pr-4">Sales Rep</th>
+                        <th className="text-left font-semibold text-gray-500 uppercase tracking-wide py-2 pr-4">Referral Partner</th>
+                        <th className="text-right font-semibold text-gray-500 uppercase tracking-wide py-2 pr-4">Value</th>
+                        <th className="text-left font-semibold text-gray-500 uppercase tracking-wide py-2 pr-4">Created</th>
+                        <th className="text-left font-semibold text-gray-500 uppercase tracking-wide py-2 pr-4">Closed</th>
+                        <th className="text-left font-semibold text-gray-500 uppercase tracking-wide py-2">Stage / Days</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {cycleListOpps.map(o => (
+                        <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-2.5 pr-4 font-medium text-gray-800">{o.clientContactName ?? "—"}</td>
+                          <td className="py-2.5 pr-4 text-gray-600">{o.repName}</td>
+                          <td className="py-2.5 pr-4 text-gray-600">{o.refName !== "—" ? o.refName : <span className="text-gray-300">—</span>}</td>
+                          <td className="py-2.5 pr-4 text-right font-medium text-gray-800">{fmt$(o.estimatedValue)}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{o.createdAt}</td>
+                          <td className="py-2.5 pr-4 text-gray-500">{o.closeDate}</td>
+                          <td className="py-2.5">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium ${
+                              o.stage === "Won"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-red-100 text-red-800"
+                            }`}>
+                              {o.stage} · {o.duration}d
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

@@ -172,15 +172,16 @@ export async function GET() {
       const refCo  = refCid ? (refContactByIdMap.get(refCid)?.referralCompanyId ?? null) : null;
       return {
         id: o.id,
-        createdAt:      ctDateStr(o.createdAt),
-        wonAt:          o.wonAt     ? ctDateStr(o.wonAt)  : null,
-        lostAt:         o.lostAt    ? ctDateStr(o.lostAt) : null,
-        stage:          o.stage,
-        estimatedValue: o.estimatedValue ?? 0,
-        lostReason:     o.lostReason ?? null,
-        salesRepClerkId: o.assignedToClerkId ?? null,
+        createdAt:         ctDateStr(o.createdAt),
+        wonAt:             o.wonAt     ? ctDateStr(o.wonAt)  : null,
+        lostAt:            o.lostAt    ? ctDateStr(o.lostAt) : null,
+        stage:             o.stage,
+        estimatedValue:    o.estimatedValue ?? 0,
+        lostReason:        o.lostReason ?? null,
+        salesRepClerkId:   o.assignedToClerkId ?? null,
         referralContactId: refCid,
         referralCompanyId: refCo,
+        clientContactName: cc?.name ?? null,
       };
     });
 
