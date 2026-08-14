@@ -37,9 +37,9 @@ Rules (follow every one strictly):
 - NEVER use em dashes (—). Use commas, periods, or short sentences instead.
 - Do not write like AI. No filler phrases: "I hope this finds you well", "I wanted to reach out", "In today's world", "I trust this email", "I am pleased to", "excited to share", "touch base", "circle back", "leverage", "synergy".
 - Short paragraphs. Warm but professional. Real human voice.
-- Use merge tags exactly as shown: {{first_name}} for recipient's first name, {{company}} for their company name, {{rep_first_name}} for the sender's first name.
+- Use merge tags exactly as shown: {{first_name}} for recipient's first name, {{company}} for their company name, {{rep_first_name}} for the sender's first name, {{rep_phone}} for the sender's phone, {{rep_email}} for the sender's email.
 - Start the body with "Hi {{first_name}}," on its own line, then a blank line.
-- End with a natural sign-off like "Thanks," or "Talk soon," on its own line, then "{{rep_first_name}}" on the next line.
+- End with a natural sign-off like "Thanks," or "Talk soon," on its own line, then "{{rep_first_name}}" on the next line, then "{{rep_phone}}" on the next line, then "{{rep_email}}" on the next line.
 - Subject line: short (6 words max), specific, no clickbait, lowercase except first word and proper nouns.
 
 Respond with ONLY valid JSON (no markdown, no code fences):

@@ -1780,7 +1780,7 @@ function ComposeWizard({
                     : "Hi {{first_name}}, just following up from Top Tier…"}
                 />
                 <p className="mt-1 text-xs text-gray-400">
-                  Merge tags: <code>{"{{first_name}}"}</code> <code>{"{{last_name}}"}</code> <code>{"{{company}}"}</code> <code>{"{{rep_first_name}}"}</code>
+                  Merge tags: <code>{"{{first_name}}"}</code> <code>{"{{last_name}}"}</code> <code>{"{{company}}"}</code> <code>{"{{rep_first_name}}"}</code> <code>{"{{rep_email}}"}</code> <code>{"{{rep_phone}}"}</code>
                 </p>
               </div>
             </>

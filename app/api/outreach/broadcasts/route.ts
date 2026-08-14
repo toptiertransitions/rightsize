@@ -15,6 +15,7 @@ import {
   updateOutreachEnrollment,
   createOutreachSend,
   createActivity,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { getValidAccessToken } from "@/lib/gmail";
 import { sendGmailMessage } from "@/lib/gmail";
@@ -161,9 +162,15 @@ export async function POST(req: NextRequest) {
       if (channel === "Email") {
         const accessToken = await getValidAccessToken(userId);
         const clerk = await clerkClient();
-        const user = await clerk.users.getUser(userId);
+        const [user, staffList] = await Promise.all([
+          clerk.users.getUser(userId),
+          getStaffMembers().catch(() => []),
+        ]);
         const fromName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Top Tier Transitions";
         const fromEmail = user.emailAddresses[0]?.emailAddress ?? "";
+        const senderStaff = staffList.find(s => s.clerkUserId === userId);
+        const repEmail = senderStaff?.email ?? fromEmail;
+        const repPhone = senderStaff?.phone ?? "";
 
         // Fetch attachment if provided
         let attachment: { data: Buffer; name: string; mimeType: string } | undefined;
@@ -235,6 +242,8 @@ export async function POST(req: NextRequest) {
               first_name: enrollment.contactName.split(" ")[0] || enrollment.contactName,
               last_name: enrollment.contactName.split(" ").slice(1).join(" "),
               rep_first_name: user.firstName ?? "",
+              rep_email: repEmail,
+              rep_phone: repPhone,
               company: enrollment.company ?? "",
             });
             const htmlDoc = /^\s*<!DOCTYPE|^\s*<html/i.test(mergedHtml)

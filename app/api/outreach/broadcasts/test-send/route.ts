@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole } from "@/lib/airtable";
+import { getSystemRole, getStaffMembers } from "@/lib/airtable";
 import { getValidAccessToken, sendGmailMessage } from "@/lib/gmail";
 import { clerkClient } from "@clerk/nextjs/server";
 import { injectTracking } from "@/lib/tracking";
@@ -27,17 +27,26 @@ export async function POST(req: NextRequest) {
 
   const accessToken = await getValidAccessToken(userId);
   const clerk = await clerkClient();
-  const user = await clerk.users.getUser(userId);
+  const [user, staffList] = await Promise.all([
+    clerk.users.getUser(userId),
+    getStaffMembers().catch(() => []),
+  ]);
   const toEmail = user.emailAddresses[0]?.emailAddress ?? "";
   const fromName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Top Tier Transitions";
 
   if (!toEmail) return NextResponse.json({ error: "No email address on your account" }, { status: 400 });
+
+  const senderStaff = staffList.find(s => s.clerkUserId === userId);
+  const repEmail = senderStaff?.email ?? toEmail;
+  const repPhone = senderStaff?.phone ?? "";
 
   // Substitute merge tags with the sender's own info for the test
   const filledHtml = bodyHtml
     .replace(/\{\{first_name\}\}/g, user.firstName ?? "there")
     .replace(/\{\{last_name\}\}/g, user.lastName ?? "")
     .replace(/\{\{rep_first_name\}\}/g, user.firstName ?? "")
+    .replace(/\{\{rep_email\}\}/g, repEmail)
+    .replace(/\{\{rep_phone\}\}/g, repPhone)
     .replace(/\{\{company\}\}/g, "Test Company");
 
   // Fetch attachment if provided
