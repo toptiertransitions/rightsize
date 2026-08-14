@@ -315,15 +315,42 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
     };
   }
 
-  // Furniture/Antiques categories require Item Length/Width/Height item specifics.
-  // Use stored dimensions when available; fall back to 1 so the listing goes through
-  // (seller can update on eBay). Other categories get aspects only when dims are set.
+  // Required item specifics per Rightsize category → eBay Antiques/Art tree.
+  // Keys are eBay aspect names; values are the defaults to send.
+  // Dimension aspects use actual stored values when available.
+  const CATEGORY_ASPECTS: Record<string, Record<string, string>> = {
+    "Seating":                       { Type: "Chair",        Style: "Antique",   Material: "Wood" },
+    "Tables & Desks":                { Type: "Table",        Style: "Antique",   Material: "Wood" },
+    "Cabinets, Dressers & Shelving": { Type: "Cabinet",      Style: "Antique",   Material: "Wood" },
+    "Beds & Bedroom":                { Type: "Bed",          Style: "Antique",   Material: "Wood" },
+    "Mirrors":                       { Type: "Wall Mirror",  Style: "Antique",   Material: "Wood" },
+    "Rugs & Textiles":               { Type: "Area Rug",     Style: "Antique" },
+    "Fine Art & Paintings":          { Type: "Painting",     Style: "Antique" },
+    "Prints & Framed Art":           { Type: "Print",        Style: "Antique" },
+    "Sculpture & Figurines":         { Type: "Figure",       Style: "Antique",   Material: "Unknown" },
+    "Silver & Serveware":            { Type: "Serving Set",  Style: "Antique" },
+    "Fine China & Dinnerware":       { Type: "Dinner Set",   Style: "Antique" },
+    "Glassware & Crystal":           { Type: "Glassware",    Style: "Antique" },
+    "Jewelry & Watches":             { Type: "Fashion",      Style: "Antique" },
+    "Lamps & Lighting":              { Type: "Table Lamp",   Style: "Antique" },
+    "Vases, Bowls & Decorative Objects": { Type: "Vase",     Style: "Antique" },
+  };
+
+  const cat = item.category ?? "";
+  const categoryDefaults = CATEGORY_ASPECTS[cat] ?? {};
+  const aspects: Record<string, string[]> = {};
+
+  // Apply category-level required aspects
+  for (const [k, v] of Object.entries(categoryDefaults)) {
+    aspects[k] = [v];
+  }
+
+  // Furniture categories require Item Length/Width/Height; other categories
+  // include dimension aspects only when dims are actually stored.
   const REQUIRES_DIMENSION_ASPECTS = new Set([
     "Seating", "Tables & Desks", "Cabinets, Dressers & Shelving", "Beds & Bedroom", "Mirrors",
   ]);
-  const cat = item.category ?? "";
   const needsDimAspects = REQUIRES_DIMENSION_ASPECTS.has(cat);
-  const aspects: Record<string, string[]> = {};
   if (hasDimensions || needsDimAspects) {
     aspects["Item Length"] = [String(item.widthInches  ?? 1)];
     aspects["Item Width"]  = [String(item.depthInches  ?? 1)];
