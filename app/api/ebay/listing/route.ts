@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
       ebayListingStatus: "Active",
       ebayLastSyncedAt:  today,
       ebaySyncError:     "",
+      alsoListedOnline:  true,
     });
 
     fireListingEmail(item, listingId).catch(e => console.error("[ebay-email]", e));

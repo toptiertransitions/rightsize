@@ -375,6 +375,7 @@ export interface Item {
   ebayListingStatus?: "Active" | "Ended" | "Error" | "Pending";
   ebayLastSyncedAt?: string;
   ebaySyncError?: string;
+  alsoListedOnline?: boolean;
   // Shipping label (eBay / FB sold items)
   shippingLabelUrl?: string;
   shippingLabelFileName?: string;

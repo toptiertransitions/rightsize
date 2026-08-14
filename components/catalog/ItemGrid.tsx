@@ -173,6 +173,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     quantity: item.quantity ?? 1,
     staffSellerId: item.staffSellerId ?? "",
     staffSellerName: item.staffSellerName ?? "",
+    alsoListedOnline: item.alsoListedOnline ?? false,
     completedDate: item.completedDate ?? "",
     approvedDate: item.approvedDate ?? "",
     shippingLabelUrl: item.shippingLabelUrl ?? "",
@@ -992,7 +993,18 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 />
               ) : null;
             })()}
-            {isTTTUser && (form.primaryRoute === "FB/Marketplace" || form.primaryRoute === "Online Marketplace") && staffMembers.length > 0 && (
+            {isTTTUser && (form.primaryRoute === "ProFoundFinds Consignment" || form.primaryRoute === "Estate Sale") && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!form.alsoListedOnline}
+                  onChange={e => setForm(f => ({ ...f, alsoListedOnline: e.target.checked }))}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Also Listed Online?</span>
+              </label>
+            )}
+            {isTTTUser && (form.primaryRoute === "FB/Marketplace" || form.primaryRoute === "Online Marketplace" || (form.alsoListedOnline && (form.primaryRoute === "ProFoundFinds Consignment" || form.primaryRoute === "Estate Sale"))) && staffMembers.length > 0 && (
               <StaffAutofill
                 value={form.staffSellerName ?? ""}
                 onChange={(name, id) => setForm(f => ({ ...f, staffSellerName: name, staffSellerId: id }))}

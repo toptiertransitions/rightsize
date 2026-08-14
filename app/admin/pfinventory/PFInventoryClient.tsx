@@ -8,6 +8,57 @@ const PAGE_SIZE = 25;
 import Image from "next/image";
 import type { Item, ItemStatus, OpenHouseDate } from "@/lib/types";
 
+// ─── eBay list-it button ──────────────────────────────────────────────────────
+function EbayActionButton({ item, onUpdate }: { item: Item; onUpdate: (updated: Item) => void }) {
+  const [loading, setLoading] = useState(false);
+  async function handleClick() {
+    setLoading(true);
+    const isUpdate = !!item.ebayListingId;
+    try {
+      const res = await fetch("/api/ebay/listing", {
+        method: isUpdate ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "eBay operation failed");
+      onUpdate(data.item as Item);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "eBay error");
+    } finally {
+      setLoading(false);
+    }
+  }
+  if (item.ebayListingStatus === "Pending" || loading) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1">
+        <svg className="w-3.5 h-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <span className="text-xs text-gray-400">Publishing…</span>
+      </div>
+    );
+  }
+  if (item.ebayListingId) {
+    return (
+      <div className="flex flex-col gap-1">
+        <button onClick={handleClick} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-forest-800 hover:bg-forest-700 text-forest-200 border border-forest-600 transition-colors whitespace-nowrap">
+          Sync eBay
+        </button>
+        {item.ebayListingStatus === "Error" && item.ebaySyncError && (
+          <span className="text-[10px] text-red-400 px-1 max-w-[120px] truncate" title={item.ebaySyncError}>{item.ebaySyncError}</span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <button onClick={handleClick} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 border border-indigo-700 transition-colors whitespace-nowrap">
+      List It
+    </button>
+  );
+}
+
 const PF_STATUSES: ItemStatus[] = ["Pending Review", "Approved", "Listed", "In Cart", "Sold", "Donated", "Discarded", "Rejected / Revisit"];
 
 interface TenantInfo { name: string; ownerEmail: string; }
@@ -1473,6 +1524,7 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                   <th className="px-3 py-3 text-center w-16">{thBtn("storefrontActive", "Site")}</th>
                   <th className="px-3 py-3 text-left w-20">{thBtn("squareSynced", "Square")}</th>
                   <th className="px-3 py-3 text-left w-28">{thBtn("payoutPaidAt", "Paid Date")}</th>
+                  <th className="px-3 py-3 w-24"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">eBay</span></th>
                   <th className="px-3 py-3 w-16"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Sales</span></th>
                 </tr>
               </thead>
@@ -1643,6 +1695,14 @@ export function PFInventoryClient({ items: initialItems, tenantInfoMap }: Props)
                         {item.payoutPaidAt && (
                           <p className="text-[10px] text-green-400 px-2">{fmtDate(item.payoutPaidAt)}</p>
                         )}
+                      </td>
+
+                      {/* eBay / List It */}
+                      <td className="px-3 py-2.5">
+                        <EbayActionButton
+                          item={item}
+                          onUpdate={(updated) => setItems(prev => prev.map(i => i.id === updated.id ? updated : i))}
+                        />
                       </td>
 
                       {/* Sale Events */}
