@@ -318,22 +318,26 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
   // Required item specifics per Rightsize category → eBay Antiques/Art tree.
   // Keys are eBay aspect names; values are the defaults to send.
   // Dimension aspects use actual stored values when available.
+  // Required item specifics per Rightsize category → eBay Antiques/Art tree.
+  // "Multi-Color" and "Unknown" are broadly accepted fallbacks; sellers can
+  // correct values directly on eBay after listing.
   const CATEGORY_ASPECTS: Record<string, Record<string, string>> = {
-    "Seating":                       { Type: "Chair",        Style: "Antique",   Material: "Wood" },
-    "Tables & Desks":                { Type: "Table",        Style: "Antique",   Material: "Wood" },
-    "Cabinets, Dressers & Shelving": { Type: "Cabinet",      Style: "Antique",   Material: "Wood" },
-    "Beds & Bedroom":                { Type: "Bed",          Style: "Antique",   Material: "Wood" },
-    "Mirrors":                       { Type: "Wall Mirror",  Style: "Antique",   Material: "Wood" },
-    "Rugs & Textiles":               { Type: "Area Rug",     Style: "Antique" },
-    "Fine Art & Paintings":          { Type: "Painting",     Style: "Antique" },
-    "Prints & Framed Art":           { Type: "Print",        Style: "Antique" },
-    "Sculpture & Figurines":         { Type: "Figure",       Style: "Antique",   Material: "Unknown" },
-    "Silver & Serveware":            { Type: "Serving Set",  Style: "Antique" },
-    "Fine China & Dinnerware":       { Type: "Dinner Set",   Style: "Antique" },
-    "Glassware & Crystal":           { Type: "Glassware",    Style: "Antique" },
-    "Jewelry & Watches":             { Type: "Fashion",      Style: "Antique" },
-    "Lamps & Lighting":              { Type: "Table Lamp",   Style: "Antique" },
-    "Vases, Bowls & Decorative Objects": { Type: "Vase",     Style: "Antique" },
+    "Seating":                       { Type: "Chair",        Style: "Antique", Material: "Wood",    Color: "Brown",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Tables & Desks":                { Type: "Table",        Style: "Antique", Material: "Wood",    Color: "Brown",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Cabinets, Dressers & Shelving": { Type: "Cabinet",      Style: "Antique", Material: "Wood",    Color: "Brown",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Beds & Bedroom":                { Type: "Bed",          Style: "Antique", Material: "Wood",    Color: "Brown",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Mirrors":                       { Type: "Wall Mirror",  Style: "Antique", Material: "Wood",    Color: "Brown",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Rugs & Textiles":               { Type: "Area Rug",     Style: "Antique",                      Color: "Multi-Color", "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Fine Art & Paintings":          { Type: "Painting",     Style: "Antique",                      Color: "Multi-Color", "Country/Region of Manufacture": "Unknown", "Time Period Created": "Unknown" },
+    "Prints & Framed Art":           { Type: "Print",        Style: "Antique",                      Color: "Multi-Color", "Country/Region of Manufacture": "Unknown" },
+    "Sculpture & Figurines":         { Type: "Figure",       Style: "Antique", Material: "Unknown", Color: "Multi-Color", "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Silver & Serveware":            { Type: "Serving Set",  Style: "Antique", Material: "Sterling Silver", Color: "Silver", "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Fine China & Dinnerware":       { Type: "Dinner Set",   Style: "Antique",                      Color: "White",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Glassware & Crystal":           { Type: "Glassware",    Style: "Antique",                      Color: "Clear",       "Country/Region of Manufacture": "Unknown", "Time Period Manufactured": "Unknown" },
+    "Jewelry & Watches":             { Type: "Fashion",      Style: "Antique",                      Color: "Multi-Color", "Country/Region of Manufacture": "Unknown" },
+    "Lamps & Lighting":              { Type: "Table Lamp",   Style: "Antique", Material: "Unknown", Color: "Brown",       "Country/Region of Manufacture": "Unknown" },
+    "Vases, Bowls & Decorative Objects": { Type: "Vase",    Style: "Antique", Material: "Unknown", Color: "Multi-Color", "Country/Region of Manufacture": "Unknown" },
+    "Collectibles & Memorabilia":    { Type: "Unknown",      Style: "Vintage",                      Color: "Multi-Color", "Country/Region of Manufacture": "Unknown" },
   };
 
   const cat = item.category ?? "";
