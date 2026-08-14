@@ -128,9 +128,20 @@ const CONDITION_MAP: Record<string, string> = {
   "Parts Only":     "FOR_PARTS_OR_NOT_WORKING",
 };
 
-// eBay clothing/apparel categories only allow conditions up to "Pre-owned" (ID 3000,
-// equivalent to USED_EXCELLENT). USED_GOOD (5000) and below are rejected with 25021.
-const APPAREL_CATEGORIES = new Set(["Handbags & Accessories", "Clothing & Furs"]);
+// eBay Antiques, Art, Pottery, and Apparel categories reject USED_GOOD (5000) and below
+// with error 25021. Clamp these to USED_EXCELLENT (3000) to avoid the rejection.
+const CONDITION_CLAMP_CATEGORIES = new Set([
+  // Apparel
+  "Handbags & Accessories", "Clothing & Furs",
+  // Furniture — mapped to Antiques > Furniture tree
+  "Seating", "Tables & Desks", "Cabinets, Dressers & Shelving", "Beds & Bedroom", "Mirrors",
+  // Art
+  "Fine Art & Paintings", "Prints & Framed Art", "Sculpture & Figurines",
+  // Antiques / Vintage
+  "Rugs & Textiles", "Silver & Serveware", "Fine China & Dinnerware", "Glassware & Crystal",
+  // Jewelry
+  "Jewelry & Watches",
+]);
 
 // ── Access token cache (per serverless instance) ──────────────────────────────
 let _cachedToken: { token: string; expiresAt: number } | null = null;
@@ -281,7 +292,7 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
   }
 
   let condition = CONDITION_MAP[item.condition] ?? "USED_EXCELLENT";
-  if (APPAREL_CATEGORIES.has(item.category ?? "")) {
+  if (CONDITION_CLAMP_CATEGORIES.has(item.category ?? "")) {
     if (condition === "USED_GOOD" || condition === "USED_ACCEPTABLE" || condition === "FOR_PARTS_OR_NOT_WORKING") {
       condition = "USED_EXCELLENT";
     }
