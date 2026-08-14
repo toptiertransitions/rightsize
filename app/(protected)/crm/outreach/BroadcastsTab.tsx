@@ -1140,6 +1140,10 @@ function ComposeWizard({
   const [brandedGist, setBrandedGist] = useState("");
   const [generatingBranded, setGeneratingBranded] = useState(false);
   const [brandedError, setBrandedError] = useState("");
+  // brandedVersion increments whenever entirely new HTML is loaded (AI gen, template, content picker).
+  // The editable iframe uses this as its key so it only re-mounts on new content, not on every edit.
+  const [brandedVersion, setBrandedVersion] = useState(0);
+  const brandedIframeRef = useRef<HTMLIFrameElement>(null);
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const templateInputRef = useRef<HTMLInputElement>(null);
@@ -1151,6 +1155,27 @@ function ComposeWizard({
   const [sendSuccess, setSendSuccess] = useState<{ count: number } | null>(null);
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<"sent" | "error" | null>(null);
+
+  // When brandedVersion changes (new HTML loaded), write content into the editable iframe
+  // and enable designMode so users can click-to-edit text inline.
+  // The input listener syncs edits back to brandedHtml state without remounting the iframe.
+  useEffect(() => {
+    if (!brandedHtml) return;
+    const iframe = brandedIframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    doc.open();
+    doc.write(brandedHtml);
+    doc.close();
+    doc.designMode = "on";
+    const handler = () => {
+      setBrandedHtml("<!DOCTYPE html>" + doc.documentElement.outerHTML);
+    };
+    doc.addEventListener("input", handler);
+    return () => { try { doc.removeEventListener("input", handler); } catch {} };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandedVersion]);
 
   function fmtTemplateDate(iso: string): string {
     if (!iso) return "";
@@ -1183,6 +1208,7 @@ function ComposeWizard({
     setSubject(subject);
     if (emailType === "branded" && html) {
       setBrandedHtml(html);
+      setBrandedVersion(v => v + 1);
     } else if (emailType === "branded" && body) {
       setBrandedGist(body);
     } else {
@@ -1206,6 +1232,7 @@ function ComposeWizard({
     setEmailType(tType);
     if (tType === "branded") {
       setBrandedHtml(t.body);
+      setBrandedVersion(v => v + 1);
       setBodyText("");
     } else {
       setBodyText(t.body);
@@ -1835,6 +1862,7 @@ function ComposeWizard({
                     if (!res.ok) { setBrandedError(data.error ?? "Generation failed"); return; }
                     setSubject(data.subject ?? "");
                     setBrandedHtml(data.html ?? "");
+                    if (data.html) setBrandedVersion(v => v + 1);
                   } catch { setBrandedError("Something went wrong. Try again."); }
                   finally { setGeneratingBranded(false); }
                 }}
@@ -1846,15 +1874,16 @@ function ComposeWizard({
               {brandedHtml && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-600">Preview</span>
-                    <span className="text-xs text-gray-400">Merge tags will be filled at send time</span>
+                    <span className="text-xs font-medium text-gray-600">Edit Email</span>
+                    <span className="text-xs text-gray-400">Click any text to edit — brand styles are preserved</span>
                   </div>
-                  <div className="rounded-lg border border-gray-200 overflow-hidden" style={{ height: 320 }}>
+                  <div className="rounded-lg border border-gray-200 overflow-hidden cursor-text" style={{ height: 380 }}>
                     <iframe
-                      srcDoc={brandedHtml}
+                      key={brandedVersion}
+                      ref={brandedIframeRef}
                       className="w-full h-full border-0"
-                      sandbox="allow-same-origin allow-popups allow-top-navigation-by-user-activation"
-                      title="Branded email preview"
+                      sandbox="allow-same-origin"
+                      title="Branded email — click to edit"
                     />
                   </div>
                   <div>
