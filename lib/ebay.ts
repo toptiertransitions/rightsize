@@ -315,6 +315,21 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
     };
   }
 
+  // Furniture/Antiques categories require Item Length/Width/Height item specifics.
+  // Use stored dimensions when available; fall back to 1 so the listing goes through
+  // (seller can update on eBay). Other categories get aspects only when dims are set.
+  const REQUIRES_DIMENSION_ASPECTS = new Set([
+    "Seating", "Tables & Desks", "Cabinets, Dressers & Shelving", "Beds & Bedroom", "Mirrors",
+  ]);
+  const cat = item.category ?? "";
+  const needsDimAspects = REQUIRES_DIMENSION_ASPECTS.has(cat);
+  const aspects: Record<string, string[]> = {};
+  if (hasDimensions || needsDimAspects) {
+    aspects["Item Length"] = [String(item.widthInches  ?? 1)];
+    aspects["Item Width"]  = [String(item.depthInches  ?? 1)];
+    aspects["Item Height"] = [String(item.heightInches ?? 1)];
+  }
+
   const qty = Math.max(item.quantity ?? 1, 1);
 
   return {
@@ -322,6 +337,7 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
       title: (item.itemName || item.listingTitleEbay || "").trim().slice(0, 80),
       ...(item.listingDescriptionEbay ? { description: item.listingDescriptionEbay } : {}),
       ...(imageUrls.length ? { imageUrls } : {}),
+      ...(Object.keys(aspects).length ? { aspects } : {}),
     },
     condition,
     ...(item.conditionNotes?.trim()
