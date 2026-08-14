@@ -354,8 +354,6 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
             <View style={styles.tableHeader}>
               <Text style={styles.colSvc}>Service</Text>
               {showServiceHours && <Text style={styles.colHrs}>Hrs</Text>}
-              <Text style={styles.colRate}>Rate</Text>
-              <Text style={styles.colAmt}>Amount</Text>
             </View>
             {lineItems.map((item, i) => (
               <View key={i} style={i % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
@@ -364,8 +362,6 @@ export function ContractPDF({ contract, tenantName, settings }: ContractPDFProps
                   {item.description ? <Text style={styles.cellSvcDesc}>{item.description}</Text> : null}
                 </View>
                 {showServiceHours && <Text style={styles.cellHrs}>{item.hours}</Text>}
-                <Text style={styles.cellRate}>{fmt(item.rate)}</Text>
-                <Text style={styles.cellAmt}>{fmt(item.hours * item.rate)}</Text>
               </View>
             ))}
             {contract.discountAmount != null && contract.discountAmount > 0 && (

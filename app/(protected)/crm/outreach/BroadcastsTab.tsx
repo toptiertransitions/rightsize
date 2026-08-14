@@ -49,6 +49,18 @@ interface ContactItem {
   email: string;
 }
 
+interface PrefillData {
+  subject: string;
+  bodyHtml: string;
+  channel: "Email" | "SMS";
+  emailType: "text" | "branded";
+  ctaLink: string;
+  attachmentUrl: string;
+  attachmentName: string;
+  priorRecipientEmails: string[];
+  sourceBroadcast: BroadcastSummary;
+}
+
 const REFERRAL_STAGES = [
   "Identified", "Met", "Agreed to Refer", "Shared Leads",
   "Active Referral", "Inactive Referral",
@@ -741,10 +753,12 @@ function BroadcastMetricsAccordion({ broadcastId, channel }: { broadcastId: stri
 // ─── Broadcasts list ──────────────────────────────────────────────────────────
 type BcastSortCol = "name" | "channel" | "recipients" | "delivered" | "failed" | "sent" | "sender";
 
-function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew, staffMembers, currentUserId }: {
+function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew, onSendToOthers, sendToOthersLoadingId, staffMembers, currentUserId }: {
   broadcasts: BroadcastSummary[];
   loading: boolean;
   onNew: () => void;
+  onSendToOthers: (b: BroadcastSummary) => void;
+  sendToOthersLoadingId: string | null;
   staffMembers: StaffMember[];
   currentUserId: string;
 }) {
@@ -1018,6 +1032,20 @@ function BroadcastsList({ broadcasts: initialBroadcasts, loading, onNew, staffMe
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
+                            onClick={() => onSendToOthers(b)}
+                            disabled={isBusy || sendToOthersLoadingId === b.id}
+                            title="Send to others"
+                            className="p-1.5 rounded-md text-gray-400 hover:text-forest-700 hover:bg-forest-50 disabled:opacity-40 transition-colors"
+                          >
+                            {sendToOthersLoadingId === b.id ? (
+                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
                             onClick={() => handleArchive(b)}
                             disabled={isBusy}
                             title={isArchived ? "Unarchive" : "Archive"}
@@ -1105,18 +1133,20 @@ interface ComposeProps {
   currentUserId: string;
   hasSendScope: boolean;
   gmailEmail?: string;
-  onDone: (broadcast: BroadcastSummary) => void;
+  prefill?: PrefillData | null;
+  onDone: (broadcast: BroadcastSummary, isAdditive?: boolean) => void;
   onCancel: () => void;
 }
 
 function ComposeWizard({
   templates, companies, staffMembers, currentUserId,
-  hasSendScope, gmailEmail, onDone, onCancel,
+  hasSendScope, gmailEmail, prefill, onDone, onCancel,
 }: ComposeProps) {
   const isSalesOnly = (staffMembers.find(s => s.clerkUserId === currentUserId)?.role ?? "") === "TTTSales";
+  const isPrefill = !!prefill;
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [broadcastName, setBroadcastName] = useState("");
+  const [broadcastName, setBroadcastName] = useState(prefill?.sourceBroadcast.name ?? "");
   const [filter, setFilter] = useState<AudienceFilter>({ ...EMPTY_FILTER, ownerClerkId: isSalesOnly ? currentUserId : "" });
   const [audienceMode, setAudienceMode] = useState<"filter" | "manual">("filter");
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
@@ -1124,19 +1154,20 @@ function ComposeWizard({
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [preview, setPreview] = useState<{ count: number; sample: string[] } | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [excludePriorRecipients, setExcludePriorRecipients] = useState(true);
 
   // Step 2
-  const [channel, setChannel] = useState<"Email" | "SMS">("Email");
+  const [channel, setChannel] = useState<"Email" | "SMS">(prefill?.channel ?? "Email");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [subject, setSubject] = useState("");
-  const [bodyText, setBodyText] = useState("");
+  const [subject, setSubject] = useState(prefill?.subject ?? "");
+  const [bodyText, setBodyText] = useState(prefill && prefill.emailType === "text" ? prefill.bodyHtml : "");
   const [showAiPrompt, setShowAiPrompt] = useState(false);
-  const [emailType, setEmailType] = useState<"text" | "branded" | "template">("text");
-  const [ctaLink, setCtaLink] = useState("");
+  const [emailType, setEmailType] = useState<"text" | "branded" | "template">(prefill?.emailType ?? "text");
+  const [ctaLink, setCtaLink] = useState(prefill?.ctaLink ?? "");
   const [ctaLabel, setCtaLabel] = useState("");
-  const [attachmentUrl, setAttachmentUrl] = useState("");
-  const [attachmentName, setAttachmentName] = useState("");
-  const [brandedHtml, setBrandedHtml] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState(prefill?.attachmentUrl ?? "");
+  const [attachmentName, setAttachmentName] = useState(prefill?.attachmentName ?? "");
+  const [brandedHtml, setBrandedHtml] = useState(prefill && prefill.emailType === "branded" ? prefill.bodyHtml : "");
   const [brandedGist, setBrandedGist] = useState("");
   const [generatingBranded, setGeneratingBranded] = useState(false);
   const [brandedError, setBrandedError] = useState("");
@@ -1152,7 +1183,7 @@ function ComposeWizard({
   // Step 3 / result
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [sendSuccess, setSendSuccess] = useState<{ count: number } | null>(null);
+  const [sendSuccess, setSendSuccess] = useState<{ count: number; isAdditive?: boolean; broadcastName?: string } | null>(null);
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<"sent" | "error" | null>(null);
 
@@ -1310,7 +1341,7 @@ function ComposeWizard({
 
   async function handleSend() {
     const isBranded = emailType === "branded";
-    if (!broadcastName.trim()) return;
+    if (!isPrefill && !broadcastName.trim()) return;
     if (isBranded && !brandedHtml) return;
     if (!isBranded && !bodyText.trim()) return;
     setSending(true);
@@ -1323,32 +1354,63 @@ function ComposeWizard({
         : bodyText);
 
     try {
-      const res = await fetch("/api/outreach/broadcasts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: broadcastName,
-          filter: buildApiFilter(),
-          subject,
-          bodyHtml: finalBodyHtml,
-          templateId: selectedTemplateId || undefined,
-          channel,
-          ctaLink: ctaLink || undefined,
-          ctaLabel: ctaLabel || undefined,
-          attachmentUrl: attachmentUrl || undefined,
-          attachmentName: attachmentName || undefined,
-        }),
-        signal: AbortSignal.timeout(30000),
-      });
-      let data: Record<string, unknown> = {};
-      try { data = await res.json(); } catch { /* non-JSON body */ }
-      if (!res.ok) {
-        setError((data.error as string) ?? `Server error (${res.status}). Please try again.`);
-        return;
+      if (isPrefill && prefill) {
+        // Send to additional recipients on the existing broadcast
+        const res = await fetch(`/api/outreach/broadcasts/${prefill.sourceBroadcast.id}/send-more`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filter: buildApiFilter(),
+            subject,
+            bodyHtml: finalBodyHtml,
+            channel,
+            attachmentUrl: attachmentUrl || undefined,
+            attachmentName: attachmentName || undefined,
+            excludePriorRecipients,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        let data: Record<string, unknown> = {};
+        try { data = await res.json(); } catch { /* non-JSON body */ }
+        if (!res.ok) {
+          setError((data.error as string) ?? `Server error (${res.status}). Please try again.`);
+          return;
+        }
+        const added = Number(data.added ?? 0);
+        const updatedBroadcast: BroadcastSummary = {
+          ...prefill.sourceBroadcast,
+          recipientCount: Number(data.newRecipientCount ?? prefill.sourceBroadcast.recipientCount + added),
+        };
+        setSendSuccess({ count: added, isAdditive: true, broadcastName: prefill.sourceBroadcast.name });
+        onDone(updatedBroadcast, true);
+      } else {
+        const res = await fetch("/api/outreach/broadcasts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: broadcastName,
+            filter: buildApiFilter(),
+            subject,
+            bodyHtml: finalBodyHtml,
+            templateId: selectedTemplateId || undefined,
+            channel,
+            ctaLink: ctaLink || undefined,
+            ctaLabel: ctaLabel || undefined,
+            attachmentUrl: attachmentUrl || undefined,
+            attachmentName: attachmentName || undefined,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        let data: Record<string, unknown> = {};
+        try { data = await res.json(); } catch { /* non-JSON body */ }
+        if (!res.ok) {
+          setError((data.error as string) ?? `Server error (${res.status}). Please try again.`);
+          return;
+        }
+        const broadcast = data.broadcast as BroadcastSummary;
+        setSendSuccess({ count: broadcast.recipientCount });
+        onDone(broadcast);
       }
-      const broadcast = data.broadcast as BroadcastSummary;
-      setSendSuccess({ count: broadcast.recipientCount });
-      onDone(broadcast);
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
         setError("Request timed out. The server may still be processing — check your inbox for a confirmation email.");
@@ -1371,12 +1433,25 @@ function ComposeWizard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-xl font-semibold text-gray-900">Broadcast sent!</h2>
-        <p className="text-sm text-gray-500">
-          <strong className="text-gray-700">{broadcastName}</strong> is on its way to{" "}
-          <strong className="text-gray-700">{sendSuccess.count} contact{sendSuccess.count !== 1 ? "s" : ""}</strong>.
-          A confirmation email will land in your inbox once all messages have been processed.
-        </p>
+        {sendSuccess.isAdditive ? (
+          <>
+            <h2 className="text-xl font-semibold text-gray-900">Sent to additional recipients!</h2>
+            <p className="text-sm text-gray-500">
+              <strong className="text-gray-700">{sendSuccess.count} new contact{sendSuccess.count !== 1 ? "s" : ""}</strong>{" "}
+              added to <strong className="text-gray-700">&ldquo;{sendSuccess.broadcastName}&rdquo;</strong>.
+              The recipient count on that broadcast has been updated. A confirmation email will arrive once sending finishes.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-xl font-semibold text-gray-900">Broadcast sent!</h2>
+            <p className="text-sm text-gray-500">
+              <strong className="text-gray-700">{broadcastName}</strong> is on its way to{" "}
+              <strong className="text-gray-700">{sendSuccess.count} contact{sendSuccess.count !== 1 ? "s" : ""}</strong>.
+              A confirmation email will land in your inbox once all messages have been processed.
+            </p>
+          </>
+        )}
         <button
           onClick={onCancel}
           className="mt-4 rounded-lg bg-forest-600 px-5 py-2 text-sm font-medium text-white hover:bg-forest-700 transition-colors"
@@ -1415,16 +1490,24 @@ function ComposeWizard({
       {/* ── Step 1: Audience ── */}
       {step === 1 && (
         <div className="space-y-5">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Broadcast name <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={broadcastName}
-              onChange={e => setBroadcastName(e.target.value)}
-              className={inputCls}
-              placeholder="e.g. April newsletter — active referrals"
-            />
-          </div>
+          {isPrefill ? (
+            <div className="rounded-lg border border-forest-200 bg-forest-50 px-4 py-3">
+              <p className="text-xs font-medium text-forest-700 mb-0.5">Adding recipients to</p>
+              <p className="text-sm font-semibold text-forest-900">{prefill!.sourceBroadcast.name}</p>
+              <p className="text-xs text-forest-600 mt-0.5">Select a new audience below. Stats will update on the original broadcast.</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Broadcast name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={broadcastName}
+                onChange={e => setBroadcastName(e.target.value)}
+                className={inputCls}
+                placeholder="e.g. April newsletter — active referrals"
+              />
+            </div>
+          )}
 
           {/* Contact type */}
           <div>
@@ -1607,6 +1690,34 @@ function ComposeWizard({
             <span className="text-sm text-gray-700">Exclude opted-out contacts</span>
           </label>
 
+          {/* Exclude prior recipients — only shown in Send to Others mode */}
+          {isPrefill && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={excludePriorRecipients}
+                  onChange={e => setExcludePriorRecipients(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 accent-forest-600"
+                />
+                <span className="text-sm text-gray-700">
+                  Exclude prior recipients
+                  <span className="ml-1.5 text-xs text-gray-400">({prefill!.priorRecipientEmails.length} from this broadcast)</span>
+                </span>
+              </label>
+              {!excludePriorRecipients && prefill!.priorRecipientEmails.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 flex items-start gap-2">
+                  <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="text-xs text-red-700">
+                    <strong>Warning:</strong> {prefill!.priorRecipientEmails.length} contact{prefill!.priorRecipientEmails.length !== 1 ? "s" : ""} already received this broadcast. If any overlap with your selected audience, they will receive it again. Enable &ldquo;Exclude prior recipients&rdquo; to prevent duplicates.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Preview */}
           {audienceMode === "filter" && (
             <div className="flex items-center gap-3">
@@ -1633,9 +1744,15 @@ function ComposeWizard({
 
           <div className="flex justify-end pt-2">
             <button
-              onClick={() => setStep(2)}
+              onClick={() => {
+                // If entering step 2 with prefilled branded HTML for the first time, trigger iframe write
+                if (emailType === "branded" && brandedHtml && brandedVersion === 0) {
+                  setBrandedVersion(1);
+                }
+                setStep(2);
+              }}
               disabled={
-                !broadcastName.trim() ||
+                (!isPrefill && !broadcastName.trim()) ||
                 (audienceMode === "manual" && selectedContactIds.size === 0)
               }
               className="rounded-lg bg-forest-600 px-5 py-2 text-sm font-medium text-white hover:bg-forest-700 disabled:opacity-50 transition-colors"
@@ -2144,6 +2261,8 @@ export default function BroadcastsTab({
   const [view, setView] = useState<"list" | "compose">("list");
   const [broadcasts, setBroadcasts] = useState<BroadcastSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [prefill, setPrefill] = useState<PrefillData | null>(null);
+  const [prefillLoading, setPrefillLoading] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/outreach/broadcasts")
@@ -2170,8 +2289,35 @@ export default function BroadcastsTab({
       .finally(() => setLoading(false));
   }, []);
 
-  function handleDone(broadcast: BroadcastSummary) {
-    setBroadcasts(prev => [broadcast, ...prev]);
+  function handleDone(broadcast: BroadcastSummary, isAdditive?: boolean) {
+    if (isAdditive) {
+      setBroadcasts(prev => prev.map(b => b.id === broadcast.id ? broadcast : b));
+    } else {
+      setBroadcasts(prev => [broadcast, ...prev]);
+    }
+  }
+
+  async function handleSendToOthers(b: BroadcastSummary) {
+    setPrefillLoading(b.id);
+    try {
+      const res = await fetch(`/api/outreach/broadcasts/${b.id}/content`);
+      const data = await res.json();
+      if (!res.ok) return;
+      setPrefill({
+        subject: data.subject ?? "",
+        bodyHtml: data.bodyHtml ?? "",
+        channel: data.channel ?? "Email",
+        emailType: data.emailType ?? "text",
+        ctaLink: data.ctaLink ?? "",
+        attachmentUrl: data.attachmentUrl ?? "",
+        attachmentName: data.attachmentName ?? "",
+        priorRecipientEmails: data.priorRecipientEmails ?? [],
+        sourceBroadcast: b,
+      });
+      setView("compose");
+    } finally {
+      setPrefillLoading(null);
+    }
   }
 
   if (view === "compose") {
@@ -2183,8 +2329,9 @@ export default function BroadcastsTab({
         currentUserId={currentUserId}
         hasSendScope={hasSendScope}
         gmailEmail={gmailEmail}
+        prefill={prefill}
         onDone={handleDone}
-        onCancel={() => setView("list")}
+        onCancel={() => { setView("list"); setPrefill(null); }}
       />
     );
   }
@@ -2193,7 +2340,9 @@ export default function BroadcastsTab({
     <BroadcastsList
       broadcasts={broadcasts}
       loading={loading}
-      onNew={() => setView("compose")}
+      onNew={() => { setPrefill(null); setView("compose"); }}
+      onSendToOthers={handleSendToOthers}
+      sendToOthersLoadingId={prefillLoading}
       staffMembers={staffMembers}
       currentUserId={currentUserId}
     />
