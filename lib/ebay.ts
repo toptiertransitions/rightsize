@@ -2,6 +2,7 @@ import { request as httpsRequest } from "node:https";
 import { URL } from "node:url";
 import type { Item } from "@/lib/types";
 import { EBAY_CATEGORY_MAP } from "@/lib/ebay-categories";
+import { categoryToGroup } from "@/lib/categories";
 
 const EBAY_API_BASE = "https://api.ebay.com";
 const EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token";
@@ -363,10 +364,27 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
 
   const qty = Math.max(item.quantity ?? 1, 1);
 
+  // For Furniture, Art & Wall, and Home Décor: append dimensions and condition
+  // notes to the eBay description so buyers see physical details inline.
+  const APPEND_DETAILS_GROUPS = new Set(["Furniture", "Art & Wall", "Home Décor"]);
+  let description = item.listingDescriptionEbay?.trim() ?? "";
+  if (APPEND_DETAILS_GROUPS.has(categoryToGroup(item.category ?? ""))) {
+    const dimParts: string[] = [];
+    if (item.heightInches) dimParts.push(`H ${item.heightInches}"`);
+    if (item.widthInches)  dimParts.push(`W ${item.widthInches}"`);
+    if (item.depthInches)  dimParts.push(`D ${item.depthInches}"`);
+    if (dimParts.length > 0) {
+      description += (description ? "\n\n" : "") + `Dimensions: ${dimParts.join(", ")}`;
+    }
+    if (item.conditionNotes?.trim()) {
+      description += (description ? "\n\n" : "") + `Condition Notes: ${item.conditionNotes.trim()}`;
+    }
+  }
+
   return {
     product: {
       title: (item.itemName || item.listingTitleEbay || "").trim().slice(0, 80),
-      ...(item.listingDescriptionEbay ? { description: item.listingDescriptionEbay } : {}),
+      ...(description ? { description } : {}),
       ...(imageUrls.length ? { imageUrls } : {}),
       ...(Object.keys(aspects).length ? { aspects } : {}),
     },
