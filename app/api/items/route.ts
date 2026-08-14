@@ -424,7 +424,7 @@ export async function PATCH(req: NextRequest) {
       const ZELLE_ROUTES = new Set(["FB/Marketplace", "Online Marketplace"]);
       const salePrice = item.salePrice ?? item.valueMid ?? 0;
 
-      const [adminEmails, tenant, zellePayments] = await Promise.all([
+      const [adminEmails, tenant, zellePayments, soldStaffList] = await Promise.all([
         getAdminEmails().catch(() => [] as string[]),
         getTenantById(item.tenantId).catch(() => null),
         (!isAdjustment && ZELLE_ROUTES.has(item.primaryRoute ?? "") && salePrice > 0)
@@ -440,11 +440,23 @@ export async function PATCH(req: NextRequest) {
               } catch { return []; }
             })()
           : Promise.resolve([]),
+        getStaffMembers().catch(() => []),
       ]);
 
-      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)} isAdjustment=${isAdjustment}`);
-      if (!adminEmails.length) {
-        console.warn("[items/PATCH] item-sold notification skipped — no admin emails resolved");
+      // Look up staff seller by Airtable record ID (not Clerk user ID)
+      const soldStaffSeller = item.staffSellerId
+        ? soldStaffList.find(s => s.id === item.staffSellerId && s.isActive && s.email)
+        : null;
+      const staffSellerEmail = soldStaffSeller?.email ?? null;
+
+      // Deduplicate: staff seller may already be an admin
+      const toEmails = staffSellerEmail && !adminEmails.includes(staffSellerEmail)
+        ? [...adminEmails, staffSellerEmail]
+        : adminEmails;
+
+      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)} staffSellerEmail=${staffSellerEmail} isAdjustment=${isAdjustment}`);
+      if (!toEmails.length) {
+        console.warn("[items/PATCH] item-sold notification skipped — no recipients resolved");
       } else {
         const zelleMatch = zellePayments.find(p => Math.abs(p.amount - salePrice) < 0.01) ?? undefined;
         const projectName = tenant?.name ?? "Unknown Project";
@@ -475,18 +487,18 @@ export async function PATCH(req: NextRequest) {
 
         const subject = isAdjustment
           ? `Sale Record Updated — ${projectName}: ${item.itemName}`
-          : `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`;
+          : `Item Sold — ${item.itemName} for ${fmt(salePrice)}${item.staffSellerName ? ` · Great work, ${item.staffSellerName}!` : ""}`;
 
         const { error: sendError } = await resend.emails.send({
           from: "Rightsize Alerts <notifications@toptiertransitions.com>",
-          to: adminEmails,
+          to: toEmails,
           subject,
           html,
         });
         if (sendError) {
           console.error("[items/PATCH] item-sold Resend error:", sendError);
         } else {
-          console.log(`[items/PATCH] item-sold notification sent to ${adminEmails.join(", ")}`);
+          console.log(`[items/PATCH] item-sold notification sent to ${toEmails.join(", ")}`);
         }
       }
       } // end else (changedFields not empty)

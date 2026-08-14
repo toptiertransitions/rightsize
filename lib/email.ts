@@ -4079,6 +4079,21 @@ export function buildItemSoldEmail({
                 </td>
               </tr>
 
+              ${!isAdjustment && staffSellerName ? `
+              <!-- Congratulatory banner for staff seller -->
+              <tr>
+                <td style="padding:0 0 20px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
+                    <tr>
+                      <td style="padding:14px 18px;">
+                        <p style="margin:0;font-size:14px;font-weight:700;color:#166534;">&#127881;&nbsp; Congratulations, ${staffSellerName}!</p>
+                        <p style="margin:5px 0 0;font-size:13px;color:#15803d;">Great work closing this sale. Keep it up!</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>` : ""}
+
               ${isAdjustment && changedFields.length > 0 ? `
               <!-- What changed -->
               <tr>
