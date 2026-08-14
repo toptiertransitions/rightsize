@@ -35,8 +35,9 @@ export async function GET(
   try { cfg = JSON.parse(sequence.triggerConfigJson || "{}"); } catch {}
 
   const step = steps[0];
-  const subject = step?.subjectOverride ?? "";
-  const bodyHtml = step?.bodyOverride ?? "";
+  // Prefer cfg (Long Text field, no 512-char limit) with step as fallback for older broadcasts
+  const subject = String(cfg.subject ?? step?.subjectOverride ?? "");
+  const bodyHtml = String(cfg.bodyHtml ?? step?.bodyOverride ?? "");
   const channel = (cfg.channel as "Email" | "SMS") ?? "Email";
   const emailType: "branded" | "text" = /^\s*<!DOCTYPE|^\s*<html/i.test(bodyHtml) ? "branded" : "text";
   const attachmentUrl = String(cfg.attachmentUrl ?? "");

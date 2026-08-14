@@ -102,6 +102,9 @@ export async function POST(req: NextRequest) {
         recipientCount: contacts.length,
         channel,
         filterJson: JSON.stringify(filter),
+        subject,
+        bodyHtml,
+        attachmentUrl: attachmentUrl || undefined,
       }),
       defaultAudienceId: "",
       sendWindowJson: "",
@@ -227,7 +230,7 @@ export async function POST(req: NextRequest) {
             triggerConfigJson: JSON.stringify({
               isBroadcast: true, sentAt: now, recipientCount: contacts.length,
               channel, filterJson: JSON.stringify(filter), sentCount: 0, failedCount: enrollments.length,
-              attachmentUrl: attachmentUrl || undefined,
+              attachmentUrl: attachmentUrl || undefined, subject, bodyHtml,
             }),
           }).catch(() => {});
           return;
@@ -333,6 +336,8 @@ ${failed > 0 ? `
             sentCount: sent,
             failedCount: failures.length,
             attachmentUrl: attachmentUrl || undefined,
+            subject,
+            bodyHtml,
           }),
         }).catch(err => console.error("[broadcasts] updateOutreachSequence failed:", err));
       } else {
@@ -349,6 +354,8 @@ ${failed > 0 ? `
             filterJson: JSON.stringify(filter),
             sentCount: enrollments.length,
             failedCount: 0,
+            subject,
+            bodyHtml,
           }),
         }).catch(err => console.error("[broadcasts] updateOutreachSequence (SMS) failed:", err));
       }
