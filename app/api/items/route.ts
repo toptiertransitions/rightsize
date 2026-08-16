@@ -443,9 +443,9 @@ export async function PATCH(req: NextRequest) {
         getStaffMembers().catch(() => []),
       ]);
 
-      // Look up staff seller by Airtable record ID (not Clerk user ID)
+      // staffSellerId stores the Clerk user ID (set by the admin UI via s.clerkUserId)
       const soldStaffSeller = item.staffSellerId
-        ? soldStaffList.find(s => s.id === item.staffSellerId && s.isActive && s.email)
+        ? soldStaffList.find(s => s.clerkUserId === item.staffSellerId && s.isActive && s.email)
         : null;
       const staffSellerEmail = soldStaffSeller?.email ?? null;
 
@@ -523,8 +523,8 @@ export async function PATCH(req: NextRequest) {
   if (shouldSendLabelEmail) {
     try {
       const staffList = await getStaffMembers().catch(() => []);
-      const seller = staffList.find(s => s.id === item.staffSellerId && s.isActive && s.email);
-      console.log(`[label-email] staffList.length=${staffList.length} looking for id="${item.staffSellerId}" → found=${seller ? `${seller.displayName} <${seller.email}>` : "NOT FOUND"}`);
+      const seller = staffList.find(s => s.clerkUserId === item.staffSellerId && s.isActive && s.email);
+      console.log(`[label-email] staffList.length=${staffList.length} looking for clerkUserId="${item.staffSellerId}" → found=${seller ? `${seller.displayName} <${seller.email}>` : "NOT FOUND"}`);
       if (seller?.email) {
         const ccEmails = staffList
           .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
@@ -580,7 +580,7 @@ export async function PATCH(req: NextRequest) {
           console.log(`[label-email] sent to ${seller.email} cc=${ccEmails.join(",")}`);
         }
       } else {
-        console.warn(`[label-email] seller not found or missing email — staffSellerId="${item.staffSellerId}" staffList ids=[${staffList.map(s => s.id).join(",")}]`);
+        console.warn(`[label-email] seller not found or missing email — staffSellerId="${item.staffSellerId}" staffList clerkUserIds=[${staffList.map(s => s.clerkUserId).join(",")}]`);
       }
     } catch (e) {
       console.error("[label-email] unexpected error:", e);
