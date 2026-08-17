@@ -54,6 +54,12 @@ function fmtDate(s: string | undefined): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// Returns the most meaningful date for a signed contract.
+// Prefer signedAt; fall back to createdAt for contracts manually marked Signed without running the signing flow.
+function contractDate(c: Contract): string {
+  return c.signedAt || c.createdAt || "";
+}
+
 function parseDate(s: string | undefined): Date | null {
   if (!s) return null;
   const d = new Date(s);
@@ -841,8 +847,9 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   for (const [tid, cs] of contractsByTenant) {
     for (const c of cs) {
-      // Include Archived contracts that have signedAt — archived = completed project, still counts for the month signed
-      if (c.signedAt && (c.status === "Signed" || c.status === "Archived")) {
+      // Include any contract with Signed or Archived status that has an identifiable date.
+      // Fall back to createdAt for contracts manually marked Signed without the signing flow (signedAt may be null).
+      if ((c.status === "Signed" || c.status === "Archived") && (c.signedAt || c.createdAt)) {
         allSignedContracts.push({ tenantId: tid, c });
       }
     }
@@ -866,13 +873,13 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const priorSignedGoal   = priorGoal?.signedGoal ?? 0;
   const priorBilledGoal   = priorGoal?.billedGoal ?? 0;
   const priorSignedContracts = allSignedContracts
-    .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === priorMonthKey);
+    .filter(({ c }) => monthKey(contractDate(c)) === priorMonthKey);
   const priorSignedActual = priorSignedContracts.reduce((s, { c }) => s + c.totalCost, 0);
   const priorSignedDetails: SignedDetail[] = [...priorSignedContracts]
-    .sort((a, b) => (a.c.signedAt ?? "").localeCompare(b.c.signedAt ?? ""))
+    .sort((a, b) => contractDate(a.c).localeCompare(contractDate(b.c)))
     .map(({ tenantId, c }) => ({
       clientName: tenantMap.get(tenantId)?.name ?? "Unknown",
-      signedAt: fmtDate(c.signedAt),
+      signedAt: fmtDate(contractDate(c)),
       amount: c.totalCost,
     }));
   const priorBilledInvoices = allInvoices
@@ -888,7 +895,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     }));
 
   const signedMTD = allSignedContracts
-    .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === curMonthKey)
+    .filter(({ c }) => monthKey(contractDate(c)) === curMonthKey)
     .reduce((s, { c }) => s + c.totalCost, 0);
   const billedMTD = allInvoices
     .filter(({ inv }) => monthKey(inv.createdAt) === curMonthKey)
@@ -899,7 +906,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   const signedPerWeek = weekBuckets.map((b) =>
     allSignedContracts
-      .filter(({ c }) => inBucket(c.signedAt, b))
+      .filter(({ c }) => inBucket(contractDate(c), b))
       .reduce((s, { c }) => s + c.totalCost, 0)
   );
   const billedPerWeek = weekBuckets.map((b) =>
@@ -947,14 +954,14 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   // ── Signed this month rows ──
   const signedRows: SignedRow[] = allSignedContracts
-    .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === curMonthKey)
+    .filter(({ c }) => monthKey(contractDate(c)) === curMonthKey)
     .map(({ tenantId, c }) => {
       const tenant = tenantMap.get(tenantId);
       const opp    = oppByTenant.get(tenantId);
       return {
         clientName: tenant?.name || "Unknown",
         address: tenant ? tenantAddress(tenant) : "",
-        signedAt: fmtDate(c.signedAt),
+        signedAt: fmtDate(contractDate(c)),
         value: c.totalCost,
         refSource: resolveRefSource(opp, contactMap, companyMap, refContactMap),
         rep: resolveRep(opp?.assignedToClerkId, staffMap),
