@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
         subject,
         bodyHtml,
         attachmentUrl: attachmentUrl || undefined,
+        attachmentName: attachmentName || undefined,
       }),
       defaultAudienceId: "",
       sendWindowJson: "",
@@ -181,8 +182,8 @@ export async function POST(req: NextRequest) {
           try {
             const fileRes = await fetch(attachmentUrl);
             if (fileRes.ok) {
-              const mimeType = fileRes.headers.get("content-type") || "application/octet-stream";
               const attachName = attachmentName || decodeURIComponent(new URL(attachmentUrl).pathname.split("/").pop() || "attachment");
+              const mimeType = mimeTypeFromName(attachName) || fileRes.headers.get("content-type") || "application/octet-stream";
               attachment = { data: Buffer.from(await fileRes.arrayBuffer()), name: attachName, mimeType };
             }
           } catch (err) {
@@ -230,7 +231,7 @@ export async function POST(req: NextRequest) {
             triggerConfigJson: JSON.stringify({
               isBroadcast: true, sentAt: now, recipientCount: contacts.length,
               channel, filterJson: JSON.stringify(filter), sentCount: 0, failedCount: enrollments.length,
-              attachmentUrl: attachmentUrl || undefined, subject, bodyHtml,
+              attachmentUrl: attachmentUrl || undefined, attachmentName: attachmentName || undefined, subject, bodyHtml,
             }),
           }).catch(() => {});
           return;
@@ -336,6 +337,7 @@ ${failed > 0 ? `
             sentCount: sent,
             failedCount: failures.length,
             attachmentUrl: attachmentUrl || undefined,
+            attachmentName: attachmentName || undefined,
             subject,
             bodyHtml,
           }),
@@ -377,4 +379,26 @@ ${failed > 0 ? `
 
 function applyMergeTags(body: string, vars: Record<string, string>): string {
   return body.replace(/\{\{([\w.]+)\}\}/g, (_, key) => vars[key] ?? "");
+}
+
+function mimeTypeFromName(filename: string): string | null {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    txt: "text/plain",
+    csv: "text/csv",
+    zip: "application/zip",
+  };
+  return ext ? (map[ext] ?? null) : null;
 }

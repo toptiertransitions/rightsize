@@ -41,13 +41,8 @@ export async function GET(
   const channel = (cfg.channel as "Email" | "SMS") ?? "Email";
   const emailType: "branded" | "text" = /^\s*<!DOCTYPE|^\s*<html/i.test(bodyHtml) ? "branded" : "text";
   const attachmentUrl = String(cfg.attachmentUrl ?? "");
-
-  let attachmentName = "";
-  if (attachmentUrl) {
-    try {
-      attachmentName = decodeURIComponent(new URL(attachmentUrl).pathname.split("/").pop() || "");
-    } catch { /* ignore */ }
-  }
+  // Use stored name from cfg — URL-derived name gives mangled Cloudinary public IDs
+  const attachmentName = String(cfg.attachmentName ?? "");
 
   const priorRecipientEmails = enrollments.map(e => e.contactEmail).filter(Boolean);
 
