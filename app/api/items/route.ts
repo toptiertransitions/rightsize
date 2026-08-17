@@ -443,9 +443,10 @@ export async function PATCH(req: NextRequest) {
         getStaffMembers().catch(() => []),
       ]);
 
-      // staffSellerId stores the Clerk user ID (set by the admin UI via s.clerkUserId)
+      // staffSellerId may be a Clerk user ID (FB/eBay admin pages, catalog after fix)
+      // or an Airtable record ID (catalog before fix) — match either to handle existing data
       const soldStaffSeller = item.staffSellerId
-        ? soldStaffList.find(s => s.clerkUserId === item.staffSellerId && s.isActive && s.email)
+        ? soldStaffList.find(s => (s.clerkUserId === item.staffSellerId || s.id === item.staffSellerId) && s.isActive && s.email)
         : null;
       const staffSellerEmail = soldStaffSeller?.email ?? null;
 
@@ -523,8 +524,8 @@ export async function PATCH(req: NextRequest) {
   if (shouldSendLabelEmail) {
     try {
       const staffList = await getStaffMembers().catch(() => []);
-      const seller = staffList.find(s => s.clerkUserId === item.staffSellerId && s.isActive && s.email);
-      console.log(`[label-email] staffList.length=${staffList.length} looking for clerkUserId="${item.staffSellerId}" → found=${seller ? `${seller.displayName} <${seller.email}>` : "NOT FOUND"}`);
+      const seller = staffList.find(s => (s.clerkUserId === item.staffSellerId || s.id === item.staffSellerId) && s.isActive && s.email);
+      console.log(`[label-email] staffList.length=${staffList.length} looking for staffSellerId="${item.staffSellerId}" → found=${seller ? `${seller.displayName} <${seller.email}>` : "NOT FOUND"}`);
       if (seller?.email) {
         const ccEmails = staffList
           .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))

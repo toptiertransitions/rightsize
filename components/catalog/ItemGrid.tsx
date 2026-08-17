@@ -111,7 +111,7 @@ function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller", 
           {matches.map(s => (
             <li
               key={s.id}
-              onMouseDown={e => { e.preventDefault(); onChange(s.displayName, s.id); setInputVal(s.displayName); setOpen(false); }}
+              onMouseDown={e => { e.preventDefault(); onChange(s.displayName, s.clerkUserId); setInputVal(s.displayName); setOpen(false); }}
               className="px-4 py-2 cursor-pointer hover:bg-forest-50 text-gray-900"
             >
               {s.displayName}
