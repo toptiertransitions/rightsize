@@ -49,7 +49,12 @@ Generate a complete standalone HTML email. Requirements:
 - Header: #2d4a3e background, "Top Tier Transitions" in white Georgia 24px bold, tagline "White Glove Senior Move Management. Done Right." in #a7c4b5 14px below
 - White content area, 32px padding, 600px max-width centered
 - Body starts with "Hi {{first_name}}," on its own line, then a blank line
-- Leave {{first_name}}, {{last_name}}, {{company}}, {{rep_first_name}}, {{rep_phone}}, {{rep_email}} exactly as-is — do NOT substitute values for these
+- Merge tag rules — these are MANDATORY, never break them:
+  * Recipient name: always {{first_name}}, {{last_name}}, {{company}} — never substitute real names
+  * Rep name in body: always {{rep_first_name}} — never write the sender's actual name
+  * Rep phone in body: whenever the email references a phone number to call or text, write {{rep_phone}} — NEVER write any literal phone number (no 312 numbers, no placeholders like [phone])
+  * Rep email in body: whenever the email references an email address to reply to or contact, write {{rep_email}} — NEVER write any literal email address (no info@, no placeholders like [email])
+  * These tags must appear in the HTML exactly as written with double curly braces
 - ${ctaLink ? `CTA button (email-safe): use a <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto"><tr><td align="center" bgcolor="#2d4a3e" style="border-radius:4px;mso-padding-alt:0"><a href="${ctaLink}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-family:Georgia,serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:4px;-webkit-text-size-adjust:none">${ctaLabel || "Learn More"}</a></td></tr></table> — the <a> tag MUST be the innermost element with all padding on it, NOT on the <td>` : "No CTA button — do not render any button or link placeholder"}
 - Footer: #f5f4f0 bg, 16px padding, center-aligned, gray 12px text, "Top Tier Transitions", then "{{rep_first_name}}" on the next line, then "{{rep_phone}}" on the next line, then "{{rep_email}}" on the next line
 - No em dashes anywhere
