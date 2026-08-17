@@ -3753,6 +3753,7 @@ function DashboardTab({
   const [rewardEmailSending, setRewardEmailSending] = useState(false);
   const [rewardEmailSent, setRewardEmailSent] = useState(false);
   const [rewardEmailError, setRewardEmailError] = useState("");
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   const [activeUpdateSending, setActiveUpdateSending] = useState(false);
   const [activeUpdateSent, setActiveUpdateSent] = useState(false);
   const [activeUpdateError, setActiveUpdateError] = useState("");
@@ -4272,7 +4273,10 @@ function DashboardTab({
                 {opps.length === 0 && (
                   <p className="text-xs text-gray-400 px-4 py-3">No opportunities</p>
                 )}
-                {opps.slice(0, 5).map((o) => {
+                {(expandedStages.has(stage)
+                  ? [...opps].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+                  : opps.slice(0, 5)
+                ).map((o) => {
                   const oppOwner = staffById.get(o.assignedToClerkId || "");
                   return (
                     <button
@@ -4291,10 +4295,17 @@ function DashboardTab({
                 })}
                 {opps.length > 5 && (
                   <button
-                    onClick={() => onNavigate("opportunities", { stage })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedStages((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(stage)) next.delete(stage); else next.add(stage);
+                        return next;
+                      });
+                    }}
                     className="w-full text-xs text-forest-600 hover:text-forest-800 px-4 py-2 text-left font-medium"
                   >
-                    +{opps.length - 5} more →
+                    {expandedStages.has(stage) ? "Show less ↑" : `+${opps.length - 5} more ↓`}
                   </button>
                 )}
               </div>
