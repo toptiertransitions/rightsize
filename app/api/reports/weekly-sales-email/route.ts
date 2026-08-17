@@ -841,7 +841,10 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   for (const [tid, cs] of contractsByTenant) {
     for (const c of cs) {
-      if (c.status === "Signed" && c.signedAt) allSignedContracts.push({ tenantId: tid, c });
+      // Include Archived contracts that have signedAt — archived = completed project, still counts for the month signed
+      if (c.signedAt && (c.status === "Signed" || c.status === "Archived")) {
+        allSignedContracts.push({ tenantId: tid, c });
+      }
     }
   }
   for (const [tid, invs] of invoicesByTenant) {
@@ -959,10 +962,12 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     });
 
   // ── Billed this month rows ──
-  // Group all invoices by tenant using createdAt; include tenants with at least
-  // one invoice created this month. Sum all invoice amounts for that tenant.
+  // Filter to current-month invoices first so totals only reflect this month's billing.
+  const curMonthInvoices = allInvoices.filter(
+    ({ inv }) => monthKey(inv.createdAt) === curMonthKey
+  );
   const invoiceSumByTenant = new Map<string, { total: number; latestCreatedAt: string }>();
-  for (const { tenantId, inv } of allInvoices) {
+  for (const { tenantId, inv } of curMonthInvoices) {
     const existing = invoiceSumByTenant.get(tenantId);
     const latestCreatedAt = !existing || (inv.createdAt > existing.latestCreatedAt)
       ? inv.createdAt
@@ -975,7 +980,6 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   const billedRows: BilledRow[] = [];
   for (const [tenantId, { total, latestCreatedAt }] of invoiceSumByTenant) {
-    if (monthKey(latestCreatedAt) !== curMonthKey) continue;
     const tenant = tenantMap.get(tenantId);
     const opp    = oppByTenant.get(tenantId);
     billedRows.push({
