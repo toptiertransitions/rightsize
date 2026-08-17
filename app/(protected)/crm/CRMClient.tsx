@@ -201,7 +201,11 @@ function OpportunitiesTab({
 }) {
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">(initialStageFilter);
-  const [sort, setSort] = useState<{ col: OppSortCol; dir: "asc" | "desc" }>({ col: "created", dir: "desc" });
+  const [sort, setSort] = useState<{ col: OppSortCol; dir: "asc" | "desc" }>(
+    initialStageFilter !== "All"
+      ? { col: "nextstep", dir: "asc" }
+      : { col: "created", dir: "desc" }
+  );
   const [search, setSearch] = useState("");
   const [filterOwner, setFilterOwner] = useState("");
 
