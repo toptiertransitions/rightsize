@@ -1,3 +1,4 @@
+import { execSync } from "child_process";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
@@ -257,6 +258,30 @@ async function buildWoWChart(
   }
 }
 
+// ─── New-feature detection ────────────────────────────────────────────────────
+
+function getNewFeatures(): string[] {
+  try {
+    const out = execSync(
+      'git log --since="7 days ago" --pretty=format:"%s" --reverse',
+      { encoding: "utf-8", cwd: process.cwd(), timeout: 5000 }
+    );
+    return out
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => {
+        if (!l) return false;
+        const lower = l.toLowerCase();
+        if (lower.startsWith("feat:") || lower.startsWith("feat ")) return true;
+        if ((lower.startsWith("add ") || lower.startsWith("new ")) && !lower.includes("fix")) return true;
+        return false;
+      })
+      .map(l => l.replace(/^feat:\s*/i, "").trim());
+  } catch {
+    return [];
+  }
+}
+
 // ─── Email template ───────────────────────────────────────────────────────────
 
 interface SignedRow {
@@ -282,6 +307,7 @@ interface PipelineRow {
   address: string;
   stage: string;
   estimatedValue: number;
+  estimatedCloseDate?: string;
   refSource: string;
   rep: string;
   nextStepDate?: string;
@@ -327,6 +353,7 @@ function buildEmail({
   weekLabel,
   priorBilledDetails,
   priorSignedDetails,
+  newFeatures,
 }: {
   reportDate: string;
   currentMonthLabel: string;
@@ -355,6 +382,7 @@ function buildEmail({
   weekLabel: string;
   priorBilledDetails: BilledDetail[];
   priorSignedDetails: SignedDetail[];
+  newFeatures: string[];
 }): string {
   const SAGE  = "#2d4a3e";
   const TINT  = "#f0f4f0";
@@ -397,19 +425,24 @@ function buildEmail({
 
   // ── Pipeline table ──
   const pipelineTableRows = pipelineRows.length === 0
-    ? `<tr><td colspan="7" style="padding:16px;text-align:center;color:#9ca3af;font-size:13px;">No open pipeline.</td></tr>`
-    : pipelineRows
-        .sort((a, b) => stages.indexOf(a.stage as typeof stages[number]) - stages.indexOf(b.stage as typeof stages[number]) || b.estimatedValue - a.estimatedValue)
+    ? `<tr><td colspan="8" style="padding:16px;text-align:center;color:#9ca3af;font-size:13px;">No open pipeline.</td></tr>`
+    : [...pipelineRows]
+        .sort((a, b) => {
+          const da = a.estimatedCloseDate ? new Date(a.estimatedCloseDate).getTime() : Infinity;
+          const db = b.estimatedCloseDate ? new Date(b.estimatedCloseDate).getTime() : Infinity;
+          return da - db;
+        })
         .map((r, i) => {
           const sc = stageColors(r.stage);
           const bg = i % 2 === 0 ? "#fff" : TINT;
           const daysLabel = r.daysInPipeline === 0 ? "Today" : `${r.daysInPipeline}d`;
           return `<tr style="background:${bg};">
             <td ${TD}><span style="font-weight:600;">${r.clientName}</span></td>
-            <td ${TDm}>${r.address || "—"}</td>
+            <td style="padding:10px 12px;font-size:12px;color:${MUTED};border-bottom:1px solid #f3f4f6;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.address || "—"}</td>
             <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
               <span style="display:inline-block;background:${sc.bg};border:1px solid ${sc.border};color:${sc.text};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;">${r.stage}</span>
             </td>
+            <td style="padding:10px 12px;font-size:12px;color:${MUTED};border-bottom:1px solid #f3f4f6;white-space:nowrap;">${r.estimatedCloseDate ? fmtDate(r.estimatedCloseDate) : "—"}</td>
             <td style="padding:10px 12px;font-size:13px;font-weight:700;color:${GOLD};border-bottom:1px solid #f3f4f6;">${r.estimatedValue ? fmtMoneyFull(r.estimatedValue) : "—"}</td>
             <td ${TDm}>${r.refSource}</td>
             <td ${TDm}>${r.rep}</td>
@@ -422,7 +455,7 @@ function buildEmail({
           </tr>`;
         }).join("") + `
         <tr style="background:#f9fafb;">
-          <td colspan="3" style="padding:10px 12px;font-size:13px;font-weight:700;color:${DARK};border-top:2px solid #e5e7eb;">Total Pipeline</td>
+          <td colspan="4" style="padding:10px 12px;font-size:13px;font-weight:700;color:${DARK};border-top:2px solid #e5e7eb;">Total Pipeline</td>
           <td style="padding:10px 12px;font-size:14px;font-weight:700;color:${GOLD};border-top:2px solid #e5e7eb;">${fmtMoneyFull(totalPipeline)}</td>
           <td colspan="3" style="border-top:2px solid #e5e7eb;"></td>
         </tr>`;
@@ -450,6 +483,7 @@ function buildEmail({
         <th ${TH}>Client</th>
         <th ${TH}>Address</th>
         <th ${TH}>Stage</th>
+        <th ${TH}>Est. Close</th>
         <th ${TH}>Est. Value</th>
         <th ${TH}>Referral</th>
         <th ${TH}>Rep</th>
@@ -621,7 +655,7 @@ function buildEmail({
           <span style="font-size:13px;font-weight:700;color:${woWSignedColor};">Signed ${woWSignedChange}</span>
           <span style="font-size:13px;color:#d1d5db;margin:0 6px;">·</span>
           <span style="font-size:13px;font-weight:700;color:${woWBilledColor};">Billed ${woWBilledChange}</span>
-          <span style="font-size:11px;color:${MUTED};margin-left:4px;">vs last wk</span>
+          <span style="font-size:11px;color:${MUTED};margin-left:4px;">vs wk prior</span>
         </td>
       </tr></table>
       ${chartSrc
@@ -632,19 +666,19 @@ function buildEmail({
           <td style="background:${TINT};border-radius:8px;padding:10px 14px;">
             <table cellpadding="0" cellspacing="0"><tr>
               <td style="padding-right:20px;">
-                <p style="margin:0;font-size:11px;color:${MUTED};">This week signed</p>
+                <p style="margin:0;font-size:11px;color:${MUTED};">Prior week signed</p>
                 <p style="margin:2px 0 0;font-size:16px;font-weight:700;color:${SAGE};">${fmtMoney(woWSignedCurr)}</p>
               </td>
               <td style="padding-right:20px;border-left:1px solid #d1d5db;padding-left:20px;">
-                <p style="margin:0;font-size:11px;color:${MUTED};">Last week signed</p>
+                <p style="margin:0;font-size:11px;color:${MUTED};">Wk before signed</p>
                 <p style="margin:2px 0 0;font-size:16px;font-weight:700;color:${DARK};">${fmtMoney(woWSignedPrev)}</p>
               </td>
               <td style="padding-right:20px;border-left:1px solid #d1d5db;padding-left:20px;">
-                <p style="margin:0;font-size:11px;color:${MUTED};">This week billed</p>
+                <p style="margin:0;font-size:11px;color:${MUTED};">Prior week billed</p>
                 <p style="margin:2px 0 0;font-size:16px;font-weight:700;color:${GOLD};">${fmtMoney(woWBilledCurr)}</p>
               </td>
               <td style="border-left:1px solid #d1d5db;padding-left:20px;">
-                <p style="margin:0;font-size:11px;color:${MUTED};">Last week billed</p>
+                <p style="margin:0;font-size:11px;color:${MUTED};">Wk before billed</p>
                 <p style="margin:2px 0 0;font-size:16px;font-weight:700;color:${DARK};">${fmtMoney(woWBilledPrev)}</p>
               </td>
             </tr></table>
@@ -683,6 +717,15 @@ function buildEmail({
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+  })())}
+
+  ${section("New Features — Last 7 Days", (() => {
+    if (newFeatures.length === 0) {
+      return `<p style="font-size:13px;color:#9ca3af;text-align:center;margin:8px 0;">No new features tracked in this period.</p>`;
+    }
+    return `<ul style="margin:0;padding:0 0 0 18px;">
+      ${newFeatures.map(f => `<li style="font-size:13px;color:#374151;padding:3px 0;">${f}</li>`).join("")}
+    </ul>`;
   })())}
 
   <!-- Footer -->
@@ -798,24 +841,24 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const priorSignedContracts = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === priorMonthKey);
   const priorSignedActual = priorSignedContracts.reduce((s, { c }) => s + c.totalCost, 0);
-  const priorSignedDetails: SignedDetail[] = priorSignedContracts
+  const priorSignedDetails: SignedDetail[] = [...priorSignedContracts]
+    .sort((a, b) => (a.c.signedAt ?? "").localeCompare(b.c.signedAt ?? ""))
     .map(({ tenantId, c }) => ({
       clientName: tenantMap.get(tenantId)?.name ?? "Unknown",
       signedAt: fmtDate(c.signedAt),
       amount: c.totalCost,
-    }))
-    .sort((a, b) => a.signedAt.localeCompare(b.signedAt));
+    }));
   const priorBilledInvoices = allInvoices
     .filter(({ inv }) => monthKey(inv.createdAt) === priorMonthKey);
   const priorBilledActual = priorBilledInvoices
     .reduce((s, { inv }) => s + grossInvoiceAmount(inv), 0);
-  const priorBilledDetails: BilledDetail[] = priorBilledInvoices
+  const priorBilledDetails: BilledDetail[] = [...priorBilledInvoices]
+    .sort((a, b) => (a.inv.createdAt ?? "").localeCompare(b.inv.createdAt ?? ""))
     .map(({ tenantId, inv }) => ({
       clientName: tenantMap.get(tenantId)?.name ?? "Unknown",
       invoiceDate: fmtDate(inv.createdAt),
       amount: grossInvoiceAmount(inv),
-    }))
-    .sort((a, b) => b.amount - a.amount);
+    }));
 
   const signedMTD = allSignedContracts
     .filter(({ c }) => c.signedAt && monthKey(c.signedAt) === curMonthKey)
@@ -839,17 +882,18 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   );
 
   const n = weekBuckets.length;
-  const woWSignedCurr = signedPerWeek[n - 1];
-  const woWSignedPrev = signedPerWeek[n - 2];
-  const woWBilledCurr = billedPerWeek[n - 1];
-  const woWBilledPrev = billedPerWeek[n - 2];
+  // Focus on prior week (n-2) vs week-before-prior (n-3); current week (n-1) is too new on Mondays
+  const woWSignedCurr = signedPerWeek[n - 2];
+  const woWSignedPrev = signedPerWeek[n - 3];
+  const woWBilledCurr = billedPerWeek[n - 2];
+  const woWBilledPrev = billedPerWeek[n - 3];
 
   // ── Chart ──
   const chartSrc = await buildWoWChart(
     weekBuckets.map((b) => b.label),
     signedPerWeek.map(Math.round),
     billedPerWeek.map(Math.round),
-    n - 1,
+    n - 2, // highlight prior week, not current week
   );
 
   // ── Pipeline rows ──
@@ -865,6 +909,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
         address: addr,
         stage: o.stage,
         estimatedValue: o.estimatedValue || 0,
+        estimatedCloseDate: o.expectedCloseDate,
         refSource: resolveRefSource(o, contactMap, companyMap, refContactMap),
         rep: resolveRep(o.assignedToClerkId, staffMap),
         nextStepDate: o.nextStepDate,
@@ -948,6 +993,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   // Group by rep
   const repData = new Map<string, { contacts: Set<string>; total: number; byType: Record<string, number> }>();
   for (const { createdByClerkId, contactKey, type } of weekActivities) {
+    if (createdByClerkId === "user_3Aw06FvmrUG36VFw1ACgncn0dkE") continue;
     if (!repData.has(createdByClerkId)) repData.set(createdByClerkId, { contacts: new Set(), total: 0, byType: {} });
     const d = repData.get(createdByClerkId)!;
     d.contacts.add(contactKey);
@@ -962,6 +1008,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   }));
 
   // ── Build + send ──
+  const newFeatures = getNewFeatures();
   const html = buildEmail({
     reportDate, currentMonthLabel, priorMonthLabel,
     signedMTD, signedMonthGoal, proratedSignedGoal,
@@ -976,6 +1023,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     activityRows, weekLabel,
     priorBilledDetails,
     priorSignedDetails,
+    newFeatures,
   });
 
   return { html, reportDate };
