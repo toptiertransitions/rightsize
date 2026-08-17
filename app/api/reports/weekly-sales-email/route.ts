@@ -260,23 +260,47 @@ async function buildWoWChart(
 
 // ─── New-feature detection ────────────────────────────────────────────────────
 
-function getNewFeatures(): string[] {
+function isFeatureCommit(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  if (lower.startsWith("feat:") || lower.startsWith("feat ")) return true;
+  if ((lower.startsWith("add ") || lower.startsWith("new ")) && !lower.includes("fix")) return true;
+  return false;
+}
+
+function cleanMessage(msg: string): string {
+  return msg.replace(/^feat:\s*/i, "").trim();
+}
+
+async function getNewFeatures(): Promise<string[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // GitHub API — works in Vercel (no git binary needed)
+  try {
+    const token = process.env.GITHUB_TOKEN;
+    const headers: Record<string, string> = { Accept: "application/vnd.github+json", "User-Agent": "rightsize-report" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(
+      `https://api.github.com/repos/toptiertransitions/rightsize/commits?since=${since}&per_page=100`,
+      { headers }
+    );
+    if (res.ok) {
+      const commits = await res.json() as Array<{ commit: { message: string } }>;
+      return commits
+        .map(({ commit }) => commit.message.split("\n")[0].trim())
+        .filter(isFeatureCommit)
+        .map(cleanMessage)
+        .filter(Boolean)
+        .reverse(); // oldest first
+    }
+  } catch { /* fall through */ }
+
+  // Fallback: git log (works locally)
   try {
     const out = execSync(
-      'git log --since="7 days ago" --pretty=format:"%s" --reverse',
+      `git log --since="${since}" --pretty=format:"%s" --reverse`,
       { encoding: "utf-8", cwd: process.cwd(), timeout: 5000 }
     );
-    return out
-      .split("\n")
-      .map(l => l.trim())
-      .filter(l => {
-        if (!l) return false;
-        const lower = l.toLowerCase();
-        if (lower.startsWith("feat:") || lower.startsWith("feat ")) return true;
-        if ((lower.startsWith("add ") || lower.startsWith("new ")) && !lower.includes("fix")) return true;
-        return false;
-      })
-      .map(l => l.replace(/^feat:\s*/i, "").trim());
+    return out.split("\n").map(l => l.trim()).filter(isFeatureCommit).map(cleanMessage).filter(Boolean);
   } catch {
     return [];
   }
@@ -1008,7 +1032,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   }));
 
   // ── Build + send ──
-  const newFeatures = getNewFeatures();
+  const newFeatures = await getNewFeatures();
   const html = buildEmail({
     reportDate, currentMonthLabel, priorMonthLabel,
     signedMTD, signedMonthGoal, proratedSignedGoal,
