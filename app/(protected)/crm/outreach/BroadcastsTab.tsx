@@ -340,7 +340,7 @@ function ContentPickerModal({
   emailFormat: "text" | "branded";
   senderName: string;
   onClose: () => void;
-  onApply: (subject: string, body?: string, html?: string) => void;
+  onApply: (subject: string, body?: string, html?: string, fileUrl?: string, fileName?: string) => void;
 }) {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -379,6 +379,13 @@ function ContentPickerModal({
     });
   }, [items, likedIds, favoritesOnly, search]);
 
+  function contentFileInfo(item: ContentItem): { fileUrl: string; fileName: string } | null {
+    if (item.contentType !== "PDF" || !item.fileUrl) return null;
+    let ext = "pdf";
+    try { ext = new URL(item.fileUrl).pathname.split(".").pop()?.toLowerCase() || "pdf"; } catch { /* ignore */ }
+    return { fileUrl: item.fileUrl, fileName: `${item.title}.${ext}` };
+  }
+
   async function handleAiGenerate() {
     if (!selected) return;
     setGenerating(true);
@@ -391,7 +398,8 @@ function ContentPickerModal({
       });
       const data = await res.json();
       if (!res.ok) { setGenerateError(data.error ?? "Generation failed"); return; }
-      onApply(data.subject ?? "", data.body, data.html);
+      const fi = contentFileInfo(selected);
+      onApply(data.subject ?? "", data.body, data.html, fi?.fileUrl, fi?.fileName);
       onClose();
     } catch {
       setGenerateError("Something went wrong. Try again.");
@@ -402,7 +410,8 @@ function ContentPickerModal({
 
   function handleWriteOwn() {
     if (!selected) return;
-    onApply(selected.title, selected.description ?? undefined);
+    const fi = contentFileInfo(selected);
+    onApply(selected.title, selected.description ?? undefined, undefined, fi?.fileUrl, fi?.fileName);
     onClose();
   }
 
@@ -1235,7 +1244,7 @@ function ComposeWizard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relevantTemplates, templateSearch]);
 
-  function handleContentApply(subject: string, body?: string, html?: string) {
+  function handleContentApply(subject: string, body?: string, html?: string, fileUrl?: string, fileName?: string) {
     setSubject(subject);
     if (emailType === "branded" && html) {
       setBrandedHtml(html);
@@ -1245,6 +1254,10 @@ function ComposeWizard({
     } else {
       setBodyText(body ?? "");
       setEmailType("text");
+    }
+    if (fileUrl && fileName) {
+      setAttachmentUrl(fileUrl);
+      setAttachmentName(fileName);
     }
   }
 
