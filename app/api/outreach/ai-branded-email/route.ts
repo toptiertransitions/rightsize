@@ -58,7 +58,7 @@ Generate a complete standalone HTML email. Requirements:
 - ${ctaLink ? `CTA button (email-safe): use a <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto"><tr><td align="center" bgcolor="#2d4a3e" style="border-radius:4px;mso-padding-alt:0"><a href="${ctaLink}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-family:Georgia,serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:4px;-webkit-text-size-adjust:none">${ctaLabel || "Learn More"}</a></td></tr></table> — the <a> tag MUST be the innermost element with all padding on it, NOT on the <td>` : "No CTA button — do not render any button or link placeholder"}
 - Footer: #f5f4f0 bg, 16px padding, center-aligned, gray 12px text, "Top Tier Transitions", then "{{rep_first_name}}" on the next line, then "{{rep_phone}}" on the next line, then "{{rep_email}}" on the next line
 - No em dashes anywhere
-- Subject: short (6 words max), specific, real human voice`;
+- Subject: plain ASCII text only — no emojis, no special characters, no unicode symbols. Short (6 words max), specific, real human voice`;
 
   try {
     const message = await client.messages.create({
@@ -71,8 +71,9 @@ Generate a complete standalone HTML email. Requirements:
     // Strip any accidental markdown fences
     const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
     const parsed = JSON.parse(cleaned) as { subject: string; html: string };
+    const subject = (parsed.subject ?? "").replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim();
 
-    return NextResponse.json({ subject: parsed.subject ?? "", html: parsed.html ?? "" });
+    return NextResponse.json({ subject, html: parsed.html ?? "" });
   } catch (err) {
     console.error("[ai-branded-email] error:", err);
     return NextResponse.json({ error: "AI generation failed" }, { status: 500 });

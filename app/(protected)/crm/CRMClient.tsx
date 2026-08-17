@@ -267,8 +267,20 @@ function OpportunitiesTab({
       }
       case "stage":   return d * (OPP_STAGE_ORDER[a.stage] - OPP_STAGE_ORDER[b.stage]);
       case "value":   return d * (a.estimatedValue - b.estimatedValue);
-      case "closedate": return d * (a.expectedCloseDate || "9999").localeCompare(b.expectedCloseDate || "9999");
-      case "nextstep": return d * (a.nextStepDate || "9999").localeCompare(b.nextStepDate || "9999");
+      case "closedate": {
+        const av = a.expectedCloseDate || "", bv = b.expectedCloseDate || "";
+        if (!av && !bv) return 0;
+        if (!av) return 1;
+        if (!bv) return -1;
+        return d * av.localeCompare(bv);
+      }
+      case "nextstep": {
+        const av = a.nextStepDate || "", bv = b.nextStepDate || "";
+        if (!av && !bv) return 0;
+        if (!av) return 1;
+        if (!bv) return -1;
+        return d * av.localeCompare(bv);
+      }
       case "created": return d * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       default: return 0;
     }

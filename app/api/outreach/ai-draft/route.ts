@@ -40,7 +40,7 @@ Rules (follow every one strictly):
 - Use merge tags exactly as shown: {{first_name}} for recipient's first name, {{company}} for their company name, {{rep_first_name}} for the sender's first name, {{rep_phone}} for the sender's phone, {{rep_email}} for the sender's email.
 - Start the body with "Hi {{first_name}}," on its own line, then a blank line.
 - End with a natural sign-off like "Thanks," or "Talk soon," on its own line, then "{{rep_first_name}}" on the next line, then "{{rep_phone}}" on the next line, then "{{rep_email}}" on the next line.
-- Subject line: short (6 words max), specific, no clickbait, lowercase except first word and proper nouns.
+- Subject line: plain ASCII text only — no emojis, no special characters, no unicode symbols. Short (6 words max), specific, no clickbait, lowercase except first word and proper nouns.
 
 Respond with ONLY valid JSON (no markdown, no code fences):
 {"subject": "...", "body": "..."}`
@@ -68,8 +68,9 @@ Respond with ONLY valid JSON: {"subject": "", "body": "..."}`;
     // Strip any accidental markdown fences
     const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
     const parsed = JSON.parse(cleaned) as { subject: string; body: string };
+    const subject = (parsed.subject ?? "").replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim();
 
-    return NextResponse.json({ subject: parsed.subject ?? "", body: parsed.body ?? "" });
+    return NextResponse.json({ subject, body: parsed.body ?? "" });
   } catch (err) {
     console.error("[ai-draft] error:", err);
     return NextResponse.json({ error: "AI generation failed" }, { status: 500 });

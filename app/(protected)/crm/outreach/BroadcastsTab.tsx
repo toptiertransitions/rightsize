@@ -5,6 +5,11 @@ import { cn } from "@/lib/utils";
 import type { OutreachTemplate, OutreachSequence, OutreachContactType, ContentItem } from "@/lib/types";
 import type { ReferralCompany, StaffMember } from "@/lib/types";
 
+// Strip emojis and non-ASCII characters from email subject lines.
+function sanitizeSubject(s: string): string {
+  return s.replace(/[^\x20-\x7E]/g, "").replace(/\s+/g, " ").trim();
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface MetricsRecipient {
   contactName: string;
@@ -1245,7 +1250,7 @@ function ComposeWizard({
   }, [relevantTemplates, templateSearch]);
 
   function handleContentApply(subject: string, body?: string, html?: string, fileUrl?: string, fileName?: string) {
-    setSubject(subject);
+    setSubject(sanitizeSubject(subject));
     if (emailType === "branded" && html) {
       setBrandedHtml(html);
       setBrandedVersion(v => v + 1);
@@ -1271,7 +1276,7 @@ function ComposeWizard({
     if (!t) return;
     setTemplateSearch(templateLabel(t));
     setTemplateMenuOpen(false);
-    setSubject(t.subject);
+    setSubject(sanitizeSubject(t.subject));
     const tType = t.emailType ?? "text";
     setEmailType(tType);
     if (tType === "branded") {
@@ -1880,7 +1885,7 @@ function ComposeWizard({
                 <AiPromptPanel
                   channel={channel}
                   senderName={senderName}
-                  onGenerated={(s, b) => { setSubject(s); setBodyText(b); }}
+                  onGenerated={(s, b) => { setSubject(sanitizeSubject(s)); setBodyText(b); }}
                   onClose={() => setShowAiPrompt(false)}
                 />
               ) : (
@@ -1916,7 +1921,7 @@ function ComposeWizard({
                   <input
                     type="text"
                     value={subject}
-                    onChange={e => setSubject(e.target.value)}
+                    onChange={e => setSubject(sanitizeSubject(e.target.value))}
                     className={inputCls}
                     placeholder="e.g. Quick update from Top Tier"
                   />
