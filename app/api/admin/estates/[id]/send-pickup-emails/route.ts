@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import {
   getSystemRole,
@@ -28,10 +28,11 @@ export async function POST(
 
   const { id } = await params;
 
-  // Optional: only send to a single buyer email (resend flow)
-  let body: { targetEmail?: string } = {};
+  // Optional body params
+  let body: { targetEmail?: string; testMode?: boolean } = {};
   try { body = await req.json(); } catch { /* no body is fine */ }
   const targetEmail = body.targetEmail?.toLowerCase().trim() || null;
+  const testMode = !!body.testMode;
 
   const [estate, buyers, items] = await Promise.all([
     getEstateById(id).catch(() => null),
@@ -40,6 +41,51 @@ export async function POST(
   ]);
 
   if (!estate) return NextResponse.json({ error: "Estate not found" }, { status: 404 });
+
+  // ── Test mode: send a preview with dummy items to the requesting admin ──────
+  if (testMode) {
+    const clerk = await clerkClient();
+    const clerkUser = await clerk.users.getUser(userId);
+    const adminEmail = clerkUser.emailAddresses[0]?.emailAddress;
+    if (!adminEmail) return NextResponse.json({ error: "Could not resolve your email address." }, { status: 400 });
+
+    const dummyItems = [
+      { itemName: "Vintage Mahogany Dresser", purchaseAmount: 245.00 },
+      { itemName: "Set of 6 Crystal Wine Glasses", purchaseAmount: 85.00 },
+      { itemName: "Mid-Century Lounge Chair", purchaseAmount: 320.00 },
+    ];
+
+    const html = buildPickupDetailsEmail({
+      buyerName: clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName ?? ""}`.trim() : adminEmail,
+      buyerEmail: adminEmail,
+      estateName: estate.name,
+      cityRegion: estate.cityRegion || undefined,
+      items: dummyItems,
+      pickupAddress: estate.pickupAddress || undefined,
+      pickupWindowsJson: estate.pickupWindowsJson || undefined,
+      pickupWindowStart: estate.pickupWindowStart || undefined,
+      pickupWindowEnd: estate.pickupWindowEnd || undefined,
+      pickupWindowStartTime: estate.pickupWindowStartTime || undefined,
+      pickupWindowEndTime: estate.pickupWindowEndTime || undefined,
+      contactEmail: estate.contactEmail || undefined,
+      contactPhone: estate.contactPhone || undefined,
+      terms: estate.terms || undefined,
+      pickupNotes: estate.pickupNotes || undefined,
+    });
+
+    const { error: sendError } = await resend.emails.send({
+      from: "ProFound Finds <orders@profoundfinds.com>",
+      to: adminEmail,
+      subject: `[TEST] Pickup Details Preview — ${estate.name}`,
+      html,
+    });
+
+    if (sendError) {
+      return NextResponse.json({ error: sendError.message }, { status: 500 });
+    }
+    return NextResponse.json({ testMode: true, sentTo: adminEmail });
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   if (buyers.length === 0) {
     return NextResponse.json({ sent: 0, total: 0, message: "No buyers found for this estate." });

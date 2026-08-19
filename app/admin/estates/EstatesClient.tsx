@@ -105,6 +105,8 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
   const [emailingId, setEmailingId] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
   const [emailResult, setEmailResult] = useState<{ id: string; sent: number; total: number; failed?: { email: string; error?: string }[] } | null>(null);
+  const [testEmailingId, setTestEmailingId] = useState<string | null>(null);
+  const [testEmailSentTo, setTestEmailSentTo] = useState<Record<string, string>>({});
   const [downloadingCsvId, setDownloadingCsvId] = useState<string | null>(null);
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
   const [backfillingInterests, setBackfillingInterests] = useState(false);
@@ -258,6 +260,28 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
       alert("Failed to send emails. Check server logs.");
     } finally {
       setEmailingId(null);
+    }
+  }
+
+  async function handleTestPickupEmail(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setTestEmailingId(id);
+    try {
+      const res = await fetch(`/api/admin/estates/${id}/send-pickup-emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testMode: true }),
+      });
+      const data = await res.json() as { testMode?: boolean; sentTo?: string; error?: string };
+      if (!res.ok || data.error) {
+        alert(`Test email failed: ${data.error ?? res.status}`);
+      } else {
+        setTestEmailSentTo(prev => ({ ...prev, [id]: data.sentTo ?? "you" }));
+      }
+    } catch {
+      alert("Test email failed. Check server logs.");
+    } finally {
+      setTestEmailingId(null);
     }
   }
 
@@ -465,6 +489,28 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       </svg>
                       Pickup Sheet
                     </a>
+                    <button
+                      onClick={e => handleTestPickupEmail(estate.id, e)}
+                      disabled={testEmailingId === estate.id}
+                      title="Send a test pickup email with dummy items to yourself"
+                      className="text-gray-500 hover:text-sky-400 transition-colors text-xs px-2 py-1 rounded border border-gray-700 hover:border-sky-600 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {testEmailingId === estate.id ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Testing…
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          {testEmailSentTo[estate.id] ? `Test sent → ${testEmailSentTo[estate.id]}` : "Test Email"}
+                        </>
+                      )}
+                    </button>
                     <button
                       onClick={e => handleSendPickupEmails(estate.id, e)}
                       disabled={emailingId === estate.id}

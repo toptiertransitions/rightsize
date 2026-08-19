@@ -1362,6 +1362,25 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
                   </td>
                 </tr>
 
+                <!-- Divider -->
+                <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Packing reminder — always shown -->
+                <tr>
+                  <td style="padding:20px 36px;">
+                    <table cellpadding="0" cellspacing="0" style="background:#F5F2EE;border-radius:10px;overflow:hidden;width:100%;">
+                      <tr>
+                        <td style="width:4px;padding:0;background:#7A9E7E;border-radius:10px 0 0 10px;font-size:0;">&nbsp;</td>
+                        <td style="padding:14px 20px;">
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#555;line-height:1.65;">
+                            <strong style="color:#2C2C2C;">Reminder:</strong> Please bring packing materials for fragile items, and bring help if you need assistance carrying large items.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
                 ${p.pickupNotes ? `
                 <!-- Divider -->
                 <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
