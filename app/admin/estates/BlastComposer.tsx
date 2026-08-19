@@ -9,6 +9,7 @@ interface BlastItem {
   photoUrl?: string;
   valueMid?: number;
   onlineListingSlug?: string;
+  estateSlug?: string;   // set for estate-sale items; drives link to estate page
   category?: string;
 }
 
@@ -18,6 +19,22 @@ const CATEGORY_OPTIONS = ["Furniture", "Jewelry", "Art", "Vintage", "Décor", "O
 
 function fmt(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function mapEstate(e: Estate) {
+  return {
+    id: e.id,
+    name: e.name,
+    slug: e.slug,
+    saleStartDate: e.saleStartDate,
+    saleStartTime: e.saleStartTime,
+    description: e.description,
+    status: e.status,
+    dropIntervalHours: e.dropIntervalHours,
+    dropPercent: e.dropPercent,
+    floorPercent: e.floorPercent,
+    featuredImageUrl: e.featuredImageUrl,
+  };
 }
 
 export function BlastComposer({
@@ -37,8 +54,11 @@ export function BlastComposer({
   const [draftError, setDraftError] = useState("");
 
   // Content
-  const [availableItems, setAvailableItems] = useState<BlastItem[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<BlastItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  // Estate items grouped by estate id
+  const [estateItemGroups, setEstateItemGroups] = useState<Map<string, BlastItem[]>>(new Map());
+  const [estateItemsLoading, setEstateItemsLoading] = useState(false);
   const [selectedEstateIds, setSelectedEstateIds] = useState<Set<string>>(new Set());
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
@@ -58,7 +78,10 @@ export function BlastComposer({
   const [preview, setPreview] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  // Eligible recipient count — manual selection takes priority over category filter
+  // Active/upcoming estates with slugs — source for estate item picker
+  const pickableEstates = estates.filter(e => e.status === "Active" || e.status === "Upcoming");
+
+  // Eligible recipients
   const hasManualSelection = selectedRecipientIds.size > 0;
   const eligibleShoppers = hasManualSelection
     ? shoppers.filter(s => !s.optOut && selectedRecipientIds.has(s.id))
@@ -71,19 +94,62 @@ export function BlastComposer({
       });
 
   const featuredEstates = estates.filter(e => selectedEstateIds.has(e.id));
-  const featuredItems = availableItems.filter(i => selectedItemIds.has(i.id));
+
+  // All selected items across catalog + estate items
+  const allAvailableItems: BlastItem[] = [
+    ...catalogItems,
+    ...Array.from(estateItemGroups.values()).flat(),
+  ];
+  const featuredItems = allAvailableItems.filter(i => selectedItemIds.has(i.id));
 
   useEffect(() => {
-    // Load PF items when user opens the content tab
-    if (tab === "content" && availableItems.length === 0 && !itemsLoading) {
-      setItemsLoading(true);
+    if (tab !== "content") return;
+
+    // Load catalog items once
+    if (catalogItems.length === 0 && !catalogLoading) {
+      setCatalogLoading(true);
       fetch("/api/admin/blast-context")
         .then(r => r.json())
-        .then(d => setAvailableItems(d.items ?? []))
+        .then(d => setCatalogItems(d.items ?? []))
         .catch(() => {})
-        .finally(() => setItemsLoading(false));
+        .finally(() => setCatalogLoading(false));
     }
-  }, [tab, availableItems.length, itemsLoading]);
+
+    // Load estate items for active/upcoming estates once
+    if (pickableEstates.length > 0 && estateItemGroups.size === 0 && !estateItemsLoading) {
+      setEstateItemsLoading(true);
+      const ids = pickableEstates.map(e => e.id).join(",");
+      fetch(`/api/admin/blast-context/estate-items?estateIds=${encodeURIComponent(ids)}`)
+        .then(r => r.json())
+        .then(d => {
+          const map = new Map<string, BlastItem[]>();
+          for (const group of (d.groups ?? []) as Array<{ estateId: string; items: BlastItem[] }>) {
+            // Tag each item with its estate slug so the email can build the right link
+            const estate = pickableEstates.find(e => e.id === group.estateId);
+            map.set(group.estateId, group.items.map(i => ({ ...i, estateSlug: estate?.slug })));
+          }
+          setEstateItemGroups(map);
+        })
+        .catch(() => {})
+        .finally(() => setEstateItemsLoading(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  function buildFeaturedEstatesPayload() {
+    return featuredEstates.map(mapEstate);
+  }
+
+  function buildFeaturedItemsPayload() {
+    return featuredItems.map(i => ({
+      itemName: i.itemName,
+      photoUrl: i.photoUrl,
+      valueMid: i.valueMid,
+      onlineListingSlug: i.onlineListingSlug,
+      estateSlug: i.estateSlug,
+      category: i.category,
+    }));
+  }
 
   async function handleDraft() {
     if (!brief.trim()) { setDraftError("Enter a brief first."); return; }
@@ -120,14 +186,8 @@ export function BlastComposer({
         body: JSON.stringify({
           subject,
           bodyText,
-          featuredEstates: featuredEstates.map(e => ({
-            id: e.id, name: e.name, slug: e.slug,
-            saleStartDate: e.saleStartDate, description: e.description, status: e.status,
-          })),
-          featuredItems: featuredItems.map(i => ({
-            id: i.id, itemName: i.itemName, photoUrl: i.photoUrl,
-            valueMid: i.valueMid, onlineListingSlug: i.onlineListingSlug, category: i.category,
-          })),
+          featuredEstates: buildFeaturedEstatesPayload(),
+          featuredItems: buildFeaturedItemsPayload(),
         }),
       });
       const data = await res.json();
@@ -154,14 +214,8 @@ export function BlastComposer({
         body: JSON.stringify({
           subject,
           bodyText,
-          featuredEstates: featuredEstates.map(e => ({
-            id: e.id, name: e.name, slug: e.slug,
-            saleStartDate: e.saleStartDate, description: e.description, status: e.status,
-          })),
-          featuredItems: featuredItems.map(i => ({
-            id: i.id, itemName: i.itemName, photoUrl: i.photoUrl,
-            valueMid: i.valueMid, onlineListingSlug: i.onlineListingSlug, category: i.category,
-          })),
+          featuredEstates: buildFeaturedEstatesPayload(),
+          featuredItems: buildFeaturedItemsPayload(),
         }),
       });
       const data = await res.json();
@@ -196,14 +250,8 @@ export function BlastComposer({
           bodyText,
           shopperIds: hasManualSelection ? Array.from(selectedRecipientIds) : undefined,
           filterCategory: !hasManualSelection && filterCategory ? filterCategory : undefined,
-          featuredEstates: featuredEstates.map(e => ({
-            id: e.id, name: e.name, slug: e.slug,
-            saleStartDate: e.saleStartDate, description: e.description, status: e.status,
-          })),
-          featuredItems: featuredItems.map(i => ({
-            id: i.id, itemName: i.itemName, photoUrl: i.photoUrl,
-            valueMid: i.valueMid, onlineListingSlug: i.onlineListingSlug, category: i.category,
-          })),
+          featuredEstates: buildFeaturedEstatesPayload(),
+          featuredItems: buildFeaturedItemsPayload(),
         }),
       });
       const data = await res.json();
@@ -311,7 +359,7 @@ export function BlastComposer({
                   />
                 ) : (
                   <div className="w-full rounded-xl border border-gray-700 bg-gray-900 flex items-center justify-center" style={{ height: 200 }}>
-                    <p className="text-gray-600 text-sm">Fill in subject and body, then click "Refresh preview"</p>
+                    <p className="text-gray-600 text-sm">Fill in subject and body, then click &quot;Refresh preview&quot;</p>
                   </div>
                 )}
               </div>
@@ -321,7 +369,8 @@ export function BlastComposer({
           {/* ── Content ─────────────────────────────────────────────────── */}
           {tab === "content" && (
             <div className="space-y-6">
-              {/* Estate sales */}
+
+              {/* Featured Estate Sales */}
               <div>
                 <p className="text-sm font-semibold text-white mb-3">Featured Estate Sales <span className="text-gray-500 font-normal text-xs">(optional)</span></p>
                 {estates.length === 0 ? (
@@ -352,16 +401,77 @@ export function BlastComposer({
                 )}
               </div>
 
-              {/* ProFoundFinds items */}
+              {/* Items from Estate Sales */}
+              {pickableEstates.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-white mb-3">
+                    Feature Items from Estate Sales
+                    <span className="text-gray-500 font-normal text-xs ml-2">(optional — active &amp; upcoming sales)</span>
+                  </p>
+                  {estateItemsLoading ? (
+                    <p className="text-gray-500 text-sm">Loading estate items…</p>
+                  ) : (
+                    <div className="space-y-5">
+                      {pickableEstates.map(estate => {
+                        const items = estateItemGroups.get(estate.id) ?? [];
+                        if (items.length === 0) return null;
+                        return (
+                          <div key={estate.id}>
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{estate.name}</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {items.map(item => {
+                                const selected = selectedItemIds.has(item.id);
+                                return (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const next = new Set(selectedItemIds);
+                                      selected ? next.delete(item.id) : next.add(item.id);
+                                      setSelectedItemIds(next);
+                                    }}
+                                    className={`text-left rounded-xl border transition-colors overflow-hidden ${selected ? "border-forest-500 bg-forest-900/20" : "border-gray-700 bg-gray-900 hover:border-gray-500"}`}
+                                  >
+                                    {item.photoUrl && (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={item.photoUrl} alt={item.itemName} className="w-full h-28 object-cover" />
+                                    )}
+                                    <div className="p-2.5">
+                                      <p className="text-xs font-medium text-gray-100 leading-tight line-clamp-2">{item.itemName}</p>
+                                      {item.valueMid ? <p className="text-xs text-emerald-400 mt-1">{fmt(item.valueMid)}</p> : null}
+                                      {item.category && <p className="text-xs text-gray-600 mt-0.5">{item.category}</p>}
+                                    </div>
+                                    {selected && (
+                                      <div className="px-2.5 pb-2 text-xs text-forest-400 font-medium">✓ Selected</div>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {pickableEstates.every(e => (estateItemGroups.get(e.id) ?? []).length === 0) && !estateItemsLoading && (
+                        <p className="text-gray-500 text-sm">No listed items found on active or upcoming estate sales.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ProFoundFinds catalog items */}
               <div>
-                <p className="text-sm font-semibold text-white mb-3">Featured ProFoundFinds Items <span className="text-gray-500 font-normal text-xs">(optional — active Listed consignment items)</span></p>
-                {itemsLoading ? (
+                <p className="text-sm font-semibold text-white mb-3">
+                  Feature Items from ProFoundFinds Catalog
+                  <span className="text-gray-500 font-normal text-xs ml-2">(optional — active listed consignment items)</span>
+                </p>
+                {catalogLoading ? (
                   <p className="text-gray-500 text-sm">Loading items…</p>
-                ) : availableItems.length === 0 ? (
+                ) : catalogItems.length === 0 ? (
                   <p className="text-gray-500 text-sm">No active ProFoundFinds consignment items found.</p>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {availableItems.map(item => {
+                    {catalogItems.map(item => {
                       const selected = selectedItemIds.has(item.id);
                       return (
                         <button
@@ -392,6 +502,7 @@ export function BlastComposer({
                   </div>
                 )}
               </div>
+
             </div>
           )}
 
@@ -474,7 +585,7 @@ export function BlastComposer({
                 </div>
               </div>
 
-              {/* Category filter — only applies when no manual selection */}
+              {/* Category filter */}
               {!hasManualSelection && (
                 <div>
                   <p className="text-sm font-semibold text-white mb-3">Filter by category interest <span className="text-gray-500 font-normal text-xs">(ignored when specific recipients are selected above)</span></p>
