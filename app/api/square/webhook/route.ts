@@ -7,6 +7,7 @@ import {
   applySquareSaleToItem,
   getSaleEventBySquarePaymentId,
   getTenantById,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { getAdminEmails } from "@/lib/admin-notifications";
 import { validateSquareWebhookSignature, getSquareOrder } from "@/lib/square";
@@ -138,11 +139,30 @@ export async function POST(req: NextRequest) {
       if (updatedItem.status === "Sold" && updatedItem.primaryRoute !== "Estate Sale") {
         after(async () => {
           try {
-            const [adminEmails, tenant] = await Promise.all([
+            const [adminEmails, tenant, staffList] = await Promise.all([
               getAdminEmails().catch(() => [] as string[]),
               getTenantById(updatedItem.tenantId).catch(() => null),
+              getStaffMembers().catch(() => []),
             ]);
             if (!adminEmails.length) return;
+
+            // Resolve staff seller email — same dual-format + name fallback as items/PATCH
+            const sellerId = updatedItem.staffSellerId?.trim();
+            let staffSeller = sellerId
+              ? staffList.find(s =>
+                  (s.clerkUserId.trim() === sellerId || s.id.trim() === sellerId) &&
+                  s.isActive && s.email)
+              : null;
+            if (!staffSeller && updatedItem.staffSellerName) {
+              staffSeller = staffList.find(s =>
+                s.displayName.trim().toLowerCase() === updatedItem.staffSellerName!.trim().toLowerCase() &&
+                s.isActive && s.email
+              ) ?? null;
+            }
+            const staffSellerEmail = staffSeller?.email ?? null;
+            const ccEmails = staffSellerEmail && !adminEmails.includes(staffSellerEmail)
+              ? [staffSellerEmail]
+              : [];
 
             const projectName = tenant?.name ?? "Unknown Project";
             const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
@@ -159,18 +179,22 @@ export async function POST(req: NextRequest) {
               barcodeNumber: updatedItem.barcodeNumber,
               primaryRoute: updatedItem.primaryRoute ?? "",
               salePrice,
+              staffSellerName: updatedItem.staffSellerName || undefined,
               consignorPayout: clientPayout || undefined,
               saleDate: paymentDate,
               catalogUrl,
               markedSoldBySource: "Square",
             });
 
-            await resend.emails.send({
+            const sendPayload: Parameters<typeof resend.emails.send>[0] = {
               from: "Rightsize Alerts <notifications@toptiertransitions.com>",
               to: adminEmails,
-              subject: `Internal Notification - Item Sold for ${projectName} for ${fmt(salePrice)}`,
+              subject: `Item Sold — ${updatedItem.itemName} for ${fmt(salePrice)}${updatedItem.staffSellerName ? ` · Great work, ${updatedItem.staffSellerName}!` : ""}`,
               html,
-            });
+            };
+            if (ccEmails.length > 0) sendPayload.cc = ccEmails;
+            await resend.emails.send(sendPayload);
+            console.log(`[square/webhook] item-sold notification to=${adminEmails.join(", ")} cc=${ccEmails.join(", ") || "none"}`);
           } catch (e) {
             console.error("[square/webhook] item-sold notification failed:", e);
           }

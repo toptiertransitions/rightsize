@@ -443,20 +443,30 @@ export async function PATCH(req: NextRequest) {
         getStaffMembers().catch(() => []),
       ]);
 
-      // staffSellerId may be a Clerk user ID (FB/eBay admin pages, catalog after fix)
-      // or an Airtable record ID (catalog before fix) — match either to handle existing data
-      const soldStaffSeller = item.staffSellerId
-        ? soldStaffList.find(s => (s.clerkUserId === item.staffSellerId || s.id === item.staffSellerId) && s.isActive && s.email)
+      // staffSellerId may be a Clerk user ID (FB/eBay admin pages) or Airtable record ID
+      // (older data) — match either. Trim both sides to guard against whitespace in Airtable.
+      const sellerId = item.staffSellerId?.trim();
+      let soldStaffSeller = sellerId
+        ? soldStaffList.find(s =>
+            (s.clerkUserId.trim() === sellerId || s.id.trim() === sellerId) &&
+            s.isActive && s.email)
         : null;
+      // Fallback: match by display name when the ID is missing or stale
+      if (!soldStaffSeller && item.staffSellerName) {
+        soldStaffSeller = soldStaffList.find(s =>
+          s.displayName.trim().toLowerCase() === item.staffSellerName!.trim().toLowerCase() &&
+          s.isActive && s.email
+        ) ?? null;
+      }
       const staffSellerEmail = soldStaffSeller?.email ?? null;
 
-      // Deduplicate: staff seller may already be an admin
-      const toEmails = staffSellerEmail && !adminEmails.includes(staffSellerEmail)
-        ? [...adminEmails, staffSellerEmail]
-        : adminEmails;
+      // Put seller in cc (separate from admins in to) so it's clear who is admin vs seller
+      const ccEmails = staffSellerEmail && !adminEmails.includes(staffSellerEmail)
+        ? [staffSellerEmail]
+        : [];
 
-      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)} staffSellerEmail=${staffSellerEmail} isAdjustment=${isAdjustment}`);
-      if (!toEmails.length) {
+      console.log(`[items/PATCH] item-sold adminEmails=${JSON.stringify(adminEmails)} staffSellerEmail=${staffSellerEmail} sellerId="${sellerId ?? ""}" sellerName="${item.staffSellerName ?? ""}" isAdjustment=${isAdjustment}`);
+      if (!adminEmails.length) {
         console.warn("[items/PATCH] item-sold notification skipped — no recipients resolved");
       } else {
         const zelleMatch = zellePayments.find(p => Math.abs(p.amount - salePrice) < 0.01) ?? undefined;
@@ -490,16 +500,18 @@ export async function PATCH(req: NextRequest) {
           ? `Sale Record Updated — ${projectName}: ${item.itemName}`
           : `Item Sold — ${item.itemName} for ${fmt(salePrice)}${item.staffSellerName ? ` · Great work, ${item.staffSellerName}!` : ""}`;
 
-        const { error: sendError } = await resend.emails.send({
+        const sendPayload: Parameters<typeof resend.emails.send>[0] = {
           from: "Rightsize Alerts <notifications@toptiertransitions.com>",
-          to: toEmails,
+          to: adminEmails,
           subject,
           html,
-        });
+        };
+        if (ccEmails.length > 0) sendPayload.cc = ccEmails;
+        const { error: sendError } = await resend.emails.send(sendPayload);
         if (sendError) {
           console.error("[items/PATCH] item-sold Resend error:", sendError);
         } else {
-          console.log(`[items/PATCH] item-sold notification sent to ${toEmails.join(", ")}`);
+          console.log(`[items/PATCH] item-sold notification sent to=${adminEmails.join(", ")} cc=${ccEmails.join(", ") || "none"}`);
         }
       }
       } // end else (changedFields not empty)
