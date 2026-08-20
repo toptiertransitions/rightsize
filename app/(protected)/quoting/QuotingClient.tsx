@@ -302,16 +302,25 @@ function QuoteInlineEditor({
 
   const roomsOriginSqFt = rooms.reduce((s, r) => s + r.squareFeet, 0);
 
-  const [rows, setRows] = useState<ServiceRowEdit[]>(initRows);
+  // Refs hold the values at editor-open time so the recalc effect always scales
+  // from the original baseline — never from a mid-edit intermediate value.
+  const initialRowsRef = useRef<ServiceRowEdit[]>(initRows());
+  const initialOriginSqFtRef = useRef(roomsOriginSqFt);
+
+  const [rows, setRows] = useState<ServiceRowEdit[]>(() => initRows());
   const [contractBody, setContractBody] = useState(contract.contractBody ?? "");
   const [showBody, setShowBody] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [originSqFt, setOriginSqFt] = useState(roomsOriginSqFt);
   const [destSqFt, setDestSqFt] = useState(tenant.destinationSqFt ?? 0);
-  const [draftOriginSqFt, setDraftOriginSqFt] = useState(roomsOriginSqFt);
-  const [draftDestSqFt, setDraftDestSqFt] = useState(tenant.destinationSqFt ?? 0);
-  const [sqFtConfirm, setSqFtConfirm] = useState<{ origin: number; dest: number } | null>(null);
+
+  // Auto-recalc hours whenever sqft fields change, skipping the initial render.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    setRows(recalcRowsForSqFt(initialRowsRef.current, services, initialOriginSqFtRef.current, originSqFt, destSqFt));
+  }, [originSqFt, destSqFt, services]);
 
   const totalCost = rows
     .filter((r) => r.included && r.hours > 0)
@@ -371,7 +380,7 @@ function QuoteInlineEditor({
   return (
     <div className="border-t border-gray-100 bg-gray-50/40 px-5 py-5">
 
-      {/* ── Square footage override ─────────────────────────────────────────── */}
+      {/* ── Square footage — hours recalculate live as you type ─────────────── */}
       <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2.5">Square Footage</p>
         <div className="flex items-end gap-4 flex-wrap">
@@ -382,18 +391,18 @@ function QuoteInlineEditor({
                 type="number"
                 min={0}
                 step={10}
-                value={draftOriginSqFt === 0 ? "" : draftOriginSqFt}
+                value={originSqFt === 0 ? "" : originSqFt}
                 placeholder="0"
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => setDraftOriginSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
+                onChange={(e) => setOriginSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
                 className="w-28 h-8 px-2 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
               />
               <span className="text-xs text-gray-400">SF</span>
             </div>
-            {roomsOriginSqFt > 0 && draftOriginSqFt !== roomsOriginSqFt && (
+            {roomsOriginSqFt > 0 && originSqFt !== roomsOriginSqFt && (
               <p className="text-[10px] text-amber-600 mt-0.5">{roomsOriginSqFt.toLocaleString()} SF from rooms</p>
             )}
-            {roomsOriginSqFt > 0 && draftOriginSqFt === roomsOriginSqFt && (
+            {roomsOriginSqFt > 0 && originSqFt === roomsOriginSqFt && (
               <p className="text-[10px] text-gray-400 mt-0.5">{roomsOriginSqFt.toLocaleString()} SF from rooms</p>
             )}
           </div>
@@ -404,75 +413,18 @@ function QuoteInlineEditor({
                 type="number"
                 min={0}
                 step={10}
-                value={draftDestSqFt === 0 ? "" : draftDestSqFt}
+                value={destSqFt === 0 ? "" : destSqFt}
                 placeholder="0"
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => setDraftDestSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
+                onChange={(e) => setDestSqFt(e.target.value === "" ? 0 : Number(e.target.value))}
                 className="w-28 h-8 px-2 text-right rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
               />
               <span className="text-xs text-gray-400">SF</span>
             </div>
           </div>
-          <button
-            type="button"
-            disabled={draftOriginSqFt === originSqFt && draftDestSqFt === destSqFt}
-            onClick={() => setSqFtConfirm({ origin: draftOriginSqFt, dest: draftDestSqFt })}
-            className="h-8 px-3.5 rounded-lg bg-forest-600 text-white text-xs font-semibold hover:bg-forest-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Apply &amp; Recalculate
-          </button>
+          <p className="text-[10px] text-gray-400 self-center pb-0.5">Hours update automatically</p>
         </div>
       </div>
-
-      {/* ── Sq ft confirmation modal ──────────────────────────────────────────── */}
-      {sqFtConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-1">Override square footage?</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Hours for all currently included services will be recalculated using the new values. Manually set hours will be replaced.
-            </p>
-            <div className="grid grid-cols-2 gap-3 mb-5 text-sm">
-              <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-                <p className="text-xs text-gray-400 mb-0.5">Origin</p>
-                <p className="font-semibold text-gray-800">
-                  {originSqFt.toLocaleString()} → {sqFtConfirm.origin.toLocaleString()} SF
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-                <p className="text-xs text-gray-400 mb-0.5">Destination</p>
-                <p className="font-semibold text-gray-800">
-                  {destSqFt.toLocaleString()} → {sqFtConfirm.dest.toLocaleString()} SF
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  const updated = recalcRowsForSqFt(rows, services, originSqFt, sqFtConfirm.origin, sqFtConfirm.dest);
-                  setRows(updated);
-                  setOriginSqFt(sqFtConfirm.origin);
-                  setDestSqFt(sqFtConfirm.dest);
-                  setSqFtConfirm(null);
-                }}
-                className="flex-1 h-10 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 transition-colors"
-              >
-                Recalculate Hours
-              </button>
-              <button
-                onClick={() => {
-                  setDraftOriginSqFt(originSqFt);
-                  setDraftDestSqFt(destSqFt);
-                  setSqFtConfirm(null);
-                }}
-                className="h-10 px-4 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Service rows */}
       <div className="mb-4 rounded-xl border border-gray-200 overflow-hidden bg-white">
