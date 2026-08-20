@@ -15,6 +15,7 @@ export interface BlastFeaturedItem {
   itemName: string;
   photoUrl?: string;
   valueMid?: number;
+  currentPrice?: number;  // discounted price when Dutch auction has dropped; absent = full price
   onlineListingSlug?: string;
   estateSlug?: string;   // if set, links to estate sale page instead of /shop/
   category?: string;
@@ -156,10 +157,16 @@ function buildItemsSection(items: BlastFeaturedItem[]): string {
       const photo = item.photoUrl
         ? `<img src="${escapeHtml(item.photoUrl)}" alt="${escapeHtml(item.itemName)}" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:4px 4px 0 0;" />`
         : "";
-      const price =
-        item.valueMid && item.valueMid > 0
-          ? `<p style="margin:4px 0 8px;font-size:13px;color:#7A9E7E;font-weight:600;">Est. $${item.valueMid.toLocaleString()}</p>`
-          : "";
+      const hasDiscount = !!(item.currentPrice && item.valueMid && item.currentPrice < item.valueMid);
+      const discountPct = hasDiscount
+        ? Math.round((1 - item.currentPrice! / item.valueMid!) * 100)
+        : 0;
+      const price = item.valueMid && item.valueMid > 0
+        ? hasDiscount
+          ? `<p style="margin:4px 0 1px;font-size:11px;color:#aaa;text-decoration:line-through;">Starting $${item.valueMid.toLocaleString()}</p>
+             <p style="margin:0 0 8px;font-size:13px;color:#7A9E7E;font-weight:700;">Now $${item.currentPrice!.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} &nbsp;<span style="font-size:10px;background:#eaf4ea;color:#5a8a5e;padding:1px 5px;border-radius:3px;font-weight:600;">${discountPct}% Off</span></p>`
+          : `<p style="margin:4px 0 8px;font-size:13px;color:#7A9E7E;font-weight:600;">Est. $${item.valueMid.toLocaleString()}</p>`
+        : "";
       const category = item.category
         ? `<p style="margin:0 0 4px;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(item.category)}</p>`
         : "";

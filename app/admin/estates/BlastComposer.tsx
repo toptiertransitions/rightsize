@@ -21,6 +21,36 @@ function fmt(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function parseCSTMs(dateStr: string, timeStr?: string | null): number {
+  if (!dateStr) return 0;
+  const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number);
+  let hours = 0, minutes = 0;
+  if (timeStr) {
+    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      hours = parseInt(match[1]);
+      minutes = parseInt(match[2]);
+      const isPM = match[3].toUpperCase() === "PM";
+      if (isPM && hours !== 12) hours += 12;
+      if (!isPM && hours === 12) hours = 0;
+    }
+  }
+  const utcOffset = month >= 4 && month <= 10 ? 5 : 6;
+  return Date.UTC(year, month - 1, day, hours + utcOffset, minutes, 0);
+}
+
+function computeEstateDiscountPct(estate: Estate): number {
+  if (!estate.dropIntervalHours || !estate.dropPercent) return 0;
+  const saleStart = parseCSTMs(estate.saleStartDate ?? "", estate.saleStartTime);
+  if (!saleStart) return 0;
+  const now = Date.now();
+  if (now < saleStart) return 0;
+  const n = Math.floor((now - saleStart) / (estate.dropIntervalHours * 3_600_000));
+  if (n <= 0) return 0;
+  const maxDiscount = estate.floorPercent != null ? 100 - estate.floorPercent : 75;
+  return Math.min(n * estate.dropPercent, maxDiscount);
+}
+
 function mapEstate(e: Estate) {
   return {
     id: e.id,
@@ -141,14 +171,27 @@ export function BlastComposer({
   }
 
   function buildFeaturedItemsPayload() {
-    return featuredItems.map(i => ({
-      itemName: i.itemName,
-      photoUrl: i.photoUrl,
-      valueMid: i.valueMid,
-      onlineListingSlug: i.onlineListingSlug,
-      estateSlug: i.estateSlug,
-      category: i.category,
-    }));
+    return featuredItems.map(i => {
+      let currentPrice: number | undefined;
+      if (i.estateSlug && i.valueMid) {
+        const estate = pickableEstates.find(e => e.slug === i.estateSlug);
+        if (estate) {
+          const discountPct = computeEstateDiscountPct(estate);
+          if (discountPct > 0) {
+            currentPrice = Math.round(i.valueMid * (1 - discountPct / 100));
+          }
+        }
+      }
+      return {
+        itemName: i.itemName,
+        photoUrl: i.photoUrl,
+        valueMid: i.valueMid,
+        currentPrice,
+        onlineListingSlug: i.onlineListingSlug,
+        estateSlug: i.estateSlug,
+        category: i.category,
+      };
+    });
   }
 
   async function handleDraft() {
@@ -421,6 +464,10 @@ export function BlastComposer({
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                               {items.map(item => {
                                 const selected = selectedItemIds.has(item.id);
+                                const discountPct = computeEstateDiscountPct(estate);
+                                const currentPrice = (discountPct > 0 && item.valueMid)
+                                  ? Math.round(item.valueMid * (1 - discountPct / 100))
+                                  : null;
                                 return (
                                   <button
                                     key={item.id}
@@ -438,7 +485,18 @@ export function BlastComposer({
                                     )}
                                     <div className="p-2.5">
                                       <p className="text-xs font-medium text-gray-100 leading-tight line-clamp-2">{item.itemName}</p>
-                                      {item.valueMid ? <p className="text-xs text-emerald-400 mt-1">{fmt(item.valueMid)}</p> : null}
+                                      {item.valueMid ? (
+                                        currentPrice ? (
+                                          <div className="mt-1">
+                                            <p className="text-xs text-gray-500 line-through leading-tight">Starting {fmt(item.valueMid)}</p>
+                                            <p className="text-xs text-emerald-400 font-semibold leading-tight">
+                                              Now {fmt(currentPrice)} <span className="text-emerald-600 font-normal">{discountPct}% Off</span>
+                                            </p>
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-emerald-400 mt-1">{fmt(item.valueMid)}</p>
+                                        )
+                                      ) : null}
                                       {item.category && <p className="text-xs text-gray-600 mt-0.5">{item.category}</p>}
                                     </div>
                                     {selected && (
