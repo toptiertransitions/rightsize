@@ -29,11 +29,14 @@ export async function POST(
   const { id } = await params;
 
   // Optional body params
-  let body: { targetEmail?: string; testMode?: boolean; customNote?: string } = {};
+  let body: { targetEmail?: string; testMode?: boolean; customNote?: string; excludeEmails?: string[] } = {};
   try { body = await req.json(); } catch { /* no body is fine */ }
   const targetEmail = body.targetEmail?.toLowerCase().trim() || null;
   const testMode = !!body.testMode;
   const customNote = body.customNote?.trim() || undefined;
+  const excludeSet = body.excludeEmails && body.excludeEmails.length > 0
+    ? new Set(body.excludeEmails.map(e => e.toLowerCase().trim()))
+    : null;
 
   const [estate, buyers, items] = await Promise.all([
     getEstateById(id).catch(() => null),
@@ -112,6 +115,8 @@ export async function POST(
   for (const [emailKey, buyerRecords] of byEmail) {
     // If resending to one buyer, skip all others
     if (targetEmail && emailKey !== targetEmail) continue;
+    // Skip buyers excluded by the caller (e.g. already received a prior send)
+    if (excludeSet && excludeSet.has(emailKey)) continue;
 
     const first = buyerRecords[0];
     const buyerEmail = first.buyerEmail.trim();
@@ -199,5 +204,6 @@ export async function POST(
     sent,
     total: results.length,
     failed: failed.length > 0 ? failed : undefined,
+    sentEmails: results.filter(r => r.ok).map(r => r.email),
   });
 }
