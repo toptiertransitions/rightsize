@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
             photoUrl: i.photoUrl ?? undefined,
             valueMid: i.valueMid ?? undefined,
             category: i.category ?? undefined,
+            onlineListingSlug: i.onlineListingSlug ?? undefined,
           })),
       };
     })

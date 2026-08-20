@@ -189,6 +189,7 @@ export function BlastComposer({
         currentPrice,
         onlineListingSlug: i.onlineListingSlug,
         estateSlug: i.estateSlug,
+        itemId: i.id,
         category: i.category,
       };
     });

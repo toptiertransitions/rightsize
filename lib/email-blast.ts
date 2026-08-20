@@ -17,7 +17,8 @@ export interface BlastFeaturedItem {
   valueMid?: number;
   currentPrice?: number;  // discounted price when Dutch auction has dropped; absent = full price
   onlineListingSlug?: string;
-  estateSlug?: string;   // if set, links to estate sale page instead of /shop/
+  estateSlug?: string;   // if set, item lives on an estate sale page
+  itemId?: string;       // Airtable record ID — used as slug fallback when onlineListingSlug is absent
   category?: string;
 }
 
@@ -149,13 +150,20 @@ function buildItemsSection(items: BlastFeaturedItem[]): string {
     const right = items[i + 1] ?? null;
 
     const renderCell = (item: BlastFeaturedItem): string => {
+      // Build the direct item URL.
+      // Estate items: /onlineestatesales/[estateSlug]/[itemSlug]  (itemSlug = onlineListingSlug ?? itemId)
+      // Catalog items: /shop/[onlineListingSlug]
+      // Fallback: /shop
+      const estateItemSlug = item.onlineListingSlug || item.itemId;
       const itemUrl = item.estateSlug
-        ? `https://www.profoundfinds.com/onlineestatesales/${escapeHtml(item.estateSlug)}`
+        ? estateItemSlug
+          ? `https://www.profoundfinds.com/onlineestatesales/${escapeHtml(item.estateSlug)}/${escapeHtml(estateItemSlug)}`
+          : `https://www.profoundfinds.com/onlineestatesales/${escapeHtml(item.estateSlug)}`
         : item.onlineListingSlug
           ? `https://www.profoundfinds.com/shop/${escapeHtml(item.onlineListingSlug)}`
           : "https://www.profoundfinds.com/shop";
       const photo = item.photoUrl
-        ? `<img src="${escapeHtml(item.photoUrl)}" alt="${escapeHtml(item.itemName)}" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:4px 4px 0 0;" />`
+        ? `<a href="${itemUrl}" style="display:block;line-height:0;"><img src="${escapeHtml(item.photoUrl)}" alt="${escapeHtml(item.itemName)}" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:4px 4px 0 0;" /></a>`
         : "";
       const hasDiscount = !!(item.currentPrice && item.valueMid && item.currentPrice < item.valueMid);
       const discountPct = hasDiscount
@@ -170,7 +178,6 @@ function buildItemsSection(items: BlastFeaturedItem[]): string {
       const category = item.category
         ? `<p style="margin:0 0 4px;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(item.category)}</p>`
         : "";
-      const linkLabel = item.estateSlug ? "View Estate Sale &rarr;" : "View Item &rarr;";
       return `
       <td style="width:50%;vertical-align:top;padding:0 8px 16px;">
         <div style="background:#fff;border-radius:6px;border:1px solid #eee;overflow:hidden;">
@@ -179,7 +186,7 @@ function buildItemsSection(items: BlastFeaturedItem[]): string {
             ${category}
             <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#2C2C2C;">${escapeHtml(item.itemName)}</p>
             ${price}
-            <a href="${itemUrl}" style="font-size:12px;color:#B8960C;text-decoration:none;font-weight:500;">${linkLabel}</a>
+            <a href="${itemUrl}" style="font-size:12px;color:#B8960C;text-decoration:none;font-weight:500;">View Item &rarr;</a>
           </div>
         </div>
       </td>`;
