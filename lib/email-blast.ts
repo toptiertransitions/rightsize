@@ -154,13 +154,14 @@ function buildItemsSection(items: BlastFeaturedItem[]): string {
       // Estate items: /onlineestatesales/[estateSlug]/[itemSlug]  (itemSlug = onlineListingSlug ?? itemId)
       // Catalog items: /shop/[onlineListingSlug]
       // Fallback: /shop
-      const estateItemSlug = item.onlineListingSlug || item.itemId;
+      // Profoundfinds uses onlineListingSlug ?? airtableId as the item slug in all URLs
+      const itemSlug = item.onlineListingSlug || item.itemId;
       const itemUrl = item.estateSlug
-        ? estateItemSlug
-          ? `https://www.profoundfinds.com/onlineestatesales/${escapeHtml(item.estateSlug)}/${escapeHtml(estateItemSlug)}`
+        ? itemSlug
+          ? `https://www.profoundfinds.com/onlineestatesales/${escapeHtml(item.estateSlug)}/${escapeHtml(itemSlug)}`
           : `https://www.profoundfinds.com/onlineestatesales/${escapeHtml(item.estateSlug)}`
-        : item.onlineListingSlug
-          ? `https://www.profoundfinds.com/shop/${escapeHtml(item.onlineListingSlug)}`
+        : itemSlug
+          ? `https://www.profoundfinds.com/shop/${escapeHtml(itemSlug)}`
           : "https://www.profoundfinds.com/shop";
       const photo = item.photoUrl
         ? `<a href="${itemUrl}" style="display:block;line-height:0;"><img src="${escapeHtml(item.photoUrl)}" alt="${escapeHtml(item.itemName)}" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:4px 4px 0 0;" /></a>`
