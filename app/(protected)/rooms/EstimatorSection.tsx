@@ -182,6 +182,10 @@ export function EstimatorSection({
   // syntheticRooms passed via `rooms` so the main-page H/M/L inputs drive calculations here.
   // Skip the first run so saved tenant values aren't overwritten immediately on mount.
   const syncInitRef = useRef(false);
+  // Prevents the sqft recalc effect from firing on the same render that the
+  // editingContract effect loads saved rows. Set back to true each time a new
+  // contract is loaded so the guard is re-armed.
+  const isFirstSqFtRender = useRef(true);
   useEffect(() => {
     if (actualRooms !== undefined) return;
     if (!syncInitRef.current) { syncInitRef.current = true; return; }
@@ -265,7 +269,7 @@ export function EstimatorSection({
       calculatedHours: li.hours,
       hours: li.hours,
       included: true,
-      overridden: true,
+      overridden: false, // allow sqft changes to recalculate while editing
     }));
     // Append active services not in the saved line items (unchecked)
     const oRooms = buildOriginRooms(originHighSqFt, originMedSqFt, originLowSqFt);
@@ -284,6 +288,7 @@ export function EstimatorSection({
       }
     }
     setRows(rows);
+    isFirstSqFtRender.current = true; // arm: skip the next sqft recalc fire (same render)
     setContractBody(editingContract.contractBody ?? "");
     if (editingContract.templateId) setSelectedTemplateId(editingContract.templateId);
     setNotInScope(editingContract.notInScope ?? settings?.notInScopeDefault ?? "");
@@ -307,7 +312,11 @@ export function EstimatorSection({
 
   // Init on mount + recalc non-overridden rows when rooms, services, destinationSqFt, or touchMultiplier change
   useEffect(() => {
-    if (editingContract) return; // don't override when editing
+    if (editingContract) {
+      // Skip the render that immediately follows the contract-load effect (rows already set correctly).
+      // On subsequent sqft/service changes, fall through and recalculate non-overridden rows.
+      if (isFirstSqFtRender.current) { isFirstSqFtRender.current = false; return; }
+    }
     const oRooms = buildOriginRooms(originHighSqFt, originMedSqFt, originLowSqFt);
     setRows((prev) => {
       if (prev.length === 0) {
