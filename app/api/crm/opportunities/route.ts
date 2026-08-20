@@ -60,8 +60,8 @@ export async function PATCH(req: NextRequest) {
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   try {
-    // Fetch current opportunity once if we need to diff key people or detect first project link
-    const needsPrefetch = (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) || !!data.tenantId;
+    // Fetch current opportunity once if we need to diff key people, detect first project link, or detect Lost transition
+    const needsPrefetch = (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) || !!data.tenantId || data.stage === "Lost";
     const current = needsPrefetch ? await getOpportunityById(id).catch(() => null) : null;
 
     // Case A: New key people added while a project is already linked
@@ -123,6 +123,18 @@ export async function PATCH(req: NextRequest) {
         }
         await updateTenant(opportunity.tenantId, patch);
       } catch { /* non-fatal */ }
+    }
+
+    // When an opportunity transitions to Lost, auto-mark the linked project as a Lost Deal
+    // so it moves off the Plan page without manual cleanup.
+    const stagingToLost = data.stage === "Lost" && current?.stage !== "Lost";
+    if (stagingToLost && opportunity.tenantId) {
+      try {
+        const tenant = await getTenantById(opportunity.tenantId);
+        if (tenant && !tenant.isLostDeal) {
+          await updateTenant(opportunity.tenantId, { isLostDeal: true, isArchived: true });
+        }
+      } catch { /* non-fatal — opportunity save already succeeded */ }
     }
 
     return NextResponse.json({ opportunity });
