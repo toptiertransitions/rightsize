@@ -319,6 +319,8 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
   const [backfillResult, setBackfillResult] = useState<{ updated: number; errors: number } | null>(null);
   const [pickupDates, setPickupDates] = useState<Array<{ date: string; startTime: string; endTime: string }>>([{ date: "", startTime: "", endTime: "" }]);
   const [pickupBlastEstateId, setPickupBlastEstateId] = useState<string | null>(null);
+  const [pickupEmailPanelId, setPickupEmailPanelId] = useState<string | null>(null);
+  const [pickupEmailNote, setPickupEmailNote] = useState("");
   const [activeTab, setActiveTab] = useState<"estates" | "estate-items" | "shoppers">("estates");
   const [estateItems, setEstateItems] = useState<Item[]>(initialEstateItems);
 
@@ -454,15 +456,19 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
     }
   }
 
-  async function handleSendPickupEmails(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!confirm("Send pickup detail emails to all buyers for this estate?")) return;
+  async function handleSendPickupEmails(id: string, note: string) {
     setEmailingId(id);
     setEmailResult(null);
     try {
-      const res = await fetch(`/api/admin/estates/${id}/send-pickup-emails`, { method: "POST" });
+      const res = await fetch(`/api/admin/estates/${id}/send-pickup-emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customNote: note || undefined }),
+      });
       const data = await res.json() as { sent: number; total: number; failed?: { email: string; error?: string }[]; message?: string };
       setEmailResult({ id, sent: data.sent, total: data.total ?? data.sent, failed: data.failed });
+      setPickupEmailPanelId(null);
+      setPickupEmailNote("");
     } catch {
       alert("Failed to send emails. Check server logs.");
     } finally {
@@ -470,14 +476,13 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
     }
   }
 
-  async function handleTestPickupEmail(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleTestPickupEmail(id: string, note: string) {
     setTestEmailingId(id);
     try {
       const res = await fetch(`/api/admin/estates/${id}/send-pickup-emails`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ testMode: true }),
+        body: JSON.stringify({ testMode: true, customNote: note || undefined }),
       });
       const data = await res.json() as { testMode?: boolean; sentTo?: string; error?: string };
       if (!res.ok || data.error) {
@@ -697,50 +702,17 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       Pickup Sheet
                     </a>
                     <button
-                      onClick={e => handleTestPickupEmail(estate.id, e)}
-                      disabled={testEmailingId === estate.id}
-                      title="Send a test pickup email with dummy items to yourself"
-                      className="text-gray-500 hover:text-sky-400 transition-colors text-xs px-2 py-1 rounded border border-gray-700 hover:border-sky-600 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {testEmailingId === estate.id ? (
-                        <>
-                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Testing…
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                          {testEmailSentTo[estate.id] ? `Test sent → ${testEmailSentTo[estate.id]}` : "Test Email"}
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={e => handleSendPickupEmails(estate.id, e)}
+                      onClick={e => { e.stopPropagation(); setPickupEmailPanelId(id => id === estate.id ? null : estate.id); setPickupEmailNote(""); setTestEmailSentTo(prev => ({ ...prev, [estate.id]: "" })); }}
                       disabled={emailingId === estate.id}
-                      title="Email pickup details to all buyers"
-                      className="text-gray-500 hover:text-emerald-400 transition-colors text-xs px-2 py-1 rounded border border-gray-700 hover:border-emerald-600 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Email pickup details to buyers — add optional custom note"
+                      className={`text-xs px-2 py-1 rounded border flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${pickupEmailPanelId === estate.id ? "bg-emerald-900/50 border-emerald-600 text-emerald-300" : emailResult?.id === estate.id ? "text-emerald-400 border-emerald-700" : "text-gray-500 hover:text-emerald-400 border-gray-700 hover:border-emerald-600"}`}
                     >
-                      {emailingId === estate.id ? (
-                        <>
-                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Sending…
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                          {emailResult?.id === estate.id
-                            ? `Sent (${emailResult.sent}/${emailResult.total})${(emailResult.failed?.length ?? 0) > 0 ? ` · ${emailResult.failed!.length} failed` : ""}`
-                            : "Email Details"}
-                        </>
-                      )}
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      {emailResult?.id === estate.id
+                        ? `Sent (${emailResult.sent}/${emailResult.total})${(emailResult.failed?.length ?? 0) > 0 ? ` · ${emailResult.failed!.length} failed` : ""}`
+                        : "Email Details"}
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); setPickupBlastEstateId(id => id === estate.id ? null : estate.id); }}
@@ -810,6 +782,50 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                     </div>
                   )}
                 </div>
+                {pickupEmailPanelId === estate.id && (
+                  <div className="mt-3 border-t border-gray-700 pt-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Email Details to Buyers</p>
+                      <button onClick={() => { setPickupEmailPanelId(null); setPickupEmailNote(""); }} className="text-gray-500 hover:text-white text-xs transition-colors">✕ Close</button>
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Custom note <span className="text-gray-600">(optional — 1-2 sentences, shown as a branded callout in the email)</span>
+                      </label>
+                      <textarea
+                        value={pickupEmailNote}
+                        onChange={e => setPickupEmailNote(e.target.value)}
+                        placeholder="e.g. Please bring help for large items — our team won't be on-site to assist."
+                        rows={2}
+                        maxLength={300}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none"
+                      />
+                      {pickupEmailNote.length > 0 && (
+                        <p className="text-[10px] text-gray-600 mt-0.5 text-right">{pickupEmailNote.length}/300</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        onClick={() => handleTestPickupEmail(estate.id, pickupEmailNote)}
+                        disabled={testEmailingId === estate.id}
+                        className="px-4 py-1.5 bg-sky-800 hover:bg-sky-700 disabled:opacity-50 text-sky-100 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+                      >
+                        {testEmailingId === estate.id ? (
+                          <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>Sending…</>
+                        ) : testEmailSentTo[estate.id] ? `Test sent → ${testEmailSentTo[estate.id]}` : "Send Test to Me"}
+                      </button>
+                      <button
+                        onClick={() => { if (confirm("Send pickup detail emails to all buyers for this estate?")) handleSendPickupEmails(estate.id, pickupEmailNote); }}
+                        disabled={emailingId === estate.id}
+                        className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-emerald-100 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+                      >
+                        {emailingId === estate.id ? (
+                          <><svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>Sending…</>
+                        ) : "Send to All Buyers"}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {pickupBlastEstateId === estate.id && (
                   <PickupBlastPanel
                     estate={estate}

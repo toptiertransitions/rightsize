@@ -29,10 +29,11 @@ export async function POST(
   const { id } = await params;
 
   // Optional body params
-  let body: { targetEmail?: string; testMode?: boolean } = {};
+  let body: { targetEmail?: string; testMode?: boolean; customNote?: string } = {};
   try { body = await req.json(); } catch { /* no body is fine */ }
   const targetEmail = body.targetEmail?.toLowerCase().trim() || null;
   const testMode = !!body.testMode;
+  const customNote = body.customNote?.trim() || undefined;
 
   const [estate, buyers, items] = await Promise.all([
     getEstateById(id).catch(() => null),
@@ -71,6 +72,7 @@ export async function POST(
       contactPhone: estate.contactPhone || undefined,
       terms: estate.terms || undefined,
       pickupNotes: estate.pickupNotes || undefined,
+      customNote,
     });
 
     const { error: sendError } = await resend.emails.send({
@@ -138,6 +140,7 @@ export async function POST(
         contactPhone: estate.contactPhone || undefined,
         terms: estate.terms || undefined,
         pickupNotes: estate.pickupNotes || undefined,
+        customNote,
       });
 
       const subject = `Your Pickup Details — ${estate.name}`;

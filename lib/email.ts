@@ -1148,6 +1148,7 @@ export interface PickupDetailsEmailParams {
   contactPhone?: string;
   terms?: string;
   pickupNotes?: string;
+  customNote?: string;   // 1-2 sentences added by admin at send time — shown as a branded callout
 }
 
 function fmtCurrency(n: number): string {
@@ -1380,6 +1381,25 @@ export function buildPickupDetailsEmail(p: PickupDetailsEmailParams): string {
                     </table>
                   </td>
                 </tr>
+
+                ${p.customNote ? `
+                <!-- Divider -->
+                <tr><td style="padding:0 36px;"><div style="height:1px;background:#EEEBE6;"></div></td></tr>
+
+                <!-- Custom note from team -->
+                <tr>
+                  <td style="padding:20px 36px;">
+                    <table cellpadding="0" cellspacing="0" style="background:#EEF4EE;border-radius:10px;overflow:hidden;width:100%;">
+                      <tr>
+                        <td style="width:4px;padding:0;background:#7A9E7E;border-radius:10px 0 0 10px;font-size:0;">&nbsp;</td>
+                        <td style="padding:16px 20px;">
+                          <p style="margin:0 0 4px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#7A9E7E;">A note from our team</p>
+                          <p style="margin:0;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#3a5c3a;line-height:1.65;">${p.customNote}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>` : ""}
 
                 ${p.pickupNotes ? `
                 <!-- Divider -->
