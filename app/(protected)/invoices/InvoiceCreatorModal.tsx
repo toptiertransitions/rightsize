@@ -69,9 +69,15 @@ export function InvoiceCreatorModal({
 
   // Deposit credit state — include both fully and partially paid deposits
   const paidDeposits = invoices.filter((inv) => inv.type === "Deposit" && (inv.status === "Paid" || inv.status === "PartiallyPaid"));
-  const totalPaidDeposit = paidDeposits.reduce((s, inv) =>
-    s + (inv.status === "PartiallyPaid" ? (inv.paidAmount ?? 0) : (inv.paidAmount ?? inv.amount)), 0);
-  const [applyDeposit, setApplyDeposit] = useState(totalPaidDeposit > 0);
+  function getDepositAmount(inv: (typeof paidDeposits)[number]): number {
+    return inv.status === "PartiallyPaid" ? (inv.paidAmount ?? 0) : (inv.paidAmount ?? inv.amount);
+  }
+  const totalPaidDeposit = paidDeposits.reduce((s, inv) => s + getDepositAmount(inv), 0);
+  // Per-deposit selection: default to all selected (matches previous "apply all" behaviour)
+  const [selectedDepositIds, setSelectedDepositIds] = useState<Set<string>>(() => new Set(paidDeposits.map(d => d.id)));
+  const selectedDepositTotal = paidDeposits
+    .filter(d => selectedDepositIds.has(d.id))
+    .reduce((s, d) => s + getDepositAmount(d), 0);
 
   // Promo code state (for Full Invoice — Logged Hours source)
   const [promoCode, setPromoCode] = useState("");
@@ -128,10 +134,11 @@ export function InvoiceCreatorModal({
 
   const expensesTotal = includeExpenses ? expenseItems.reduce((s, e) => s + e.amount, 0) : 0;
 
-  // Reset applyDeposit when switching to Full tab or when modal opens
+  // Reset deposit selection to "all selected" when switching to Full tab
   useEffect(() => {
-    if (tab === "Full") setApplyDeposit(totalPaidDeposit > 0);
-  }, [tab, totalPaidDeposit]);
+    if (tab === "Full") setSelectedDepositIds(new Set(paidDeposits.map(d => d.id)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   // Bill To
   const [billToName, setBillToName] = useState(defaultBillToName ?? tenant.name);
@@ -229,7 +236,7 @@ export function InvoiceCreatorModal({
       ? loggedTotal - loggedPromoDiscount
       : parseFloat(specificAmount) || 0;
 
-  const effectiveDeposit = tab === "Full" && applyDeposit && totalPaidDeposit > 0 ? totalPaidDeposit : 0;
+  const effectiveDeposit = tab === "Full" && selectedDepositTotal > 0 ? selectedDepositTotal : 0;
   const fullAmount = fullSubtotal + expensesTotal - effectiveDeposit;
 
   const selectedDepositService = services.find((s) => s.id === depositServiceId);
@@ -277,7 +284,7 @@ export function InvoiceCreatorModal({
     serviceId: "",
     serviceName: "Deposit Applied",
     hours: 1,
-    rate: -totalPaidDeposit,
+    rate: -selectedDepositTotal,
   };
 
   async function validatePromoCode(code: string) {
@@ -782,20 +789,47 @@ export function InvoiceCreatorModal({
               )}
 
               {/* Deposit credit section */}
-              {totalPaidDeposit > 0 && (
+              {paidDeposits.length > 0 && (
                 <div className="border border-blue-200 bg-blue-50 rounded-xl px-4 py-3 space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={applyDeposit}
-                      onChange={(e) => setApplyDeposit(e.target.checked)}
-                      className="rounded text-forest-600 w-4 h-4"
-                    />
+                  <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-blue-900">
-                      Apply paid deposit ({fmt(totalPaidDeposit)})
+                      Apply paid deposit{paidDeposits.length > 1 ? "s" : ""}
                     </span>
-                  </label>
-                  {applyDeposit && fullSubtotal > 0 && (
+                    {paidDeposits.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allSelected = paidDeposits.every(d => selectedDepositIds.has(d.id));
+                          setSelectedDepositIds(allSelected ? new Set() : new Set(paidDeposits.map(d => d.id)));
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                      >
+                        {paidDeposits.every(d => selectedDepositIds.has(d.id)) ? "Deselect All" : "Select All"}
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {paidDeposits.map(dep => (
+                      <label key={dep.id} className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={selectedDepositIds.has(dep.id)}
+                          onChange={() => setSelectedDepositIds(prev => {
+                            const next = new Set(prev);
+                            next.has(dep.id) ? next.delete(dep.id) : next.add(dep.id);
+                            return next;
+                          })}
+                          className="rounded text-forest-600 w-4 h-4 flex-shrink-0"
+                        />
+                        <span className="text-sm text-blue-900 flex-1 min-w-0">
+                          {dep.invoiceNumber}
+                          {dep.status === "PartiallyPaid" && <span className="ml-1.5 text-xs text-blue-500">(partial)</span>}
+                        </span>
+                        <span className="text-sm font-medium text-blue-800 tabular-nums">{fmt(getDepositAmount(dep))}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedDepositTotal > 0 && fullSubtotal > 0 && (
                     <div className="space-y-1.5 text-sm border-t border-blue-200 pt-3">
                       <div className="flex justify-between text-gray-700">
                         <span>Subtotal</span>
@@ -803,11 +837,11 @@ export function InvoiceCreatorModal({
                       </div>
                       <div className="flex justify-between text-blue-700">
                         <span>Deposit Applied</span>
-                        <span>-{fmt(totalPaidDeposit)}</span>
+                        <span>-{fmt(selectedDepositTotal)}</span>
                       </div>
                       <div className="flex justify-between font-semibold text-gray-900 border-t border-blue-200 pt-1.5">
                         <span>Balance Owed</span>
-                        <span>{fmt(Math.max(0, fullSubtotal - totalPaidDeposit))}</span>
+                        <span>{fmt(Math.max(0, fullSubtotal - selectedDepositTotal))}</span>
                       </div>
                     </div>
                   )}
