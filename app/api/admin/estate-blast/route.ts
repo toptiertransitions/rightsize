@@ -12,8 +12,13 @@ interface FeaturedEstate {
   name: string;
   slug: string;
   saleStartDate: string;
+  saleStartTime?: string;
   description: string;
   status: string;
+  dropIntervalHours?: number;
+  dropPercent?: number;
+  floorPercent?: number;
+  featuredImageUrl?: string;
 }
 
 interface FeaturedItem {
@@ -21,7 +26,10 @@ interface FeaturedItem {
   itemName: string;
   photoUrl?: string;
   valueMid?: number;
+  currentPrice?: number;
   onlineListingSlug?: string;
+  estateSlug?: string;
+  itemId?: string;
   category?: string;
 }
 
@@ -126,14 +134,22 @@ export async function POST(request: Request): Promise<NextResponse> {
           name: e.name,
           slug: e.slug,
           saleStartDate: e.saleStartDate,
+          saleStartTime: e.saleStartTime,
           description: e.description,
           status: e.status,
+          dropIntervalHours: e.dropIntervalHours,
+          dropPercent: e.dropPercent,
+          floorPercent: e.floorPercent,
+          featuredImageUrl: e.featuredImageUrl,
         })),
         featuredItems: featuredItems.map((item) => ({
           itemName: item.itemName,
           photoUrl: item.photoUrl,
           valueMid: item.valueMid,
+          currentPrice: item.currentPrice,
           onlineListingSlug: item.onlineListingSlug,
+          estateSlug: item.estateSlug,
+          itemId: item.itemId ?? item.id,
           category: item.category,
         })),
         unsubscribeUrl,

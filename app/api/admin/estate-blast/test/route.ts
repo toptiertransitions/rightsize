@@ -49,11 +49,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       description: e.description,
       status: e.status,
     })),
-    featuredItems: (featuredItems as Array<{ itemName: string; photoUrl?: string; valueMid?: number; onlineListingSlug?: string; category?: string }>).map(i => ({
+    featuredItems: (featuredItems as Array<{ itemName: string; photoUrl?: string; valueMid?: number; currentPrice?: number; onlineListingSlug?: string; estateSlug?: string; itemId?: string; category?: string }>).map(i => ({
       itemName: i.itemName,
       photoUrl: i.photoUrl,
       valueMid: i.valueMid,
+      currentPrice: i.currentPrice,
       onlineListingSlug: i.onlineListingSlug,
+      estateSlug: i.estateSlug,
+      itemId: i.itemId,
       category: i.category,
     })),
     unsubscribeUrl: "#",
