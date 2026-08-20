@@ -23,11 +23,29 @@ export interface BuyerGroup {
   }[];
 }
 
+// Maximum items rendered per card chunk before splitting to a new card.
+// At 46pt per row, 12 items ≈ 600pt which fits comfortably on a LETTER page.
+const ITEMS_PER_CHUNK = 12;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+// Shrink Cloudinary URLs to small, compressed thumbnails so the PDF stays lean.
+// The thumbnails are rendered at 36pt; 120px @ q_auto:low is more than enough.
+function compressPhotoUrl(url: string | undefined): string | undefined {
+  if (!url || !url.includes("cloudinary.com")) return url;
+  return url.replace(/\/upload\//, "/upload/w_120,h_120,c_fill,q_auto:low,f_jpg/");
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const sage = "#5a7a5e";
 const charcoal = "#2C2C2C";
 const lightGray = "#f5f5f5";
+const contGray = "#ebebeb";
 const borderGray = "#e0e0e0";
 
 const styles = StyleSheet.create({
@@ -53,34 +71,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerLeft: {
-    flexDirection: "column",
-  },
+  headerLeft: { flexDirection: "column" },
   headerTitle: {
     fontFamily: "Helvetica-Bold",
     fontSize: 13,
     color: "#ffffff",
     letterSpacing: 0.5,
   },
-  headerEstate: {
-    fontSize: 9,
-    color: "#aaaaaa",
-    marginTop: 2,
-  },
-  headerRight: {
-    alignItems: "flex-end",
-  },
+  headerEstate: { fontSize: 9, color: "#aaaaaa", marginTop: 2 },
+  headerRight: { alignItems: "flex-end" },
   headerLabel: {
     fontSize: 7,
     color: "#888888",
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
-  headerTimestamp: {
-    fontSize: 8,
-    color: "#cccccc",
-    marginTop: 1,
-  },
+  headerTimestamp: { fontSize: 8, color: "#cccccc", marginTop: 1 },
   // ── Section title ──────────────────────────────────────────────────────────
   sectionTitle: {
     fontFamily: "Helvetica-Bold",
@@ -107,6 +113,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  buyerHeaderCont: {
+    backgroundColor: contGray,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   checkbox: {
     width: 14,
     height: 14,
@@ -114,29 +128,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     flexShrink: 0,
   },
-  buyerInfo: {
-    flex: 1,
-  },
-  buyerName: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 11,
-    color: charcoal,
-  },
-  buyerContact: {
-    fontSize: 8,
-    color: "#555555",
-    marginTop: 2,
-  },
-  buyerTotal: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 10,
-    color: sage,
-  },
+  buyerInfo: { flex: 1 },
+  buyerName: { fontFamily: "Helvetica-Bold", fontSize: 11, color: charcoal },
+  buyerNameCont: { fontFamily: "Helvetica-Bold", fontSize: 10, color: "#555555" },
+  buyerContact: { fontSize: 8, color: "#555555", marginTop: 2 },
+  buyerTotal: { fontFamily: "Helvetica-Bold", fontSize: 10, color: sage },
   // ── Item rows ──────────────────────────────────────────────────────────────
-  itemsContainer: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
+  itemsContainer: { paddingHorizontal: 10, paddingVertical: 6 },
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -157,26 +155,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#eeeeee",
     objectFit: "cover",
   },
-  itemPhotoPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 3,
-    backgroundColor: "#eeeeee",
-  },
-  itemNameCol: {
-    flex: 1,
-    flexDirection: "column",
-    gap: 1,
-  },
-  itemName: {
-    fontSize: 9,
-    color: charcoal,
-  },
-  itemBarcode: {
-    fontSize: 7,
-    color: "#888888",
-    fontFamily: "Helvetica",
-  },
+  itemPhotoPlaceholder: { width: 36, height: 36, borderRadius: 3, backgroundColor: "#eeeeee" },
+  itemNameCol: { flex: 1, flexDirection: "column", gap: 1 },
+  itemName: { fontSize: 9, color: charcoal },
+  itemBarcode: { fontSize: 7, color: "#888888", fontFamily: "Helvetica" },
   itemPrice: {
     fontFamily: "Helvetica-Bold",
     fontSize: 9,
@@ -196,14 +178,8 @@ const styles = StyleSheet.create({
     borderTop: `0.5pt solid ${borderGray}`,
     paddingTop: 6,
   },
-  footerText: {
-    fontSize: 7,
-    color: "#aaaaaa",
-  },
-  pageNum: {
-    fontSize: 7,
-    color: "#aaaaaa",
-  },
+  footerText: { fontSize: 7, color: "#aaaaaa" },
+  pageNum: { fontSize: 7, color: "#aaaaaa" },
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -230,6 +206,14 @@ function formatPrintTime(): string {
   return `${formatted} CST`;
 }
 
+function displayName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return parts[0].toUpperCase();
+  const first = parts[0];
+  const last = parts.slice(1).join(" ");
+  return `${last.toUpperCase()}, ${first}`;
+}
+
 // ─── Group buyers by email ─────────────────────────────────────────────────────
 
 export function groupBuyers(buyers: StorefrontBuyer[]): BuyerGroup[] {
@@ -237,28 +221,98 @@ export function groupBuyers(buyers: StorefrontBuyer[]): BuyerGroup[] {
   for (const b of buyers) {
     const key = b.buyerEmail.toLowerCase();
     if (!map.has(key)) {
-      map.set(key, {
-        name: b.buyerName,
-        email: b.buyerEmail,
-        phone: b.buyerPhone || "",
-        items: [],
-      });
+      map.set(key, { name: b.buyerName, email: b.buyerEmail, phone: b.buyerPhone || "", items: [] });
     }
-    map.get(key)!.items.push({
-      itemName: b.itemName,
-      purchaseAmount: b.purchaseAmount,
-    });
+    map.get(key)!.items.push({ itemName: b.itemName, purchaseAmount: b.purchaseAmount });
   }
   return Array.from(map.values()).sort((a, b) => lastName(a.name).localeCompare(lastName(b.name)));
 }
 
-// ─── PDF Component ─────────────────────────────────────────────────────────────
+// ─── Item rows renderer ───────────────────────────────────────────────────────
+
+interface ItemChunk {
+  itemName: string;
+  purchaseAmount: number;
+  photoUrl?: string;
+  barcode?: string;
+}
+
+function ItemRows({ chunk }: { chunk: ItemChunk[] }) {
+  return (
+    <View style={styles.itemsContainer}>
+      {chunk.map((item, idx) => {
+        const isLast = idx === chunk.length - 1;
+        return (
+          <View key={idx} style={isLast ? styles.itemRowLast : styles.itemRow}>
+            {item.photoUrl ? (
+              <Image src={item.photoUrl} style={styles.itemPhoto} />
+            ) : (
+              <View style={styles.itemPhotoPlaceholder} />
+            )}
+            <View style={styles.itemNameCol}>
+              <Text style={styles.itemName}>{item.itemName}</Text>
+              {item.barcode && <Text style={styles.itemBarcode}>#{item.barcode}</Text>}
+            </View>
+            <Text style={styles.itemPrice}>{fmtMoney(item.purchaseAmount)}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Buyer card: first chunk ───────────────────────────────────────────────────
+
+function BuyerCardFirst({
+  group, chunk, isLastCard,
+}: { group: BuyerGroup; chunk: ItemChunk[]; isLastCard: boolean }) {
+  const total = group.items.reduce((s, i) => s + i.purchaseAmount, 0);
+  const name = displayName(group.name);
+  return (
+    <View style={[styles.buyerCard, isLastCard ? { marginBottom: 0 } : {}]} wrap={false}>
+      <View style={styles.buyerHeader}>
+        <View style={styles.checkbox} />
+        <View style={styles.buyerInfo}>
+          <Text style={styles.buyerName}>{name}</Text>
+          <Text style={styles.buyerContact}>
+            {group.email}{group.phone ? `  ·  ${group.phone}` : ""}
+          </Text>
+        </View>
+        <Text style={styles.buyerTotal}>{fmtMoney(total)}</Text>
+      </View>
+      <ItemRows chunk={chunk} />
+    </View>
+  );
+}
+
+// ─── Buyer card: continuation chunk ───────────────────────────────────────────
+
+function BuyerCardContinued({
+  group, chunk, chunkIndex, totalChunks, isLastCard,
+}: { group: BuyerGroup; chunk: ItemChunk[]; chunkIndex: number; totalChunks: number; isLastCard: boolean }) {
+  const name = displayName(group.name);
+  return (
+    <View style={[styles.buyerCard, isLastCard ? { marginBottom: 0 } : {}]} wrap={false}>
+      <View style={styles.buyerHeaderCont}>
+        <View style={styles.checkbox} />
+        <View style={styles.buyerInfo}>
+          <Text style={styles.buyerNameCont}>
+            {name} — Continued ({chunkIndex + 1} of {totalChunks})
+          </Text>
+        </View>
+      </View>
+      <ItemRows chunk={chunk} />
+    </View>
+  );
+}
+
+// ─── PDF Document ─────────────────────────────────────────────────────────────
 
 interface PickupSheetProps {
   estate: Estate;
   buyerGroups: BuyerGroup[];
-  itemPhotos: Map<string, string>;    // itemName → photoUrl
-  itemBarcodes: Map<string, string>;  // itemName → barcodeNumber
+  itemPhotos: Map<string, string>;
+  itemBarcodes: Map<string, string>;
   printedAt: string;
 }
 
@@ -286,53 +340,36 @@ function Footer() {
   );
 }
 
-function BuyerCard({ group, itemPhotos, itemBarcodes, isLast }: { group: BuyerGroup; itemPhotos: Map<string, string>; itemBarcodes: Map<string, string>; isLast: boolean }) {
-  const total = group.items.reduce((s, i) => s + i.purchaseAmount, 0);
-  const [first, ...rest] = group.name.trim().split(/\s+/);
-  const last = rest.join(" ") || first;
-  const displayName = rest.length > 0 ? `${last.toUpperCase()}, ${first}` : first.toUpperCase();
-
-  return (
-    <View style={[styles.buyerCard, isLast ? { marginBottom: 0 } : {}]} wrap={false}>
-      {/* Buyer header row */}
-      <View style={styles.buyerHeader}>
-        <View style={styles.checkbox} />
-        <View style={styles.buyerInfo}>
-          <Text style={styles.buyerName}>{displayName}</Text>
-          <Text style={styles.buyerContact}>
-            {group.email}{group.phone ? `  ·  ${group.phone}` : ""}
-          </Text>
-        </View>
-        <Text style={styles.buyerTotal}>{fmtMoney(total)}</Text>
-      </View>
-
-      {/* Item rows */}
-      <View style={styles.itemsContainer}>
-        {group.items.map((item, idx) => {
-          const photoUrl = itemPhotos.get(item.itemName);
-          const barcode = itemBarcodes.get(item.itemName);
-          const isLastItem = idx === group.items.length - 1;
-          return (
-            <View key={idx} style={isLastItem ? styles.itemRowLast : styles.itemRow}>
-              {photoUrl ? (
-                <Image src={photoUrl} style={styles.itemPhoto} />
-              ) : (
-                <View style={styles.itemPhotoPlaceholder} />
-              )}
-              <View style={styles.itemNameCol}>
-                <Text style={styles.itemName}>{item.itemName}</Text>
-                {barcode && <Text style={styles.itemBarcode}>#{barcode}</Text>}
-              </View>
-              <Text style={styles.itemPrice}>{fmtMoney(item.purchaseAmount)}</Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function PickupSheetDoc({ estate, buyerGroups, itemPhotos, itemBarcodes, printedAt }: PickupSheetProps) {
+  // Pre-compute all card chunks across all buyers so we know which is truly last
+  interface CardEntry {
+    group: BuyerGroup;
+    chunk: ItemChunk[];
+    chunkIndex: number;
+    totalChunks: number;
+    isContinuation: boolean;
+  }
+  const cards: CardEntry[] = [];
+
+  for (const group of buyerGroups) {
+    const enriched: ItemChunk[] = group.items.map(item => ({
+      itemName: item.itemName,
+      purchaseAmount: item.purchaseAmount,
+      photoUrl: compressPhotoUrl(itemPhotos.get(item.itemName)),
+      barcode: itemBarcodes.get(item.itemName),
+    }));
+    const chunks = chunkArray(enriched, ITEMS_PER_CHUNK);
+    chunks.forEach((chunk, chunkIndex) => {
+      cards.push({
+        group,
+        chunk,
+        chunkIndex,
+        totalChunks: chunks.length,
+        isContinuation: chunkIndex > 0,
+      });
+    });
+  }
+
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
@@ -343,16 +380,32 @@ function PickupSheetDoc({ estate, buyerGroups, itemPhotos, itemBarcodes, printed
           <Text style={{ color: "#888", fontSize: 10, marginTop: 20 }}>No buyers recorded for this estate sale yet.</Text>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>{buyerGroups.length} {buyerGroups.length === 1 ? "Buyer" : "Buyers"} · Sorted Alphabetically by Last Name</Text>
-            {buyerGroups.map((group, idx) => (
-              <BuyerCard
-                key={group.email}
-                group={group}
-                itemPhotos={itemPhotos}
-                itemBarcodes={itemBarcodes}
-                isLast={idx === buyerGroups.length - 1}
-              />
-            ))}
+            <Text style={styles.sectionTitle}>
+              {buyerGroups.length} {buyerGroups.length === 1 ? "Buyer" : "Buyers"} · Sorted Alphabetically by Last Name
+            </Text>
+            {cards.map((entry, idx) => {
+              const isLastCard = idx === cards.length - 1;
+              if (entry.isContinuation) {
+                return (
+                  <BuyerCardContinued
+                    key={`${entry.group.email}-${entry.chunkIndex}`}
+                    group={entry.group}
+                    chunk={entry.chunk}
+                    chunkIndex={entry.chunkIndex}
+                    totalChunks={entry.totalChunks}
+                    isLastCard={isLastCard}
+                  />
+                );
+              }
+              return (
+                <BuyerCardFirst
+                  key={`${entry.group.email}-0`}
+                  group={entry.group}
+                  chunk={entry.chunk}
+                  isLastCard={isLastCard}
+                />
+              );
+            })}
           </>
         )}
       </Page>
@@ -369,7 +422,6 @@ export async function renderPickupSheetPDF(opts: {
 }): Promise<Buffer> {
   const { estate, buyers, items } = opts;
 
-  // Build itemName → photoUrl and itemName → barcodeNumber maps from Items table
   const itemPhotos = new Map<string, string>();
   const itemBarcodes = new Map<string, string>();
   for (const item of items) {
