@@ -94,6 +94,212 @@ function nextDropLabel(estate: Estate): string {
   return `Next drop in ${h}h ${m}m`;
 }
 
+// ─── Pickup Blast Panel ───────────────────────────────────────────────────────
+
+function Spinner() {
+  return (
+    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
+
+function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => void }) {
+  const [note, setNote] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testSentTo, setTestSentTo] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sentResult, setSentResult] = useState<{ sent: number; total: number } | null>(null);
+  const [err, setErr] = useState("");
+
+  function buildBrief(): string {
+    const lines: string[] = [`Write a pickup announcement email for the "${estate.name}" estate sale.`];
+    if (estate.pickupWindowsJson) {
+      try {
+        const dates = (JSON.parse(estate.pickupWindowsJson) as { date: string; startTime: string; endTime: string }[]).filter(d => d.date);
+        if (dates.length > 0) {
+          lines.push(`Pickup windows: ${dates.map(d => [
+            new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
+            d.startTime ? `from ${d.startTime}` : "",
+            d.endTime ? `to ${d.endTime}` : "",
+          ].filter(Boolean).join(" ")).join("; ")}`);
+        }
+      } catch { /* ignore bad json */ }
+    } else if (estate.pickupWindowStart) {
+      const parts = [estate.pickupWindowStart];
+      if (estate.pickupWindowStartTime) parts.push(`at ${estate.pickupWindowStartTime}`);
+      if (estate.pickupWindowEnd && estate.pickupWindowEnd !== estate.pickupWindowStart) {
+        parts.push(`through ${estate.pickupWindowEnd}`);
+        if (estate.pickupWindowEndTime) parts.push(`at ${estate.pickupWindowEndTime}`);
+      }
+      lines.push(`Pickup window: ${parts.join(" ")}`);
+    }
+    if (estate.pickupAddress) lines.push(`Pickup address: ${estate.pickupAddress}`);
+    if (estate.pickupNotes) lines.push(`Pickup notes: ${estate.pickupNotes}`);
+    if (note.trim()) lines.push(`Additional info from organizer: ${note.trim()}`);
+    return lines.join("\n");
+  }
+
+  function buildFeaturedEstate() {
+    return {
+      id: estate.id, name: estate.name, slug: estate.slug,
+      saleStartDate: estate.saleStartDate, saleStartTime: estate.saleStartTime,
+      description: estate.description, status: estate.status,
+      dropIntervalHours: estate.dropIntervalHours, dropPercent: estate.dropPercent,
+      floorPercent: estate.floorPercent, featuredImageUrl: estate.featuredImageUrl,
+    };
+  }
+
+  async function handleDraft() {
+    setDrafting(true); setErr("");
+    try {
+      const res = await fetch("/api/admin/estate-blast/draft", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief: buildBrief(), estateNames: [estate.name], itemNames: [] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Draft failed");
+      setSubject(data.subject || ""); setBody(data.body || "");
+      setTestSentTo(null); setSentResult(null);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Draft failed"); }
+    finally { setDrafting(false); }
+  }
+
+  async function handleTest() {
+    setTestSending(true); setErr("");
+    try {
+      const res = await fetch("/api/admin/estate-blast/test", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, bodyText: body, featuredEstates: [buildFeaturedEstate()], featuredItems: [] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Test failed");
+      setTestSentTo(data.sentTo);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Test send failed"); }
+    finally { setTestSending(false); }
+  }
+
+  async function handleSend() {
+    if (!confirm("Send this pickup announcement to all eligible shoppers?")) return;
+    setSending(true); setErr("");
+    try {
+      const res = await fetch("/api/admin/estate-blast", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, bodyText: body, featuredEstates: [buildFeaturedEstate()], featuredItems: [] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Send failed");
+      setSentResult({ sent: data.sent, total: data.total });
+    } catch (e) { setErr(e instanceof Error ? e.message : "Send failed"); }
+    finally { setSending(false); }
+  }
+
+  const hasDraft = !!(subject && body);
+
+  // Parse pickup dates for the summary display
+  let pickupDateRows: { date: string; startTime: string; endTime: string }[] = [];
+  if (estate.pickupWindowsJson) {
+    try { pickupDateRows = (JSON.parse(estate.pickupWindowsJson) as typeof pickupDateRows).filter(d => d.date); } catch { /* ignore */ }
+  }
+
+  return (
+    <div className="mt-3 border-t border-gray-700 pt-4" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Pickup Announcement — Shopper Blast</p>
+        <button onClick={onClose} className="text-gray-500 hover:text-white text-xs transition-colors">✕ Close</button>
+      </div>
+
+      {/* Pickup details summary */}
+      {(estate.pickupAddress || pickupDateRows.length > 0 || estate.pickupWindowStart || estate.pickupNotes) && (
+        <div className="mb-3 px-3 py-2 bg-gray-800 rounded-lg text-xs text-gray-400 space-y-0.5">
+          {estate.pickupAddress && <p><span className="text-gray-300">Address:</span> {estate.pickupAddress}</p>}
+          {pickupDateRows.length > 0
+            ? pickupDateRows.map((d, i) => (
+                <p key={i}><span className="text-gray-300">Pickup:</span> {d.date}{d.startTime ? ` · ${d.startTime}` : ""}{d.endTime ? ` – ${d.endTime}` : ""}</p>
+              ))
+            : estate.pickupWindowStart && (
+                <p><span className="text-gray-300">Pickup:</span> {estate.pickupWindowStart}{estate.pickupWindowStartTime ? ` · ${estate.pickupWindowStartTime}` : ""}</p>
+              )}
+          {estate.pickupNotes && <p><span className="text-gray-300">Notes:</span> {estate.pickupNotes}</p>}
+        </div>
+      )}
+
+      {/* Custom note */}
+      <div className="mb-3">
+        <label className="block text-xs text-gray-400 mb-1">
+          Anything unique to add? <span className="text-gray-600">(optional — AI will weave it in)</span>
+        </label>
+        <textarea
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="e.g. Early access for VIP buyers from 9–10am, bring your own boxes, items not picked up by deadline will be donated..."
+          rows={2}
+          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
+        />
+      </div>
+
+      <button
+        onClick={handleDraft}
+        disabled={drafting}
+        className="mb-4 px-4 py-1.5 bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-amber-100 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+      >
+        {drafting ? <><Spinner />Drafting with AI…</> : hasDraft ? "Re-draft with AI" : "Draft Email with AI"}
+      </button>
+
+      {hasDraft && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Subject</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Body <span className="text-gray-600">(edit if needed — separate paragraphs with a blank line)</span></label>
+            <textarea
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              rows={7}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500 resize-y"
+            />
+          </div>
+          <div className="flex items-center gap-3 flex-wrap pt-1">
+            <button
+              onClick={handleTest}
+              disabled={testSending}
+              className="px-4 py-1.5 bg-sky-800 hover:bg-sky-700 disabled:opacity-50 text-sky-100 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+            >
+              {testSending ? <><Spinner />Sending…</> : testSentTo ? `Test sent → ${testSentTo}` : "Send Test to Me"}
+            </button>
+            {testSentTo && !sentResult && (
+              <button
+                onClick={handleSend}
+                disabled={sending}
+                className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-emerald-100 text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+              >
+                {sending ? <><Spinner />Sending…</> : "Send to All Shoppers"}
+              </button>
+            )}
+            {sentResult && (
+              <span className="text-xs text-emerald-400 font-medium">
+                Sent to {sentResult.sent} of {sentResult.total} shoppers!
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {err && <p className="text-xs text-red-400 mt-2">{err}</p>}
+    </div>
+  );
+}
+
 export function EstatesClient({ estates: initial, tenants, estateItems: initialEstateItems }: EstatesClientProps) {
   const [estates, setEstates] = useState<Estate[]>(initial);
   const [editing, setEditing] = useState<Estate | null>(null);
@@ -112,6 +318,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
   const [backfillingInterests, setBackfillingInterests] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ updated: number; errors: number } | null>(null);
   const [pickupDates, setPickupDates] = useState<Array<{ date: string; startTime: string; endTime: string }>>([{ date: "", startTime: "", endTime: "" }]);
+  const [pickupBlastEstateId, setPickupBlastEstateId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"estates" | "estate-items" | "shoppers">("estates");
   const [estateItems, setEstateItems] = useState<Item[]>(initialEstateItems);
 
@@ -536,6 +743,16 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       )}
                     </button>
                     <button
+                      onClick={e => { e.stopPropagation(); setPickupBlastEstateId(id => id === estate.id ? null : estate.id); }}
+                      title="Send pickup announcement to all shoppers"
+                      className={`text-xs px-2 py-1 rounded border flex items-center gap-1 transition-colors ${pickupBlastEstateId === estate.id ? "bg-amber-800/60 border-amber-600 text-amber-300" : "text-gray-500 hover:text-amber-400 border-gray-700 hover:border-amber-600"}`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                      </svg>
+                      Shopper Blast
+                    </button>
+                    <button
                       onClick={e => handleDownloadCsv(estate.id, e)}
                       disabled={downloadingCsvId === estate.id}
                       title="Download item names as CSV"
@@ -593,6 +810,12 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                     </div>
                   )}
                 </div>
+                {pickupBlastEstateId === estate.id && (
+                  <PickupBlastPanel
+                    estate={estate}
+                    onClose={() => setPickupBlastEstateId(null)}
+                  />
+                )}
               </div>
             ))}
           </div>
