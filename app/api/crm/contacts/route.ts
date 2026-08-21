@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getReferralContacts, getReferralContactById, createReferralContact, updateReferralContact, deleteReferralContact, findReferralContactByName } from "@/lib/airtable";
+import { sendStageProgressNotification } from "@/lib/admin-notifications";
 
 async function requireCRMAccess(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -50,14 +51,31 @@ export async function PATCH(req: NextRequest) {
   if (data.email === "") delete data.email;
   if (data.phone === "") delete data.phone;
   // Track stage changes: capture previousStage and stageChangedAt when stage actually changes
+  let prevStage: string | undefined;
   if (data.stage) {
     const current = await getReferralContactById(id);
     if (current && current.stage !== data.stage) {
+      prevStage = current.stage;
       data.previousStage = current.stage;
       data.stageChangedAt = new Date().toISOString();
     }
   }
   const contact = await updateReferralContact(id, data);
+
+  // Fire stage-progress notification (non-fatal, fire-and-forget)
+  if (prevStage && data.stage) {
+    sendStageProgressNotification({
+      contactId: id,
+      contactName: contact.name,
+      contactTitle: contact.title || undefined,
+      referralCompanyId: contact.referralCompanyId || undefined,
+      previousStage: prevStage,
+      newStage: data.stage,
+      nextStepDate: contact.nextStepDate,
+      nextStepNote: contact.nextStepNote,
+    }).catch(e => console.error("[contacts PATCH] stage notification failed:", e));
+  }
+
   return NextResponse.json({ contact });
 }
 

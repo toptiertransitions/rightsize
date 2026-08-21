@@ -4509,3 +4509,316 @@ export function buildGoogleReviewNotificationEmail({
 </body>
 </html>`;
 }
+
+// ─── CRM: Stage Progress Notification ────────────────────────────────────────
+
+export interface StageProgressEmailParams {
+  contactName: string;
+  contactTitle?: string;
+  companyName: string;
+  previousStage: string;
+  newStage: string;
+  ownerName: string;
+  totalActivities: number;
+  recentActivities: Array<{ date: string; type: string; note: string }>;
+  nextStepDate?: string;
+  nextStepNote?: string;
+  crmUrl: string;
+}
+
+export function buildStageProgressEmail(p: StageProgressEmailParams): string {
+  const STAGES = ["Identified", "Met", "Agreed to Refer", "Shared Leads", "Active Referral"];
+  const newIdx = STAGES.indexOf(p.newStage);
+
+  function fmtD(d: string): string {
+    try { return new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return d; }
+  }
+
+  // ── Stage stepper ──────────────────────────────────────────────────────────
+  const stepNodes = STAGES.map((stage, idx) => {
+    const isDone    = idx < newIdx;
+    const isCurrent = idx === newIdx;
+    const dotBg    = isCurrent ? "#3d6b4f" : isDone ? "#bbf7d0" : "#e5e7eb";
+    const dotColor = isCurrent ? "#ffffff" : isDone ? "#14532d" : "#9ca3af";
+    const txtColor = isCurrent ? "#3d6b4f" : isDone ? "#374151" : "#9ca3af";
+    const weight   = isCurrent ? "700" : isDone ? "500" : "400";
+    const symbol   = isDone ? "✓" : isCurrent ? "★" : String(idx + 1);
+    return `<td align="center" style="vertical-align:top;padding:0 2px;">
+      <div style="width:26px;height:26px;border-radius:50%;background:${dotBg};color:${dotColor};font-size:10px;font-weight:700;line-height:26px;text-align:center;margin:0 auto;${isCurrent ? "box-shadow:0 0 0 3px #d1fae5;" : ""}">${symbol}</div>
+      <div style="font-size:8px;color:${txtColor};font-weight:${weight};margin-top:5px;line-height:1.3;text-align:center;max-width:58px;word-wrap:break-word;">${stage}</div>
+    </td>`;
+  });
+  const connectors = STAGES.slice(0, -1).map((_, idx) => {
+    const active = idx < newIdx;
+    return `<td style="vertical-align:top;padding:0;width:24px;padding-top:12px;"><div style="height:2px;background:${active ? "#4ade80" : "#e5e7eb"};"></div></td>`;
+  });
+
+  const stepperCells: string[] = [];
+  for (let i = 0; i < STAGES.length; i++) {
+    stepperCells.push(stepNodes[i]);
+    if (i < STAGES.length - 1) stepperCells.push(connectors[i]);
+  }
+
+  // ── Recent activities ──────────────────────────────────────────────────────
+  const actHtml = p.recentActivities.length > 0
+    ? p.recentActivities.slice(0, 4).map(a => `
+      <tr>
+        <td style="padding:9px 16px;border-bottom:1px solid #f3f4f6;">
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:3px;">${a.type} &middot; ${fmtD(a.date)}</div>
+          <div style="font-size:13px;color:#374151;line-height:1.5;">${a.note ? (a.note.length > 130 ? a.note.slice(0, 130) + "…" : a.note) : "—"}</div>
+        </td>
+      </tr>`).join("")
+    : `<tr><td style="padding:12px 16px;font-size:13px;color:#9ca3af;font-style:italic;">No activities logged yet.</td></tr>`;
+
+  // ── Next step callout ──────────────────────────────────────────────────────
+  let nextStepHtml = "";
+  if (p.nextStepNote) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const nsDate = p.nextStepDate ? new Date(p.nextStepDate + "T00:00:00") : null;
+    const isOverdue = !!(nsDate && nsDate < today);
+    const isSoon    = !!(nsDate && !isOverdue && (nsDate.getTime() - today.getTime()) / 86400000 <= 7);
+    const bg     = isOverdue ? "#fef2f2" : isSoon ? "#fffbeb" : "#f0fdf4";
+    const border = isOverdue ? "#fca5a5" : isSoon ? "#fcd34d" : "#86efac";
+    const label  = isOverdue ? "#dc2626" : isSoon ? "#b45309" : "#15803d";
+    const tag    = isOverdue ? " — OVERDUE" : isSoon ? " — Soon" : "";
+    nextStepHtml = `
+      <tr><td style="padding:0 24px;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+      <tr>
+        <td style="padding:16px 24px;">
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#9ca3af;margin-bottom:10px;">Next Step</div>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:${bg};border-radius:8px;border:1px solid ${border};">
+            <tr><td style="padding:12px 16px;">
+              ${p.nextStepDate ? `<div style="font-size:11px;font-weight:700;color:${label};margin-bottom:4px;">${fmtD(p.nextStepDate)}${tag}</div>` : ""}
+              <div style="font-size:13px;color:#374151;line-height:1.5;">${p.nextStepNote}</div>
+            </td></tr>
+          </table>
+        </td>
+      </tr>`;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Partnership Progress</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px 48px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+  <!-- Header bar -->
+  <tr><td>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1f2937;border-radius:12px 12px 0 0;">
+      <tr><td style="padding:22px 28px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td>
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;">Top Tier Transitions &middot; CRM</div>
+            <div style="font-size:20px;font-weight:700;color:#ffffff;margin-top:4px;line-height:1.2;">Partnership Progress</div>
+          </td>
+          <td align="right" style="padding-left:12px;white-space:nowrap;font-size:26px;vertical-align:middle;">&#129309;</td>
+        </tr></table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Card -->
+  <tr><td style="background:#ffffff;border-radius:0 0 12px 12px;box-shadow:0 4px 20px rgba(0,0,0,0.07);">
+    <table width="100%" cellpadding="0" cellspacing="0">
+
+      <!-- Congrats opener -->
+      <tr><td style="padding:28px 28px 4px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6d9e7a;margin-bottom:6px;">Partnership Milestone</div>
+        <div style="font-size:24px;font-weight:700;color:#111827;line-height:1.25;margin-bottom:10px;">Great work, ${p.ownerName}!</div>
+        <div style="font-size:15px;color:#4b5563;line-height:1.65;">
+          <strong style="color:#111827;">${p.contactName}</strong>${p.contactTitle ? ` <span style="color:#9ca3af;font-size:13px;">(${p.contactTitle})</span>` : ""} at <strong style="color:#111827;">${p.companyName}</strong> just moved from
+          <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-size:13px;font-weight:600;">${p.previousStage}</span>
+          &rarr;
+          <span style="background:#dcfce7;color:#14532d;padding:1px 6px;border-radius:4px;font-size:13px;font-weight:600;">${p.newStage}</span>
+        </div>
+      </td></tr>
+
+      <!-- Stage stepper -->
+      <tr><td style="padding:20px 20px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>${stepperCells.join("")}</tr></table>
+      </td></tr>
+
+      <tr><td style="padding:0 24px;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+
+      <!-- Contact + total touches -->
+      <tr><td style="padding:20px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;">
+          <tr><td style="padding:16px 18px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td>
+                <div style="font-size:15px;font-weight:700;color:#111827;">${p.contactName}</div>
+                <div style="font-size:12px;color:#6b7280;margin-top:3px;">${p.contactTitle ? `${p.contactTitle} &middot; ` : ""}${p.companyName}</div>
+              </td>
+              <td align="right" style="vertical-align:top;white-space:nowrap;padding-left:12px;">
+                <div style="background:#eff9f1;border-radius:20px;padding:7px 14px;text-align:center;">
+                  <div style="font-size:22px;font-weight:700;color:#3d6b4f;line-height:1;">${p.totalActivities}</div>
+                  <div style="font-size:10px;color:#6d9e7a;letter-spacing:0.04em;text-transform:uppercase;margin-top:2px;">Touches</div>
+                </div>
+              </td>
+            </tr></table>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:0 24px;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+
+      <!-- Recent activity -->
+      <tr><td style="padding:20px 24px 0;">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#9ca3af;margin-bottom:10px;">Recent Activity</div>
+      </td></tr>
+      <tr><td style="padding:0 12px 4px;">
+        <table width="100%" cellpadding="0" cellspacing="0">${actHtml}</table>
+      </td></tr>
+
+      ${nextStepHtml || "<tr><td style=\"height:12px;\"></td></tr>"}
+
+      <!-- CTA -->
+      <tr><td style="padding:20px 28px 28px;">
+        <a href="${p.crmUrl}" style="display:inline-block;background:#3d6b4f;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:13px 26px;border-radius:8px;letter-spacing:0.02em;">Open in CRM &rarr;</a>
+      </td></tr>
+
+    </table>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="padding:20px 0 0;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.7;">Top Tier Transitions &middot; CRM Notifications</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+// ─── CRM: Active Referral Milestone Celebration ──────────────────────────────
+
+export interface ActiveReferralCelebrationEmailParams {
+  contactName: string;
+  contactTitle?: string;
+  companyName: string;
+  ownerName: string;
+  totalActivities: number;
+  recentActivities: Array<{ date: string; type: string; note: string }>;
+  nextStepDate?: string;
+  nextStepNote?: string;
+  crmUrl: string;
+}
+
+export function buildActiveReferralCelebrationEmail(p: ActiveReferralCelebrationEmailParams): string {
+  function fmtD(d: string): string {
+    try { return new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return d; }
+  }
+
+  const actHtml = p.recentActivities.length > 0
+    ? p.recentActivities.slice(0, 4).map(a => `
+      <tr>
+        <td style="padding:9px 16px;border-bottom:1px solid #f0fdf4;">
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#86efac;margin-bottom:3px;">${a.type} &middot; ${fmtD(a.date)}</div>
+          <div style="font-size:13px;color:#ecfdf5;line-height:1.5;">${a.note ? (a.note.length > 130 ? a.note.slice(0, 130) + "…" : a.note) : "—"}</div>
+        </td>
+      </tr>`).join("")
+    : "";
+
+  let nextStepHtml = "";
+  if (p.nextStepNote) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const nsDate = p.nextStepDate ? new Date(p.nextStepDate + "T00:00:00") : null;
+    const isOverdue = !!(nsDate && nsDate < today);
+    const isSoon    = !!(nsDate && !isOverdue && (nsDate.getTime() - today.getTime()) / 86400000 <= 7);
+    const tag = isOverdue ? " — OVERDUE" : isSoon ? " — Soon" : "";
+    const labelColor = isOverdue ? "#fca5a5" : isSoon ? "#fde68a" : "#86efac";
+    nextStepHtml = `
+      <tr><td style="padding:16px 28px 0;">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#86efac;margin-bottom:10px;">Next Step</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.08);border-radius:8px;border:1px solid rgba(255,255,255,0.15);">
+          <tr><td style="padding:12px 16px;">
+            ${p.nextStepDate ? `<div style="font-size:11px;font-weight:700;color:${labelColor};margin-bottom:4px;">${fmtD(p.nextStepDate)}${tag}</div>` : ""}
+            <div style="font-size:13px;color:#d1fae5;line-height:1.5;">${p.nextStepNote}</div>
+          </td></tr>
+        </table>
+      </td></tr>`;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Active Referral Milestone</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px 48px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+  <!-- Header -->
+  <tr><td>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#1a3d28 0%,#2d6a4f 100%);border-radius:12px 12px 0 0;">
+      <tr><td style="padding:28px 28px 24px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#86efac;margin-bottom:6px;">Top Tier Transitions &middot; CRM Milestone</div>
+        <div style="font-size:28px;font-weight:700;color:#ffffff;line-height:1.2;margin-bottom:4px;">&#127942; Active Referral!</div>
+        <div style="font-size:15px;color:#a7f3d0;line-height:1.5;">
+          Congrats, <strong style="color:#ffffff;">${p.ownerName}</strong>! You turned <strong style="color:#ffffff;">${p.contactName}</strong> at <strong style="color:#ffffff;">${p.companyName}</strong> into an active referral partner.
+        </div>
+        <div style="margin-top:14px;padding:14px 18px;background:rgba(255,255,255,0.1);border-radius:10px;border-left:4px solid #4ade80;">
+          <div style="font-size:15px;color:#f0fdf4;font-weight:600;font-style:italic;line-height:1.5;">&ldquo;Now let&rsquo;s defend this castle!&rdquo;</div>
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Stats card inside dark bg continuation -->
+  <tr><td style="background:#2d6a4f;padding:0 24px 24px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;border:1px solid rgba(255,255,255,0.15);">
+      <tr><td style="padding:16px 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td>
+            <div style="font-size:16px;font-weight:700;color:#ffffff;">${p.contactName}</div>
+            <div style="font-size:12px;color:#a7f3d0;margin-top:3px;">${p.contactTitle ? `${p.contactTitle} &middot; ` : ""}${p.companyName}</div>
+          </td>
+          <td align="right" style="vertical-align:top;white-space:nowrap;padding-left:12px;">
+            <div style="background:rgba(255,255,255,0.15);border-radius:20px;padding:7px 16px;text-align:center;">
+              <div style="font-size:24px;font-weight:700;color:#ffffff;line-height:1;">${p.totalActivities}</div>
+              <div style="font-size:9px;color:#86efac;letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Touches to Win</div>
+            </div>
+          </td>
+        </tr></table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Recent activity (dark card) -->
+  ${p.recentActivities.length > 0 ? `
+  <tr><td style="background:#2d6a4f;padding:0 24px 0;">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#86efac;margin-bottom:10px;">The Journey</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(0,0,0,0.15);border-radius:10px;overflow:hidden;">${actHtml}</table>
+  </td></tr>` : ""}
+
+  ${nextStepHtml ? `<tr><td style="background:#2d6a4f;">${nextStepHtml.replace(/<tr><td/, "<td").replace(/<\/td><\/tr>/, "</td>")}</td></tr>` : ""}
+
+  <!-- White bottom section -->
+  <tr><td style="background:#2d6a4f;padding:24px 24px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px 10px 0 0;">
+      <tr><td style="padding:20px 24px;">
+        <p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.6;">The whole team is rooting for you. Keep the momentum going and let&rsquo;s make sure this partner stays engaged and keeps the referrals flowing.</p>
+        <a href="${p.crmUrl}" style="display:inline-block;background:#3d6b4f;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:13px 26px;border-radius:8px;letter-spacing:0.02em;">Open in CRM &rarr;</a>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- White continuation to footer -->
+  <tr><td style="background:#ffffff;border-radius:0 0 12px 12px;box-shadow:0 4px 20px rgba(0,0,0,0.07);">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;"></td></tr></table>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="padding:20px 0 0;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.7;">Top Tier Transitions &middot; CRM Notifications</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
