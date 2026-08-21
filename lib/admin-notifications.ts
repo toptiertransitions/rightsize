@@ -109,9 +109,9 @@ export async function sendStageProgressNotification(params: {
   const ownerStaff = ownerClerkId ? staff.find(s => s.clerkUserId === ownerClerkId) : undefined;
   const ownerName = ownerStaff?.displayName ?? "the team";
 
-  // Send to all active TTTSales + TTTManager + TTTAdmin
+  // Send to all active TTTSales only
   const recipients = staff
-    .filter(s => s.isActive && s.email && ["TTTSales", "TTTManager", "TTTAdmin"].includes(s.role))
+    .filter(s => s.isActive && s.email && s.role === "TTTSales")
     .map(s => s.email as string)
     .filter(Boolean);
 
