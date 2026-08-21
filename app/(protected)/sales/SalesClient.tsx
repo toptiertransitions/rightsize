@@ -240,7 +240,12 @@ function SalesTableRow({
       </td>
       {/* Name + category */}
       <td className="px-3 py-2.5 max-w-[220px]">
-        <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+        <div className="flex items-center gap-1.5">
+          <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+          {(item.quantity ?? 1) > 1 && (
+            <span className="flex-shrink-0 text-[10px] font-semibold text-forest-700 bg-forest-50 border border-forest-100 px-1.5 py-0.5 rounded-full">×{item.quantity}</span>
+          )}
+        </div>
         {item.category && <div className="text-[11px] text-gray-400 truncate">{item.category}</div>}
       </td>
       {/* Status */}
@@ -491,18 +496,10 @@ function PFTableRow({
             </div>
           )}
         </td>
-        {/* Progress */}
+        {/* Qty Sold */}
         <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
-          {qtyTotal > 0 ? (
-            <div>
-              <div className="text-sm font-semibold text-gray-900 tabular-nums">{qtySold}/{qtyTotal}</div>
-              <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden mt-1 ml-auto">
-                <div
-                  className={cn("h-full rounded-full", isSold ? "bg-green-400" : "bg-purple-400")}
-                  style={{ width: `${Math.min(100, qtyTotal > 0 ? (qtySold / qtyTotal) * 100 : 0)}%` }}
-                />
-              </div>
-            </div>
+          {qtyTotal > 1 ? (
+            <span className="text-sm font-semibold text-gray-900 tabular-nums">{qtySold}/{qtyTotal}</span>
           ) : <span className="text-gray-300 text-sm">—</span>}
         </td>
         {/* Payout summary */}
@@ -765,7 +762,7 @@ function PFSalesSection({
                 <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
                 <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
                 <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
-                <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="qty" label="Progress" right /></th>
+                <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="qty" label="Qty Sold" right /></th>
                 <th className="px-2 py-2.5 text-right hidden sm:table-cell">
                   <span className="flex items-center justify-end text-[11px] font-semibold uppercase tracking-wide text-gray-400">Payout</span>
                 </th>

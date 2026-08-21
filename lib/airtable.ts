@@ -1048,6 +1048,7 @@ export async function createStorefrontBuyer(data: {
   estateName?: string;
   estateSlug?: string;
   purchaseAmount: number;
+  quantityPurchased?: number;
 }): Promise<void> {
   const base = getBase();
   const fields: Airtable.FieldSet = {
@@ -1064,6 +1065,7 @@ export async function createStorefrontBuyer(data: {
   if (data.estateSaleId) fields["EstateSaleId"] = data.estateSaleId;
   if (data.estateName) fields["EstateName"] = data.estateName;
   if (data.estateSlug) fields["EstateSlug"] = data.estateSlug;
+  if (data.quantityPurchased && data.quantityPurchased > 1) fields["QuantityPurchased"] = data.quantityPurchased;
   await base(AIRTABLE_TABLES.STOREFRONT_BUYERS).create(fields);
 }
 
@@ -1091,6 +1093,7 @@ export async function getAllStorefrontBuyersSince(sinceIso: string): Promise<imp
       estateName: f["EstateName"] ? String(f["EstateName"]) : undefined,
       estateSlug: f["EstateSlug"] ? String(f["EstateSlug"]) : undefined,
       purchaseAmount: typeof f["PurchaseAmount"] === "number" ? f["PurchaseAmount"] : 0,
+      quantityPurchased: typeof f["QuantityPurchased"] === "number" && f["QuantityPurchased"] > 1 ? f["QuantityPurchased"] : undefined,
       createdAt: f["CreatedAt"] ? String(f["CreatedAt"]) : "",
     };
   });
@@ -1153,6 +1156,7 @@ export async function getStorefrontBuyersByEstate(estateId: string): Promise<imp
       estateName: f["EstateName"] ? String(f["EstateName"]) : undefined,
       estateSlug: f["EstateSlug"] ? String(f["EstateSlug"]) : undefined,
       purchaseAmount: typeof f["PurchaseAmount"] === "number" ? f["PurchaseAmount"] : 0,
+      quantityPurchased: typeof f["QuantityPurchased"] === "number" && f["QuantityPurchased"] > 1 ? f["QuantityPurchased"] : undefined,
       createdAt: f["CreatedAt"] ? String(f["CreatedAt"]) : "",
     };
   });
@@ -1180,6 +1184,7 @@ export async function getStorefrontBuyersByEmail(email: string): Promise<import(
       estateName: f["EstateName"] ? String(f["EstateName"]) : undefined,
       estateSlug: f["EstateSlug"] ? String(f["EstateSlug"]) : undefined,
       purchaseAmount: typeof f["PurchaseAmount"] === "number" ? f["PurchaseAmount"] : 0,
+      quantityPurchased: typeof f["QuantityPurchased"] === "number" && f["QuantityPurchased"] > 1 ? f["QuantityPurchased"] : undefined,
       createdAt: f["CreatedAt"] ? String(f["CreatedAt"]) : "",
     };
   });

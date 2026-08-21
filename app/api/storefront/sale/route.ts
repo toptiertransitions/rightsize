@@ -141,6 +141,7 @@ async function attemptRecordSale(data: {
       estateName,
       estateSlug,
       purchaseAmount: data.salePrice,
+      quantityPurchased: qtyPurchased > 1 ? qtyPurchased : undefined,
     });
   } catch (e) {
     console.error("[storefront/sale] createStorefrontBuyer failed (non-fatal):", e);

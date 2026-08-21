@@ -409,6 +409,7 @@ export interface StorefrontBuyer {
   estateName?: string;
   estateSlug?: string;
   purchaseAmount: number;
+  quantityPurchased?: number;
   createdAt: string;
 }
 

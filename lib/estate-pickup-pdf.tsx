@@ -20,6 +20,7 @@ export interface BuyerGroup {
     itemName: string;
     purchaseAmount: number;
     photoUrl?: string;
+    quantityPurchased?: number;
   }[];
 }
 
@@ -223,7 +224,7 @@ export function groupBuyers(buyers: StorefrontBuyer[]): BuyerGroup[] {
     if (!map.has(key)) {
       map.set(key, { name: b.buyerName, email: b.buyerEmail, phone: b.buyerPhone || "", items: [] });
     }
-    map.get(key)!.items.push({ itemName: b.itemName, purchaseAmount: b.purchaseAmount });
+    map.get(key)!.items.push({ itemName: b.itemName, purchaseAmount: b.purchaseAmount, quantityPurchased: b.quantityPurchased });
   }
   return Array.from(map.values()).sort((a, b) => lastName(a.name).localeCompare(lastName(b.name)));
 }
@@ -235,6 +236,7 @@ interface ItemChunk {
   purchaseAmount: number;
   photoUrl?: string;
   barcode?: string;
+  quantityPurchased?: number;
 }
 
 function ItemRows({ chunk }: { chunk: ItemChunk[] }) {
@@ -250,7 +252,14 @@ function ItemRows({ chunk }: { chunk: ItemChunk[] }) {
               <View style={styles.itemPhotoPlaceholder} />
             )}
             <View style={styles.itemNameCol}>
-              <Text style={styles.itemName}>{item.itemName}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Text style={styles.itemName}>{item.itemName}</Text>
+                {item.quantityPurchased && item.quantityPurchased > 1 && (
+                  <View style={{ backgroundColor: "#EEF4EE", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 7, color: sage, fontFamily: "Helvetica-Bold" }}>×{item.quantityPurchased}</Text>
+                  </View>
+                )}
+              </View>
               {item.barcode && <Text style={styles.itemBarcode}>#{item.barcode}</Text>}
             </View>
             <Text style={styles.itemPrice}>{fmtMoney(item.purchaseAmount)}</Text>
@@ -357,6 +366,7 @@ function PickupSheetDoc({ estate, buyerGroups, itemPhotos, itemBarcodes, printed
       purchaseAmount: item.purchaseAmount,
       photoUrl: compressPhotoUrl(itemPhotos.get(item.itemName)),
       barcode: itemBarcodes.get(item.itemName),
+      quantityPurchased: item.quantityPurchased,
     }));
     const chunks = chunkArray(enriched, ITEMS_PER_CHUNK);
     chunks.forEach((chunk, chunkIndex) => {
