@@ -847,9 +847,13 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   for (const [tid, cs] of contractsByTenant) {
     for (const c of cs) {
-      // Only count Signed contracts as won — Archived = discarded quote, not a closed deal.
-      // Fall back to createdAt for contracts manually marked Signed without the signing flow (signedAt may be null).
-      if (c.status === "Signed" && (c.signedAt || c.createdAt)) {
+      // Count Signed contracts (signedAt or createdAt fallback) and Archived contracts that
+      // have a signedAt — those were genuinely signed then archived after project completion.
+      // Archived contracts with no signedAt are discarded quotes and must be excluded.
+      if (
+        (c.status === "Signed" && (c.signedAt || c.createdAt)) ||
+        (c.status === "Archived" && c.signedAt)
+      ) {
         allSignedContracts.push({ tenantId: tid, c });
       }
     }
