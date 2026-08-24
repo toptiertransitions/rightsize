@@ -232,6 +232,27 @@ function TemplatesTab({
   const [brandedGist, setBrandedGist] = useState("");
   const [generatingBranded, setGeneratingBranded] = useState(false);
   const [brandedError, setBrandedError] = useState("");
+  const brandedIframeRef = useRef<HTMLIFrameElement>(null);
+  const [brandedVersion, setBrandedVersion] = useState(0);
+
+  // Enable designMode on the branded preview iframe so the user can edit inline
+  useEffect(() => {
+    if (!form.body || form.emailType !== "branded") return;
+    const iframe = brandedIframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    doc.open();
+    doc.write(form.body);
+    doc.close();
+    doc.designMode = "on";
+    const handler = () => {
+      setForm(f => ({ ...f, body: "<!DOCTYPE html>" + doc.documentElement.outerHTML }));
+    };
+    doc.addEventListener("input", handler);
+    return () => { try { doc.removeEventListener("input", handler); } catch {} };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandedVersion]);
 
   const currentUser = staffMembers.find(s => s.clerkUserId === currentUserId);
   const senderName = currentUser?.displayName || "Top Tier Transitions";
@@ -303,6 +324,7 @@ function TemplatesTab({
     setBrandedError("");
     setSaveError(null);
     setModalOpen(true);
+    if ((t.emailType ?? "text") === "branded") setBrandedVersion(v => v + 1);
   }
 
   async function handleSave() {
@@ -656,6 +678,7 @@ function TemplatesTab({
                         const data = await res.json();
                         if (!res.ok) { setBrandedError(data.error ?? "Generation failed"); return; }
                         setForm(f => ({ ...f, subject: data.subject ?? f.subject, body: data.html ?? f.body }));
+                        setBrandedVersion(v => v + 1);
                       } catch { setBrandedError("Something went wrong. Try again."); }
                       finally { setGeneratingBranded(false); }
                     }}
@@ -667,19 +690,20 @@ function TemplatesTab({
                   {form.body && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-600">Preview</span>
+                        <span className="text-xs font-medium text-gray-600">Preview — click to edit</span>
                         <span className="text-xs text-gray-400">Merge tags will be filled at send time</span>
                       </div>
-                      <div className="rounded-lg border border-gray-200 overflow-hidden" style={{ height: 280 }}>
+                      <div className="rounded-lg border border-gray-200 overflow-hidden cursor-text" style={{ height: 380 }}>
                         <iframe
-                          srcDoc={form.body}
+                          key={brandedVersion}
+                          ref={brandedIframeRef}
                           className="w-full h-full border-0"
-                          sandbox="allow-same-origin allow-popups allow-top-navigation-by-user-activation"
-                          title="Branded email preview"
+                          sandbox="allow-same-origin"
+                          title="Branded email — click to edit"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Subject (editable)</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
                         <input type="text" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} className={inputCls} />
                       </div>
                     </div>
