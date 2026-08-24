@@ -67,6 +67,9 @@ interface PlanData {
   reps: RepPlan[];
 }
 
+// War Room stages live on the War Room tab only — Nurture excludes them
+const NURTURE_EXCLUDE = ["Agreed to Refer", "Active Referral", "Inactive Referral"];
+
 // ─── Add Quarter Modal ────────────────────────────────────────────────────────
 
 function suggestNextQuarter(): { label: string; startDate: string; endDate: string } {
@@ -271,72 +274,176 @@ function sortByPriorityThenName<T extends { priority: ReferralPriority; companyN
   });
 }
 
-// ─── Stage Changes Table ──────────────────────────────────────────────────────
+// ─── Stage Changes Table (sortable, spotlight, rep-filtered) ──────────────────
 
-function StageChangesTable({ rows, loading }: { rows: StageChangeRow[]; loading: boolean }) {
-  if (loading) {
-    return <div className="py-8 text-center text-sm text-gray-400">Loading recent stage changes...</div>;
+type SortKey = "companyName" | "contactName" | "ownerName" | "currentStage" | "stageChangedAt" | "lastActivityDate" | "nextStepDate";
+type SortDir = "asc" | "desc";
+
+function StageChangesTable({
+  rows,
+  loading,
+  repFilter,
+  currentUserId,
+}: {
+  rows: StageChangeRow[];
+  loading: boolean;
+  repFilter: string | null;
+  currentUserId: string;
+}) {
+  const [sortKey, setSortKey] = useState<SortKey>("nextStepDate");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [spotlightIds, setSpotlightIds] = useState<Set<string>>(new Set());
+  const [showOnlySpotlit, setShowOnlySpotlit] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`ttt_nurture_spotlight_${currentUserId}`);
+      setSpotlightIds(stored ? new Set(JSON.parse(stored)) : new Set());
+    } catch { setSpotlightIds(new Set()); }
+  }, [currentUserId]);
+
+  function toggleSpotlight(contactId: string) {
+    setSpotlightIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId); else next.add(contactId);
+      try {
+        localStorage.setItem(`ttt_nurture_spotlight_${currentUserId}`, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
   }
-  if (rows.length === 0) {
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  const repFiltered = repFilter ? rows.filter((r) => r.ownerName === repFilter) : rows;
+  const spotFiltered = showOnlySpotlit ? repFiltered.filter((r) => spotlightIds.has(r.contactId)) : repFiltered;
+  const sorted = [...spotFiltered].sort((a, b) => {
+    const va = (a[sortKey as keyof StageChangeRow] ?? null) as string | null;
+    const vb = (b[sortKey as keyof StageChangeRow] ?? null) as string | null;
+    if (va === null) return sortDir === "asc" ? 1 : -1;
+    if (vb === null) return sortDir === "asc" ? -1 : 1;
+    const cmp = va.localeCompare(vb);
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function SortTh({ k, label, align = "left" }: { k: SortKey; label: string; align?: "left" | "center" }) {
+    const active = sortKey === k;
     return (
-      <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center text-sm text-gray-400 italic">
-        No stage changes in the last 30 days.
-      </div>
+      <th
+        className={cn(
+          "px-3 py-2 font-medium text-gray-500 cursor-pointer select-none whitespace-nowrap hover:text-gray-700 transition-colors",
+          align === "center" ? "text-center" : "text-left"
+        )}
+        onClick={() => handleSort(k)}
+      >
+        {label}
+        <span className={cn("ml-1 text-xs", active ? "text-forest-600" : "text-gray-300")}>
+          {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+        </span>
+      </th>
     );
   }
+
+  if (loading) return <div className="py-8 text-center text-sm text-gray-400">Loading recent stage changes...</div>;
+
+  if (rows.length === 0) return (
+    <div className="bg-white border border-gray-200 rounded-xl px-5 py-8 text-center text-sm text-gray-400 italic">
+      No stage changes in the last 30 days.
+    </div>
+  );
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 bg-green-50 border-b border-green-100 flex items-center justify-between">
+      <div className="px-4 py-3 bg-green-50 border-b border-green-100 flex items-center gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-green-900">Recent Progress — Stage Changes (Last 30 Days)</h3>
-        <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">{rows.length}</span>
+        <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+          {sorted.length}{(repFilter || showOnlySpotlit) ? ` of ${rows.length}` : ""}
+        </span>
+        <button
+          onClick={() => setShowOnlySpotlit((s) => !s)}
+          className={cn(
+            "ml-auto inline-flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border transition-colors",
+            showOnlySpotlit
+              ? "border-amber-400 bg-amber-50 text-amber-700 font-medium"
+              : "border-gray-300 text-gray-500 hover:border-amber-300 hover:text-amber-600"
+          )}
+        >
+          <span>★</span>
+          {showOnlySpotlit ? "Show All" : "Spotlight Only"}
+          {spotlightIds.size > 0 && (
+            <span className="ml-1 bg-amber-200 text-amber-800 rounded-full px-1.5 text-[10px] font-bold">
+              {spotlightIds.size}
+            </span>
+          )}
+        </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="text-xs w-full" style={{ minWidth: 780 }}>
+        <table className="text-xs w-full" style={{ minWidth: 660 }}>
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500">Company</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500">Contact</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500">Owner</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500">Stage Change</th>
-              <th className="text-center px-4 py-2.5 font-medium text-gray-500">Changed</th>
-              <th className="text-center px-4 py-2.5 font-medium text-gray-500">Last Activity</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500">Next Step</th>
+              <th className="w-8 px-2 py-2 text-center text-gray-400 font-normal">★</th>
+              <SortTh k="companyName" label="Company" />
+              <SortTh k="contactName" label="Contact" />
+              <SortTh k="ownerName" label="Owner" />
+              <SortTh k="currentStage" label="Stage Change" />
+              <SortTh k="stageChangedAt" label="Changed" align="center" />
+              <SortTh k="lastActivityDate" label="Last Act." align="center" />
+              <SortTh k="nextStepDate" label="Next Step" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => (
-              <tr key={c.contactId} className="border-b border-gray-100 last:border-0">
-                <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{c.companyName}</td>
-                <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">
-                  {c.contactName}
-                  {c.contactTitle && <span className="text-gray-400 block text-[10px]">{c.contactTitle}</span>}
-                </td>
-                <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{c.ownerName || "—"}</td>
-                <td className="px-4 py-2.5 whitespace-nowrap">
-                  <StageBadge stage={c.previousStage} />
-                  <span className="mx-1.5 text-gray-400">→</span>
-                  <StageBadge stage={c.currentStage} />
-                </td>
-                <td className="px-4 py-2.5 text-center text-gray-500 whitespace-nowrap">{fmtDate(c.stageChangedAt?.slice(0, 10))}</td>
-                <td className="px-4 py-2.5 text-center text-gray-500 whitespace-nowrap">{c.lastActivityDate ? fmtDate(c.lastActivityDate) : "—"}</td>
-                <td className="px-4 py-2.5 text-gray-700 max-w-[180px]">
-                  {c.nextStepDate ? (
-                    <div>
-                      <span className="whitespace-nowrap">{fmtDate(c.nextStepDate)}</span>
-                      {c.nextStepNote && <p className="text-gray-400 truncate mt-0.5">{c.nextStepNote}</p>}
-                    </div>
-                  ) : "—"}
-                </td>
-              </tr>
-            ))}
+            {sorted.map((c) => {
+              const isSpotlit = spotlightIds.has(c.contactId);
+              return (
+                <tr key={c.contactId} className={cn("border-b border-gray-100 last:border-0", isSpotlit && "bg-amber-50/60")}>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      onClick={() => toggleSpotlight(c.contactId)}
+                      className={cn("transition-colors leading-none", isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-200 hover:text-amber-400")}
+                    >
+                      ★
+                    </button>
+                  </td>
+                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{c.companyName}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                    {c.contactName}
+                    {c.contactTitle && <span className="text-gray-400 block text-[10px]">{c.contactTitle}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{c.ownerName || "—"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <StageBadge stage={c.previousStage} />
+                    <span className="mx-1 text-gray-400">→</span>
+                    <StageBadge stage={c.currentStage} />
+                  </td>
+                  <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">{fmtDate(c.stageChangedAt?.slice(0, 10))}</td>
+                  <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">{c.lastActivityDate ? fmtDate(c.lastActivityDate) : "—"}</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[160px]">
+                    {c.nextStepDate ? (
+                      <div>
+                        <span className="whitespace-nowrap font-medium text-gray-800">{fmtDate(c.nextStepDate)}</span>
+                        {c.nextStepNote && <p className="text-gray-400 truncate mt-0.5">{c.nextStepNote}</p>}
+                      </div>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {showOnlySpotlit && sorted.length === 0 && (
+          <div className="px-4 py-6 text-center text-sm text-gray-400 italic">
+            No spotlit contacts. Click ★ on any row to spotlight.
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Not Yet Referring (Team View — flat table) ───────────────────────────────
+// ─── Not Yet Referring — Team View ────────────────────────────────────────────
 
 interface FlatTarget extends ConversionTarget {
   repName: string;
@@ -344,10 +451,13 @@ interface FlatTarget extends ConversionTarget {
 }
 
 function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
-  if (targets.length === 0) {
-    return <p className="text-sm text-gray-400 italic">No companies are targeted for conversion this quarter.</p>;
+  // Exclude war-room stages — those belong on the War Room tab
+  const nurtureTargets = targets.filter((t) => !NURTURE_EXCLUDE.includes(t.bestStage));
+
+  if (nurtureTargets.length === 0) {
+    return <p className="text-sm text-gray-400 italic">No nurture-stage companies targeted for conversion this quarter.</p>;
   }
-  const sorted = [...targets].sort((a, b) => {
+  const sorted = [...nurtureTargets].sort((a, b) => {
     const pd = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
     return pd !== 0 ? pd : a.companyName.localeCompare(b.companyName);
   });
@@ -396,7 +506,7 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
   );
 }
 
-// ─── Not Yet Referring (Rep View — with add/remove) ───────────────────────────
+// ─── Not Yet Referring — Rep View ─────────────────────────────────────────────
 
 function RepNurtureSection({
   rep,
@@ -413,12 +523,13 @@ function RepNurtureSection({
   onAddTarget: (companyId: string, currentStage: string, forClerkUserId?: string) => Promise<void>;
   onRemoveTarget: (targetId: string, companyId: string) => Promise<void>;
 }) {
-  const canManage = canManageTargets;
+  // Exclude war-room stages — those belong on the War Room tab
+  const nurtureTargets = rep.conversionTargets.filter((t) => !NURTURE_EXCLUDE.includes(t.bestStage));
+  const nurtureAvailable = rep.availableToConvert.filter((c) => !NURTURE_EXCLUDE.includes(c.bestStage));
 
   return (
     <div className="space-y-4">
-      {/* Conversion Targets */}
-      {rep.conversionTargets.length > 0 ? (
+      {nurtureTargets.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
           <table className="text-sm w-full" style={{ minWidth: 880 }}>
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -432,11 +543,11 @@ function RepNurtureSection({
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Rcvd</th>
-                {canManage && !isPast && <th className="px-4 py-2.5" />}
+                {canManageTargets && !isPast && <th className="px-4 py-2.5" />}
               </tr>
             </thead>
             <tbody>
-              {sortByPriorityThenName(rep.conversionTargets).map((t) => (
+              {sortByPriorityThenName(nurtureTargets).map((t) => (
                 <tr key={t.companyId} className="border-b border-gray-100 last:border-0">
                   <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
                   <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
@@ -454,7 +565,7 @@ function RepNurtureSection({
                   </td>
                   <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
                   <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
-                  {canManage && !isPast && (
+                  {canManageTargets && !isPast && (
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button
                         onClick={() => onRemoveTarget(t.targetId, t.companyId)}
@@ -471,15 +582,14 @@ function RepNurtureSection({
           </table>
         </div>
       ) : (
-        <p className="text-sm text-gray-400 italic">No companies targeted for conversion this quarter.</p>
+        <p className="text-sm text-gray-400 italic">No nurture-stage companies targeted this quarter.</p>
       )}
 
-      {/* Add from pipeline */}
-      {canManageTargets && !isPast && rep.availableToConvert.length > 0 && (
+      {canManageTargets && !isPast && nurtureAvailable.length > 0 && (
         <div>
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Add from your pipeline</p>
           <div className="flex flex-wrap gap-2">
-            {rep.availableToConvert.map((c) => (
+            {nurtureAvailable.map((c) => (
               <button
                 key={c.companyId}
                 onClick={() => onAddTarget(c.companyId, c.bestStage, rep.clerkUserId)}
@@ -496,9 +606,9 @@ function RepNurtureSection({
         </div>
       )}
 
-      {canManageTargets && !isPast && rep.availableToConvert.length === 0 && rep.conversionTargets.length === 0 && (
+      {canManageTargets && !isPast && nurtureAvailable.length === 0 && nurtureTargets.length === 0 && (
         <p className="text-xs text-gray-400 italic">
-          No other companies are assigned to you — assign companies in the Referral Partners tab to track them here.
+          No nurture-stage companies assigned to you — assign companies in the Referral Partners tab.
         </p>
       )}
     </div>
@@ -610,28 +720,60 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
   const today = new Date().toISOString().slice(0, 10);
   const isPast = selectedQuarter ? selectedQuarter.endDate < today : false;
 
+  // View options from planData (all reps visible to all roles)
   const repOptions: { key: string; label: string }[] = [
     { key: "team", label: "Team" },
     ...(planData?.reps ?? []).map((r) => ({ key: r.clerkUserId, label: r.displayName })),
   ];
 
   const activeRep = planData?.reps.find((r) => r.clerkUserId === viewMode);
-  // Can manage targets for the currently viewed rep (own data, or admin/manager)
   const canManageActiveRep = isAdmin || sysRole === "TTTManager" || activeRep?.clerkUserId === currentUserId;
 
+  // Map viewMode clerkUserId → display name to filter the Stage Changes table
+  const selectedRepName = viewMode === "team"
+    ? null
+    : planData?.reps.find((r) => r.clerkUserId === viewMode)?.displayName ?? null;
+
+  // All flat targets for team view (war-room stages excluded — handled inside TeamNurtureTable)
   const allFlatTargets: FlatTarget[] = (planData?.reps ?? []).flatMap((r) =>
     r.conversionTargets.map((t) => ({ ...t, repName: r.displayName, repClerkId: r.clerkUserId }))
   );
 
   return (
-    <div className="space-y-6">
-      {/* Stage Changes — always at the top */}
-      <StageChangesTable rows={stageChanges} loading={stageChangesLoading} />
+    <div className="space-y-5">
+      {/* Rep filter — at the top, affects both Stage Changes and Not Yet Referring */}
+      {repOptions.length > 1 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Showing:</span>
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
+            {repOptions.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => setViewMode(v.key)}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium transition-colors",
+                  viewMode === v.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Quarter selector */}
+      {/* Stage Changes — filtered by selected rep */}
+      <StageChangesTable
+        rows={stageChanges}
+        loading={stageChangesLoading}
+        repFilter={selectedRepName}
+        currentUserId={currentUserId}
+      />
+
+      {/* Not Yet Referring Pipeline */}
       {!quartersLoading && quarters.length > 0 && (
         <div>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h2 className="text-sm font-semibold text-gray-700">Not Yet Referring Pipeline</h2>
             <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
               {quarters.map((q) => (
@@ -662,7 +804,6 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
             )}
           </div>
 
-          {/* Missing dates warning */}
           {selectedQuarter && (!selectedQuarter.startDate || !selectedQuarter.endDate) && (
             <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
               <span>This quarter has no date range set.</span>
@@ -672,24 +813,6 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
                   Set dates
                 </button>
               )}
-            </div>
-          )}
-
-          {/* View switcher */}
-          {repOptions.length > 1 && (
-            <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white w-fit mb-4">
-              {repOptions.map((v) => (
-                <button
-                  key={v.key}
-                  onClick={() => setViewMode(v.key)}
-                  className={cn(
-                    "px-3 py-1.5 text-sm font-medium transition-colors",
-                    viewMode === v.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
-                  )}
-                >
-                  {v.label}
-                </button>
-              ))}
             </div>
           )}
 

@@ -1227,6 +1227,11 @@ function RepView({
   const hasSpotlight = !!(spotlightIds && onToggleSpotlight);
   const atMax = (spotlightIds?.length ?? 0) >= 3;
 
+  const WAR_ROOM_STAGES = ["Agreed to Refer", "Active Referral", "Inactive Referral"];
+  const warRoomAvailable = sortByPriorityThenName(
+    rep.availableToConvert.filter((c) => WAR_ROOM_STAGES.includes(c.bestStage))
+  );
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-3 gap-3">
@@ -1435,32 +1440,44 @@ function RepView({
           <p className="text-sm text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
         )}
 
-        {canManageTargets && !isPast && (
+        {!isPast && warRoomAvailable.length > 0 && (
           <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">
-              Add from your pipeline
-            </p>
-            {rep.availableToConvert.length === 0 ? (
-              <p className="text-xs text-gray-400 italic">
-                No other companies are assigned to you — assign companies in the Referral Partners tab to track them here.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {rep.availableToConvert.map((c) => (
-                  <button
-                    key={c.companyId}
-                    onClick={() => handleToggleTarget(c.companyId, null, c.bestStage)}
-                    disabled={toggling === c.companyId}
-                    className="inline-flex items-center gap-1.5 text-xs border border-dashed border-gray-300 text-gray-500 rounded-lg px-2.5 py-1.5 hover:border-forest-400 hover:text-forest-600 hover:bg-forest-50 transition-colors disabled:opacity-40"
-                  >
-                    <span className="text-gray-400">+</span>
-                    {c.companyName}
-                    <span className="text-gray-300">·</span>
-                    <StageBadge stage={c.bestStage} />
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-gray-700">Add to Priority List</h3>
+              <span className="text-xs text-gray-400">Active-stage companies not yet tracked this quarter</span>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Priority</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Stage</th>
+                    {canManageTargets && <th className="px-4 py-2.5" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {warRoomAvailable.map((c) => (
+                    <tr key={c.companyId} className="border-b border-gray-100 last:border-0">
+                      <td className="px-4 py-3 font-medium text-gray-900">{c.companyName}</td>
+                      <td className="px-4 py-3"><PriorityBadge priority={c.priority} /></td>
+                      <td className="px-4 py-3"><StageBadge stage={c.bestStage} /></td>
+                      {canManageTargets && (
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => handleToggleTarget(c.companyId, null, c.bestStage)}
+                            disabled={toggling === c.companyId}
+                            className="text-xs bg-forest-600 text-white rounded-lg px-3 py-1.5 hover:bg-forest-700 disabled:opacity-40"
+                          >
+                            + Add to Priority List
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
