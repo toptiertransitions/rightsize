@@ -154,8 +154,9 @@ export async function POST(req: NextRequest) {
                   s.isActive && s.email)
               : null;
             if (!staffSeller && updatedItem.staffSellerName) {
+              const normName = (n: string) => n.replace(/\s+/g, "").toLowerCase();
               staffSeller = staffList.find(s =>
-                s.displayName.trim().toLowerCase() === updatedItem.staffSellerName!.trim().toLowerCase() &&
+                normName(s.displayName) === normName(updatedItem.staffSellerName!) &&
                 s.isActive && s.email
               ) ?? null;
             }

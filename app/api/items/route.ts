@@ -451,10 +451,12 @@ export async function PATCH(req: NextRequest) {
             (s.clerkUserId.trim() === sellerId || s.id.trim() === sellerId) &&
             s.isActive && s.email)
         : null;
-      // Fallback: match by display name when the ID is missing or stale
+      // Fallback: match by display name when the ID is missing or stale.
+      // Normalize spaces so "MaryEllen Leto" and "Mary Ellen Leto" resolve to the same person.
       if (!soldStaffSeller && item.staffSellerName) {
+        const normName = (n: string) => n.replace(/\s+/g, "").toLowerCase();
         soldStaffSeller = soldStaffList.find(s =>
-          s.displayName.trim().toLowerCase() === item.staffSellerName!.trim().toLowerCase() &&
+          normName(s.displayName) === normName(item.staffSellerName!) &&
           s.isActive && s.email
         ) ?? null;
       }

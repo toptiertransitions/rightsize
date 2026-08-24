@@ -2449,15 +2449,17 @@ function ReferralPartnersTab({
   staffMembers,
   initialContactStage = "",
   initialType = "",
+  initialExpandedCompanyId,
 }: {
   initialCompanies: ReferralCompany[];
   initialReferralContacts: ReferralContact[];
   staffMembers: StaffMember[];
   initialContactStage?: ReferralContactStage | "";
   initialType?: string;
+  initialExpandedCompanyId?: string;
 }) {
   const [companies, setCompanies] = useState(initialCompanies);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(initialExpandedCompanyId ?? null);
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
   const [companyModal, setCompanyModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<ReferralCompany | null>(null);
@@ -5835,6 +5837,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           staffMembers={staffMembers}
           initialContactStage={refInitialContactStage}
           initialType={refInitialType}
+          initialExpandedCompanyId={searchParams.get("company") ?? undefined}
         />
       )}
       {tab === "tasks" && (

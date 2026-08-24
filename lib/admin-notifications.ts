@@ -123,7 +123,10 @@ export async function sendStageProgressNotification(params: {
     note: a.note,
   }));
 
-  const crmUrl = `${(process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim()}/crm`;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const crmUrl = params.referralCompanyId
+    ? `${appUrl}/crm?tab=referrals&company=${params.referralCompanyId}`
+    : `${appUrl}/crm?tab=referrals`;
   const resend = new Resend(resendKey);
   const from = `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`;
 

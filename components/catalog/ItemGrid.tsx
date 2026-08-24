@@ -102,7 +102,13 @@ function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller", 
         value={inputVal}
         placeholder={placeholder}
         onFocus={() => setOpen(true)}
-        onChange={e => { setInputVal(e.target.value); setOpen(true); onChange(e.target.value, ""); }}
+        onChange={e => {
+          setInputVal(e.target.value);
+          setOpen(true);
+          const normName = (n: string) => n.replace(/\s+/g, "").toLowerCase();
+          const exact = staffMembers.find(s => normName(s.displayName) === normName(e.target.value));
+          onChange(e.target.value, exact?.clerkUserId ?? "");
+        }}
         onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
         className={inputClassName ?? defaultInputClass}
       />
@@ -171,7 +177,11 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
     quantity: item.quantity ?? 1,
-    staffSellerId: item.staffSellerId ?? "",
+    staffSellerId: item.staffSellerId || (() => {
+      if (!item.staffSellerName) return "";
+      const normName = (n: string) => n.replace(/\s+/g, "").toLowerCase();
+      return staffMembers.find(s => normName(s.displayName) === normName(item.staffSellerName!))?.clerkUserId ?? "";
+    })(),
     staffSellerName: item.staffSellerName ?? "",
     alsoListedOnline: item.alsoListedOnline ?? false,
     completedDate: item.completedDate ?? "",
