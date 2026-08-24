@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import VoiceLogTab from "./VoiceLogTab";
 import TasksTab from "./TasksTab";
-import PlanTab from "./PlanTab";
+import WarRoomTab from "./WarRoomTab";
+import NurtureTab from "./NurtureTab";
 
 const CRMActivityCharts = dynamic(() => import("./CRMActivityCharts"), { ssr: false });
 import { cn } from "@/lib/utils";
@@ -44,7 +45,7 @@ function parseCSV(text: string): Record<string, string>[] {
   }).filter(row => Object.values(row).some(v => v.trim()));
 }
 
-type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "voice" | "activity" | "settings" | "plan";
+type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "voice" | "activity" | "settings" | "warroom" | "nurture";
 
 interface CRMClientProps {
   opportunities: ClientOpportunity[];
@@ -5757,7 +5758,8 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     { key: "opportunities", label: "Opportunities" },
     { key: "contacts", label: "Clients" },
     { key: "referrals", label: "Referral Partners" },
-    { key: "plan", label: "Plan" },
+    { key: "warroom", label: "War Room" },
+    { key: "nurture", label: "Referral Nurture" },
     { key: "tasks", label: "Tasks" },
     { key: "voice", label: "Log with Voice" },
     { key: "activity", label: "Activity Log" },
@@ -5856,7 +5858,8 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         <ActivityLogTab opportunities={opportunities} clientContacts={localContacts} referralContacts={referralContacts} staffMembers={staffMembers} gmailConnected={gmailConnected} />
       )}
       {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} gmailTokenRevoked={gmailTokenRevoked} />}
-      {tab === "plan" && <PlanTab currentUserId={currentUserId} sysRole={sysRole} />}
+      {tab === "warroom" && <WarRoomTab currentUserId={currentUserId} sysRole={sysRole} />}
+      {tab === "nurture" && <NurtureTab currentUserId={currentUserId} sysRole={sysRole} />}
     </div>
   );
 }
