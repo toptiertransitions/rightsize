@@ -56,12 +56,14 @@ Email requirements:
 - White content area, 32px padding, 600px max-width centered
 - Open with "Hi {{first_name}}," then a blank line
 - Body: 2-3 short paragraphs. Be specific about what's in this resource and why it's valuable to their clients/referrals. Sound like a real person writing to a colleague.
-- Keep merge tags exactly as-is: {{first_name}}, {{last_name}}, {{company}}, {{rep_first_name}}
+- Keep merge tags exactly as-is: {{first_name}}, {{last_name}}, {{company}}, {{rep_first_name}}, {{rep_phone}}, {{rep_email}}
+- Rep phone in body: whenever the email references a phone number to call or text, write {{rep_phone}} — NEVER write any literal phone number (no 312 numbers, no placeholders like [phone])
+- Rep email in body: whenever the email references an email address to reply to or contact, write {{rep_email}} — NEVER write any literal email address (no info@, no placeholders like [email])
 - ${ctaLink
     ? `CTA button: <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto"><tr><td align="center" bgcolor="#2d4a3e" style="border-radius:4px"><a href="${ctaLink}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-family:Georgia,serif;font-size:16px;font-weight:bold;text-decoration:none;border-radius:4px">${ctaLabel}</a></td></tr></table>`
     : "Mention the resource is attached to this email — no CTA button needed"}
 - Warm sign-off from {{rep_first_name}} at Top Tier Transitions
-- Footer: #f5f4f0 bg, 16px padding, center-aligned, gray 12px, "Top Tier Transitions"
+- Footer: #f5f4f0 bg, 16px padding, center-aligned, gray 12px text, "Top Tier Transitions", then "{{rep_first_name}}" on the next line, then "{{rep_phone}}" on the next line, then "{{rep_email}}" on the next line
 - No em dashes anywhere in the email`;
 
   const systemPrompt = `You are an expert HTML email copywriter. You MUST respond with ONLY a single valid JSON object and absolutely nothing else — no explanation, no preamble, no markdown fences. The JSON must have exactly two keys: "subject" (string, 6 words max, specific and human) and "html" (string, the complete HTML email document).`;
