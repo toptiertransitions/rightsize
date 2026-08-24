@@ -109,12 +109,19 @@ export async function POST(
         }
       }
 
-      // Recipients: TTTSales + TTTManager + TTTAdmin (active, with email)
-      const recipients = allStaff
-        .filter(s => s.isActive && s.email && (
-          ["TTTAdmin", "TTTManager", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
-        ))
-        .map(s => s.email as string);
+      // Recipients: TTTSales + TTTManager + TTTAdmin + the project's team lead (active, with email)
+      const teamLeadEmail = tenant?.teamLeadClerkId
+        ? (allStaff.find(s => s.clerkUserId === tenant.teamLeadClerkId && s.isActive && s.email)?.email ?? null)
+        : null;
+      const recipientSet = new Set<string>(
+        allStaff
+          .filter(s => s.isActive && s.email && (
+            ["TTTAdmin", "TTTManager", "TTTSales"].includes(s.role ?? "") || isTTTAdmin(s.clerkUserId)
+          ))
+          .map(s => s.email as string)
+      );
+      if (teamLeadEmail) recipientSet.add(teamLeadEmail);
+      const recipients = [...recipientSet];
 
       if (recipients.length > 0) {
         const planUrl = `${APP_URL}/plan?tenantId=${id}`;
