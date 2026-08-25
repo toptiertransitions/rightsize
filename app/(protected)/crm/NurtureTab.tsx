@@ -463,7 +463,7 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
   });
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-      <table className="text-sm w-full" style={{ minWidth: 860 }}>
+      <table className="text-sm w-full" style={{ minWidth: 700 }}>
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
             <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
@@ -474,8 +474,6 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
             <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
             <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
             <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
-            <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
-            <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Rcvd</th>
           </tr>
         </thead>
         <tbody>
@@ -496,8 +494,6 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
                   </div>
                 ) : <span className="text-gray-400">—</span>}
               </td>
-              <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
-              <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
             </tr>
           ))}
         </tbody>
@@ -531,7 +527,7 @@ function RepNurtureSection({
     <div className="space-y-4">
       {nurtureTargets.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-          <table className="text-sm w-full" style={{ minWidth: 880 }}>
+          <table className="text-sm w-full" style={{ minWidth: 700 }}>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
@@ -541,8 +537,6 @@ function RepNurtureSection({
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Rcvd</th>
                 {canManageTargets && !isPast && <th className="px-4 py-2.5" />}
               </tr>
             </thead>
@@ -563,8 +557,6 @@ function RepNurtureSection({
                       </div>
                     ) : <span className="text-gray-400">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
-                  <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
                   {canManageTargets && !isPast && (
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button

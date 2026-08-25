@@ -426,11 +426,15 @@ function QuarterlyPlanSection({
   const [compareError, setCompareError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/crm/plan/tasks/${quarterId}?companyId=${companyId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setPlan(d.plan ?? null);
-        setActStats(d.actStats ?? []);
+    Promise.all([
+      fetch(`/api/crm/plan/company-plan?companyId=${companyId}&quarterId=${quarterId}`).then((r) => r.json()),
+      fetch(`/api/crm/plan/activity-stats?companyId=${companyId}&quarterId=${quarterId}`).then((r) => r.json()),
+    ])
+      .then(([planData, statsData]) => {
+        const p = planData.plan ?? null;
+        const hasAnyPlanData = p && (p.meeting1 || p.meeting2 || p.meeting3 || p.resource1 || p.resource2 || p.resource3 || p.monthlyMeetingGoal > 0 || p.monthlyCheckinGoal > 0);
+        setPlan(hasAnyPlanData ? p : null);
+        setActStats((statsData.months ?? []).map((m: { key: string; label: string; meetings: number; checkins: number }) => m));
       })
       .catch(console.error);
   }, [companyId, quarterId]);
@@ -450,10 +454,10 @@ function QuarterlyPlanSection({
     if (!draft) return;
     setSaving(true);
     try {
-      await fetch(`/api/crm/plan/tasks/${quarterId}`, {
-        method: "POST",
+      await fetch(`/api/crm/plan/company-plan`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, ...draft }),
+        body: JSON.stringify({ companyId, quarterId, ...draft }),
       });
       setPlan(draft);
       setEditing(false);
@@ -469,10 +473,16 @@ function QuarterlyPlanSection({
     setCompareResults(null);
     setCompareError(null);
     try {
-      const res = await fetch(`/api/crm/plan/tasks/${quarterId}/compare`, {
+      const res = await fetch(`/api/crm/plan/compare-activity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, companyName }),
+        body: JSON.stringify({
+          companyId,
+          companyName,
+          quarterId,
+          meetings: plan ? [plan.meeting1, plan.meeting2, plan.meeting3].filter(Boolean) : [],
+          resources: plan ? [plan.resource1, plan.resource2, plan.resource3].filter(Boolean) : [],
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setCompareError(data.error ?? "Failed"); return; }
@@ -1008,8 +1018,6 @@ function RepAccordionItem({
                       <th className="text-center pb-1.5 pr-3 font-medium">Stage Age</th>
                       <th className="text-center pb-1.5 pr-3 font-medium">Last Activity</th>
                       <th className="text-left pb-1.5 pr-3 font-medium">Next Step</th>
-                      <th className="text-center pb-1.5 pr-3 font-medium">Goal</th>
-                      <th className="text-center pb-1.5 font-medium">Rcvd</th>
                       {canManage && !isPast && <th className="pb-1.5" />}
                     </tr>
                   </thead>
@@ -1032,8 +1040,6 @@ function RepAccordionItem({
                             </div>
                           ) : <span className="text-gray-400">—</span>}
                         </td>
-                        <td className="py-1.5 pr-3 text-center text-gray-600">{t.goal}</td>
-                        <td className="py-1.5 text-center font-semibold text-gray-900">{t.actual}</td>
                         {canManage && !isPast && (
                           <td className="py-1.5 pl-2 text-right whitespace-nowrap">
                             <button
@@ -1349,7 +1355,7 @@ function RepView({
 
         {rep.conversionTargets.length > 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-3">
-            <table className="text-sm" style={{ minWidth: 880 }}>
+            <table className="text-sm" style={{ minWidth: 720 }}>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Company</th>
@@ -1359,8 +1365,6 @@ function RepView({
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
                   <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Goal</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Rcvd</th>
                   {hasSpotlight && <th className="px-2 py-2.5 text-xs font-medium text-gray-400 text-center">Spotlight</th>}
                   {canManageTargets && !isPast && <th className="px-4 py-2.5" />}
                   <th className="px-2 py-2.5 w-8" />
@@ -1370,7 +1374,7 @@ function RepView({
                 {sortByPriorityThenName(rep.conversionTargets).map((t) => {
                   const isOpen = expandedCompanies.has(t.companyId);
                   const isSpotlit = spotlightIds?.includes(t.companyId) ?? false;
-                  const colCount = [9, hasSpotlight ? 1 : 0, canManageTargets && !isPast ? 1 : 0, 1].reduce((a, b) => a + b, 0);
+                  const colCount = [7, hasSpotlight ? 1 : 0, canManageTargets && !isPast ? 1 : 0, 1].reduce((a, b) => a + b, 0);
                   return (
                     <Fragment key={t.companyId}>
                       <tr
@@ -1393,8 +1397,6 @@ function RepView({
                             </div>
                           ) : <span className="text-gray-400 text-sm">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-center text-gray-600">{t.goal}</td>
-                        <td className="px-4 py-3 text-center font-medium text-gray-900">{t.actual}</td>
                         {hasSpotlight && (
                           <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             <button
