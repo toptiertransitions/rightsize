@@ -85,6 +85,11 @@ export function InvoiceCreatorModal({
   const [promoResult, setPromoResult] = useState<{ code: string; label: string; discountPercent: number; maxDiscount?: number } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
 
+  // Consignment earnings state
+  const [includeConsignment, setIncludeConsignment] = useState(false);
+  const [consignmentRaw, setConsignmentRaw] = useState("");
+  const consignmentAmount = includeConsignment ? (parseFloat(consignmentRaw) || 0) : 0;
+
   // Expenses state
   const [expenseItems, setExpenseItems] = useState<InvoiceExpenseItem[]>([]);
   const [includeExpenses, setIncludeExpenses] = useState(true);
@@ -237,7 +242,13 @@ export function InvoiceCreatorModal({
       : parseFloat(specificAmount) || 0;
 
   const effectiveDeposit = tab === "Full" && selectedDepositTotal > 0 ? selectedDepositTotal : 0;
-  const fullAmount = fullSubtotal + expensesTotal - effectiveDeposit;
+  const consignmentLineItem = consignmentAmount > 0 ? {
+    serviceId: "__consignment__",
+    serviceName: "Consignment Earnings",
+    hours: 1,
+    rate: -consignmentAmount,
+  } : null;
+  const fullAmount = fullSubtotal + expensesTotal - effectiveDeposit - consignmentAmount;
 
   const selectedDepositService = services.find((s) => s.id === depositServiceId);
   const selectedSpecificService = services.find((s) => s.id === specificServiceId);
@@ -267,6 +278,8 @@ export function InvoiceCreatorModal({
       setPromoResult(null);
       setPromoError(null);
       setBillToName(defaultBillToName ?? tenant.name);
+      setIncludeConsignment(false);
+      setConsignmentRaw("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -356,6 +369,7 @@ export function InvoiceCreatorModal({
             })),
             ...(discountLineItem ? [discountLineItem] : []),
             ...(withDepositCredit ? [depositCreditLineItem] : []),
+            ...(consignmentLineItem ? [consignmentLineItem] : []),
           ];
           body = {
             ...body,
@@ -375,6 +389,7 @@ export function InvoiceCreatorModal({
             })),
             ...(loggedPromoLineItem ? [loggedPromoLineItem] : []),
             ...(withDepositCredit ? [depositCreditLineItem] : []),
+            ...(consignmentLineItem ? [consignmentLineItem] : []),
           ];
           body = {
             ...body,
@@ -384,7 +399,8 @@ export function InvoiceCreatorModal({
           };
         } else {
           // Specific amount
-          const lineItems = withDepositCredit
+          const needsLineItems = withDepositCredit || !!consignmentLineItem;
+          const lineItems = needsLineItems
             ? [
                 {
                   serviceId: specificServiceId,
@@ -392,7 +408,8 @@ export function InvoiceCreatorModal({
                   hours: 1,
                   rate: fullSubtotal,
                 },
-                depositCreditLineItem,
+                ...(withDepositCredit ? [depositCreditLineItem] : []),
+                ...(consignmentLineItem ? [consignmentLineItem] : []),
               ]
             : undefined;
           body = {
@@ -991,6 +1008,51 @@ export function InvoiceCreatorModal({
                       <span>{fmt(expensesTotal)}</span>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Consignment Earnings section (Full Invoice only) */}
+          {tab === "Full" && (
+            <div className="border border-amber-200 bg-amber-50 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeConsignment}
+                    onChange={e => setIncludeConsignment(e.target.checked)}
+                    className="rounded text-amber-600 w-4 h-4"
+                  />
+                  <span className="text-sm font-semibold text-amber-900">
+                    Consignment Earnings
+                    {consignmentAmount > 0 && (
+                      <span className="ml-1.5 text-amber-700">(-{fmt(consignmentAmount)})</span>
+                    )}
+                  </span>
+                </label>
+              </div>
+              {includeConsignment && (
+                <div className="px-4 pb-3 space-y-2 border-t border-amber-200">
+                  <div className="pt-2">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                      Amount to deduct
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        value={consignmentRaw}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setConsignmentRaw(e.target.value)}
+                        className="w-full border border-amber-300 rounded-xl pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-amber-700">
+                    Deducted from the invoice balance. Pushed to QuickBooks as &ldquo;Consignment Payout 10.1.&rdquo;
+                  </p>
                 </div>
               )}
             </div>

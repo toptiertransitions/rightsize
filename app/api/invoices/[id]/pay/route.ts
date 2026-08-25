@@ -209,6 +209,7 @@ export async function POST(
         projectName: tenant?.name,
         serviceName: invoice.serviceName,
         amountPaid: chargeAmount,
+        surchargeAmount: surchargeRate > 0 ? chargeAmount - balance : undefined,
         paymentMethod,
         maskedCard,
         transactionId: txnId,

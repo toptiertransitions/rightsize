@@ -172,21 +172,23 @@ export async function POST(req: NextRequest) {
           const lineItemsTotal = typedLineItems.reduce((s, li) => s + li.hours * li.rate, 0);
 
           // QBO rejects invoices whose total is below $0. Only strip credit/adjustment
-          // lines (serviceId="", negative net) when they push the total negative — for
-          // normal invoices with a positive balance the deposit credit line is valid and
-          // should flow through so QBO reflects the correct amount owed.
+          // lines (serviceId="" or "__consignment__", negative net) when they push the
+          // total negative — for normal positive-balance invoices these lines are valid
+          // and should flow through so QBO reflects the correct amount owed.
           const qboEligibleItems = lineItemsTotal < 0
-            ? typedLineItems.filter((item) => !(item.serviceId === "" && item.hours * item.rate < 0))
+            ? typedLineItems.filter((item) => !((item.serviceId === "" || item.serviceId === "__consignment__") && item.hours * item.rate < 0))
             : typedLineItems;
 
           if (qboEligibleItems.length === 0) {
             qboLineItems = [];
           } else {
             qboLineItems = qboEligibleItems.map((item) => ({
-              serviceName: item.serviceName,
+              // Consignment earnings always use the fixed QBO item name regardless of
+              // what serviceName is stored locally.
+              serviceName: item.serviceId === "__consignment__" ? "Consignment Payout 10.1" : item.serviceName,
               hours: item.hours,
               rate: item.rate,
-              qboItemId: serviceMap.get(item.serviceId)?.qboItemId,
+              qboItemId: item.serviceId === "__consignment__" ? undefined : serviceMap.get(item.serviceId)?.qboItemId,
             }));
           }
         } else {

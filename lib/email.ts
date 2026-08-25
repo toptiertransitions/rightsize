@@ -3109,6 +3109,7 @@ export function buildPaymentReceiptEmail({
   projectName,
   serviceName,
   amountPaid,
+  surchargeAmount,
   paymentMethod,
   maskedCard,
   transactionId,
@@ -3124,6 +3125,7 @@ export function buildPaymentReceiptEmail({
   projectName?: string;
   serviceName?: string;
   amountPaid: number;
+  surchargeAmount?: number;
   paymentMethod: "credit_card" | "ach";
   maskedCard?: string;
   transactionId?: string;
@@ -3172,6 +3174,20 @@ export function buildPaymentReceiptEmail({
       <td style="padding:9px 16px;font-size:13px;color:#1d4ed8;font-style:italic;border-top:1px solid #dbeafe;text-align:right;">-${fmt(Math.abs(li.hours * li.rate))}</td>
     </tr>`).join("");
 
+  const hasSurcharge = !!surchargeAmount && surchargeAmount > 0;
+  const invoiceBalance = hasSurcharge ? amountPaid - surchargeAmount! : null;
+
+  const surchargeRows = hasSurcharge
+    ? `<tr style="background:#f9fafb;">
+        <td style="padding:9px 16px;font-size:13px;color:${MUTED};border-top:1px solid #e5e7eb;">Subtotal</td>
+        <td style="padding:9px 16px;font-size:13px;color:${MUTED};border-top:1px solid #e5e7eb;text-align:right;">${fmt(invoiceBalance!)}</td>
+      </tr>
+      <tr>
+        <td style="padding:9px 16px;font-size:13px;color:${TEXT};border-top:1px solid #e5e7eb;">Credit Card Transaction</td>
+        <td style="padding:9px 16px;font-size:13px;color:${TEXT};border-top:1px solid #e5e7eb;text-align:right;">+${fmt(surchargeAmount!)}</td>
+      </tr>`
+    : "";
+
   const itemsTable = `
     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
       <thead>
@@ -3183,6 +3199,7 @@ export function buildPaymentReceiptEmail({
       <tbody>
         ${lineItemRows}
         ${creditRows}
+        ${surchargeRows}
       </tbody>
       <tfoot>
         <tr style="background:${LIGHT_GREEN};">
