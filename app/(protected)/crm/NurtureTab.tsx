@@ -786,9 +786,12 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
   const isPast = selectedQuarter ? selectedQuarter.endDate < today : false;
 
   // View options from planData (all reps visible to all roles)
+  const EXCLUDE_REPS = ["MattTest Sales"];
   const repOptions: { key: string; label: string }[] = [
     { key: "team", label: "Team" },
-    ...(planData?.reps ?? []).map((r) => ({ key: r.clerkUserId, label: r.displayName })),
+    ...(planData?.reps ?? [])
+      .filter(r => !EXCLUDE_REPS.includes(r.displayName))
+      .map((r) => ({ key: r.clerkUserId, label: r.displayName })),
   ];
 
   const activeRep = planData?.reps.find((r) => r.clerkUserId === viewMode);

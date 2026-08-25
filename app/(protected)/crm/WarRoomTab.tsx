@@ -1674,6 +1674,7 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
   const [showAddQuarter, setShowAddQuarter] = useState(false);
   const [showEditQuarter, setShowEditQuarter] = useState(false);
   const [spotlightIds, setSpotlightIds] = useState<string[]>([]);
+  const [spotlightOnlyMode, setSpotlightOnlyMode] = useState(false);
 
   const isAdmin = sysRole === "TTTAdmin";
   const [viewMode, setViewMode] = useState<"team" | string>(
@@ -1793,14 +1794,31 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
   const isPast = selectedQuarter ? selectedQuarter.endDate < today : false;
 
   const repOptions = planData?.reps ?? [];
+  const EXCLUDE_REPS = ["MattTest Sales"];
   const viewOptions: { key: string; label: string }[] = [
     { key: "team", label: "Team" },
-    ...repOptions.map((r) => ({ key: r.clerkUserId, label: r.displayName })),
+    ...repOptions
+      .filter(r => !EXCLUDE_REPS.includes(r.displayName))
+      .map((r) => ({ key: r.clerkUserId, label: r.displayName })),
   ];
 
   const activeRep = planData?.reps.find((r) => r.clerkUserId === viewMode);
   // Can manage targets for the currently viewed rep (own data, or admin/manager)
   const canManageActiveRep = isAdmin || sysRole === "TTTManager" || activeRep?.clerkUserId === currentUserId;
+
+  // When spotlight-only mode is on, filter plan data to only spotlit companies for rendering
+  const planDataForView = spotlightOnlyMode && spotlightIds.length > 0 && planData
+    ? {
+        ...planData,
+        reps: planData.reps.map(r => ({
+          ...r,
+          activePartners: r.activePartners.filter(p => spotlightIds.includes(p.companyId)),
+          conversionTargets: r.conversionTargets.filter(t => spotlightIds.includes(t.companyId)),
+          availableToConvert: r.availableToConvert.filter(c => spotlightIds.includes(c.companyId)),
+        })),
+      }
+    : planData;
+  const activeRepForView = planDataForView?.reps.find((r) => r.clerkUserId === viewMode);
 
   // In rep view, show spotlight if viewing own data (or admin can view spotlight for any rep)
   const showSpotlight = viewMode !== "team" && planData != null && selectedQuarterId != null;
@@ -1873,21 +1891,37 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
         </div>
       )}
 
-      {/* View switcher */}
+      {/* View switcher + Spotlight Only filter */}
       {viewOptions.length > 1 && (
-        <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white w-fit mb-5">
-          {viewOptions.map((v) => (
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
+            {viewOptions.map((v) => (
+              <button
+                key={v.key}
+                onClick={() => setViewMode(v.key)}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium transition-colors",
+                  viewMode === v.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          {spotlightIds.length > 0 && (
             <button
-              key={v.key}
-              onClick={() => setViewMode(v.key)}
+              onClick={() => setSpotlightOnlyMode(m => !m)}
               className={cn(
-                "px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === v.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                "h-[34px] px-3 text-sm rounded-lg border transition-colors flex items-center gap-1.5",
+                spotlightOnlyMode
+                  ? "border-amber-400 bg-amber-50 text-amber-700 font-medium"
+                  : "border-gray-200 text-gray-500 hover:border-gray-400"
               )}
+              title={spotlightOnlyMode ? "Show all companies" : "Show spotlighted companies only"}
             >
-              {v.label}
+              ★ Spotlight Only
             </button>
-          ))}
+          )}
         </div>
       )}
 
@@ -1899,9 +1933,9 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
         </div>
       )}
 
-      {!loading && planData && viewMode === "team" && (
+      {!loading && planDataForView && viewMode === "team" && (
         <TeamView
-          planData={planData}
+          planData={planDataForView}
           isAdmin={isAdmin}
           sysRole={sysRole}
           currentUserId={currentUserId}
@@ -1912,10 +1946,10 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
         />
       )}
 
-      {!loading && planData && activeRep && (
+      {!loading && planDataForView && activeRepForView && (
         <RepView
-          rep={activeRep}
-          quarter={planData.quarter}
+          rep={activeRepForView}
+          quarter={planDataForView.quarter}
           isPast={isPast}
           isAdmin={isAdmin}
           canManageTargets={canManageActiveRep}
