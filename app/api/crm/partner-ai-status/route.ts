@@ -193,6 +193,20 @@ export async function POST(req: NextRequest) {
     referralPartnerId: str(c.fields["ReferralPartnerId"]),
   }]));
 
+  // referralContact.id → name
+  const contactNameById = new Map(contacts.map((c) => [c.id, str(c.fields["Name"])]));
+
+  // tenantId → { clientName, referralContactName } — connects Google reviews to the referred client
+  const tenantToInfo = new Map<string, { clientName: string; referralContactName: string }>();
+  for (const o of opportunities) {
+    const tid = str(o.fields["TenantId"]);
+    if (!tid || tenantToInfo.has(tid)) continue;
+    const cc = ccById.get(str(o.fields["ClientContactId"]));
+    const clientName = cc?.name ?? "Unknown client";
+    const referralContactName = cc?.referralPartnerId ? (contactNameById.get(cc.referralPartnerId) ?? "Unknown contact") : "Unknown contact";
+    tenantToInfo.set(tid, { clientName, referralContactName });
+  }
+
   // ── Step 8: Build AI prompt sections ──────────────────────────────────────────
 
   // Company info
@@ -290,9 +304,15 @@ export async function POST(req: NextRequest) {
       ).join("\n")
     : "  (no data)";
 
-  // Google reviews
+  // Google reviews — with full attribution back to the referred client and contact
   const reviewsSection = allReviews.length > 0
-    ? allReviews.map((r) => `• ${r.stars}/5 stars — "${r.text.slice(0, 300)}" (${r.createdAt.slice(0, 10)})`).join("\n")
+    ? allReviews.map((r) => {
+        const info = tenantToInfo.get(r.tenantId);
+        const attribution = info
+          ? ` [client: ${info.clientName}, referred by: ${info.referralContactName}]`
+          : "";
+        return `• ${r.stars}/5 stars${attribution} (${r.createdAt.slice(0, 10)}): "${r.text.slice(0, 350)}"`;
+      }).join("\n")
     : "(no reviews yet from projects this partner referred)";
 
   // Prior AI statuses (last 3 to keep prompt manageable)
