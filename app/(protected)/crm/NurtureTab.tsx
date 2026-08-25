@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { cn } from "@/lib/utils";
 import type { ReferralPriority } from "@/lib/types";
+import { CompanyContactsPanel } from "./WarRoomTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -450,7 +451,17 @@ interface FlatTarget extends ConversionTarget {
   repClerkId: string;
 }
 
-function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
+function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quarterId: string }) {
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+
+  function toggleCompany(companyId: string) {
+    setExpandedCompanies((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      return next;
+    });
+  }
+
   // Exclude war-room stages — those belong on the War Room tab
   const nurtureTargets = targets.filter((t) => !NURTURE_EXCLUDE.includes(t.bestStage));
 
@@ -461,6 +472,8 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
     const pd = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
     return pd !== 0 ? pd : a.companyName.localeCompare(b.companyName);
   });
+  // 9 columns: Company, Rep, Priority, Start Stage, Current Stage, Stage Age, Last Activity, Next Step, chevron
+  const colCount = 9;
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
       <table className="text-sm w-full" style={{ minWidth: 700 }}>
@@ -474,28 +487,51 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
             <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
             <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
             <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
+            <th className="px-2 py-2.5 w-8" />
           </tr>
         </thead>
         <tbody>
-          {sorted.map((t) => (
-            <tr key={`${t.repClerkId}-${t.companyId}`} className="border-b border-gray-100 last:border-0">
-              <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
-              <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{t.repName}</td>
-              <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
-              <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
-              <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
-              <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
-              <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
-              <td className="px-4 py-3 max-w-[180px]">
-                {t.nextStepDate ? (
-                  <div>
-                    <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
-                    {t.nextStepNote && <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>}
-                  </div>
-                ) : <span className="text-gray-400">—</span>}
-              </td>
-            </tr>
-          ))}
+          {sorted.map((t) => {
+            const isOpen = expandedCompanies.has(t.companyId);
+            return (
+              <Fragment key={`${t.repClerkId}-${t.companyId}`}>
+                <tr
+                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => toggleCompany(t.companyId)}
+                >
+                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{t.repName}</td>
+                  <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
+                  <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
+                  <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
+                  <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
+                  <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
+                  <td className="px-4 py-3 max-w-[180px]">
+                    {t.nextStepDate ? (
+                      <div>
+                        <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
+                        {t.nextStepNote && <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>}
+                      </div>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-2 py-3 text-center text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</td>
+                </tr>
+                {isOpen && (
+                  <tr>
+                    <td colSpan={colCount} className="p-0">
+                      <CompanyContactsPanel
+                        companyId={t.companyId}
+                        quarterId={quarterId}
+                        companyName={t.companyName}
+                        competitors={t.competitors ?? null}
+                        excludeStages={[]}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -506,6 +542,7 @@ function TeamNurtureTable({ targets }: { targets: FlatTarget[] }) {
 
 function RepNurtureSection({
   rep,
+  quarterId,
   isPast,
   canManageTargets,
   toggling,
@@ -513,12 +550,23 @@ function RepNurtureSection({
   onRemoveTarget,
 }: {
   rep: RepPlan;
+  quarterId: string;
   isPast: boolean;
   canManageTargets: boolean;
   toggling: string | null;
   onAddTarget: (companyId: string, currentStage: string, forClerkUserId?: string) => Promise<void>;
   onRemoveTarget: (targetId: string, companyId: string) => Promise<void>;
 }) {
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+
+  function toggleCompany(companyId: string) {
+    setExpandedCompanies((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      return next;
+    });
+  }
+
   // Exclude war-room stages — those belong on the War Room tab
   const nurtureTargets = rep.conversionTargets.filter((t) => !NURTURE_EXCLUDE.includes(t.bestStage));
   const nurtureAvailable = rep.availableToConvert.filter((c) => !NURTURE_EXCLUDE.includes(c.bestStage));
@@ -538,38 +586,63 @@ function RepNurtureSection({
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
                 {canManageTargets && !isPast && <th className="px-4 py-2.5" />}
+                <th className="px-2 py-2.5 w-8" />
               </tr>
             </thead>
             <tbody>
-              {sortByPriorityThenName(nurtureTargets).map((t) => (
-                <tr key={t.companyId} className="border-b border-gray-100 last:border-0">
-                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
-                  <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
-                  <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
-                  <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
-                  <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
-                  <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
-                  <td className="px-4 py-3 max-w-[180px]">
-                    {t.nextStepDate ? (
-                      <div>
-                        <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
-                        {t.nextStepNote && <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>}
-                      </div>
-                    ) : <span className="text-gray-400">—</span>}
-                  </td>
-                  {canManageTargets && !isPast && (
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => onRemoveTarget(t.targetId, t.companyId)}
-                        disabled={toggling === t.companyId}
-                        className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {sortByPriorityThenName(nurtureTargets).map((t) => {
+                const isOpen = expandedCompanies.has(t.companyId);
+                // base 7 cols + optional remove col + chevron col
+                const colCount = 7 + (canManageTargets && !isPast ? 1 : 0) + 1;
+                return (
+                  <Fragment key={t.companyId}>
+                    <tr
+                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => toggleCompany(t.companyId)}
+                    >
+                      <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
+                      <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
+                      <td className="px-4 py-3"><StageBadge stage={t.startingStage || "—"} /></td>
+                      <td className="px-4 py-3"><StageBadge stage={t.bestStage} /></td>
+                      <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDays(t.stageDurationDays)}</td>
+                      <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{fmtDate(t.lastActivityDate)}</td>
+                      <td className="px-4 py-3 max-w-[180px]">
+                        {t.nextStepDate ? (
+                          <div>
+                            <p className="text-gray-800 font-medium whitespace-nowrap">{fmtDate(t.nextStepDate)}</p>
+                            {t.nextStepNote && <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>}
+                          </div>
+                        ) : <span className="text-gray-400">—</span>}
+                      </td>
+                      {canManageTargets && !isPast && (
+                        <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => onRemoveTarget(t.targetId, t.companyId)}
+                            disabled={toggling === t.companyId}
+                            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      )}
+                      <td className="px-2 py-3 text-center text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={colCount} className="p-0">
+                          <CompanyContactsPanel
+                            companyId={t.companyId}
+                            quarterId={quarterId}
+                            companyName={t.companyName}
+                            competitors={t.competitors ?? null}
+                            excludeStages={[]}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -811,12 +884,13 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
           {planLoading && <div className="py-8 text-center text-sm text-gray-400">Loading pipeline data...</div>}
 
           {!planLoading && planData && viewMode === "team" && (
-            <TeamNurtureTable targets={allFlatTargets} />
+            <TeamNurtureTable targets={allFlatTargets} quarterId={selectedQuarterId ?? ""} />
           )}
 
           {!planLoading && planData && activeRep && (
             <RepNurtureSection
               rep={activeRep}
+              quarterId={selectedQuarterId ?? ""}
               isPast={isPast}
               canManageTargets={canManageActiveRep}
               toggling={toggling}

@@ -424,20 +424,47 @@ function QuarterlyPlanSection({
   const [compareLoading, setCompareLoading] = useState(false);
   const [compareResults, setCompareResults] = useState<{ summary?: string; results: CompareResult[] } | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<string | null>(null);
+  const [aiStatusAt, setAiStatusAt] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/crm/plan/company-plan?companyId=${companyId}&quarterId=${quarterId}`).then((r) => r.json()),
       fetch(`/api/crm/plan/activity-stats?companyId=${companyId}&quarterId=${quarterId}`).then((r) => r.json()),
+      fetch(`/api/crm/partner-ai-status?companyId=${companyId}`).then((r) => r.json()),
     ])
-      .then(([planData, statsData]) => {
+      .then(([planData, statsData, statusData]) => {
         const p = planData.plan ?? null;
         const hasAnyPlanData = p && (p.meeting1 || p.meeting2 || p.meeting3 || p.resource1 || p.resource2 || p.resource3 || p.monthlyMeetingGoal > 0 || p.monthlyCheckinGoal > 0);
         setPlan(hasAnyPlanData ? p : null);
         setActStats((statsData.months ?? []).map((m: { key: string; label: string; meetings: number; checkins: number }) => m));
+        setAiStatus(statusData.status ?? null);
+        setAiStatusAt(statusData.statusAt ?? null);
       })
       .catch(console.error);
   }, [companyId, quarterId]);
+
+  async function generateAIStatus() {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/crm/partner-ai-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, quarterId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAiError(data.error ?? "Failed to generate AI status"); return; }
+      setAiStatus(data.status ?? null);
+      setAiStatusAt(data.statusAt ?? null);
+    } catch (e) {
+      setAiError(String(e));
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const todayMonthKey = new Date().toISOString().slice(0, 7);
 
@@ -517,6 +544,13 @@ function QuarterlyPlanSection({
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quarterly Plan</p>
         <div className="flex items-center gap-2">
+          <button
+            onClick={generateAIStatus}
+            disabled={aiLoading}
+            className="text-xs text-purple-600 hover:text-purple-800 border border-purple-200 bg-purple-50 px-2.5 py-1 rounded-lg disabled:opacity-50"
+          >
+            {aiLoading ? "Analyzing..." : "Create Current AI Status"}
+          </button>
           <button
             onClick={runCompare}
             disabled={compareLoading}
@@ -660,8 +694,25 @@ function QuarterlyPlanSection({
         </div>
       )}
 
+      {aiError && (
+        <div className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2">{aiError}</div>
+      )}
+      {aiStatus && (
+        <div className="mt-3 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Current AI Status</p>
+            {aiStatusAt && <p className="text-xs text-purple-400">Updated {new Date(aiStatusAt).toLocaleDateString()}</p>}
+          </div>
+          <div className="space-y-1">
+            {aiStatus.split("\n").filter((l) => l.trim()).map((line, i) => (
+              <p key={i} className="text-xs text-gray-700 leading-relaxed">{line}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
       {competitors && (
-        <div className="mb-3">
+        <div className="mb-3 mt-3">
           <p className="text-xs font-medium text-gray-500 mb-1">Competitors</p>
           <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">{competitors}</p>
         </div>
@@ -692,7 +743,7 @@ function QuarterlyPlanSection({
 
 // ─── Company Contacts Panel ───────────────────────────────────────────────────
 
-function CompanyContactsPanel({
+export function CompanyContactsPanel({
   companyId,
   quarterId,
   excludeStages,
