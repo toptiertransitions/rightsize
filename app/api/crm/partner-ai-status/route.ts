@@ -1,8 +1,12 @@
-// DEPLOY: Add AIStatus (Long text), AIStatusAt (Single line text), AIStatusHistory (Long text) to QuarterlyCompanyPlans table in Airtable first
+// DEPLOY: Add AIStatus (Long text), AIStatusAt (Single line text), AIStatusHistory (Long text)
+// to QuarterlyCompanyPlans table in Airtable before using this feature.
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getReviewsForTenant } from "@/lib/airtable";
+import { getSystemRole, getReviewsForTenant, getPartnerPointsByCompany } from "@/lib/airtable";
 import { AIRTABLE_TABLES } from "@/lib/config";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -13,6 +17,30 @@ function atFetch(table: string, path: string, options?: RequestInit) {
     ...options,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options?.headers ?? {}) },
   });
+}
+
+type Rec = { id: string; fields: Record<string, unknown> };
+function str(v: unknown): string { return typeof v === "string" ? v : v == null ? "" : String(v); }
+function num(v: unknown): number { return typeof v === "number" ? v : 0; }
+
+async function fetchAllRecs(table: string, formula: string, extra = ""): Promise<Rec[]> {
+  const all: Rec[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${encodeURIComponent(formula)}${extra}${offset ? `&offset=${offset}` : ""}`;
+    const res = await atFetch(table, qs);
+    if (!res.ok) break;
+    const data = await res.json() as { records: Rec[]; offset?: string };
+    all.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+  return all;
+}
+
+function orFilter(field: string, ids: string[]): string {
+  if (ids.length === 0) return "FALSE()";
+  if (ids.length === 1) return `{${field}} = "${ids[0]}"`;
+  return `OR(${ids.map((id) => `{${field}} = "${id}"`).join(", ")})`;
 }
 
 // ─── GET: return most recent AIStatus across all quarters for a company ────────
@@ -28,27 +56,15 @@ export async function GET(req: NextRequest) {
   const companyId = req.nextUrl.searchParams.get("companyId");
   if (!companyId) return NextResponse.json({ error: "companyId required" }, { status: 400 });
 
-  // Fetch ALL QuarterlyCompanyPlans records for this company
-  const formula = encodeURIComponent(`{CompanyId} = "${companyId}"`);
-  const res = await atFetch(AIRTABLE_TABLES.QUARTERLY_COMPANY_PLANS, `?filterByFormula=${formula}`);
-  if (!res.ok) return NextResponse.json({ status: null, statusAt: null });
+  const records = await fetchAllRecs(AIRTABLE_TABLES.QUARTERLY_COMPANY_PLANS, `{CompanyId} = "${companyId}"`);
 
-  const data = await res.json();
-  const records: { fields: Record<string, unknown> }[] = data.records ?? [];
-
-  // Find the record with the most recent AIStatusAt
   let bestStatus: string | null = null;
   let bestStatusAt: string | null = null;
-
   for (const r of records) {
-    const f = r.fields;
-    const statusAt = typeof f["AIStatusAt"] === "string" ? f["AIStatusAt"] : null;
-    const status = typeof f["AIStatus"] === "string" ? f["AIStatus"] : null;
+    const statusAt = str(r.fields["AIStatusAt"]) || null;
+    const status = str(r.fields["AIStatus"]) || null;
     if (!statusAt || !status) continue;
-    if (!bestStatusAt || statusAt > bestStatusAt) {
-      bestStatusAt = statusAt;
-      bestStatus = status;
-    }
+    if (!bestStatusAt || statusAt > bestStatusAt) { bestStatusAt = statusAt; bestStatus = status; }
   }
 
   return NextResponse.json({ status: bestStatus, statusAt: bestStatusAt });
@@ -64,320 +80,297 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { companyId, quarterId } = await req.json() as { companyId: string; quarterId: string };
-  if (!companyId || !quarterId) {
-    return NextResponse.json({ error: "companyId and quarterId required" }, { status: 400 });
-  }
+  const { companyId, quarterId } = await req.json().catch(() => ({})) as { companyId?: string; quarterId?: string };
+  if (!companyId || !quarterId) return NextResponse.json({ error: "companyId and quarterId required" }, { status: 400 });
 
-  // ── Step 1: Gather ALL data in parallel ──────────────────────────────────────
+  // ── Step 1: Parallel fetch of company, contacts, all plan records, quarter, partner points ──
 
-  const [companyRes, contactsRes, allPlansRes, quarterRes] = await Promise.all([
-    atFetch(AIRTABLE_TABLES.CRM_COMPANIES, `?filterByFormula=${encodeURIComponent(`RECORD_ID() = "${companyId}"`)}&maxRecords=1`),
-    atFetch(AIRTABLE_TABLES.CRM_CONTACTS, `?filterByFormula=${encodeURIComponent(`{ReferralCompanyId} = "${companyId}"`)}`),
-    atFetch(AIRTABLE_TABLES.QUARTERLY_COMPANY_PLANS, `?filterByFormula=${encodeURIComponent(`{CompanyId} = "${companyId}"`)}`),
-    atFetch(AIRTABLE_TABLES.QUARTERS, `/${quarterId}`),
+  const [companyRecs, contacts, allPlanRecs, quarterRec, partnerPoints] = await Promise.all([
+    fetchAllRecs(AIRTABLE_TABLES.CRM_COMPANIES, `RECORD_ID() = "${companyId}"`),
+    fetchAllRecs(AIRTABLE_TABLES.CRM_CONTACTS, `{ReferralCompanyId} = "${companyId}"`),
+    fetchAllRecs(AIRTABLE_TABLES.QUARTERLY_COMPANY_PLANS, `{CompanyId} = "${companyId}"`),
+    atFetch(AIRTABLE_TABLES.QUARTERS, `/${quarterId}`).then((r) => r.ok ? r.json() as Promise<Rec> : Promise.resolve({ id: quarterId, fields: {} })),
+    getPartnerPointsByCompany(companyId).catch(() => [] as import("@/lib/types").PartnerPoint[]),
   ]);
 
-  const companyData = companyRes.ok ? await companyRes.json() : { records: [] };
-  const contactsData = contactsRes.ok ? await contactsRes.json() : { records: [] };
-  const allPlansData = allPlansRes.ok ? await allPlansRes.json() : { records: [] };
-  const quarterData = quarterRes.ok ? await quarterRes.json() : { fields: {} };
+  const companyFields = companyRecs[0]?.fields ?? {};
+  const contactIds = contacts.map((c) => c.id);
+  const quarterFields = (quarterRec.fields ?? {}) as Record<string, unknown>;
+  const quarterLabel = str(quarterFields["Label"] ?? quarterFields["Name"] ?? "");
+  const quarterStart = str(quarterFields["StartDate"]).slice(0, 10);
+  const quarterEnd = str(quarterFields["EndDate"]).slice(0, 10);
 
-  const companyRecord = companyData.records?.[0];
-  const companyFields = companyRecord?.fields ?? {};
+  // ── Step 2: Fetch activities + client contacts (referred clients) in parallel ──
 
-  interface ContactRecord { id: string; fields: Record<string, unknown> }
-  const contacts: ContactRecord[] = contactsData.records ?? [];
-  const contactIds: string[] = contacts.map((c: ContactRecord) => c.id);
+  const [activities, clientContacts] = await Promise.all([
+    contactIds.length === 0 ? Promise.resolve<Rec[]>([]) : fetchAllRecs(
+      AIRTABLE_TABLES.CRM_ACTIVITIES,
+      orFilter("ClientContactId", contactIds),
+      "&sort[0][field]=ActivityDate&sort[0][direction]=desc&maxRecords=80"
+    ),
+    contactIds.length === 0 ? Promise.resolve<Rec[]>([]) : fetchAllRecs(
+      AIRTABLE_TABLES.CRM_CLIENT_CONTACTS,
+      // ReferralPartnerId on ClientContacts = the referral contact's Airtable record ID
+      orFilter("ReferralPartnerId", contactIds)
+    ),
+  ]);
 
-  const quarterFields = quarterData.fields ?? {};
-  const quarterLabel = String(quarterFields["Label"] ?? quarterFields["Name"] ?? "");
-  const quarterStart = String(quarterFields["StartDate"] ?? "").slice(0, 10);
-  const quarterEnd = String(quarterFields["EndDate"] ?? "").slice(0, 10);
+  const clientContactIds = clientContacts.map((c) => c.id); // use .id, NOT fields["RecordId"]
 
-  // ── Fetch activities, client contacts, opportunities in parallel ──────────────
+  // ── Step 3: Fetch opportunities for those referred clients ─────────────────────
 
-  let activitiesData: { records: { fields: Record<string, unknown> }[] } = { records: [] };
-  let clientContactsData: { records: { fields: Record<string, unknown> }[] } = { records: [] };
+  const opportunities = clientContactIds.length === 0 ? [] : await fetchAllRecs(
+    AIRTABLE_TABLES.CRM_OPPORTUNITIES,
+    `AND(NOT({Deleted}), ${orFilter("ClientContactId", clientContactIds)})`
+  );
 
-  if (contactIds.length > 0) {
-    const orParts = contactIds.map((id) => `{ClientContactId} = "${id}"`);
-    const contactFilter = contactIds.length === 1 ? orParts[0] : `OR(${orParts.join(", ")})`;
-    const actFormula = encodeURIComponent(contactFilter);
-    const ccFormula = encodeURIComponent(
-      contactIds.length === 1
-        ? `{ReferralPartnerId} = "${contactIds[0]}"`
-        : `OR(${contactIds.map((id) => `{ReferralPartnerId} = "${id}"`).join(", ")})`
-    );
+  // ── Step 4: Google reviews for won/active projects ─────────────────────────────
 
-    const [actRes, ccRes] = await Promise.all([
-      atFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, `?filterByFormula=${actFormula}&sort[0][field]=ActivityDate&sort[0][direction]=desc&maxRecords=60`),
-      atFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `?filterByFormula=${ccFormula}`),
-    ]);
+  const wonTenantIds = [...new Set(
+    opportunities
+      .filter((o) => str(o.fields["Stage"]) === "Won" && str(o.fields["TenantId"]))
+      .map((o) => str(o.fields["TenantId"]))
+  )].slice(0, 6);
+  const reviewGroups = await Promise.all(wonTenantIds.map((tid) => getReviewsForTenant(tid).catch(() => [])));
+  const allReviews = reviewGroups.flat();
 
-    if (actRes.ok) activitiesData = await actRes.json();
-    if (ccRes.ok) clientContactsData = await ccRes.json();
-  }
+  // ── Step 5: Build monthly activity stats for this quarter ──────────────────────
 
-  const clientContacts: { fields: Record<string, unknown> }[] = clientContactsData.records ?? [];
-  const clientContactIds: string[] = clientContacts.map((c) => {
-    const f = c.fields;
-    return String(f["RecordId"] ?? "");
-  }).filter(Boolean);
-
-  // Fetch opportunities for referred clients
-  let opportunitiesData: { records: { fields: Record<string, unknown> }[] } = { records: [] };
-  if (clientContactIds.length > 0) {
-    const oppFilter = clientContactIds.length === 1
-      ? `{ClientContactId} = "${clientContactIds[0]}"`
-      : `OR(${clientContactIds.map((id) => `{ClientContactId} = "${id}"`).join(", ")})`;
-    const oppRes = await atFetch(
-      AIRTABLE_TABLES.CRM_OPPORTUNITIES,
-      `?filterByFormula=${encodeURIComponent(`AND(NOT({Deleted}), ${oppFilter})`)}`
-    );
-    if (oppRes.ok) opportunitiesData = await oppRes.json();
-  } else {
-    // Try by referral partner directly using the contact IDs
-    if (contactIds.length > 0) {
-      const directFilter = contactIds.length === 1
-        ? `{ReferralPartnerId} = "${contactIds[0]}"`
-        : `OR(${contactIds.map((id) => `{ReferralPartnerId} = "${id}"`).join(", ")})`;
-      const oppRes = await atFetch(
-        AIRTABLE_TABLES.CRM_OPPORTUNITIES,
-        `?filterByFormula=${encodeURIComponent(`AND(NOT({Deleted}), ${directFilter})`)}`
-      );
-      if (oppRes.ok) opportunitiesData = await oppRes.json();
-    }
-  }
-
-  const opportunities: { fields: Record<string, unknown> }[] = opportunitiesData.records ?? [];
-
-  // ── Step 2: Get Google reviews for won/active tenants ────────────────────────
-
-  const wonOpps = opportunities.filter((o) => {
-    const stage = String(o.fields["Stage"] ?? "");
-    return stage === "Won";
-  });
-  const uniqueTenantIds = [...new Set(wonOpps.map((o) => String(o.fields["TenantId"] ?? "").trim()).filter(Boolean))].slice(0, 5);
-  const reviewsByTenant = await Promise.all(uniqueTenantIds.map((tid) => getReviewsForTenant(tid)));
-  const allReviews = reviewsByTenant.flat();
-
-  // ── Step 3: Current quarter's plan record ────────────────────────────────────
-
-  interface PlanRecord { id: string; fields: Record<string, unknown> }
-  const allPlanRecords: PlanRecord[] = allPlansData.records ?? [];
-  const currentPlanRecord = allPlanRecords.find((r) => String(r.fields["QuarterId"] ?? "") === quarterId) ?? null;
-  const planFields = currentPlanRecord?.fields ?? {};
-
-  // Compute monthly activity stats for this quarter
-  interface MonthStat { key: string; meetings: number; checkins: number }
-  const monthStats: MonthStat[] = [];
+  const monthStats: { key: string; meetings: number; checkins: number; emails: number }[] = [];
   if (quarterStart && quarterEnd) {
-    const qStartDate = new Date(quarterStart + "T00:00:00.000Z");
-    const qEndDate = new Date(quarterEnd + "T23:59:59.999Z");
-    if (!isNaN(qStartDate.getTime()) && !isNaN(qEndDate.getTime())) {
-      let cur = new Date(Date.UTC(qStartDate.getUTCFullYear(), qStartDate.getUTCMonth(), 1));
-      while (cur <= qEndDate) {
-        const key = `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, "0")}`;
-        monthStats.push({ key, meetings: 0, checkins: 0 });
+    const qS = new Date(quarterStart + "T00:00:00Z");
+    const qE = new Date(quarterEnd + "T23:59:59Z");
+    if (!isNaN(qS.getTime()) && !isNaN(qE.getTime())) {
+      let cur = new Date(Date.UTC(qS.getUTCFullYear(), qS.getUTCMonth(), 1));
+      while (cur <= qE) {
+        monthStats.push({ key: `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, "0")}`, meetings: 0, checkins: 0, emails: 0 });
         cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1));
       }
-      const counts: Record<string, MonthStat> = {};
-      for (const m of monthStats) counts[m.key] = m;
-
-      const activities: { fields: Record<string, unknown> }[] = activitiesData.records ?? [];
+      const byKey: Record<string, typeof monthStats[0]> = Object.fromEntries(monthStats.map((m) => [m.key, m]));
       for (const r of activities) {
-        const f = r.fields;
-        const type = String(f["Type"] ?? "");
-        const dateStr = String(f["ActivityDate"] ?? "").slice(0, 10);
-        if (!dateStr) continue;
-        const d = new Date(dateStr + "T12:00:00.000Z");
-        if (isNaN(d.getTime()) || d < qStartDate || d > qEndDate) continue;
+        const type = str(r.fields["Type"]);
+        const d = new Date(str(r.fields["ActivityDate"]).slice(0, 10) + "T12:00:00Z");
+        if (isNaN(d.getTime()) || d < qS || d > qE) continue;
         const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-        if (!counts[key]) continue;
-        if (type === "Meeting") counts[key].meetings++;
-        else if (type === "Call" || type === "Email" || type === "Text Message") counts[key].checkins++;
+        const slot = byKey[key];
+        if (!slot) continue;
+        if (type === "Meeting") slot.meetings++;
+        else if (type === "Email") slot.emails++;
+        else if (type === "Call" || type === "Text Message") slot.checkins++;
       }
     }
   }
 
-  const monthlyMeetingGoal = typeof planFields["MonthlyInPersonMeetings"] === "number" ? planFields["MonthlyInPersonMeetings"] : 0;
-  const monthlyCheckinGoal = typeof planFields["MonthlyCheckins"] === "number" ? planFields["MonthlyCheckins"] : 0;
+  const currentPlanRecord = allPlanRecs.find((r) => str(r.fields["QuarterId"]) === quarterId) ?? null;
+  const planFields = currentPlanRecord?.fields ?? {};
+  const monthlyMeetingGoal = num(planFields["MonthlyInPersonMeetings"]);
+  const monthlyCheckinGoal = num(planFields["MonthlyCheckins"]);
 
-  // ── Step 4: Extract prior AI statuses from all plan records ──────────────────
+  // ── Step 6: Extract prior AI statuses ─────────────────────────────────────────
 
   interface AIStatusEntry { status: string; statusAt: string }
   const priorStatuses: AIStatusEntry[] = [];
-  for (const r of allPlanRecords) {
-    const f = r.fields;
-    // Current AIStatus
-    const curStatus = typeof f["AIStatus"] === "string" ? f["AIStatus"] : null;
-    const curStatusAt = typeof f["AIStatusAt"] === "string" ? f["AIStatusAt"] : null;
+  for (const r of allPlanRecs) {
+    const curStatus = str(r.fields["AIStatus"]) || null;
+    const curStatusAt = str(r.fields["AIStatusAt"]) || null;
     if (curStatus && curStatusAt) priorStatuses.push({ status: curStatus, statusAt: curStatusAt });
-    // History
-    const histJson = typeof f["AIStatusHistory"] === "string" ? f["AIStatusHistory"] : null;
+    const histJson = str(r.fields["AIStatusHistory"]) || null;
     if (histJson) {
       try {
-        const hist = JSON.parse(histJson) as AIStatusEntry[];
-        if (Array.isArray(hist)) priorStatuses.push(...hist);
+        const arr = JSON.parse(histJson) as AIStatusEntry[];
+        if (Array.isArray(arr)) priorStatuses.push(...arr.filter((e) => e.status && e.statusAt));
       } catch { /* ignore */ }
     }
   }
-  // Sort by most recent first for display
   priorStatuses.sort((a, b) => b.statusAt.localeCompare(a.statusAt));
 
-  // ── Step 5: Build AI prompt ───────────────────────────────────────────────────
+  // ── Step 7: Build lookup maps ─────────────────────────────────────────────────
 
-  const cf = companyFields;
-  const companyName = String(cf["Name"] ?? cf["CompanyName"] ?? "Unknown");
-  const companyType = String(cf["Type"] ?? "");
-  const companyPriority = String(cf["Priority"] ?? "");
-  const companyWebsite = String(cf["Website"] ?? "");
-  const companyNotes = String(cf["Notes"] ?? "");
-  const companyCompetitors = String(cf["Competitors"] ?? "");
+  // clientContact.id → { name, createdAt, referralPartnerId }
+  const ccById = new Map(clientContacts.map((c) => [c.id, {
+    name: str(c.fields["Name"]),
+    createdAt: str(c.fields["CreatedAt"]).slice(0, 10),
+    referralPartnerId: str(c.fields["ReferralPartnerId"]),
+  }]));
 
-  const companyLine = `COMPANY: ${companyName} | Type: ${companyType} | Priority: ${companyPriority}`;
-  const companyExtras = [
+  // ── Step 8: Build AI prompt sections ──────────────────────────────────────────
+
+  // Company info
+  const companyName = str(companyFields["Name"] ?? companyFields["CompanyName"]) || "Unknown";
+  const companyType = str(companyFields["Type"]);
+  const companyPriority = str(companyFields["Priority"]);
+  const companyWebsite = str(companyFields["Website"]);
+  const companyNotes = str(companyFields["Notes"]);
+  const companyCompetitors = str(companyFields["Competitors"]);
+
+  const companySection = [
+    `COMPANY: ${companyName} | Type: ${companyType || "—"} | Priority: ${companyPriority || "—"}`,
     companyWebsite ? `Website: ${companyWebsite}` : null,
-    companyNotes ? `Notes: ${companyNotes}` : null,
-    companyCompetitors ? `Competitors: ${companyCompetitors}` : null,
-  ].filter(Boolean).join(" | ");
+    companyNotes ? `Company notes: ${companyNotes}` : null,
+    companyCompetitors ? `Competitors/competing orgs: ${companyCompetitors}` : null,
+  ].filter(Boolean).join("\n");
 
-  // Build contacts section
-  const activitiesArr: { fields: Record<string, unknown> }[] = activitiesData.records ?? [];
+  // Contacts section — include portal status, notes, interests, activities, email engagement
+  const contactsSection = contacts.length === 0 ? "(no contacts)" : contacts.map((c) => {
+    const f = c.fields;
+    const usesPortal = !!(str(f["ClerkUserId"]));
+    const contactPointCount = partnerPoints.filter((p) => p.referralContactId === c.id).length;
+    const redeemedCount = partnerPoints.filter((p) => p.referralContactId === c.id && p.redeemedAt).length;
 
-  const contactsSection = contacts.map((c: ContactRecord) => {
-    const cf2 = c.fields;
-    const cName = String(cf2["Name"] ?? "");
-    const cTitle = String(cf2["Title"] ?? "");
-    const cStage = String(cf2["Stage"] ?? "");
-    const cStageChangedAt = String(cf2["StageChangedAt"] ?? "").slice(0, 10);
-    const cPrevStage = String(cf2["PreviousStage"] ?? "");
-    const cInterests = String(cf2["Interests"] ?? "");
-    const cCoffee = String(cf2["CoffeeOrder"] ?? "");
-    const cOrgs = String(cf2["OrgsGroups"] ?? "");
-    const cNotes = String(cf2["Notes"] ?? "");
-    const cNextStepDate = String(cf2["NextStepDate"] ?? "").slice(0, 10);
-    const cNextStepNote = String(cf2["NextStepNote"] ?? "");
-
-    const contactActs = activitiesArr
-      .filter((a) => String(a.fields["ClientContactId"] ?? "") === c.id)
-      .slice(0, 15)
+    const contactActs = activities
+      .filter((a) => str(a.fields["ClientContactId"]) === c.id)
+      .slice(0, 18)
       .map((a) => {
-        const af = a.fields;
-        const date = String(af["ActivityDate"] ?? "").slice(0, 10);
-        const type = String(af["Type"] ?? "");
-        const note = String(af["Notes"] ?? af["Description"] ?? "").slice(0, 200);
-        return `    ${date} ${type}: ${note}`;
-      }).join("\n");
+        const date = str(a.fields["ActivityDate"]).slice(0, 10);
+        const type = str(a.fields["Type"]);
+        const note = str(a.fields["Note"]).slice(0, 220); // "Note" is the correct field name
+        return `    ${date} [${type}]: ${note || "(no note)"}`;
+      });
+
+    // Email engagement: check how many emails, and whether notes suggest two-way conversation
+    const emailActs = activities.filter((a) => str(a.fields["ClientContactId"]) === c.id && str(a.fields["Type"]) === "Email");
+    const gmailImported = emailActs.filter((a) => a.fields["IsGmailImported"] === true).length;
+    const emailEngagementNote = emailActs.length > 0
+      ? `${emailActs.length} email interactions (${gmailImported} via Gmail sync)`
+      : "no email interactions logged";
 
     return [
-      `• ${cName}${cTitle ? ` (${cTitle})` : ""} — Stage: ${cStage}${cStageChangedAt ? ` since ${cStageChangedAt}` : ""}${cPrevStage ? ` (prev: ${cPrevStage})` : ""}`,
-      `  Interests: ${cInterests || "—"} | Coffee: ${cCoffee || "—"} | Orgs: ${cOrgs || "—"}`,
-      `  Notes: ${cNotes || "—"}`,
-      `  Next step: ${cNextStepDate || "—"} — ${cNextStepNote || "—"}`,
-      contactActs ? `  Recent activities:\n${contactActs}` : "  Recent activities: (none)",
-    ].join("\n");
+      `• ${str(f["Name"])}${str(f["Title"]) ? ` (${str(f["Title"])})` : ""} — Stage: ${str(f["Stage"])}${str(f["StageChangedAt"]) ? ` since ${str(f["StageChangedAt"]).slice(0, 10)}` : ""}${str(f["PreviousStage"]) ? ` (prev: ${str(f["PreviousStage"])})` : ""}`,
+      `  Portal access: ${usesPortal ? "YES — actively uses the referral portal" : "No portal access"}`,
+      `  Loyalty points: ${contactPointCount} earned, ${redeemedCount} redeemed`,
+      str(f["Interests"]) ? `  Interests: ${str(f["Interests"])}` : null,
+      str(f["CoffeeOrder"]) ? `  Coffee: ${str(f["CoffeeOrder"])}` : null,
+      str(f["OrgsGroups"]) ? `  Orgs/Groups: ${str(f["OrgsGroups"])}` : null,
+      str(f["Notes"]) ? `  Notes: ${str(f["Notes"])}` : null,
+      str(f["NextStepDate"]) ? `  Next step: ${str(f["NextStepDate"]).slice(0, 10)} — ${str(f["NextStepNote"]) || "(no note)"}` : null,
+      `  Email engagement: ${emailEngagementNote}`,
+      contactActs.length > 0 ? `  Recent activities (newest first):\n${contactActs.join("\n")}` : "  Recent activities: (none logged)",
+    ].filter(Boolean).join("\n");
   }).join("\n\n");
 
-  // Build referrals section
-  const referralsSection = opportunities.map((o) => {
-    const of2 = o.fields;
-    const clientName = String(of2["ClientName"] ?? of2["Name"] ?? "Unknown");
-    const city = String(of2["City"] ?? "");
-    const state = String(of2["State"] ?? "");
-    const stage = String(of2["Stage"] ?? "");
-    const value = typeof of2["Value"] === "number" ? `$${of2["Value"].toLocaleString()}` : "—";
-    const referredAt = String(of2["CreatedAt"] ?? of2["ReferredAt"] ?? "").slice(0, 10);
-    const loc = [city, state].filter(Boolean).join(", ");
-    return `• ${clientName}${loc ? ` (${loc})` : ""} — ${stage} — ${value} — referred ${referredAt}`;
-  }).join("\n");
+  // Partner loyalty points summary
+  const totalPoints = partnerPoints.length;
+  const redeemedPoints = partnerPoints.filter((p) => p.redeemedAt).length;
+  const unredeemedPoints = totalPoints - redeemedPoints;
+  const pointsSection = totalPoints > 0
+    ? `PARTNER LOYALTY POINTS: ${totalPoints} total earned | ${unredeemedPoints} unredeemed | ${redeemedPoints} redeemed\n` +
+      partnerPoints.slice(0, 10).map((p) => `  • Earned ${p.earnedAt}${p.tenantName ? ` for ${p.tenantName}` : ""}${p.redeemedAt ? ` → REDEEMED ${p.redeemedAt}${p.redemptionNote ? ` (${p.redemptionNote})` : ""}` : " (unredeemed)"}`).join("\n")
+    : "PARTNER LOYALTY POINTS: none earned yet";
 
-  // Build plan section
-  const planMeetings = [
-    String(planFields["Meeting1"] ?? ""),
-    String(planFields["Meeting2"] ?? ""),
-    String(planFields["Meeting3"] ?? ""),
-  ].filter(Boolean);
-  const planResources = [
-    String(planFields["Resource1"] ?? ""),
-    String(planFields["Resource2"] ?? ""),
-    String(planFields["Resource3"] ?? ""),
-  ].filter(Boolean);
+  // Referrals section — client contacts with their opportunities
+  const referralLines: string[] = [];
+  for (const cc of clientContacts) {
+    const ccName = str(cc.fields["Name"]);
+    const ccDate = str(cc.fields["CreatedAt"]).slice(0, 10);
+    const ccOpps = opportunities.filter((o) => str(o.fields["ClientContactId"]) === cc.id);
+    if (ccOpps.length === 0) {
+      referralLines.push(`• ${ccName} — referred ${ccDate} (no opportunity yet)`);
+    } else {
+      for (const o of ccOpps) {
+        const stage = str(o.fields["Stage"]) || "Unknown";
+        const value = num(o.fields["EstimatedValue"]);
+        const city = str(o.fields["City"]);
+        const state = str(o.fields["State"]);
+        const loc = [city, state].filter(Boolean).join(", ");
+        const valStr = value > 0 ? `$${value.toLocaleString()}` : "no value";
+        referralLines.push(`• ${ccName}${loc ? ` (${loc})` : ""} — ${stage} — ${valStr} — referred ${ccDate}`);
+      }
+    }
+  }
+  const referralsSection = referralLines.length > 0 ? referralLines.join("\n") : "(none yet)";
 
+  // Quarterly plan + activity vs goals
+  const planMeetings = [str(planFields["Meeting1"]), str(planFields["Meeting2"]), str(planFields["Meeting3"])].filter(Boolean);
+  const planResources = [str(planFields["Resource1"]), str(planFields["Resource2"]), str(planFields["Resource3"])].filter(Boolean);
   const today = new Date().toISOString().slice(0, 7);
-  const activityVsGoals = monthStats.map((m) => {
-    const isFuture = m.key > today;
-    if (isFuture) return `  ${m.key}: (future)`;
-    return `  ${m.key}: ${m.meetings} meetings (goal ${monthlyMeetingGoal}), ${m.checkins} checkins (goal ${monthlyCheckinGoal})`;
-  }).join("\n");
+  const actVsGoals = monthStats.length > 0
+    ? monthStats.map((m) => m.key > today
+        ? `  ${m.key}: (future)`
+        : `  ${m.key}: ${m.meetings} meetings (goal ${monthlyMeetingGoal}), ${m.checkins} calls/texts (goal ${monthlyCheckinGoal}), ${m.emails} emails`
+      ).join("\n")
+    : "  (no data)";
 
-  // Build reviews section
+  // Google reviews
   const reviewsSection = allReviews.length > 0
-    ? allReviews.map((r) => `• ${r.stars} stars — "${r.text.slice(0, 300)}" (${r.createdAt})`).join("\n")
-    : "(no reviews yet)";
+    ? allReviews.map((r) => `• ${r.stars}/5 stars — "${r.text.slice(0, 300)}" (${r.createdAt.slice(0, 10)})`).join("\n")
+    : "(no reviews yet from projects this partner referred)";
 
-  // Build prior AI status section
-  const priorStatusSection = priorStatuses.length > 0
-    ? priorStatuses.map((s) => `${s.statusAt}: ${s.status}`).join("\n\n---\n\n")
+  // Prior AI statuses (last 3 to keep prompt manageable)
+  const priorSection = priorStatuses.slice(0, 3).length > 0
+    ? priorStatuses.slice(0, 3).map((s) => `[${s.statusAt.slice(0, 10)}]\n${s.status}`).join("\n\n---\n\n")
     : "(none yet)";
 
-  const prompt = `You are analyzing a referral partner relationship for Top Tier Transitions (TTT), a premium senior move management company.
+  // Email engagement trend across all contacts
+  const allEmailActs = activities.filter((a) => str(a.fields["Type"]) === "Email");
+  const emailMonthCounts: Record<string, number> = {};
+  for (const e of allEmailActs) {
+    const mo = str(e.fields["ActivityDate"]).slice(0, 7);
+    if (mo) emailMonthCounts[mo] = (emailMonthCounts[mo] ?? 0) + 1;
+  }
+  const emailTrendLines = Object.entries(emailMonthCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
+    .map(([mo, cnt]) => `  ${mo}: ${cnt} emails`).join("\n");
 
-${companyLine}
-${companyExtras}
+  const prompt = `You are analyzing a referral partner relationship for Top Tier Transitions (TTT), a premium senior move management company. Use every data point below to write an accurate, specific status brief.
+
+${companySection}
 
 CONTACTS:
-${contactsSection || "(no contacts)"}
+${contactsSection}
 
-ALL-TIME REFERRALS (${opportunities.length} total):
-${referralsSection || "(none yet)"}
+${pointsSection}
 
-QUARTERLY PLAN (${quarterLabel}):
+ALL-TIME REFERRALS (${clientContacts.length} referred clients, ${opportunities.length} opportunities):
+${referralsSection}
+
+QUARTERLY PLAN (${quarterLabel || quarterId}):
 Key Meetings: ${planMeetings.join("; ") || "(none set)"}
 Key Resources: ${planResources.join("; ") || "(none set)"}
-Monthly goals: ${monthlyMeetingGoal} in-person meetings, ${monthlyCheckinGoal} checkins
+Monthly goals: ${monthlyMeetingGoal} in-person meetings, ${monthlyCheckinGoal} other outreach
 Activity vs Goals:
-${activityVsGoals || "(no data)"}
+${actVsGoals}
 
-GOOGLE REVIEWS FROM REFERRED CLIENTS:
+EMAIL ENGAGEMENT TREND (last 6 months):
+${emailTrendLines || "  (no emails logged)"}
+
+GOOGLE REVIEWS FROM CLIENTS THIS PARTNER REFERRED:
 ${reviewsSection}
 
-PRIOR AI STATUS SNAPSHOTS:
-${priorStatusSection}
+PRIOR AI STATUS SNAPSHOTS (most recent first):
+${priorSection}
 
-Based on ALL the above, write 5-8 bullet points for the TTT supporting team summarizing:
-- Current relationship health and momentum
-- Referral trends (increasing/decreasing/stalled)
-- Progress vs quarterly plan goals
-- Key contact insights (engagement level, interests, opportunities)
-- Concerns or risks
-- Suggested next actions
+---
+Write 6-9 concise bullet points for the TTT supporting team. Each bullet should be specific and actionable — reference actual names, numbers, dates, and trends from the data above. Cover:
+• Overall relationship health and momentum
+• Referral volume and trend (cite actual counts and dates)
+• Portal/engagement level (are they actively using the partner portal?)
+• Loyalty points status (earned, unredeemed, redeemed — and what that signals)
+• Activity trend — are meetings/emails increasing, decreasing, or stalled?
+• Google review signals (if any) — what do reviews say about client experience?
+• Key contact-specific insights (personality, interests, what engages them)
+• Concerns or risks worth flagging
+• Specific recommended next action
 
-Format: bullet points only, each starting with "•", 1-2 sentences each. No headers, no preamble, no summary line.`;
+Format: bullet points only, each starting with "•", 1-2 sentences. No headers, no preamble.`;
 
-  // ── Step 6: Call Claude ───────────────────────────────────────────────────────
+  // ── Step 9: Call Claude ───────────────────────────────────────────────────────
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+    max_tokens: 1200,
     messages: [{ role: "user", content: prompt }],
   });
   const newStatus = message.content[0].type === "text" ? message.content[0].text.trim() : "";
   const newStatusAt = new Date().toISOString();
 
-  // ── Step 7: Save to Airtable ─────────────────────────────────────────────────
+  // ── Step 10: Save to Airtable (find or create plan record) ───────────────────
 
-  // Find or create current quarter plan record
   let planRecordId = currentPlanRecord?.id ?? null;
-
-  // Build updated history: push existing AIStatus into history array
-  const existingStatus = currentPlanRecord ? (typeof currentPlanRecord.fields["AIStatus"] === "string" ? currentPlanRecord.fields["AIStatus"] : null) : null;
-  const existingStatusAt = currentPlanRecord ? (typeof currentPlanRecord.fields["AIStatusAt"] === "string" ? currentPlanRecord.fields["AIStatusAt"] : null) : null;
+  const existingStatus = currentPlanRecord ? (str(currentPlanRecord.fields["AIStatus"]) || null) : null;
+  const existingStatusAt = currentPlanRecord ? (str(currentPlanRecord.fields["AIStatusAt"]) || null) : null;
   let historyArr: AIStatusEntry[] = [];
   if (currentPlanRecord) {
-    const histJson = typeof currentPlanRecord.fields["AIStatusHistory"] === "string" ? currentPlanRecord.fields["AIStatusHistory"] : null;
+    const histJson = str(currentPlanRecord.fields["AIStatusHistory"]) || null;
     if (histJson) {
       try {
         const parsed = JSON.parse(histJson);
@@ -403,17 +396,10 @@ Format: bullet points only, each starting with "•", 1-2 sentences each. No hea
   } else {
     const createRes = await atFetch(AIRTABLE_TABLES.QUARTERLY_COMPANY_PLANS, "", {
       method: "POST",
-      body: JSON.stringify({
-        fields: {
-          ...patchFields,
-          CompanyId: companyId,
-          QuarterId: quarterId,
-          CreatedAt: new Date().toISOString(),
-        },
-      }),
+      body: JSON.stringify({ fields: { ...patchFields, CompanyId: companyId, QuarterId: quarterId, CreatedAt: new Date().toISOString() } }),
     });
     if (createRes.ok) {
-      const created = await createRes.json();
+      const created = await createRes.json() as Rec;
       planRecordId = created.id;
     }
   }
