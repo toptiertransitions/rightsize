@@ -165,11 +165,20 @@ export interface PayoutMarkData {
   eventIdsToMark: string[];
 }
 
-/** Compute which item IDs and event IDs should be marked paid on payout. */
+/**
+ * Compute which item IDs and event IDs should be marked paid on payout.
+ * When expenseDeduction > 0 the expense is distributed proportionally across
+ * itemsToMark so that their stored payoutPaidAmount values sum to the NET
+ * payout (what the client actually receives), not the gross.
+ * Note: Square event payouts (eventIdsToMark) cannot be adjusted here since
+ * they are marked via payoutPaid:true only — their clientPayout amounts remain
+ * at gross and are excluded from this distribution.
+ */
 export function buildPayoutMarkData(
   items: Item[],
   pfSaleEvents: ItemSaleEvent[],
-  localVendors: LocalVendor[]
+  localVendors: LocalVendor[],
+  expenseDeduction = 0
 ): PayoutMarkData {
   const itemsToMark: { id: string; amount: number }[] = [];
   const eventIdsToMark: string[] = [];
@@ -229,6 +238,22 @@ export function buildPayoutMarkData(
         : (item.consignorPayout ?? 0);
     if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
       itemsToMark.push({ id: item.id, amount: payout });
+    }
+  }
+
+  // Distribute expense proportionally across itemsToMark so stored payoutPaidAmount
+  // values reflect what the client actually receives (net), not the gross amount.
+  if (expenseDeduction > 0 && itemsToMark.length > 0) {
+    const grossTotal = itemsToMark.reduce((s, i) => s + i.amount, 0);
+    if (grossTotal > 0) {
+      const netTotal = Math.max(0, grossTotal - expenseDeduction);
+      const scale = netTotal / grossTotal;
+      let roundedSum = 0;
+      for (let i = 0; i < itemsToMark.length - 1; i++) {
+        itemsToMark[i].amount = Math.round(itemsToMark[i].amount * scale * 100) / 100;
+        roundedSum += itemsToMark[i].amount;
+      }
+      itemsToMark[itemsToMark.length - 1].amount = Math.round((netTotal - roundedSum) * 100) / 100;
     }
   }
 
@@ -316,7 +341,7 @@ export function PayoutModal({
 
       if (!reprint) {
         // Mark items and events as paid (best-effort; fire in parallel)
-        const markData = buildPayoutMarkData(items, pfSaleEvents, localVendors);
+        const markData = buildPayoutMarkData(items, pfSaleEvents, localVendors, deduction);
         const payoutDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         await Promise.allSettled([
           ...markData.itemsToMark.map(({ id, amount }) =>
@@ -390,7 +415,7 @@ export function PayoutModal({
                 {deduction > 0 && (
                   <div className="grid grid-cols-[1fr_auto_auto] px-4 py-2.5 gap-3 items-center bg-red-50 border-t border-red-100">
                     <span className="text-sm text-red-700 truncate">
-                      Expenses Deducted{expenseNote ? ` — ${expenseNote}` : ""}
+                      Consignment Expenses (Moving Costs){expenseNote ? ` — ${expenseNote}` : ""}
                     </span>
                     <span className="text-xs text-red-400 text-right whitespace-nowrap">Deduction</span>
                     <span className="text-sm font-medium text-red-700 text-right tabular-nums">-{fmtCurrency(deduction)}</span>

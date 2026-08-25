@@ -151,7 +151,7 @@ export function PayoutPDF({
           {expenseDeduction > 0 && (
             <View style={s.deductRow}>
               <Text style={s.deductLabel}>
-                Expenses Deducted{expenseNote ? ` — ${expenseNote}` : ""}
+                Consignment Expenses (Moving Costs){expenseNote ? ` — ${expenseNote}` : ""}
               </Text>
               <Text style={s.deductValue}>-{fmt(expenseDeduction)}</Text>
             </View>
