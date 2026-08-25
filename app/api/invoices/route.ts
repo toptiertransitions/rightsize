@@ -60,8 +60,10 @@ async function sendWrapNotification(invoice: Invoice) {
   }
 
   const lineItems = invoice.lineItems ?? [];
+  // Gross service revenue: exclude credits (deposits, consignment) — only positive-rate lines count.
+  // Falls back to invoice.amount for legacy invoices with no stored line items.
   const invoicedServicesAmount = lineItems.length > 0
-    ? lineItems.reduce((sum, li) => sum + li.hours * li.rate, 0)
+    ? lineItems.filter(li => li.rate > 0).reduce((sum, li) => sum + li.hours * li.rate, 0) || invoice.amount
     : invoice.amount;
 
   const html = buildWrappedNotificationEmail({
@@ -185,7 +187,7 @@ export async function POST(req: NextRequest) {
             qboLineItems = qboEligibleItems.map((item) => ({
               // Consignment earnings always use the fixed QBO item name regardless of
               // what serviceName is stored locally.
-              serviceName: item.serviceId === "__consignment__" ? "Consignment Payout 10.1" : item.serviceName,
+              serviceName: item.serviceId === "__consignment__" ? "Consignment Payout" : item.serviceName,
               hours: item.hours,
               rate: item.rate,
               qboItemId: item.serviceId === "__consignment__" ? undefined : serviceMap.get(item.serviceId)?.qboItemId,

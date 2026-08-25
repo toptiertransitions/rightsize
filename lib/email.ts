@@ -312,11 +312,17 @@ export function buildInvoiceEmail({
   const fmt = (n: number) =>
     `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const logoSection = logoUrl
-    ? `<tr><td style="padding:0 0 16px;"><img src="${logoUrl}" alt="${companyName}" style="max-height:60px;max-width:200px;object-fit:contain;" /></td></tr>`
+  const GREEN = "#2E6B4F";
+  const TEXT = "#374151";
+  const MUTED = "#6b7280";
+  const BORDER = "#e5e7eb";
+  const BG = "#F5F0E8";
+
+  // Logo lives in the header so transparent PNGs render naturally on the green background
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${companyName}" style="display:block;max-height:48px;max-width:160px;object-fit:contain;margin-bottom:12px;" />`
     : "";
 
-  // Build detailed line-item table for Full invoices
   const positiveItems = (lineItems ?? []).filter((li) => li.rate >= 0);
   const creditItems = (lineItems ?? []).filter((li) => li.rate < 0);
   const expenses = expenseItems ?? [];
@@ -329,12 +335,12 @@ export function buildInvoiceEmail({
 
   const lineItemRows = positiveItems
     .map(
-      (li, i) =>
-        `<tr${i % 2 === 1 ? ' style="background-color:#f9fafb;"' : ""}>
-          <td style="padding:9px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${li.serviceName}</td>
-          <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${li.hours % 1 === 0 ? li.hours : li.hours.toFixed(2)}</td>
-          <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.rate)}</td>
-          <td style="padding:9px 14px;font-size:13px;color:#374151;font-weight:600;border-top:1px solid #e5e7eb;text-align:right;">${fmt(li.hours * li.rate)}</td>
+      (li) =>
+        `<tr>
+          <td style="padding:11px 16px;font-size:13px;color:${TEXT};border-top:1px solid ${BORDER};">${li.serviceName}</td>
+          <td style="padding:11px 16px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};text-align:right;">${li.hours % 1 === 0 ? li.hours : li.hours.toFixed(2)}</td>
+          <td style="padding:11px 16px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};text-align:right;">${fmt(li.rate)}</td>
+          <td style="padding:11px 16px;font-size:13px;color:${TEXT};font-weight:600;border-top:1px solid ${BORDER};text-align:right;">${fmt(li.hours * li.rate)}</td>
         </tr>`
     )
     .join("");
@@ -343,104 +349,127 @@ export function buildInvoiceEmail({
     .map(
       (ei) =>
         `<tr>
-          <td colspan="3" style="padding:9px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${ei.description}${ei.vendor ? ` — ${ei.vendor}` : ""}${ei.date ? ` <span style="color:#9ca3af;font-size:12px;">(${ei.date})</span>` : ""}</td>
-          <td style="padding:9px 14px;font-size:13px;color:#374151;font-weight:600;border-top:1px solid #e5e7eb;text-align:right;">${fmt(ei.amount)}</td>
+          <td colspan="3" style="padding:11px 16px;font-size:13px;color:${TEXT};border-top:1px solid ${BORDER};">${ei.description}${ei.vendor ? ` &mdash; ${ei.vendor}` : ""}${ei.date ? ` <span style="color:#9ca3af;font-size:12px;">(${ei.date})</span>` : ""}</td>
+          <td style="padding:11px 16px;font-size:13px;color:${TEXT};font-weight:600;border-top:1px solid ${BORDER};text-align:right;">${fmt(ei.amount)}</td>
         </tr>`
     )
     .join("");
 
   const subtotalRow = hasCredits
     ? `<tr style="background-color:#f9fafb;">
-        <td colspan="3" style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;">Subtotal</td>
-        <td style="padding:9px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;text-align:right;">${fmt(subtotal)}</td>
+        <td colspan="3" style="padding:10px 16px;font-size:12px;color:${MUTED};border-top:1px solid ${BORDER};text-transform:uppercase;letter-spacing:0.4px;">Subtotal</td>
+        <td style="padding:10px 16px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};text-align:right;">${fmt(subtotal)}</td>
       </tr>`
     : "";
 
   const creditRows = creditItems
     .map(
       (li) =>
-        `<tr style="background-color:#eff6ff;">
-          <td colspan="3" style="padding:9px 14px;font-size:13px;color:#1d4ed8;font-style:italic;border-top:1px solid #dbeafe;">${li.serviceName}</td>
-          <td style="padding:9px 14px;font-size:13px;color:#1d4ed8;font-style:italic;border-top:1px solid #dbeafe;text-align:right;">-${fmt(Math.abs(li.hours * li.rate))}</td>
+        `<tr style="background-color:#f0f7ff;">
+          <td colspan="3" style="padding:10px 16px;font-size:13px;color:#2563eb;border-top:1px solid #dbeafe;">${li.serviceName}</td>
+          <td style="padding:10px 16px;font-size:13px;color:#2563eb;border-top:1px solid #dbeafe;text-align:right;">-${fmt(Math.abs(li.hours * li.rate))}</td>
         </tr>`
     )
     .join("");
 
   const detailedTable = hasLineItems
-    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
-        <tr style="background-color:#f9fafb;">
-          <th style="padding:9px 14px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Service / Expense</th>
-          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Hrs</th>
-          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Rate</th>
-          <th style="padding:9px 14px;text-align:right;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Amount</th>
-        </tr>
-        ${lineItemRows}
-        ${expenseRows}
-        ${subtotalRow}
-        ${creditRows}
-        <tr style="background-color:#f0fdf4;">
-          <td colspan="3" style="padding:12px 14px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;">${totalLabel}</td>
-          <td style="padding:12px 14px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;text-align:right;">${fmt(amount)}</td>
-        </tr>
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:28px;">
+        <thead>
+          <tr style="background-color:#f8f9fa;">
+            <th style="padding:10px 16px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid ${BORDER};">Service / Expense</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid ${BORDER};">Hrs</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid ${BORDER};">Rate</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid ${BORDER};">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lineItemRows}
+          ${expenseRows}
+          ${subtotalRow}
+          ${creditRows}
+        </tbody>
+        <tfoot>
+          <tr style="background-color:#ecfdf5;">
+            <td colspan="3" style="padding:14px 16px;font-size:15px;font-weight:700;color:${GREEN};border-top:2px solid ${GREEN};">${totalLabel}</td>
+            <td style="padding:14px 16px;font-size:15px;font-weight:700;color:${GREEN};border-top:2px solid ${GREEN};text-align:right;">${fmt(amount)}</td>
+          </tr>
+        </tfoot>
       </table>`
-    : `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
-        <tr style="background-color:#f9fafb;">
-          <th style="padding:10px 16px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Service</th>
-          <th style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;">Amount Due</th>
-        </tr>
-        <tr>
-          <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;">${serviceName}</td>
-          <td style="padding:10px 16px;font-size:14px;color:#374151;border-top:1px solid #e5e7eb;text-align:right;">${invoiceNumber}</td>
-        </tr>
-        <tr style="background-color:#f0fdf4;">
-          <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;">Total Due</td>
-          <td style="padding:12px 16px;font-size:14px;font-weight:bold;color:#2E6B4F;border-top:2px solid #2E6B4F;text-align:right;">${fmt(amount)}</td>
-        </tr>
+    : `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:28px;">
+        <thead>
+          <tr style="background-color:#f8f9fa;">
+            <th style="padding:10px 16px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid ${BORDER};">Service</th>
+            <th style="padding:10px 16px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.6px;border-bottom:1px solid ${BORDER};">Amount Due</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:14px 16px;font-size:14px;color:${TEXT};border-bottom:1px solid ${BORDER};">${serviceName}</td>
+            <td style="padding:14px 16px;font-size:14px;color:${TEXT};border-bottom:1px solid ${BORDER};text-align:right;">${fmt(amount)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background-color:#ecfdf5;">
+            <td style="padding:14px 16px;font-size:15px;font-weight:700;color:${GREEN};border-top:2px solid ${GREEN};">Total Due</td>
+            <td style="padding:14px 16px;font-size:15px;font-weight:700;color:${GREEN};border-top:2px solid ${GREEN};text-align:right;">${fmt(amount)}</td>
+          </tr>
+        </tfoot>
       </table>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Invoice ${invoiceNumber}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+<body style="margin:0;padding:0;background-color:${BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${BG};padding:40px 16px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
           <tr>
-            <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
-              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">${companyName}</p>
-              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Invoice ${invoiceNumber}</p>
+            <td style="background-color:${GREEN};padding:32px 36px 28px;">
+              ${logoHtml}
+              <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;line-height:1.2;">${companyName}</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;letter-spacing:0.2px;">Invoice ${invoiceNumber}</p>
             </td>
           </tr>
+
+          <!-- Body -->
           <tr>
-            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
-              ${logoSection}
-              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${tenantName},</p>
-              <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-                You have a new <strong>${type} Invoice</strong> ready for payment.
+            <td style="background-color:#ffffff;padding:36px 36px 32px;">
+              <p style="margin:0 0 6px;font-size:17px;font-weight:600;color:#111827;">Hi ${tenantName},</p>
+              <p style="margin:0 0 28px;font-size:14px;color:${MUTED};line-height:1.6;">
+                You have a new <strong style="color:${TEXT};">${type} Invoice</strong> ready for review and payment.
               </p>
+
               ${detailedTable}
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+
+              <!-- Pay Now button -->
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
                 <tr>
-                  <td style="background-color:#2E6B4F;border-radius:8px;padding:12px 24px;">
-                    <a href="${payUrl}" style="color:#F5F0E8;font-size:15px;font-weight:bold;text-decoration:none;">Pay Now</a>
+                  <td style="background-color:${GREEN};border-radius:8px;">
+                    <a href="${payUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">Pay Now &rarr;</a>
                   </td>
                 </tr>
               </table>
-              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5;">
-                If you have any questions, reply to this email or contact your coordinator.
+
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
+                Questions about this invoice? Reply to this email or reach out to your project coordinator.
               </p>
             </td>
           </tr>
+
+          <!-- Footer -->
           <tr>
-            <td style="padding:20px 32px 0;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#9ca3af;">${companyName} &mdash; Invoice</p>
+            <td style="background-color:#f8f9fa;padding:18px 36px;border-top:1px solid ${BORDER};text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">${companyName} &nbsp;&bull;&nbsp; Invoice ${invoiceNumber}</p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
