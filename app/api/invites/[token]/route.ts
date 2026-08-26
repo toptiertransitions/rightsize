@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorById, updateLocalVendor, upsertUser } from "@/lib/airtable";
+import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorById, updateLocalVendor, upsertUser, getStaffMembers } from "@/lib/airtable";
 import { verifyInviteToken, isVendorInvite } from "@/lib/invites";
 import { Resend } from "resend";
 import { buildNewUserAdminEmail } from "@/lib/email";
-import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
+import { sendNewUserAdminNotification, getAdminEmails } from "@/lib/admin-notifications";
 
 interface RouteContext {
   params: Promise<{ token: string }>;
@@ -120,40 +120,19 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
 }
 
 // ─── Admin notification on invite acceptance ──────────────────────────────────
-async function notifyAdminsInviteAccepted(clerkUserId: string, tenantId: string, role: string) {
+async function notifyAdminsInviteAccepted(clerkUserId: string, tenantId: string, _role: string) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
 
-  let adminEmails: string[] = (process.env.ADMIN_NOTIFICATION_EMAIL ?? "")
-    .split(",").map(s => s.trim()).filter(Boolean);
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
 
-  if (adminEmails.length === 0) {
-    const adminClerkIds = (process.env.TTT_ADMIN_USER_IDS ?? "")
-      .split(",").map(s => s.trim()).filter(Boolean);
-    const clerkSecret = process.env.CLERK_SECRET_KEY;
-    if (adminClerkIds.length > 0 && clerkSecret) {
-      for (const id of adminClerkIds) {
-        const r = await fetch(`https://api.clerk.com/v1/users/${id}`, {
-          headers: { Authorization: `Bearer ${clerkSecret}` },
-        });
-        if (!r.ok) continue;
-        const u = await r.json();
-        const primaryId = u.primary_email_address_id as string | null;
-        const email = (u.email_addresses as Array<{ id: string; email_address: string }>)
-          ?.find(e => e.id === primaryId)?.email_address
-          ?? (u.email_addresses as Array<{ email_address: string }>)?.[0]?.email_address;
-        if (email) adminEmails.push(email);
-      }
-    }
-  }
-
-  if (adminEmails.length === 0) return;
-
-  // Fetch user info and tenant info in parallel
+  // Fetch everything in parallel
   const clerk = await clerkClient();
-  const [clerkUser, tenant] = await Promise.all([
+  const [clerkUser, tenant, staffMembers, adminEmails] = await Promise.all([
     clerk.users.getUser(clerkUserId).catch(() => null),
     getTenantById(tenantId).catch(() => null),
+    getStaffMembers().catch(() => []),
+    getAdminEmails(),
   ]);
 
   const primaryEmailId = clerkUser?.primaryEmailAddressId;
@@ -164,20 +143,43 @@ async function notifyAdminsInviteAccepted(clerkUserId: string, tenantId: string,
 
   let projectName: string | null = null;
   let projectAddress: string | null = null;
+  let teamLeadName: string | null = null;
   if (tenant) {
     projectName = tenant.name;
     const addrParts = [tenant.address, tenant.city, tenant.state, tenant.zip].filter(Boolean);
     if (addrParts.length > 0) projectAddress = addrParts.join(", ");
+    if (tenant.teamLeadClerkId) {
+      const lead = staffMembers.find(s => s.clerkUserId === tenant.teamLeadClerkId);
+      teamLeadName = lead?.displayName ?? null;
+    }
   }
+
+  // Recipients: all TTTAdmin + all TTTManager + the project team lead
+  const recipientSet = new Set<string>(adminEmails.map(e => e.toLowerCase()));
+  for (const s of staffMembers) {
+    if (s.isActive && s.email && s.role === "TTTManager") {
+      recipientSet.add((s.email as string).toLowerCase());
+    }
+    if (tenant?.teamLeadClerkId && s.clerkUserId === tenant.teamLeadClerkId && s.email) {
+      recipientSet.add((s.email as string).toLowerCase());
+    }
+  }
+
+  const recipients = [...recipientSet];
+  if (recipients.length === 0) return;
+
+  const planUrl = `${appUrl}/plan?tenantId=${tenantId}`;
 
   const html = buildNewUserAdminEmail({
     fullName,
     email,
     imageUrl,
     userType: "client",
-    roleLabel: `Invite Accepted — ${role}`,
+    roleLabel: "New Client User",
     projectName,
     projectAddress,
+    teamLeadName,
+    planUrl,
     createdAt: new Date().toLocaleDateString("en-US", {
       weekday: "long", month: "long", day: "numeric", year: "numeric",
     }),
@@ -186,8 +188,8 @@ async function notifyAdminsInviteAccepted(clerkUserId: string, tenantId: string,
   const resend = new Resend(resendKey);
   await resend.emails.send({
     from: "Top Tier Transitions <noreply@toptiertransitions.com>",
-    to: adminEmails,
-    subject: `Invite Accepted: ${fullName}${projectName ? ` → ${projectName}` : ""}`,
+    to: recipients,
+    subject: `Internal Notification: New Client User Registered! — ${fullName}${projectName ? ` at ${projectName}` : ""}`,
     html,
   });
 }

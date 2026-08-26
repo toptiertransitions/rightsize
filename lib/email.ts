@@ -1526,6 +1526,8 @@ export function buildNewUserAdminEmail({
   roleLabel,
   projectName,
   projectAddress,
+  teamLeadName,
+  planUrl,
   createdAt,
 }: {
   fullName: string;
@@ -1535,6 +1537,8 @@ export function buildNewUserAdminEmail({
   roleLabel: string;
   projectName?: string | null;
   projectAddress?: string | null;
+  teamLeadName?: string | null;
+  planUrl?: string | null;
   createdAt: string;
 }): string {
   const typeBadge =
@@ -1556,12 +1560,14 @@ export function buildNewUserAdminEmail({
     ? `<img src="${imageUrl}" alt="${fullName}" width="64" height="64" style="border-radius:50%;display:block;object-fit:cover;border:3px solid #e5e7eb;" />`
     : `<table cellpadding="0" cellspacing="0"><tr><td style="width:64px;height:64px;border-radius:50%;background:#2E6B4F;font-size:22px;font-weight:700;color:#ffffff;text-align:center;line-height:64px;">${initials}</td></tr></table>`;
 
+  const isClientNotification = userType === "client";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>New User — Top Tier Transitions</title>
+  <title>New Client User Registered — Top Tier Transitions</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
@@ -1574,8 +1580,8 @@ export function buildNewUserAdminEmail({
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td>
-                  <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions</p>
-                  <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">New User Account</p>
+                  <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions &nbsp;·&nbsp; Internal Notification</p>
+                  <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">${isClientNotification ? "New Client User Registered" : "New User Account"}</p>
                 </td>
                 <td align="right" style="vertical-align:top;">
                   <p style="margin:0;font-size:12px;color:#a8d4bc;">${createdAt}</p>
@@ -1627,15 +1633,19 @@ export function buildNewUserAdminEmail({
                       <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;">Email</td>
                       <td style="padding:12px 16px;font-size:13px;color:#111827;">${email}</td>
                     </tr>
-                    <tr style="${projectAddress ? "border-bottom:1px solid #f3f4f6;" : ""}">
+                    <tr style="border-bottom:1px solid #f3f4f6;">
                       <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;">Project</td>
                       <td style="padding:12px 16px;font-size:13px;color:${projectName ? "#111827" : "#9ca3af"};${projectName ? "" : "font-style:italic;"}">${projectName ?? "No project yet"}</td>
                     </tr>
                     ${projectAddress ? `
-                    <tr>
+                    <tr style="border-bottom:1px solid #f3f4f6;">
                       <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;vertical-align:top;">Address</td>
                       <td style="padding:12px 16px;font-size:13px;color:#111827;">${projectAddress}</td>
                     </tr>` : ""}
+                    <tr>
+                      <td style="padding:12px 16px;font-size:13px;font-weight:600;color:#6b7280;">Team Lead</td>
+                      <td style="padding:12px 16px;font-size:13px;color:${teamLeadName ? "#111827" : "#9ca3af"};${teamLeadName ? "" : "font-style:italic;"}">${teamLeadName ?? "Not assigned"}</td>
+                    </tr>
                   </table>
                 </td>
               </tr>
@@ -1643,9 +1653,9 @@ export function buildNewUserAdminEmail({
               <!-- CTA -->
               <tr>
                 <td style="padding:0 0 24px;">
-                  <a href="https://app.toptiertransitions.com/admin/users"
+                  <a href="${planUrl ?? "https://app.toptiertransitions.com/plan"}"
                      style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
-                    View Users in Admin →
+                    View Project Plan →
                   </a>
                 </td>
               </tr>
