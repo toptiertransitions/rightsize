@@ -1677,7 +1677,7 @@ export function SalesClient({
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
             <div className="text-xl font-bold tabular-nums text-gray-700">{fmt(nonTTTInventoryValue)}</div>
-            <div className="text-xs text-gray-500 mt-0.5">Client value of unsold inventory</div>
+            <div className="text-xs text-gray-500 mt-0.5">Best Case Value of unsold items</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
             <div className="text-xl font-bold tabular-nums text-green-700">{fmt(nonTTTEarned)}</div>
@@ -1689,7 +1689,7 @@ export function SalesClient({
         {/* Inventory value — static card, no caret */}
         <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
           <div className="text-xl font-bold tabular-nums text-gray-700">{fmt(totalInventoryValue)}</div>
-          <div className="text-xs text-gray-500 mt-0.5">Client value of unsold inventory</div>
+          <div className="text-xs text-gray-500 mt-0.5">Best Case Value of unsold items</div>
         </div>
 
         {expandableCard(0, "Total client earnings (sold)", totalEarned, "text-green-700", r => r.earned)}
