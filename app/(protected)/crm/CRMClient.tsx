@@ -5759,7 +5759,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     { key: "contacts", label: "Clients" },
     { key: "referrals", label: "Referral Partners" },
     { key: "warroom", label: "War Room" },
-    { key: "nurture", label: "Referral Nurture" },
+    { key: "nurture", label: "Referral Funnel" },
     { key: "tasks", label: "Tasks" },
     { key: "voice", label: "Log with Voice" },
     { key: "activity", label: "Activity Log" },

@@ -385,7 +385,6 @@ function StageChangesTable({
         <table className="text-xs w-full" style={{ minWidth: 660 }}>
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="w-8 px-2 py-2 text-center text-gray-400 font-normal">★</th>
               <SortTh k="companyName" label="Company" />
               <SortTh k="contactName" label="Contact" />
               <SortTh k="ownerName" label="Owner" />
@@ -393,6 +392,7 @@ function StageChangesTable({
               <SortTh k="stageChangedAt" label="Changed" align="center" />
               <SortTh k="lastActivityDate" label="Last Act." align="center" />
               <SortTh k="nextStepDate" label="Next Step" />
+              <th className="w-8 px-2 py-2 text-center text-gray-400 font-normal">★</th>
             </tr>
           </thead>
           <tbody>
@@ -400,18 +400,10 @@ function StageChangesTable({
               const isSpotlit = spotlightIds.has(c.contactId);
               return (
                 <tr key={c.contactId} className={cn("border-b border-gray-100 last:border-0", isSpotlit && "bg-amber-50/60")}>
-                  <td className="px-2 py-2 text-center">
-                    <button
-                      onClick={() => toggleSpotlight(c.contactId)}
-                      className={cn("transition-colors leading-none", isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-200 hover:text-amber-400")}
-                    >
-                      ★
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{c.companyName}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                  <td className="px-3 py-2 font-medium text-gray-900 max-w-[110px] truncate">{c.companyName}</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">
                     {c.contactName}
-                    {c.contactTitle && <span className="text-gray-400 block text-[10px]">{c.contactTitle}</span>}
+                    {c.contactTitle && <span className="text-gray-400 block text-[10px] truncate">{c.contactTitle}</span>}
                   </td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{c.ownerName || "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -421,13 +413,21 @@ function StageChangesTable({
                   </td>
                   <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">{fmtDate(c.stageChangedAt?.slice(0, 10))}</td>
                   <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">{c.lastActivityDate ? fmtDate(c.lastActivityDate) : "—"}</td>
-                  <td className="px-3 py-2 text-gray-700 max-w-[160px]">
+                  <td className="px-3 py-2 text-gray-700 max-w-[140px]">
                     {c.nextStepDate ? (
                       <div>
                         <span className="whitespace-nowrap font-medium text-gray-800">{fmtDate(c.nextStepDate)}</span>
                         {c.nextStepNote && <p className="text-gray-400 truncate mt-0.5">{c.nextStepNote}</p>}
                       </div>
                     ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      onClick={() => toggleSpotlight(c.contactId)}
+                      className={cn("transition-colors leading-none", isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-200 hover:text-amber-400")}
+                    >
+                      ★
+                    </button>
                   </td>
                 </tr>
               );
@@ -451,8 +451,28 @@ interface FlatTarget extends ConversionTarget {
   repClerkId: string;
 }
 
-function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quarterId: string }) {
+function TeamNurtureTable({ targets, quarterId, currentUserId }: { targets: FlatTarget[]; quarterId: string; currentUserId: string }) {
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  const [spotlightIds, setSpotlightIds] = useState<Set<string>>(new Set());
+  const [showOnlySpotlit, setShowOnlySpotlit] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`);
+      setSpotlightIds(stored ? new Set(JSON.parse(stored)) : new Set());
+    } catch { setSpotlightIds(new Set()); }
+  }, [currentUserId]);
+
+  function toggleSpotlight(companyId: string) {
+    setSpotlightIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      try {
+        localStorage.setItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  }
 
   function toggleCompany(companyId: string) {
     setExpandedCompanies((prev) => {
@@ -468,14 +488,36 @@ function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quart
   if (nurtureTargets.length === 0) {
     return <p className="text-sm text-gray-400 italic">No nurture-stage companies targeted for conversion this quarter.</p>;
   }
-  const sorted = [...nurtureTargets].sort((a, b) => {
+  const allSorted = [...nurtureTargets].sort((a, b) => {
     const pd = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
     return pd !== 0 ? pd : a.companyName.localeCompare(b.companyName);
   });
-  // 9 columns: Company, Rep, Priority, Start Stage, Current Stage, Stage Age, Last Activity, Next Step, chevron
-  const colCount = 9;
+  const sorted = showOnlySpotlit ? allSorted.filter(t => spotlightIds.has(t.companyId)) : allSorted;
+  // 10 columns: Company, Rep, Priority, Start Stage, Current Stage, Stage Age, Last Activity, Next Step, spotlight, chevron
+  const colCount = 10;
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-3">
+        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Not Yet Referring</span>
+        <span className="text-xs text-gray-400">{sorted.length}{showOnlySpotlit ? ` of ${nurtureTargets.length}` : ""}</span>
+        <button
+          onClick={() => setShowOnlySpotlit(s => !s)}
+          className={cn(
+            "ml-auto inline-flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border transition-colors",
+            showOnlySpotlit
+              ? "border-amber-400 bg-amber-50 text-amber-700 font-medium"
+              : "border-gray-300 text-gray-500 hover:border-amber-300 hover:text-amber-600"
+          )}
+        >
+          <span>★</span>
+          {showOnlySpotlit ? "Show All" : "Spotlight Only"}
+          {spotlightIds.size > 0 && (
+            <span className="ml-1 bg-amber-200 text-amber-800 rounded-full px-1.5 text-[10px] font-bold">
+              {spotlightIds.size}
+            </span>
+          )}
+        </button>
+      </div>
       <table className="text-sm w-full" style={{ minWidth: 700 }}>
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
@@ -487,16 +529,18 @@ function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quart
             <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
             <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
             <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
+            <th className="px-2 py-2.5 text-xs font-medium text-gray-400 text-center">★</th>
             <th className="px-2 py-2.5 w-8" />
           </tr>
         </thead>
         <tbody>
           {sorted.map((t) => {
             const isOpen = expandedCompanies.has(t.companyId);
+            const isSpotlit = spotlightIds.has(t.companyId);
             return (
               <Fragment key={`${t.repClerkId}-${t.companyId}`}>
                 <tr
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                  className={cn("border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer", isSpotlit && "bg-amber-50/40")}
                   onClick={() => toggleCompany(t.companyId)}
                 >
                   <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
@@ -513,6 +557,15 @@ function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quart
                         {t.nextStepNote && <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>}
                       </div>
                     ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => toggleSpotlight(t.companyId)}
+                      title={isSpotlit ? "Remove from Spotlight" : "Add to Spotlight"}
+                      className={cn("text-base transition-colors", isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-300 hover:text-amber-400")}
+                    >
+                      ★
+                    </button>
                   </td>
                   <td className="px-2 py-3 text-center text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</td>
                 </tr>
@@ -532,6 +585,13 @@ function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quart
               </Fragment>
             );
           })}
+          {showOnlySpotlit && sorted.length === 0 && (
+            <tr>
+              <td colSpan={colCount} className="px-4 py-6 text-center text-sm text-gray-400 italic">
+                No spotlit companies. Click ★ on any row to spotlight.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -546,6 +606,7 @@ function RepNurtureSection({
   isPast,
   canManageTargets,
   toggling,
+  currentUserId,
   onAddTarget,
   onRemoveTarget,
 }: {
@@ -554,10 +615,31 @@ function RepNurtureSection({
   isPast: boolean;
   canManageTargets: boolean;
   toggling: string | null;
+  currentUserId: string;
   onAddTarget: (companyId: string, currentStage: string, forClerkUserId?: string) => Promise<void>;
   onRemoveTarget: (targetId: string, companyId: string) => Promise<void>;
 }) {
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  const [spotlightIds, setSpotlightIds] = useState<Set<string>>(new Set());
+  const [showOnlySpotlit, setShowOnlySpotlit] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`);
+      setSpotlightIds(stored ? new Set(JSON.parse(stored)) : new Set());
+    } catch { setSpotlightIds(new Set()); }
+  }, [currentUserId]);
+
+  function toggleSpotlight(companyId: string) {
+    setSpotlightIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      try {
+        localStorage.setItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  }
 
   function toggleCompany(companyId: string) {
     setExpandedCompanies((prev) => {
@@ -570,11 +652,33 @@ function RepNurtureSection({
   // Exclude war-room stages — those belong on the War Room tab
   const nurtureTargets = rep.conversionTargets.filter((t) => !NURTURE_EXCLUDE.includes(t.bestStage));
   const nurtureAvailable = rep.availableToConvert.filter((c) => !NURTURE_EXCLUDE.includes(c.bestStage));
+  const displayTargets = showOnlySpotlit ? nurtureTargets.filter(t => spotlightIds.has(t.companyId)) : nurtureTargets;
 
   return (
     <div className="space-y-4">
       {nurtureTargets.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-3">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Not Yet Referring</span>
+            <span className="text-xs text-gray-400">{displayTargets.length}{showOnlySpotlit ? ` of ${nurtureTargets.length}` : ""}</span>
+            <button
+              onClick={() => setShowOnlySpotlit(s => !s)}
+              className={cn(
+                "ml-auto inline-flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1 border transition-colors",
+                showOnlySpotlit
+                  ? "border-amber-400 bg-amber-50 text-amber-700 font-medium"
+                  : "border-gray-300 text-gray-500 hover:border-amber-300 hover:text-amber-600"
+              )}
+            >
+              <span>★</span>
+              {showOnlySpotlit ? "Show All" : "Spotlight Only"}
+              {spotlightIds.size > 0 && (
+                <span className="ml-1 bg-amber-200 text-amber-800 rounded-full px-1.5 text-[10px] font-bold">
+                  {spotlightIds.size}
+                </span>
+              )}
+            </button>
+          </div>
           <table className="text-sm w-full" style={{ minWidth: 700 }}>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -585,19 +689,21 @@ function RepNurtureSection({
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Stage Age</th>
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-500">Last Activity</th>
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Next Step</th>
+                <th className="px-2 py-2.5 text-xs font-medium text-gray-400 text-center">★</th>
                 {canManageTargets && !isPast && <th className="px-4 py-2.5" />}
                 <th className="px-2 py-2.5 w-8" />
               </tr>
             </thead>
             <tbody>
-              {sortByPriorityThenName(nurtureTargets).map((t) => {
+              {sortByPriorityThenName(displayTargets).map((t) => {
                 const isOpen = expandedCompanies.has(t.companyId);
-                // base 7 cols + optional remove col + chevron col
-                const colCount = 7 + (canManageTargets && !isPast ? 1 : 0) + 1;
+                const isSpotlit = spotlightIds.has(t.companyId);
+                // base 7 cols + spotlight col + optional remove col + chevron col
+                const colCount = 7 + 1 + (canManageTargets && !isPast ? 1 : 0) + 1;
                 return (
                   <Fragment key={t.companyId}>
                     <tr
-                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                      className={cn("border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer", isSpotlit && "bg-amber-50/40")}
                       onClick={() => toggleCompany(t.companyId)}
                     >
                       <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{t.companyName}</td>
@@ -613,6 +719,15 @@ function RepNurtureSection({
                             {t.nextStepNote && <p className="text-xs text-gray-400 truncate mt-0.5" title={t.nextStepNote}>{t.nextStepNote}</p>}
                           </div>
                         ) : <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => toggleSpotlight(t.companyId)}
+                          title={isSpotlit ? "Remove from Spotlight" : "Add to Spotlight"}
+                          className={cn("text-base transition-colors", isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-300 hover:text-amber-400")}
+                        >
+                          ★
+                        </button>
                       </td>
                       {canManageTargets && !isPast && (
                         <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -643,6 +758,13 @@ function RepNurtureSection({
                   </Fragment>
                 );
               })}
+              {showOnlySpotlit && displayTargets.length === 0 && (
+                <tr>
+                  <td colSpan={7 + 1 + (canManageTargets && !isPast ? 1 : 0) + 1} className="px-4 py-6 text-center text-sm text-gray-400 italic">
+                    No spotlit companies. Click ★ on any row to spotlight.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -887,7 +1009,7 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
           {planLoading && <div className="py-8 text-center text-sm text-gray-400">Loading pipeline data...</div>}
 
           {!planLoading && planData && viewMode === "team" && (
-            <TeamNurtureTable targets={allFlatTargets} quarterId={selectedQuarterId ?? ""} />
+            <TeamNurtureTable targets={allFlatTargets} quarterId={selectedQuarterId ?? ""} currentUserId={currentUserId} />
           )}
 
           {!planLoading && planData && activeRep && (
@@ -897,6 +1019,7 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
               isPast={isPast}
               canManageTargets={canManageActiveRep}
               toggling={toggling}
+              currentUserId={currentUserId}
               onAddTarget={handleAddTarget}
               onRemoveTarget={handleRemoveTarget}
             />

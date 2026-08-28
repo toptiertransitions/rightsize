@@ -337,6 +337,8 @@ function fmtDollar(n: number): string {
 
 const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2, "": 3 };
 
+const WAR_ROOM_STAGES = ["Agreed to Refer", "Active Referral", "Inactive Referral"];
+
 function sortByPriorityThenName<T extends { priority: ReferralPriority; companyName: string }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => {
     const diff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
@@ -1057,7 +1059,9 @@ function RepAccordionItem({
 
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Not Yet Referring</p>
-            {rep.conversionTargets.length > 0 ? (
+            {(() => {
+              const warRoomTargets = rep.conversionTargets.filter(t => WAR_ROOM_STAGES.includes(t.bestStage));
+              return warRoomTargets.length > 0 ? (
               <div className="overflow-x-auto mb-3">
                 <table className="text-xs" style={{ minWidth: 760 }}>
                   <thead>
@@ -1073,7 +1077,7 @@ function RepAccordionItem({
                     </tr>
                   </thead>
                   <tbody>
-                    {sortByPriorityThenName(rep.conversionTargets).map((t) => (
+                    {sortByPriorityThenName(warRoomTargets).map((t) => (
                       <tr key={t.companyId} className="border-t border-gray-200 first:border-0">
                         <td className="py-1.5 pr-3 font-medium text-gray-800 whitespace-nowrap">{t.companyName}</td>
                         <td className="py-1.5 pr-3"><PriorityBadge priority={t.priority} /></td>
@@ -1109,7 +1113,8 @@ function RepAccordionItem({
               </div>
             ) : (
               <p className="text-xs text-gray-400 italic mb-3">No companies targeted for conversion this quarter.</p>
-            )}
+            );
+            })()}
 
             {isAdmin && !isPast && rep.availableToConvert.length > 0 && (
               <div>
@@ -1284,10 +1289,10 @@ function RepView({
   const hasSpotlight = !!(spotlightIds && onToggleSpotlight);
   const atMax = (spotlightIds?.length ?? 0) >= 3;
 
-  const WAR_ROOM_STAGES = ["Agreed to Refer", "Active Referral", "Inactive Referral"];
   const warRoomAvailable = sortByPriorityThenName(
     rep.availableToConvert.filter((c) => WAR_ROOM_STAGES.includes(c.bestStage))
   );
+  const warRoomConversionTargets = rep.conversionTargets.filter(t => WAR_ROOM_STAGES.includes(t.bestStage));
 
   return (
     <div className="space-y-6">
@@ -1404,7 +1409,7 @@ function RepView({
           {isPast && <span className="text-xs text-gray-400">(read-only)</span>}
         </div>
 
-        {rep.conversionTargets.length > 0 ? (
+        {warRoomConversionTargets.length > 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto mb-3">
             <table className="text-sm" style={{ minWidth: 720 }}>
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -1422,7 +1427,7 @@ function RepView({
                 </tr>
               </thead>
               <tbody>
-                {sortByPriorityThenName(rep.conversionTargets).map((t) => {
+                {sortByPriorityThenName(warRoomConversionTargets).map((t) => {
                   const isOpen = expandedCompanies.has(t.companyId);
                   const isSpotlit = spotlightIds?.includes(t.companyId) ?? false;
                   const colCount = [7, hasSpotlight ? 1 : 0, canManageTargets && !isPast ? 1 : 0, 1].reduce((a, b) => a + b, 0);
