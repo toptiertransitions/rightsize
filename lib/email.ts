@@ -4878,3 +4878,275 @@ export function buildActiveReferralCelebrationEmail(p: ActiveReferralCelebration
 </body>
 </html>`;
 }
+
+export function buildQuoteAlertEmail({
+  clientName,
+  clientEmail,
+  referralSource,
+  projectName,
+  opportunity,
+  contract,
+  quotePhotos,
+}: {
+  clientName: string;
+  clientEmail?: string;
+  referralSource?: string;
+  projectName: string;
+  opportunity?: {
+    stage?: string;
+    estimatedValue?: number;
+    address?: string;
+    addressUnitNumber?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    destAddress?: string;
+    destAddressUnitNumber?: string;
+    destCity?: string;
+    destState?: string;
+    destZip?: string;
+    seniorCommunityName?: string;
+    expectedCloseDate?: string;
+    notes?: string;
+    keyPeople?: { name: string; relationship: string; email?: string; phone?: string }[];
+  };
+  contract: {
+    totalCost: number;
+    lineItems?: { serviceName: string; hours: number; rate: number; description?: string }[];
+    discountCode?: string;
+    discountAmount?: number;
+    notInScope?: string;
+  };
+  quotePhotos?: { url: string }[];
+}): string {
+  const fmt = (n: number) =>
+    `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtHrs = (h: number) => {
+    const rounded = Math.round(h * 10) / 10;
+    return `${rounded} hr${rounded === 1 ? "" : "s"}`;
+  };
+
+  const GREEN = "#2E6B4F";
+  const TEXT = "#374151";
+  const MUTED = "#6b7280";
+  const BORDER = "#e5e7eb";
+  const BG = "#F5F0E8";
+
+  const hasDiscount = !!contract.discountCode && !!contract.discountAmount && contract.discountAmount > 0;
+  const lineItems = contract.lineItems ?? [];
+  const totalHours = lineItems.reduce((s, li) => s + li.hours, 0);
+
+  const originParts = [
+    opportunity?.address
+      ? opportunity.address + (opportunity.addressUnitNumber ? `, Unit ${opportunity.addressUnitNumber}` : "")
+      : null,
+    [opportunity?.city, opportunity?.state, opportunity?.zip].filter(Boolean).join(" "),
+  ].filter(Boolean);
+  const originStr = originParts.join(", ");
+
+  const destParts = [
+    opportunity?.destAddress
+      ? opportunity.destAddress + (opportunity.destAddressUnitNumber ? `, Unit ${opportunity.destAddressUnitNumber}` : "")
+      : null,
+    [opportunity?.destCity, opportunity?.destState, opportunity?.destZip].filter(Boolean).join(" "),
+  ].filter(Boolean);
+  const destStr = destParts.join(", ");
+
+  const closeDate = opportunity?.expectedCloseDate
+    ? (() => {
+        try {
+          return new Date(opportunity.expectedCloseDate!).toLocaleDateString("en-US", {
+            month: "long", day: "numeric", year: "numeric",
+          });
+        } catch { return opportunity.expectedCloseDate!; }
+      })()
+    : null;
+
+  const detailRow = (label: string, value: string) =>
+    `<tr>
+      <td style="padding:8px 14px;font-size:13px;color:${MUTED};width:130px;vertical-align:top;border-top:1px solid ${BORDER};white-space:nowrap;">${label}</td>
+      <td style="padding:8px 14px;font-size:13px;color:${TEXT};border-top:1px solid ${BORDER};border-left:1px solid ${BORDER};line-height:1.5;">${value}</td>
+    </tr>`;
+
+  const destCellValue = [
+    opportunity?.seniorCommunityName
+      ? `<strong style="color:#1d4ed8;">${opportunity.seniorCommunityName}</strong>`
+      : "",
+    destStr,
+  ].filter(Boolean).join("<br>");
+
+  const oppRows = [
+    clientEmail
+      ? detailRow("Email", `<a href="mailto:${clientEmail}" style="color:${GREEN};text-decoration:none;">${clientEmail}</a>`)
+      : "",
+    referralSource ? detailRow("Referral Source", referralSource) : "",
+    opportunity?.stage ? detailRow("CRM Stage", opportunity.stage) : "",
+    opportunity?.estimatedValue
+      ? detailRow("Estimated Value", `<strong>${fmt(opportunity.estimatedValue)}</strong>`)
+      : "",
+    closeDate ? detailRow("Expected Close", closeDate) : "",
+    originStr ? detailRow("Origin", originStr) : "",
+    destCellValue ? detailRow("Destination", destCellValue) : "",
+    opportunity?.notes
+      ? detailRow("Notes", opportunity.notes.replace(/\n/g, "<br>"))
+      : "",
+  ].filter(Boolean).join("");
+
+  const keyPeople = opportunity?.keyPeople ?? [];
+  const keyPeopleSection =
+    keyPeople.length > 0
+      ? `<p style="margin:24px 0 8px;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Key People</p>
+         <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:24px;">
+           <thead>
+             <tr style="background-color:#f9fafb;">
+               <th style="padding:9px 14px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Name</th>
+               <th style="padding:9px 14px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Role</th>
+               <th style="padding:9px 14px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contact</th>
+             </tr>
+           </thead>
+           <tbody>
+             ${keyPeople.map((p, i) =>
+               `<tr${i % 2 === 1 ? ` style="background-color:#f9fafb;"` : ""}>
+                 <td style="padding:9px 14px;font-size:13px;color:${TEXT};border-top:1px solid ${BORDER};font-weight:500;">${p.name}</td>
+                 <td style="padding:9px 14px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};">${p.relationship}</td>
+                 <td style="padding:9px 14px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};">${[p.email, p.phone].filter(Boolean).join(" &middot; ") || "&mdash;"}</td>
+               </tr>`
+             ).join("")}
+           </tbody>
+         </table>`
+      : "";
+
+  const serviceRows = lineItems.map((li, i) =>
+    `<tr${i % 2 === 1 ? ` style="background-color:#f9fafb;"` : ""}>
+      <td style="padding:10px 14px;font-size:13px;color:${TEXT};border-top:1px solid ${BORDER};">${li.serviceName}${li.description ? `<br><span style="font-size:12px;color:#9ca3af;">${li.description}</span>` : ""}</td>
+      <td style="padding:10px 14px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};text-align:right;white-space:nowrap;">${fmtHrs(li.hours)}</td>
+      <td style="padding:10px 14px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};text-align:right;white-space:nowrap;">${fmt(li.rate)}/hr</td>
+      <td style="padding:10px 14px;font-size:13px;color:${TEXT};font-weight:600;border-top:1px solid ${BORDER};text-align:right;white-space:nowrap;">${fmt(li.hours * li.rate)}</td>
+    </tr>`
+  ).join("");
+
+  const discountRows = hasDiscount
+    ? `<tr>
+        <td colspan="3" style="padding:9px 14px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};">Subtotal</td>
+        <td style="padding:9px 14px;font-size:13px;color:${MUTED};border-top:1px solid ${BORDER};text-align:right;white-space:nowrap;">${fmt(contract.totalCost + contract.discountAmount!)}</td>
+      </tr>
+      <tr style="background-color:#eff6ff;">
+        <td colspan="3" style="padding:9px 14px;font-size:13px;color:#1d4ed8;border-top:1px solid #dbeafe;">Discount &mdash; ${contract.discountCode}</td>
+        <td style="padding:9px 14px;font-size:13px;color:#1d4ed8;border-top:1px solid #dbeafe;text-align:right;white-space:nowrap;">&minus;${fmt(contract.discountAmount!)}</td>
+      </tr>`
+    : "";
+
+  const quoteSection =
+    lineItems.length > 0
+      ? `<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Quote &mdash; Scope &amp; Pricing</p>
+         <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:24px;">
+           <thead>
+             <tr style="background-color:#f9fafb;">
+               <th style="padding:9px 14px;text-align:left;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Service</th>
+               <th style="padding:9px 14px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Hours</th>
+               <th style="padding:9px 14px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Rate</th>
+               <th style="padding:9px 14px;text-align:right;font-size:11px;color:${MUTED};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Value</th>
+             </tr>
+           </thead>
+           <tbody>${serviceRows}${discountRows}</tbody>
+           <tfoot>
+             <tr style="background-color:#f0fdf4;">
+               <td colspan="2" style="padding:12px 14px;font-size:14px;font-weight:bold;color:${GREEN};border-top:2px solid ${GREEN};">${hasDiscount ? "Total After Discount" : "Estimated Total"}</td>
+               <td style="padding:12px 14px;font-size:13px;color:${MUTED};border-top:2px solid ${GREEN};text-align:right;white-space:nowrap;">${fmtHrs(totalHours)}</td>
+               <td style="padding:12px 14px;font-size:14px;font-weight:bold;color:${GREEN};border-top:2px solid ${GREEN};text-align:right;white-space:nowrap;">${fmt(contract.totalCost)}</td>
+             </tr>
+           </tfoot>
+         </table>`
+      : `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:24px;">
+           <tr style="background-color:#f0fdf4;">
+             <td style="padding:14px;font-size:14px;font-weight:bold;color:${GREEN};">Estimated Total</td>
+             <td style="padding:14px;font-size:14px;font-weight:bold;color:${GREEN};text-align:right;">${fmt(contract.totalCost)}</td>
+           </tr>
+         </table>`;
+
+  const notInScopeSection = contract.notInScope
+    ? `<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Not in Scope</p>
+       <p style="margin:0 0 24px;font-size:13px;color:${TEXT};line-height:1.6;padding:12px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;">${contract.notInScope.replace(/\n/g, "<br>")}</p>`
+    : "";
+
+  const photos = (quotePhotos ?? []).slice(0, 6);
+  const photoRows: string[] = [];
+  for (let i = 0; i < photos.length; i += 3) {
+    const chunk = photos.slice(i, i + 3);
+    const cells = chunk.map(photo => {
+      let imgUrl = photo.url;
+      if (imgUrl.includes("res.cloudinary.com") && imgUrl.includes("/upload/")) {
+        imgUrl = imgUrl.replace("/upload/", "/upload/w_300,q_85,f_auto/");
+      }
+      return `<td style="padding:4px;width:33.33%;vertical-align:top;"><img src="${imgUrl}" alt="" style="display:block;width:100%;height:auto;border-radius:6px;border:1px solid ${BORDER};" /></td>`;
+    }).join("");
+    photoRows.push(`<tr>${cells}</tr>`);
+  }
+  const imageSection =
+    photos.length > 0
+      ? `<p style="margin:24px 0 10px;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Quote Photos (${photos.length})</p>
+         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">${photoRows.join("")}</table>`
+      : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Internal Alert &mdash; New Quote Sent</title>
+</head>
+<body style="margin:0;padding:0;background-color:${BG};font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${BG};padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:${GREEN};padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Internal Alert &mdash; Quote Sent</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:1px solid #fcd34d;border-radius:10px;margin-bottom:28px;">
+                <tr>
+                  <td style="padding:18px 22px;">
+                    <p style="margin:0 0 4px;font-size:16px;font-weight:bold;color:#92400e;">New Quote Sent &mdash; Awaiting Signature</p>
+                    <p style="margin:0;font-size:14px;color:#b45309;line-height:1.5;">A service agreement was just sent to <strong>${clientName}</strong> for <strong>${projectName}</strong>. It has not been signed yet.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Client &amp; Opportunity</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:24px;">
+                <tbody>
+                  <tr>
+                    <td style="padding:10px 14px;font-size:13px;color:${MUTED};width:130px;vertical-align:top;white-space:nowrap;">Client</td>
+                    <td style="padding:10px 14px;font-size:15px;font-weight:bold;color:#111827;border-left:1px solid ${BORDER};">${clientName}</td>
+                  </tr>
+                  ${oppRows}
+                </tbody>
+              </table>
+
+              ${keyPeopleSection}
+              ${quoteSection}
+              ${notInScopeSection}
+              ${imageSection}
+
+              <p style="margin:8px 0 0;font-size:13px;color:#9ca3af;line-height:1.5;">
+                This is an automated internal notification. Log in to view the full project and quote details.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Alert System</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}

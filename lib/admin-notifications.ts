@@ -1,8 +1,8 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
-import { getStaffMembers, getReferralCompanyById, getActivitiesForContact } from "./airtable";
+import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail } from "./email";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
 const STAGE_PROGRESSION = ["Identified", "Met", "Agreed to Refer", "Shared Leads", "Active Referral"];
@@ -169,4 +169,81 @@ export async function sendStageProgressNotification(params: {
       html,
     });
   }
+}
+
+export async function sendQuoteAlertNotification({
+  tenantId,
+  tenantName,
+  quotePhotos,
+  contract,
+}: {
+  tenantId: string;
+  tenantName: string;
+  quotePhotos?: { url: string }[];
+  contract: {
+    totalCost: number;
+    lineItems?: { serviceName: string; hours: number; rate: number; description?: string }[];
+    discountCode?: string;
+    discountAmount?: number;
+    notInScope?: string;
+  };
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const [adminEmails, opportunities] = await Promise.all([
+    getAdminEmails(),
+    getOpportunitiesForTenant(tenantId).catch(() => []),
+  ]);
+  if (adminEmails.length === 0) return;
+
+  // Prefer the first non-Won/Lost opportunity, fall back to any opportunity
+  const opp =
+    opportunities.find(o => o.stage !== "Won" && o.stage !== "Lost") ??
+    opportunities[0];
+
+  const contact = opp?.clientContactId
+    ? await getClientContactById(opp.clientContactId).catch(() => null)
+    : null;
+
+  const clientName = contact?.name || tenantName;
+  const cityForSubject = opp?.city || "";
+
+  const html = buildQuoteAlertEmail({
+    clientName,
+    clientEmail: contact?.email,
+    referralSource: contact?.source,
+    projectName: tenantName,
+    opportunity: opp
+      ? {
+          stage: opp.stage,
+          estimatedValue: opp.estimatedValue,
+          address: opp.address,
+          addressUnitNumber: opp.addressUnitNumber,
+          city: opp.city,
+          state: opp.state,
+          zip: opp.zip,
+          destAddress: opp.destAddress,
+          destAddressUnitNumber: opp.destAddressUnitNumber,
+          destCity: opp.destCity,
+          destState: opp.destState,
+          destZip: opp.destZip,
+          seniorCommunityName: opp.seniorCommunityName,
+          expectedCloseDate: opp.expectedCloseDate,
+          notes: opp.notes,
+          keyPeople: opp.keyPeople,
+        }
+      : undefined,
+    contract,
+    quotePhotos,
+  });
+
+  const subject = `Internal Alert - New Quote Sent (Not Signed Yet) to ${clientName}${cityForSubject ? ` in ${cityForSubject}` : ""}`;
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject,
+    html,
+  });
 }

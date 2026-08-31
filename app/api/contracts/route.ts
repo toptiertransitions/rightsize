@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import {
   getContractsForTenant,
@@ -12,6 +12,7 @@ import {
   updateOpportunity,
 } from "@/lib/airtable";
 import { buildContractSentEmail } from "@/lib/email";
+import { sendQuoteAlertNotification } from "@/lib/admin-notifications";
 import { Resend } from "resend";
 
 export async function GET(req: NextRequest) {
@@ -163,6 +164,28 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error("Failed to send contract email:", e);
     }
+
+    // Internal alert to all TTTAdmin users — fire after response is sent
+    const alertContractSnapshot = {
+      totalCost: contract.totalCost,
+      lineItems: contract.lineItems,
+      discountCode: contract.discountCode,
+      discountAmount: contract.discountAmount,
+      notInScope: contract.notInScope,
+    };
+    after(async () => {
+      try {
+        const alertTenant = await getTenantById(tenantId).catch(() => null);
+        await sendQuoteAlertNotification({
+          tenantId,
+          tenantName: alertTenant?.name ?? tenantId,
+          quotePhotos: alertTenant?.quotePhotos,
+          contract: alertContractSnapshot,
+        });
+      } catch (e) {
+        console.error("[contracts POST] Failed to send internal quote alert:", e);
+      }
+    });
   }
 
   return NextResponse.json({ contract });
@@ -287,6 +310,29 @@ export async function PATCH(req: NextRequest) {
     } catch (e) {
       console.error("Failed to send draft contract email:", e);
     }
+
+    // Internal alert to all TTTAdmin users — fire after response is sent
+    const patchAlertTenantId = patchTenantId ?? contract.tenantId;
+    const patchAlertContractSnapshot = {
+      totalCost: contract.totalCost,
+      lineItems: contract.lineItems,
+      discountCode: contract.discountCode,
+      discountAmount: contract.discountAmount,
+      notInScope: contract.notInScope,
+    };
+    after(async () => {
+      try {
+        const alertTenant = await getTenantById(patchAlertTenantId).catch(() => null);
+        await sendQuoteAlertNotification({
+          tenantId: patchAlertTenantId,
+          tenantName: alertTenant?.name ?? patchAlertTenantId,
+          quotePhotos: alertTenant?.quotePhotos,
+          contract: patchAlertContractSnapshot,
+        });
+      } catch (e) {
+        console.error("[contracts PATCH] Failed to send internal quote alert:", e);
+      }
+    });
 
     return NextResponse.json({ contract });
   }
