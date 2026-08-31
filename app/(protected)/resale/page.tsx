@@ -40,12 +40,16 @@ export default async function ResalePage() {
   const activeTenants = allTenants.filter(t => !t.isArchived && !t.isLostDeal);
   const activeTenantIdSet = new Set(activeTenants.map(t => t.id));
 
+  // Only show signed projects in the active projects table
   const activeProjectsList = activeTenants
+    .filter(t => t.isContractSigned === true)
     .map(t => {
       const lead = t.teamLeadClerkId ? staffMap.get(t.teamLeadClerkId) : undefined;
       return {
         id: t.id,
         name: t.name,
+        address: [t.city, t.state].filter(Boolean).join(", "),
+        status: (t.isConsignmentOnly ? "Post-Move" : "Active") as "Active" | "Post-Move",
         teamLeadName: lead?.displayName,
         teamLeadPhone: lead?.phone,
         teamLeadEmail: lead?.email,
@@ -53,7 +57,6 @@ export default async function ResalePage() {
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Tenant info map: all tenants (PF items may belong to non-active projects)
   const tenantInfoMap: Record<string, {
     name: string;
     priceDrop1Days: number;
@@ -71,18 +74,17 @@ export default async function ResalePage() {
     };
   }
 
-  // Key-date plan entries only, scoped to active tenants
-  const keyDateEntries = planEntries.filter(
-    e => e.entryType === "keydate" && activeTenantIdSet.has(e.tenantId)
-  );
+  // All plan entries for active tenants (both focus shifts and key dates)
+  const allPlanEntries = planEntries.filter(e => activeTenantIdSet.has(e.tenantId));
 
   return (
     <ResaleClient
       activeProjectsList={activeProjectsList}
       tenantInfoMap={tenantInfoMap}
-      planEntries={keyDateEntries}
+      planEntries={allPlanEntries}
       pfItems={pfItems}
       localVendors={localVendors}
+      staffMembers={staffMembers}
     />
   );
 }
