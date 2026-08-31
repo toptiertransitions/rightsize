@@ -1,0 +1,88 @@
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import {
+  getSystemRole,
+  getTenants,
+  getStaffMembers,
+  getPlanEntriesForDateRange,
+  getItemsByPrimaryRoute,
+  getLocalVendors,
+} from "@/lib/airtable";
+import { ResaleClient } from "./ResaleClient";
+import type { Tenant, StaffMember, Item, LocalVendor, PlanEntry } from "@/lib/types";
+
+function toISO(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export default async function ResalePage() {
+  const { userId } = await auth();
+  if (!userId) redirect("/sign-in");
+
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (!["TTTAdmin", "TTTManager", "TTTStaff", "TTTSales"].includes(sysRole ?? "")) {
+    redirect("/home");
+  }
+
+  const today = new Date();
+  const from = toISO(new Date(today.getFullYear(), today.getMonth() - 3, 1));
+  const to = toISO(new Date(today.getFullYear(), today.getMonth() + 7, 0));
+
+  const [allTenants, staffMembers, planEntries, pfItems, localVendors] = await Promise.all([
+    getTenants().catch(() => [] as Tenant[]),
+    getStaffMembers().catch(() => [] as StaffMember[]),
+    getPlanEntriesForDateRange(from, to).catch(() => [] as PlanEntry[]),
+    getItemsByPrimaryRoute("ProFoundFinds Consignment").catch(() => [] as Item[]),
+    getLocalVendors().catch(() => [] as LocalVendor[]),
+  ]);
+
+  const staffMap = new Map(staffMembers.map(s => [s.clerkUserId, s]));
+  const activeTenants = allTenants.filter(t => !t.isArchived && !t.isLostDeal);
+  const activeTenantIdSet = new Set(activeTenants.map(t => t.id));
+
+  const activeProjectsList = activeTenants
+    .map(t => {
+      const lead = t.teamLeadClerkId ? staffMap.get(t.teamLeadClerkId) : undefined;
+      return {
+        id: t.id,
+        name: t.name,
+        teamLeadName: lead?.displayName,
+        teamLeadPhone: lead?.phone,
+        teamLeadEmail: lead?.email,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Tenant info map: all tenants (PF items may belong to non-active projects)
+  const tenantInfoMap: Record<string, {
+    name: string;
+    priceDrop1Days: number;
+    priceDrop1Percent: number;
+    priceDrop2Days: number;
+    priceDrop2Percent: number;
+  }> = {};
+  for (const t of allTenants) {
+    tenantInfoMap[t.id] = {
+      name: t.name,
+      priceDrop1Days: t.priceDrop1Days ?? 30,
+      priceDrop1Percent: t.priceDrop1Percent ?? 33,
+      priceDrop2Days: t.priceDrop2Days ?? 60,
+      priceDrop2Percent: t.priceDrop2Percent ?? 66,
+    };
+  }
+
+  // Key-date plan entries only, scoped to active tenants
+  const keyDateEntries = planEntries.filter(
+    e => e.entryType === "keydate" && activeTenantIdSet.has(e.tenantId)
+  );
+
+  return (
+    <ResaleClient
+      activeProjectsList={activeProjectsList}
+      tenantInfoMap={tenantInfoMap}
+      planEntries={keyDateEntries}
+      pfItems={pfItems}
+      localVendors={localVendors}
+    />
+  );
+}
