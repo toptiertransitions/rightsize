@@ -812,7 +812,12 @@ function OpportunityPanel({
         destState: oppDestState,
         destZip: oppDestZip,
         expectedCloseDate,
-        seniorCommunityName: movingToCommunity ? seniorCommunityName : "",
+        // Only include seniorCommunityName when the feature is active, or to clear a previously-set value.
+        // Omitting it entirely (undefined → dropped by JSON.stringify) keeps the Airtable field
+        // optional so missing-field errors don't block normal opportunity saves.
+        ...(movingToCommunity || opportunity?.seniorCommunityName
+          ? { seniorCommunityName: movingToCommunity ? seniorCommunityName : "" }
+          : {}),
       };
       if (opportunity) {
         const res = await fetch("/api/crm/opportunities", {
