@@ -572,6 +572,7 @@ export const KEY_DATE_ACTIVITIES: string[] = [
   "Pickup Date",
   "Estate Sale Date",
   "Close Date",
+  "Consign/ProFound Delivery",
 ];
 
 export interface PlanHelper {

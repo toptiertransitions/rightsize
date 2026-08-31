@@ -36,11 +36,12 @@ const LEGACY_ACTIVITY_COLORS: Record<string, string> = {
 };
 
 const KEY_DATE_COLORS: Record<string, string> = {
-  "Start Date":       "bg-emerald-50 text-emerald-800 border border-emerald-300",
-  "Move Date":        "bg-amber-50 text-amber-800 border border-amber-300",
-  "Pickup Date":      "bg-blue-50 text-blue-800 border border-blue-300",
-  "Estate Sale Date": "bg-purple-50 text-purple-800 border border-purple-300",
-  "Close Date":       "bg-red-50 text-red-800 border border-red-300",
+  "Start Date":                "bg-emerald-50 text-emerald-800 border border-emerald-300",
+  "Move Date":                 "bg-amber-50 text-amber-800 border border-amber-300",
+  "Pickup Date":               "bg-blue-50 text-blue-800 border border-blue-300",
+  "Estate Sale Date":          "bg-purple-50 text-purple-800 border border-purple-300",
+  "Close Date":                "bg-red-50 text-red-800 border border-red-300",
+  "Consign/ProFound Delivery": "bg-violet-50 text-violet-700 border border-violet-300",
 };
 
 function getActivityColor(activity: string, serviceList: string[], entryType?: PlanEntryType): string {
