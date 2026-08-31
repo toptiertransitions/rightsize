@@ -7,6 +7,7 @@ import {
   getPlanEntriesForDateRange,
   getItemsByPrimaryRoute,
   getLocalVendors,
+  getSignedTenantIds,
 } from "@/lib/airtable";
 import { ResaleClient } from "./ResaleClient";
 import type { Tenant, StaffMember, Item, LocalVendor, PlanEntry } from "@/lib/types";
@@ -28,21 +29,25 @@ export default async function ResalePage() {
   const from = toISO(new Date(today.getFullYear(), today.getMonth() - 3, 1));
   const to = toISO(new Date(today.getFullYear(), today.getMonth() + 7, 0));
 
-  const [allTenants, staffMembers, planEntries, pfItems, localVendors] = await Promise.all([
+  const [allTenantsRaw, staffMembers, planEntries, pfItems, localVendors, signedIds] = await Promise.all([
     getTenants().catch(() => [] as Tenant[]),
     getStaffMembers().catch(() => [] as StaffMember[]),
     getPlanEntriesForDateRange(from, to).catch(() => [] as PlanEntry[]),
     getItemsByPrimaryRoute("ProFoundFinds Consignment").catch(() => [] as Item[]),
     getLocalVendors().catch(() => [] as LocalVendor[]),
+    getSignedTenantIds().catch(() => new Set<string>()),
   ]);
+
+  // Mirror home page: compute isContractSigned from signed contract IDs
+  const allTenants = allTenantsRaw.map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
 
   const staffMap = new Map(staffMembers.map(s => [s.clerkUserId, s]));
   const activeTenants = allTenants.filter(t => !t.isArchived && !t.isLostDeal);
   const activeTenantIdSet = new Set(activeTenants.map(t => t.id));
 
-  // Only show signed projects in the active projects table
+  // Exclude "Not Signed Yet" (not consignment + not signed). Include Active + Post-Move.
   const activeProjectsList = activeTenants
-    .filter(t => t.isContractSigned === true)
+    .filter(t => t.isConsignmentOnly || t.isContractSigned)
     .map(t => {
       const lead = t.teamLeadClerkId ? staffMap.get(t.teamLeadClerkId) : undefined;
       return {

@@ -95,6 +95,21 @@ function mondayOf(d: Date): Date {
   return m;
 }
 
+function fmtTime(t?: string): string {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "pm" : "am";
+  const hour = h % 12 || 12;
+  return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, "0")}${ampm}`;
+}
+
+function fmtTimeRange(start?: string, end?: string): string {
+  if (!start) return "";
+  const s = fmtTime(start);
+  const e = fmtTime(end);
+  return e ? `${s}–${e}` : s;
+}
+
 // ─── Label Modal ──────────────────────────────────────────────────────────────
 
 function LabelModal({ count, onClose, onPrint }: {
@@ -383,10 +398,12 @@ function CalendarSection({
                   </div>
                   {shown.map((e, i) => {
                     const { type, project } = entryLabel(e);
+                    const timeRange = fmtTimeRange(e.startTime, e.endTime);
                     return (
-                      <div key={i} className={`w-full mb-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-tight border truncate ${entryColor(e)}`}
-                        title={`${type} — ${project}`}>
-                        {type === "Shift" ? project : `${type} — ${project}`}
+                      <div key={i} className={`w-full mb-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-tight border ${entryColor(e)}`}
+                        title={`${type} — ${project}${timeRange ? ` (${timeRange})` : ""}`}>
+                        <div className="truncate">{type === "Shift" ? project : `${type} — ${project}`}</div>
+                        {timeRange && <div className="font-normal opacity-70">{timeRange}</div>}
                       </div>
                     );
                   })}
@@ -412,10 +429,12 @@ function CalendarSection({
                   )}
                   {dayEntries.map((e, i) => {
                     const { type, project } = entryLabel(e);
+                    const timeRange = fmtTimeRange(e.startTime, e.endTime);
                     return (
                       <div key={i} className={`w-full mb-1 px-2 py-1 rounded border text-[10px] leading-tight ${entryColor(e)}`}>
                         <div className="font-bold truncate">{type}</div>
                         <div className="truncate opacity-75">{project}</div>
+                        {timeRange && <div className="opacity-60 font-medium">{timeRange}</div>}
                       </div>
                     );
                   })}
@@ -776,23 +795,29 @@ function InventorySection({
                   className="rounded border-gray-300 text-forest-600 focus:ring-forest-400" />
               </th>
               <th className="w-12 px-2 py-3" />
-              <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Item Name</th>
-              <th className="w-32 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Status</th>
-              <th className="w-32 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Client</th>
-              <th className="w-24 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Barcode</th>
-              <th className="w-20 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Price</th>
-              <th className="w-24 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Delivery</th>
-              <th className="w-14 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Days</th>
+              <th className="w-40 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Item Name</th>
+              <th className="w-28 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Status</th>
+              <th className="w-28 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Client</th>
+              <th className="w-20 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Barcode</th>
+              <th className="w-20 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Start $</th>
+              <th className="w-20 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Current $</th>
+              <th className="w-22 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left">Delivery</th>
+              <th className="w-12 px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Days</th>
             </tr>
           </thead>
           <tbody>
             {paginated.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">No items match the current filters.</td></tr>
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">No items match the current filters.</td></tr>
             )}
             {paginated.map((item, idx) => {
               const photoUrl = item.photos?.[0]?.url ?? item.photoUrl;
               const clientName = tenantInfoMap[item.tenantId]?.name ?? item.tenantId;
               const daysOnSite = daysSince(item.deliveryDate);
+              const startPrice = item.priceDropOriginalValue && item.priceDropOriginalValue > 0
+                ? item.priceDropOriginalValue
+                : item.valueMid;
+              const currentPrice = item.valueMid;
+              const hasDropped = !!(item.priceDropOriginalValue && item.priceDropOriginalValue > 0);
 
               return (
                 <tr key={item.id}
@@ -815,7 +840,7 @@ function InventorySection({
                     </div>
                   </td>
                   {/* Item Name — click to open EditItemModal */}
-                  <td className="px-3 py-2 max-w-0">
+                  <td className="px-3 py-2 w-40">
                     <button onClick={() => setEditingItem(item)}
                       className="text-left w-full text-sm font-medium text-gray-900 hover:text-forest-700 truncate block transition-colors"
                       title={item.itemName}>
@@ -827,13 +852,24 @@ function InventorySection({
                     <StatusSelect value={item.status} onSave={v => patchItem(item.id, { status: v })} />
                   </td>
                   {/* Client */}
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs truncate max-w-[128px]">{clientName}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs truncate max-w-[112px]">{clientName}</td>
                   {/* Barcode */}
-                  <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.barcodeNumber ?? <span className="text-gray-300">—</span>}</td>
-                  {/* Price */}
-                  <td className="px-3 py-2 text-right">
-                    <InlineEdit value={item.valueMid != null ? String(item.valueMid) : ""} type="number" prefix="$" placeholder="—"
-                      onSave={v => patchItem(item.id, { valueMid: v ? parseFloat(v) : null })} />
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500">{item.barcodeNumber ?? <span className="text-gray-300">—</span>}</td>
+                  {/* Start Price */}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {startPrice != null
+                      ? <span className={`text-xs ${hasDropped ? "line-through text-gray-400" : "text-gray-800 font-medium"}`}>
+                          ${startPrice.toLocaleString("en-US", { minimumFractionDigits: 0 })}
+                        </span>
+                      : <span className="text-gray-300 text-xs">—</span>}
+                  </td>
+                  {/* Current Price */}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {currentPrice != null
+                      ? <span className={`text-xs font-semibold ${hasDropped ? "text-forest-700" : "text-gray-800"}`}>
+                          ${currentPrice.toLocaleString("en-US", { minimumFractionDigits: 0 })}
+                        </span>
+                      : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   {/* Delivery */}
                   <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">
