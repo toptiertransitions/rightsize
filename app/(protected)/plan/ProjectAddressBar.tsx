@@ -23,6 +23,7 @@ interface Props {
   initialDestCity?: string;
   initialDestState?: string;
   initialDestZip?: string;
+  initialSeniorCommunityName?: string;
   // Team Lead
   canEditTeamLead?: boolean;
   canEditAddresses?: boolean;
@@ -40,19 +41,27 @@ function PencilIcon() {
   );
 }
 
-function AddressBlock({ label, street, unitNumber, city, state, zip }: { label: string; street?: string; unitNumber?: string; city?: string; state?: string; zip?: string }) {
+function AddressBlock({ label, street, unitNumber, city, state, zip, communityName }: { label: string; street?: string; unitNumber?: string; city?: string; state?: string; zip?: string; communityName?: string }) {
   const hasAny = street || city || state || zip;
   const cityStateZip = [city, state, zip].filter(Boolean).join(" ");
   return (
     <div className="min-w-0">
       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
+      {communityName && (
+        <div className="mt-0.5 mb-0.5">
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5">
+            <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+            {communityName}
+          </span>
+        </div>
+      )}
       {hasAny ? (
         <div className="text-sm text-gray-700 leading-snug mt-0.5">
           {street && <div>{street}{unitNumber ? `, Unit ${unitNumber}` : ""}</div>}
           {cityStateZip && <div>{cityStateZip}</div>}
         </div>
       ) : (
-        <div className="text-sm text-gray-400 italic mt-0.5">Not set</div>
+        <div className="text-sm text-gray-400 italic mt-0.5">{communityName ? "" : "Not set"}</div>
       )}
     </div>
   );
@@ -102,6 +111,7 @@ export function ProjectAddressBar({
   initialDestCity,
   initialDestState,
   initialDestZip,
+  initialSeniorCommunityName,
   canEditTeamLead,
   canEditAddresses,
   initialTeamLeadClerkId,
@@ -124,6 +134,7 @@ export function ProjectAddressBar({
   const [destCity, setDestCity] = useState(initialDestCity ?? "");
   const [destState, setDestState] = useState(initialDestState ?? "");
   const [destZip, setDestZip] = useState(initialDestZip ?? "");
+  const [seniorCommunityName, setSeniorCommunityName] = useState(initialSeniorCommunityName ?? "");
 
   // Team lead
   const [teamLeadClerkId, setTeamLeadClerkId] = useState(initialTeamLeadClerkId ?? "");
@@ -165,6 +176,7 @@ export function ProjectAddressBar({
           destCity: destCity.trim() || null,
           destState: destState.trim() || null,
           destZip: destZip.trim() || null,
+          seniorCommunityName: seniorCommunityName.trim() || null,
           teamLeadClerkId: canEditTeamLead ? (teamLeadClerkId || null) : undefined,
         }),
       });
@@ -191,6 +203,7 @@ export function ProjectAddressBar({
     setDestCity(initialDestCity ?? "");
     setDestState(initialDestState ?? "");
     setDestZip(initialDestZip ?? "");
+    setSeniorCommunityName(initialSeniorCommunityName ?? "");
     setTeamLeadClerkId(initialTeamLeadClerkId ?? "");
     setTeamLeadName(initialTeamLeadName ?? "");
     setTeamLeadPhoto(initialTeamLeadPhoto ?? "");
@@ -227,6 +240,14 @@ export function ProjectAddressBar({
             <div>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Destination</p>
               <div className="flex flex-col gap-1.5">
+                <input
+                  type="text"
+                  placeholder="Community name (optional)"
+                  value={seniorCommunityName}
+                  onChange={e => setSeniorCommunityName(e.target.value)}
+                  className={inputCls + " font-medium"}
+                  title="Senior community name — set automatically from CRM opportunity"
+                />
                 <input type="text" placeholder="Street address" value={destAddress} onChange={e => setDestAddress(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="Unit # (optional)" value={destAddressUnitNumber} onChange={e => setDestAddressUnitNumber(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />
@@ -286,6 +307,7 @@ export function ProjectAddressBar({
       />
       <AddressBlock
         label="Destination"
+        communityName={seniorCommunityName || initialSeniorCommunityName}
         street={destAddress || initialDestAddress}
         unitNumber={destAddressUnitNumber || initialDestAddressUnitNumber}
         city={destCity || initialDestCity}

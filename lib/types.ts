@@ -124,6 +124,7 @@ export interface Tenant {
   destCity?: string;
   destState?: string;
   destZip?: string;
+  seniorCommunityName?: string;
   estimatedHours?: number;
   estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   isArchived?: boolean;
@@ -952,6 +953,7 @@ export interface ClientOpportunity {
   destState?: string;
   destZip?: string;
   expectedCloseDate?: string;
+  seniorCommunityName?: string;
 }
 
 export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task" | "Text Message";

@@ -101,9 +101,9 @@ export async function PATCH(req: NextRequest) {
       } catch { /* non-fatal — note creation shouldn't block the save */ }
     }
 
-    // Sync origin/destination address fields to the linked project when changed.
+    // Sync origin/destination address fields (and community name) to the linked project when changed.
     const originChanged = ["address", "addressUnitNumber", "city", "state", "zip"].some(f => f in data);
-    const destChanged = ["destAddress", "destAddressUnitNumber", "destCity", "destState", "destZip"].some(f => f in data);
+    const destChanged = ["destAddress", "destAddressUnitNumber", "destCity", "destState", "destZip", "seniorCommunityName"].some(f => f in data);
     if ((originChanged || destChanged) && opportunity.tenantId) {
       try {
         const patch: Record<string, unknown> = {};
@@ -120,6 +120,7 @@ export async function PATCH(req: NextRequest) {
           patch.destCity = opportunity.destCity;
           patch.destState = opportunity.destState;
           patch.destZip = opportunity.destZip;
+          if ("seniorCommunityName" in data) patch.seniorCommunityName = opportunity.seniorCommunityName ?? null;
         }
         await updateTenant(opportunity.tenantId, patch);
       } catch { /* non-fatal */ }

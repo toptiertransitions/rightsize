@@ -709,6 +709,14 @@ function OpportunityPanel({
   const [oppDestState, setOppDestState] = useState(opportunity?.destState || "");
   const [oppDestZip, setOppDestZip] = useState(opportunity?.destZip || "");
   const [expectedCloseDate, setExpectedCloseDate] = useState(opportunity?.expectedCloseDate || "");
+  // Senior community
+  const [movingToCommunity, setMovingToCommunity] = useState(!!(opportunity?.seniorCommunityName));
+  const [seniorCommunityName, setSeniorCommunityName] = useState(opportunity?.seniorCommunityName || "");
+  const [communityQuery, setCommunityQuery] = useState("");
+  const [communityOpen, setCommunityOpen] = useState(false);
+  const [seniorCompanies, setSeniorCompanies] = useState<Pick<ReferralCompany, "id" | "name" | "address" | "city" | "state" | "zip">[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const communityDropdownRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [syncingGmail, setSyncingGmail] = useState(false);
@@ -739,6 +747,43 @@ function OpportunityPanel({
     loadActivities();
   }, [loadActivities]);
 
+  // Load Senior Living companies when checkbox is toggled on
+  useEffect(() => {
+    if (!movingToCommunity || seniorCompanies.length > 0) return;
+    setCompaniesLoading(true);
+    fetch("/api/crm/companies")
+      .then(r => r.json())
+      .then(d => {
+        const all: ReferralCompany[] = d.companies ?? [];
+        setSeniorCompanies(all.filter(c => c.type === "Senior Living"));
+      })
+      .catch(() => {})
+      .finally(() => setCompaniesLoading(false));
+  }, [movingToCommunity, seniorCompanies.length]);
+
+  // Close community dropdown on outside click
+  useEffect(() => {
+    if (!communityOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (communityDropdownRef.current && !communityDropdownRef.current.contains(e.target as Node)) {
+        setCommunityOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [communityOpen]);
+
+  function handleSelectCommunity(c: Pick<ReferralCompany, "id" | "name" | "address" | "city" | "state" | "zip">) {
+    setSeniorCommunityName(c.name);
+    setCommunityOpen(false);
+    setCommunityQuery("");
+    setOppDestAddress(c.address || "");
+    setOppDestCity(c.city || "");
+    setOppDestState(c.state || "");
+    setOppDestZip(c.zip || "");
+    setOppDestAddressUnit("");
+  }
+
   async function doSave(addrOverride?: { address: string; city: string; state: string; zip: string }) {
     if (!clientContactId) return;
     setSaving(true);
@@ -767,6 +812,7 @@ function OpportunityPanel({
         destState: oppDestState,
         destZip: oppDestZip,
         expectedCloseDate,
+        seniorCommunityName: movingToCommunity ? seniorCommunityName : "",
       };
       if (opportunity) {
         const res = await fetch("/api/crm/opportunities", {
@@ -1194,6 +1240,95 @@ function OpportunityPanel({
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
+          </div>
+
+          {/* Moving to a Community? */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={movingToCommunity}
+                onChange={(e) => {
+                  setMovingToCommunity(e.target.checked);
+                  if (!e.target.checked) {
+                    setSeniorCommunityName("");
+                    setCommunityQuery("");
+                    setCommunityOpen(false);
+                  }
+                }}
+                className="w-4 h-4 rounded accent-blue-600"
+              />
+              <span className="text-sm font-medium text-blue-900">Moving to a Community?</span>
+            </label>
+
+            {movingToCommunity && (
+              <div className="mt-2.5">
+                {seniorCommunityName ? (
+                  <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-2">
+                    <span className="text-sm font-semibold text-blue-900 flex-1">{seniorCommunityName}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setSeniorCommunityName(""); setCommunityQuery(""); }}
+                      className="text-xs text-blue-400 hover:text-blue-600 transition-colors shrink-0"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div ref={communityDropdownRef} className="relative">
+                    <input
+                      type="text"
+                      value={communityQuery}
+                      onChange={(e) => { setCommunityQuery(e.target.value); setCommunityOpen(true); }}
+                      onFocus={() => setCommunityOpen(true)}
+                      placeholder="Search senior living communities..."
+                      className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    {communityOpen && (
+                      <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+                        {companiesLoading ? (
+                          <div className="px-3 py-3 text-xs text-gray-400 text-center">Loading communities...</div>
+                        ) : (
+                          <>
+                            {(communityQuery
+                              ? seniorCompanies.filter(c => c.name.toLowerCase().includes(communityQuery.toLowerCase()))
+                              : seniorCompanies
+                            ).map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onMouseDown={(e) => { e.preventDefault(); handleSelectCommunity(c); }}
+                                className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0"
+                              >
+                                <div className="text-sm font-medium text-gray-900">{c.name}</div>
+                                {(c.address || c.city) && (
+                                  <div className="text-xs text-gray-400 mt-0.5">{[c.address, c.city, c.state].filter(Boolean).join(", ")}</div>
+                                )}
+                              </button>
+                            ))}
+                            {seniorCompanies.length === 0 && !companiesLoading && (
+                              <div className="px-3 py-2 text-xs text-gray-400 italic">No Senior Living companies in CRM</div>
+                            )}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setSeniorCommunityName("Not in CRM Yet");
+                                setCommunityOpen(false);
+                                setCommunityQuery("");
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors border-t border-gray-200"
+                            >
+                              <span className="text-sm text-gray-500 italic">Not in CRM Yet</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Destination Address */}

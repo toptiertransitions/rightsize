@@ -193,6 +193,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     destCity: toStr(f["DestCity"]) || undefined,
     destState: toStr(f["DestState"]) || undefined,
     destZip: toStr(f["DestZip"]) || undefined,
+    seniorCommunityName: toStr(f["SeniorCommunityName"]) || undefined,
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     estimatedServiceHours: (() => { try { const s = toStr(f["EstimatedServiceHours"]); return s ? JSON.parse(s) : undefined; } catch { return undefined; } })(),
     isArchived: f["IsArchived"] === true,
@@ -1335,7 +1336,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
+  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -1350,6 +1351,7 @@ export async function updateTenant(
   if (data.destCity !== undefined) fields["DestCity"] = data.destCity ?? "";
   if (data.destState !== undefined) fields["DestState"] = data.destState ?? "";
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip ?? "";
+  if (data.seniorCommunityName !== undefined) fields["SeniorCommunityName"] = data.seniorCommunityName ?? "";
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   if (data.estimatedServiceHours !== undefined) fields["EstimatedServiceHours"] = data.estimatedServiceHours ? JSON.stringify(data.estimatedServiceHours) : "";
   if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
@@ -3649,6 +3651,7 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     destState: toStr(f["DestState"]) || undefined,
     destZip: toStr(f["DestZip"]) || undefined,
     expectedCloseDate: toStr(f["ExpectedCloseDate"]) || undefined,
+    seniorCommunityName: toStr(f["SeniorCommunityName"]) || undefined,
   };
 }
 
@@ -3715,6 +3718,7 @@ export async function createOpportunity(data: {
   destState?: string;
   destZip?: string;
   expectedCloseDate?: string;
+  seniorCommunityName?: string;
 }): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {
     TenantId: data.tenantId || "",
@@ -3739,6 +3743,7 @@ export async function createOpportunity(data: {
   if (data.destState !== undefined) fields["DestState"] = data.destState;
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
   if (data.expectedCloseDate !== undefined) fields["ExpectedCloseDate"] = data.expectedCloseDate || null;
+  if (data.seniorCommunityName !== undefined) fields["SeniorCommunityName"] = data.seniorCommunityName;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -3773,6 +3778,7 @@ export async function updateOpportunity(
     destState: string;
     destZip: string;
     expectedCloseDate: string;
+    seniorCommunityName: string;
   }>
 ): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {};
@@ -3799,6 +3805,7 @@ export async function updateOpportunity(
   if (data.destState !== undefined) fields["DestState"] = data.destState;
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
   if (data.expectedCloseDate !== undefined) fields["ExpectedCloseDate"] = data.expectedCloseDate || null;
+  if (data.seniorCommunityName !== undefined) fields["SeniorCommunityName"] = data.seniorCommunityName;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
