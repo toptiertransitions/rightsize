@@ -219,34 +219,6 @@ function VendorModal({ tenantId, vendor, prefill, onClose, onSaved }: ModalProps
             />
           </div>
 
-          {/* Key Dates */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Key Dates (optional)</label>
-            <div className="space-y-2">
-              {([
-                [date1Label, setDate1Label, date1, setDate1, "e.g. Move Day"],
-                [date2Label, setDate2Label, date2, setDate2, "e.g. Closing"],
-                [date3Label, setDate3Label, date3, setDate3, "e.g. Donation Pickup"],
-              ] as const).map((row, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={row[0] as string}
-                    onChange={(e) => (row[1] as (v: string) => void)(e.target.value)}
-                    placeholder={row[4] as string}
-                    className="flex-1 h-10 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
-                  />
-                  <input
-                    type="date"
-                    value={row[2] as string}
-                    onChange={(e) => (row[3] as (v: string) => void)(e.target.value)}
-                    className="w-40 h-10 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
@@ -363,24 +335,6 @@ function VendorCard({
         <p className="text-sm text-gray-600 line-clamp-3">{vendor.arrangement}</p>
       )}
 
-      {/* Key Dates */}
-      {dates.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {dates.map((d, i) => (
-            <span
-              key={i}
-              className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${
-                isUpcoming(d.value)
-                  ? "bg-forest-50 text-forest-700"
-                  : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              {d.label && <span className="font-semibold">{d.label}:</span>}
-              {formatDate(d.value)}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* Files */}
       <VendorFilesSection
