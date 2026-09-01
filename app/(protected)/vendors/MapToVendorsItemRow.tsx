@@ -1,16 +1,23 @@
 "use client";
 import Image from "next/image";
 
+interface OtherVendor {
+  id: string;
+  name: string;
+}
+
 interface Props {
   itemId: string;
   itemName: string;
   category: string;
   valueMid: number;
   photoUrl?: string;
+  otherVendors: OtherVendor[];
   onRemove: (itemId: string) => void;
+  onMove: (itemId: string, toVendorId: string) => void;
 }
 
-export function MapToVendorsItemRow({ itemId, itemName, category, valueMid, photoUrl, onRemove }: Props) {
+export function MapToVendorsItemRow({ itemId, itemName, category, valueMid, photoUrl, otherVendors, onRemove, onMove }: Props) {
   const fmt = (n: number) => n > 0 ? `$${Math.round(n).toLocaleString()}` : "";
   return (
     <div className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-b-0">
@@ -29,12 +36,25 @@ export function MapToVendorsItemRow({ itemId, itemName, category, valueMid, phot
         <p className="text-base font-medium text-gray-900 truncate">{itemName}</p>
         <p className="text-sm text-gray-500">{category}{valueMid > 0 ? ` · ${fmt(valueMid)}` : ""}</p>
       </div>
-      <button
-        onClick={() => onRemove(itemId)}
-        className="min-w-[44px] min-h-[44px] flex items-center justify-center text-sm text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
-        title="Remove">
-        ✕ Remove
-      </button>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {otherVendors.length > 0 && (
+          <select
+            defaultValue=""
+            onChange={e => { if (e.target.value) { onMove(itemId, e.target.value); (e.target as HTMLSelectElement).value = ""; } }}
+            className="h-8 text-xs rounded-lg border border-gray-200 text-gray-600 px-2 bg-white cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#2d4a3e]">
+            <option value="" disabled>Move to…</option>
+            {otherVendors.map(v => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
+        )}
+        <button
+          onClick={() => onRemove(itemId)}
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-sm text-gray-400 hover:text-red-500 transition-colors"
+          title="Remove">
+          ✕
+        </button>
+      </div>
     </div>
   );
 }
