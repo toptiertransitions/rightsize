@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import {
@@ -83,13 +84,15 @@ export default async function ResalePage() {
   const allPlanEntries = planEntries.filter(e => activeTenantIdSet.has(e.tenantId));
 
   return (
-    <ResaleClient
-      activeProjectsList={activeProjectsList}
-      tenantInfoMap={tenantInfoMap}
-      planEntries={allPlanEntries}
-      pfItems={pfItems}
-      localVendors={localVendors}
-      staffMembers={staffMembers}
-    />
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <ResaleClient
+        activeProjectsList={activeProjectsList}
+        tenantInfoMap={tenantInfoMap}
+        planEntries={allPlanEntries}
+        pfItems={pfItems}
+        localVendors={localVendors}
+        staffMembers={staffMembers}
+      />
+    </Suspense>
   );
 }

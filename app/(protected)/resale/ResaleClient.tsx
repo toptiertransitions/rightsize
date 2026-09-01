@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { VendorFileModal } from "@/components/catalog/VendorFileModal";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
-import { KEY_DATE_ACTIVITIES } from "@/lib/types";
-import type { Item, ItemStatus, LocalVendor, PlanEntry, StaffMember, Room } from "@/lib/types";
+import { KEY_DATE_ACTIVITIES, VENDOR_TYPES } from "@/lib/types";
+import type { Item, ItemStatus, LocalVendor, PlanEntry, StaffMember, Room, VendorType } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1017,7 +1018,349 @@ function StatusSelect({ value, onSave }: { value: ItemStatus; onSave: (v: ItemSt
   );
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+];
+
+const VENDOR_TYPE_COLORS: Record<VendorType, string> = {
+  "Move Manager":           "bg-purple-100 text-purple-700",
+  "Mover":                  "bg-blue-100 text-blue-700",
+  "Future Home/Community":  "bg-green-100 text-green-700",
+  "Realtor":                "bg-teal-100 text-teal-700",
+  "Broker":                 "bg-yellow-100 text-yellow-700",
+  "Donation Org":           "bg-orange-100 text-orange-700",
+  "Consignment Store":      "bg-amber-100 text-amber-700",
+  "Collector/Reseller":     "bg-indigo-100 text-indigo-700",
+  "Junk Hauler":            "bg-gray-100 text-gray-600",
+  "Attorney":               "bg-red-100 text-red-700",
+  "Other":                  "bg-gray-100 text-gray-600",
+};
+
+// ─── Vendors Section ──────────────────────────────────────────────────────────
+
+function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
+  const router = useRouter();
+
+  // Add-vendor form state
+  const [vType, setVType] = useState<VendorType>("Consignment Store");
+  const [vName, setVName] = useState("");
+  const [vPoc, setVPoc] = useState("");
+  const [vEmail, setVEmail] = useState("");
+  const [vPhone, setVPhone] = useState("");
+  const [vAddress, setVAddress] = useState("");
+  const [vCity, setVCity] = useState("");
+  const [vState, setVState] = useState("IL");
+  const [vZip, setVZip] = useState("");
+  const [vWebsite, setVWebsite] = useState("");
+  const [vTake, setVTake] = useState("");
+  const [vNotes, setVNotes] = useState("");
+  const [vSaving, setVSaving] = useState(false);
+  const [vError, setVError] = useState("");
+  const [vSuccess, setVSuccess] = useState(false);
+
+  // Local vendor list (seeded from props, grows on add)
+  const [vendors, setVendors] = useState<LocalVendor[]>(initialVendors);
+
+  // Table controls
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<VendorType | "">("");
+  const [sortCol, setSortCol] = useState<string>("vendorName");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function handleSort(col: string) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    let list = vendors;
+    if (typeFilter) list = list.filter(v => v.vendorType === typeFilter);
+    if (q) list = list.filter(v =>
+      v.vendorName.toLowerCase().includes(q) ||
+      v.pocName.toLowerCase().includes(q) ||
+      v.email.toLowerCase().includes(q) ||
+      v.city.toLowerCase().includes(q)
+    );
+    return [...list].sort((a, b) => {
+      let av = "", bv = "";
+      if (sortCol === "vendorName") { av = a.vendorName; bv = b.vendorName; }
+      else if (sortCol === "vendorType") { av = a.vendorType; bv = b.vendorType; }
+      else if (sortCol === "pocName") { av = a.pocName; bv = b.pocName; }
+      else if (sortCol === "city") { av = `${a.city}, ${a.state}`; bv = `${b.city}, ${b.state}`; }
+      else if (sortCol === "email") { av = a.email; bv = b.email; }
+      else if (sortCol === "take") { return sortDir === "asc" ? a.consignmentTake - b.consignmentTake : b.consignmentTake - a.consignmentTake; }
+      return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }, [vendors, search, typeFilter, sortCol, sortDir]);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!vName.trim()) { setVError("Vendor name is required"); return; }
+    setVSaving(true);
+    setVError("");
+    setVSuccess(false);
+    try {
+      const res = await fetch("/api/local-vendors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorType: vType,
+          vendorName: vName.trim(),
+          pocName: vPoc.trim(),
+          email: vEmail.trim(),
+          phone: vPhone.trim(),
+          address: vAddress.trim(),
+          city: vCity.trim(),
+          state: vState,
+          zip: vZip.trim(),
+          website: vWebsite.trim(),
+          consignmentTake: Number(vTake) || 0,
+          notes: vNotes.trim(),
+          isActive: true,
+          zipCodesServed: "",
+          itemCategories: "",
+          prefCategories: [],
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to add vendor");
+      }
+      const { vendor } = await res.json();
+      setVendors(prev => [...prev, vendor]);
+      // Reset form
+      setVType("Consignment Store"); setVName(""); setVPoc(""); setVEmail("");
+      setVPhone(""); setVAddress(""); setVCity(""); setVState("IL"); setVZip("");
+      setVWebsite(""); setVTake(""); setVNotes("");
+      setVSuccess(true);
+      setTimeout(() => setVSuccess(false), 3000);
+      router.refresh();
+    } catch (err) {
+      setVError(err instanceof Error ? err.message : "Error adding vendor");
+    } finally {
+      setVSaving(false);
+    }
+  }
+
+  const thCls = "px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-700 whitespace-nowrap";
+  const SortIcon = ({ col }: { col: string }) => (
+    <span className="ml-1 inline-block opacity-40">
+      {sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+    </span>
+  );
+
+  const inputCls = "w-full h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#2d4a3e] focus:border-transparent placeholder-gray-400";
+  const labelCls = "block text-xs font-medium text-gray-600 mb-1";
+
+  return (
+    <div className="space-y-8">
+      {/* Add Vendor Form */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+        <h3 className="text-base font-semibold text-gray-900 mb-5">Add New Vendor</h3>
+        <form onSubmit={handleAdd} className="space-y-4">
+          {/* Row 1: Type + Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Vendor Type</label>
+              <select value={vType} onChange={e => setVType(e.target.value as VendorType)}
+                className={inputCls}>
+                {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Vendor Name *</label>
+              <input value={vName} onChange={e => setVName(e.target.value)} placeholder="e.g. Chicago Consignment Co."
+                className={inputCls} />
+            </div>
+          </div>
+
+          {/* Row 2: Contact + Email + Phone */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Contact Name</label>
+              <input value={vPoc} onChange={e => setVPoc(e.target.value)} placeholder="Jane Smith"
+                className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Email</label>
+              <input type="email" value={vEmail} onChange={e => setVEmail(e.target.value)} placeholder="jane@example.com"
+                className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Phone</label>
+              <input value={vPhone} onChange={e => setVPhone(e.target.value)} placeholder="(312) 555-0100"
+                className={inputCls} />
+            </div>
+          </div>
+
+          {/* Row 3: Address + City + State + Zip */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Street Address</label>
+              <input value={vAddress} onChange={e => setVAddress(e.target.value)} placeholder="123 Main St"
+                className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>City</label>
+              <input value={vCity} onChange={e => setVCity(e.target.value)} placeholder="Chicago"
+                className={inputCls} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelCls}>State</label>
+                <select value={vState} onChange={e => setVState(e.target.value)} className={inputCls}>
+                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Zip</label>
+                <input value={vZip} onChange={e => setVZip(e.target.value)} placeholder="60601"
+                  className={inputCls} />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 4: Website + Consignment Take */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Website</label>
+              <input value={vWebsite} onChange={e => setVWebsite(e.target.value)} placeholder="https://example.com"
+                className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>TTT Consignment Take %</label>
+              <input type="number" min={0} max={100} value={vTake} onChange={e => setVTake(e.target.value)}
+                placeholder="e.g. 40" className={inputCls} />
+            </div>
+          </div>
+
+          {/* Row 5: Notes */}
+          <div>
+            <label className={labelCls}>Notes</label>
+            <textarea value={vNotes} onChange={e => setVNotes(e.target.value)} placeholder="Specializes in mid-century furniture, great for large lots…"
+              rows={2} className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#2d4a3e] focus:border-transparent placeholder-gray-400 resize-none" />
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-1">
+            <button type="submit" disabled={vSaving}
+              className="h-10 px-6 bg-[#2d4a3e] text-white text-sm font-semibold rounded-xl hover:bg-[#1e3329] disabled:opacity-50 disabled:cursor-not-allowed">
+              {vSaving ? "Adding…" : "Add Vendor"}
+            </button>
+            {vSuccess && <span className="text-sm text-green-600 font-medium">Vendor added successfully.</span>}
+            {vError && <span className="text-sm text-red-600">{vError}</span>}
+          </div>
+        </form>
+      </div>
+
+      {/* Vendor Table */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* Table Controls */}
+        <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors…"
+              className="w-full h-9 pl-9 pr-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2d4a3e]" />
+          </div>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as VendorType | "")}
+            className="h-9 pl-3 pr-8 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2d4a3e] bg-white">
+            <option value="">All Types</option>
+            {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <span className="text-xs text-gray-400 ml-auto">{filtered.length} vendor{filtered.length !== 1 ? "s" : ""}</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className={thCls} onClick={() => handleSort("vendorName")}>
+                  Vendor <SortIcon col="vendorName" />
+                </th>
+                <th className={thCls} onClick={() => handleSort("vendorType")}>
+                  Type <SortIcon col="vendorType" />
+                </th>
+                <th className={thCls} onClick={() => handleSort("pocName")}>
+                  Contact <SortIcon col="pocName" />
+                </th>
+                <th className={thCls} onClick={() => handleSort("city")}>
+                  Location <SortIcon col="city" />
+                </th>
+                <th className={thCls} onClick={() => handleSort("email")}>
+                  Email <SortIcon col="email" />
+                </th>
+                <th className={thCls}>Phone</th>
+                <th className={thCls + " text-right"} onClick={() => handleSort("take")}>
+                  Take % <SortIcon col="take" />
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-10 text-center text-sm text-gray-400">
+                    {search || typeFilter ? "No vendors match your search." : "No vendors yet."}
+                  </td>
+                </tr>
+              ) : filtered.map(v => (
+                <tr key={v.id} className="hover:bg-gray-50/60 transition-colors">
+                  <td className="px-3 py-3">
+                    <div className="font-medium text-gray-900">{v.vendorName}</div>
+                    {v.website && (
+                      <a href={v.website.startsWith("http") ? v.website : `https://${v.website}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-[#2d4a3e] hover:underline"
+                        onClick={e => e.stopPropagation()}>
+                        {v.website.replace(/^https?:\/\//, "")}
+                      </a>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${VENDOR_TYPE_COLORS[v.vendorType] ?? "bg-gray-100 text-gray-600"}`}>
+                      {v.vendorType}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-gray-700">{v.pocName || "—"}</td>
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                    {[v.city, v.state].filter(Boolean).join(", ") || "—"}
+                  </td>
+                  <td className="px-3 py-3">
+                    {v.email ? (
+                      <a href={`mailto:${v.email}`} className="text-[#2d4a3e] hover:underline">{v.email}</a>
+                    ) : "—"}
+                  </td>
+                  <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{v.phone || "—"}</td>
+                  <td className="px-3 py-3 text-right text-gray-700 font-tabular-nums">
+                    {v.consignmentTake > 0 ? `${v.consignmentTake}%` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
+
+type TabId = "projects" | "items" | "vendors";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "projects", label: "Projects" },
+  { id: "items",    label: "Items" },
+  { id: "vendors",  label: "Vendors" },
+];
 
 export function ResaleClient({
   activeProjectsList,
@@ -1027,42 +1370,96 @@ export function ResaleClient({
   localVendors,
   staffMembers,
 }: Props) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const rawTab = searchParams.get("tab") as TabId | null;
+  const activeTab: TabId = (rawTab && ["projects", "items", "vendors"].includes(rawTab))
+    ? rawTab : "projects";
+
   const tenantNames: Record<string, string> = {};
   for (const [id, info] of Object.entries(tenantInfoMap)) tenantNames[id] = info.name;
 
+  function setTab(tab: TabId) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.push(`?${params.toString()}`, { scroll: false });
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8 space-y-10">
-        <div>
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
+        {/* Header */}
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Resale Ops</h1>
-          <p className="text-gray-500 text-sm mt-1">Global view across all active projects — calendar, team leads, and ProFound inventory.</p>
+          <p className="text-gray-500 text-sm mt-1">Global view across all active projects — calendar, team leads, ProFound inventory, and vendors.</p>
         </div>
 
-        <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Key Dates + Shifts — All Active Projects</h2>
-          <CalendarSection entries={planEntries} tenantNames={tenantNames} />
-        </section>
+        {/* Tab Navigation */}
+        <div className="flex gap-1 border-b border-gray-200 mb-8">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setTab(tab.id)}
+              className={[
+                "px-5 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors",
+                activeTab === tab.id
+                  ? "border-[#2d4a3e] text-[#2d4a3e] bg-white"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/70"
+              ].join(" ")}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Active Projects{" "}
-            <span className="text-sm font-normal text-gray-400">({activeProjectsList.length} signed)</span>
-          </h2>
-          <ActiveProjectsSection projects={activeProjectsList} />
-        </section>
+        {/* Tab: Projects */}
+        {activeTab === "projects" && (
+          <div className="space-y-10">
+            <section>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Key Dates + Shifts — All Active Projects</h2>
+              <CalendarSection entries={planEntries} tenantNames={tenantNames} />
+            </section>
+            <section>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Active Projects{" "}
+                <span className="text-sm font-normal text-gray-400">({activeProjectsList.length} signed)</span>
+              </h2>
+              <ActiveProjectsSection projects={activeProjectsList} />
+            </section>
+          </div>
+        )}
 
-        <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            ProFound Inventory{" "}
-            <span className="text-sm font-normal text-gray-400">({pfItems.length} items)</span>
-          </h2>
-          <InventorySection
-            initialItems={pfItems}
-            tenantInfoMap={tenantInfoMap}
-            localVendors={localVendors}
-            staffMembers={staffMembers}
-          />
-        </section>
+        {/* Tab: Items */}
+        {activeTab === "items" && (
+          <div>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                ProFound Inventory{" "}
+                <span className="text-sm font-normal text-gray-400">({pfItems.length} items)</span>
+              </h2>
+            </div>
+            <InventorySection
+              initialItems={pfItems}
+              tenantInfoMap={tenantInfoMap}
+              localVendors={localVendors}
+              staffMembers={staffMembers}
+            />
+          </div>
+        )}
+
+        {/* Tab: Vendors */}
+        {activeTab === "vendors" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Vendors{" "}
+                <span className="text-sm font-normal text-gray-400">({localVendors.length} total)</span>
+              </h2>
+            </div>
+            <VendorsSection initialVendors={localVendors} />
+          </div>
+        )}
       </div>
     </div>
   );
