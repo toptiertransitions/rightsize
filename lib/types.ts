@@ -866,6 +866,7 @@ export interface ReferralCompany {
   createdAt: string;
   lastActivityDate?: string;
   competitors?: string;
+  parentCompany?: string;
 }
 
 export type ReferralContactStage =

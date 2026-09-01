@@ -3260,6 +3260,7 @@ function mapReferralCompany(record: AirtableRecord): ReferralCompany {
     createdAt: toStr(f["CreatedAt"]),
     lastActivityDate: toStr(f["LastActivityDate"]) || undefined,
     competitors: toStr(f["Competitors"]) || undefined,
+    parentCompany: toStr(f["ParentCompany"]) || undefined,
   };
 }
 
@@ -3296,6 +3297,7 @@ export async function createReferralCompany(data: {
   notes?: string;
   website?: string;
   assignedToClerkId?: string;
+  parentCompany?: string;
 }): Promise<ReferralCompany> {
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, "", {
     method: "POST",
@@ -3311,6 +3313,7 @@ export async function createReferralCompany(data: {
         Notes: data.notes || "",
         Website: data.website || "",
         AssignedToClerkId: data.assignedToClerkId || "",
+        ParentCompany: data.parentCompany || "",
         CreatedAt: new Date().toISOString(),
       },
     }),
@@ -3321,7 +3324,7 @@ export async function createReferralCompany(data: {
 
 export async function updateReferralCompany(
   id: string,
-  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; website: string; assignedToClerkId: string; lastActivityDate: string; competitors: string }>
+  data: Partial<{ name: string; type: string; address: string; city: string; state: string; zip: string; priority: string; notes: string; website: string; assignedToClerkId: string; lastActivityDate: string; competitors: string; parentCompany: string }>
 ): Promise<ReferralCompany> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -3336,6 +3339,7 @@ export async function updateReferralCompany(
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
   if (data.lastActivityDate !== undefined) fields["LastActivityDate"] = data.lastActivityDate;
   if (data.competitors !== undefined) fields["Competitors"] = data.competitors;
+  if (data.parentCompany !== undefined) fields["ParentCompany"] = data.parentCompany;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_COMPANIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

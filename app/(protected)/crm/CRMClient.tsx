@@ -2604,7 +2604,8 @@ function ReferralPartnersTab({
   const [contacts, setContacts] = useState<Record<string, ReferralContact[]>>({});
   const [companyModal, setCompanyModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState<ReferralCompany | null>(null);
-  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", website: "", assignedToClerkId: "", competitors: "" });
+  const [companyForm, setCompanyForm] = useState({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "" as ReferralPriority | "", notes: "", website: "", assignedToClerkId: "", competitors: "", parentCompany: "" });
+  const [showParentSuggestions, setShowParentSuggestions] = useState(false);
   const [contactModal, setContactModal] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<ReferralContact | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", title: "", email: "", phone: "", notes: "", stage: "Identified" as ReferralContactStage, dateIntroduced: "", interests: "", coffeeOrder: "", orgsGroups: "", referralCompanyId: "", nextStepDate: "", nextStepNote: "" });
@@ -2621,6 +2622,7 @@ function ReferralPartnersTab({
   // Search / filter / sort / pagination
   const [search, setSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState<"" | ReferralPriority>("");
+  const [filterParentCompany, setFilterParentCompany] = useState("");
   const [filterType, setFilterType] = useState(initialType);
   const [filterContactStage, setFilterContactStage] = useState<ReferralContactStage | "">(initialContactStage);
   const [filterOwner, setFilterOwner] = useState("");
@@ -2866,13 +2868,15 @@ function ReferralPartnersTab({
 
   function openNewCompany() {
     setEditingCompany(null);
-    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", website: "", assignedToClerkId: "", competitors: "" });
+    setCompanyForm({ name: "", type: "", address: "", city: "", state: "", zip: "", priority: "", notes: "", website: "", assignedToClerkId: "", competitors: "", parentCompany: "" });
+    setShowParentSuggestions(false);
     setCompanyModal(true);
   }
 
   function openEditCompany(c: ReferralCompany) {
     setEditingCompany(c);
-    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, website: c.website || "", assignedToClerkId: c.assignedToClerkId || "", competitors: c.competitors || "" });
+    setCompanyForm({ name: c.name, type: c.type, address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", priority: c.priority || "", notes: c.notes, website: c.website || "", assignedToClerkId: c.assignedToClerkId || "", competitors: c.competitors || "", parentCompany: c.parentCompany || "" });
+    setShowParentSuggestions(false);
     setCompanyModal(true);
   }
 
@@ -2892,6 +2896,7 @@ function ReferralPartnersTab({
         website: companyForm.website,
         assignedToClerkId: companyForm.assignedToClerkId,
         competitors: companyForm.competitors,
+        parentCompany: companyForm.parentCompany,
       };
       if (editingCompany) {
         const res = await fetch("/api/crm/companies", {
@@ -3016,8 +3021,19 @@ function ReferralPartnersTab({
     setContactModal(null);
   }
 
-  // Compute unique types for filter dropdown
+  // Compute unique types and parent companies for filter dropdowns
   const allTypes = Array.from(new Set(companies.map(c => c.type).filter(Boolean))).sort();
+  const allParentCompanies = Array.from(new Set(companies.map(c => c.parentCompany).filter(Boolean) as string[])).sort();
+
+  // Autocomplete suggestions pool for parent company field (existing parent values + all company names)
+  const parentCompanySuggestionsPool = useMemo(() => {
+    const pool = new Set<string>();
+    companies.forEach(c => {
+      if (c.parentCompany) pool.add(c.parentCompany);
+      pool.add(c.name);
+    });
+    return Array.from(pool).sort();
+  }, [companies]);
 
   // Apply search / filter / sort
   const staffById = new Map(staffMembers.map(s => [s.clerkUserId, s.displayName]));
@@ -3038,11 +3054,12 @@ function ReferralPartnersTab({
   const filtered = companies
     .filter(c => {
       if (search) {
-        const companyMatch = c.name.toLowerCase().includes(searchLower) || c.type.toLowerCase().includes(searchLower);
+        const companyMatch = c.name.toLowerCase().includes(searchLower) || c.type.toLowerCase().includes(searchLower) || (c.parentCompany && c.parentCompany.toLowerCase().includes(searchLower));
         if (!companyMatch && !contactMatchIds.has(c.id)) return false;
       }
       if (filterPriority && c.priority !== filterPriority) return false;
       if (filterType && c.type !== filterType) return false;
+      if (filterParentCompany && c.parentCompany !== filterParentCompany) return false;
       if (filterOwner && c.assignedToClerkId !== filterOwner) return false;
       if (filterActiveOnly && !isActiveReferralCompany(c.id)) return false;
       if (filterContactStage && !hasContactWithStage(c.id, filterContactStage)) return false;
@@ -3134,6 +3151,21 @@ function ReferralPartnersTab({
             >
               <option value="">All Types</option>
               {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+          {allParentCompanies.length > 0 && (
+            <select
+              value={filterParentCompany}
+              onChange={e => handleFilterChange(setFilterParentCompany)(e.target.value)}
+              className={cn(
+                "h-7 border rounded-lg px-2 text-xs focus:outline-none transition-colors",
+                filterParentCompany
+                  ? "border-forest-500 bg-forest-50 text-forest-700 font-medium"
+                  : "border-gray-300 text-gray-600"
+              )}
+            >
+              <option value="">All Parent Cos</option>
+              {allParentCompanies.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           )}
           {staffMembers.length > 0 && (
@@ -3249,6 +3281,21 @@ function ReferralPartnersTab({
                     )}
                     {isActiveReferralCompany(company.id) && (
                       <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Active Partner</span>
+                    )}
+                    {company.parentCompany && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); handleFilterChange(setFilterParentCompany)(company.parentCompany === filterParentCompany ? "" : company.parentCompany!); setPage(1); }}
+                        className={cn(
+                          "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                          filterParentCompany === company.parentCompany
+                            ? "border-violet-400 bg-violet-50 text-violet-700 font-medium"
+                            : "border-violet-200 bg-violet-50 text-violet-600 hover:border-violet-400"
+                        )}
+                        title={`Filter by parent company: ${company.parentCompany}`}
+                      >
+                        ↑ {company.parentCompany}
+                      </button>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 mt-0.5 text-xs text-gray-500">
@@ -3513,6 +3560,42 @@ function ReferralPartnersTab({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Competitors</label>
               <textarea value={companyForm.competitors} onChange={(e) => setCompanyForm((f) => ({ ...f, competitors: e.target.value }))} rows={2} placeholder="e.g. Competitor A, Competitor B" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Parent Company <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={companyForm.parentCompany}
+                onChange={e => setCompanyForm(f => ({ ...f, parentCompany: e.target.value }))}
+                onFocus={() => setShowParentSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowParentSuggestions(false), 150)}
+                placeholder="e.g. Sunrise Senior Living (national brand)"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                autoComplete="off"
+              />
+              {showParentSuggestions && parentCompanySuggestionsPool.filter(s =>
+                s !== companyForm.parentCompany &&
+                (!companyForm.parentCompany || s.toLowerCase().includes(companyForm.parentCompany.toLowerCase()))
+              ).length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {parentCompanySuggestionsPool
+                    .filter(s => s !== companyForm.parentCompany && (!companyForm.parentCompany || s.toLowerCase().includes(companyForm.parentCompany.toLowerCase())))
+                    .slice(0, 12)
+                    .map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onMouseDown={() => { setCompanyForm(f => ({ ...f, parentCompany: s })); setShowParentSuggestions(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-gray-400">Type to search existing companies, or enter a new parent name to add it to the network.</p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setCompanyModal(false)} className="text-sm border border-gray-300 rounded-lg px-4 py-2">Cancel</button>

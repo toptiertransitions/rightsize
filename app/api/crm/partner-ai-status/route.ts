@@ -128,6 +128,44 @@ export async function POST(req: NextRequest) {
   const quarterStart = str(quarterFields["StartDate"]).slice(0, 10);
   const quarterEnd = str(quarterFields["EndDate"]).slice(0, 10);
 
+  // ── Step 1b: Parent company + sibling network ──────────────────────────────────
+  const parentCompanyName = str(companyFields["ParentCompany"]);
+  let siblingNetworkSection = "";
+  if (parentCompanyName) {
+    const siblingRecs = await fetchAllRecs(
+      AIRTABLE_TABLES.CRM_COMPANIES,
+      `AND({ParentCompany} = "${parentCompanyName.replace(/"/g, '\\"')}", NOT(RECORD_ID() = "${companyId}"))`
+    );
+    if (siblingRecs.length > 0) {
+      const siblingIds = siblingRecs.map(s => s.id);
+      const siblingContacts = await fetchAllRecs(
+        AIRTABLE_TABLES.CRM_CONTACTS,
+        orFilter("ReferralCompanyId", siblingIds)
+      );
+      const activeContactsByCompany = new Map<string, string[]>();
+      for (const c of siblingContacts) {
+        const cid = str(c.fields["ReferralCompanyId"]);
+        const stage = str(c.fields["Stage"]);
+        if (!activeContactsByCompany.has(cid)) activeContactsByCompany.set(cid, []);
+        activeContactsByCompany.get(cid)!.push(`${str(c.fields["Name"])} (${stage || "Unknown"})`);
+      }
+      const siblingLines = siblingRecs.map(s => {
+        const sName = str(s.fields["Name"]);
+        const sType = str(s.fields["Type"]);
+        const sPriority = str(s.fields["Priority"]);
+        const sContacts = (activeContactsByCompany.get(s.id) ?? []);
+        const activeReferrals = sContacts.filter(c => c.includes("Active Referral"));
+        const contactSummary = sContacts.length > 0
+          ? ` — ${sContacts.length} contact(s)${activeReferrals.length > 0 ? `, including ${activeReferrals.length} Active Referral(s): ${activeReferrals.join(", ")}` : ""}`
+          : " — no contacts logged";
+        return `  • ${sName}${sType ? ` (${sType})` : ""}${sPriority ? ` [${sPriority} priority]` : ""}${contactSummary}`;
+      });
+      siblingNetworkSection = `PARENT COMPANY NETWORK:\nParent/Brand: ${parentCompanyName}\nThis company is one of ${siblingRecs.length + 1} branches tracked in our CRM under this parent.\nSibling branches (${siblingRecs.length}):\n${siblingLines.join("\n")}`;
+    } else {
+      siblingNetworkSection = `PARENT COMPANY: ${parentCompanyName} (this is the only branch currently tracked in our CRM)`;
+    }
+  }
+
   // ── Step 2: Fetch activities + referred client contacts in parallel ────────────
 
   const [activities, clientContacts] = await Promise.all([
@@ -295,6 +333,7 @@ export async function POST(req: NextRequest) {
   const companyName = str(companyFields["Name"] ?? companyFields["CompanyName"]) || "Unknown";
   const companySection = [
     `COMPANY: ${companyName} | Type: ${str(companyFields["Type"]) || "—"} | Priority: ${str(companyFields["Priority"]) || "—"}`,
+    parentCompanyName ? `Parent Company/Brand: ${parentCompanyName}` : null,
     str(companyFields["Website"]) ? `Website: ${str(companyFields["Website"])}` : null,
     str(companyFields["Notes"]) ? `Company notes: ${str(companyFields["Notes"])}` : null,
     str(companyFields["Competitors"]) ? `Competitors/competing orgs: ${str(companyFields["Competitors"])}` : null,
@@ -440,6 +479,7 @@ export async function POST(req: NextRequest) {
   const prompt = `You are analyzing a referral partner relationship for Top Tier Transitions (TTT), a premium senior move management company. Use every specific data point below — names, numbers, dates, trends — in your response.
 
 ${companySection}
+${siblingNetworkSection ? `\n${siblingNetworkSection}` : ""}
 
 ${loyaltySection}
 
@@ -482,6 +522,7 @@ Write 7-10 concise, specific bullet points for the TTT supporting team. Referenc
 • Loyalty points — what's outstanding, what's been redeemed, what does that signal about engagement
 • Google review highlights — name the client and the referring contact when possible
 • Key contact insight — what do we know about their interests/personality that could unlock more referrals?
+${siblingNetworkSection ? "• Parent company network — if sibling branches have Active Referrals or strong pipelines, recommend leveraging that parent-level relationship to accelerate this branch; if siblings are underperforming, suggest a unified network approach." : ""}
 • Top recommended next action — specific, not generic
 
 Format: bullet points only, each starting with "•", 1-2 sentences. No headers, no preamble.`;
