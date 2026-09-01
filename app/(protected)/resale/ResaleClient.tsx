@@ -7,6 +7,7 @@ import { VendorFileModal } from "@/components/catalog/VendorFileModal";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { KEY_DATE_ACTIVITIES, VENDOR_TYPES } from "@/lib/types";
 import type { Item, ItemStatus, LocalVendor, PlanEntry, StaffMember, Room, VendorType } from "@/lib/types";
+import { CATEGORY_GROUPS } from "@/lib/categories";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1060,6 +1061,7 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
   const [vWebsite, setVWebsite] = useState("");
   const [vTake, setVTake] = useState("");
   const [vNotes, setVNotes] = useState("");
+  const [vCategories, setVCategories] = useState<string[]>([""]);
   const [vSaving, setVSaving] = useState(false);
   const [vError, setVError] = useState("");
   const [vSuccess, setVSuccess] = useState(false);
@@ -1125,7 +1127,7 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
           notes: vNotes.trim(),
           isActive: true,
           zipCodesServed: "",
-          itemCategories: "",
+          itemCategories: vCategories.filter(Boolean).join(", "),
           prefCategories: [],
         }),
       });
@@ -1138,7 +1140,7 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
       // Reset form
       setVType("Consignment Store"); setVName(""); setVPoc(""); setVEmail("");
       setVPhone(""); setVAddress(""); setVCity(""); setVState("IL"); setVZip("");
-      setVWebsite(""); setVTake(""); setVNotes("");
+      setVWebsite(""); setVTake(""); setVNotes(""); setVCategories([""]);
       setVSuccess(true);
       setTimeout(() => setVSuccess(false), 3000);
       router.refresh();
@@ -1246,6 +1248,47 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
             <label className={labelCls}>Notes</label>
             <textarea value={vNotes} onChange={e => setVNotes(e.target.value)} placeholder="Specializes in mid-century furniture, great for large lots…"
               rows={2} className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#2d4a3e] focus:border-transparent placeholder-gray-400 resize-none" />
+          </div>
+
+          {/* Row 6: Item Categories */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className={labelCls + " mb-0"}>Item Categories <span className="text-gray-400 font-normal">(optional — up to 5)</span></label>
+              {vCategories.length < 5 && (
+                <button type="button" onClick={() => setVCategories(prev => [...prev, ""])}
+                  className="text-xs text-[#2d4a3e] font-medium hover:underline">
+                  + Add category
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {vCategories.map((cat, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <select
+                    value={cat}
+                    onChange={e => setVCategories(prev => prev.map((c, i) => i === idx ? e.target.value : c))}
+                    className="flex-1 h-10 px-3 rounded-xl border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#2d4a3e] focus:border-transparent"
+                  >
+                    <option value="">— Select category —</option>
+                    {CATEGORY_GROUPS.map(g => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.categories.map(c => (
+                          <option key={c} value={c} disabled={vCategories.includes(c) && vCategories[idx] !== c}>
+                            {c}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {vCategories.length > 1 && (
+                    <button type="button" onClick={() => setVCategories(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0" title="Remove">
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Actions */}
