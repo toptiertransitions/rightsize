@@ -3028,10 +3028,7 @@ function ReferralPartnersTab({
   // Autocomplete suggestions pool for parent company field (existing parent values + all company names)
   const parentCompanySuggestionsPool = useMemo(() => {
     const pool = new Set<string>();
-    companies.forEach(c => {
-      if (c.parentCompany) pool.add(c.parentCompany);
-      pool.add(c.name);
-    });
+    companies.forEach(c => { if (c.parentCompany) pool.add(c.parentCompany); });
     return Array.from(pool).sort();
   }, [companies]);
 
