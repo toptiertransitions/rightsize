@@ -221,10 +221,15 @@ export async function sendNewVendorNotification(params: {
     source: params.source,
   });
 
+  const ccEmail = addedByEmail && !adminEmails.includes(addedByEmail.toLowerCase())
+    ? [addedByEmail]
+    : undefined;
+
   const resend = new Resend(resendKey);
   await resend.emails.send({
     from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
     to: adminEmails,
+    ...(ccEmail ? { cc: ccEmail } : {}),
     subject: `Internal Notification - New Vendor Added to Directory - ${params.vendor.vendorName} - ${params.vendor.vendorType}`,
     html,
   });
