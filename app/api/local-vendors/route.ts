@@ -7,6 +7,7 @@ import {
   updateLocalVendor,
   deleteLocalVendor,
 } from "@/lib/airtable";
+import { sendNewVendorNotification } from "@/lib/admin-notifications";
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,6 +30,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const vendor = await createLocalVendor(body);
+
+    const source = (req.headers.get("x-vendor-source") ?? "Admin Page");
+    sendNewVendorNotification({ vendor, addedByClerkId: userId, source }).catch(() => {});
+
     return NextResponse.json({ vendor });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

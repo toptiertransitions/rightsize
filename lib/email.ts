@@ -5150,3 +5150,137 @@ export function buildQuoteAlertEmail({
 </body>
 </html>`;
 }
+
+// ─── New Vendor Added — Internal Admin Notification ───────────────────────────
+
+export function buildNewVendorAdminEmail({
+  vendorName, vendorType, pocName, email, phone, address, city, state, zip,
+  website, consignmentTake, notes, addedByName, addedByEmail, addedAt, source,
+}: {
+  vendorName: string;
+  vendorType: string;
+  pocName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  website?: string;
+  consignmentTake?: number;
+  notes?: string;
+  addedByName: string;
+  addedByEmail: string;
+  addedAt: string;
+  source: string;
+}): string {
+  const location = [address, [city, state].filter(Boolean).join(", "), zip].filter(Boolean).join(", ");
+  const typeColors: Record<string, { bg: string; border: string; text: string }> = {
+    "Consignment Store":     { bg: "#fef3c7", border: "#fcd34d", text: "#92400e" },
+    "Collector/Reseller":    { bg: "#e0e7ff", border: "#a5b4fc", text: "#3730a3" },
+    "Donation Org":          { bg: "#ffedd5", border: "#fdba74", text: "#9a3412" },
+    "Move Manager":          { bg: "#f3e8ff", border: "#c4b5fd", text: "#5b21b6" },
+    "Mover":                 { bg: "#dbeafe", border: "#93c5fd", text: "#1e3a8a" },
+    "Realtor":               { bg: "#ccfbf1", border: "#5eead4", text: "#134e4a" },
+    "Broker":                { bg: "#fef9c3", border: "#fde047", text: "#713f12" },
+    "Future Home/Community": { bg: "#dcfce7", border: "#86efac", text: "#166534" },
+    "Junk Hauler":           { bg: "#f3f4f6", border: "#d1d5db", text: "#374151" },
+    "Attorney":              { bg: "#fee2e2", border: "#fca5a5", text: "#991b1b" },
+    "Other":                 { bg: "#f3f4f6", border: "#d1d5db", text: "#374151" },
+  };
+  const badge = typeColors[vendorType] ?? typeColors["Other"];
+
+  const row = (label: string, value?: string | number | null, href?: string) => {
+    if (!value && value !== 0) return "";
+    const display = href
+      ? `<a href="${href}" style="color:#2E6B4F;text-decoration:none;">${value}</a>`
+      : `${value}`;
+    return `
+    <tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;width:38%;white-space:nowrap;">${label}</td>
+      <td style="padding:11px 16px;font-size:13px;color:#111827;">${display}</td>
+    </tr>`;
+  };
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Vendor Added — Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions &nbsp;&middot;&nbsp; Internal Notification</p>
+                  <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">New Vendor Added to Directory</p>
+                </td>
+                <td align="right" style="vertical-align:top;white-space:nowrap;">
+                  <p style="margin:0;font-size:12px;color:#a8d4bc;">${addedAt}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:24px;">
+              <tr>
+                <td style="padding:22px 24px;">
+                  <span style="display:inline-block;background:${badge.bg};border:1px solid ${badge.border};color:${badge.text};font-size:11px;font-weight:700;padding:3px 12px;border-radius:999px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;">${vendorType}</span>
+                  <p style="margin:0;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">${vendorName}</p>
+                  ${location ? `<p style="margin:6px 0 0;font-size:13px;color:#6b7280;">${location}</p>` : ""}
+                </td>
+              </tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+              <tr style="background:#f9fafb;">
+                <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Vendor Details</td>
+              </tr>
+              ${row("Contact", pocName)}
+              ${row("Email", email, email ? "mailto:" + email : undefined)}
+              ${row("Phone", phone)}
+              ${row("Website", website ? website.replace(/^https?:\/\//, "") : undefined, website ? (website.startsWith("http") ? website : "https://" + website) : undefined)}
+              ${row("TTT Take %", consignmentTake && consignmentTake > 0 ? consignmentTake + "%" : undefined)}
+              ${row("Notes", notes)}
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+              <tr style="background:#f9fafb;">
+                <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Added By</td>
+              </tr>
+              <tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;width:38%;">Name</td>
+                <td style="padding:11px 16px;font-size:13px;color:#111827;">${addedByName}</td>
+              </tr>
+              <tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;">Email</td>
+                <td style="padding:11px 16px;font-size:13px;color:#111827;"><a href="mailto:${addedByEmail}" style="color:#2E6B4F;text-decoration:none;">${addedByEmail}</a></td>
+              </tr>
+              <tr>
+                <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;">Source</td>
+                <td style="padding:11px 16px;font-size:13px;color:#111827;">${source}</td>
+              </tr>
+            </table>
+            <a href="https://app.toptiertransitions.com/admin/local-vendors"
+               style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
+              View Vendor Directory &rarr;
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Notification</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

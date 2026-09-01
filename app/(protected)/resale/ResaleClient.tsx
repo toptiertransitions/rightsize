@@ -1109,7 +1109,7 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
     try {
       const res = await fetch("/api/local-vendors", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-vendor-source": "Resale Page" },
         body: JSON.stringify({
           vendorType: vType,
           vendorName: vName.trim(),

@@ -2,7 +2,8 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail } from "./email";
+import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
 const STAGE_PROGRESSION = ["Identified", "Met", "Agreed to Refer", "Shared Leads", "Active Referral"];
@@ -169,6 +170,64 @@ export async function sendStageProgressNotification(params: {
       html,
     });
   }
+}
+
+export async function sendNewVendorNotification(params: {
+  vendor: LocalVendor;
+  addedByClerkId: string;
+  source: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return;
+
+  let addedByName = "Unknown";
+  let addedByEmail = "";
+  try {
+    const clerk = await clerkClient();
+    const user = await clerk.users.getUser(params.addedByClerkId).catch(() => null);
+    if (user) {
+      addedByName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Unknown";
+      addedByEmail =
+        user.emailAddresses.find(e => e.id === user.primaryEmailAddressId)?.emailAddress ??
+        user.emailAddresses[0]?.emailAddress ??
+        "";
+    }
+  } catch { /* non-fatal */ }
+
+  const addedAt = new Date().toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+
+  const html = buildNewVendorAdminEmail({
+    vendorName: params.vendor.vendorName,
+    vendorType: params.vendor.vendorType,
+    pocName: params.vendor.pocName || undefined,
+    email: params.vendor.email || undefined,
+    phone: params.vendor.phone || undefined,
+    address: params.vendor.address || undefined,
+    city: params.vendor.city || undefined,
+    state: params.vendor.state || undefined,
+    zip: params.vendor.zip || undefined,
+    website: params.vendor.website || undefined,
+    consignmentTake: params.vendor.consignmentTake > 0 ? params.vendor.consignmentTake : undefined,
+    notes: params.vendor.notes || undefined,
+    addedByName,
+    addedByEmail,
+    addedAt,
+    source: params.source,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject: `Internal Notification - New Vendor Added to Directory - ${params.vendor.vendorName} - ${params.vendor.vendorType}`,
+    html,
+  });
 }
 
 export async function sendQuoteAlertNotification({

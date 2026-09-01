@@ -108,7 +108,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
       const payload = isEdit ? { id: vendor.id, ...base } : base;
       const res = await fetch("/api/local-vendors", {
         method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(!isEdit && { "x-vendor-source": "Admin Vendor Directory" }) },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
