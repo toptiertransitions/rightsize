@@ -156,6 +156,12 @@ export interface Tenant {
   priceDrop2Percent?: number;
   quotePhotos?: ItemPhoto[];
   quoteAssessmentItemIds?: string[];
+  quoteTargetStartDate?: string;
+  quoteTargetMoveDate?: string;
+  quoteDatesFlexible?: boolean;
+  quoteDeadlineNotes?: string;
+  quoteSpecialItems?: string;
+  quoteVendorNotes?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────

@@ -2529,6 +2529,7 @@ export function buildQuoteInfoEmail({
   opportunityNotes,
   estimate,
   photos,
+  projectDetails,
 }: {
   recipientName: string;
   tenantName: string;
@@ -2544,6 +2545,14 @@ export function buildQuoteInfoEmail({
     totalCost: number;
   };
   photos: { url: string; publicId: string }[];
+  projectDetails?: {
+    targetStartDate?: string;
+    targetMoveDate?: string;
+    datesFlexible?: boolean;
+    deadlineNotes?: string;
+    specialItems?: string;
+    vendorNotes?: string;
+  };
 }): string {
   const fmtDollar = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const cityState = [city, state].filter(Boolean).join(", ");
@@ -2674,6 +2683,28 @@ export function buildQuoteInfoEmail({
                   </td>
                 </tr>
               </table>` : ""}
+
+              ${(() => {
+                const pd = projectDetails;
+                if (!pd) return "";
+                const hasAny = pd.targetStartDate || pd.targetMoveDate || pd.datesFlexible || pd.deadlineNotes || pd.specialItems || pd.vendorNotes;
+                if (!hasAny) return "";
+                const fmt = (d: string) => { try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return d; } };
+                const rows = [
+                  pd.targetStartDate ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;width:140px;border-top:1px solid #e5e7eb;white-space:nowrap;">Target Start</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;">${fmt(pd.targetStartDate)}</td></tr>` : "",
+                  pd.targetMoveDate ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;width:140px;border-top:1px solid #e5e7eb;white-space:nowrap;">Target Move</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;">${fmt(pd.targetMoveDate)}</td></tr>` : "",
+                  (pd.targetStartDate || pd.targetMoveDate) ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;">Dates Flexible?</td><td style="padding:8px 14px;font-size:13px;font-weight:600;color:${pd.datesFlexible ? "#166534" : "#9a3412"};border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;">${pd.datesFlexible ? "Yes" : "No"}</td></tr>` : "",
+                  pd.deadlineNotes ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Deadline Notes</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.deadlineNotes.replace(/\n/g, "<br>")}</td></tr>` : "",
+                  pd.specialItems ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Special Items</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.specialItems.replace(/\n/g, "<br>")}</td></tr>` : "",
+                  pd.vendorNotes ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Vendor Notes</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.vendorNotes.replace(/\n/g, "<br>")}</td></tr>` : "",
+                ].filter(Boolean).join("");
+                return `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+                  <tr><td style="background-color:#fff7ed;padding:12px 16px;border-bottom:1px solid #fed7aa;">
+                    <p style="margin:0;font-size:11px;font-weight:600;color:#9a3412;text-transform:uppercase;letter-spacing:0.05em;">Project Details &mdash; Internal</p>
+                  </td></tr>
+                  <tbody>${rows}</tbody>
+                </table>`;
+              })()}
 
               ${photoRows}
 
@@ -4887,6 +4918,7 @@ export function buildQuoteAlertEmail({
   opportunity,
   contract,
   quotePhotos,
+  projectDetails,
 }: {
   clientName: string;
   clientEmail?: string;
@@ -4918,6 +4950,14 @@ export function buildQuoteAlertEmail({
     notInScope?: string;
   };
   quotePhotos?: { url: string }[];
+  projectDetails?: {
+    targetStartDate?: string;
+    targetMoveDate?: string;
+    datesFlexible?: boolean;
+    deadlineNotes?: string;
+    specialItems?: string;
+    vendorNotes?: string;
+  };
 }): string {
   const fmt = (n: number) =>
     `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -5069,6 +5109,32 @@ export function buildQuoteAlertEmail({
        <p style="margin:0 0 24px;font-size:13px;color:${TEXT};line-height:1.6;padding:12px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;">${contract.notInScope.replace(/\n/g, "<br>")}</p>`
     : "";
 
+  const projectDetailsSection = (() => {
+    const pd = projectDetails;
+    if (!pd) return "";
+    const hasAny = pd.targetStartDate || pd.targetMoveDate || pd.datesFlexible || pd.deadlineNotes || pd.specialItems || pd.vendorNotes;
+    if (!hasAny) return "";
+    const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return d; } };
+    const dr = (label: string, value: string, valColor = TEXT) =>
+      `<tr>
+        <td style="padding:9px 14px;font-size:13px;color:${MUTED};width:140px;vertical-align:top;border-top:1px solid ${BORDER};white-space:nowrap;">${label}</td>
+        <td style="padding:9px 14px;font-size:13px;color:${valColor};border-top:1px solid ${BORDER};border-left:1px solid ${BORDER};line-height:1.5;">${value}</td>
+      </tr>`;
+    const rows = [
+      pd.targetStartDate ? dr("Target Start", `<strong>${fmtDate(pd.targetStartDate)}</strong>`) : "",
+      pd.targetMoveDate ? dr("Target Move", `<strong>${fmtDate(pd.targetMoveDate)}</strong>`) : "",
+      (pd.targetStartDate || pd.targetMoveDate) ? dr("Dates Flexible?", pd.datesFlexible ? "Yes" : "No", pd.datesFlexible ? "#166534" : "#9a3412") : "",
+      pd.deadlineNotes ? dr("Deadline Notes", pd.deadlineNotes.replace(/\n/g, "<br>")) : "",
+      pd.specialItems ? dr("Special Items", pd.specialItems.replace(/\n/g, "<br>")) : "",
+      pd.vendorNotes ? dr("Vendor Notes", pd.vendorNotes.replace(/\n/g, "<br>")) : "",
+    ].filter(Boolean).join("");
+    return `<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Project Details</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:8px;overflow:hidden;margin-bottom:24px;">
+        <thead><tr style="background-color:#fff7ed;"><td colspan="2" style="padding:10px 14px;font-size:11px;font-weight:600;color:#9a3412;letter-spacing:0.5px;text-transform:uppercase;">Internal Only &mdash; Not shared with client</td></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  })();
+
   const photos = (quotePhotos ?? []).slice(0, 6);
   const photoRows: string[] = [];
   for (let i = 0; i < photos.length; i += 3) {
@@ -5130,6 +5196,7 @@ export function buildQuoteAlertEmail({
 
               ${keyPeopleSection}
               ${quoteSection}
+              ${projectDetailsSection}
               ${notInScopeSection}
               ${imageSection}
 

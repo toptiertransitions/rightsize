@@ -240,6 +240,7 @@ export async function sendQuoteAlertNotification({
   tenantName,
   quotePhotos,
   contract,
+  projectDetails,
 }: {
   tenantId: string;
   tenantName: string;
@@ -250,6 +251,14 @@ export async function sendQuoteAlertNotification({
     discountCode?: string;
     discountAmount?: number;
     notInScope?: string;
+  };
+  projectDetails?: {
+    targetStartDate?: string;
+    targetMoveDate?: string;
+    datesFlexible?: boolean;
+    deadlineNotes?: string;
+    specialItems?: string;
+    vendorNotes?: string;
   };
 }): Promise<void> {
   const resendKey = process.env.RESEND_API_KEY;
@@ -300,6 +309,7 @@ export async function sendQuoteAlertNotification({
       : undefined,
     contract,
     quotePhotos,
+    projectDetails,
   });
 
   const subject = `Internal Alert - New Quote Sent (Not Signed Yet) to ${clientName}${cityForSubject ? ` in ${cityForSubject}` : ""}`;

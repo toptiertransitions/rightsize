@@ -181,6 +181,14 @@ export async function POST(req: NextRequest) {
           tenantName: alertTenant?.name ?? tenantId,
           quotePhotos: alertTenant?.quotePhotos,
           contract: alertContractSnapshot,
+          projectDetails: alertTenant ? {
+            targetStartDate: alertTenant.quoteTargetStartDate,
+            targetMoveDate: alertTenant.quoteTargetMoveDate,
+            datesFlexible: alertTenant.quoteDatesFlexible,
+            deadlineNotes: alertTenant.quoteDeadlineNotes,
+            specialItems: alertTenant.quoteSpecialItems,
+            vendorNotes: alertTenant.quoteVendorNotes,
+          } : undefined,
         });
       } catch (e) {
         console.error("[contracts POST] Failed to send internal quote alert:", e);
@@ -328,6 +336,14 @@ export async function PATCH(req: NextRequest) {
           tenantName: alertTenant?.name ?? patchAlertTenantId,
           quotePhotos: alertTenant?.quotePhotos,
           contract: patchAlertContractSnapshot,
+          projectDetails: alertTenant ? {
+            targetStartDate: alertTenant.quoteTargetStartDate,
+            targetMoveDate: alertTenant.quoteTargetMoveDate,
+            datesFlexible: alertTenant.quoteDatesFlexible,
+            deadlineNotes: alertTenant.quoteDeadlineNotes,
+            specialItems: alertTenant.quoteSpecialItems,
+            vendorNotes: alertTenant.quoteVendorNotes,
+          } : undefined,
         });
       } catch (e) {
         console.error("[contracts PATCH] Failed to send internal quote alert:", e);

@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, originSqFt, originHighSqFt, originMedSqFt, originLowSqFt, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent, seniorCommunityName } = body;
+  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, originSqFt, originHighSqFt, originMedSqFt, originLowSqFt, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent, seniorCommunityName, quoteTargetStartDate, quoteTargetMoveDate, quoteDatesFlexible, quoteDeadlineNotes, quoteSpecialItems, quoteVendorNotes } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -144,6 +144,12 @@ export async function PATCH(req: NextRequest) {
     priceDrop1Percent: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop1Percent !== undefined ? (priceDrop1Percent as number | null) : undefined,
     priceDrop2Days: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop2Days !== undefined ? (priceDrop2Days as number | null) : undefined,
     priceDrop2Percent: (sysRole === "TTTManager" || sysRole === "TTTAdmin") && priceDrop2Percent !== undefined ? (priceDrop2Percent as number | null) : undefined,
+    quoteTargetStartDate: isTTTInternalRole && quoteTargetStartDate !== undefined ? (quoteTargetStartDate as string | null) : undefined,
+    quoteTargetMoveDate: isTTTInternalRole && quoteTargetMoveDate !== undefined ? (quoteTargetMoveDate as string | null) : undefined,
+    quoteDatesFlexible: isTTTInternalRole && typeof quoteDatesFlexible === "boolean" ? quoteDatesFlexible : undefined,
+    quoteDeadlineNotes: isTTTInternalRole && quoteDeadlineNotes !== undefined ? (quoteDeadlineNotes as string | null) : undefined,
+    quoteSpecialItems: isTTTInternalRole && quoteSpecialItems !== undefined ? (quoteSpecialItems as string | null) : undefined,
+    quoteVendorNotes: isTTTInternalRole && quoteVendorNotes !== undefined ? (quoteVendorNotes as string | null) : undefined,
   });
   revalidateTag("tenants");
   return NextResponse.json({ tenant });

@@ -85,6 +85,14 @@ export async function POST(
     opportunityNotes: oppNotes || undefined,
     estimate,
     photos: tenant.quotePhotos ?? [],
+    projectDetails: (tenant.quoteTargetStartDate || tenant.quoteTargetMoveDate || tenant.quoteDatesFlexible || tenant.quoteDeadlineNotes || tenant.quoteSpecialItems || tenant.quoteVendorNotes) ? {
+      targetStartDate: tenant.quoteTargetStartDate,
+      targetMoveDate: tenant.quoteTargetMoveDate,
+      datesFlexible: tenant.quoteDatesFlexible,
+      deadlineNotes: tenant.quoteDeadlineNotes,
+      specialItems: tenant.quoteSpecialItems,
+      vendorNotes: tenant.quoteVendorNotes,
+    } : undefined,
   });
 
   await resend.emails.send({

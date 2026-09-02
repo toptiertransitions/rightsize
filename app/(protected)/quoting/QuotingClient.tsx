@@ -1018,6 +1018,174 @@ function FileIcon({ fileName }: { fileName: string }) {
   );
 }
 
+function ProjectDetailsSection({
+  tenantId,
+  initialTargetStartDate,
+  initialTargetMoveDate,
+  initialDatesFlexible,
+  initialDeadlineNotes,
+  initialSpecialItems,
+  initialVendorNotes,
+}: {
+  tenantId: string;
+  initialTargetStartDate?: string;
+  initialTargetMoveDate?: string;
+  initialDatesFlexible?: boolean;
+  initialDeadlineNotes?: string;
+  initialSpecialItems?: string;
+  initialVendorNotes?: string;
+}) {
+  const [targetStartDate, setTargetStartDate] = useState(initialTargetStartDate ?? "");
+  const [targetMoveDate, setTargetMoveDate] = useState(initialTargetMoveDate ?? "");
+  const [datesFlexible, setDatesFlexible] = useState(initialDatesFlexible ?? false);
+  const [deadlineNotes, setDeadlineNotes] = useState(initialDeadlineNotes ?? "");
+  const [specialItems, setSpecialItems] = useState(initialSpecialItems ?? "");
+  const [vendorNotes, setVendorNotes] = useState(initialVendorNotes ?? "");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function save(overrides?: { datesFlexible?: boolean; targetStartDate?: string; targetMoveDate?: string }) {
+    setSaveStatus("saving");
+    try {
+      await fetch("/api/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          quoteTargetStartDate: (overrides?.targetStartDate ?? targetStartDate) || null,
+          quoteTargetMoveDate: (overrides?.targetMoveDate ?? targetMoveDate) || null,
+          quoteDatesFlexible: overrides?.datesFlexible ?? datesFlexible,
+          quoteDeadlineNotes: deadlineNotes || null,
+          quoteSpecialItems: specialItems || null,
+          quoteVendorNotes: vendorNotes || null,
+        }),
+      });
+      setSaveStatus("saved");
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => setSaveStatus("idle"), 2200);
+    } catch {
+      setSaveStatus("idle");
+    }
+  }
+
+  function toggleFlexible(val: boolean) {
+    setDatesFlexible(val);
+    save({ datesFlexible: val });
+  }
+
+  const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 focus:border-transparent bg-white placeholder-gray-400";
+  const textareaCls = `${inputCls} resize-none`;
+
+  return (
+    <div className="border-t border-gray-100 mt-12 pt-8 pb-2">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-gray-900">Project Details</h2>
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wide">
+            Internal only
+          </span>
+        </div>
+        <div className="ml-auto text-xs">
+          {saveStatus === "saving" && <span className="text-gray-400">Saving…</span>}
+          {saveStatus === "saved" && <span className="text-emerald-600 font-medium">Saved</span>}
+        </div>
+      </div>
+
+      {/* Dates + Flexibility */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Target Start Date <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <input
+            type="date"
+            value={targetStartDate}
+            onChange={e => setTargetStartDate(e.target.value)}
+            onBlur={() => save()}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Target Move Date <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <input
+            type="date"
+            value={targetMoveDate}
+            onChange={e => setTargetMoveDate(e.target.value)}
+            onBlur={() => save()}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Are Dates Flexible? <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <div className="flex gap-2 mt-0.5">
+            <button
+              type="button"
+              onClick={() => toggleFlexible(true)}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${datesFlexible ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleFlexible(false)}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${!datesFlexible ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}
+            >
+              No
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Text notes */}
+      <div className="grid gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Notes on Deadlines / Dependencies <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <textarea
+            value={deadlineNotes}
+            onChange={e => setDeadlineNotes(e.target.value)}
+            onBlur={() => save()}
+            rows={2}
+            placeholder="e.g. Lease ends Nov 1, family flying in for move week…"
+            className={textareaCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Special Items <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <textarea
+            value={specialItems}
+            onChange={e => setSpecialItems(e.target.value)}
+            onBlur={() => save()}
+            rows={2}
+            placeholder="e.g. Grand piano, safe, wall-mounted TV, antiques…"
+            className={textareaCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Notes on Vendors Already Engaged <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <textarea
+            value={vendorNotes}
+            onChange={e => setVendorNotes(e.target.value)}
+            onBlur={() => save()}
+            rows={2}
+            placeholder="e.g. Movers booked with Allied, estate attorney involved…"
+            className={textareaCls}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClientFilesSection({
   tenantId,
   initialFiles,
@@ -1956,6 +2124,17 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
           initialAssessedItems={initialAssessedItems}
         />
       </div>
+
+      {/* ─── Project Details ──────────────────────────────────────────────────── */}
+      <ProjectDetailsSection
+        tenantId={tenant.id}
+        initialTargetStartDate={tenant.quoteTargetStartDate}
+        initialTargetMoveDate={tenant.quoteTargetMoveDate}
+        initialDatesFlexible={tenant.quoteDatesFlexible}
+        initialDeadlineNotes={tenant.quoteDeadlineNotes}
+        initialSpecialItems={tenant.quoteSpecialItems}
+        initialVendorNotes={tenant.quoteVendorNotes}
+      />
 
       {/* ─── Client Files ─────────────────────────────────────────────────────── */}
       <ClientFilesSection tenantId={tenant.id} initialFiles={initialClientFiles} />
