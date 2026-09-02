@@ -30,11 +30,13 @@ export default async function ResalePage() {
   const from = toISO(new Date(today.getFullYear(), today.getMonth() - 3, 1));
   const to = toISO(new Date(today.getFullYear(), today.getMonth() + 7, 0));
 
-  const [allTenantsRaw, staffMembers, planEntries, pfItems, localVendors, signedIds] = await Promise.all([
+  const [allTenantsRaw, staffMembers, planEntries, pfItems, fbItems, ebayItems, localVendors, signedIds] = await Promise.all([
     getTenants().catch(() => [] as Tenant[]),
     getStaffMembers().catch(() => [] as StaffMember[]),
     getPlanEntriesForDateRange(from, to).catch(() => [] as PlanEntry[]),
     getItemsByPrimaryRoute("ProFoundFinds Consignment").catch(() => [] as Item[]),
+    getItemsByPrimaryRoute("FB/Marketplace").catch(() => [] as Item[]),
+    getItemsByPrimaryRoute("Online Marketplace").catch(() => [] as Item[]),
     getLocalVendors().catch(() => [] as LocalVendor[]),
     getSignedTenantIds().catch(() => new Set<string>()),
   ]);
@@ -90,6 +92,8 @@ export default async function ResalePage() {
         tenantInfoMap={tenantInfoMap}
         planEntries={allPlanEntries}
         pfItems={pfItems}
+        fbItems={fbItems}
+        ebayItems={ebayItems}
         localVendors={localVendors}
         staffMembers={staffMembers}
       />

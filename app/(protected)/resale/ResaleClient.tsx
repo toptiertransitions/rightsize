@@ -34,6 +34,8 @@ interface Props {
   tenantInfoMap: Record<string, TenantInfo>;
   planEntries: PlanEntry[];
   pfItems: Item[];
+  fbItems: Item[];
+  ebayItems: Item[];
   localVendors: LocalVendor[];
   staffMembers: StaffMember[];
 }
@@ -1397,11 +1399,13 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
-type TabId = "projects" | "items" | "vendors";
+type TabId = "projects" | "items" | "fb" | "ebay" | "vendors";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "projects", label: "Projects" },
-  { id: "items",    label: "Items" },
+  { id: "items",    label: "ProFound" },
+  { id: "fb",       label: "FB Marketplace" },
+  { id: "ebay",     label: "eBay" },
   { id: "vendors",  label: "Vendors" },
 ];
 
@@ -1410,6 +1414,8 @@ export function ResaleClient({
   tenantInfoMap,
   planEntries,
   pfItems,
+  fbItems,
+  ebayItems,
   localVendors,
   staffMembers,
 }: Props) {
@@ -1417,7 +1423,7 @@ export function ResaleClient({
   const router = useRouter();
 
   const rawTab = searchParams.get("tab") as TabId | null;
-  const activeTab: TabId = (rawTab && ["projects", "items", "vendors"].includes(rawTab))
+  const activeTab: TabId = (rawTab && ["projects", "items", "fb", "ebay", "vendors"].includes(rawTab))
     ? rawTab : "projects";
 
   const tenantNames: Record<string, string> = {};
@@ -1473,7 +1479,7 @@ export function ResaleClient({
           </div>
         )}
 
-        {/* Tab: Items */}
+        {/* Tab: ProFound */}
         {activeTab === "items" && (
           <div>
             <div className="mb-4">
@@ -1484,6 +1490,42 @@ export function ResaleClient({
             </div>
             <InventorySection
               initialItems={pfItems}
+              tenantInfoMap={tenantInfoMap}
+              localVendors={localVendors}
+              staffMembers={staffMembers}
+            />
+          </div>
+        )}
+
+        {/* Tab: FB Marketplace */}
+        {activeTab === "fb" && (
+          <div>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                FB Marketplace Inventory{" "}
+                <span className="text-sm font-normal text-gray-400">({fbItems.length} items)</span>
+              </h2>
+            </div>
+            <InventorySection
+              initialItems={fbItems}
+              tenantInfoMap={tenantInfoMap}
+              localVendors={localVendors}
+              staffMembers={staffMembers}
+            />
+          </div>
+        )}
+
+        {/* Tab: eBay */}
+        {activeTab === "ebay" && (
+          <div>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                eBay Inventory{" "}
+                <span className="text-sm font-normal text-gray-400">({ebayItems.length} items)</span>
+              </h2>
+            </div>
+            <InventorySection
+              initialItems={ebayItems}
               tenantInfoMap={tenantInfoMap}
               localVendors={localVendors}
               staffMembers={staffMembers}
