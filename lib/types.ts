@@ -926,6 +926,7 @@ export interface KeyPerson {
   relationship: string;
   email?: string;
   phone?: string;
+  isPrimary?: boolean;
   referralContactId?: string;
 }
 
@@ -956,6 +957,7 @@ export interface ClientOpportunity {
   destZip?: string;
   expectedCloseDate?: string;
   seniorCommunityName?: string;
+  originParkingNotes?: string;
 }
 
 export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task" | "Text Message";

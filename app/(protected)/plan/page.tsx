@@ -18,6 +18,7 @@ import {
   getContractsForTenant,
   getStaffMembers,
   getProjectTasksForTenant,
+  getOpportunitiesForTenant,
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -265,7 +266,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ────────────────────────────────────────────────────────
   const isAdmin = isTTTAdmin(userId);
-  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts, projectTasks, allStaffMembers] = await Promise.all([
+  const [tenant, role, rooms, entries, projectFiles, timeEntries, sysRole, allTenants, serviceList, contracts, projectTasks, allStaffMembers, opportunities] = await Promise.all([
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getRoomsForTenant(tenantId).catch(() => []),
@@ -278,6 +279,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
     getContractsForTenant(tenantId).catch(() => []),
     getProjectTasksForTenant(tenantId).catch(() => []),
     getStaffMembers().catch(() => []),
+    getOpportunitiesForTenant(tenantId).catch(() => []),
   ]);
 
   const signedContracts = contracts.filter((c) => c.status === "Signed");
@@ -330,6 +332,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   const isTTTStaffOrAbove = sysRole !== null;
 
+  // Derive parking notes and primary contact from the active CRM opportunity
+  const activeOpp = opportunities.find(o => o.stage !== "Won" && o.stage !== "Lost") ?? opportunities[0];
+  const originParkingNotes = activeOpp?.originParkingNotes || undefined;
+  const primaryContact = activeOpp?.keyPeople?.find(kp => kp.isPrimary);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
@@ -363,6 +370,13 @@ export default async function PlanPage({ searchParams }: PageProps) {
               initialPhone={tenant.clientPhone}
               initialSecondaryEmail={tenant.secondaryClientEmail}
               initialSecondaryPhone={tenant.secondaryClientPhone}
+              parkingNotes={originParkingNotes}
+              primaryContact={primaryContact ? {
+                name: primaryContact.name,
+                relationship: primaryContact.relationship,
+                phone: primaryContact.phone,
+                email: primaryContact.email,
+              } : undefined}
             />
           )}
         </div>
@@ -394,6 +408,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         isManager={isManagerOrAdmin}
         isStaff={isTTTStaff}
         isTTT={tenant.isTTT === true}
+        originParkingNotes={originParkingNotes}
       />
 
       {/* First Visit Intake — visible to TTTStaff, TTTManager, TTTAdmin only */}

@@ -3656,6 +3656,7 @@ function mapOpportunity(record: AirtableRecord): ClientOpportunity {
     destZip: toStr(f["DestZip"]) || undefined,
     expectedCloseDate: toStr(f["ExpectedCloseDate"]) || undefined,
     seniorCommunityName: toStr(f["SeniorCommunityName"]) || undefined,
+    originParkingNotes: toStr(f["OriginParkingNotes"]) || undefined,
   };
 }
 
@@ -3723,6 +3724,7 @@ export async function createOpportunity(data: {
   destZip?: string;
   expectedCloseDate?: string;
   seniorCommunityName?: string;
+  originParkingNotes?: string;
 }): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {
     TenantId: data.tenantId || "",
@@ -3748,6 +3750,7 @@ export async function createOpportunity(data: {
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
   if (data.expectedCloseDate !== undefined) fields["ExpectedCloseDate"] = data.expectedCloseDate || null;
   if (data.seniorCommunityName !== undefined) fields["SeniorCommunityName"] = data.seniorCommunityName;
+  if (data.originParkingNotes !== undefined) fields["OriginParkingNotes"] = data.originParkingNotes;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, "", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -3783,6 +3786,7 @@ export async function updateOpportunity(
     destZip: string;
     expectedCloseDate: string;
     seniorCommunityName: string;
+    originParkingNotes: string;
   }>
 ): Promise<ClientOpportunity> {
   const fields: Record<string, unknown> = {};
@@ -3810,6 +3814,7 @@ export async function updateOpportunity(
   if (data.destZip !== undefined) fields["DestZip"] = data.destZip;
   if (data.expectedCloseDate !== undefined) fields["ExpectedCloseDate"] = data.expectedCloseDate || null;
   if (data.seniorCommunityName !== undefined) fields["SeniorCommunityName"] = data.seniorCommunityName;
+  if (data.originParkingNotes !== undefined) fields["OriginParkingNotes"] = data.originParkingNotes;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_OPPORTUNITIES, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

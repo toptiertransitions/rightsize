@@ -709,6 +709,7 @@ function OpportunityPanel({
   const [oppDestState, setOppDestState] = useState(opportunity?.destState || "");
   const [oppDestZip, setOppDestZip] = useState(opportunity?.destZip || "");
   const [expectedCloseDate, setExpectedCloseDate] = useState(opportunity?.expectedCloseDate || "");
+  const [originParkingNotes, setOriginParkingNotes] = useState(opportunity?.originParkingNotes || "");
   // Senior community
   const [movingToCommunity, setMovingToCommunity] = useState(!!(opportunity?.seniorCommunityName));
   const [seniorCommunityName, setSeniorCommunityName] = useState(opportunity?.seniorCommunityName || "");
@@ -812,6 +813,7 @@ function OpportunityPanel({
         destState: oppDestState,
         destZip: oppDestZip,
         expectedCloseDate,
+        originParkingNotes,
         // Only include seniorCommunityName when the feature is active, or to clear a previously-set value.
         // Omitting it entirely (undefined → dropped by JSON.stringify) keeps the Airtable field
         // optional so missing-field errors don't block normal opportunity saves.
@@ -1247,6 +1249,20 @@ function OpportunityPanel({
             </div>
           </div>
 
+          {/* Origin Parking Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Origin Parking Notes <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <textarea
+              value={originParkingNotes}
+              onChange={(e) => setOriginParkingNotes(e.target.value)}
+              rows={2}
+              placeholder="e.g. Street parking on Oak Ave, loading zone available 8am–5pm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+            />
+          </div>
+
           {/* Moving to a Community? */}
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -1394,10 +1410,21 @@ function OpportunityPanel({
             <label className="block text-sm font-medium text-gray-700 mb-2">Key People</label>
             <div className="flex flex-wrap gap-2 mb-2">
               {keyPeople.map((p, i) => (
-                <span key={i} className="flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full">
+                <span key={i} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${p.isPrimary ? "bg-amber-50 text-amber-900 ring-1 ring-amber-300" : "bg-gray-100 text-gray-700"}`}>
+                  <button
+                    type="button"
+                    title={p.isPrimary ? "Primary contact — click to unset" : "Set as primary contact"}
+                    onClick={() => setKeyPeople(prev => {
+                      const alreadyPrimary = prev[i]?.isPrimary;
+                      return prev.map((person, j) => ({ ...person, isPrimary: j === i ? !alreadyPrimary : false }));
+                    })}
+                    className={`shrink-0 leading-none transition-colors ${p.isPrimary ? "text-amber-500" : "text-gray-300 hover:text-amber-400"}`}
+                  >
+                    ★
+                  </button>
                   {p.name}{p.relationship ? ` · ${p.relationship}` : ""}
-                  {p.email && <span className="text-gray-400 ml-0.5">· {p.email}</span>}
-                  {p.phone && <span className="text-gray-400 ml-0.5">· {p.phone}</span>}
+                  {p.email && <span className={`ml-0.5 ${p.isPrimary ? "text-amber-700" : "text-gray-400"}`}>· {p.email}</span>}
+                  {p.phone && <span className={`ml-0.5 ${p.isPrimary ? "text-amber-700" : "text-gray-400"}`}>· {p.phone}</span>}
                   <button onClick={() => setKeyPeople((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 ml-1">×</button>
                 </span>
               ))}

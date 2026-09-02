@@ -187,9 +187,10 @@ interface ModalProps {
   services?: string[];
   canManageTTTHelpers: boolean;
   tenantOptions?: TenantOption[];
+  originParkingNotes?: string;
 }
 
-function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions }: ModalProps) {
+function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions, originParkingNotes }: ModalProps) {
   const focusActivityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
   const [entryType, setEntryType] = useState<PlanEntryType>(entry?.entryType ?? "focus");
   const activityOptions = entryType === "keydate" ? KEY_DATE_ACTIVITIES : focusActivityOptions;
@@ -200,7 +201,9 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [dynamicRooms, setDynamicRooms] = useState<Room[]>(rooms);
   const [roomId, setRoomId] = useState(entry?.roomId ?? "");
   const [customRoom, setCustomRoom] = useState(entry?.roomLabel ?? "");
-  const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [notes, setNotes] = useState(
+    entry?.notes ?? (!entry && originParkingNotes ? `Origin Parking: ${originParkingNotes}` : "")
+  );
   const [startTime, setStartTime] = useState(entry?.startTime ?? "");
   const [endTime, setEndTime] = useState(entry?.endTime ?? "");
   const [helpers, setHelpers] = useState<PlanHelper[]>(entry?.helpers ?? []);
@@ -1025,9 +1028,10 @@ interface PlanClientProps {
   currentTenantId?: string;        // which project is selected ("" = All)
   services?: string[];             // dynamic service names from Airtable
   isTTT?: boolean;
+  originParkingNotes?: string;
 }
 
-export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT, originParkingNotes }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -1599,6 +1603,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           services={services}
           canManageTTTHelpers={!!(isManager || isAdmin)}
           tenantOptions={tenantOptions}
+          originParkingNotes={originParkingNotes}
         />
       )}
     </>

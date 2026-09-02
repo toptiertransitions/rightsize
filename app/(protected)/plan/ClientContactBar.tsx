@@ -8,6 +8,13 @@ interface Props {
   initialPhone?: string;
   initialSecondaryEmail?: string;
   initialSecondaryPhone?: string;
+  parkingNotes?: string;
+  primaryContact?: {
+    name: string;
+    relationship: string;
+    phone?: string;
+    email?: string;
+  };
 }
 
 function PhoneIcon() {
@@ -34,7 +41,7 @@ function PencilIcon() {
   );
 }
 
-export function ClientContactBar({ tenantId, initialEmail, initialPhone, initialSecondaryEmail, initialSecondaryPhone }: Props) {
+export function ClientContactBar({ tenantId, initialEmail, initialPhone, initialSecondaryEmail, initialSecondaryPhone, parkingNotes, primaryContact }: Props) {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState(initialPhone ?? "");
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -156,6 +163,35 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone, initial
   // View mode
   return (
     <div className="group flex flex-col gap-1 mt-2">
+      {/* Primary Contact (from CRM Opportunity) */}
+      {primaryContact && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-1">
+          <span className="text-amber-500 text-sm mt-0.5 shrink-0">★</span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-sm font-semibold text-amber-900">{primaryContact.name}</span>
+              <span className="text-xs text-amber-600 uppercase tracking-wide font-medium">Primary Contact</span>
+              {primaryContact.relationship && (
+                <span className="text-xs text-amber-700">· {primaryContact.relationship}</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+              {primaryContact.phone && (
+                <a href={`tel:${primaryContact.phone.replace(/\D/g, "")}`} className="flex items-center gap-1 text-sm text-amber-800 hover:text-amber-900 transition-colors">
+                  <PhoneIcon />
+                  <span>{primaryContact.phone}</span>
+                </a>
+              )}
+              {primaryContact.email && (
+                <a href={`mailto:${primaryContact.email}`} className="flex items-center gap-1 text-sm text-amber-800 hover:text-amber-900 transition-colors">
+                  <MailIcon />
+                  <span>{primaryContact.email}</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {displayPhone ? (
           <a
@@ -213,6 +249,12 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone, initial
               <span>{displaySecondaryEmail}</span>
             </a>
           )}
+        </div>
+      )}
+      {parkingNotes && (
+        <div className="flex items-start gap-1.5 mt-0.5 pl-0.5">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mt-0.5 shrink-0">Parking</span>
+          <span className="text-sm text-gray-600">{parkingNotes}</span>
         </div>
       )}
     </div>
