@@ -228,6 +228,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     quoteTargetMoveDate: toStr(f["QuoteTargetMoveDate"]) || undefined,
     quoteDatesFlexible: f["QuoteDatesFlexible"] === true,
     quoteDeadlineNotes: toStr(f["QuoteDeadlineNotes"]) || undefined,
+    quoteDisposalNotes: toStr(f["QuoteDisposalNotes"]) || undefined,
     quoteSpecialItems: toStr(f["QuoteSpecialItems"]) || undefined,
     quoteVendorNotes: toStr(f["QuoteVendorNotes"]) || undefined,
   };
@@ -1342,7 +1343,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null; quoteTargetStartDate?: string | null; quoteTargetMoveDate?: string | null; quoteDatesFlexible?: boolean; quoteDeadlineNotes?: string | null; quoteSpecialItems?: string | null; quoteVendorNotes?: string | null }
+  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null; quoteTargetStartDate?: string | null; quoteTargetMoveDate?: string | null; quoteDatesFlexible?: boolean; quoteDeadlineNotes?: string | null; quoteDisposalNotes?: string | null; quoteSpecialItems?: string | null; quoteVendorNotes?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -1392,6 +1393,7 @@ export async function updateTenant(
   if (data.quoteTargetMoveDate !== undefined) fields["QuoteTargetMoveDate"] = data.quoteTargetMoveDate || "";
   if (data.quoteDatesFlexible !== undefined) fields["QuoteDatesFlexible"] = data.quoteDatesFlexible;
   if (data.quoteDeadlineNotes !== undefined) fields["QuoteDeadlineNotes"] = data.quoteDeadlineNotes || "";
+  if (data.quoteDisposalNotes !== undefined) fields["QuoteDisposalNotes"] = data.quoteDisposalNotes || "";
   if (data.quoteSpecialItems !== undefined) fields["QuoteSpecialItems"] = data.quoteSpecialItems || "";
   if (data.quoteVendorNotes !== undefined) fields["QuoteVendorNotes"] = data.quoteVendorNotes || "";
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);

@@ -2550,6 +2550,7 @@ export function buildQuoteInfoEmail({
     targetMoveDate?: string;
     datesFlexible?: boolean;
     deadlineNotes?: string;
+    disposalNotes?: string;
     specialItems?: string;
     vendorNotes?: string;
   };
@@ -2687,7 +2688,7 @@ export function buildQuoteInfoEmail({
               ${(() => {
                 const pd = projectDetails;
                 if (!pd) return "";
-                const hasAny = pd.targetStartDate || pd.targetMoveDate || pd.datesFlexible || pd.deadlineNotes || pd.specialItems || pd.vendorNotes;
+                const hasAny = pd.targetStartDate || pd.targetMoveDate || pd.datesFlexible || pd.deadlineNotes || pd.disposalNotes || pd.specialItems || pd.vendorNotes;
                 if (!hasAny) return "";
                 const fmt = (d: string) => { try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return d; } };
                 const rows = [
@@ -2695,6 +2696,7 @@ export function buildQuoteInfoEmail({
                   pd.targetMoveDate ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;width:140px;border-top:1px solid #e5e7eb;white-space:nowrap;">Target Move</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;">${fmt(pd.targetMoveDate)}</td></tr>` : "",
                   (pd.targetStartDate || pd.targetMoveDate) ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;">Dates Flexible?</td><td style="padding:8px 14px;font-size:13px;font-weight:600;color:${pd.datesFlexible ? "#166534" : "#9a3412"};border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;">${pd.datesFlexible ? "Yes" : "No"}</td></tr>` : "",
                   pd.deadlineNotes ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Deadline Notes</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.deadlineNotes.replace(/\n/g, "<br>")}</td></tr>` : "",
+                  pd.disposalNotes ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Disposal / Hauling</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.disposalNotes.replace(/\n/g, "<br>")}</td></tr>` : "",
                   pd.specialItems ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Special Items</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.specialItems.replace(/\n/g, "<br>")}</td></tr>` : "",
                   pd.vendorNotes ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;border-top:1px solid #e5e7eb;white-space:nowrap;vertical-align:top;">Vendor Notes</td><td style="padding:8px 14px;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;border-left:1px solid #e5e7eb;line-height:1.5;">${pd.vendorNotes.replace(/\n/g, "<br>")}</td></tr>` : "",
                 ].filter(Boolean).join("");
@@ -4955,6 +4957,7 @@ export function buildQuoteAlertEmail({
     targetMoveDate?: string;
     datesFlexible?: boolean;
     deadlineNotes?: string;
+    disposalNotes?: string;
     specialItems?: string;
     vendorNotes?: string;
   };
@@ -5112,7 +5115,7 @@ export function buildQuoteAlertEmail({
   const projectDetailsSection = (() => {
     const pd = projectDetails;
     if (!pd) return "";
-    const hasAny = pd.targetStartDate || pd.targetMoveDate || pd.datesFlexible || pd.deadlineNotes || pd.specialItems || pd.vendorNotes;
+    const hasAny = pd.targetStartDate || pd.targetMoveDate || pd.datesFlexible || pd.deadlineNotes || pd.disposalNotes || pd.specialItems || pd.vendorNotes;
     if (!hasAny) return "";
     const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); } catch { return d; } };
     const dr = (label: string, value: string, valColor = TEXT) =>
@@ -5125,6 +5128,7 @@ export function buildQuoteAlertEmail({
       pd.targetMoveDate ? dr("Target Move", `<strong>${fmtDate(pd.targetMoveDate)}</strong>`) : "",
       (pd.targetStartDate || pd.targetMoveDate) ? dr("Dates Flexible?", pd.datesFlexible ? "Yes" : "No", pd.datesFlexible ? "#166534" : "#9a3412") : "",
       pd.deadlineNotes ? dr("Deadline Notes", pd.deadlineNotes.replace(/\n/g, "<br>")) : "",
+      pd.disposalNotes ? dr("Disposal / Hauling", pd.disposalNotes.replace(/\n/g, "<br>")) : "",
       pd.specialItems ? dr("Special Items", pd.specialItems.replace(/\n/g, "<br>")) : "",
       pd.vendorNotes ? dr("Vendor Notes", pd.vendorNotes.replace(/\n/g, "<br>")) : "",
     ].filter(Boolean).join("");

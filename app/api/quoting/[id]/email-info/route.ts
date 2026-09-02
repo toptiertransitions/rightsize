@@ -85,11 +85,12 @@ export async function POST(
     opportunityNotes: oppNotes || undefined,
     estimate,
     photos: tenant.quotePhotos ?? [],
-    projectDetails: (tenant.quoteTargetStartDate || tenant.quoteTargetMoveDate || tenant.quoteDatesFlexible || tenant.quoteDeadlineNotes || tenant.quoteSpecialItems || tenant.quoteVendorNotes) ? {
+    projectDetails: (tenant.quoteTargetStartDate || tenant.quoteTargetMoveDate || tenant.quoteDatesFlexible || tenant.quoteDeadlineNotes || tenant.quoteDisposalNotes || tenant.quoteSpecialItems || tenant.quoteVendorNotes) ? {
       targetStartDate: tenant.quoteTargetStartDate,
       targetMoveDate: tenant.quoteTargetMoveDate,
       datesFlexible: tenant.quoteDatesFlexible,
       deadlineNotes: tenant.quoteDeadlineNotes,
+      disposalNotes: tenant.quoteDisposalNotes,
       specialItems: tenant.quoteSpecialItems,
       vendorNotes: tenant.quoteVendorNotes,
     } : undefined,

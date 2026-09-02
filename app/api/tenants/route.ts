@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, originSqFt, originHighSqFt, originMedSqFt, originLowSqFt, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent, seniorCommunityName, quoteTargetStartDate, quoteTargetMoveDate, quoteDatesFlexible, quoteDeadlineNotes, quoteSpecialItems, quoteVendorNotes } = body;
+  const { tenantId, name, address, addressUnitNumber, city, state, zip, estimatedHours, estimatedServiceHours, isArchived, isLostDeal, originSqFt, originHighSqFt, originMedSqFt, originLowSqFt, destinationSqFt, payoutMethod, payoutUsername, payoutCheckAddress, isTTT, isConsignmentOnly, clientEmail, clientPhone, secondaryClientEmail, secondaryClientPhone, consignmentExpense, consignmentExpenseNote, destAddress, destAddressUnitNumber, destCity, destState, destZip, teamLeadClerkId, unsoldStandardPreference, unsoldSpecialSituations, priceDrop1Days, priceDrop1Percent, priceDrop2Days, priceDrop2Percent, seniorCommunityName, quoteTargetStartDate, quoteTargetMoveDate, quoteDatesFlexible, quoteDeadlineNotes, quoteDisposalNotes, quoteSpecialItems, quoteVendorNotes } = body;
   if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });
 
   const [tenantRole, sysRole] = await Promise.all([
@@ -148,6 +148,7 @@ export async function PATCH(req: NextRequest) {
     quoteTargetMoveDate: isTTTInternalRole && quoteTargetMoveDate !== undefined ? (quoteTargetMoveDate as string | null) : undefined,
     quoteDatesFlexible: isTTTInternalRole && typeof quoteDatesFlexible === "boolean" ? quoteDatesFlexible : undefined,
     quoteDeadlineNotes: isTTTInternalRole && quoteDeadlineNotes !== undefined ? (quoteDeadlineNotes as string | null) : undefined,
+    quoteDisposalNotes: isTTTInternalRole && quoteDisposalNotes !== undefined ? (quoteDisposalNotes as string | null) : undefined,
     quoteSpecialItems: isTTTInternalRole && quoteSpecialItems !== undefined ? (quoteSpecialItems as string | null) : undefined,
     quoteVendorNotes: isTTTInternalRole && quoteVendorNotes !== undefined ? (quoteVendorNotes as string | null) : undefined,
   });

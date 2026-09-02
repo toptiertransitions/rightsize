@@ -160,6 +160,7 @@ export interface Tenant {
   quoteTargetMoveDate?: string;
   quoteDatesFlexible?: boolean;
   quoteDeadlineNotes?: string;
+  quoteDisposalNotes?: string;
   quoteSpecialItems?: string;
   quoteVendorNotes?: string;
 }

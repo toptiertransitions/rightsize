@@ -1024,6 +1024,7 @@ function ProjectDetailsSection({
   initialTargetMoveDate,
   initialDatesFlexible,
   initialDeadlineNotes,
+  initialDisposalNotes,
   initialSpecialItems,
   initialVendorNotes,
 }: {
@@ -1032,6 +1033,7 @@ function ProjectDetailsSection({
   initialTargetMoveDate?: string;
   initialDatesFlexible?: boolean;
   initialDeadlineNotes?: string;
+  initialDisposalNotes?: string;
   initialSpecialItems?: string;
   initialVendorNotes?: string;
 }) {
@@ -1039,6 +1041,7 @@ function ProjectDetailsSection({
   const [targetMoveDate, setTargetMoveDate] = useState(initialTargetMoveDate ?? "");
   const [datesFlexible, setDatesFlexible] = useState(initialDatesFlexible ?? false);
   const [deadlineNotes, setDeadlineNotes] = useState(initialDeadlineNotes ?? "");
+  const [disposalNotes, setDisposalNotes] = useState(initialDisposalNotes ?? "");
   const [specialItems, setSpecialItems] = useState(initialSpecialItems ?? "");
   const [vendorNotes, setVendorNotes] = useState(initialVendorNotes ?? "");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -1056,6 +1059,7 @@ function ProjectDetailsSection({
           quoteTargetMoveDate: (overrides?.targetMoveDate ?? targetMoveDate) || null,
           quoteDatesFlexible: overrides?.datesFlexible ?? datesFlexible,
           quoteDeadlineNotes: deadlineNotes || null,
+          quoteDisposalNotes: disposalNotes || null,
           quoteSpecialItems: specialItems || null,
           quoteVendorNotes: vendorNotes || null,
         }),
@@ -1152,6 +1156,19 @@ function ProjectDetailsSection({
             onBlur={() => save()}
             rows={2}
             placeholder="e.g. Lease ends Nov 1, family flying in for move week…"
+            className={textareaCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Disposal or Hauling Needs <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          </label>
+          <textarea
+            value={disposalNotes}
+            onChange={e => setDisposalNotes(e.target.value)}
+            onBlur={() => save()}
+            rows={2}
+            placeholder="e.g. Full garage to haul, hazardous materials, large appliances for disposal…"
             className={textareaCls}
           />
         </div>
@@ -2132,6 +2149,7 @@ export function QuotingClient({ tenant, rooms, settings, templates, existingCont
         initialTargetMoveDate={tenant.quoteTargetMoveDate}
         initialDatesFlexible={tenant.quoteDatesFlexible}
         initialDeadlineNotes={tenant.quoteDeadlineNotes}
+        initialDisposalNotes={tenant.quoteDisposalNotes}
         initialSpecialItems={tenant.quoteSpecialItems}
         initialVendorNotes={tenant.quoteVendorNotes}
       />

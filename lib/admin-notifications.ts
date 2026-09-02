@@ -257,6 +257,7 @@ export async function sendQuoteAlertNotification({
     targetMoveDate?: string;
     datesFlexible?: boolean;
     deadlineNotes?: string;
+    disposalNotes?: string;
     specialItems?: string;
     vendorNotes?: string;
   };
