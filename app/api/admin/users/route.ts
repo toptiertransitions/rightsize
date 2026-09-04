@@ -18,11 +18,13 @@ export async function POST(req: NextRequest) {
   if (!adminId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { action, email, clerkUserId } = body;
+  const { action, email, clerkUserId, query } = body;
   const client = await clerkClient();
 
-  if (action === "lookup" && email) {
-    const res = await client.users.getUserList({ emailAddress: [email] });
+  if (action === "lookup" && (email || query)) {
+    const res = email?.trim()
+      ? await client.users.getUserList({ emailAddress: [email.trim()] })
+      : await client.users.getUserList({ query: query.trim() });
     return NextResponse.json({
       users: res.data.map(u => ({
         id: u.id,

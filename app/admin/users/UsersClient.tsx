@@ -1102,69 +1102,123 @@ function InvitationSentModal({ userName, email, onClose }: { userName: string; e
   );
 }
 
-// ─── Email Lookup ──────────────────────────────────────────────────────────────
+// ─── User Lookup ───────────────────────────────────────────────────────────────
 
-function LookupPanel({ tenants, onFound }: { tenants: Array<{ id: string; name: string }>; onFound: (user: AdminUser) => void }) {
-  const [email, setEmail] = useState("");
+function LookupPanel({ onFound }: { onFound: (user: AdminUser) => void }) {
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AdminUser | null>(null);
+  const [results, setResults] = useState<AdminUser[]>([]);
   const [error, setError] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function handleLookup() {
-    if (!email.trim()) return;
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "lookup", email: email.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      if (data.users.length === 0) { setError("No Clerk account found with that email."); return; }
-      const u = data.users[0];
-      setResult({ clerkUserId: u.id, email: u.email, name: u.name, imageUrl: u.imageUrl, createdAt: "", banned: false, memberships: [] });
-    } catch (e) { setError(e instanceof Error ? e.message : "Lookup failed"); }
-    finally { setLoading(false); }
-  }
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim() || query.trim().length < 2) {
+      setResults([]);
+      setError("");
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      setError("");
+      setResults([]);
+      try {
+        const res = await fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "lookup", query: query.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        if (data.users.length === 0) {
+          setError("No Clerk account found.");
+        } else {
+          setResults(data.users.map((u: { id: string; email: string; name: string; imageUrl: string }) => ({
+            clerkUserId: u.id, email: u.email, name: u.name, imageUrl: u.imageUrl,
+            createdAt: "", banned: false, memberships: [],
+          })));
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Search failed");
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6">
-      <h3 className="text-sm font-semibold text-gray-300 mb-3">Find user by email to assign to a project</h3>
-      <div className="flex gap-2">
-        <input
-          type="email"
-          placeholder="user@example.com"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleLookup()}
-          className="flex-1 h-9 px-3 rounded-lg border border-gray-700 bg-gray-900 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500"
-        />
-        <button
-          onClick={handleLookup}
-          disabled={loading || !email.trim()}
-          className="px-4 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? "…" : "Lookup"}
-        </button>
-      </div>
-      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
-      {result && (
-        <div className="mt-3 flex items-center justify-between bg-gray-900 rounded-lg px-3 py-2">
-          <div>
-            <p className="text-sm text-white font-medium">{result.name}</p>
-            <p className="text-xs text-gray-400 font-mono">{result.clerkUserId}</p>
-          </div>
-          <button
-            onClick={() => onFound(result)}
-            className="text-xs text-forest-400 hover:text-forest-300 font-medium"
-          >
-            Manage →
-          </button>
+    <div className="rounded-2xl border border-gray-700/60 overflow-hidden mb-6">
+      <div className="bg-gray-800/50 px-5 py-4 border-b border-gray-700/60 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-forest-900/50 border border-forest-700/40 flex items-center justify-center flex-shrink-0">
+          <svg className="w-4 h-4 text-forest-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
         </div>
-      )}
+        <div>
+          <h3 className="text-sm font-semibold text-white">Find any Clerk user</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Search by name or email to manage or assign to a project</p>
+        </div>
+      </div>
+      <div className="bg-gray-800 px-5 py-4">
+        <div className="relative">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+            {loading ? (
+              <svg className="w-4 h-4 text-forest-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            )}
+          </div>
+          <input
+            type="text"
+            placeholder="Search by name or email…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="w-full h-10 pl-9 pr-9 rounded-xl border border-gray-700 bg-gray-900 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500 placeholder-gray-500"
+          />
+          {query && (
+            <button
+              onClick={() => { setQuery(""); setResults([]); setError(""); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+        {results.length > 0 && (
+          <div className="mt-3 rounded-xl border border-gray-700 overflow-hidden divide-y divide-gray-700">
+            {results.map(result => (
+              <div key={result.clerkUserId} className="flex items-center gap-3 px-4 py-3 bg-gray-900">
+                {result.imageUrl ? (
+                  <img src={result.imageUrl} alt="" className="w-9 h-9 rounded-full flex-shrink-0 object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-semibold text-gray-300">{result.name.charAt(0).toUpperCase()}</span>
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-white truncate">{result.name}</p>
+                  <p className="text-xs text-gray-400 truncate">{result.email}</p>
+                </div>
+                <button
+                  onClick={() => onFound(result)}
+                  className="flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-forest-600 hover:bg-forest-700 text-white transition-colors"
+                >
+                  Open
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1229,6 +1283,8 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
   const [showCreate, setShowCreate] = useState(false);
   const [inviteSent, setInviteSent] = useState<{ userName: string; email: string } | null>(null);
   const [impersonating, setImpersonating] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const clerk = useClerk();
   const router = useRouter();
 
@@ -1257,6 +1313,16 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
       setImpersonating(null);
     }
   }
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const tenantMap = useMemo(
     () => new Map(tenants.map(t => [t.id, { isTTT: t.isTTT }])),
@@ -1288,6 +1354,14 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
     });
     return list;
   }, [users, search, typeFilter, sortKey, sortDir]);
+
+  const suggestions = useMemo(() => {
+    if (search.trim().length < 2) return [];
+    const q = search.toLowerCase();
+    return users
+      .filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [users, search]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1362,22 +1436,60 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
           </svg>
           New Staff User
         </button>
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div ref={searchContainerRef} className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
             placeholder="Search name, email…"
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            onChange={e => { setSearch(e.target.value); setPage(1); setShowSuggestions(true); }}
+            onKeyDown={e => e.key === "Escape" && setShowSuggestions(false)}
+            onFocus={() => { if (search.trim().length >= 2) setShowSuggestions(true); }}
             className="w-64 h-10 pl-9 pr-3 rounded-xl border border-gray-700 bg-gray-800 text-sm text-white focus:outline-none focus:ring-1 focus:ring-forest-500 placeholder-gray-500"
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full right-0 mt-1.5 w-80 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+              <div className="px-3 py-1.5 border-b border-gray-700/60">
+                <p className="text-xs text-gray-500">Click to open user</p>
+              </div>
+              {suggestions.map(u => (
+                <button
+                  key={u.clerkUserId}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-700 transition-colors text-left"
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    setManaging(u);
+                    setSearch("");
+                    setShowSuggestions(false);
+                  }}
+                >
+                  {u.imageUrl ? (
+                    <img src={u.imageUrl} alt="" className="w-7 h-7 rounded-full flex-shrink-0 object-cover" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium text-gray-300">{u.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white truncate">{u.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                  </div>
+                  {u.systemRole && (
+                    <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-md bg-gray-700 text-gray-400 border border-gray-600">
+                      {u.systemRole.replace("TTT", "")}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         </div>
       </div>
 
-      <LookupPanel tenants={tenants} onFound={handleFoundUser} />
+      <LookupPanel onFound={handleFoundUser} />
 
       {/* Type filter */}
       <div className="mb-4 flex flex-wrap gap-1.5">
