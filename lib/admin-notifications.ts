@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -320,5 +320,85 @@ export async function sendQuoteAlertNotification({
     to: adminEmails,
     subject,
     html,
+  });
+}
+
+// ─── Daily Recap notification ─────────────────────────────────────────────────
+export async function sendDailyRecapNotification(params: {
+  projectName: string;
+  recapDate: string;
+  uploaderClerkId: string;
+  aiRecapText: string;
+  fileUrl: string;
+  fileName: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const staff = await getStaffMembers().catch(() => []);
+
+  // Managers + Admins receive the email
+  const toEmails = staff
+    .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
+    .map(s => s.email as string);
+
+  // Also get admin emails from env/Clerk as fallback
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  const allTo = [...new Set([...toEmails, ...adminEmails])];
+  if (allTo.length === 0) return;
+
+  // Uploader info for CC
+  let uploaderName = "TTT Staff";
+  let uploaderEmail = "";
+  try {
+    const clerk = await clerkClient();
+    const user = await clerk.users.getUser(params.uploaderClerkId).catch(() => null);
+    if (user) {
+      uploaderName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "TTT Staff";
+      uploaderEmail =
+        user.emailAddresses.find(e => e.id === user.primaryEmailAddressId)?.emailAddress ??
+        user.emailAddresses[0]?.emailAddress ??
+        "";
+    }
+  } catch { /* non-fatal */ }
+
+  const ccEmails = uploaderEmail && !allTo.includes(uploaderEmail.toLowerCase())
+    ? [uploaderEmail]
+    : undefined;
+
+  const html = buildDailyRecapEmail({
+    projectName: params.projectName,
+    recapDate: params.recapDate,
+    uploaderName,
+    aiRecapText: params.aiRecapText,
+    fileName: params.fileName,
+  });
+
+  // Fetch file as attachment
+  let attachments: { filename: string; content: Buffer }[] | undefined;
+  try {
+    const fileRes = await fetch(params.fileUrl);
+    if (fileRes.ok) {
+      const buf = await fileRes.arrayBuffer();
+      attachments = [{ filename: params.fileName, content: Buffer.from(buf) }];
+    }
+  } catch { /* non-fatal — send without attachment */ }
+
+  const displayDate = (() => {
+    const [year, month, day] = params.recapDate.split("-");
+    if (!year || !month || !day) return params.recapDate;
+    return new Date(`${year}-${month}-${day}T12:00:00`).toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric",
+    });
+  })();
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: allTo,
+    ...(ccEmails ? { cc: ccEmails } : {}),
+    subject: `Internal Notification - Daily Recap for ${params.projectName} on ${displayDate}`,
+    html,
+    ...(attachments ? { attachments } : {}),
   });
 }

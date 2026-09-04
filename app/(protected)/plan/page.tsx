@@ -31,6 +31,7 @@ import { ClientContactBar } from "./ClientContactBar";
 import { ProjectAddressBar } from "./ProjectAddressBar";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
 import { WeeklyEmailButton } from "./WeeklyEmailButton";
+import { DailyRecapSection } from "./DailyRecapSection";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -424,6 +425,13 @@ export default async function PlanPage({ searchParams }: PageProps) {
           initialTasks={projectTasks}
         />
       )}
+
+      {/* Daily Recaps — visible to all plan page users (staff + clients) */}
+      <DailyRecapSection
+        tenantId={tenantId}
+        initialFiles={projectFiles}
+        canEdit={isTTTStaffOrAbove}
+      />
 
       {/* Internal Notes — TTT staff only, never visible to clients */}
       {isTTTStaffOrAbove && (

@@ -5355,3 +5355,91 @@ export function buildNewVendorAdminEmail({
 </body>
 </html>`;
 }
+
+// ─── Daily Recap Notification Email ──────────────────────────────────────────
+export function buildDailyRecapEmail({
+  projectName,
+  recapDate,
+  uploaderName,
+  aiRecapText,
+  fileName,
+}: {
+  projectName: string;
+  recapDate: string;
+  uploaderName: string;
+  aiRecapText: string;
+  fileName: string;
+}): string {
+  const displayDate = (() => {
+    const [year, month, day] = recapDate.split("-");
+    if (!year || !month || !day) return recapDate;
+    return new Date(`${year}-${month}-${day}T12:00:00`).toLocaleDateString("en-US", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+  })();
+
+  const safeText = aiRecapText
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br/>");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Daily Recap &mdash; ${projectName}</title></head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+            <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Internal Notification &mdash; Daily Recap</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+
+            <p style="margin:0 0 6px;font-size:20px;font-weight:bold;color:#1a1a1a;">Daily Recap</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#2E6B4F;font-weight:600;">${projectName}</p>
+
+            <!-- Meta info -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+              <tr style="background-color:#f9fafb;">
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;width:40%;">Date</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;">${displayDate}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;border-top:1px solid #e5e7eb;">Uploaded By</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;border-top:1px solid #e5e7eb;">${uploaderName}</td>
+              </tr>
+              <tr style="background-color:#f9fafb;">
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;border-top:1px solid #e5e7eb;">File</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;border-top:1px solid #e5e7eb;">${fileName}</td>
+              </tr>
+            </table>
+
+            <!-- AI-extracted notes -->
+            <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;">Handwritten Notes (AI Transcription)</p>
+            <div style="background-color:#f8fdf9;border:1px solid #d1fae5;border-left:4px solid #2E6B4F;border-radius:6px;padding:20px;margin-bottom:28px;">
+              <p style="margin:0;font-size:15px;color:#1f2937;line-height:1.7;font-family:Georgia,serif;">${safeText}</p>
+            </div>
+
+            <p style="margin:0 0 20px;font-size:13px;color:#6b7280;line-height:1.6;">
+              The original handwritten document is attached to this email. You can also view it on the project&rsquo;s Plan page.
+            </p>
+
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Notification</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

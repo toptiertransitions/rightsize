@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 // ─── Tag config ───────────────────────────────────────────────────────────────
 const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
+  "Daily Recap":  { label: "Daily Recap",  color: "bg-emerald-100 text-emerald-800" },
   "Floorplan":    { label: "Floorplan",    color: "bg-indigo-100 text-indigo-800" },
   "Room Image":   { label: "Room Image",   color: "bg-green-100 text-green-800" },
   "Layout Image": { label: "Layout Image", color: "bg-violet-100 text-violet-800" },
@@ -29,7 +30,7 @@ const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
   "Payment Proof": { label: "Payment Proof", color: "bg-teal-100 text-teal-700" },
   "Client File":  { label: "Client File",  color: "bg-amber-100 text-amber-800" },
 };
-const TAG_ORDER: FileTag[] = ["Floorplan", "Room Image", "Layout Image", "Damage Image", "Client File"];
+const TAG_ORDER: FileTag[] = ["Daily Recap", "Floorplan", "Room Image", "Layout Image", "Damage Image", "Client File"];
 
 // ─── Sort helper ──────────────────────────────────────────────────────────────
 function sortFiles(files: ProjectFile[]): ProjectFile[] {
@@ -79,7 +80,7 @@ interface UploadModalProps {
 
 function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [tag, setTag] = useState<FileTag>("Floorplan");
+  const [tag, setTag] = useState<FileTag>("Daily Recap");
   const [roomLabel, setRoomLabel] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -501,8 +502,8 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles, projectName
       {/* Section header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Floorplans & Images</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Reference documents for your move</p>
+          <h2 className="text-lg font-bold text-gray-900">Daily Recaps, Floorplans & Images</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Reference documents and daily notes for your project</p>
         </div>
         {canEdit && (
           <button

@@ -702,7 +702,7 @@ export interface LocalVendor {
 }
 
 // ─── Project Files ────────────────────────────────────────────────────────────
-export type FileTag = "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File" | "Payment Proof" | "Client File";
+export type FileTag = "Daily Recap" | "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File" | "Payment Proof" | "Client File";
 
 export interface ProjectFile {
   id: string;
@@ -717,6 +717,8 @@ export interface ProjectFile {
   resourceType: string; // "image" | "raw"
   sortOrder?: number;
   createdAt: string;
+  aiRecapText?: string;
+  recapDate?: string; // YYYY-MM-DD in CST
 }
 
 // ─── Time Tracking ────────────────────────────────────────────────────────────

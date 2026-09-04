@@ -2269,6 +2269,8 @@ function mapProjectFile(record: AirtableRecord): ProjectFile {
     resourceType: toStr(f["ResourceType"]) || "image",
     sortOrder: f["SortOrder"] != null ? toNum(f["SortOrder"]) : undefined,
     createdAt: toStr(f["CreatedAt"]),
+    aiRecapText: toStr(f["AiRecapText"]) || undefined,
+    recapDate: toStr(f["RecapDate"]) || undefined,
   };
 }
 
@@ -2291,6 +2293,8 @@ export async function createProjectFile(data: {
   cloudinaryUrl: string;
   cloudinaryPublicId: string;
   resourceType: string;
+  aiRecapText?: string;
+  recapDate?: string;
 }): Promise<ProjectFile> {
   const fields: Record<string, string> = {
     TenantID: data.tenantId,
@@ -2303,6 +2307,8 @@ export async function createProjectFile(data: {
     CreatedAt: new Date().toISOString(),
   };
   if (data.vendorId) fields["VendorId"] = data.vendorId;
+  if (data.aiRecapText) fields["AiRecapText"] = data.aiRecapText;
+  if (data.recapDate) fields["RecapDate"] = data.recapDate;
   const res = await fileFetch("", {
     method: "POST",
     body: JSON.stringify({ fields }),
@@ -2334,7 +2340,7 @@ export async function deleteProjectFile(id: string): Promise<void> {
 
 export async function updateProjectFile(
   id: string,
-  data: { fileName?: string; fileTag?: FileTag; roomLabel?: string; sortOrder?: number }
+  data: { fileName?: string; fileTag?: FileTag; roomLabel?: string; sortOrder?: number; aiRecapText?: string; recapDate?: string }
 ): Promise<ProjectFile> {
   const fields: Record<string, string | number> = {};
   if (data.fileName !== undefined) fields["FileName"] = data.fileName;
@@ -2342,6 +2348,8 @@ export async function updateProjectFile(
   // Always include RoomLabel so clearing it works
   fields["RoomLabel"] = data.roomLabel ?? "";
   if (data.sortOrder !== undefined) fields["SortOrder"] = data.sortOrder;
+  if (data.aiRecapText !== undefined) fields["AiRecapText"] = data.aiRecapText;
+  if (data.recapDate !== undefined) fields["RecapDate"] = data.recapDate;
   const res = await fileFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
