@@ -1116,11 +1116,13 @@ function RepAccordionItem({
             );
             })()}
 
-            {isAdmin && !isPast && rep.availableToConvert.length > 0 && (
+            {(() => {
+              const accordionAvailable = rep.availableToConvert.filter(c => WAR_ROOM_STAGES.includes(c.bestStage));
+              return isAdmin && !isPast && accordionAvailable.length > 0 ? (
               <div>
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Add from pipeline</p>
                 <div className="flex flex-wrap gap-2">
-                  {rep.availableToConvert.map((c) => (
+                  {accordionAvailable.map((c) => (
                     <button
                       key={c.companyId}
                       onClick={() => handleToggle(c.companyId, null, c.bestStage)}
@@ -1135,7 +1137,8 @@ function RepAccordionItem({
                   ))}
                 </div>
               </div>
-            )}
+            ) : null;
+            })()}
           </div>
         </div>
       )}
