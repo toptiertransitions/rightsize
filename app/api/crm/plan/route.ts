@@ -235,8 +235,7 @@ export async function GET(req: NextRequest) {
           const stage = companyBestStage.get(c.id);
           return conversionTargetMap.has(`${c.id}::${rep.clerkUserId}`)
             && stage !== "Active Referral"
-            && stage !== "Inactive Referral"
-            && stage !== "Identified";
+            && stage !== "Inactive Referral";
         })
         .map((c) => {
           const key = `${c.id}::${rep.clerkUserId}`;
