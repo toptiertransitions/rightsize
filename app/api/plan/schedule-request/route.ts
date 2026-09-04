@@ -40,9 +40,8 @@ export async function POST(req: NextRequest) {
     resolvedProjectName = tenant?.name ?? tenantId;
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "https://app.toptiertransitions.com";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://app.toptiertransitions.com");
   const planUrl = `${baseUrl}/plan?tenantId=${tenantId}`;
 
   try {
