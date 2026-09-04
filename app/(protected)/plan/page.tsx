@@ -185,7 +185,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const tenantIdsWithAccess = [...new Set(filteredEntries.map(e => e.tenantId).filter(Boolean))];
       const staffTimeEntries = await getTimeEntriesForTenants(tenantIdsWithAccess).catch(() => []);
 
-      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      const tenantOptions = allTenants.filter(t => !t.isArchived && !t.isLostDeal).map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
 
       return (
@@ -241,7 +241,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const tenantIdsWithEntries = [...new Set(staffEntries.map(e => e.tenantId).filter(Boolean))];
       const staffTimeEntries = await getTimeEntriesForTenants(tenantIdsWithEntries).catch(() => []);
 
-      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      const tenantOptions = allTenants.filter(t => !t.isArchived && !t.isLostDeal).map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
 
       return (
