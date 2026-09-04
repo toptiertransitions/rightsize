@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers, getContractsForTenant } from "@/lib/airtable";
+import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers, getContractsForTenant, getAllServices } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { isTTTAdmin } from "@/lib/config";
@@ -73,12 +73,19 @@ export async function POST(req: NextRequest) {
   // If autoSendDeposit: push deposit invoice to QuickBooks
   if (contract.autoSendDeposit && createdInvoice) {
     try {
+      const primaryServiceId = contract.lineItems?.[0]?.serviceId;
+      let qboItemId: string | undefined;
+      if (primaryServiceId) {
+        const services = await getAllServices().catch(() => []);
+        qboItemId = services.find(s => s.id === primaryServiceId)?.qboItemId;
+      }
       await createQBOInvoice({
         customerName: signerName.trim(),
         lineItems: [{
           serviceName: createdInvoice.serviceName || "Services",
           hours: 1,
           rate: createdInvoice.amount,
+          qboItemId,
         }],
         memo: `Invoice ${createdInvoice.invoiceNumber}`,
       });
