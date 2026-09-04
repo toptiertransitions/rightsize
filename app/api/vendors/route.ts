@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   }
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+  if (!sysRole || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole)) {
     const role = await getUserRoleForTenant(userId, tenantId);
     if (!role || !EDIT_ROLES.includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest) {
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const sysRolePatch = await getSystemRole(userId).catch(() => null);
-  if (!sysRolePatch || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRolePatch)) {
+  if (!sysRolePatch || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRolePatch)) {
     const role = await getUserRoleForTenant(userId, existing.tenantId);
     if (!role || !EDIT_ROLES.includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -135,7 +135,7 @@ export async function DELETE(req: NextRequest) {
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const sysRoleDel = await getSystemRole(userId).catch(() => null);
-  if (!sysRoleDel || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRoleDel)) {
+  if (!sysRoleDel || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRoleDel)) {
     const role = await getUserRoleForTenant(userId, existing.tenantId);
     if (!role || !EDIT_ROLES.includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

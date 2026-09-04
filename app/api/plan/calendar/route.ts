@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+  if (!sysRole || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole)) {
     const role = await getUserRoleForTenant(userId, entry.tenantId);
     if (!role || !EDIT_ROLES.includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

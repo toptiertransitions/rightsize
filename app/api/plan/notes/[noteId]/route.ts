@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { deleteProjectNote } from "@/lib/airtable-notes";
 
-const TTT_ROLES = ["TTTStaff", "TTTManager", "TTTAdmin", "TTTSales"];
+const TTT_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"];
 
 export async function DELETE(
   _req: NextRequest,

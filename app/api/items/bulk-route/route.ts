@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     getSystemRole(userId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
   ]);
-  const isSystemStaff = sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  const isSystemStaff = sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
   if (!isSystemStaff && (!tenantRole || !EDIT_ROLES.includes(tenantRole))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -167,7 +167,7 @@ function todayISO() {
 }
 
 function defaultReimbursableForRole(sysRole: string | null): boolean {
-  return sysRole === "TTTStaff" || sysRole === "TTTManager";
+  return sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager";
 }
 
 const CATEGORY_COLORS: Record<ExpenseCategory, string> = {

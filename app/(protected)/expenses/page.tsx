@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getSystemRole, getExpensesForUser, getTenants, getStaffMember } from "@/lib/airtable";
 import { ExpensesClient } from "./ExpensesClient";
 
-const ALLOWED_ROLES = ["TTTStaff", "TTTManager", "TTTSales", "TTTAdmin"];
+const ALLOWED_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTSales", "TTTAdmin"];
 
 export default async function ExpensesPage() {
   const { userId } = await auth();

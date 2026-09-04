@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   ]);
   const canEdit =
     (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(tenantRole)) ||
-    (sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole));
+    (sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole));
   if (!canEdit) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const room = await updateRoom(id, {
@@ -103,7 +103,7 @@ export async function DELETE(req: NextRequest) {
   ]);
   const canDelete =
     (tenantRole && ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(tenantRole)) ||
-    (sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole));
+    (sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole));
   if (!canDelete) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await deleteRoom(id);

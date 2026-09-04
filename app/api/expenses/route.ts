@@ -6,7 +6,7 @@ import type { ExpenseCategory } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const ALLOWED_ROLES = ["TTTStaff", "TTTManager", "TTTSales", "TTTAdmin"];
+const ALLOWED_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTSales", "TTTAdmin"];
 
 // ─── GET: fetch expenses ───────────────────────────────────────────────────────
 // ?allCompany=true  → all expenses (TTTManager/TTTAdmin only)
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   const { receiptUrl, receiptPublicId, receiptBase64, mimeType } = body;
 
   // Default reimbursable by role: TTTStaff + TTTManager = YES, TTTAdmin + TTTSales = NO
-  const defaultReimbursable = sysRole === "TTTStaff" || sysRole === "TTTManager";
+  const defaultReimbursable = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager";
   const reimbursable = typeof body.reimbursable === "boolean" ? body.reimbursable : defaultReimbursable;
 
   // ── Claude AI receipt analysis ─────────────────────────────────────────────

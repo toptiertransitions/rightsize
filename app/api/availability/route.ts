@@ -6,7 +6,7 @@ import { Resend } from "resend";
 import type { TimeOffEntry } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ALLOWED = ["TTTStaff", "TTTManager", "TTTAdmin"] as const;
+const ALLOWED = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"] as const;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
 
 export async function GET() {
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest) {
 
   // ── Detect new time-off entries (compare IDs) ──────────────────────────────
   const incomingTimeOff = Array.isArray(body.timeOff) ? (body.timeOff as TimeOffEntry[]) : undefined;
-  if (incomingTimeOff !== undefined && role === "TTTStaff") {
+  if (incomingTimeOff !== undefined && (role === "TTTStaff" || role === "TTTTeamLead")) {
     const existingIds = new Set((member.timeOff ?? []).map((e) => e.id));
     const newEntries = incomingTimeOff.filter((e) => !existingIds.has(e.id));
 

@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   }
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  const isSystemStaff = sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  const isSystemStaff = sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
   if (!isSystemStaff) {
     const role = await getUserRoleForTenant(userId, tenantId);
     if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   // TTT system users (Staff/Manager/Admin) can create items on any project
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+  if (!sysRole || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole)) {
     // Non-system users must be an Owner or Collaborator on the tenant
     const role = await getUserRoleForTenant(userId, tenantId);
     if (!role || !["Owner", "Collaborator"].includes(role)) {
@@ -167,7 +167,7 @@ export async function PATCH(req: NextRequest) {
 
   // TTTStaff and above can update any item without needing tenant membership
   const sysRole = await getSystemRole(userId).catch(() => null);
-  const isSystemStaff = sysRole !== null && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  const isSystemStaff = sysRole !== null && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
   // isAdmin = can reassign items across projects (manager/admin only)
   const isAdmin = sysRole === "TTTAdmin" || sysRole === "TTTManager";
 
@@ -709,7 +709,7 @@ export async function DELETE(req: NextRequest) {
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const sysRoleDel = await getSystemRole(userId).catch(() => null);
-  const isSystemStaffDel = sysRoleDel && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRoleDel);
+  const isSystemStaffDel = sysRoleDel && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRoleDel);
   if (!isSystemStaffDel) {
     const role = await getUserRoleForTenant(userId, item.tenantId);
     if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {

@@ -100,8 +100,8 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   if (!resolvedRole) redirect("/home");
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
-  const isTTT = ["TTTStaff", "TTTAdmin", "TTTManager"].includes(resolvedRole);
-  const isTTTStaff = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole ?? "");
+  const isTTT = ["TTTStaff", "TTTTeamLead", "TTTAdmin", "TTTManager"].includes(resolvedRole);
+  const isTTTStaff = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(resolvedRole ?? "");
 
   const [projectItems, outreachRecords, clerkUser] = isTTTStaff
     ? await Promise.all([
@@ -129,7 +129,7 @@ export default async function VendorsPage({ searchParams }: PageProps) {
   const sentByEmail = clerkUser?.emailAddresses?.[0]?.emailAddress ?? "";
 
   // TTTClient = has a tenant membership role, no system role, and the project IS a TTT project
-  const TTT_SYSTEM_ROLES = ["TTTStaff", "TTTAdmin", "TTTManager", "TTTSales"];
+  const TTT_SYSTEM_ROLES = ["TTTStaff", "TTTTeamLead", "TTTAdmin", "TTTManager", "TTTSales"];
   const isTTTClient = !!role && !TTT_SYSTEM_ROLES.includes(resolvedRole) && (tenant.isTTT ?? false);
 
   return (

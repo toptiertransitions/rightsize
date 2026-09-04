@@ -4,7 +4,7 @@ import { getSystemRole, getStaffMembers, updateItem, logItemStatusChange } from 
 import { upsertSquareCatalogItem } from "@/lib/square";
 
 const TERMINAL_STATUSES = ["Sold", "Donated", "Discarded", "Rejected / Revisit"];
-const ALLOWED_ROLES = ["TTTStaff", "TTTManager", "TTTAdmin"];
+const ALLOWED_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();

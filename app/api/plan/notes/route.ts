@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { getProjectNotes, createProjectNote } from "@/lib/airtable-notes";
 
-const TTT_ROLES = ["TTTStaff", "TTTManager", "TTTAdmin", "TTTSales"];
+const TTT_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"];
 
 async function assertTTT(userId: string) {
   const sysRole = await getSystemRole(userId).catch(() => null);

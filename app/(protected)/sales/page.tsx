@@ -79,15 +79,15 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const paymentProofFiles = files.filter(f => f.fileTag === "Payment Proof");
 
   const canEdit = EDIT_ROLES.includes(resolvedRole);
-  const canEditPayout = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canEditPayout = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditUnsold = role === "Owner" || role === "Collaborator" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditExpense = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditPricing = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const canApplyPriceDrop = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const isStaff = sysRole === "TTTStaff" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
+  const canApplyPriceDrop = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const isStaff = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
   const paymentHandles = isStaff && invoiceSettings ? {
     venmoHandle: invoiceSettings.venmoHandle,
     venmoQrUrl: invoiceSettings.venmoQrUrl,

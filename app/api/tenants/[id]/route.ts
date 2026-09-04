@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     getUserRoleForTenant(userId, id).catch(() => null),
   ]);
 
-  const isTTTStaff = ["TTTStaff", "TTTManager", "TTTAdmin", "TTTSales"].includes(sysRole ?? "");
+  const isTTTStaff = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"].includes(sysRole ?? "");
   if (!isTTTStaff && !role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const tenant = await getTenantById(id).catch(() => null);

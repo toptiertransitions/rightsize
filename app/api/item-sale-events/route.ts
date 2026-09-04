@@ -4,7 +4,7 @@ import { getSystemRole, getItemSaleEvents, updateItemSaleEvent, deleteItemSaleEv
 
 async function requireStaff(userId: string) {
   const role = await getSystemRole(userId);
-  return ["TTTStaff", "TTTManager", "TTTAdmin"].includes(role ?? "");
+  return ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(role ?? "");
 }
 
 async function requireAdmin(userId: string) {

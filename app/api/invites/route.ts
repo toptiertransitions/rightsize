@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   // ── Vendor invite branch ──────────────────────────────────────────────────
   if (body.vendorId) {
     const sysRole = await getSystemRole(userId);
-    if (!sysRole || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole)) {
+    if (!sysRole || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

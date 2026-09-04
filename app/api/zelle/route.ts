@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId);
-  if (!["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? ""))
+  if (!["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? ""))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const daysParam = req.nextUrl.searchParams.get("days") ?? "7";

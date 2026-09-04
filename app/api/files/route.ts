@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   // System staff can upload to any project; otherwise check tenant membership
   const sysRolePost = await getSystemRole(userId).catch(() => null);
-  if (!sysRolePost || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRolePost)) {
+  if (!sysRolePost || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRolePost)) {
     const role = await getUserRoleForTenant(userId, tenantId);
     if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -195,7 +195,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const sysRolePatch = await getSystemRole(userId).catch(() => null);
-  if (!sysRolePatch || !["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRolePatch)) {
+  if (!sysRolePatch || !["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRolePatch)) {
     const role = await getUserRoleForTenant(userId, tenantId);
     if (!role || !EDIT_ROLES.includes(role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -236,7 +236,7 @@ export async function DELETE(req: NextRequest) {
     getUserRoleForTenant(userId, tenantId).catch(() => null),
     getSystemRole(userId).catch(() => null),
   ]);
-  const isSystemStaff = sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  const isSystemStaff = sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
   if (!role && !isSystemStaff) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Payment Proof files: only TTTManager or TTTAdmin can delete

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, updateItem, getItemById, logItemPriceChange } from "@/lib/airtable";
 
-const PAYOUT_ROLES = ["TTTStaff", "TTTManager", "TTTAdmin"];
+const PAYOUT_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
 export async function PATCH(req: NextRequest) {
   const { userId } = await auth();

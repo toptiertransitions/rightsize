@@ -3,7 +3,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getIntakeForm, saveIntakeForm } from "@/lib/airtable";
 import type { IntakeForm } from "@/lib/types";
 
-const ALLOWED_ROLES = ["TTTStaff", "TTTManager", "TTTAdmin"];
+const ALLOWED_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
 async function checkAccess(userId: string): Promise<boolean> {
   const sysRole = await getSystemRole(userId).catch(() => null);

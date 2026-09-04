@@ -17,7 +17,7 @@ export default async function ProtectedLayout({
   const isAdmin = sysRole === "TTTAdmin";
   const isSales = sysRole === "TTTSales";
   const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const isStaff = ["TTTStaff", "TTTManager", "TTTSales", "TTTAdmin"].includes(sysRole ?? "");
+  const isStaff = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTSales", "TTTAdmin"].includes(sysRole ?? "");
 
   // For non-staff users, build a tenantId→isTTT map server-side so the Header
   // can show/hide the Invoices link without a client-side fetch (avoids timing bugs).

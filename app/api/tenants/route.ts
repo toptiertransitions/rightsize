@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  const isTTTCaller = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+  const isTTTCaller = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
   if (!isTTTCaller) return NextResponse.json({ tenants: [] });
 
   const isTTTAdminCaller = sysRole === "TTTAdmin";
@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest) {
     ? isConsignmentOnly : undefined;
 
   // Only TTT internal roles can edit client contact info
-  const isTTTInternalRole = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+  const isTTTInternalRole = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
 
   const tenant = await updateTenant(tenantId, {
     name: typeof name === "string" && name.trim() ? name.trim() : undefined,

@@ -23,13 +23,14 @@ export default async function HelpPage() {
 
   const isAdmin = sysRole === "TTTAdmin";
   const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const isStaff = sysRole !== null && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+  const isStaff = sysRole !== null && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
   const isSales = sysRole === "TTTSales";
   const isClient = !isStaff && !isSales;
 
   // Determine display role label for the ticket
   const userTypeLabel = isAdmin ? "TTT Admin"
     : isManager ? "TTT Manager"
+    : sysRole === "TTTTeamLead" ? "TTT Team Lead"
     : sysRole === "TTTStaff" ? "TTT Staff"
     : isSales ? "TTT Sales"
     : memberships[0]?.role === "Owner" ? "Project Owner"
