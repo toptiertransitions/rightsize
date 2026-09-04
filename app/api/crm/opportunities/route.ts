@@ -45,6 +45,23 @@ export async function POST(req: NextRequest) {
       } catch { /* non-fatal */ }
     }
 
+    // If notes were provided and a project is linked, post to Internal Notes
+    if (opportunity.tenantId && body.notes?.trim()) {
+      try {
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId).catch(() => null);
+        const authorName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "TTT Staff";
+        const authorPhotoUrl = user?.imageUrl || undefined;
+        await createProjectNote({
+          tenantId: opportunity.tenantId,
+          authorClerkId: userId,
+          authorName,
+          authorPhotoUrl,
+          content: `Client Notes (from CRM):\n${body.notes.trim()}`,
+        });
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({ opportunity });
   } catch (err) {
     console.error("[opportunities POST] create failed:", err);
@@ -60,8 +77,8 @@ export async function PATCH(req: NextRequest) {
   const { id, ...data } = await req.json();
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   try {
-    // Fetch current opportunity once if we need to diff key people, detect first project link, or detect Lost transition
-    const needsPrefetch = (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) || !!data.tenantId || data.stage === "Lost";
+    // Fetch current opportunity once if we need to diff key people, detect first project link, Lost transition, or notes change
+    const needsPrefetch = (Array.isArray(data.keyPeople) && data.keyPeople.length > 0) || !!data.tenantId || data.stage === "Lost" || "notes" in data;
     const current = needsPrefetch ? await getOpportunityById(id).catch(() => null) : null;
 
     // Case A: New key people added while a project is already linked
@@ -76,6 +93,24 @@ export async function PATCH(req: NextRequest) {
     const firstLinkKeyPeople: KeyPerson[] = isFirstProjectLink ? (current!.keyPeople ?? []) : [];
 
     const opportunity = await updateOpportunity(id, data);
+
+    // Sync notes changes to Internal Notes on the linked Plan page (staff-only, never visible to clients)
+    const notesChanged = "notes" in data && (data.notes ?? "").trim() !== (current?.notes ?? "").trim();
+    if (notesChanged && (data.notes ?? "").trim() && opportunity.tenantId) {
+      try {
+        const clerk = await clerkClient();
+        const user = await clerk.users.getUser(userId).catch(() => null);
+        const authorName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "TTT Staff";
+        const authorPhotoUrl = user?.imageUrl || undefined;
+        await createProjectNote({
+          tenantId: opportunity.tenantId,
+          authorClerkId: userId,
+          authorName,
+          authorPhotoUrl,
+          content: `Client Notes (from CRM):\n${(data.notes as string).trim()}`,
+        });
+      } catch { /* non-fatal */ }
+    }
 
     // Create internal Plan notes for key people (Case A: new additions; Case B: first project link backfill)
     const peopleToNote = firstLinkKeyPeople.length > 0 ? firstLinkKeyPeople : addedKeyPeople;

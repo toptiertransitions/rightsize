@@ -1464,12 +1464,15 @@ function OpportunityPanel({
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Client Notes <span className="font-normal text-gray-400">(optional)</span>
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Personality/communication style, family dynamics, key concerns, emotional context"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm placeholder-gray-300 resize-none"
             />
           </div>
 
