@@ -23,7 +23,7 @@ interface PageProps {
   searchParams: Promise<{ tenantId?: string; search?: string }>;
 }
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
 export default async function CatalogPage({ searchParams }: PageProps) {
   const { userId } = await auth();
@@ -123,7 +123,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           canEdit={canEdit}
           rooms={rooms}
           localVendors={localVendors}
-          canAutoRoute={resolvedRole ? ["TTTStaff", "TTTManager", "TTTAdmin"].includes(resolvedRole) : false}
+          canAutoRoute={resolvedRole ? ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(resolvedRole) : false}
           canReassign={canReassign}
           allTenants={canReassign ? allTenants : undefined}
           isTTT={tenant.isTTT ?? true}
