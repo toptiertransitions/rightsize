@@ -157,6 +157,60 @@ export default async function PlanPage({ searchParams }: PageProps) {
       );
     }
 
+    // ── TTT Team Lead: show all shifts on lead projects + own helper shifts ──
+    if (sysRole === "TTTTeamLead") {
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId!);
+      const userEmail = clerkUser.emailAddresses.find(
+        e => e.id === clerkUser.primaryEmailAddressId
+      )?.emailAddress;
+
+      const [allTenantsRaw, serviceList] = await Promise.all([
+        getTenants().catch(() => []),
+        getServices().catch(() => []),
+      ]);
+
+      const allTenants = allTenantsRaw.filter(t => t.isTTT ?? true);
+      const leadProjectIds = new Set(allTenants.filter(t => t.teamLeadClerkId === userId).map(t => t.id));
+
+      const allEntries = await Promise.all(
+        allTenants.map(t => getPlanEntriesForTenant(t.id).catch(() => []))
+      ).then(r => r.flat());
+
+      const filteredEntries = allEntries.filter(entry => {
+        if (leadProjectIds.has(entry.tenantId)) return true;
+        return userEmail ? entry.helpers?.some(h => h.email === userEmail) : false;
+      });
+
+      const tenantIdsWithAccess = [...new Set(filteredEntries.map(e => e.tenantId).filter(Boolean))];
+      const staffTimeEntries = await getTimeEntriesForTenants(tenantIdsWithAccess).catch(() => []);
+
+      const tenantOptions = allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      const serviceNames = serviceList.map(s => s.name);
+
+      return (
+        <div>
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
+            <p className="text-gray-500 mt-0.5">Your lead projects and personal shifts across all projects</p>
+          </div>
+          <PlanClient
+            entries={filteredEntries}
+            rooms={[]}
+            tenantId=""
+            canEdit={false}
+            projectFiles={[]}
+            timeEntries={staffTimeEntries}
+            isAdmin={false}
+            tenantOptions={tenantOptions}
+            currentTenantId="__my_projects__"
+            services={serviceNames}
+            isStaff={true}
+          />
+        </div>
+      );
+    }
+
     // ── TTT Staff: show their helper shifts across all projects ──────────────
     if (sysRole === "TTTStaff") {
       const clerk = await clerkClient();
@@ -290,9 +344,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
   if (!resolvedRole) redirect("/home");
 
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const isTTTStaff = sysRole === "TTTStaff";
+  const isTeamLead = sysRole === "TTTTeamLead";
+  const isProjectTeamLead = isTeamLead && tenant?.teamLeadClerkId === userId;
+  // TTTTeamLead inherits TTTStaff behavior for base access
+  const isTTTStaff = sysRole === "TTTStaff" || isTeamLead;
 
-  // TTTStaff can add/edit shifts (non-TTT-helper shifts) just like a client user
+  // TTTStaff/TTTTeamLead can add/edit shifts (non-TTT-helper shifts) just like a client user
   const canEdit = EDIT_ROLES.includes(resolvedRole) || isTTTStaff;
 
   // Fetch current user's Clerk profile for the notes section
@@ -316,9 +373,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
     teamLeadPhoto = teamLeadClerkUser?.imageUrl || undefined;
   }
 
-  // TTTStaff should only see shifts they are personally invited to
+  // TTTStaff should only see shifts they are personally invited to.
+  // TTTTeamLead on their lead project sees all entries; on other projects sees only their own.
   let filteredEntries = entries;
-  if (isTTTStaff) {
+  if (isTTTStaff && !isProjectTeamLead) {
     const userEmail = clerkUser?.emailAddresses.find(
       e => e.id === clerkUser.primaryEmailAddressId
     )?.emailAddress;
@@ -326,7 +384,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
       ? entries.filter(entry => entry.helpers?.some(h => h.email === userEmail))
       : [];
   }
-  const tenantOptions = (isManagerOrAdmin || isTTTStaff)
+  const tenantOptions = (isManagerOrAdmin || isTTTStaff || isTeamLead)
     ? allTenants.map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }))
     : [{ id: tenantId, name: tenant.name, isArchived: tenant.isArchived ?? false, isLostDeal: tenant.isLostDeal ?? false, address: tenant.address, city: tenant.city, state: tenant.state, zip: tenant.zip, destAddress: tenant.destAddress, destCity: tenant.destCity, destState: tenant.destState, destZip: tenant.destZip }];
   const serviceNames = serviceList.map(s => s.name);
@@ -410,17 +468,18 @@ export default async function PlanPage({ searchParams }: PageProps) {
         isStaff={isTTTStaff}
         isTTT={tenant.isTTT === true}
         originParkingNotes={originParkingNotes}
+        isProjectTeamLead={isProjectTeamLead}
       />
 
       {/* First Visit Intake — visible to TTTStaff, TTTManager, TTTAdmin only */}
       {isTTTStaffOrAbove && <IntakeFormSection tenantId={tenantId} />}
 
-      {/* Project Checklist — TTTManager and TTTAdmin only */}
-      {isManagerOrAdmin && (
+      {/* Project Checklist — TTTManager, TTTAdmin, and Team Lead on their lead project */}
+      {(isManagerOrAdmin || isProjectTeamLead) && (
         <ProjectChecklistSection
           tenantId={tenantId}
           isAdmin={sysRole === "TTTAdmin"}
-          isManager={sysRole === "TTTManager"}
+          isManager={sysRole === "TTTManager" || isProjectTeamLead}
           currentUserName={currentUserName}
           initialTasks={projectTasks}
         />

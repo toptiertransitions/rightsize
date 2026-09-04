@@ -8,7 +8,7 @@ export type UserRole =
   | "TTTSales"
   | "TTTAdmin";
 
-export type SystemRole = "TTTStaff" | "TTTManager" | "TTTSales" | "TTTAdmin";
+export type SystemRole = "TTTStaff" | "TTTTeamLead" | "TTTManager" | "TTTSales" | "TTTAdmin";
 
 // ─── Staff Availability ───────────────────────────────────────────────────────
 export interface DaySchedule {

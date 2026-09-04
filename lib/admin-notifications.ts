@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -337,7 +337,7 @@ export async function sendDailyRecapNotification(params: {
 
   const staff = await getStaffMembers().catch(() => []);
 
-  // Managers + Admins receive the email
+  // Managers + Admins receive the daily recap email
   const toEmails = staff
     .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
     .map(s => s.email as string);
@@ -400,5 +400,48 @@ export async function sendDailyRecapNotification(params: {
     subject: `Internal Notification - Daily Recap for ${params.projectName} on ${displayDate}`,
     html,
     ...(attachments ? { attachments } : {}),
+  });
+}
+
+export async function sendScheduleModificationRequest(params: {
+  projectName: string;
+  tenantId: string;
+  requesterName: string;
+  requesterEmail: string;
+  request: string;
+  reason?: string;
+  priority: "Normal" | "Urgent";
+  planUrl: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const staff = await getStaffMembers().catch(() => []);
+
+  const toEmails = staff
+    .filter(s => s.isActive && s.email && (s.role === "TTTManager" || s.role === "TTTAdmin"))
+    .map(s => s.email as string);
+
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  const allTo = [...new Set([...toEmails, ...adminEmails])];
+  if (allTo.length === 0) return;
+
+  const html = buildScheduleModificationEmail({
+    projectName: params.projectName,
+    requesterName: params.requesterName,
+    request: params.request,
+    reason: params.reason,
+    priority: params.priority,
+    planUrl: params.planUrl,
+  });
+
+  const resend = new Resend(resendKey);
+  const priorityLabel = params.priority === "Urgent" ? " [URGENT]" : "";
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: allTo,
+    ...(params.requesterEmail && !allTo.includes(params.requesterEmail.toLowerCase()) ? { cc: [params.requesterEmail] } : {}),
+    subject: `${priorityLabel}Schedule Modification Request — ${params.projectName} (${params.requesterName})`,
+    html,
   });
 }

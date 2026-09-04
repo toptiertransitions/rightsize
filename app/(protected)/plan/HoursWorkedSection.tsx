@@ -237,6 +237,7 @@ interface Props {
   timeEntries: TimeEntry[];
   isAdmin: boolean;
   isManager?: boolean;
+  isTeamLeadView?: boolean; // Team Lead on their lead project — gets view-only manager details, no entry editing
   estimatedHours?: number;
   estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   tenantId: string;
@@ -248,7 +249,9 @@ interface Props {
   tenantName?: string;
 }
 
-export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, signedContracts, isTTT, tenantName }: Props) {
+export function HoursWorkedSection({ timeEntries, isAdmin, isManager, isTeamLeadView, estimatedHours: initialEstimatedHours, estimatedServiceHours, tenantId, canEditEstimate, planEntries, services, signedContracts, isTTT, tenantName }: Props) {
+  // canViewManagerDetails: can see breakdowns + staff names but may not be able to edit
+  const canViewManagerDetails = isAdmin || !!isManager || !!isTeamLeadView;
   const serviceList = services && services.length > 0 ? services : TIME_FOCUS_AREAS;
 
   // Derive estimated hours from all signed contracts combined
@@ -443,7 +446,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
     <div className="mt-10">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-gray-900">Hours</h2>
-        {(isAdmin || !!isManager) && entries.length > 0 && (
+        {canViewManagerDetails && entries.length > 0 && (
           <button onClick={exportCSV} className="text-xs text-forest-600 hover:text-forest-700 font-medium">
             Export CSV
           </button>
@@ -514,7 +517,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
           <div className="text-xs text-gray-500 mb-1">Logged</div>
           <div className="text-xl font-bold text-gray-900">{totalMins > 0 ? fmtMins(totalMins) : "—"}</div>
           {/* Manager accordion */}
-          {isManager && focusBreakdown.length > 0 && (
+          {canViewManagerDetails && focusBreakdown.length > 0 && (
             <>
               <button
                 onClick={() => setLogOpen(p => !p)}
@@ -545,7 +548,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
           <div className="text-xs text-amber-600 mb-1">Scheduled</div>
           <div className="text-xl font-bold text-amber-700">{scheduledMins > 0 ? fmtMins(scheduledMins) : "—"}</div>
           {/* Manager accordion */}
-          {isManager && scheduledBreakdown.length > 0 && (
+          {canViewManagerDetails && scheduledBreakdown.length > 0 && (
             <>
               <button
                 onClick={() => setSchedOpen(p => !p)}
@@ -588,7 +591,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
               : "—"}
           </div>
           {/* Manager accordion */}
-          {isManager && remainingByService.length > 0 && (
+          {canViewManagerDetails && remainingByService.length > 0 && (
             <>
               <button
                 onClick={() => setRemOpen(p => !p)}
@@ -692,7 +695,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
                 </div>
 
                 {/* Staff filter pills — shown to managers and admins */}
-                {(isAdmin || !!isManager) && uniqueStaffNames.length > 1 && (
+                {canViewManagerDetails && uniqueStaffNames.length > 1 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Staff</span>
                     {uniqueStaffNames.map(name => (
@@ -748,14 +751,14 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, estimatedH
                           </div>
                           <div className="text-xs text-gray-400 mt-0.5">
                             {fmt12(e.startTime)} – {fmt12(e.endTime)}
-                            {(isAdmin || !!isManager) && ` · ${e.staffName}`}
+                            {canViewManagerDetails && ` · ${e.staffName}`}
                             {e.travelMinutes ? ` · ${e.travelMinutes}min travel` : ""}
                             {e.travelMiles ? ` · ${e.travelMiles}mi` : ""}
                             {e.notes ? ` · ${e.notes}` : ""}
                           </div>
                         </div>
                       </div>
-                      {(isAdmin || !!isManager) && (
+                      {(isAdmin || !!isManager) && !isTeamLeadView && (
                         <button onClick={() => setEditingEntry(e)}
                           className="text-xs text-gray-400 hover:text-forest-600 ml-3 flex-shrink-0 font-medium">
                           Edit

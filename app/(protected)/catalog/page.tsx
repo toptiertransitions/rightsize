@@ -35,7 +35,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   const SENTINEL_VIEWS = ["__all_active__", "__all_archived__", "__all_time__"];
   if (tenantId && SENTINEL_VIEWS.includes(tenantId)) {
     const sysRole = await getSystemRole(userId!).catch(() => null);
-    if (!["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")) redirect("/home");
+    if (!["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")) redirect("/home");
 
     const allTenants = await getTenants().catch(() => []);
     const selectedTenants =
@@ -52,14 +52,14 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     ]);
 
     items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const canAutoRoute = ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+    const canAutoRoute = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
     const viewLabel =
       tenantId === "__all_active__" ? "All Active Projects" :
       tenantId === "__all_archived__" ? "All Archived Projects" :
       "All-Time Projects";
 
-    const canReassign = ["TTTManager", "TTTAdmin"].includes(sysRole ?? "");
-    const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+    const canReassign = ["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+    const isTTTUser = !!sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
     const canEdit = sysRole === "TTTAdmin" && tenantId === "__all_active__";
 
     return (
@@ -103,8 +103,8 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     if (!resolvedRole) redirect("/home");
 
     const canEdit = EDIT_ROLES.includes(resolvedRole);
-    const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-    const isTTTUser = !!sysRole && ["TTTStaff", "TTTManager", "TTTAdmin"].includes(sysRole);
+    const canReassign = ["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+    const isTTTUser = !!sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
     const canSeeEstateMode = sysRole === "TTTManager" || sysRole === "TTTAdmin";
     const estateMode = tenant.isEstateSale ?? false;
 

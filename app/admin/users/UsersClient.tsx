@@ -12,12 +12,13 @@ import type { AdminUser } from "./page";
 const PROJECT_ROLES = ["Owner", "Collaborator", "Viewer", "Vendor"] as const;
 
 // System-level roles (stored in Airtable StaffMembers table)
-const SYSTEM_ROLES = ["TTTStaff", "TTTManager", "TTTSales"] as const;
+const SYSTEM_ROLES = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTSales"] as const;
 
 const SYSTEM_ROLE_LABELS: Record<string, string> = {
   TTTAdmin: "TTT Admin",
   TTTManager: "TTT Manager",
   TTTSales: "TTT Sales",
+  TTTTeamLead: "TTT Team Lead",
   TTTStaff: "TTT Staff",
 };
 
@@ -66,6 +67,8 @@ function userTypeBadges(user: AdminUser, tenantMap: Map<string, { isTTT?: boolea
         ? "bg-purple-900/50 text-purple-300 border border-purple-800"
         : user.systemRole === "TTTSales"
         ? "bg-blue-900/50 text-blue-300 border border-blue-800"
+        : user.systemRole === "TTTTeamLead"
+        ? "bg-teal-900/50 text-teal-300 border border-teal-800"
         : "bg-gray-700 text-gray-300 border border-gray-600";
     return [<span key="sys" className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>];
   }
@@ -106,6 +109,8 @@ function systemRoleBadge(role: string | undefined) {
       ? "bg-purple-900/50 text-purple-300 border border-purple-800"
       : role === "TTTSales"
       ? "bg-blue-900/50 text-blue-300 border border-blue-800"
+      : role === "TTTTeamLead"
+      ? "bg-teal-900/50 text-teal-300 border border-teal-800"
       : "bg-gray-700 text-gray-300 border border-gray-600";
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>;
 }
@@ -940,7 +945,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"TTTStaff" | "TTTManager" | "TTTSales">("TTTStaff");
+  const [role, setRole] = useState<"TTTStaff" | "TTTTeamLead" | "TTTManager" | "TTTSales">("TTTStaff");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -998,7 +1003,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1.5">Role</label>
             <div className="flex gap-2">
-              {(["TTTStaff", "TTTManager", "TTTSales"] as const).map(r => (
+              {(["TTTStaff", "TTTTeamLead", "TTTManager", "TTTSales"] as const).map(r => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
@@ -1167,12 +1172,13 @@ function LookupPanel({ tenants, onFound }: { tenants: Array<{ id: string; name: 
 // ─── Sort / Filter helpers ─────────────────────────────────────────────────────
 
 type SortKey = "name" | "email" | "joined" | "lastActive" | "type";
-type TypeFilter = "All" | "TTTAdmin" | "TTTManager" | "TTTSales" | "TTTStaff" | "Client" | "Partner" | "Vendor" | "None";
+type TypeFilter = "All" | "TTTAdmin" | "TTTManager" | "TTTSales" | "TTTTeamLead" | "TTTStaff" | "Client" | "Partner" | "Vendor" | "None";
 
 function getCategory(u: AdminUser): TypeFilter {
   if (u.systemRole === "TTTAdmin") return "TTTAdmin";
   if (u.systemRole === "TTTManager") return "TTTManager";
   if (u.systemRole === "TTTSales") return "TTTSales";
+  if (u.systemRole === "TTTTeamLead") return "TTTTeamLead";
   if (u.systemRole === "TTTStaff") return "TTTStaff";
   if (u.isPartner) return "Partner";
   if (u.isVendor) return "Vendor";
@@ -1185,6 +1191,7 @@ const TYPE_FILTER_LABELS: Record<TypeFilter, string> = {
   TTTAdmin: "Admin",
   TTTManager: "Manager",
   TTTSales: "Sales",
+  TTTTeamLead: "Team Lead",
   TTTStaff: "Staff",
   Client: "Client",
   Partner: "Partner",
@@ -1308,7 +1315,7 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
   }
 
   const isStaffOrAdmin = (u: AdminUser) =>
-    u.systemRole === "TTTAdmin" || u.systemRole === "TTTManager" || u.systemRole === "TTTStaff" || u.systemRole === "TTTSales";
+    u.systemRole === "TTTAdmin" || u.systemRole === "TTTManager" || u.systemRole === "TTTTeamLead" || u.systemRole === "TTTStaff" || u.systemRole === "TTTSales";
 
   return (
     <>
@@ -1374,7 +1381,7 @@ export function UsersClient({ users: initialUsers, tenants, currentUserId }: Pro
 
       {/* Type filter */}
       <div className="mb-4 flex flex-wrap gap-1.5">
-        {(["All", "TTTAdmin", "TTTManager", "TTTSales", "TTTStaff", "Client", "Partner", "Vendor", "None"] as TypeFilter[]).map(f => (
+        {(["All", "TTTAdmin", "TTTManager", "TTTSales", "TTTTeamLead", "TTTStaff", "Client", "Partner", "Vendor", "None"] as TypeFilter[]).map(f => (
           <button
             key={f}
             onClick={() => { setTypeFilter(f); setPage(1); }}

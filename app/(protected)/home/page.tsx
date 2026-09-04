@@ -1,7 +1,7 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getTimeEntriesForTenants, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds } from "@/lib/airtable";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -36,6 +36,7 @@ export default async function DashboardPage({
   const isAdmin = systemRole === "TTTAdmin";
   const isManager = systemRole === "TTTManager";
   const isSales = systemRole === "TTTSales";
+  const isTeamLead = systemRole === "TTTTeamLead";
   const firstName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] || "there";
 
   // ── TTTSales users land on CRM ────────────────────────────────────────────────
@@ -46,15 +47,29 @@ export default async function DashboardPage({
     const canViewAll = isAdmin || isManager;
     const userEmail = user?.emailAddresses?.[0]?.emailAddress ?? "";
     const todayStr = new Date().toISOString().slice(0, 10);
-    const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager";
+    const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager" || systemRole === "TTTTeamLead";
 
-    const [allTenantsRaw, timeEntries, allStaff, serviceList, signedIds] = await Promise.all([
+    const [allTenantsRaw, ownTimeEntries, allStaff, serviceList, signedIds] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
       getStaffMembers().catch(() => []),
       getServices().catch(() => []),
       getSignedTenantIds().catch(() => new Set<string>()),
     ]);
+
+    // Team Lead: also load all time entries for projects they lead
+    const teamLeadTenantIds = isTeamLead
+      ? allTenantsRaw.filter(t => t.teamLeadClerkId === userId).map(t => t.id)
+      : [];
+    const teamLeadTimeEntries = teamLeadTenantIds.length > 0
+      ? await getTimeEntriesForTenants(teamLeadTenantIds).catch(() => [])
+      : [];
+    const timeEntries = isTeamLead
+      ? (() => {
+          const seen = new Set<string>();
+          return [...teamLeadTimeEntries, ...ownTimeEntries].filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true; });
+        })()
+      : ownTimeEntries;
     const allTenants = allTenantsRaw.map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
 
     // Use the Airtable-stored email (what's actually saved in plan helpers JSON)
@@ -170,13 +185,13 @@ export default async function DashboardPage({
           <AdminProjectsClient initialTenants={isAdmin ? allTenants : filteredTenants} isManager={isAdmin || isManager} isAdmin={isAdmin} />
         </section>
 
-        {/* Availability — TTTStaff and TTTManager only (not admin-only accounts) */}
-        {(systemRole === "TTTStaff" || systemRole === "TTTManager") && (
+        {/* Availability — TTTStaff, TTTTeamLead, and TTTManager only (not admin-only accounts) */}
+        {(systemRole === "TTTStaff" || systemRole === "TTTTeamLead" || systemRole === "TTTManager") && (
           <AvailabilitySection />
         )}
 
-        {/* My Pay — TTTStaff and TTTManager */}
-        {(systemRole === "TTTStaff" || systemRole === "TTTManager") && (
+        {/* My Pay — TTTStaff, TTTTeamLead, and TTTManager */}
+        {(systemRole === "TTTStaff" || systemRole === "TTTTeamLead" || systemRole === "TTTManager") && (
           <MyPaySection clerkUserId={userId} />
         )}
       </div>

@@ -6,6 +6,7 @@ import { PLAN_ACTIVITIES, KEY_DATE_ACTIVITIES } from "@/lib/types";
 import type { PlanEntry, PlanActivity, PlanHelper, PlanEntryType, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
+import { ScheduleModificationModal } from "./ScheduleModificationModal";
 
 // ─── Activity chip colors ──────────────────────────────────────────────────────
 const ACTIVITY_COLOR_PALETTE = [
@@ -1014,6 +1015,7 @@ interface PlanClientProps {
   signedContracts?: Contract[];
   isManager?: boolean;
   isStaff?: boolean;
+  isProjectTeamLead?: boolean;
   entries: PlanEntry[];
   rooms: Room[];
   tenantId: string;
@@ -1031,7 +1033,7 @@ interface PlanClientProps {
   originParkingNotes?: string;
 }
 
-export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT, originParkingNotes }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT, originParkingNotes, isProjectTeamLead }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -1041,6 +1043,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [showScheduleModModal, setShowScheduleModModal] = useState(false);
 
   // TTT users for resolving helper names on calendar chips
   const [tttUsers, setTttUsers] = useState<TTTUser[]>([]);
@@ -1564,6 +1567,21 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
       )}
 
       {/* ── Hours Worked ─────────────────────────────────────────────────────── */}
+      {/* Request to Modify Schedule — Team Lead only, single project view */}
+      {isProjectTeamLead && tenantId && tenantName && (
+        <div className="flex justify-end mb-2 -mt-4">
+          <button
+            onClick={() => setShowScheduleModModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Request to Modify Schedule
+          </button>
+        </div>
+      )}
+
       <HoursWorkedSection
         key={`hours-${currentTenantId ?? tenantId}`}
         timeEntries={timeEntries}
@@ -1576,6 +1594,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
         services={services}
         signedContracts={signedContracts}
         isManager={isManager}
+        isTeamLeadView={isProjectTeamLead}
         isTTT={isTTT}
         tenantName={tenantName}
       />
@@ -1604,6 +1623,14 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           canManageTTTHelpers={!!(isManager || isAdmin)}
           tenantOptions={tenantOptions}
           originParkingNotes={originParkingNotes}
+        />
+      )}
+
+      {showScheduleModModal && tenantId && tenantName && (
+        <ScheduleModificationModal
+          tenantId={tenantId}
+          projectName={tenantName}
+          onClose={() => setShowScheduleModModal(false)}
         />
       )}
     </>
