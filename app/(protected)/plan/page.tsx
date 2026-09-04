@@ -480,8 +480,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
       {(isManagerOrAdmin || isProjectTeamLead) && (
         <ProjectChecklistSection
           tenantId={tenantId}
-          isAdmin={sysRole === "TTTAdmin"}
-          isManager={sysRole === "TTTManager" || isProjectTeamLead}
+          isAdmin={sysRole === "TTTAdmin" || sysRole === "TTTManager"}
+          isManager={isProjectTeamLead}
           currentUserName={currentUserName}
           initialTasks={projectTasks}
         />

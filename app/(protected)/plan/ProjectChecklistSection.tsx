@@ -500,7 +500,7 @@ export function ProjectChecklistSection({ tenantId, isAdmin, isManager, currentU
                 </span>
               )}
             </h2>
-            <p className="text-xs text-gray-400">Internal — visible to managers and admins only</p>
+            <p className="text-xs text-gray-400">Internal — visible to managers, admins, and team leads</p>
           </div>
           <svg
             className={`w-4 h-4 text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"}`}
