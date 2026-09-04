@@ -206,6 +206,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
             currentTenantId="__my_projects__"
             services={serviceNames}
             isStaff={true}
+            isTTT={true}
           />
         </div>
       );
@@ -261,6 +262,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
             currentTenantId="__my_projects__"
             services={serviceNames}
             isStaff={true}
+            isTTT={true}
           />
         </div>
       );
