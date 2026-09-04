@@ -69,7 +69,7 @@ interface PlanData {
 }
 
 // War Room stages live on the War Room tab only — Nurture excludes them
-const NURTURE_EXCLUDE = ["Agreed to Refer", "Active Referral", "Inactive Referral"];
+const NURTURE_EXCLUDE = ["Shared Leads", "Agreed to Refer", "Active Referral", "Inactive Referral"];
 
 // ─── Add Quarter Modal ────────────────────────────────────────────────────────
 

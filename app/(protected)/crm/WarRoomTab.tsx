@@ -337,7 +337,7 @@ function fmtDollar(n: number): string {
 
 const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2, "": 3 };
 
-const WAR_ROOM_STAGES = ["Agreed to Refer", "Active Referral", "Inactive Referral"];
+const WAR_ROOM_STAGES = ["Shared Leads", "Agreed to Refer", "Active Referral", "Inactive Referral"];
 
 function sortByPriorityThenName<T extends { priority: ReferralPriority; companyName: string }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => {
