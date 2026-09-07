@@ -11,6 +11,8 @@ import { CATEGORY_GROUPS, isValidCategory } from "@/lib/categories";
 import { Card, CardContent } from "@/components/ui/Card";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import type { Room, ItemAnalysis, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemPhoto } from "@/lib/types";
+import type { ShelfMediaItem } from "@/lib/anthropic";
+import { ShelfAnalyzerView } from "./ShelfAnalyzerView";
 import { formatCurrency } from "@/lib/utils";
 import { prepareImageForUpload } from "@/lib/image-utils";
 
@@ -19,6 +21,7 @@ interface NewItemClientProps {
   rooms: Room[];
   isTTT?: boolean;
   estateMode?: boolean;
+  tenantName?: string;
 }
 
 const ESTATE_OVERRIDE_ROUTES = new Set([
@@ -28,7 +31,7 @@ const ESTATE_OVERRIDE_ROUTES = new Set([
   "FB/Marketplace",
 ]);
 
-type Step = "photo" | "analyzing" | "review" | "saving" | "done";
+type Step = "photo" | "analyzing" | "review" | "saving" | "done" | "shelf-results";
 
 // Re-export for local convenience
 type PhotoMeta = ItemPhoto;
@@ -55,7 +58,7 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
 };
 
 
-export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = false }: NewItemClientProps) {
+export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = false, tenantName = "" }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +89,9 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
   }, [error]);
   const [removeBg, setRemoveBg] = useState(false);
   const [bgRemoving, setBgRemoving] = useState(false);
+  const [shelfMode, setShelfMode] = useState(false);
+  const [shelfItems, setShelfItems] = useState<ShelfMediaItem[]>([]);
+  const [shelfPhoto, setShelfPhoto] = useState<{ url: string; publicId: string } | null>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
@@ -199,6 +205,30 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
       setStep("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
+      setStep("photo");
+    }
+  };
+
+  const handleShelfAnalyze = async () => {
+    if (!photoFile) return;
+    setStep("analyzing");
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", photoFile);
+      formData.append("tenantId", tenantId);
+      const res = await fetch("/api/analyze-shelf", { method: "POST", body: formData });
+      if (!res.ok) {
+        if (res.status === 413) throw new Error("Photo is too large. Please use a smaller image.");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Shelf analysis failed");
+      }
+      const data = await res.json();
+      setShelfItems(data.items ?? []);
+      setShelfPhoto({ url: data.photoUrl ?? "", publicId: data.photoPublicId ?? "" });
+      setStep("shelf-results");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Shelf analysis failed");
       setStep("photo");
     }
   };
@@ -339,16 +369,39 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
     );
   }
 
+  if (step === "shelf-results") {
+    return (
+      <ShelfAnalyzerView
+        tenantId={tenantId}
+        tenantName={tenantName}
+        roomId={selectedRoomId || undefined}
+        shelfItems={shelfItems}
+        shelfPhotoUrl={shelfPhoto?.url ?? ""}
+        shelfPhotoPublicId={shelfPhoto?.publicId ?? ""}
+        onAddAnother={() => {
+          setStep("photo");
+          setPhotoFile(null);
+          setPhotoPreview(null);
+          setShelfItems([]);
+          setShelfPhoto(null);
+          setShelfMode(false);
+        }}
+      />
+    );
+  }
+
   if (step === "analyzing") {
     return (
       <div className="flex flex-col items-center py-20 text-center">
         <LoadingSpinner size="lg" className="mb-4" />
         <h2 className="text-xl font-bold text-gray-900 mb-2">
-          {bgRemoving ? "Removing background..." : "Analyzing item..."}
+          {bgRemoving ? "Removing background..." : shelfMode ? "Scanning shelf..." : "Analyzing item..."}
         </h2>
         <p className="text-gray-500 max-w-xs">
           {bgRemoving
             ? "AI is removing the background from your photo."
+            : shelfMode
+            ? "Claude AI is identifying every media item on the shelf from the spines. This may take a moment."
             : "Claude AI is examining the photo to identify the item, estimate value, and suggest the best route."}
         </p>
       </div>
@@ -424,11 +477,11 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                   Change Photo
                 </Button>
               )}
-              <Button onClick={handleAnalyze} disabled={!photoFile || uploading} className="flex-1">
+              <Button onClick={shelfMode ? handleShelfAnalyze : handleAnalyze} disabled={!photoFile || uploading} className="flex-1">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                Analyze with AI
+                {shelfMode ? "Scan Shelf" : "Analyze with AI"}
               </Button>
               <Button variant="secondary" onClick={handleManualEntry} loading={uploading} disabled={!!(photoFile && uploading)} className="flex-1">
                 Enter Manually
@@ -450,6 +503,29 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                   />
                 </button>
                 <span className="text-sm text-gray-600">Remove background with AI</span>
+              </div>
+            )}
+
+            {/* Shelf of Books/Media toggle — TTT users only */}
+            {isTTT && (
+              <div className="mt-2.5 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={shelfMode}
+                  onClick={() => setShelfMode(v => !v)}
+                  className={`relative inline-flex w-9 h-5 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none ${shelfMode ? "bg-forest-600" : "bg-gray-300"}`}
+                >
+                  <span
+                    className={`inline-block w-4 h-4 mt-0.5 rounded-full bg-white shadow transform transition-transform duration-200 ${shelfMode ? "translate-x-4" : "translate-x-0.5"}`}
+                  />
+                </button>
+                <span className="text-sm text-gray-600">
+                  Shelf of Books / Media
+                  {shelfMode && (
+                    <span className="ml-1.5 text-xs text-forest-700 font-medium">— AI will identify all items from spines</span>
+                  )}
+                </span>
               </div>
             )}
           </CardContent>

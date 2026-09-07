@@ -46,7 +46,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} estateMode={estateMode} />
+      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} estateMode={estateMode} tenantName={tenant.name ?? ""} />
     </div>
   );
 }

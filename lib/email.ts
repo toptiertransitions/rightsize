@@ -5518,3 +5518,177 @@ export function buildScheduleModificationEmail({
 </body>
 </html>`;
 }
+
+// ─── Shelf Alert Email ────────────────────────────────────────────────────────
+export interface ShelfAlertSessionLog {
+  individual: Array<{ title: string; creator: string; type: string; route: string }>;
+  lots: Array<{ name: string; itemCount: number; items: string[]; route: string }>;
+  donates: Array<{ name: string; itemCount: number; items: string[] }>;
+}
+
+export function buildShelfAlertEmail({
+  tenantName,
+  uploaderName,
+  shelfImageUrl,
+  sessionLog,
+  assessedAt,
+}: {
+  tenantName: string;
+  uploaderName: string;
+  shelfImageUrl: string;
+  sessionLog: ShelfAlertSessionLog;
+  assessedAt: string;
+}): string {
+  const { individual, lots, donates } = sessionLog;
+
+  const totalCount =
+    individual.length +
+    lots.reduce((sum, l) => sum + l.itemCount, 0) +
+    donates.reduce((sum, d) => sum + d.itemCount, 0);
+
+  const shelfImageHtml = shelfImageUrl
+    ? `<tr>
+          <td style="padding:20px 32px 0;">
+            <img src="${shelfImageUrl}" alt="Shelf photo" style="display:block;width:100%;max-width:100%;border-radius:10px;object-fit:cover;" />
+          </td>
+        </tr>`
+    : "";
+
+  const individualSection =
+    individual.length > 0
+      ? `<tr>
+          <td style="padding:0 0 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-left:4px solid #22c55e;border-radius:6px;overflow:hidden;">
+              <tr>
+                <td style="background:#f0fdf4;padding:10px 16px;font-size:12px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.6px;">
+                  For Sale Individually &nbsp;<span style="font-weight:400;color:#4ade80;">(${individual.length})</span>
+                </td>
+              </tr>
+              ${individual.map((item) => `
+              <tr>
+                <td style="padding:8px 16px;border-top:1px solid #f0fdf4;font-size:13px;color:#374151;">
+                  <span style="margin-right:8px;color:#22c55e;">&bull;</span>${item.title}${item.creator ? ` <span style="color:#6b7280;">by ${item.creator}</span>` : ""}&nbsp;&nbsp;<span style="display:inline-block;background:#dcfce7;color:#166534;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;">${item.route}</span>
+                </td>
+              </tr>`).join("")}
+            </table>
+          </td>
+        </tr>`
+      : "";
+
+  const lotsSection =
+    lots.length > 0
+      ? `<tr>
+          <td style="padding:0 0 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-left:4px solid #f59e0b;border-radius:6px;overflow:hidden;">
+              <tr>
+                <td style="background:#fffbeb;padding:10px 16px;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.6px;">
+                  For Sale as a Lot &nbsp;<span style="font-weight:400;color:#fbbf24;">(${lots.reduce((s, l) => s + l.itemCount, 0)} items in ${lots.length} lot${lots.length !== 1 ? "s" : ""})</span>
+                </td>
+              </tr>
+              ${lots.map((lot) => {
+                const visible = lot.items.slice(0, 20);
+                const extra = lot.items.length - visible.length;
+                return `
+              <tr>
+                <td style="padding:10px 16px;border-top:1px solid #fffbeb;font-size:13px;color:#374151;">
+                  <p style="margin:0 0 4px;font-weight:700;color:#111827;">${lot.name} &nbsp;<span style="font-size:12px;font-weight:400;color:#6b7280;">${lot.itemCount} item${lot.itemCount !== 1 ? "s" : ""}</span></p>
+                  <ul style="margin:0;padding-left:20px;color:#6b7280;font-size:12px;line-height:1.7;">
+                    ${visible.map((i) => `<li>${i}</li>`).join("")}
+                    ${extra > 0 ? `<li style="color:#9ca3af;font-style:italic;">+${extra} more</li>` : ""}
+                  </ul>
+                </td>
+              </tr>`;
+              }).join("")}
+            </table>
+          </td>
+        </tr>`
+      : "";
+
+  const donatesSection =
+    donates.length > 0
+      ? `<tr>
+          <td style="padding:0 0 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-left:4px solid #3b82f6;border-radius:6px;overflow:hidden;">
+              <tr>
+                <td style="background:#eff6ff;padding:10px 16px;font-size:12px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.6px;">
+                  Donation &nbsp;<span style="font-weight:400;color:#60a5fa;">(${donates.reduce((s, d) => s + d.itemCount, 0)} items)</span>
+                </td>
+              </tr>
+              ${donates.map((group) => {
+                const visible = group.items.slice(0, 20);
+                const extra = group.items.length - visible.length;
+                return `
+              <tr>
+                <td style="padding:10px 16px;border-top:1px solid #eff6ff;font-size:13px;color:#374151;">
+                  <p style="margin:0 0 4px;font-weight:700;color:#111827;">${group.name} &nbsp;<span style="font-size:12px;font-weight:400;color:#6b7280;">${group.itemCount} item${group.itemCount !== 1 ? "s" : ""}</span></p>
+                  <ul style="margin:0;padding-left:20px;color:#6b7280;font-size:12px;line-height:1.7;">
+                    ${visible.map((i) => `<li>${i}</li>`).join("")}
+                    ${extra > 0 ? `<li style="color:#9ca3af;font-style:italic;">+${extra} more</li>` : ""}
+                  </ul>
+                </td>
+              </tr>`;
+              }).join("")}
+            </table>
+          </td>
+        </tr>`
+      : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shelf Assessed — ${tenantName}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;font-variant:small-caps;">Top Tier Transitions &nbsp;&middot;&nbsp; Internal Alert</p>
+            <p style="margin:6px 0 2px;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">Shelf Assessed at ${tenantName}</p>
+            <p style="margin:0;font-size:13px;color:#a8d4bc;">by ${uploaderName} &nbsp;&middot;&nbsp; ${assessedAt}</p>
+          </td>
+        </tr>
+
+        ${shelfImageHtml}
+
+        <!-- Body -->
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:${shelfImageUrl ? "0 0 14px 14px" : "0 0 14px 14px"};">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+              <!-- Total count -->
+              <tr>
+                <td style="padding:0 0 24px;">
+                  <p style="margin:0;font-size:14px;color:#6b7280;">
+                    <strong style="color:#111827;font-size:28px;font-weight:700;">${totalCount}</strong>
+                    &nbsp;total item${totalCount !== 1 ? "s" : ""} assessed
+                  </p>
+                </td>
+              </tr>
+
+              ${individualSection}
+              ${lotsSection}
+              ${donatesSection}
+
+              <!-- Footer -->
+              <tr>
+                <td style="border-top:1px solid #e5e7eb;padding-top:20px;">
+                  <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;line-height:1.6;">Generated automatically by Rightsize &nbsp;&middot;&nbsp; Top Tier Transitions</p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

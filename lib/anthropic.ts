@@ -89,6 +89,99 @@ Return ONLY a valid JSON array with no markdown, explanation, or code fences:
   return parsed.filter(g => typeof g.category === "string" && g.count > 0);
 }
 
+export interface ShelfMediaItem {
+  title: string;
+  type: "Book" | "DVD" | "Blu-ray" | "CD" | "Album" | "Video Game" | "Other";
+  creator: string;
+  condition: "Excellent" | "Good" | "Fair" | "Poor";
+  value_low: number;
+  value_mid: number;
+  value_high: number;
+  notes: string;
+}
+
+const SHELF_ANALYSIS_PROMPT = `You are an expert media appraiser analyzing a photo of a shelf containing books, DVDs, CDs, vinyl albums, video games, or other media items.
+
+Identify EVERY media item whose spine or title is at least partially visible. Return a JSON array sorted from HIGHEST to LOWEST estimated resale value:
+
+[
+  {
+    "title": "Exact title as visible on spine/cover",
+    "type": "Book",
+    "creator": "Author / Director / Artist / Band as visible on spine (empty string if not visible)",
+    "condition": "Good",
+    "value_low": 8,
+    "value_mid": 15,
+    "value_high": 25,
+    "notes": "First edition, collectible dust jacket"
+  }
+]
+
+type must be exactly one of: Book | DVD | Blu-ray | CD | Album | Video Game | Other
+condition must be exactly one of: Excellent | Good | Fair | Poor
+
+Value guidelines (resale marketplace prices, NOT retail):
+- Common paperback fiction: value_mid $1
+- Popular trade paperback/hardcover: value_mid $2–4
+- Textbooks (recent editions): value_mid $10–80
+- Collectible/first-edition/signed books: assess individually ($10–500+)
+- Common DVD: value_mid $2
+- Blu-ray: value_mid $5
+- DVD/Blu-ray box sets or collector editions: $10–80+
+- Common CD: value_mid $1
+- Rare/sought-after CDs or box sets: $10–100+
+- Common vinyl album: value_mid $5
+- Rare pressing or in-demand vinyl: $20–500+
+- Video games: highly title/platform dependent — research carefully
+
+Rules:
+- Include ALL visible items, even common low-value ones
+- Sort array by value_mid DESCENDING (highest first)
+- Use realistic, conservative estimates
+- If a title is partially obscured, make your best attempt and note it
+- Return ONLY valid JSON — no markdown fences, no explanation, no preamble`;
+
+export async function analyzeShelfPhoto(imageBase64: string): Promise<ShelfMediaItem[]> {
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8000,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64" as const, media_type: "image/jpeg" as const, data: imageBase64 } },
+          { type: "text", text: SHELF_ANALYSIS_PROMPT },
+        ],
+      },
+    ],
+  });
+
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
+  let items: ShelfMediaItem[];
+  try {
+    items = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Claude returned invalid JSON for shelf analysis: ${text.slice(0, 300)}`);
+  }
+  if (!Array.isArray(items)) throw new Error("Claude did not return an array for shelf analysis");
+
+  const VALID_TYPES = ["Book", "DVD", "Blu-ray", "CD", "Album", "Video Game", "Other"];
+  const VALID_CONDITIONS = ["Excellent", "Good", "Fair", "Poor"];
+
+  return items.map(item => ({
+    title: String(item.title || "Unknown").trim(),
+    type: (VALID_TYPES.includes(item.type) ? item.type : "Other") as ShelfMediaItem["type"],
+    creator: String(item.creator || "").trim(),
+    condition: (VALID_CONDITIONS.includes(item.condition) ? item.condition : "Good") as ShelfMediaItem["condition"],
+    value_low: Math.max(0, Math.round(Number(item.value_low) || 0)),
+    value_mid: Math.max(0, Math.round(Number(item.value_mid) || 0)),
+    value_high: Math.max(0, Math.round(Number(item.value_high) || 0)),
+    notes: String(item.notes || "").trim(),
+  }));
+}
+
 export async function analyzeItemPhoto(
   imageData: string | { url: string },
   mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg"
