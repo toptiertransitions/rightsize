@@ -22,16 +22,19 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Returns the gross service value for a Full invoice.
-// inv.amount = service lines + expenses − deposit credit applied.
-// Summing only positive-rate line items gives pure service value,
-// correctly excluding both deposit credits (negative rate) and
-// pass-through expense items (stored in expenseItems, not lineItems).
+// Returns the net service value for a Full invoice, accounting for discounts.
+// inv.amount = service lines + expenses − deposit credit − discounts applied.
+// We sum line items directly rather than using inv.amount to exclude pass-through
+// expenses (stored in expenseItems, not lineItems).
+// Line item rate can be:
+//   > 0 : service line (include)
+//   < 0, serviceName starts with "Discount" : discount applied (include — reduces revenue)
+//   < 0, serviceName = "Deposit Applied" : deposit credit (exclude — already counted as billed)
 // Falls back to inv.amount for invoices with no stored line items.
 function grossInvoiceAmount(inv: Invoice): number {
   if (inv.lineItems && inv.lineItems.length > 0) {
     return inv.lineItems
-      .filter(li => li.rate > 0)
+      .filter(li => li.rate > 0 || li.serviceName?.startsWith("Discount"))
       .reduce((s, li) => s + li.rate * li.hours, 0);
   }
   return inv.amount;
@@ -139,31 +142,41 @@ function inBucket(dateStr: string | undefined, bucket: WeekBucket): boolean {
 }
 
 // ─── Batch-fetch across all tenants ──────────────────────────────────────────
+// Airtable enforces ~5 requests/second per base. We fetch contracts and invoices
+// in separate sequential passes (not concurrent) and pause between batches so we
+// stay safely under that limit even as the project count grows.
+
+const BATCH_SIZE = 5;
+const BATCH_DELAY_MS = 300;
 
 async function fetchAllContracts(tenants: Tenant[]): Promise<Map<string, Contract[]>> {
   const map = new Map<string, Contract[]>();
-  for (let i = 0; i < tenants.length; i += 10) {
-    const batch = tenants.slice(i, i + 10);
+  for (let i = 0; i < tenants.length; i += BATCH_SIZE) {
+    const batch = tenants.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
       batch.map((t) => getContractsForTenant(t.id).then((cs) => ({ id: t.id, cs })))
     );
     for (const r of results) {
       if (r.status === "fulfilled") map.set(r.value.id, r.value.cs);
+      else console.error("[weekly-report] contract fetch failed:", r.reason);
     }
+    if (i + BATCH_SIZE < tenants.length) await new Promise(res => setTimeout(res, BATCH_DELAY_MS));
   }
   return map;
 }
 
 async function fetchAllInvoices(tenants: Tenant[]): Promise<Map<string, Invoice[]>> {
   const map = new Map<string, Invoice[]>();
-  for (let i = 0; i < tenants.length; i += 10) {
-    const batch = tenants.slice(i, i + 10);
+  for (let i = 0; i < tenants.length; i += BATCH_SIZE) {
+    const batch = tenants.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
       batch.map((t) => getInvoicesForTenant(t.id).then((invs) => ({ id: t.id, invs })))
     );
     for (const r of results) {
       if (r.status === "fulfilled") map.set(r.value.id, r.value.invs);
+      else console.error("[weekly-report] invoice fetch failed:", r.reason);
     }
+    if (i + BATCH_SIZE < tenants.length) await new Promise(res => setTimeout(res, BATCH_DELAY_MS));
   }
   return map;
 }
@@ -817,10 +830,9 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   const clientTenants = allTenants.filter((t) => t.isTTT !== false);
 
   // ── Fetch contracts + invoices across all client tenants ──
-  const [contractsByTenant, invoicesByTenant] = await Promise.all([
-    fetchAllContracts(clientTenants),
-    fetchAllInvoices(clientTenants),
-  ]);
+  // Run sequentially (not concurrently) to avoid hitting Airtable's rate limit.
+  const contractsByTenant = await fetchAllContracts(clientTenants);
+  const invoicesByTenant  = await fetchAllInvoices(clientTenants);
 
   // ── Build lookup maps ──
   const tenantMap    = new Map(allTenants.map((t) => [t.id, t]));
@@ -939,7 +951,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     .filter((o) => ["Lead", "Qualifying", "Proposing"].includes(o.stage))
     .map((o) => {
       const contact = contactMap.get(o.clientContactId);
-      const clientName = o.keyPeople?.[0]?.name || contact?.name || "Unknown Client";
+      const clientName = contact?.name || tenantMap.get(o.tenantId)?.name || "Unknown Client";
       const addr = [o.address, o.city, o.state].filter(Boolean).join(", ");
       const daysIn = Math.max(0, Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 86_400_000));
       return {
