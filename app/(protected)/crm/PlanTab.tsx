@@ -99,7 +99,7 @@ function suggestNextQuarter(): { label: string; startDate: string; endDate: stri
   return { label: `Q${nextQIdx + 1} ${nextQYear}`, startDate: fmt(startDate), endDate: fmt(endDate) };
 }
 
-function AddQuarterModal({ onClose, onCreated }: { onClose: () => void; onCreated: (q: Quarter) => void }) {
+function AddQuarterModal({ onClose, onCreated, priorQuarterId }: { onClose: () => void; onCreated: (q: Quarter, copiedCompanyIds: string[]) => void; priorQuarterId?: string }) {
   const suggested = suggestNextQuarter();
   const [label, setLabel] = useState(suggested.label);
   const [startDate, setStartDate] = useState(suggested.startDate);
@@ -115,11 +115,11 @@ function AddQuarterModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await fetch("/api/crm/quarters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, startDate, endDate }),
+        body: JSON.stringify({ label, startDate, endDate, copyFromQuarterId: priorQuarterId }),
       });
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      onCreated(data.quarter);
+      onCreated(data.quarter, data.copiedCompanyIds ?? []);
     } catch {
       setError("Failed to create quarter. Please try again.");
       setSaving(false);
@@ -454,8 +454,19 @@ function QuarterlyPlanSection({
   const [comparing, setComparing] = useState(false);
   const [compareResults, setCompareResults] = useState<{ results: CompareResult[]; summary: string } | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
+  const [showCopiedDisclaimer, setShowCopiedDisclaimer] = useState(false);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`ttt_plan_copied_${quarterId}`);
+      if (raw) {
+        const ids: string[] = JSON.parse(raw);
+        setShowCopiedDisclaimer(ids.includes(companyId));
+      } else {
+        setShowCopiedDisclaimer(false);
+      }
+    } catch { setShowCopiedDisclaimer(false); }
+
     setLoaded(false);
     setActStats(null);
     fetch(`/api/crm/plan/company-plan?companyId=${companyId}&quarterId=${quarterId}`)
@@ -476,6 +487,21 @@ function QuarterlyPlanSection({
       .catch(() => setActStats([]));
   }, [companyId, quarterId]);
 
+  function clearCopiedDisclaimer() {
+    try {
+      const raw = localStorage.getItem(`ttt_plan_copied_${quarterId}`);
+      if (!raw) return;
+      const ids: string[] = JSON.parse(raw);
+      const filtered = ids.filter((id) => id !== companyId);
+      if (filtered.length === 0) {
+        localStorage.removeItem(`ttt_plan_copied_${quarterId}`);
+      } else {
+        localStorage.setItem(`ttt_plan_copied_${quarterId}`, JSON.stringify(filtered));
+      }
+    } catch { /* ignore */ }
+    setShowCopiedDisclaimer(false);
+  }
+
   async function saveField(field: keyof Pick<CompanyPlan, "meeting1"|"meeting2"|"meeting3"|"resource1"|"resource2"|"resource3">, value: string) {
     setSaving(field);
     try {
@@ -484,6 +510,7 @@ function QuarterlyPlanSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId, quarterId, [field]: value }),
       });
+      if (showCopiedDisclaimer) clearCopiedDisclaimer();
     } finally {
       setSaving(null);
     }
@@ -497,6 +524,7 @@ function QuarterlyPlanSection({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ companyId, quarterId, [airtableKey]: value }),
     });
+    if (showCopiedDisclaimer) clearCopiedDisclaimer();
   }
 
   async function handleCompare() {
@@ -549,6 +577,11 @@ function QuarterlyPlanSection({
 
   return (
     <div className="bg-white border-b border-slate-200 px-5 py-4">
+      {showCopiedDisclaimer && (
+        <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+          Plan copied from prior quarter — make and save an edit to dismiss this notice.
+        </div>
+      )}
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quarter&apos;s Plan</h4>
         <button
@@ -1594,10 +1627,15 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
     await loadPlan(selectedQuarterId);
   }
 
-  function handleQuarterCreated(q: Quarter) {
+  function handleQuarterCreated(q: Quarter, copiedCompanyIds: string[]) {
     setQuarters((prev) => [q, ...prev]);
     setSelectedQuarterId(q.id);
     setShowAddQuarter(false);
+    if (copiedCompanyIds.length > 0) {
+      try {
+        localStorage.setItem(`ttt_plan_copied_${q.id}`, JSON.stringify(copiedCompanyIds));
+      } catch { /* ignore */ }
+    }
   }
 
   function handleQuarterSaved(q: Quarter) {
@@ -1634,7 +1672,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
             + Create First Quarter
           </button>
         )}
-        {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />}
+        {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} priorQuarterId={quarters[0]?.id} />}
       </div>
     );
   }
@@ -1787,7 +1825,7 @@ export default function PlanTab({ currentUserId, sysRole }: PlanTabProps) {
         />
       )}
 
-      {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} />}
+      {showAddQuarter && <AddQuarterModal onClose={() => setShowAddQuarter(false)} onCreated={handleQuarterCreated} priorQuarterId={quarters[0]?.id} />}
       {showEditQuarter && selectedQuarter && (
         <EditQuarterModal quarter={selectedQuarter} onClose={() => setShowEditQuarter(false)} onSaved={handleQuarterSaved} />
       )}
