@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         type: "Deposit",
         invoiceNumber,
         serviceId: primaryService?.serviceId ?? "",
-        serviceName: primaryService?.serviceName ?? "Services",
+        serviceName: "40% Deposit Payment",
         depositType: "PercentOfEstimate",
         depositPercent: depositPct,
         amount: depositAmount,
