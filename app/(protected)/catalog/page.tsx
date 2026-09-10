@@ -60,7 +60,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
     const canReassign = ["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
     const isTTTUser = !!sysRole && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
-    const canEdit = sysRole === "TTTAdmin" && tenantId === "__all_active__";
+    const canEdit = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
 
     return (
       <div>
