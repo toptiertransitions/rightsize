@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   const prompt = buildPrompt(title.trim(), description?.trim(), contentType ?? "PDF", audience ?? "Both");
 
   const message = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: "claude-sonnet-4-6",
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
