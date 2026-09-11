@@ -95,6 +95,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     thumbnailUrl: dataUri,
-    thumbnailPublicId: null,
+    thumbnailPublicId: "",
   });
 }
