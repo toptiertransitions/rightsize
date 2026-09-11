@@ -2,15 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import Anthropic from "@anthropic-ai/sdk";
-import { v2 as cloudinary } from "cloudinary";
 
 export const maxDuration = 60;
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 const AUDIENCE_CONTEXT: Record<string, string> = {
   Clients: "seniors and families navigating a home transition or downsizing move",
@@ -73,16 +66,21 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = buildPrompt(title.trim(), description?.trim(), contentType ?? "PDF", audience ?? "Both");
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const rawText = message.content
-    .filter(b => b.type === "text")
-    .map(b => (b as { type: "text"; text: string }).text)
-    .join("");
+  let rawText: string;
+  try {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+    rawText = message.content
+      .filter(b => b.type === "text")
+      .map(b => (b as { type: "text"; text: string }).text)
+      .join("");
+  } catch (e) {
+    console.error("[generate-icon] Anthropic error:", e);
+    return NextResponse.json({ error: "Failed to generate icon — AI error" }, { status: 500 });
+  }
 
   // Extract SVG — Claude might wrap it despite instructions
   const svgMatch = rawText.match(/<svg[\s\S]*<\/svg>/i);
@@ -92,16 +90,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not generate a valid SVG" }, { status: 500 });
   }
 
-  const svgBuffer = Buffer.from(svgContent, "utf-8");
-  const dataUri = `data:image/svg+xml;base64,${svgBuffer.toString("base64")}`;
-
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder: "rightsize/content/icons",
-    resource_type: "image",
-  });
+  // Return SVG as a data URI — works natively in <img> tags and avoids Cloudinary SVG restrictions
+  const dataUri = `data:image/svg+xml;base64,${Buffer.from(svgContent, "utf-8").toString("base64")}`;
 
   return NextResponse.json({
-    thumbnailUrl: result.secure_url,
-    thumbnailPublicId: result.public_id,
+    thumbnailUrl: dataUri,
+    thumbnailPublicId: null,
   });
 }
