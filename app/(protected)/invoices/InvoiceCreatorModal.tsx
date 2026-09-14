@@ -103,7 +103,7 @@ export function InvoiceCreatorModal({
   const billedHoursByServiceId = new Map<string, number>();
   for (const inv of paidFullInvoices) {
     for (const li of (inv.lineItems ?? [])) {
-      if (!li.serviceId) continue; // skip deposit-credit line items (serviceId === "")
+      if (!li.serviceId || li.serviceId.startsWith("__")) continue; // skip credit/discount/consignment adjustment lines
       billedHoursByServiceId.set(li.serviceId, (billedHoursByServiceId.get(li.serviceId) ?? 0) + li.hours);
     }
   }
@@ -179,7 +179,7 @@ export function InvoiceCreatorModal({
         : (fullContract?.discountAmount ?? 0))
     : 0;
   const discountLineItem = fullContractDiscount > 0 ? {
-    serviceId: "",
+    serviceId: "__discount__",
     serviceName: fullContractId === "__all__"
       ? "Discounts Applied"
       : `Discount — ${fullContract?.discountCode ?? "Code Applied"}`,
@@ -228,7 +228,7 @@ export function InvoiceCreatorModal({
       ) * 100) / 100
     : 0;
   const loggedPromoLineItem = loggedPromoDiscount > 0 ? {
-    serviceId: "",
+    serviceId: "__discount__",
     serviceName: `Discount — ${promoResult?.code ?? "Code Applied"}`,
     hours: 1,
     rate: -loggedPromoDiscount,
@@ -294,7 +294,7 @@ export function InvoiceCreatorModal({
   }, [fullSource]);
 
   const depositCreditLineItem = {
-    serviceId: "",
+    serviceId: "__deposit_credit__",
     serviceName: "Deposit Applied",
     hours: 1,
     rate: -selectedDepositTotal,

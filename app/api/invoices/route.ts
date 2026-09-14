@@ -173,12 +173,19 @@ export async function POST(req: NextRequest) {
           const typedLineItems = lineItems as Array<{ serviceId: string; serviceName: string; hours: number; rate: number }>;
           const lineItemsTotal = typedLineItems.reduce((s, li) => s + li.hours * li.rate, 0);
 
-          // QBO rejects invoices whose total is below $0. Only strip credit/adjustment
-          // lines (serviceId="" or "__consignment__", negative net) when they push the
-          // total negative — for normal positive-balance invoices these lines are valid
-          // and should flow through so QBO reflects the correct amount owed.
+          // QBO rejects invoices whose total is below $0. When that happens, strip only
+          // the lines representing amounts already accounted for elsewhere in QBO —
+          // Deposit Applied (billed on a separate prior QBO invoice) and Consignment
+          // Earnings (paid out to the client outside QBO) — never the discount/promo
+          // line: that's a genuine price reduction, and dropping it would silently
+          // overcharge the client in QBO relative to what Rightsize's own invoice says
+          // they owe. NOTE: this previously also matched "__discount__" because both it
+          // and "__deposit_credit__" used the same empty-string serviceId, so a promo
+          // code would vanish from the QBO invoice whenever deposit + consignment +
+          // promo stacked up enough to push the total negative.
+          const STRIPPABLE_WHEN_NEGATIVE = new Set(["__deposit_credit__", "__consignment__"]);
           const qboEligibleItems = lineItemsTotal < 0
-            ? typedLineItems.filter((item) => !((item.serviceId === "" || item.serviceId === "__consignment__") && item.hours * item.rate < 0))
+            ? typedLineItems.filter((item) => !(STRIPPABLE_WHEN_NEGATIVE.has(item.serviceId) && item.hours * item.rate < 0))
             : typedLineItems;
 
           if (qboEligibleItems.length === 0) {
