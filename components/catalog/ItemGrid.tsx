@@ -129,6 +129,70 @@ function StaffAutofill({ value, onChange, staffMembers, label = "Staff Seller", 
   );
 }
 
+// ─── Tenant Autofill Combobox ──────────────────────────────────────────────────
+
+interface TenantAutofillProps {
+  value: string;
+  onChange: (id: string) => void;
+  tenants: Tenant[];
+  label?: string;
+  placeholder?: string;
+}
+
+function TenantAutofill({ value, onChange, tenants, label = "Move to Project", placeholder = "Search projects…" }: TenantAutofillProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selected = tenants.find(t => t.id === value);
+
+  const matches = useMemo(() => {
+    const q = query.toLowerCase();
+    if (!q) return tenants;
+    return tenants.filter(t => t.name.toLowerCase().includes(q));
+  }, [query, tenants]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>}
+      <input
+        type="text"
+        value={open ? query : (selected?.name ?? "")}
+        placeholder={placeholder}
+        onFocus={() => { setOpen(true); setQuery(""); }}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onKeyDown={e => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+      />
+      {open && (
+        <ul className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto text-sm">
+          {matches.length === 0 ? (
+            <li className="px-4 py-2 text-gray-400">No matches</li>
+          ) : matches.map(t => (
+            <li
+              key={t.id}
+              onMouseDown={e => { e.preventDefault(); onChange(t.id); setOpen(false); setQuery(""); }}
+              className="px-4 py-2 cursor-pointer hover:bg-forest-50 text-gray-900"
+            >
+              {t.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 
 interface EditModalProps {
@@ -201,6 +265,16 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
   const [reanalyzing, setReanalyzing] = useState(false);
   const [reanalyzeError, setReanalyzeError] = useState("");
   const [reassignTenantId, setReassignTenantId] = useState(item.tenantId);
+
+  // Projects eligible as a reassignment target — archived, lost, and not-yet-signed
+  // projects are excluded, but the item's current project always stays visible.
+  const reassignableTenants = useMemo(() => {
+    if (!allTenants) return [];
+    const eligible = allTenants.filter(t => !t.isArchived && !t.isLostDeal && t.isContractSigned !== false);
+    if (eligible.some(t => t.id === item.tenantId)) return eligible;
+    const current = allTenants.find(t => t.id === item.tenantId);
+    return current ? [current, ...eligible] : eligible;
+  }, [allTenants, item.tenantId]);
 
   // Photo management
   const [photos, setPhotos] = useState<ItemPhoto[]>(
@@ -1099,11 +1173,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
           {canReassign && allTenants && allTenants.length > 1 && (
             <section className="space-y-3 border-t border-dashed border-gray-200 pt-5">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Reassign Project</h3>
-              <Select
-                label="Move to Project"
+              <TenantAutofill
                 value={reassignTenantId}
-                onChange={e => setReassignTenantId(e.target.value)}
-                options={allTenants.filter(t => !t.isArchived).map(t => ({ value: t.id, label: t.name }))}
+                onChange={setReassignTenantId}
+                tenants={reassignableTenants}
               />
               {reassignTenantId !== item.tenantId && (
                 <p className="text-xs text-amber-600">This item will be moved to the selected project and removed from this view on save.</p>

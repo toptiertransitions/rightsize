@@ -13,6 +13,7 @@ import {
   getSystemRole,
   getAllLocalVendors,
   getStaffMembers,
+  getSignedTenantIds,
 } from "@/lib/airtable";
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
@@ -37,7 +38,11 @@ export default async function CatalogPage({ searchParams }: PageProps) {
     const sysRole = await getSystemRole(userId!).catch(() => null);
     if (!["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")) redirect("/home");
 
-    const allTenants = await getTenants().catch(() => []);
+    const [allTenantsRaw, signedIds] = await Promise.all([
+      getTenants().catch(() => []),
+      getSignedTenantIds().catch(() => new Set<string>()),
+    ]);
+    const allTenants = allTenantsRaw.map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
     const selectedTenants =
       tenantId === "__all_active__" ? allTenants.filter((t) => !t.isArchived) :
       tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :
@@ -87,7 +92,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── Single-tenant mode ───────────────────────────────────────────────────────
   if (tenantId) {
-    const [tenant, role, items, rooms, sysRole, localVendors, allTenants, staffMembers] = await Promise.all([
+    const [tenant, role, items, rooms, sysRole, localVendors, allTenantsRaw, staffMembers, signedIds] = await Promise.all([
       getTenantById(tenantId).catch(() => null),
       getUserRoleForTenant(userId, tenantId).catch(() => null),
       getItemsForTenant(tenantId).catch(() => []),
@@ -96,7 +101,9 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       getAllLocalVendors().catch(() => []),
       getTenants().catch(() => []),
       getStaffMembers().catch(() => []),
+      getSignedTenantIds().catch(() => new Set<string>()),
     ]);
+    const allTenants = allTenantsRaw.map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
 
     if (!tenant) redirect("/home");
     const resolvedRole = role ?? sysRole;
