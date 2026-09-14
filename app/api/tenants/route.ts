@@ -85,7 +85,7 @@ export async function PATCH(req: NextRequest) {
     getSystemRole(userId),
   ]);
   const role = tenantRole ?? sysRole;
-  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(role)) {
+  if (!role || !["Owner", "Collaborator", "TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest) {
     ? isConsignmentOnly : undefined;
 
   // Only TTT internal roles can edit client contact info
-  const isTTTInternalRole = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "");
+  const isTTTInternalRole = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"].includes(sysRole ?? "");
 
   const tenant = await updateTenant(tenantId, {
     name: typeof name === "string" && name.trim() ? name.trim() : undefined,

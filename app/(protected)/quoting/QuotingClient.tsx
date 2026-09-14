@@ -1044,13 +1044,14 @@ function ProjectDetailsSection({
   const [disposalNotes, setDisposalNotes] = useState(initialDisposalNotes ?? "");
   const [specialItems, setSpecialItems] = useState(initialSpecialItems ?? "");
   const [vendorNotes, setVendorNotes] = useState(initialVendorNotes ?? "");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function save(overrides?: { datesFlexible?: boolean; targetStartDate?: string; targetMoveDate?: string }) {
     setSaveStatus("saving");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     try {
-      await fetch("/api/tenants", {
+      const res = await fetch("/api/tenants", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1064,11 +1065,11 @@ function ProjectDetailsSection({
           quoteVendorNotes: vendorNotes || null,
         }),
       });
+      if (!res.ok) throw new Error(`Save failed (${res.status})`);
       setSaveStatus("saved");
-      if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => setSaveStatus("idle"), 2200);
     } catch {
-      setSaveStatus("idle");
+      setSaveStatus("error");
     }
   }
 
@@ -1089,9 +1090,20 @@ function ProjectDetailsSection({
             Internal only
           </span>
         </div>
-        <div className="ml-auto text-xs">
-          {saveStatus === "saving" && <span className="text-gray-400">Saving…</span>}
-          {saveStatus === "saved" && <span className="text-emerald-600 font-medium">Saved</span>}
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs">
+            {saveStatus === "saving" && <span className="text-gray-400">Saving…</span>}
+            {saveStatus === "saved" && <span className="text-emerald-600 font-medium">Saved</span>}
+            {saveStatus === "error" && <span className="text-red-600 font-medium">Save failed — try again</span>}
+          </span>
+          <button
+            type="button"
+            onClick={() => save()}
+            disabled={saveStatus === "saving"}
+            className="bg-forest-600 hover:bg-forest-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          >
+            Save
+          </button>
         </div>
       </div>
 
