@@ -103,7 +103,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-cream-200 shadow-sm">
+    <header className="sticky top-0 z-50 bg-white border-b border-cream-200 shadow-sm" style={{ paddingTop: "var(--sat)" }}>
       {/* Impersonation Banner */}
       {isImpersonating && (
         <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between text-sm font-medium">

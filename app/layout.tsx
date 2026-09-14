@@ -37,6 +37,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const viewport: Viewport = {
   themeColor: "#2E6B4F",
+  // viewport-fit=cover lets the app extend behind the iOS notch/Dynamic Island;
+  // safe-area-inset-* CSS variables then push content clear of the hardware cutouts
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -28,6 +28,18 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# Capacitor — build artifacts (native project source IS committed; only build outputs excluded)
+ios/Pods/
+ios/App/App/public/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+*.ipa
+*.apk
+*.aab
+*.xcarchive
 /package/
 vercel-next-*.tgz
 
