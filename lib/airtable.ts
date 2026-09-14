@@ -1389,8 +1389,10 @@ export async function updateTenant(
   if (data.priceDrop2Percent !== undefined) fields["PriceDrop2Percent"] = data.priceDrop2Percent ?? 0;
   if (data.quotePhotos !== undefined) fields["QuotePhotos"] = data.quotePhotos ? JSON.stringify(data.quotePhotos) : "";
   if (data.quoteAssessmentItemIds !== undefined) fields["QuoteAssessmentItemIds"] = data.quoteAssessmentItemIds?.length ? JSON.stringify(data.quoteAssessmentItemIds) : "";
-  if (data.quoteTargetStartDate !== undefined) fields["QuoteTargetStartDate"] = data.quoteTargetStartDate || "";
-  if (data.quoteTargetMoveDate !== undefined) fields["QuoteTargetMoveDate"] = data.quoteTargetMoveDate || "";
+  // Airtable date fields reject "" ("Cannot parse date value") — must send real null to clear.
+  // Airtable.FieldSet's TS type omits null even though the API accepts/requires it; cast narrowly.
+  if (data.quoteTargetStartDate !== undefined) fields["QuoteTargetStartDate"] = (data.quoteTargetStartDate || null) as unknown as string;
+  if (data.quoteTargetMoveDate !== undefined) fields["QuoteTargetMoveDate"] = (data.quoteTargetMoveDate || null) as unknown as string;
   if (data.quoteDatesFlexible !== undefined) fields["QuoteDatesFlexible"] = data.quoteDatesFlexible;
   if (data.quoteDeadlineNotes !== undefined) fields["QuoteDeadlineNotes"] = data.quoteDeadlineNotes || "";
   if (data.quoteDisposalNotes !== undefined) fields["QuoteDisposalNotes"] = data.quoteDisposalNotes || "";
