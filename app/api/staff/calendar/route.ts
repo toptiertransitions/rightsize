@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getStaffMembers, getPlanEntriesForDateRange } from "@/lib/airtable";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 
 const ALLOWED = ["TTTManager", "TTTAdmin", "TTTSales"] as const;
 
@@ -21,10 +22,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing from/to params" }, { status: 400 });
   }
 
-  const [staff, entries] = await Promise.all([
+  const [allStaff, entries] = await Promise.all([
     getStaffMembers(),
     getPlanEntriesForDateRange(from, to),
   ]);
+  // Hide suspended/deleted staff (Clerk-side; Airtable's IsActive doesn't track this)
+  const excludedIds = await getSuspendedOrDeletedClerkUserIds(allStaff.map((s) => s.clerkUserId));
+  const staff = allStaff.filter((s) => !excludedIds.has(s.clerkUserId));
 
   const dateCounts = entries.reduce<Record<string, number>>((acc, e) => {
     acc[e.date] = (acc[e.date] ?? 0) + 1;

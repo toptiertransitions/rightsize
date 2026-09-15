@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getStaffMember, getSystemRole, updateStaffAvailability, getStaffMembers, getPlanEntriesForDateRange, getTenants } from "@/lib/airtable";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import { buildTimeOffEmail } from "@/lib/email";
 import { Resend } from "resend";
 import type { TimeOffEntry } from "@/lib/types";
@@ -56,9 +57,9 @@ export async function PATCH(req: NextRequest) {
       (async () => {
         try {
           const allStaff = await getStaffMembers();
-          const recipientEmails = allStaff
-            .filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email)
-            .map((s) => s.email);
+          const managers = allStaff.filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email);
+          const excludedIds = await getSuspendedOrDeletedClerkUserIds(managers.map((s) => s.clerkUserId));
+          const recipientEmails = managers.filter((s) => !excludedIds.has(s.clerkUserId)).map((s) => s.email);
 
           if (recipientEmails.length === 0) return;
 

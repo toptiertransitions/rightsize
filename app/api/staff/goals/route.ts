@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 
 const STAFF_ROLES_TABLE = process.env.STAFF_ROLES_TABLE_ID || "StaffRoles";
 const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${STAFF_ROLES_TABLE}`;
@@ -26,6 +27,7 @@ interface AirtableRecord {
 
 export interface StaffGoalRow {
   id: string;
+  clerkUserId: string;
   displayName: string;
   email: string;
   role: string;
@@ -52,6 +54,7 @@ function mapRecord(record: AirtableRecord): StaffGoalRow {
   }
   return {
     id: record.id,
+    clerkUserId: toStr(f["ClerkUserId"]),
     displayName: toStr(f["DisplayName"]),
     email: toStr(f["Email"]),
     role: toStr(f["Role"]) || "TTTStaff",
@@ -102,7 +105,10 @@ export async function GET() {
       offset = data.offset;
     } while (offset);
 
-    const staff = records.map(mapRecord);
+    const allStaff = records.map(mapRecord);
+    // Hide suspended/deleted staff (Clerk-side; Airtable's IsActive doesn't track this)
+    const excludedIds = await getSuspendedOrDeletedClerkUserIds(allStaff.map((s) => s.clerkUserId));
+    const staff = allStaff.filter((s) => !excludedIds.has(s.clerkUserId));
     return NextResponse.json({ staff });
   } catch (e) {
     console.error("[staff/goals GET]", e);

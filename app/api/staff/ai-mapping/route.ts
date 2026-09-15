@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getStaffMembers, getPlanEntriesForDateRange } from "@/lib/airtable";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import Anthropic from "@anthropic-ai/sdk";
 import type { StaffMember, PlanEntry, WeeklySchedule } from "@/lib/types";
 
@@ -371,9 +372,16 @@ export async function POST(req: NextRequest) {
     staffMembers.filter(s => s.isActive).map(s => [s.email.toLowerCase(), s])
   );
 
+  // Hide staff whose Clerk account is suspended or deleted — Airtable's
+  // IsActive doesn't track this, so it's checked separately.
+  const excludedClerkIds = await getSuspendedOrDeletedClerkUserIds(staffMembers.map(s => s.clerkUserId));
+
   // ── Merge into enriched members ──────────────────────────────────────────────
   // Use staffGoals as the primary roster (active TTTStaff + TTTManager)
-  const enrichedMembers: EnrichedMember[] = staffGoals.map(g => {
+  const enrichedMembers: EnrichedMember[] = staffGoals.filter(g => {
+    const fullMember = staffMemberByEmail.get(g.email.toLowerCase());
+    return !fullMember || !excludedClerkIds.has(fullMember.clerkUserId);
+  }).map(g => {
     const emailKey = g.email.toLowerCase();
     const fullMember = staffMemberByEmail.get(emailKey);
     const skills = g.skillIds.map(id => skillNameMap.get(id)).filter((n): n is string => !!n);

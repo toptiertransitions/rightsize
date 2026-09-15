@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getSystemRole, getStaffMembers, getCrateLocations, getInventoryContainers, getTenants, getSubcontractors, getStorageUnits } from "@/lib/airtable";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import { StaffClient } from "./StaffClient";
 
 export default async function StaffPage() {
@@ -19,8 +20,12 @@ export default async function StaffPage() {
     getStorageUnits().catch(() => []),
   ]);
 
-  const active = members.filter((m) => m.isActive && m.role !== "TTTSales");
-  const allActive = members.filter((m) => m.isActive); // includes TTTSales for location map
+  // Hide staff whose Clerk account is suspended or deleted — Airtable's
+  // IsActive flag doesn't track this, so it's checked separately.
+  const allActiveRaw = members.filter((m) => m.isActive); // includes TTTSales for location map
+  const excludedIds = await getSuspendedOrDeletedClerkUserIds(allActiveRaw.map((m) => m.clerkUserId));
+  const allActive = allActiveRaw.filter((m) => !excludedIds.has(m.clerkUserId));
+  const active = allActive.filter((m) => m.role !== "TTTSales");
 
   // Enrich both lists with Clerk profile images
   try {
