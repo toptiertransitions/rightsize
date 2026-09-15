@@ -41,9 +41,24 @@ export async function GET(req: NextRequest) {
   ]);
   const messages = allMessages.filter(m => m.channel === channel);
   const nameByClerkId = new Map(staff.map(s => [s.clerkUserId, s.displayName]));
-  const enriched: Array<ProjectMessage & { authorName: string }> = messages.map(m => ({
+
+  // Profile photos aren't in Airtable — batch-fetch from Clerk for every
+  // distinct author in this thread (same enrichment pattern as the Ops
+  // staff roster in app/(protected)/staff/page.tsx).
+  const authorIds = Array.from(new Set(messages.map(m => m.authorClerkId).filter(Boolean)));
+  let photoByClerkId = new Map<string, string>();
+  if (authorIds.length > 0) {
+    try {
+      const clerk = await clerkClient();
+      const { data: clerkUsers } = await clerk.users.getUserList({ userId: authorIds, limit: 100 });
+      photoByClerkId = new Map(clerkUsers.map(u => [u.id, u.imageUrl]));
+    } catch { /* non-fatal — fall back to initials */ }
+  }
+
+  const enriched: Array<ProjectMessage & { authorName: string; authorPhotoUrl?: string }> = messages.map(m => ({
     ...m,
     authorName: nameByClerkId.get(m.authorClerkId) ?? "Unknown",
+    authorPhotoUrl: photoByClerkId.get(m.authorClerkId) || undefined,
   }));
   return NextResponse.json({ messages: enriched });
 }
@@ -148,7 +163,11 @@ export async function POST(req: NextRequest) {
   const clerk = await clerkClient();
   const authorUser = await clerk.users.getUser(userId).catch(() => null);
   const authorDisplayName = [authorUser?.firstName, authorUser?.lastName].filter(Boolean).join(" ") || "A staff member";
-  const message: ProjectMessage & { authorName: string } = { ...created, authorName: authorDisplayName };
+  const message: ProjectMessage & { authorName: string; authorPhotoUrl?: string } = {
+    ...created,
+    authorName: authorDisplayName,
+    authorPhotoUrl: authorUser?.imageUrl || undefined,
+  };
 
   // Urgent messages email the relevant party for this channel — same
   // recipient logic already used for time-off notifications where it

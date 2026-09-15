@@ -513,6 +513,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         <ProjectMessagesSection
           tenantId={tenantId}
           currentUserName={currentUserName}
+          currentUserPhoto={currentUserPhoto}
         />
       )}
 

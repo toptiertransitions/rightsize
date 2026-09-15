@@ -31,9 +31,10 @@ const URGENCY_BADGE: Record<MessageUrgency, string> = {
   FYI: "bg-amber-100 text-amber-700",
 };
 
-function ThreadRow({ thread, currentUserName, onActivity }: {
+function ThreadRow({ thread, currentUserName, currentUserPhoto, onActivity }: {
   thread: InboxThreadSummary;
   currentUserName: string;
+  currentUserPhoto?: string;
   onActivity: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -67,7 +68,7 @@ function ThreadRow({ thread, currentUserName, onActivity }: {
       </button>
       {expanded && (
         <div className="border-t border-gray-100 p-4">
-          <ProjectChannelThread tenantId={thread.tenantId} currentUserName={currentUserName} onActivity={onActivity} />
+          <ProjectChannelThread tenantId={thread.tenantId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={onActivity} />
         </div>
       )}
     </div>
@@ -179,7 +180,7 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
   );
 }
 
-export function InboxClient({ canBroadcast, currentUserName }: { canBroadcast: boolean; currentUserName: string }) {
+export function InboxClient({ canBroadcast, currentUserName, currentUserPhoto }: { canBroadcast: boolean; currentUserName: string; currentUserPhoto?: string }) {
   const [threads, setThreads] = useState<InboxThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -240,7 +241,7 @@ export function InboxClient({ canBroadcast, currentUserName }: { canBroadcast: b
       ) : (
         <div className="space-y-2">
           {projectThreads.map(t => (
-            <ThreadRow key={t.tenantId} thread={t} currentUserName={currentUserName} onActivity={load} />
+            <ThreadRow key={t.tenantId} thread={t} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={load} />
           ))}
         </div>
       )}

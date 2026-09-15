@@ -22,6 +22,7 @@ export default async function InboxPage() {
     [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(" ") ||
     clerkUser?.emailAddresses?.[0]?.emailAddress ||
     "Staff";
+  const currentUserPhoto = clerkUser?.imageUrl || undefined;
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -29,7 +30,7 @@ export default async function InboxPage() {
         <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
         <p className="text-gray-500 mt-1 text-sm">Messages across every project you have access to.</p>
       </div>
-      <InboxClient canBroadcast={canBroadcast} currentUserName={currentUserName} />
+      <InboxClient canBroadcast={canBroadcast} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
     </div>
   );
 }

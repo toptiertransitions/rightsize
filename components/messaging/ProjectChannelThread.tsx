@@ -5,7 +5,7 @@ import { safeJson } from "@/lib/utils";
 import { TEAM_CHANNEL } from "@/lib/airtable-messages";
 import type { ProjectMessage, MessageUrgency } from "@/lib/airtable-messages";
 
-type EnrichedMessage = ProjectMessage & { authorName: string };
+type EnrichedMessage = ProjectMessage & { authorName: string; authorPhotoUrl?: string };
 interface ChannelInfo { key: string; label: string; }
 
 function formatCT(iso: string): string {
@@ -20,7 +20,18 @@ function formatCT(iso: string): string {
   }) + " CT";
 }
 
-function Avatar({ name, size }: { name: string; size: number }) {
+function Avatar({ name, photoUrl, size }: { name: string; photoUrl?: string; size: number }) {
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt={name}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   const initials = name.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div
@@ -50,7 +61,7 @@ function MessageCard({ message }: { message: EnrichedMessage }) {
   const style = URGENCY_STYLES[message.urgency];
   return (
     <div className={`flex items-start gap-3 rounded-xl border ${style.border} p-3.5`}>
-      <Avatar name={message.authorName} size={32} />
+      <Avatar name={message.authorName} photoUrl={message.authorPhotoUrl} size={32} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-sm font-semibold text-gray-900">{message.authorName}</span>
@@ -73,6 +84,7 @@ function MessageCard({ message }: { message: EnrichedMessage }) {
 interface ProjectChannelThreadProps {
   tenantId: string;
   currentUserName: string;
+  currentUserPhoto?: string;
   /** Called after sending or marking a channel read, so a parent list view (e.g. Inbox) can refresh its own unread counts. */
   onActivity?: () => void;
 }
@@ -83,7 +95,7 @@ interface ProjectChannelThreadProps {
  * between the Plan page's Project Messages section and the Inbox's
  * inline-expanded thread view, so both stay in sync with zero duplication.
  */
-export function ProjectChannelThread({ tenantId, currentUserName, onActivity }: ProjectChannelThreadProps) {
+export function ProjectChannelThread({ tenantId, currentUserName, currentUserPhoto, onActivity }: ProjectChannelThreadProps) {
   const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [activeChannel, setActiveChannel] = useState<string>(TEAM_CHANNEL);
   const [channelsLoaded, setChannelsLoaded] = useState(false);
@@ -174,7 +186,7 @@ export function ProjectChannelThread({ tenantId, currentUserName, onActivity }: 
 
       {/* Compose */}
       <div className="flex gap-3 mb-6">
-        <Avatar name={currentUserName} size={36} />
+        <Avatar name={currentUserName} photoUrl={currentUserPhoto} size={36} />
         <div className="flex-1">
           <textarea
             value={body}
