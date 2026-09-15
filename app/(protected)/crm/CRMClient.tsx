@@ -4910,7 +4910,7 @@ function DashboardTab({
                 {rewardEmailError && <p className="text-xs text-red-500">{rewardEmailError}</p>}
               </div>
 
-              {/* Active Project Update Email → sent directly to the partner */}
+              {/* Active Project Report Email → sent to the TTT user who clicks (self-copy/reference, not the partner) */}
               <div className="mt-2 flex items-center gap-3">
                 <button
                   onClick={async () => {
@@ -4946,9 +4946,9 @@ function DashboardTab({
                       Sending…
                     </>
                   ) : activeUpdateSent ? (
-                    "Update Sent to Partner"
+                    "Report Sent to Me"
                   ) : (
-                    `${spotlightContact.name} — Active Project Update`
+                    `Send ME — ${spotlightContact.name} — Active Project Report`
                   )}
                 </button>
                 {activeUpdateError && <p className="text-xs text-red-500">{activeUpdateError}</p>}
