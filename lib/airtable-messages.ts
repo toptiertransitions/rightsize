@@ -1,19 +1,25 @@
 /**
- * Communication Hub — Phase A (structured messaging, no push).
- * See PRD-ADDENDUM-2026-09-15.md for full design context.
+ * Communication Hub — Phase A (structured messaging, no push), extended
+ * with per-project channels: a "team" channel (everyone with project
+ * access) plus private DM-style lines — "hq:<clerkUserId>" (that person's
+ * private line to HQ collectively) and "lead:<clerkUserId>" (a crew
+ * member's private 1:1 with the project's Team Lead). See
+ * PRD-ADDENDUM-2026-09-15.md for the original Phase A design context.
  *
  * Two tables:
  *   ProjectMessages  — project-anchored messages + company broadcasts
- *                       (TenantId = "__broadcast__" for the latter)
- *   ThreadReadState   — per-user last-read marker per thread, powers
- *                        unread badges in the unified inbox (not in the
- *                        original schema spec — added because "unread
- *                        badge/count per project thread" requires some
- *                        server-tracked read marker; flagged in the PR)
+ *                       (TenantId = "__broadcast__" for the latter),
+ *                       each tagged with a Channel (empty = "team", for
+ *                       rows written before channels existed)
+ *   ThreadReadState   — per-user last-read marker per (project, channel),
+ *                        powers unread badges (not in the original Phase A
+ *                        schema spec — added because unread counts need a
+ *                        server-tracked read marker; flagged when built)
  */
 import Airtable from "airtable";
 
 export const BROADCAST_TENANT_ID = "__broadcast__";
+export const TEAM_CHANNEL = "team";
 
 function getBase() {
   if (!process.env.AIRTABLE_API_TOKEN) throw new Error("AIRTABLE_API_TOKEN is not set");
@@ -35,6 +41,7 @@ export type MessageUrgency = "Normal" | "Urgent" | "FYI";
 export interface ProjectMessage {
   id: string;
   tenantId: string; // real Tenant record ID, or BROADCAST_TENANT_ID
+  channel: string; // TEAM_CHANNEL | "hq:<clerkUserId>" | "lead:<clerkUserId>"
   authorClerkId: string;
   body: string;
   timestamp: string;
@@ -42,6 +49,14 @@ export interface ProjectMessage {
   acknowledgedBy: string[];
   acknowledgedAt?: string;
   parentMessageId?: string;
+}
+
+export function hqChannel(clerkUserId: string): string { return `hq:${clerkUserId}`; }
+export function leadChannel(clerkUserId: string): string { return `lead:${clerkUserId}`; }
+/** clerkUserId embedded in a "hq:<id>" or "lead:<id>" channel key, or null for "team". */
+export function channelParticipant(channel: string): string | null {
+  const m = channel.match(/^(hq|lead):(.+)$/);
+  return m ? m[2] : null;
 }
 
 function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage {
@@ -55,6 +70,7 @@ function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage 
   return {
     id: record.id,
     tenantId: toStr(f["TenantId"]),
+    channel: toStr(f["Channel"]) || TEAM_CHANNEL,
     authorClerkId: toStr(f["AuthorClerkId"]),
     body: toStr(f["Body"]),
     timestamp: toStr(f["Timestamp"]),
@@ -65,7 +81,7 @@ function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage 
   };
 }
 
-/** Messages for one project thread (or the broadcast feed), newest first. */
+/** All messages for a project (every channel) — used to derive which DM channels have activity. */
 export async function getProjectMessages(tenantId: string): Promise<ProjectMessage[]> {
   const base = getBase();
   const records = await base(MESSAGES_TABLE)
@@ -77,7 +93,7 @@ export async function getProjectMessages(tenantId: string): Promise<ProjectMessa
   return records.map(mapMessage);
 }
 
-/** Messages across several threads in one call (used by the unified inbox). */
+/** Messages across several threads in one call (used by the unified inbox), every channel. */
 export async function getProjectMessagesForTenants(tenantIds: string[]): Promise<ProjectMessage[]> {
   if (tenantIds.length === 0) return [];
   const base = getBase();
@@ -91,12 +107,16 @@ export async function getProjectMessagesForTenants(tenantIds: string[]): Promise
   return records.map(mapMessage);
 }
 
-/** Every currently-unacknowledged Urgent message, company-wide — powers the Ops Open Issues view. */
+/**
+ * Every currently-unacknowledged Urgent message, company-wide, EXCLUDING
+ * "lead:*" DMs — those are private between a crew member and their Team
+ * Lead and must never surface on the Ops-visible Open Issues dashboard.
+ */
 export async function getOpenIssues(): Promise<ProjectMessage[]> {
   const base = getBase();
   const records = await base(MESSAGES_TABLE)
     .select({
-      filterByFormula: `AND({Urgency} = "Urgent", {AcknowledgedAt} = "")`,
+      filterByFormula: `AND({Urgency} = "Urgent", {AcknowledgedAt} = "", NOT(REGEX_MATCH({Channel}, "^lead:")))`,
       sort: [{ field: "Timestamp", direction: "asc" }], // oldest-open first
     })
     .all();
@@ -105,6 +125,7 @@ export async function getOpenIssues(): Promise<ProjectMessage[]> {
 
 export async function createProjectMessage(data: {
   tenantId: string;
+  channel?: string;
   authorClerkId: string;
   body: string;
   urgency: MessageUrgency;
@@ -114,6 +135,7 @@ export async function createProjectMessage(data: {
   const timestamp = new Date().toISOString();
   const record = await base(MESSAGES_TABLE).create({
     TenantId: data.tenantId,
+    Channel: data.channel ?? TEAM_CHANNEL,
     AuthorClerkId: data.authorClerkId,
     Body: data.body,
     Timestamp: timestamp,
@@ -140,7 +162,12 @@ export async function acknowledgeProjectMessage(id: string, clerkUserId: string)
 
 // ─── Thread read state (unread badges) ────────────────────────────────────────
 
-/** Map of tenantId -> lastReadAt ISO string, for every thread this user has ever opened. */
+/** Composite key used for the read-state map: `${tenantId}::${channel}`. */
+export function readStateKey(tenantId: string, channel: string): string {
+  return `${tenantId}::${channel}`;
+}
+
+/** Map of `${tenantId}::${channel}` -> lastReadAt ISO string, for every thread this user has opened. */
 export async function getThreadReadState(clerkUserId: string): Promise<Map<string, string>> {
   const base = getBase();
   const records = await base(READ_STATE_TABLE)
@@ -148,17 +175,19 @@ export async function getThreadReadState(clerkUserId: string): Promise<Map<strin
     .all();
   const map = new Map<string, string>();
   for (const r of records) {
-    map.set(toStr(r.fields["TenantId"]), toStr(r.fields["LastReadAt"]));
+    const tenantId = toStr(r.fields["TenantId"]);
+    const channel = toStr(r.fields["Channel"]) || TEAM_CHANNEL;
+    map.set(readStateKey(tenantId, channel), toStr(r.fields["LastReadAt"]));
   }
   return map;
 }
 
-/** Upsert this user's last-read marker for a thread. */
-export async function markThreadRead(clerkUserId: string, tenantId: string): Promise<void> {
+/** Upsert this user's last-read marker for one (project, channel) thread. */
+export async function markThreadRead(clerkUserId: string, tenantId: string, channel: string): Promise<void> {
   const base = getBase();
   const existing = await base(READ_STATE_TABLE)
     .select({
-      filterByFormula: `AND({ClerkUserId} = "${clerkUserId}", {TenantId} = "${tenantId}")`,
+      filterByFormula: `AND({ClerkUserId} = "${clerkUserId}", {TenantId} = "${tenantId}", {Channel} = "${channel}")`,
       maxRecords: 1,
     })
     .all();
@@ -166,6 +195,6 @@ export async function markThreadRead(clerkUserId: string, tenantId: string): Pro
   if (existing.length > 0) {
     await base(READ_STATE_TABLE).update(existing[0].id, { LastReadAt: now });
   } else {
-    await base(READ_STATE_TABLE).create({ ClerkUserId: clerkUserId, TenantId: tenantId, LastReadAt: now });
+    await base(READ_STATE_TABLE).create({ ClerkUserId: clerkUserId, TenantId: tenantId, Channel: channel, LastReadAt: now });
   }
 }

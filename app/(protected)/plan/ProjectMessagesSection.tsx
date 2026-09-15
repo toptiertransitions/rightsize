@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { safeJson } from "@/lib/utils";
+import { TEAM_CHANNEL } from "@/lib/airtable-messages";
 import type { ProjectMessage, MessageUrgency } from "@/lib/airtable-messages";
 
 type EnrichedMessage = ProjectMessage & { authorName: string };
+interface ChannelInfo { key: string; label: string; }
 
 function formatCT(iso: string): string {
   if (!iso) return "";
@@ -36,6 +38,14 @@ const URGENCY_STYLES: Record<MessageUrgency, { label: string; badge: string; bor
   FYI:    { label: "FYI",    badge: "bg-amber-100 text-amber-700", border: "border-amber-200" },
 };
 
+/** Who an Urgent message on this channel will email — mirrors app/api/messages/route.ts's urgentRecipients(). */
+function urgentHint(channel: string): string {
+  if (channel === TEAM_CHANNEL) return "Emails the project's Team Lead and all active Managers/Admins immediately.";
+  if (channel.startsWith("hq:")) return "Emails all active Managers/Admins immediately.";
+  if (channel.startsWith("lead:")) return "Emails the other person in this conversation immediately.";
+  return "";
+}
+
 function MessageCard({ message }: { message: EnrichedMessage }) {
   const style = URGENCY_STYLES[message.urgency];
   return (
@@ -48,7 +58,7 @@ function MessageCard({ message }: { message: EnrichedMessage }) {
           <span className="text-[11px] text-gray-400">{formatCT(message.timestamp)}</span>
         </div>
         <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{message.body}</p>
-        {message.urgency === "Urgent" && (
+        {message.urgency === "Urgent" && !message.channel.startsWith("lead:") && (
           <p className="mt-1.5 text-[11px] font-medium">
             {message.acknowledgedAt
               ? <span className="text-emerald-600">✓ Acknowledged</span>
@@ -66,6 +76,9 @@ interface ProjectMessagesSectionProps {
 }
 
 export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMessagesSectionProps) {
+  const [channels, setChannels] = useState<ChannelInfo[]>([]);
+  const [activeChannel, setActiveChannel] = useState<string>(TEAM_CHANNEL);
+  const [channelsLoaded, setChannelsLoaded] = useState(false);
   const [messages, setMessages] = useState<EnrichedMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
@@ -73,21 +86,33 @@ export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMes
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Load available channels once per project.
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/messages?tenantId=${tenantId}`)
-      .then(r => safeJson<{ messages?: EnrichedMessage[] }>(r))
-      .then(d => { if (!cancelled) setMessages(d.messages ?? []); })
+    fetch(`/api/messages/channels?tenantId=${tenantId}`)
+      .then(r => safeJson<{ channels?: ChannelInfo[] }>(r))
+      .then(d => { if (!cancelled) setChannels(d.channels ?? []); })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
-    // Mark this thread read on open — fire and forget, not user-blocking.
+      .finally(() => { if (!cancelled) setChannelsLoaded(true); });
+    return () => { cancelled = true; };
+  }, [tenantId]);
+
+  // Load messages + mark read whenever the active channel changes.
+  const loadChannel = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/messages?tenantId=${tenantId}&channel=${encodeURIComponent(activeChannel)}`)
+      .then(r => safeJson<{ messages?: EnrichedMessage[] }>(r))
+      .then(d => setMessages(d.messages ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
     fetch("/api/messages/read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantId }),
+      body: JSON.stringify({ tenantId, channel: activeChannel }),
     }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [tenantId]);
+  }, [tenantId, activeChannel]);
+
+  useEffect(() => { loadChannel(); }, [loadChannel]);
 
   async function handleSend() {
     const text = body.trim();
@@ -98,7 +123,7 @@ export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMes
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, body: text, urgency }),
+        body: JSON.stringify({ tenantId, channel: activeChannel, body: text, urgency }),
       });
       const data = await safeJson<{ message?: EnrichedMessage; error?: string }>(res);
       if (!res.ok || !data.message) throw new Error(data.error || "Failed to send");
@@ -112,6 +137,8 @@ export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMes
     }
   }
 
+  const activeChannelInfo = channels.find(c => c.key === activeChannel);
+
   return (
     <div className="mt-10 pt-8 border-t border-gray-200">
       <div className="flex items-center gap-3 mb-6">
@@ -123,9 +150,28 @@ export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMes
         </div>
         <div>
           <h2 className="text-base font-semibold text-gray-900">Project Messages</h2>
-          <p className="text-xs text-gray-400">Visible to this project&apos;s crew, Team Lead, and Ops</p>
+          <p className="text-xs text-gray-400">Full team channel, plus private lines to HQ and your Team Lead</p>
         </div>
       </div>
+
+      {/* Channel switcher */}
+      {channelsLoaded && channels.length > 1 && (
+        <div className="flex items-center gap-1.5 mb-5 overflow-x-auto">
+          {channels.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setActiveChannel(c.key)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
+                activeChannel === c.key
+                  ? "bg-forest-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {c.key !== TEAM_CHANNEL && "🔒 "}{c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Compose */}
       <div className="flex gap-3 mb-6">
@@ -134,7 +180,9 @@ export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMes
           <textarea
             value={body}
             onChange={e => setBody(e.target.value)}
-            placeholder="Message this project's crew and Team Lead…"
+            placeholder={activeChannelInfo?.key === TEAM_CHANNEL || !activeChannelInfo
+              ? "Message this project's crew and Team Lead…"
+              : `Message ${activeChannelInfo.label}…`}
             rows={3}
             className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none"
             onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
@@ -166,7 +214,7 @@ export function ProjectMessagesSection({ tenantId, currentUserName }: ProjectMes
             </button>
           </div>
           {urgency === "Urgent" && (
-            <p className="mt-1.5 text-[11px] text-red-600">Emails the project&apos;s Team Lead and all active Managers/Admins immediately.</p>
+            <p className="mt-1.5 text-[11px] text-red-600">{urgentHint(activeChannel)}</p>
           )}
         </div>
       </div>

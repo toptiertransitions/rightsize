@@ -1,16 +1,26 @@
 /**
- * Communication Hub — Phase A access control.
+ * Communication Hub access control — project team channel, plus private
+ * DM-style lines (Staff↔HQ, Staff↔Team Lead). See
+ * PRD-ADDENDUM-2026-09-15.md and lib/airtable-messages.ts for design
+ * context.
  *
- * "Assigned crew" reuses the exact same signal the Plan page already uses
- * to gate shift visibility for TTTStaff: appearing as a helper (by email)
- * on a plan entry for that project. See PRD-ADDENDUM-2026-09-15.md.
+ * "Assigned crew" (team-channel access) reuses the exact same signal the
+ * Plan page already uses to gate shift visibility for TTTStaff: appearing
+ * as a helper (by email) on a plan entry for that project.
  *
- * TTTSales is out of scope for the comms hub — the PRD only names crew,
- * Team Lead, and Ops (Manager/Admin) as participants.
+ * TTTSales is out of scope — the PRD only names crew, Team Lead, and Ops
+ * (Manager/Admin) as participants.
  */
 import type { SystemRole } from "./types";
-import { getStaffMember, getTenants, getPlanEntriesForTenant, getPlanEntriesForDateRange } from "./airtable";
-import { BROADCAST_TENANT_ID } from "./airtable-messages";
+import { getStaffMember, getStaffMembers, getTenants, getPlanEntriesForTenant, getPlanEntriesForDateRange } from "./airtable";
+import {
+  BROADCAST_TENANT_ID,
+  TEAM_CHANNEL,
+  hqChannel,
+  leadChannel,
+  channelParticipant,
+  getProjectMessages,
+} from "./airtable-messages";
 
 const INTERNAL_ROLES: SystemRole[] = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
@@ -18,7 +28,15 @@ export function isCommsHubRole(sysRole: SystemRole | null): boolean {
   return !!sysRole && INTERNAL_ROLES.includes(sysRole);
 }
 
-/** Whether this user can view (and post in) a specific project's thread. */
+async function isHelperOnTenant(clerkUserId: string, tenantId: string): Promise<boolean> {
+  const member = await getStaffMember(clerkUserId).catch(() => null);
+  if (!member?.email) return false;
+  const emailLower = member.email.toLowerCase();
+  const entries = await getPlanEntriesForTenant(tenantId).catch(() => []);
+  return entries.some(e => e.helpers?.some(h => h.email.toLowerCase() === emailLower));
+}
+
+/** Whether this user can view (and post in) a project's "Full Project Team" channel. */
 export async function canAccessProjectThread(
   clerkUserId: string,
   sysRole: SystemRole | null,
@@ -32,11 +50,145 @@ export async function canAccessProjectThread(
   if (!tenant) return false;
   if (tenant.teamLeadClerkId === clerkUserId) return true;
 
-  const member = await getStaffMember(clerkUserId).catch(() => null);
-  if (!member?.email) return false;
-  const emailLower = member.email.toLowerCase();
-  const entries = await getPlanEntriesForTenant(tenantId).catch(() => []);
-  return entries.some(e => e.helpers?.some(h => h.email.toLowerCase() === emailLower));
+  return isHelperOnTenant(clerkUserId, tenantId);
+}
+
+/**
+ * Whether this user can view/post in a specific channel of a project:
+ *   team    — same rule as canAccessProjectThread
+ *   hq:X    — X themselves (if they have team access), or any Manager/Admin
+ *   lead:X  — X themselves (if X is crew with team access, not the Team
+ *             Lead), or the project's current Team Lead. Never HQ — these
+ *             are private per the confirmed design.
+ */
+export async function canAccessChannel(
+  clerkUserId: string,
+  sysRole: SystemRole | null,
+  tenantId: string,
+  channel: string
+): Promise<boolean> {
+  if (!isCommsHubRole(sysRole)) return false;
+  if (channel === TEAM_CHANNEL) return canAccessProjectThread(clerkUserId, sysRole, tenantId);
+
+  const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const participant = channelParticipant(channel);
+  if (!participant) return false;
+
+  if (channel.startsWith("hq:")) {
+    if (isManager) return true;
+    if (participant !== clerkUserId) return false;
+    return canAccessProjectThread(clerkUserId, sysRole, tenantId);
+  }
+
+  if (channel.startsWith("lead:")) {
+    const tenants = await getTenants().catch(() => []);
+    const tenant = tenants.find(t => t.id === tenantId);
+    if (!tenant) return false;
+    const isThisProjectsTeamLead = tenant.teamLeadClerkId === clerkUserId;
+    if (isThisProjectsTeamLead) return true;
+    if (participant === clerkUserId) return canAccessProjectThread(clerkUserId, sysRole, tenantId);
+    return false;
+  }
+
+  return false;
+}
+
+export interface ChannelInfo {
+  key: string;
+  label: string;
+}
+
+/**
+ * Pure (no I/O) computation of every channel a user can see for a project,
+ * given already-fetched data. Shared by getAvailableChannels (one project,
+ * fetches fresh) and the inbox route (many projects, reuses one bulk fetch
+ * across all of them instead of re-fetching per project — avoids N
+ * redundant Airtable calls for a Manager/Admin with many active projects).
+ */
+export function computeAvailableChannels(params: {
+  clerkUserId: string;
+  isManager: boolean;
+  hasTeamAccess: boolean;
+  teamLeadId: string | null;
+  isThisProjectsTeamLead: boolean;
+  tenantMessages: { channel: string }[]; // all messages for this one tenant, any channel
+  nameByClerkId: Map<string, string>;
+}): ChannelInfo[] {
+  const { clerkUserId, isManager, hasTeamAccess, teamLeadId, isThisProjectsTeamLead, tenantMessages, nameByClerkId } = params;
+  if (!hasTeamAccess) return [];
+
+  const channels: ChannelInfo[] = [{ key: TEAM_CHANNEL, label: "Full Project Team" }];
+
+  if (isManager) {
+    // HQ sees every "hq:X" line that has activity on this project.
+    const hqParticipantIds = new Set(
+      tenantMessages
+        .filter(m => m.channel.startsWith("hq:"))
+        .map(m => channelParticipant(m.channel))
+        .filter((id): id is string => !!id)
+    );
+    for (const id of hqParticipantIds) {
+      channels.push({ key: hqChannel(id), label: `${nameByClerkId.get(id) ?? "Unknown"} ↔ HQ` });
+    }
+    return channels;
+  }
+
+  // Any team-access participant (crew or this project's Team Lead) always
+  // has their own private line to HQ.
+  channels.push({ key: hqChannel(clerkUserId), label: "Me ↔ HQ" });
+
+  if (isThisProjectsTeamLead) {
+    // The Team Lead sees a DM tab for every crew member who has actually
+    // started a private conversation with them.
+    const leadParticipantIds = new Set(
+      tenantMessages
+        .filter(m => m.channel.startsWith("lead:"))
+        .map(m => channelParticipant(m.channel))
+        .filter((id): id is string => !!id)
+    );
+    for (const id of leadParticipantIds) {
+      channels.push({ key: leadChannel(id), label: `${nameByClerkId.get(id) ?? "Unknown"} ↔ Me` });
+    }
+  } else if (teamLeadId) {
+    // Crew always has a private line to the project's Team Lead.
+    channels.push({ key: leadChannel(clerkUserId), label: `Me ↔ ${nameByClerkId.get(teamLeadId) ?? "Team Lead"}` });
+  }
+
+  return channels;
+}
+
+/**
+ * Every channel this user can see for a project — fetches what it needs
+ * itself. Used by the single-project channel switcher; see
+ * computeAvailableChannels for the shared, I/O-free logic and the inbox
+ * route for the bulk-fetching equivalent.
+ */
+export async function getAvailableChannels(
+  clerkUserId: string,
+  sysRole: SystemRole | null,
+  tenantId: string
+): Promise<ChannelInfo[]> {
+  if (!isCommsHubRole(sysRole)) return [];
+  const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+
+  const tenants = await getTenants().catch(() => []);
+  const tenant = tenants.find(t => t.id === tenantId);
+  if (!tenant) return [];
+
+  const teamLeadId = tenant.teamLeadClerkId || null;
+  const isThisProjectsTeamLead = !!teamLeadId && teamLeadId === clerkUserId;
+  const hasTeamAccess = isManager || isThisProjectsTeamLead || await isHelperOnTenant(clerkUserId, tenantId);
+  if (!hasTeamAccess) return [];
+
+  const [tenantMessages, staff] = await Promise.all([
+    getProjectMessages(tenantId).catch(() => []),
+    getStaffMembers().catch(() => []),
+  ]);
+  const nameByClerkId = new Map(staff.map(s => [s.clerkUserId, s.displayName]));
+
+  return computeAvailableChannels({
+    clerkUserId, isManager, hasTeamAccess, teamLeadId, isThisProjectsTeamLead, tenantMessages, nameByClerkId,
+  });
 }
 
 /**
