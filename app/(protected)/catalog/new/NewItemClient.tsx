@@ -98,7 +98,13 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
       setError("Please select an image file.");
       return;
     }
-    const converted = await prepareImageForUpload(file);
+    let converted: File;
+    try {
+      converted = await prepareImageForUpload(file);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't process that image.");
+      return;
+    }
     setPhotoFile(converted);
     const reader = new FileReader();
     reader.onload = (e) => setPhotoPreview(e.target?.result as string);

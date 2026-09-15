@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { safeJson } from "@/lib/utils";
 import type { ProjectFile } from "@/lib/types";
 
 interface DailyRecapSectionProps {
@@ -50,7 +51,7 @@ function RecapCard({ file, canEdit, onSaved }: RecapCardProps) {
           recapDate: date,
         }),
       });
-      const data = await res.json();
+      const data = await safeJson<{ file?: ProjectFile; error?: string }>(res);
       if (!res.ok) throw new Error(data.error || "Save failed");
       onSaved(data.file as ProjectFile);
       setEditing(false);

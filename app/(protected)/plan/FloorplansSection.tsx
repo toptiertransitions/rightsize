@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { prepareImageForUpload } from "@/lib/image-utils";
+import { safeJson } from "@/lib/utils";
 import type { ProjectFile, FileTag } from "@/lib/types";
 import {
   DndContext,
@@ -107,7 +108,7 @@ function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
           fd.append("roomLabel", roomLabel.trim());
         }
         const res = await fetch("/api/files", { method: "POST", body: fd });
-        const data = await res.json();
+        const data = await safeJson<{ file?: ProjectFile; error?: string }>(res);
         if (!res.ok) throw new Error(data.error || "Upload failed");
         results.push(data.file as ProjectFile);
       }
@@ -229,7 +230,7 @@ function EditFileModal({ file, onClose, onSaved, onDeleted }: EditFileModalProps
           roomLabel: fileTag === "Room Image" ? roomLabel.trim() : "",
         }),
       });
-      const data = await res.json();
+      const data = await safeJson<{ file?: ProjectFile; error?: string }>(res);
       if (!res.ok) throw new Error(data.error || "Save failed");
       onSaved(data.file as ProjectFile);
     } catch (e) {

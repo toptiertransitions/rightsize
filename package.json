@@ -31,6 +31,7 @@
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
     "googleapis": "^171.4.0",
+    "heic2any": "^0.0.4",
     "jszip": "^3.10.1",
     "next": "^15.5.12",
     "openai": "^6.48.0",

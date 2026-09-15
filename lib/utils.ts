@@ -29,3 +29,23 @@ export function formatNumber(n: number, decimals = 1): string {
     maximumFractionDigits: decimals,
   });
 }
+
+/**
+ * Safely parse a fetch Response as JSON. Platform-level rejections (e.g.
+ * Vercel's ~4.5MB serverless request body limit) return a plain-text 413
+ * before the request ever reaches our route handlers — calling res.json()
+ * directly on that throws a cryptic "Unexpected token 'R', "Request En"...
+ * is not valid JSON" instead of a usable error message. This reads the body
+ * as text first and falls back to a status-based message when it isn't JSON.
+ */
+export async function safeJson<T = Record<string, unknown>>(res: Response): Promise<T> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    if (res.status === 413) {
+      throw new Error("That file is too large to upload. Try a smaller image, or take a screenshot of it and upload that instead.");
+    }
+    throw new Error(`Server error (${res.status}). Please try again.`);
+  }
+}
