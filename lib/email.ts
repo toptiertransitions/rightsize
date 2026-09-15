@@ -1076,6 +1076,64 @@ export function buildTimeOffEmail({
 </html>`;
 }
 
+// ─── Urgent Project Message Email (Communication Hub Phase A) ────────────────
+export function buildUrgentMessageEmail({
+  authorName,
+  projectName,
+  body,
+  planUrl,
+}: {
+  authorName: string;
+  projectName: string;
+  body: string;
+  planUrl: string;
+}): string {
+  const escaped = body
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br/>");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Urgent — ${projectName}</title></head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#B91C1C;padding:28px 32px;border-radius:12px 12px 0 0;">
+            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;color:#fecaca;font-size:13px;font-weight:500;">Urgent — ${projectName}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            <p style="margin:0 0 8px;font-size:16px;color:#1a1a1a;font-weight:bold;">Hi there,</p>
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+              <strong>${authorName}</strong> flagged an urgent message on <strong>${projectName}</strong>:
+            </p>
+            <div style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+              <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">${escaped}</p>
+            </div>
+            <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+              This stays open on the Ops Open Issues dashboard until a Manager or Admin acknowledges it.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background-color:#B91C1C;border-radius:8px;padding:13px 28px;">
+                  <a href="${planUrl}" style="color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">View Project →</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions — Internal Notification</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ─── Shift Declined Notification Email ───────────────────────────────────────
 export function buildShiftDeclinedEmail({
   declinedByEmail,

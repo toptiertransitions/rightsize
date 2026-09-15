@@ -8,6 +8,7 @@ import { LocationMgmtTab } from "./LocationMgmtTab";
 import { StaffGoalsTab } from "./StaffGoalsTab";
 import { StaffSkillsTab } from "./StaffSkillsTab";
 import { AIStaffMappingTab } from "./AIStaffMappingTab";
+import { OpenIssuesTab } from "./OpenIssuesTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1575,7 +1576,7 @@ interface Props {
 }
 
 export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, storageUnits, tenants, subcontractors, canEdit = false }: Props) {
-  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors">("availability");
+  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors" | "open-issues">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
@@ -1670,7 +1671,8 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
           { key: "location", label: "Location Mgmt" },
           { key: "supply", label: "Supply Tracking" },
           { key: "subcontractors", label: "Subcontractor Management" },
-        ] as const).map(tab => (
+          { key: "open-issues", label: "Open Issues" },
+        ] as const).filter(tab => tab.key !== "open-issues" || canEdit).map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -1923,6 +1925,11 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
       {/* Subcontractor Management Tab */}
       {activeTab === "subcontractors" && (
         <SubcontractorTab initialSubs={subcontractors} tenants={tenants} />
+      )}
+
+      {/* Open Issues Tab — Manager/Admin only */}
+      {activeTab === "open-issues" && canEdit && (
+        <OpenIssuesTab />
       )}
     </div>
   );

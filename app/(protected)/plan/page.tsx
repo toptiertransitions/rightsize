@@ -25,6 +25,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { PlanClient } from "./PlanClient";
 import { IntakeFormSection } from "./IntakeFormSection";
 import { InternalNotesSection } from "./InternalNotesSection";
+import { ProjectMessagesSection } from "./ProjectMessagesSection";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { GoogleReviewsSection } from "./GoogleReviewsSection";
 import { ClientContactBar } from "./ClientContactBar";
@@ -501,6 +502,17 @@ export default async function PlanPage({ searchParams }: PageProps) {
           currentUserId={userId!}
           currentUserName={currentUserName}
           currentUserPhoto={currentUserPhoto}
+        />
+      )}
+
+      {/* Project Messages (Communication Hub Phase A) — Manager/Admin see any
+          project; a Team Lead sees their own lead project; TTTStaff see it
+          only on projects where they're a scheduled helper (same signal that
+          already gates shift visibility above via filteredEntries). */}
+      {(isManagerOrAdmin || isProjectTeamLead || (isTTTStaff && filteredEntries.length > 0)) && (
+        <ProjectMessagesSection
+          tenantId={tenantId}
+          currentUserName={currentUserName}
         />
       )}
 
