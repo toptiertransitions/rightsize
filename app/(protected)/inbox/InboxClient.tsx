@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { safeJson } from "@/lib/utils";
+import { ProjectChannelThread } from "@/components/messaging/ProjectChannelThread";
 import type { InboxThreadSummary } from "@/app/api/messages/inbox/route";
 import type { ProjectMessage, MessageUrgency } from "@/lib/airtable-messages";
+import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/project-status";
 
 type EnrichedMessage = ProjectMessage & { authorName: string };
 
 const BROADCAST_TENANT_ID = "__broadcast__";
+const STATUS_FILTERS: ProjectStatus[] = ["active", "consignment", "not-signed", "archived"];
 
 function formatRelative(iso: string | null): string {
   if (!iso) return "";
@@ -29,35 +31,50 @@ const URGENCY_BADGE: Record<MessageUrgency, string> = {
   FYI: "bg-amber-100 text-amber-700",
 };
 
-function ThreadRow({ thread }: { thread: InboxThreadSummary }) {
+function ThreadRow({ thread, currentUserName, onActivity }: {
+  thread: InboxThreadSummary;
+  currentUserName: string;
+  onActivity: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <Link
-      href={`/plan?tenantId=${thread.tenantId}`}
-      className="flex items-start gap-3 rounded-xl border border-gray-200 p-4 hover:border-forest-300 hover:bg-forest-50/30 transition-colors"
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold text-gray-900">{thread.projectName}</span>
-          {thread.unreadCount > 0 && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-forest-600 text-white">
-              {thread.unreadCount} new
-            </span>
+    <div className="rounded-xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-start gap-3 p-4 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-gray-900">{thread.projectName}</span>
+            {thread.unreadCount > 0 && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-forest-600 text-white">
+                {thread.unreadCount} new
+              </span>
+            )}
+          </div>
+          {thread.lastMessagePreview ? (
+            <p className="mt-1 text-sm text-gray-500 truncate">
+              <span className="text-gray-700 font-medium">{thread.lastMessageAuthorName}:</span> {thread.lastMessagePreview}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-gray-400 italic">No messages yet</p>
           )}
         </div>
-        {thread.lastMessagePreview ? (
-          <p className="mt-1 text-sm text-gray-500 truncate">
-            <span className="text-gray-700 font-medium">{thread.lastMessageAuthorName}:</span> {thread.lastMessagePreview}
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-gray-400 italic">No messages yet</p>
-        )}
-      </div>
-      <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">{formatRelative(thread.lastMessageAt)}</span>
-    </Link>
+        <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">{formatRelative(thread.lastMessageAt)}</span>
+        <svg className={`w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {expanded && (
+        <div className="border-t border-gray-100 p-4">
+          <ProjectChannelThread tenantId={thread.tenantId} currentUserName={currentUserName} onActivity={onActivity} />
+        </div>
+      )}
+    </div>
   );
 }
 
-function BroadcastPanel({ canBroadcast, onSent }: { canBroadcast: boolean; onSent: () => void }) {
+function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcast: boolean; currentUserName: string; onSent: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<EnrichedMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -162,13 +179,13 @@ function BroadcastPanel({ canBroadcast, onSent }: { canBroadcast: boolean; onSen
   );
 }
 
-export function InboxClient({ canBroadcast }: { canBroadcast: boolean }) {
+export function InboxClient({ canBroadcast, currentUserName }: { canBroadcast: boolean; currentUserName: string }) {
   const [threads, setThreads] = useState<InboxThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus>("active");
 
   const load = useCallback(() => {
-    setLoading(true);
     fetch("/api/messages/inbox")
       .then(r => safeJson<{ threads?: InboxThreadSummary[]; error?: string }>(r))
       .then(d => setThreads(d.threads ?? []))
@@ -178,11 +195,39 @@ export function InboxClient({ canBroadcast }: { canBroadcast: boolean }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const projectThreads = threads.filter(t => t.tenantId !== BROADCAST_TENANT_ID);
+  const projectThreads = useMemo(
+    () => threads.filter(t => t.tenantId !== BROADCAST_TENANT_ID && t.projectStatus === statusFilter),
+    [threads, statusFilter]
+  );
+
+  const countByStatus = useMemo(() => {
+    const counts: Record<ProjectStatus, number> = { active: 0, consignment: 0, "not-signed": 0, archived: 0 };
+    for (const t of threads) {
+      if (t.tenantId !== BROADCAST_TENANT_ID && t.projectStatus !== "broadcast") counts[t.projectStatus]++;
+    }
+    return counts;
+  }, [threads]);
 
   return (
     <div>
-      <BroadcastPanel canBroadcast={canBroadcast} onSent={load} />
+      <BroadcastPanel canBroadcast={canBroadcast} currentUserName={currentUserName} onSent={load} />
+
+      {/* Status filter — Active by default; everything else is opt-in */}
+      <div className="flex items-center gap-1.5 mb-4 overflow-x-auto">
+        {STATUS_FILTERS.map(status => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
+              statusFilter === status
+                ? "bg-forest-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {PROJECT_STATUS_LABELS[status]} ({countByStatus[status]})
+          </button>
+        ))}
+      </div>
 
       {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
@@ -190,11 +235,13 @@ export function InboxClient({ canBroadcast }: { canBroadcast: boolean }) {
         <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
       ) : projectThreads.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-2xl">
-          No project threads yet
+          No {PROJECT_STATUS_LABELS[statusFilter].toLowerCase()} project threads
         </div>
       ) : (
         <div className="space-y-2">
-          {projectThreads.map(t => <ThreadRow key={t.tenantId} thread={t} />)}
+          {projectThreads.map(t => (
+            <ThreadRow key={t.tenantId} thread={t} currentUserName={currentUserName} onActivity={load} />
+          ))}
         </div>
       )}
     </div>

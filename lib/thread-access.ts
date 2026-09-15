@@ -204,14 +204,18 @@ export async function getAccessibleTenantIds(
 ): Promise<string[]> {
   if (!isCommsHubRole(sysRole)) return [];
 
+  // Every status (Active/Consignment/Not-Signed/Archived) is eligible —
+  // the Inbox defaults its display to Active and offers the rest as an
+  // explicit filter. Only Lost Deals stay excluded, matching the existing
+  // "Lost deals never appear in pickers" convention used elsewhere.
   const allTenants = await getTenants().catch(() => []);
-  const activeTenants = allTenants.filter(t => !t.isArchived);
+  const eligibleTenants = allTenants.filter(t => !t.isLostDeal);
 
   if (sysRole === "TTTManager" || sysRole === "TTTAdmin") {
-    return [BROADCAST_TENANT_ID, ...activeTenants.map(t => t.id)];
+    return [BROADCAST_TENANT_ID, ...eligibleTenants.map(t => t.id)];
   }
 
-  const teamLedIds = activeTenants
+  const teamLedIds = eligibleTenants
     .filter(t => t.teamLeadClerkId === clerkUserId)
     .map(t => t.id);
 
@@ -224,10 +228,10 @@ export async function getAccessibleTenantIds(
     const to = new Date(today); to.setDate(to.getDate() + 60);
     const fmt = (d: Date) => d.toISOString().split("T")[0];
     const entries = await getPlanEntriesForDateRange(fmt(from), fmt(to)).catch(() => []);
-    const activeIds = new Set(activeTenants.map(t => t.id));
+    const eligibleIds = new Set(eligibleTenants.map(t => t.id));
     helperIds = Array.from(new Set(
       entries
-        .filter(e => activeIds.has(e.tenantId) && e.helpers?.some(h => h.email.toLowerCase() === emailLower))
+        .filter(e => eligibleIds.has(e.tenantId) && e.helpers?.some(h => h.email.toLowerCase() === emailLower))
         .map(e => e.tenantId)
     ));
   }

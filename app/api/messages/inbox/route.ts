@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getTenants, getStaffMembers } from "@/lib/airtable";
+import { getSystemRole, getTenants, getStaffMembers, getSignedTenantIds } from "@/lib/airtable";
 import {
   getProjectMessagesForTenants,
   getThreadReadState,
@@ -8,10 +8,12 @@ import {
   BROADCAST_TENANT_ID,
 } from "@/lib/airtable-messages";
 import { getAccessibleTenantIds, computeAvailableChannels } from "@/lib/thread-access";
+import { getProjectStatus, type ProjectStatus } from "@/lib/project-status";
 
 export interface InboxThreadSummary {
   tenantId: string;
   projectName: string;
+  projectStatus: ProjectStatus | "broadcast";
   unreadCount: number;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
@@ -27,11 +29,12 @@ export async function GET() {
   const tenantIds = await getAccessibleTenantIds(userId, sysRole);
   if (tenantIds.length === 0) return NextResponse.json({ threads: [] as InboxThreadSummary[] });
 
-  const [allMessages, readState, tenants, staff] = await Promise.all([
+  const [allMessages, readState, tenants, staff, signedIds] = await Promise.all([
     getProjectMessagesForTenants(tenantIds),
     getThreadReadState(userId),
     getTenants().catch(() => []),
     getStaffMembers().catch(() => []),
+    getSignedTenantIds().catch(() => new Set<string>()),
   ]);
 
   const tenantNameById = new Map(tenants.map(t => [t.id, t.name]));
@@ -49,8 +52,10 @@ export async function GET() {
     const tenantMessages = messagesByTenant.get(tenantId) ?? []; // sorted desc
 
     let accessibleChannels: string[];
+    let projectStatus: ProjectStatus | "broadcast";
     if (tenantId === BROADCAST_TENANT_ID) {
       accessibleChannels = ["team"];
+      projectStatus = "broadcast";
     } else {
       const tenant = tenantById.get(tenantId);
       const teamLeadId = tenant?.teamLeadClerkId || null;
@@ -65,6 +70,9 @@ export async function GET() {
         nameByClerkId: staffNameByClerkId,
       });
       accessibleChannels = channels.map(c => c.key);
+      projectStatus = tenant
+        ? getProjectStatus({ ...tenant, isContractSigned: signedIds.has(tenant.id) })
+        : "active";
     }
     const accessibleChannelSet = new Set(accessibleChannels);
     const visibleMessages = tenantMessages.filter(m => accessibleChannelSet.has(m.channel));
@@ -78,6 +86,7 @@ export async function GET() {
     return {
       tenantId,
       projectName: tenantId === BROADCAST_TENANT_ID ? "Company-wide" : (tenantNameById.get(tenantId) ?? "Unknown project"),
+      projectStatus,
       unreadCount,
       lastMessageAt: last?.timestamp ?? null,
       lastMessagePreview: last?.body ?? null,

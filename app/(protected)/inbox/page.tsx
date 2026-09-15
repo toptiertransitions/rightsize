@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getSystemRole } from "@/lib/airtable";
 import { InboxClient } from "./InboxClient";
@@ -16,13 +16,20 @@ export default async function InboxPage() {
 
   const canBroadcast = sysRole === "TTTManager" || sysRole === "TTTAdmin";
 
+  const clerk = await clerkClient();
+  const clerkUser = await clerk.users.getUser(userId).catch(() => null);
+  const currentUserName =
+    [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(" ") ||
+    clerkUser?.emailAddresses?.[0]?.emailAddress ||
+    "Staff";
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
         <p className="text-gray-500 mt-1 text-sm">Messages across every project you have access to.</p>
       </div>
-      <InboxClient canBroadcast={canBroadcast} />
+      <InboxClient canBroadcast={canBroadcast} currentUserName={currentUserName} />
     </div>
   );
 }
