@@ -393,11 +393,38 @@ export async function DELETE(req: NextRequest) {
 
 // ─── Partner Point Auto-Award ─────────────────────────────────────────────────
 // Looks up the referring partner for this tenant's opportunity and awards a point.
-// The PartnerPointAwarded flag on the invoice prevents double-awarding.
+//
+// The PartnerPointAwarded flag lives on the invoice, but the idempotency check
+// must be scoped to the PROJECT (tenant), not the individual invoice — a single
+// project commonly has more than one invoice (e.g. a Deposit invoice and a
+// later Full invoice), and each one reaching "Paid" independently triggers
+// this function. Checking only the invoice being processed meant a second
+// invoice for the same project — whose own flag was still unset — could
+// award a second point for the same referral. Confirmed this happened for
+// at least one real partner (two invoices, one flagged, the other not).
 async function autoAwardPartnerPoint(invoiceId: string, tenantId: string): Promise<void> {
-  // Check if already awarded (re-read the invoice raw to avoid stale cache)
   const token = process.env.AIRTABLE_API_TOKEN!;
   const baseId = process.env.AIRTABLE_BASE_ID!;
+
+  // Has ANY invoice for this tenant already triggered an award? (Re-read raw
+  // to avoid stale cache.)
+  const tenantFormula = encodeURIComponent(`AND({TenantId} = "${tenantId}", {PartnerPointAwarded} = TRUE())`);
+  const tenantCheckRes = await fetch(
+    `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(AIRTABLE_TABLES.INVOICES)}?filterByFormula=${tenantFormula}&maxRecords=1`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (tenantCheckRes.ok) {
+    const tenantCheckData = await tenantCheckRes.json();
+    if ((tenantCheckData.records ?? []).length > 0) {
+      // Another invoice for this project already awarded the point — just
+      // flag this invoice too so it doesn't get re-checked, without awarding again.
+      await markInvoicePartnerPointAwarded(invoiceId).catch(() => {});
+      return;
+    }
+  }
+
+  // Also check this specific invoice directly (covers the case where this
+  // function is re-invoked for the same invoice, e.g. a retried request).
   const checkRes = await fetch(
     `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(AIRTABLE_TABLES.INVOICES)}/${invoiceId}`,
     { headers: { Authorization: `Bearer ${token}` } }
