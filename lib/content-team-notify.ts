@@ -144,7 +144,8 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
 
   const staff = await getStaffMembers();
 
-  // Determine recipients based on visibility
+  // Determine recipients based on audience, then visibility
+  // audience=InternalTraining → uploader only, regardless of sharedWith
   // sharedWith=[] → public → all active admins/managers/sales
   // sharedWith=["__private__"] → truly private → uploader only
   // sharedWith=[id,...] → private with selected reps → those reps + uploader
@@ -166,7 +167,14 @@ export async function notifyTeamNewContent(item: ContentItem): Promise<void> {
 
   let recipients: string[];
 
-  if (isTrulyPrivate) {
+  if (item.audience === "InternalTraining") {
+    // Internal Training content is scoped to whoever's building it — only
+    // the uploader gets the notification, regardless of the item's
+    // sharedWith setting. This takes priority over the visibility branches
+    // below.
+    const uploaderEmail = await resolveUploaderEmail();
+    recipients = uploaderEmail ? [uploaderEmail] : [];
+  } else if (isTrulyPrivate) {
     const uploaderEmail = await resolveUploaderEmail();
     recipients = uploaderEmail ? [uploaderEmail] : [];
   } else if (isPrivate) {
