@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getTenants, getStaffMembers, getSignedTenantIds } from "@/lib/airtable";
 import {
   getProjectMessagesForTenants,
@@ -40,6 +40,23 @@ export async function GET() {
   const tenantNameById = new Map(tenants.map(t => [t.id, t.name]));
   const tenantById = new Map(tenants.map(t => [t.id, t]));
   const staffNameByClerkId = new Map(staff.map(s => [s.clerkUserId, s.displayName]));
+
+  // Fallback for accounts with no StaffRoles record (e.g. the hardcoded/
+  // env-based TTTAdmin — see lib/config.ts isTTTAdmin) — Clerk always
+  // knows their name even when the Airtable roster doesn't.
+  const authorIds = Array.from(new Set(allMessages.map(m => m.authorClerkId).filter(Boolean)));
+  let clerkNameByClerkId = new Map<string, string>();
+  if (authorIds.length > 0) {
+    try {
+      const clerk = await clerkClient();
+      const { data: clerkUsers } = await clerk.users.getUserList({ userId: authorIds, limit: 100 });
+      clerkNameByClerkId = new Map(clerkUsers.map(u => [
+        u.id,
+        [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || "Unknown",
+      ]));
+    } catch { /* non-fatal */ }
+  }
+  const resolveName = (clerkId: string) => staffNameByClerkId.get(clerkId) ?? clerkNameByClerkId.get(clerkId) ?? "Unknown";
 
   const messagesByTenant = new Map<string, typeof allMessages>();
   for (const id of tenantIds) messagesByTenant.set(id, []);
@@ -90,7 +107,7 @@ export async function GET() {
       unreadCount,
       lastMessageAt: last?.timestamp ?? null,
       lastMessagePreview: last?.body ?? null,
-      lastMessageAuthorName: last ? (staffNameByClerkId.get(last.authorClerkId) ?? "Unknown") : null,
+      lastMessageAuthorName: last ? resolveName(last.authorClerkId) : null,
     };
   }).sort((a, b) => (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""));
 

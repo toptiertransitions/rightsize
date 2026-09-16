@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getTenantById, getStaffMembers } from "@/lib/airtable";
-import type { StaffMember, Tenant, SystemRole } from "@/lib/types";
+import type { StaffMember, Tenant } from "@/lib/types";
 import type { ProjectMessage, MessageComment } from "@/lib/airtable-messages";
 import {
   getProjectMessages,
@@ -10,19 +10,15 @@ import {
   BROADCAST_TENANT_ID,
   TEAM_CHANNEL,
   channelParticipant,
+  isDmTenant,
 } from "@/lib/airtable-messages";
-import { canAccessChannel, isCommsHubRole } from "@/lib/thread-access";
+import { canAccessTenantChannel } from "@/lib/thread-access";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import { buildUrgentMessageEmail } from "@/lib/email";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
-
-async function checkAccess(userId: string, sysRole: SystemRole | null, tenantId: string, channel: string): Promise<boolean> {
-  if (tenantId === BROADCAST_TENANT_ID) return isCommsHubRole(sysRole);
-  return canAccessChannel(userId, sysRole, tenantId, channel);
-}
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -33,7 +29,7 @@ export async function GET(req: NextRequest) {
   const channel = req.nextUrl.searchParams.get("channel") || TEAM_CHANNEL;
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  const allowed = await checkAccess(userId, sysRole, tenantId, channel);
+  const allowed = await canAccessTenantChannel(userId, sysRole, tenantId, channel);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const [allMessages, staff] = await Promise.all([
@@ -53,13 +49,24 @@ export async function GET(req: NextRequest) {
     ...Array.from(commentsByMessage.values()).flat().map(c => c.authorClerkId),
   ].filter(Boolean)));
   let photoByClerkId = new Map<string, string>();
+  // Fallback name source: TTTAdmin can be granted via a hardcoded/env check
+  // (see lib/config.ts isTTTAdmin) with no corresponding StaffRoles record
+  // at all — for that account, and anyone else missing from the roster,
+  // getStaffMembers() has no name, even though Clerk always does (hence
+  // the photo resolving fine while the name showed "Unknown").
+  let clerkNameByClerkId = new Map<string, string>();
   if (authorIds.length > 0) {
     try {
       const clerk = await clerkClient();
       const { data: clerkUsers } = await clerk.users.getUserList({ userId: authorIds, limit: 100 });
       photoByClerkId = new Map(clerkUsers.map(u => [u.id, u.imageUrl]));
+      clerkNameByClerkId = new Map(clerkUsers.map(u => [
+        u.id,
+        [u.firstName, u.lastName].filter(Boolean).join(" ") || u.emailAddresses[0]?.emailAddress || "Unknown",
+      ]));
     } catch { /* non-fatal — fall back to initials */ }
   }
+  const resolveName = (clerkId: string) => nameByClerkId.get(clerkId) ?? clerkNameByClerkId.get(clerkId) ?? "Unknown";
 
   const enriched: Array<ProjectMessage & {
     authorName: string;
@@ -67,11 +74,11 @@ export async function GET(req: NextRequest) {
     comments: Array<MessageComment & { authorName: string; authorPhotoUrl?: string }>;
   }> = messages.map(m => ({
     ...m,
-    authorName: nameByClerkId.get(m.authorClerkId) ?? "Unknown",
+    authorName: resolveName(m.authorClerkId),
     authorPhotoUrl: photoByClerkId.get(m.authorClerkId) || undefined,
     comments: (commentsByMessage.get(m.id) ?? []).map(c => ({
       ...c,
-      authorName: nameByClerkId.get(c.authorClerkId) ?? "Unknown",
+      authorName: resolveName(c.authorClerkId),
       authorPhotoUrl: photoByClerkId.get(c.authorClerkId) || undefined,
     })),
   }));
@@ -147,7 +154,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { tenantId, body: text, urgency } = body;
-  const channel = body.channel || TEAM_CHANNEL;
+  // DMs are always one flat conversation per pair — never let a client
+  // fragment one into sub-channels.
+  const channel = (tenantId && isDmTenant(tenantId)) ? TEAM_CHANNEL : (body.channel || TEAM_CHANNEL);
   if (!tenantId || !text?.trim()) {
     return NextResponse.json({ error: "Missing tenantId or body" }, { status: 400 });
   }
@@ -164,7 +173,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden — Manager, Admin, or Sales only" }, { status: 403 });
     }
   } else {
-    const allowed = await canAccessChannel(userId, sysRole, tenantId, channel);
+    const allowed = await canAccessTenantChannel(userId, sysRole, tenantId, channel);
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -187,8 +196,10 @@ export async function POST(req: NextRequest) {
 
   // Urgent messages email the relevant party for this channel — same
   // recipient logic already used for time-off notifications where it
-  // applies (team channel), minus suspended/deleted staff.
-  if (urgency === "Urgent") {
+  // applies (team channel), minus suspended/deleted staff. Personal DMs
+  // aren't part of the escalation system at all — a casual Slack-style
+  // line between two people has no "Ops" to notify.
+  if (urgency === "Urgent" && !isDmTenant(tenantId)) {
     (async () => {
       try {
         const tenant = tenantId === BROADCAST_TENANT_ID ? null : await getTenantById(tenantId).catch(() => null);

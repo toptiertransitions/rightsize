@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { safeJson } from "@/lib/utils";
 import { ProjectChannelThread } from "@/components/messaging/ProjectChannelThread";
+import { DmSection } from "@/components/messaging/DmSection";
 import type { InboxThreadSummary } from "@/app/api/messages/inbox/route";
 import type { ProjectMessage, MessageUrgency } from "@/lib/airtable-messages";
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/project-status";
@@ -30,6 +31,15 @@ const URGENCY_BADGE: Record<MessageUrgency, string> = {
   Normal: "bg-gray-100 text-gray-600",
   FYI: "bg-amber-100 text-amber-700",
 };
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="mb-3">
+      <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wide">{title}</h2>
+      {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+    </div>
+  );
+}
 
 function ThreadRow({ thread, currentUserId, currentUserName, currentUserPhoto, onActivity }: {
   thread: InboxThreadSummary;
@@ -129,7 +139,7 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
       >
-        <span className="text-sm font-semibold text-gray-900">Company-wide Broadcasts</span>
+        <span className="text-sm font-semibold text-gray-900">View broadcasts</span>
         <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -211,41 +221,56 @@ export function InboxClient({ canBroadcast, currentUserId, currentUserName, curr
   }, [threads]);
 
   return (
-    <div>
-      <BroadcastPanel canBroadcast={canBroadcast} currentUserName={currentUserName} onSent={load} />
+    <div className="space-y-10">
+      {/* Messages Just for Me — Slack-style always-on DMs, not tied to any project */}
+      <section>
+        <SectionHeader title="Messages Just for Me" subtitle="Direct messages with any active TTT staff member" />
+        <DmSection currentUserId={currentUserId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
+      </section>
 
-      {/* Status filter — Active by default; everything else is opt-in */}
-      <div className="flex items-center gap-1.5 mb-4 overflow-x-auto">
-        {STATUS_FILTERS.map(status => (
-          <button
-            key={status}
-            onClick={() => setStatusFilter(status)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
-              statusFilter === status
-                ? "bg-forest-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {PROJECT_STATUS_LABELS[status]} ({countByStatus[status]})
-          </button>
-        ))}
-      </div>
+      {/* Project Messages */}
+      <section>
+        <SectionHeader title="Project Messages" />
 
-      {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
-
-      {loading ? (
-        <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
-      ) : projectThreads.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-2xl">
-          No {PROJECT_STATUS_LABELS[statusFilter].toLowerCase()} project threads
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {projectThreads.map(t => (
-            <ThreadRow key={t.tenantId} thread={t} currentUserId={currentUserId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={load} />
+        {/* Status filter — Active by default; everything else is opt-in */}
+        <div className="flex items-center gap-1.5 mb-4 overflow-x-auto">
+          {STATUS_FILTERS.map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
+                statusFilter === status
+                  ? "bg-forest-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {PROJECT_STATUS_LABELS[status]} ({countByStatus[status]})
+            </button>
           ))}
         </div>
-      )}
+
+        {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
+
+        {loading ? (
+          <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+        ) : projectThreads.length === 0 ? (
+          <div className="py-12 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-2xl">
+            No {PROJECT_STATUS_LABELS[statusFilter].toLowerCase()} project threads
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {projectThreads.map(t => (
+              <ThreadRow key={t.tenantId} thread={t} currentUserId={currentUserId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={load} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Company-wide Broadcasts — last section */}
+      <section>
+        <SectionHeader title="Company-wide Broadcasts" />
+        <BroadcastPanel canBroadcast={canBroadcast} currentUserName={currentUserName} onSent={load} />
+      </section>
     </div>
   );
 }

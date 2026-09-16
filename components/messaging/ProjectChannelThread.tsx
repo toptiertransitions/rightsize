@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { safeJson } from "@/lib/utils";
-import { TEAM_CHANNEL } from "@/lib/airtable-messages";
+import { TEAM_CHANNEL, isDmTenant } from "@/lib/airtable-messages";
 import type { ProjectMessage, MessageComment, MessageUrgency } from "@/lib/airtable-messages";
 
 type EnrichedComment = MessageComment & { authorName: string; authorPhotoUrl?: string };
@@ -305,6 +305,7 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
   }
 
   const activeChannelInfo = channels.find(c => c.key === activeChannel);
+  const isDm = isDmTenant(tenantId);
   // Messages arrive newest-first; showing the first N is "the last N messages".
   const visibleMessages = messages.slice(0, visibleCount);
   const remaining = messages.length - visibleMessages.length;
@@ -337,31 +338,35 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
           <textarea
             value={body}
             onChange={e => setBody(e.target.value)}
-            placeholder={activeChannelInfo?.key === TEAM_CHANNEL || !activeChannelInfo
-              ? "Message this project's crew and Team Lead…"
-              : `Message ${activeChannelInfo.label}…`}
+            placeholder={isDm
+              ? "Type a message…"
+              : (activeChannelInfo?.key === TEAM_CHANNEL || !activeChannelInfo
+                ? "Message this project's crew and Team Lead…"
+                : `Message ${activeChannelInfo.label}…`)}
             rows={3}
             className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none"
             onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSend(); }}
           />
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-            <div className="flex gap-1.5">
-              {(["Normal", "Urgent", "FYI"] as const).map(tier => (
-                <button
-                  key={tier}
-                  type="button"
-                  onClick={() => setUrgency(tier)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
-                    urgency === tier
-                      ? `${URGENCY_STYLES[tier].badge} ${URGENCY_STYLES[tier].border}`
-                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  {tier}
-                </button>
-              ))}
-            </div>
+            {isDm ? <div /> : (
+              <div className="flex gap-1.5">
+                {(["Normal", "Urgent", "FYI"] as const).map(tier => (
+                  <button
+                    key={tier}
+                    type="button"
+                    onClick={() => setUrgency(tier)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                      urgency === tier
+                        ? `${URGENCY_STYLES[tier].badge} ${URGENCY_STYLES[tier].border}`
+                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {tier}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               onClick={handleSend}
               disabled={submitting || !body.trim()}
@@ -370,7 +375,7 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
               {submitting ? "Sending…" : "Send"}
             </button>
           </div>
-          {urgency === "Urgent" && (
+          {!isDm && urgency === "Urgent" && (
             <p className="mt-1.5 text-[11px] text-red-600">{urgentHint(activeChannel)}</p>
           )}
         </div>

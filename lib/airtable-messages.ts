@@ -27,6 +27,8 @@ import Airtable from "airtable";
 
 export const BROADCAST_TENANT_ID = "__broadcast__";
 export const TEAM_CHANNEL = "team";
+/** Personal, always-on DMs between two internal users — not tied to any project. Reuses ProjectMessages via a synthetic TenantId, same sentinel-tenant convention as BROADCAST_TENANT_ID. */
+export const DM_TENANT_PREFIX = "__dm__:";
 
 function getBase() {
   if (!process.env.AIRTABLE_API_TOKEN) throw new Error("AIRTABLE_API_TOKEN is not set");
@@ -76,6 +78,30 @@ export function channelParticipant(channel: string): string | null {
   return m ? m[2] : null;
 }
 
+/** Deterministic DM "tenantId" for two people — same pair always maps to the same conversation regardless of who initiates. */
+export function dmTenantId(clerkIdA: string, clerkIdB: string): string {
+  const [a, b] = [clerkIdA, clerkIdB].sort();
+  return `${DM_TENANT_PREFIX}${a}::${b}`;
+}
+
+export function isDmTenant(tenantId: string): boolean {
+  return tenantId.startsWith(DM_TENANT_PREFIX);
+}
+
+/** The two participants encoded in a DM tenantId, or null if this isn't one. */
+export function dmParticipants(tenantId: string): [string, string] | null {
+  if (!isDmTenant(tenantId)) return null;
+  const [a, b] = tenantId.slice(DM_TENANT_PREFIX.length).split("::");
+  return a && b ? [a, b] : null;
+}
+
+/** The other person in a DM, from this user's point of view. */
+export function otherDmParticipant(tenantId: string, clerkUserId: string): string | null {
+  const participants = dmParticipants(tenantId);
+  if (!participants) return null;
+  return participants[0] === clerkUserId ? participants[1] : participants[0];
+}
+
 function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage {
   const f = record.fields;
   let acknowledgedBy: string[] = [];
@@ -115,6 +141,19 @@ export async function getProjectMessageById(id: string): Promise<ProjectMessage 
   }
 }
 
+/** Every DM message this user is a participant in, across all of their personal conversations, in one call. */
+export async function getDmMessagesForUser(clerkUserId: string): Promise<ProjectMessage[]> {
+  const base = getBase();
+  const formula = `AND(FIND("${DM_TENANT_PREFIX}", {TenantId}) = 1, FIND("${clerkUserId}", {TenantId}) > 0)`;
+  const records = await base(MESSAGES_TABLE)
+    .select({
+      filterByFormula: formula,
+      sort: [{ field: "Timestamp", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapMessage);
+}
+
 /** All messages for a project (every channel) — used to derive which DM channels have activity. */
 export async function getProjectMessages(tenantId: string): Promise<ProjectMessage[]> {
   const base = getBase();
@@ -150,7 +189,7 @@ export async function getOpenIssues(): Promise<ProjectMessage[]> {
   const base = getBase();
   const records = await base(MESSAGES_TABLE)
     .select({
-      filterByFormula: `AND({Urgency} = "Urgent", {AcknowledgedAt} = "", NOT(REGEX_MATCH({Channel}, "^lead:")))`,
+      filterByFormula: `AND({Urgency} = "Urgent", {AcknowledgedAt} = "", NOT(REGEX_MATCH({Channel}, "^lead:")), NOT(REGEX_MATCH({TenantId}, "^__dm__:")))`,
       sort: [{ field: "Timestamp", direction: "asc" }], // oldest-open first
     })
     .all();

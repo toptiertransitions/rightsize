@@ -22,6 +22,8 @@ import {
   leadChannel,
   channelParticipant,
   getProjectMessages,
+  isDmTenant,
+  dmParticipants,
 } from "./airtable-messages";
 
 const INTERNAL_ROLES: SystemRole[] = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"];
@@ -109,7 +111,14 @@ export async function canAccessTenantChannel(
   channel: string
 ): Promise<boolean> {
   if (tenantId === BROADCAST_TENANT_ID) return isCommsHubRole(sysRole);
+  if (isDmTenant(tenantId)) return isCommsHubRole(sysRole) && canAccessDm(clerkUserId, tenantId);
   return canAccessChannel(clerkUserId, sysRole, tenantId, channel);
+}
+
+/** Only the two people a DM is between can ever see or post in it — no Manager/Admin/Sales override, unlike every other channel type. */
+export function canAccessDm(clerkUserId: string, tenantId: string): boolean {
+  const participants = dmParticipants(tenantId);
+  return !!participants && participants.includes(clerkUserId);
 }
 
 export interface ChannelInfo {
@@ -188,6 +197,11 @@ export async function getAvailableChannels(
   tenantId: string
 ): Promise<ChannelInfo[]> {
   if (!isCommsHubRole(sysRole)) return [];
+
+  if (isDmTenant(tenantId)) {
+    return canAccessDm(clerkUserId, tenantId) ? [{ key: TEAM_CHANNEL, label: "Direct Message" }] : [];
+  }
+
   const isManager = isManagerEquivalent(sysRole);
 
   const tenants = await getTenants().catch(() => []);
