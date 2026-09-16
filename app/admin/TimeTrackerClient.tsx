@@ -1128,6 +1128,9 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
   const [editEntry, setEditEntry] = useState<TimeEntry | undefined>(undefined);
   const [openWeeks, setOpenWeeks] = useState<Set<string>>(new Set());
   const [showWeekends, setShowWeekends] = useState(false);
+  const PAST_WEEKS_PAGE_SIZE = 3;
+  const PAST_WEEKS_LOAD_MORE = 5;
+  const [visiblePastWeeksCount, setVisiblePastWeeksCount] = useState(PAST_WEEKS_PAGE_SIZE);
 
   // ── Derived permissions ───────────────────────────────────────────────────
   const canViewAll = isAdmin || isManager;
@@ -1145,6 +1148,10 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
   }, [currentWeekStart, currentWeekEnd]);
 
   // ── Filtered entries ─────────────────────────────────────────────────────
+  // Switching whose entries are shown should re-collapse the past-weeks list
+  // back to its default size rather than carrying over an unrelated count.
+  useEffect(() => { setVisiblePastWeeksCount(PAST_WEEKS_PAGE_SIZE); }, [staffFilter]);
+
   const visibleEntries = useMemo(() => {
     if (canViewAll && staffFilter) return entries.filter(e => e.clerkUserId === staffFilter);
     return entries;
@@ -1362,10 +1369,12 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
         );
       })()}
 
-      {/* Past weeks accordion */}
+      {/* Past weeks accordion — collapsed to the most recent PAST_WEEKS_PAGE_SIZE
+          weeks by default; older weeks stay hidden behind "Show more" so the
+          list doesn't pile up indefinitely. */}
       {pastWeekGroups.length > 0 && (
         <div className="mt-6 border-t border-gray-800 pt-4 space-y-0.5">
-          {pastWeekGroups.map(({ key, label, totalMins, entries: wEntries }) => {
+          {pastWeekGroups.slice(0, visiblePastWeeksCount).map(({ key, label, totalMins, entries: wEntries }) => {
             const isOpen = openWeeks.has(key);
             return (
               <div key={key}>
@@ -1394,6 +1403,14 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
               </div>
             );
           })}
+          {pastWeekGroups.length > visiblePastWeeksCount && (
+            <button
+              onClick={() => setVisiblePastWeeksCount(c => c + PAST_WEEKS_LOAD_MORE)}
+              className="w-full text-center text-xs font-semibold text-gray-500 hover:text-gray-300 py-2.5 rounded-xl hover:bg-gray-800 transition-colors mt-1"
+            >
+              Show more ({pastWeekGroups.length - visiblePastWeeksCount} older week{pastWeekGroups.length - visiblePastWeeksCount !== 1 ? "s" : ""})
+            </button>
+          )}
         </div>
       )}
 
