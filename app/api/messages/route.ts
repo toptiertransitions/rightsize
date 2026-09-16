@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getTenantById, getStaffMembers } from "@/lib/airtable";
 import type { StaffMember, Tenant } from "@/lib/types";
-import type { ProjectMessage, MessageComment } from "@/lib/airtable-messages";
+import type { ProjectMessage, MessageComment, MessageAttachment } from "@/lib/airtable-messages";
 import {
   getProjectMessages,
   createProjectMessage,
@@ -146,19 +146,23 @@ export async function POST(req: NextRequest) {
 
   const sysRole = await getSystemRole(userId).catch(() => null);
 
-  let body: { tenantId?: string; channel?: string; body?: string; urgency?: string };
+  let body: { tenantId?: string; channel?: string; body?: string; urgency?: string; attachment?: MessageAttachment };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { tenantId, body: text, urgency } = body;
+  const { tenantId, body: text, urgency, attachment } = body;
   // DMs are always one flat conversation per pair — never let a client
   // fragment one into sub-channels.
   const channel = (tenantId && isDmTenant(tenantId)) ? TEAM_CHANNEL : (body.channel || TEAM_CHANNEL);
-  if (!tenantId || !text?.trim()) {
+  const hasAttachment = !!attachment?.url;
+  if (!tenantId || (!text?.trim() && !hasAttachment)) {
     return NextResponse.json({ error: "Missing tenantId or body" }, { status: 400 });
+  }
+  if (hasAttachment && (!attachment!.publicId || !attachment!.fileName || (attachment!.resourceType !== "image" && attachment!.resourceType !== "raw"))) {
+    return NextResponse.json({ error: "Invalid attachment" }, { status: 400 });
   }
   if (urgency !== "Normal" && urgency !== "Urgent" && urgency !== "FYI") {
     return NextResponse.json({ error: "Invalid urgency" }, { status: 400 });
@@ -181,8 +185,9 @@ export async function POST(req: NextRequest) {
     tenantId,
     channel,
     authorClerkId: userId,
-    body: text.trim(),
+    body: text?.trim() ?? "",
     urgency,
+    attachment: hasAttachment ? attachment : undefined,
   });
   const clerk = await clerkClient();
   const authorUser = await clerk.users.getUser(userId).catch(() => null);
@@ -217,7 +222,7 @@ export async function POST(req: NextRequest) {
         const html = buildUrgentMessageEmail({
           authorName: authorDisplayName,
           projectName: label,
-          body: text.trim(),
+          body: text?.trim() || `[Attachment: ${attachment?.fileName}]`,
           planUrl: tenant ? `${APP_URL}/plan?tenantId=${tenantId}` : `${APP_URL}/inbox`,
         });
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { safeJson } from "@/lib/utils";
 import { ProjectChannelThread } from "@/components/messaging/ProjectChannelThread";
 import { DmSection } from "@/components/messaging/DmSection";
+import { AttachButton, AttachmentPendingChip, AttachmentView, uploadMessageAttachment } from "@/components/messaging/MessageAttachment";
 import type { InboxThreadSummary } from "@/app/api/messages/inbox/route";
 import type { ProjectMessage, MessageUrgency } from "@/lib/airtable-messages";
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/project-status";
@@ -93,6 +94,8 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -112,19 +115,29 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
 
   async function handleSend() {
     const text = body.trim();
-    if (!text) return;
+    if (!text && !pendingFile) return;
     setSubmitting(true);
     setError("");
     try {
+      let attachment;
+      if (pendingFile) {
+        setUploading(true);
+        try {
+          attachment = await uploadMessageAttachment(pendingFile);
+        } finally {
+          setUploading(false);
+        }
+      }
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: BROADCAST_TENANT_ID, body: text, urgency: "FYI" }),
+        body: JSON.stringify({ tenantId: BROADCAST_TENANT_ID, body: text, urgency: "FYI", attachment }),
       });
       const data = await safeJson<{ message?: EnrichedMessage; error?: string }>(res);
       if (!res.ok || !data.message) throw new Error(data.error || "Failed to send");
       setMessages(prev => [data.message!, ...prev]);
       setBody("");
+      setPendingFile(null);
       onSent();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send");
@@ -148,6 +161,7 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
         <div className="border-t border-gray-100 p-4">
           {canBroadcast && (
             <div className="mb-4">
+              {pendingFile && <AttachmentPendingChip file={pendingFile} onRemove={() => setPendingFile(null)} />}
               <textarea
                 value={body}
                 onChange={e => setBody(e.target.value)}
@@ -156,13 +170,14 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
                 className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none"
               />
               {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-              <div className="flex justify-end mt-2">
+              <div className="flex justify-end items-center gap-2 mt-2">
+                <AttachButton onSelect={setPendingFile} disabled={submitting} />
                 <button
                   onClick={handleSend}
-                  disabled={submitting || !body.trim()}
+                  disabled={submitting || (!body.trim() && !pendingFile)}
                   className="h-8 px-4 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
                 >
-                  {submitting ? "Posting…" : "Post Broadcast"}
+                  {uploading ? "Uploading…" : submitting ? "Posting…" : "Post Broadcast"}
                 </button>
               </div>
             </div>
@@ -180,7 +195,8 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${URGENCY_BADGE[m.urgency]}`}>{m.urgency}</span>
                     <span className="text-[11px] text-gray-400">{formatRelative(m.timestamp)}</span>
                   </div>
-                  <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{m.body}</p>
+                  {m.body && <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{m.body}</p>}
+                  {m.attachment && <AttachmentView attachment={m.attachment} />}
                 </div>
               ))}
             </div>

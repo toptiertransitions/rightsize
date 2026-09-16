@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { safeJson } from "@/lib/utils";
 import { TEAM_CHANNEL, isDmTenant } from "@/lib/airtable-messages";
 import type { ProjectMessage, MessageComment, MessageUrgency } from "@/lib/airtable-messages";
+import { AttachButton, AttachmentPendingChip, AttachmentView, uploadMessageAttachment } from "./MessageAttachment";
 
 type EnrichedComment = MessageComment & { authorName: string; authorPhotoUrl?: string };
 type EnrichedMessage = ProjectMessage & { authorName: string; authorPhotoUrl?: string; comments: EnrichedComment[] };
@@ -134,7 +135,8 @@ function MessageCard({ message, currentUserId, currentUserName, currentUserPhoto
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${style.badge}`}>{style.label}</span>
             <span className="text-[11px] text-gray-400">{formatCT(message.timestamp)}</span>
           </div>
-          <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{message.body}</p>
+          {message.body && <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{message.body}</p>}
+          {message.attachment && <AttachmentView attachment={message.attachment} />}
           {message.urgency === "Urgent" && !message.channel.startsWith("lead:") && (
             <p className="mt-1.5 text-[11px] font-medium">
               {message.acknowledgedAt
@@ -239,6 +241,8 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
   const [urgency, setUrgency] = useState<MessageUrgency>("Normal");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Load available channels once per project.
   useEffect(() => {
@@ -274,20 +278,30 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
 
   async function handleSend() {
     const text = body.trim();
-    if (!text) return;
+    if (!text && !pendingFile) return;
     setSubmitting(true);
     setError("");
     try {
+      let attachment;
+      if (pendingFile) {
+        setUploading(true);
+        try {
+          attachment = await uploadMessageAttachment(pendingFile, tenantId);
+        } finally {
+          setUploading(false);
+        }
+      }
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId, channel: activeChannel, body: text, urgency }),
+        body: JSON.stringify({ tenantId, channel: activeChannel, body: text, urgency, attachment }),
       });
       const data = await safeJson<{ message?: EnrichedMessage; error?: string }>(res);
       if (!res.ok || !data.message) throw new Error(data.error || "Failed to send");
       setMessages(prev => [data.message!, ...prev]);
       setBody("");
       setUrgency("Normal");
+      setPendingFile(null);
       onActivity?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send");
@@ -335,6 +349,7 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
       <div className="flex gap-3 mb-6">
         <Avatar name={currentUserName} photoUrl={currentUserPhoto} size={36} />
         <div className="flex-1">
+          {pendingFile && <AttachmentPendingChip file={pendingFile} onRemove={() => setPendingFile(null)} />}
           <textarea
             value={body}
             onChange={e => setBody(e.target.value)}
@@ -367,13 +382,16 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
                 ))}
               </div>
             )}
-            <button
-              onClick={handleSend}
-              disabled={submitting || !body.trim()}
-              className="h-8 px-4 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
-            >
-              {submitting ? "Sending…" : "Send"}
-            </button>
+            <div className="flex items-center gap-2">
+              <AttachButton onSelect={setPendingFile} disabled={submitting} />
+              <button
+                onClick={handleSend}
+                disabled={submitting || (!body.trim() && !pendingFile)}
+                className="h-8 px-4 bg-forest-600 text-white text-sm font-medium rounded-lg hover:bg-forest-700 disabled:opacity-50 transition-colors"
+              >
+                {uploading ? "Uploading…" : submitting ? "Sending…" : "Send"}
+              </button>
+            </div>
           </div>
           {!isDm && urgency === "Urgent" && (
             <p className="mt-1.5 text-[11px] text-red-600">{urgentHint(activeChannel)}</p>

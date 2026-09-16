@@ -48,6 +48,13 @@ function toStr(v: unknown): string {
 
 export type MessageUrgency = "Normal" | "Urgent" | "FYI";
 
+export interface MessageAttachment {
+  url: string;
+  publicId: string;
+  fileName: string;
+  resourceType: "image" | "raw";
+}
+
 export interface ProjectMessage {
   id: string;
   tenantId: string; // real Tenant record ID, or BROADCAST_TENANT_ID
@@ -60,6 +67,7 @@ export interface ProjectMessage {
   acknowledgedAt?: string;
   parentMessageId?: string;
   likedBy: string[];
+  attachment?: MessageAttachment;
 }
 
 export interface MessageComment {
@@ -115,6 +123,8 @@ function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage 
     if (raw) likedBy = JSON.parse(raw);
   } catch { /* leave empty on malformed JSON */ }
   const urgency = f["Urgency"];
+  const attachmentUrl = toStr(f["AttachmentUrl"]);
+  const resourceType = toStr(f["AttachmentResourceType"]);
   return {
     id: record.id,
     tenantId: toStr(f["TenantId"]),
@@ -127,6 +137,12 @@ function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage 
     acknowledgedAt: toStr(f["AcknowledgedAt"]) || undefined,
     parentMessageId: toStr(f["ParentMessageId"]) || undefined,
     likedBy,
+    attachment: attachmentUrl ? {
+      url: attachmentUrl,
+      publicId: toStr(f["AttachmentPublicId"]),
+      fileName: toStr(f["AttachmentFileName"]),
+      resourceType: resourceType === "raw" ? "raw" : "image",
+    } : undefined,
   };
 }
 
@@ -203,6 +219,7 @@ export async function createProjectMessage(data: {
   body: string;
   urgency: MessageUrgency;
   parentMessageId?: string;
+  attachment?: MessageAttachment;
 }): Promise<ProjectMessage> {
   const base = getBase();
   const timestamp = new Date().toISOString();
@@ -214,6 +231,10 @@ export async function createProjectMessage(data: {
     Timestamp: timestamp,
     Urgency: data.urgency,
     ParentMessageId: data.parentMessageId ?? "",
+    AttachmentUrl: data.attachment?.url ?? "",
+    AttachmentPublicId: data.attachment?.publicId ?? "",
+    AttachmentFileName: data.attachment?.fileName ?? "",
+    AttachmentResourceType: data.attachment?.resourceType ?? "",
   });
   return mapMessage(record);
 }
