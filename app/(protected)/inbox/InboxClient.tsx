@@ -31,8 +31,9 @@ const URGENCY_BADGE: Record<MessageUrgency, string> = {
   FYI: "bg-amber-100 text-amber-700",
 };
 
-function ThreadRow({ thread, currentUserName, currentUserPhoto, onActivity }: {
+function ThreadRow({ thread, currentUserId, currentUserName, currentUserPhoto, onActivity }: {
   thread: InboxThreadSummary;
+  currentUserId: string;
   currentUserName: string;
   currentUserPhoto?: string;
   onActivity: () => void;
@@ -68,7 +69,7 @@ function ThreadRow({ thread, currentUserName, currentUserPhoto, onActivity }: {
       </button>
       {expanded && (
         <div className="border-t border-gray-100 p-4">
-          <ProjectChannelThread tenantId={thread.tenantId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={onActivity} />
+          <ProjectChannelThread tenantId={thread.tenantId} currentUserId={currentUserId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={onActivity} />
         </div>
       )}
     </div>
@@ -180,7 +181,7 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
   );
 }
 
-export function InboxClient({ canBroadcast, currentUserName, currentUserPhoto }: { canBroadcast: boolean; currentUserName: string; currentUserPhoto?: string }) {
+export function InboxClient({ canBroadcast, currentUserId, currentUserName, currentUserPhoto }: { canBroadcast: boolean; currentUserId: string; currentUserName: string; currentUserPhoto?: string }) {
   const [threads, setThreads] = useState<InboxThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -241,7 +242,7 @@ export function InboxClient({ canBroadcast, currentUserName, currentUserPhoto }:
       ) : (
         <div className="space-y-2">
           {projectThreads.map(t => (
-            <ThreadRow key={t.tenantId} thread={t} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={load} />
+            <ThreadRow key={t.tenantId} thread={t} currentUserId={currentUserId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} onActivity={load} />
           ))}
         </div>
       )}

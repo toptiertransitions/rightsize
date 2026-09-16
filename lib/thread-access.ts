@@ -101,6 +101,17 @@ export async function canAccessChannel(
   return false;
 }
 
+/** Same as canAccessChannel, but also handles the broadcast sentinel tenant (which has no real "team" gate — any comms-hub role can view/post there, subject to the broadcast-specific Manager/Admin/Sales POST restriction enforced separately). */
+export async function canAccessTenantChannel(
+  clerkUserId: string,
+  sysRole: SystemRole | null,
+  tenantId: string,
+  channel: string
+): Promise<boolean> {
+  if (tenantId === BROADCAST_TENANT_ID) return isCommsHubRole(sysRole);
+  return canAccessChannel(clerkUserId, sysRole, tenantId, channel);
+}
+
 export interface ChannelInfo {
   key: string;
   label: string;

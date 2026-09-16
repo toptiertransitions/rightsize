@@ -4,11 +4,12 @@ import { ProjectChannelThread } from "@/components/messaging/ProjectChannelThrea
 
 interface ProjectMessagesSectionProps {
   tenantId: string;
+  currentUserId: string;
   currentUserName: string;
   currentUserPhoto?: string;
 }
 
-export function ProjectMessagesSection({ tenantId, currentUserName, currentUserPhoto }: ProjectMessagesSectionProps) {
+export function ProjectMessagesSection({ tenantId, currentUserId, currentUserName, currentUserPhoto }: ProjectMessagesSectionProps) {
   return (
     <div className="mt-10 pt-8 border-t border-gray-200">
       <div className="flex items-center gap-3 mb-6">
@@ -23,7 +24,7 @@ export function ProjectMessagesSection({ tenantId, currentUserName, currentUserP
           <p className="text-xs text-gray-400">Full team channel, plus private lines to HQ and your Team Lead</p>
         </div>
       </div>
-      <ProjectChannelThread tenantId={tenantId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
+      <ProjectChannelThread tenantId={tenantId} currentUserId={currentUserId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
     </div>
   );
 }

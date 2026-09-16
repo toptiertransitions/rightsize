@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getTenantById, getStaffMembers } from "@/lib/airtable";
 import type { StaffMember, Tenant, SystemRole } from "@/lib/types";
-import type { ProjectMessage } from "@/lib/airtable-messages";
+import type { ProjectMessage, MessageComment } from "@/lib/airtable-messages";
 import {
   getProjectMessages,
   createProjectMessage,
+  getCommentsForMessages,
   BROADCAST_TENANT_ID,
   TEAM_CHANNEL,
   channelParticipant,
@@ -42,10 +43,15 @@ export async function GET(req: NextRequest) {
   const messages = allMessages.filter(m => m.channel === channel);
   const nameByClerkId = new Map(staff.map(s => [s.clerkUserId, s.displayName]));
 
+  const commentsByMessage = await getCommentsForMessages(messages.map(m => m.id));
+
   // Profile photos aren't in Airtable — batch-fetch from Clerk for every
-  // distinct author in this thread (same enrichment pattern as the Ops
-  // staff roster in app/(protected)/staff/page.tsx).
-  const authorIds = Array.from(new Set(messages.map(m => m.authorClerkId).filter(Boolean)));
+  // distinct author across these messages AND their comments (same
+  // enrichment pattern as the Ops staff roster in app/(protected)/staff/page.tsx).
+  const authorIds = Array.from(new Set([
+    ...messages.map(m => m.authorClerkId),
+    ...Array.from(commentsByMessage.values()).flat().map(c => c.authorClerkId),
+  ].filter(Boolean)));
   let photoByClerkId = new Map<string, string>();
   if (authorIds.length > 0) {
     try {
@@ -55,10 +61,19 @@ export async function GET(req: NextRequest) {
     } catch { /* non-fatal — fall back to initials */ }
   }
 
-  const enriched: Array<ProjectMessage & { authorName: string; authorPhotoUrl?: string }> = messages.map(m => ({
+  const enriched: Array<ProjectMessage & {
+    authorName: string;
+    authorPhotoUrl?: string;
+    comments: Array<MessageComment & { authorName: string; authorPhotoUrl?: string }>;
+  }> = messages.map(m => ({
     ...m,
     authorName: nameByClerkId.get(m.authorClerkId) ?? "Unknown",
     authorPhotoUrl: photoByClerkId.get(m.authorClerkId) || undefined,
+    comments: (commentsByMessage.get(m.id) ?? []).map(c => ({
+      ...c,
+      authorName: nameByClerkId.get(c.authorClerkId) ?? "Unknown",
+      authorPhotoUrl: photoByClerkId.get(c.authorClerkId) || undefined,
+    })),
   }));
   return NextResponse.json({ messages: enriched });
 }
@@ -163,10 +178,11 @@ export async function POST(req: NextRequest) {
   const clerk = await clerkClient();
   const authorUser = await clerk.users.getUser(userId).catch(() => null);
   const authorDisplayName = [authorUser?.firstName, authorUser?.lastName].filter(Boolean).join(" ") || "A staff member";
-  const message: ProjectMessage & { authorName: string; authorPhotoUrl?: string } = {
+  const message: ProjectMessage & { authorName: string; authorPhotoUrl?: string; comments: MessageComment[] } = {
     ...created,
     authorName: authorDisplayName,
     authorPhotoUrl: authorUser?.imageUrl || undefined,
+    comments: [],
   };
 
   // Urgent messages email the relevant party for this channel — same

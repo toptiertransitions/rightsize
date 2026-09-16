@@ -6,7 +6,7 @@
  * member's private 1:1 with the project's Team Lead). See
  * PRD-ADDENDUM-2026-09-15.md for the original Phase A design context.
  *
- * Two tables:
+ * Three tables:
  *   ProjectMessages  — project-anchored messages + company broadcasts
  *                       (TenantId = "__broadcast__" for the latter),
  *                       each tagged with a Channel (empty = "team", for
@@ -15,6 +15,13 @@
  *                        powers unread badges (not in the original Phase A
  *                        schema spec — added because unread counts need a
  *                        server-tracked read marker; flagged when built)
+ *   MessageComments   — comments on a message, mirrors the existing
+ *                        ProjectNotes/NoteComments pattern in
+ *                        lib/airtable-notes.ts exactly (linked via
+ *                        MessageRecordId)
+ *
+ * Likes are a JSON array of clerkUserIds on ProjectMessages.LikedBy —
+ * same toggle-set pattern already used for AcknowledgedBy.
  */
 import Airtable from "airtable";
 
@@ -30,6 +37,7 @@ function getBase() {
 
 const MESSAGES_TABLE = process.env.AIRTABLE_PROJECT_MESSAGES_TABLE || "ProjectMessages";
 const READ_STATE_TABLE = process.env.AIRTABLE_THREAD_READ_STATE_TABLE || "ThreadReadState";
+const COMMENTS_TABLE = process.env.AIRTABLE_MESSAGE_COMMENTS_TABLE || "MessageComments";
 
 function toStr(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -49,6 +57,15 @@ export interface ProjectMessage {
   acknowledgedBy: string[];
   acknowledgedAt?: string;
   parentMessageId?: string;
+  likedBy: string[];
+}
+
+export interface MessageComment {
+  id: string;
+  messageId: string;
+  authorClerkId: string;
+  body: string;
+  createdAt: string;
 }
 
 export function hqChannel(clerkUserId: string): string { return `hq:${clerkUserId}`; }
@@ -66,6 +83,11 @@ function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage 
     const raw = toStr(f["AcknowledgedBy"]);
     if (raw) acknowledgedBy = JSON.parse(raw);
   } catch { /* leave empty on malformed JSON */ }
+  let likedBy: string[] = [];
+  try {
+    const raw = toStr(f["LikedBy"]);
+    if (raw) likedBy = JSON.parse(raw);
+  } catch { /* leave empty on malformed JSON */ }
   const urgency = f["Urgency"];
   return {
     id: record.id,
@@ -78,7 +100,19 @@ function mapMessage(record: Airtable.Record<Airtable.FieldSet>): ProjectMessage 
     acknowledgedBy,
     acknowledgedAt: toStr(f["AcknowledgedAt"]) || undefined,
     parentMessageId: toStr(f["ParentMessageId"]) || undefined,
+    likedBy,
   };
+}
+
+/** Single message by id — used to resolve tenantId/channel for access checks on like/comment routes. */
+export async function getProjectMessageById(id: string): Promise<ProjectMessage | null> {
+  const base = getBase();
+  try {
+    const record = await base(MESSAGES_TABLE).find(id);
+    return mapMessage(record);
+  } catch {
+    return null;
+  }
 }
 
 /** All messages for a project (every channel) — used to derive which DM channels have activity. */
@@ -158,6 +192,70 @@ export async function acknowledgeProjectMessage(id: string, clerkUserId: string)
     AcknowledgedAt: existing.acknowledgedAt ?? new Date().toISOString(),
   });
   return mapMessage(updated);
+}
+
+/** Toggle this user's like on a message — adds if absent, removes if present. */
+export async function toggleMessageLike(id: string, clerkUserId: string): Promise<ProjectMessage> {
+  const base = getBase();
+  const record = await base(MESSAGES_TABLE).find(id);
+  const existing = mapMessage(record);
+  const liked = existing.likedBy.includes(clerkUserId);
+  const likedBy = liked
+    ? existing.likedBy.filter(id => id !== clerkUserId)
+    : [...existing.likedBy, clerkUserId];
+  const updated = await base(MESSAGES_TABLE).update(id, {
+    LikedBy: JSON.stringify(likedBy),
+  });
+  return mapMessage(updated);
+}
+
+// ─── Comments ──────────────────────────────────────────────────────────────────
+
+function mapComment(record: Airtable.Record<Airtable.FieldSet>): MessageComment {
+  const f = record.fields;
+  return {
+    id: record.id,
+    messageId: toStr(f["MessageRecordId"]),
+    authorClerkId: toStr(f["AuthorClerkId"]),
+    body: toStr(f["Body"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+/** All comments for a set of messages in one call, grouped by messageId — mirrors getProjectNotes' comment batching. */
+export async function getCommentsForMessages(messageIds: string[]): Promise<Map<string, MessageComment[]>> {
+  const map = new Map<string, MessageComment[]>();
+  if (messageIds.length === 0) return map;
+  const base = getBase();
+  const formula = `OR(${messageIds.map(id => `{MessageRecordId} = "${id}"`).join(",")})`;
+  const records = await base(COMMENTS_TABLE)
+    .select({
+      filterByFormula: formula,
+      sort: [{ field: "CreatedAt", direction: "asc" }],
+    })
+    .all();
+  for (const r of records) {
+    const comment = mapComment(r);
+    if (!map.has(comment.messageId)) map.set(comment.messageId, []);
+    map.get(comment.messageId)!.push(comment);
+  }
+  return map;
+}
+
+export async function createMessageComment(data: {
+  messageId: string;
+  authorClerkId: string;
+  body: string;
+}): Promise<MessageComment> {
+  const base = getBase();
+  const createdAt = new Date().toISOString();
+  const record = await base(COMMENTS_TABLE).create({
+    MessageRecordId: data.messageId,
+    AuthorClerkId: data.authorClerkId,
+    Body: data.body,
+    CreatedAt: createdAt,
+  });
+  return mapComment(record);
 }
 
 // ─── Thread read state (unread badges) ────────────────────────────────────────

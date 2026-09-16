@@ -30,7 +30,7 @@ export default async function InboxPage() {
         <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
         <p className="text-gray-500 mt-1 text-sm">Messages across every project you have access to.</p>
       </div>
-      <InboxClient canBroadcast={canBroadcast} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
+      <InboxClient canBroadcast={canBroadcast} currentUserId={userId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
     </div>
   );
 }
