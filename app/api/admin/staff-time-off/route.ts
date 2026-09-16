@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getStaffMemberById, getStaffMembers, updateStaffAvailability } from "@/lib/airtable";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
@@ -43,9 +43,12 @@ export async function POST(req: NextRequest) {
 
   const updated = await updateStaffAvailability(staffMemberId, { timeOff: merged });
 
-  // Fire-and-forget: notify all TTTManager + TTTAdmin (same as self-submitted time off)
+  // Runs via after() so this reliably completes on serverless — a bare
+  // unawaited promise here gets silently killed mid-flight as soon as the
+  // response below is sent (same fix as the self-submitted flow in
+  // app/api/availability/route.ts).
   if (newEntries.length > 0) {
-    (async () => {
+    after(async () => {
       try {
         const allStaff = await getStaffMembers();
         const managers = allStaff.filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email);
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error("[admin/staff-time-off] notification email failed:", e);
       }
-    })();
+    });
   }
 
   return NextResponse.json({

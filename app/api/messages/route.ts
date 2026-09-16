@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getTenantById, getStaffMembers } from "@/lib/airtable";
 import type { StaffMember, Tenant } from "@/lib/types";
@@ -205,7 +205,11 @@ export async function POST(req: NextRequest) {
   // aren't part of the escalation system at all — a casual Slack-style
   // line between two people has no "Ops" to notify.
   if (urgency === "Urgent" && !isDmTenant(tenantId)) {
-    (async () => {
+    // Runs via after() so this reliably completes on serverless — a bare
+    // unawaited promise here gets silently killed mid-flight as soon as
+    // the response below is sent (same fix applied to the content-library
+    // and time-off notification routes for the same underlying bug).
+    after(async () => {
       try {
         const tenant = tenantId === BROADCAST_TENANT_ID ? null : await getTenantById(tenantId).catch(() => null);
         const allStaff = await getStaffMembers();
@@ -235,7 +239,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error("[messages] urgent notification email failed:", e);
       }
-    })();
+    });
   }
 
   return NextResponse.json({ message });

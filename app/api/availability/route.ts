@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getStaffMember, getSystemRole, updateStaffAvailability, getStaffMembers, getPlanEntriesForDateRange, getTenants } from "@/lib/airtable";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
@@ -53,8 +53,12 @@ export async function PATCH(req: NextRequest) {
     const newEntries = incomingTimeOff.filter((e) => !existingIds.has(e.id));
 
     if (newEntries.length > 0) {
-      // Fire-and-forget: send email to all TTTManager + TTTAdmin staff
-      (async () => {
+      // Runs via after() so this reliably completes on serverless — a bare
+      // unawaited promise here gets silently killed mid-flight as soon as
+      // the response below is sent, and this callback does enough async
+      // work (staff fetch, Clerk suspension check, plan-entry conflict
+      // lookup) to make that a real risk rather than a theoretical one.
+      after(async () => {
         try {
           const allStaff = await getStaffMembers();
           const managers = allStaff.filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email);
@@ -104,7 +108,7 @@ export async function PATCH(req: NextRequest) {
         } catch (e) {
           console.error("Time-off notification email failed:", e);
         }
-      })();
+      });
     }
   }
 

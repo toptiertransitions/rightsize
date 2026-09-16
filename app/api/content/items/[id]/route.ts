@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { updateContentItem, deleteContentItem, getContentItemById } from "@/lib/airtable-content";
@@ -41,9 +41,17 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     scheduledDate: body.scheduledDate,
     sharedWith: Array.isArray(body.sharedWith) ? body.sharedWith : undefined,
   });
-  // Notify team when status first transitions to Active
+  // Notify team when status first transitions to Active — via after() so
+  // it reliably finishes on serverless (see POST handler for why a bare
+  // unawaited promise here silently dropped notifications for slower items).
   if (item.status === "Active" && prevItem && prevItem.status !== "Active") {
-    notifyTeamNewContent(item).catch(e => console.error("[content/items PATCH] notify failed:", e));
+    after(async () => {
+      try {
+        await notifyTeamNewContent(item);
+      } catch (e) {
+        console.error("[content/items PATCH] notify failed:", e);
+      }
+    });
   }
 
   return NextResponse.json({ item });

@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { getContentItems, createContentItem } from "@/lib/airtable-content";
@@ -73,9 +73,21 @@ export async function POST(req: NextRequest) {
     sharedWith: Array.isArray(body.sharedWith) ? body.sharedWith : [],
   });
 
-  // Fire-and-forget team notification for new Active content
+  // Team notification for new Active content — runs via after() so it
+  // actually completes on serverless. A bare unawaited promise here gets
+  // silently killed mid-flight as soon as the response above is sent
+  // (Vercel functions aren't guaranteed to keep running background work
+  // once the request is done), which is why this sometimes "worked" for
+  // fast (non-PDF) items but reliably failed to send for slower ones —
+  // the PDF-summary + attachment work took long enough to get cut off.
   if (item.status === "Active") {
-    notifyTeamNewContent(item).catch(e => console.error("[content/items POST] notify failed:", e));
+    after(async () => {
+      try {
+        await notifyTeamNewContent(item);
+      } catch (e) {
+        console.error("[content/items POST] notify failed:", e);
+      }
+    });
   }
 
   return NextResponse.json({ item });
