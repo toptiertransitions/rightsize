@@ -102,13 +102,31 @@ export function DmSection({ currentUserId, currentUserName, currentUserPhoto }: 
   const [searching, setSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // A conversation just started locally, before the server has any record of
+  // it (no messages sent yet, so it can't show up in dm-list's activity-
+  // derived results). Tracked separately from `conversations` so that a
+  // server refresh — e.g. the read-marking call that fires the instant the
+  // thread opens — never wipes it out. Cleared once the server actually
+  // knows about it (i.e. a message has been sent).
+  const [pendingConversation, setPendingConversation] = useState<DmConversationSummary | null>(null);
+
+  // onActivity fires this on every send and every thread open (including
+  // background refreshes of a conversation that's already expanded) — only
+  // the very first load should show the full-list spinner, or an open
+  // thread would flash away mid-conversation every time.
+  const hasLoadedOnce = useRef(false);
+
   const load = useCallback(() => {
-    setLoading(true);
+    if (!hasLoadedOnce.current) setLoading(true);
     fetch("/api/messages/dm-list")
       .then(r => safeJson<{ conversations?: DmConversationSummary[] }>(r))
-      .then(d => setConversations(d.conversations ?? []))
+      .then(d => {
+        const server = d.conversations ?? [];
+        setConversations(server);
+        setPendingConversation(prev => (prev && server.some(c => c.tenantId === prev.tenantId)) ? null : prev);
+      })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { hasLoadedOnce.current = true; setLoading(false); });
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -142,21 +160,25 @@ export function DmSection({ currentUserId, currentUserName, currentUserPhoto }: 
     const tenantId = dmTenantId(currentUserId, contact.id);
     setSearchOpen(false);
     setQuery("");
-    // Add a placeholder row immediately if this is a brand-new conversation.
-    setConversations(prev => prev.some(c => c.tenantId === tenantId)
-      ? prev
-      : [{
-          tenantId,
-          otherUserId: contact.id,
-          otherUserName: contact.name,
-          otherUserPhoto: contact.photoUrl,
-          unreadCount: 0,
-          lastMessageAt: null,
-          lastMessagePreview: null,
-          lastMessageIsMine: false,
-        }, ...prev]);
+    // Only need a placeholder if this isn't already a real conversation.
+    if (!conversations.some(c => c.tenantId === tenantId)) {
+      setPendingConversation({
+        tenantId,
+        otherUserId: contact.id,
+        otherUserName: contact.name,
+        otherUserPhoto: contact.photoUrl,
+        unreadCount: 0,
+        lastMessageAt: null,
+        lastMessagePreview: null,
+        lastMessageIsMine: false,
+      });
+    }
     setExpandedTenantId(tenantId);
   }
+
+  const displayedConversations = pendingConversation && !conversations.some(c => c.tenantId === pendingConversation.tenantId)
+    ? [pendingConversation, ...conversations]
+    : conversations;
 
   return (
     <div>
@@ -195,13 +217,13 @@ export function DmSection({ currentUserId, currentUserName, currentUserPhoto }: 
       {/* Existing conversations */}
       {loading ? (
         <div className="py-8 text-center text-sm text-gray-400">Loading…</div>
-      ) : conversations.length === 0 ? (
+      ) : displayedConversations.length === 0 ? (
         <div className="py-8 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-2xl">
           No conversations yet — search above to message someone
         </div>
       ) : (
         <div className="space-y-2">
-          {conversations.map(c => (
+          {displayedConversations.map(c => (
             <DmRow
               key={c.tenantId}
               conversation={c}
