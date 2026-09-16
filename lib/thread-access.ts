@@ -8,8 +8,10 @@
  * Plan page already uses to gate shift visibility for TTTStaff: appearing
  * as a helper (by email) on a plan entry for that project.
  *
- * TTTSales is out of scope — the PRD only names crew, Team Lead, and Ops
- * (Manager/Admin) as participants.
+ * TTTSales has the same full access as Manager/Admin — every project's
+ * team channel regardless of status, every "hq:X" line, broadcast rights,
+ * Open Issues/acknowledgment. Confirmed explicitly, not the original PRD
+ * default (which only named crew/Team Lead/Ops).
  */
 import type { SystemRole } from "./types";
 import { getStaffMember, getStaffMembers, getTenants, getPlanEntriesForTenant, getPlanEntriesForDateRange } from "./airtable";
@@ -22,10 +24,16 @@ import {
   getProjectMessages,
 } from "./airtable-messages";
 
-const INTERNAL_ROLES: SystemRole[] = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
+const INTERNAL_ROLES: SystemRole[] = ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"];
+const MANAGER_EQUIVALENT_ROLES: SystemRole[] = ["TTTManager", "TTTAdmin", "TTTSales"];
 
 export function isCommsHubRole(sysRole: SystemRole | null): boolean {
   return !!sysRole && INTERNAL_ROLES.includes(sysRole);
+}
+
+/** Manager/Admin/Sales all get identical full access — every project, every HQ line, broadcast + acknowledge rights. */
+export function isManagerEquivalent(sysRole: SystemRole | null): boolean {
+  return !!sysRole && MANAGER_EQUIVALENT_ROLES.includes(sysRole);
 }
 
 async function isHelperOnTenant(clerkUserId: string, tenantId: string): Promise<boolean> {
@@ -43,7 +51,7 @@ export async function canAccessProjectThread(
   tenantId: string
 ): Promise<boolean> {
   if (!isCommsHubRole(sysRole)) return false;
-  if (sysRole === "TTTManager" || sysRole === "TTTAdmin") return true;
+  if (isManagerEquivalent(sysRole)) return true;
 
   const tenants = await getTenants().catch(() => []);
   const tenant = tenants.find(t => t.id === tenantId);
@@ -70,7 +78,7 @@ export async function canAccessChannel(
   if (!isCommsHubRole(sysRole)) return false;
   if (channel === TEAM_CHANNEL) return canAccessProjectThread(clerkUserId, sysRole, tenantId);
 
-  const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const isManager = isManagerEquivalent(sysRole);
   const participant = channelParticipant(channel);
   if (!participant) return false;
 
@@ -169,7 +177,7 @@ export async function getAvailableChannels(
   tenantId: string
 ): Promise<ChannelInfo[]> {
   if (!isCommsHubRole(sysRole)) return [];
-  const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const isManager = isManagerEquivalent(sysRole);
 
   const tenants = await getTenants().catch(() => []);
   const tenant = tenants.find(t => t.id === tenantId);
@@ -211,7 +219,7 @@ export async function getAccessibleTenantIds(
   const allTenants = await getTenants().catch(() => []);
   const eligibleTenants = allTenants.filter(t => !t.isLostDeal);
 
-  if (sysRole === "TTTManager" || sysRole === "TTTAdmin") {
+  if (isManagerEquivalent(sysRole)) {
     return [BROADCAST_TENANT_ID, ...eligibleTenants.map(t => t.id)];
   }
 

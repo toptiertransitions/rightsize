@@ -25,7 +25,7 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const isManager = sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
   const tenantIds = await getAccessibleTenantIds(userId, sysRole);
   if (tenantIds.length === 0) return NextResponse.json({ threads: [] as InboxThreadSummary[] });
 

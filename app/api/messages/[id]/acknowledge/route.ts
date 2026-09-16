@@ -11,8 +11,8 @@ export async function POST(
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin") {
-    return NextResponse.json({ error: "Forbidden — Manager or Admin only" }, { status: 403 });
+  if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin" && sysRole !== "TTTSales") {
+    return NextResponse.json({ error: "Forbidden — Manager, Admin, or Sales only" }, { status: 403 });
   }
 
   const { id } = await params;

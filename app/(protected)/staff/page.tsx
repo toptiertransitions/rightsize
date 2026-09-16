@@ -44,6 +44,10 @@ export default async function StaffPage() {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const canEdit = role === "TTTManager" || role === "TTTAdmin";
+  // Communication Hub Open Issues tab — same access as Manager/Admin,
+  // plus TTTSales (confirmed explicitly; separate from canEdit so Sales
+  // doesn't also pick up crate/inventory/staff-editing rights).
+  const canAccessOpenIssues = canEdit || role === "TTTSales";
 
   return (
     <StaffClient
@@ -55,6 +59,7 @@ export default async function StaffPage() {
       tenants={activeTenants}
       subcontractors={subcontractors}
       canEdit={canEdit}
+      canAccessOpenIssues={canAccessOpenIssues}
     />
   );
 }

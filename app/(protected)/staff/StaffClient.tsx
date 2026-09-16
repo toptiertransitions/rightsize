@@ -1573,9 +1573,10 @@ interface Props {
   tenants: { id: string; name: string }[];
   subcontractors: Subcontractor[];
   canEdit?: boolean; // true for TTTManager and TTTAdmin
+  canAccessOpenIssues?: boolean; // canEdit, plus TTTSales
 }
 
-export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, storageUnits, tenants, subcontractors, canEdit = false }: Props) {
+export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, storageUnits, tenants, subcontractors, canEdit = false, canAccessOpenIssues = false }: Props) {
   const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors" | "open-issues">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
@@ -1672,7 +1673,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
           { key: "supply", label: "Supply Tracking" },
           { key: "subcontractors", label: "Subcontractor Management" },
           { key: "open-issues", label: "Open Issues" },
-        ] as const).filter(tab => tab.key !== "open-issues" || canEdit).map(tab => (
+        ] as const).filter(tab => tab.key !== "open-issues" || canAccessOpenIssues).map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -1927,8 +1928,8 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
         <SubcontractorTab initialSubs={subcontractors} tenants={tenants} />
       )}
 
-      {/* Open Issues Tab — Manager/Admin only */}
-      {activeTab === "open-issues" && canEdit && (
+      {/* Open Issues Tab — Manager/Admin/Sales */}
+      {activeTab === "open-issues" && canAccessOpenIssues && (
         <OpenIssuesTab />
       )}
     </div>

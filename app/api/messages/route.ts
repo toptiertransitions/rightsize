@@ -78,7 +78,7 @@ function urgentRecipients(params: {
   allStaff: StaffMember[];
 }): StaffMember[] {
   const { channel, posterId, tenant, allStaff } = params;
-  const managers = allStaff.filter(s => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin"));
+  const managers = allStaff.filter(s => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin" || s.role === "TTTSales"));
 
   if (channel === TEAM_CHANNEL) {
     const teamLead = tenant?.teamLeadClerkId
@@ -144,9 +144,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (tenantId === BROADCAST_TENANT_ID) {
-    // Company-wide broadcasts: Manager/Admin only.
-    if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin") {
-      return NextResponse.json({ error: "Forbidden — Manager or Admin only" }, { status: 403 });
+    // Company-wide broadcasts: Manager/Admin/Sales only.
+    if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin" && sysRole !== "TTTSales") {
+      return NextResponse.json({ error: "Forbidden — Manager, Admin, or Sales only" }, { status: 403 });
     }
   } else {
     const allowed = await canAccessChannel(userId, sysRole, tenantId, channel);

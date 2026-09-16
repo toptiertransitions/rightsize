@@ -11,10 +11,10 @@ export default async function InboxPage() {
   if (!userId) redirect("/sign-in");
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  const allowed = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const allowed = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
   if (!allowed) redirect("/home");
 
-  const canBroadcast = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canBroadcast = sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
 
   const clerk = await clerkClient();
   const clerkUser = await clerk.users.getUser(userId).catch(() => null);
