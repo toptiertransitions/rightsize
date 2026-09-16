@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { safeJson } from "@/lib/utils";
 import { TEAM_CHANNEL, isDmTenant } from "@/lib/airtable-messages";
 import type { ProjectMessage, MessageComment, MessageUrgency } from "@/lib/airtable-messages";
-import { AttachButton, AttachmentPendingChip, AttachmentView, uploadMessageAttachment } from "./MessageAttachment";
+import { AttachButton, AttachmentPendingChip, AttachmentView, prepareMessageAttachment, uploadMessageAttachment } from "./MessageAttachment";
 
 type EnrichedComment = MessageComment & { authorName: string; authorPhotoUrl?: string };
 type EnrichedMessage = ProjectMessage & { authorName: string; authorPhotoUrl?: string; comments: EnrichedComment[] };
@@ -310,6 +310,15 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
     }
   }
 
+  async function handleAttachSelect(rawFile: File) {
+    setError("");
+    try {
+      setPendingFile(await prepareMessageAttachment(rawFile));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't process that file.");
+    }
+  }
+
   function handleLikeToggled(messageId: string, likedBy: string[]) {
     setMessages(prev => prev.map(m => (m.id === messageId ? { ...m, likedBy } : m)));
   }
@@ -383,7 +392,7 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
               </div>
             )}
             <div className="flex items-center gap-2">
-              <AttachButton onSelect={setPendingFile} disabled={submitting} />
+              <AttachButton onSelect={handleAttachSelect} disabled={submitting} />
               <button
                 onClick={handleSend}
                 disabled={submitting || (!body.trim() && !pendingFile)}

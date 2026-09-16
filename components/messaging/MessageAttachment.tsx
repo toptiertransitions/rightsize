@@ -12,15 +12,26 @@ export interface MessageAttachmentData {
 }
 
 /**
- * Uploads one file via the shared /api/upload endpoint (used elsewhere for
- * item photos, floorplans, daily recaps — same HEIC handling, same
- * Vercel-body-limit-aware compression) and returns everything needed to
- * attach it to a message. `fileName` is read AFTER prepareImageForUpload
- * runs, so it's the possibly-renamed (.heic -> .jpg) name that actually
- * matches what got uploaded — never the stale original.
+ * Runs HEIC/HEIF -> JPEG conversion and compression on a just-picked file
+ * (same prepareImageForUpload used for item photos/floorplans). MUST be
+ * called at selection time, before building any local preview or storing
+ * the file — a raw, unconverted HEIC file can't be rendered by <img> in
+ * any browser but Safari, so previewing it first shows a broken image,
+ * and deferring conversion to send-time only surfaces a failure after the
+ * user thinks they've already attached the photo.
  */
-export async function uploadMessageAttachment(rawFile: File, tenantId?: string): Promise<MessageAttachmentData> {
-  const file = await prepareImageForUpload(rawFile);
+export async function prepareMessageAttachment(rawFile: File): Promise<File> {
+  return prepareImageForUpload(rawFile);
+}
+
+/**
+ * Uploads an already-prepared file (see prepareMessageAttachment above)
+ * via the shared /api/upload endpoint and returns everything needed to
+ * attach it to a message. `fileName` matches the possibly-renamed
+ * (.heic -> .jpg) name that actually got uploaded — never the stale
+ * original.
+ */
+export async function uploadMessageAttachment(file: File, tenantId?: string): Promise<MessageAttachmentData> {
   const formData = new FormData();
   formData.append("file", file);
   if (tenantId) formData.append("tenantId", tenantId);

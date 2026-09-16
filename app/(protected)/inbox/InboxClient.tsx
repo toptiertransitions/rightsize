@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { safeJson } from "@/lib/utils";
 import { ProjectChannelThread } from "@/components/messaging/ProjectChannelThread";
 import { DmSection } from "@/components/messaging/DmSection";
-import { AttachButton, AttachmentPendingChip, AttachmentView, uploadMessageAttachment } from "@/components/messaging/MessageAttachment";
+import { AttachButton, AttachmentPendingChip, AttachmentView, prepareMessageAttachment, uploadMessageAttachment } from "@/components/messaging/MessageAttachment";
 import type { InboxThreadSummary } from "@/app/api/messages/inbox/route";
 import type { ProjectMessage, MessageUrgency } from "@/lib/airtable-messages";
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/project-status";
@@ -113,6 +113,15 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
 
   useEffect(() => { if (expanded) load(); }, [expanded, load]);
 
+  async function handleAttachSelect(rawFile: File) {
+    setError("");
+    try {
+      setPendingFile(await prepareMessageAttachment(rawFile));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't process that file.");
+    }
+  }
+
   async function handleSend() {
     const text = body.trim();
     if (!text && !pendingFile) return;
@@ -171,7 +180,7 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
               />
               {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
               <div className="flex justify-end items-center gap-2 mt-2">
-                <AttachButton onSelect={setPendingFile} disabled={submitting} />
+                <AttachButton onSelect={handleAttachSelect} disabled={submitting} />
                 <button
                   onClick={handleSend}
                   disabled={submitting || (!body.trim() && !pendingFile)}
