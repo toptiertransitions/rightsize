@@ -200,7 +200,7 @@ to hide Google Sign-In on native).
 | Camera/photo library access without a declared purpose string | **Hard app crash** (not a permission prompt) the instant `<input capture>` tries to open the camera | Added `NSCameraUsageDescription` + `NSPhotoLibraryUsageDescription` to `ios/App/App/Info.plist` |
 | `window.open()` — no "new tab" concept in a WebView | Silently does nothing, or navigates the whole app away | `openInBrowser()` in `lib/native.ts` — routes through `@capacitor/browser`'s in-app browser sheet on native |
 | `<a download>` — no Downloads folder concept | Same as above | `components/shared/NativeFileLink.tsx` — drop-in anchor replacement, same behavior on web |
-| `blob:` URLs (client-generated PDFs/CSVs) — scoped to the WebView's own JS context, can't be handed to a separate native browser view | Generated payout PDFs / catalog CSV exports fail to open/save on native | `saveOrShareBlob()` in `lib/native.ts` — writes to the app's cache dir via `@capacitor/filesystem`, hands it to the native Share sheet via `@capacitor/share` |
+| `blob:` URLs (client-generated PDFs/CSVs) — scoped to the WebView's own JS context, can't be handed to a separate native browser view | Generated payout PDFs / catalog CSV exports fail to open/save on native | `viewOrShareBlob()` / `downloadOrShareBlob()` in `lib/native.ts` — writes to the app's cache dir via `@capacitor/filesystem`, hands it to the native Share sheet via `@capacitor/share`. Two functions, not one — the original web code wasn't uniform (some callers used `window.open()` to just view the blob, others used a programmatic `<a download>` click to force-save it with an exact filename), so each function's web branch matches its own callers' original behavior exactly. Caught this distinction only after being asked directly whether the fix had any web impact and checking the actual diffs — an earlier single-function version had silently dropped the filename-on-save behavior for 2 of the 4 callers. |
 
 **Not yet applied**, found via a broader grep for the same
 `blob:`-download pattern: 13 files total use it, the other ~10 beyond
@@ -209,8 +209,10 @@ import-export tools (TimeTrackerClient, PFInventoryClient,
 EstatesClient, the Circle Hand/CRM importers, ItemImportClient).
 Deliberately deferred — desktop-oriented admin bulk-data workflows,
 lower priority than the catalog/sales/messaging paths already being
-tested on-device. `saveOrShareBlob()` already exists as a ready-made
-fix for whenever these come up.
+tested on-device. `downloadOrShareBlob()` already exists as a
+ready-made fix for whenever these come up (check whether each one
+originally used `window.open()` or a `<a download>` click before
+picking which of the two functions to use, per the note above).
 
 **General lesson for anything new added to the app going forward:**
 any browser API gated by an OS privacy permission (camera, photo
