@@ -2763,6 +2763,99 @@ export async function updateStaffAvailability(
   return mapStaffMember(await res.json());
 }
 
+// ─── Device Push Tokens ───────────────────────────────────────────────────────
+function pushTokensFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.DEVICE_PUSH_TOKENS;
+  return fetch(`https://api.airtable.com/v0/${base}/${table}${path}`, {
+    cache: "no-store",
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export interface DevicePushToken {
+  id: string;
+  token: string;
+  clerkUserId: string;
+  platform: "iOS" | "Android";
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+function mapDevicePushToken(record: AirtableRecord): DevicePushToken {
+  const f = record.fields;
+  return {
+    id: record.id,
+    token: toStr(f["Token"]),
+    clerkUserId: toStr(f["ClerkUserId"]),
+    platform: (toStr(f["Platform"]) || "iOS") as "iOS" | "Android",
+    createdAt: toStr(f["CreatedAt"]),
+    lastSeenAt: toStr(f["LastSeenAt"]),
+  };
+}
+
+// Registers (or refreshes) a device token for a user. Dedupes on the token
+// itself — the same physical device re-registering (app relaunch, token
+// refresh) updates the existing row's owner/timestamp rather than piling up
+// duplicates, and a token that moved to a different account (device shared,
+// account switched) gets reassigned rather than left pointing at the old user.
+export async function registerDeviceToken(data: {
+  token: string;
+  clerkUserId: string;
+  platform: "iOS" | "Android";
+}): Promise<void> {
+  const formula = encodeURIComponent(`{Token} = "${data.token}"`);
+  const res = await pushTokensFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  const existing = res.ok ? await res.json().catch(() => ({ records: [] })) : { records: [] };
+  const now = new Date().toISOString();
+  const fields = {
+    Token: data.token,
+    ClerkUserId: data.clerkUserId,
+    Platform: data.platform,
+    LastSeenAt: now,
+  };
+  if (existing.records?.length) {
+    await pushTokensFetch(`/${existing.records[0].id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    });
+  } else {
+    await pushTokensFetch("", {
+      method: "POST",
+      body: JSON.stringify({ fields: { ...fields, CreatedAt: now } }),
+    });
+  }
+}
+
+export async function unregisterDeviceToken(token: string): Promise<void> {
+  const formula = encodeURIComponent(`{Token} = "${token}"`);
+  const res = await pushTokensFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!res.ok) return;
+  const data = await res.json().catch(() => ({ records: [] }));
+  if (data.records?.length) {
+    await pushTokensFetch(`/${data.records[0].id}`, { method: "DELETE" });
+  }
+}
+
+// Returns every registered device for the given set of Clerk user ids
+// (usually 1-3 devices per person — phone, maybe a second device).
+export async function getDeviceTokensForUsers(clerkUserIds: string[]): Promise<DevicePushToken[]> {
+  const ids = Array.from(new Set(clerkUserIds.filter(Boolean)));
+  if (ids.length === 0) return [];
+  const orFormulas = ids.map((id) => `{ClerkUserId} = "${id}"`).join(",");
+  const formula = encodeURIComponent(`OR(${orFormulas})`);
+  const res = await pushTokensFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ records: [] }));
+  return (data.records as AirtableRecord[]).map(mapDevicePushToken);
+}
+
 // ─── System Role Resolution ───────────────────────────────────────────────────
 // Single source of truth for role lookup.
 // 1. TTT_ADMIN_USER_IDS env var  → TTTAdmin (bootstrap)

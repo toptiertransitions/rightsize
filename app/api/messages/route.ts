@@ -11,10 +11,12 @@ import {
   TEAM_CHANNEL,
   channelParticipant,
   isDmTenant,
+  otherDmParticipant,
 } from "@/lib/airtable-messages";
 import { canAccessTenantChannel } from "@/lib/thread-access";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import { buildUrgentMessageEmail } from "@/lib/email";
+import { sendPushToClerkUsers } from "@/lib/push-send";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -216,30 +218,57 @@ export async function POST(req: NextRequest) {
         const recipients = urgentRecipients({ channel, posterId: userId, tenant, allStaff });
 
         const excludedIds = await getSuspendedOrDeletedClerkUserIds(recipients.map(s => s.clerkUserId));
-        const recipientEmails = Array.from(new Set(
-          recipients.filter(s => !excludedIds.has(s.clerkUserId) && s.email).map(s => s.email)
-        ));
-        if (recipientEmails.length === 0) return;
+        const liveRecipients = recipients.filter(s => !excludedIds.has(s.clerkUserId));
+        const recipientEmails = Array.from(new Set(liveRecipients.filter(s => s.email).map(s => s.email)));
 
         const projectName = tenant?.name ?? "Company-wide";
         const label = channelLabel(channel, projectName);
-        const html = buildUrgentMessageEmail({
-          authorName: authorDisplayName,
-          projectName: label,
-          body: text?.trim() || `[Attachment: ${attachment?.fileName}]`,
-          planUrl: tenant ? `${APP_URL}/plan?tenantId=${tenantId}` : `${APP_URL}/inbox`,
-        });
+        const bodyPreview = text?.trim() || `[Attachment: ${attachment?.fileName}]`;
 
-        await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || "notifications@toptiertransitions.com",
-          to: recipientEmails,
-          subject: `Urgent — ${label}`,
-          html,
-        });
+        if (recipientEmails.length > 0) {
+          const html = buildUrgentMessageEmail({
+            authorName: authorDisplayName,
+            projectName: label,
+            body: bodyPreview,
+            planUrl: tenant ? `${APP_URL}/plan?tenantId=${tenantId}` : `${APP_URL}/inbox`,
+          });
+          await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || "notifications@toptiertransitions.com",
+            to: recipientEmails,
+            subject: `Urgent — ${label}`,
+            html,
+          });
+        }
+
+        await sendPushToClerkUsers(
+          liveRecipients.map(s => s.clerkUserId),
+          { title: `Urgent — ${label}`, body: `${authorDisplayName}: ${bodyPreview}`, url: "/inbox" }
+        );
       } catch (e) {
-        console.error("[messages] urgent notification email failed:", e);
+        console.error("[messages] urgent notification failed:", e);
       }
     });
+  }
+
+  // DMs skip the email escalation system entirely (see comment above — no
+  // "Ops" to notify for a 1:1 line), but a push is exactly the low-noise,
+  // instant-ping notification a DM calls for, so every DM gets one
+  // regardless of urgency.
+  if (isDmTenant(tenantId)) {
+    const recipientId = otherDmParticipant(tenantId, userId);
+    if (recipientId) {
+      after(async () => {
+        try {
+          await sendPushToClerkUsers([recipientId], {
+            title: authorDisplayName,
+            body: text?.trim() || `[Attachment: ${attachment?.fileName}]`,
+            url: "/inbox",
+          });
+        } catch (e) {
+          console.error("[messages] DM push failed:", e);
+        }
+      });
+    }
   }
 
   return NextResponse.json({ message });

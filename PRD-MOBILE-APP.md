@@ -25,6 +25,7 @@
 4. [Data Model Integration](#4-data-model-integration)
 5. [Rollout Plan & Risks](#5-rollout-plan--risks)
 6. [Open Decisions](#6-open-decisions)
+7. [Push Notifications](#7-push-notifications)
 
 ---
 
@@ -661,6 +662,40 @@ These require input before implementation begins:
 | **OD-6** | Initial rollout scope | **Decided: eventual public release intended** — staff, existing clients, and referral partners are all in scope as users of the app (each sees their existing role-based web view). Sequencing still open: TestFlight staff pilot first (in progress), public App Store listing is a later phase, not blocking current work. | Store review timeline planning, App Store listing copy/category scoped for a broader audience |
 | **OD-7** | `startOnBoot` behavior | True (resume tracking if device reboots mid-shift) / False (require manual reopen) | Complexity, Play Store foreground service behavior |
 | **OD-8** | Client/Partner-facing impact | **Decided: clients and referral partners ARE intended users of the app itself** (their existing web portal views, unchanged). GPS Check-In/Check-Out specifically remains staff-only, permanently — no location permission should ever be requested for a Client or Partner-role session. | Scope boundary confirmation — GPS code must gate on role, not just "is native app" |
+
+---
+
+## 7. Push Notifications
+
+**Status: code built and shipped; two Apple Developer Portal steps remain before it can actually deliver a push (see below).** Piloted via the Communication Hub (Inbox) — DMs and Urgent project messages, both already-existing notification triggers.
+
+### Architecture
+
+- **Device registration**: `components/shared/PushNotificationBootstrap.tsx`, mounted native-only in `app/(protected)/layout.tsx`. On launch, requests notification permission, calls `PushNotifications.register()` (`@capacitor/push-notifications`), and POSTs the resulting APNs device token to `POST /api/push/register`. Runs for every authenticated role, not just staff — client and partner sessions can register a device too, same as they get the rest of the app.
+- **Storage**: new Airtable table `DevicePushTokens` (`Token` primary field, `ClerkUserId`, `Platform`, `CreatedAt`, `LastSeenAt`). Dedupes on `Token` — a re-registering device updates its existing row rather than piling up duplicates, and a token that moved to a different account gets reassigned. Helpers in `lib/airtable.ts`: `registerDeviceToken`, `unregisterDeviceToken`, `getDeviceTokensForUsers`.
+- **Sending**: `lib/push-send.ts` — `sendPushToClerkUsers(clerkUserIds, { title, body, url })`. Talks to Apple's APNs HTTP/2 API directly (Node's core `http2` module + a JWT signed with an APNs Authentication Key), no third-party push SDK. A `410`/`400 BadDeviceToken` response auto-deregisters the dead token. No-ops (logs and returns) if the APNs env vars below aren't set — safe to ship ahead of Apple Developer Portal configuration.
+- **Triggers wired so far** (`app/api/messages/route.ts`, inside the existing `after()` blocks — never blocks the message-send response):
+  - **Every DM message** (any urgency) → push to the other participant. DMs were deliberately excluded from the email-escalation system entirely (no "Ops" to notify for a 1:1 line) — push is the right-weight channel for exactly that case, and this is the pilot the Inbox nav item was added for.
+  - **Urgent project/HQ/Team-Lead-channel messages** → push to the same `urgentRecipients()` set that already gets the escalation email (Manager/Admin/Sales, plus the project's Team Lead for the team channel), as a same-time supplement to that email, not a replacement.
+- **Tap handling**: `pushNotificationActionPerformed` listener routes the tap into the notification's `url` payload (defaults to `/inbox`).
+- **Entitlements**: `ios/App/App/App.entitlements` (new file, `aps-environment: development`) wired into both build configs via `CODE_SIGN_ENTITLEMENTS`. Xcode overrides the `aps-environment` value automatically at archive/sign time based on the resolved provisioning profile (Automatic signing), so the file's own value only matters for local `Run` builds.
+
+### Required env vars (not yet set — push silently no-ops without them)
+
+| Var | What it is |
+|---|---|
+| `APNS_TEAM_ID` | Apple Developer Team ID — already known: `598YNP88ZN` |
+| `APNS_KEY_ID` | Key ID of the APNs Authentication Key (`.p8`) — generated in the portal step below |
+| `APNS_PRIVATE_KEY` | The `.p8` key's contents (PEM). Fine to paste with real newlines in Vercel's env var UI; `\n`-escaped single-line also supported |
+| `APNS_BUNDLE_ID` | `com.toptiertransitions.rightsizeapp` |
+| `APNS_ENVIRONMENT` | `production` (default) or `development` — TestFlight and App Store builds both use Apple's *production* APNs host, not sandbox |
+
+### Two things only the Apple Developer Portal (human) side can do — nothing further to build until these are done
+
+1. **Generate an APNs Authentication Key**: developer.apple.com → Certificates, Identifiers & Profiles → Keys → **+** → check "Apple Push Notifications service (APNs)" → Continue/Register → download the `.p8` (Apple lets you download it exactly once) → note the **Key ID** shown on that page. Set `APNS_KEY_ID` and `APNS_PRIVATE_KEY` (the `.p8` contents) in Vercel's env vars from this.
+2. **Enable the Push Notifications capability on the App ID**: Certificates, Identifiers & Profiles → Identifiers → `com.toptiertransitions.rightsizeapp` → check "Push Notifications" → Save. Then in Xcode, open the App target's Signing & Capabilities tab and add the "Push Notifications" capability there too (confirms the entitlement against the now-updated App ID and lets Automatic Signing regenerate a profile that actually includes it) — the next Archive/Distribute will pick up the new profile.
+
+Once both are done and the env vars are set on Vercel, no further deploy is needed on the code side — DM and Urgent-message pushes go live immediately for anyone with the app installed and permission granted.
 
 ---
 

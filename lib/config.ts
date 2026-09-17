@@ -99,6 +99,7 @@ export const AIRTABLE_TABLES = {
   REP_QUARTERLY_GOALS: process.env.AIRTABLE_REP_QUARTERLY_GOALS_TABLE || "RepQuarterlyGoals",
   QUARTERLY_COMPANY_PLANS: process.env.AIRTABLE_QUARTERLY_COMPANY_PLANS_TABLE || "QuarterlyCompanyPlans",
   WAR_ROOM_SPOTLIGHT: process.env.AIRTABLE_WAR_ROOM_SPOTLIGHT_TABLE || "WarRoomSpotlight",
+  DEVICE_PUSH_TOKENS: process.env.AIRTABLE_DEVICE_PUSH_TOKENS_TABLE || "DevicePushTokens",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
