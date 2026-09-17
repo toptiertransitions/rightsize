@@ -224,6 +224,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   const [tttUsers, setTttUsers] = useState<TTTUser[]>([]);
   const [teamSearch, setTeamSearch] = useState("");
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+  const [otherShifts, setOtherShifts] = useState<Record<string, { projectName: string; startTime?: string; endTime?: string }[]>>({});
 
   // Effective tenant ID: use prop if set, otherwise fall back to selected
   const effectiveTenantId = tenantId || selectedTenantId;
@@ -255,8 +256,22 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
     fetch("/api/plan/ttt-users")
       .then(r => r.json())
       .then(d => { if (d.users) setTttUsers(d.users); })
-      .catch(() => {});
+      .catch(e => console.error("[AddFocusModal] failed to load TTT team members:", e));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Which team members are already helping on ANOTHER project's shift this
+  // same date — separate from the weekly-availability/time-off check below,
+  // which only looks at a person's own declared schedule.
+  useEffect(() => {
+    if (!date) { setOtherShifts({}); return; }
+    const params = new URLSearchParams({ date });
+    if (entry?.id) params.set("excludeEntryId", entry.id);
+    if (effectiveTenantId) params.set("excludeTenantId", effectiveTenantId);
+    fetch(`/api/plan/shift-conflicts?${params}`)
+      .then(r => r.json())
+      .then(d => setOtherShifts(d.conflicts ?? {}))
+      .catch(e => { console.error("[AddFocusModal] failed to load shift conflicts:", e); setOtherShifts({}); });
+  }, [date, entry?.id, effectiveTenantId]);
 
   // Fetch rooms dynamically when in all-projects mode and a project is selected
   useEffect(() => {
@@ -718,6 +733,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                 {teamHelpers.map(h => {
                   const member = tttUsers.find(u => u.email.toLowerCase() === h.email.toLowerCase());
                   const conflict = member ? checkAvailabilityConflict(member, date, startTime, endTime) : null;
+                  const doubleBooked = otherShifts[h.email.toLowerCase()];
                   return (
                     <div key={h.email} className="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden">
                       <div className="flex items-center gap-2.5 px-3 py-2">
@@ -754,6 +770,21 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                           </button>
                         )}
                       </div>
+                      {doubleBooked && doubleBooked.length > 0 && (
+                        <div className="flex items-start gap-1.5 px-3 pb-2 pt-0">
+                          <svg className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                          </svg>
+                          <span className="text-[11px] text-red-700 font-medium">
+                            Already on {doubleBooked.map((s, i) => (
+                              <span key={i}>
+                                {i > 0 && ", "}
+                                {s.projectName}{s.startTime && s.endTime ? ` (${fmt12simple(s.startTime)}–${fmt12simple(s.endTime)})` : ""}
+                              </span>
+                            ))} this date
+                          </span>
+                        </div>
+                      )}
                       {conflict && (
                         <div className="flex items-center gap-1.5 px-3 pb-2 pt-0">
                           <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
