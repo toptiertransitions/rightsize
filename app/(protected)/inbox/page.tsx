@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { getSystemRole } from "@/lib/airtable";
 import { InboxClient } from "./InboxClient";
 
-// Communication Hub Phase A — unified inbox. Deliberately NOT linked from
-// the main nav yet (testing with real accounts via direct URL only); this
-// page still enforces normal auth + role checks as if it were live.
+// Communication Hub Phase A — unified inbox. Linked from the main nav for
+// TTTAdmin only (see components/layout/Header.tsx) while we pilot this as
+// the surface for push notifications; still enforces the full role check
+// below independent of the nav link.
 export default async function InboxPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");

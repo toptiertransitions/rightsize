@@ -100,6 +100,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     // Ops — Manager, Admin, and Sales
     ...((isManager || isSales) ? [{ href: "/staff", base: "/staff", label: "Ops" }] : []),
     { href: "/help", base: "/help", label: "Help" },
+    // Inbox — Admin only, piloting push-notification groundwork
+    ...(isAdmin ? [{ href: "/inbox", base: "/inbox", label: "Inbox" }] : []),
   ];
 
   return (
