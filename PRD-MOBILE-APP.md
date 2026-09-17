@@ -537,7 +537,7 @@ These are thin Airtable-write routes matching the existing pattern in the codeba
 ### 5.1 Order of Operations — Prerequisites Before First Build
 
 **Phase 0 — Accounts & Certificates (blocking):**
-- [~] Apple Developer Program account — **enrollment submitted 2026-09-15 as Organization (Top Tier Transitions), awaiting Apple approval (~48h+)**
+- [x] Apple Developer Program account — **approved and paid 2026-09-17, Organization (Top Tier Transitions)**
 - [ ] Google Play Console account active (25 USD one-time)
 - [x] Xcode installed and Command Line Tools configured on dev Mac
 - [ ] Android Studio installed with Android SDK 34 (API 34 / Android 14)
@@ -551,7 +551,7 @@ These are thin Airtable-write routes matching the existing pattern in the codeba
 - [x] Verify all existing routes work — Home, Plan, Catalog, CRM — **confirmed working in iOS simulator 2026-09-16**
 - [~] Configure app icons and splash screen — **iOS done (TTT house/hands mark, brand green). Android not started.**
 - [x] Add safe-area CSS tweaks (`env(safe-area-inset-*)`) to main layout
-- [ ] First TestFlight build distributed to TTT team for smoke testing — blocked on Apple Developer Program approval above
+- [ ] First TestFlight build distributed to TTT team for smoke testing — **unblocked; next milestone, see plan below**
 
 **Phase 2 — GPS Check-In (foreground first, background second):**
 - [ ] Airtable: add `CheckInEvents` table + GPS fields to `TimeEntry` (schema change, no data migration needed)
