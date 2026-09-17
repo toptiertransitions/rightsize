@@ -548,7 +548,7 @@ These are thin Airtable-write routes matching the existing pattern in the codeba
 - [x] `npx cap init` + `npx cap add ios` — done. `npx cap add android` — not started
 - [x] Set `server.url` to production Vercel URL in `capacitor.config.ts`
 - [~] Verify Clerk sign-in works inside the simulator (iOS) and emulator (Android) — **iOS: email-code/password sign-in confirmed working; Google OAuth does NOT work in the embedded WebView (Google blocks embedded-WebView OAuth) — hidden on native for now, native system-browser OAuth is a separate deferred task. Android: not started.**
-- [x] Verify all existing routes work — Home, Plan, Catalog, CRM — **confirmed working in iOS simulator 2026-09-16**
+- [x] Verify all existing routes work — Home, Plan, Catalog, CRM — **confirmed working in iOS simulator 2026-09-16, and confirmed running end-to-end on a real physical iPhone via Xcode (device pairing + Developer Mode + code signing all working)**
 - [~] Configure app icons and splash screen — **iOS done (TTT house/hands mark, brand green). Android not started.**
 - [x] Add safe-area CSS tweaks (`env(safe-area-inset-*)`) to main layout
 - [ ] First TestFlight build distributed to TTT team for smoke testing — **unblocked; next milestone, see plan below**
