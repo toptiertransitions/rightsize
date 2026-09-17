@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getStaffMember, getSystemRole, updateStaffAvailability, getStaffMembers, getPlanEntriesForDateRange, getTenants } from "@/lib/airtable";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
+import { getAdminEmails } from "@/lib/admin-notifications";
 import { buildTimeOffEmail } from "@/lib/email";
 import { Resend } from "resend";
 import type { TimeOffEntry } from "@/lib/types";
@@ -63,7 +64,16 @@ export async function PATCH(req: NextRequest) {
           const allStaff = await getStaffMembers();
           const managers = allStaff.filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email);
           const excludedIds = await getSuspendedOrDeletedClerkUserIds(managers.map((s) => s.clerkUserId));
-          const recipientEmails = managers.filter((s) => !excludedIds.has(s.clerkUserId)).map((s) => s.email);
+          const recipientSet = new Set(
+            managers.filter((s) => !excludedIds.has(s.clerkUserId)).map((s) => s.email.toLowerCase())
+          );
+          // Also merge in getAdminEmails()'s TTT_ADMIN_USER_IDS fallback — catches an
+          // admin whose StaffRoles.ClerkUserId has drifted out of sync with their live
+          // Clerk account (the filter above would otherwise treat them as "deleted" and
+          // silently drop them, even though they're still a real, active admin).
+          const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+          adminEmails.forEach((e) => recipientSet.add(e.toLowerCase()));
+          const recipientEmails = [...recipientSet];
 
           if (recipientEmails.length === 0) return;
 
