@@ -187,6 +187,39 @@ Use this to conditionally render the GPS check-in control on the Home tab only w
 - `@capacitor/status-bar` is already referenced in `capacitor.config.ts` above
 - Set to `Light` style (white icons) on the forest-green `#2d4a3e` background
 
+### 1.6 Known Native/Web Behavior Gaps (found via real device testing)
+
+Browser-only behaviors the web app already relies on that don't have a
+direct native equivalent inside a WKWebView/Android WebView. Each one
+found so far has been fixed with a native-only code path that leaves
+web behavior completely unchanged (same `isNativeApp()` pattern used
+to hide Google Sign-In on native).
+
+| Gap | Symptom | Fix |
+|---|---|---|
+| Camera/photo library access without a declared purpose string | **Hard app crash** (not a permission prompt) the instant `<input capture>` tries to open the camera | Added `NSCameraUsageDescription` + `NSPhotoLibraryUsageDescription` to `ios/App/App/Info.plist` |
+| `window.open()` — no "new tab" concept in a WebView | Silently does nothing, or navigates the whole app away | `openInBrowser()` in `lib/native.ts` — routes through `@capacitor/browser`'s in-app browser sheet on native |
+| `<a download>` — no Downloads folder concept | Same as above | `components/shared/NativeFileLink.tsx` — drop-in anchor replacement, same behavior on web |
+| `blob:` URLs (client-generated PDFs/CSVs) — scoped to the WebView's own JS context, can't be handed to a separate native browser view | Generated payout PDFs / catalog CSV exports fail to open/save on native | `saveOrShareBlob()` in `lib/native.ts` — writes to the app's cache dir via `@capacitor/filesystem`, hands it to the native Share sheet via `@capacitor/share` |
+
+**Not yet applied**, found via a broader grep for the same
+`blob:`-download pattern: 13 files total use it, the other ~10 beyond
+what's already fixed are mostly `app/admin/*` bulk CSV/PDF
+import-export tools (TimeTrackerClient, PFInventoryClient,
+EstatesClient, the Circle Hand/CRM importers, ItemImportClient).
+Deliberately deferred — desktop-oriented admin bulk-data workflows,
+lower priority than the catalog/sales/messaging paths already being
+tested on-device. `saveOrShareBlob()` already exists as a ready-made
+fix for whenever these come up.
+
+**General lesson for anything new added to the app going forward:**
+any browser API gated by an OS privacy permission (camera, photo
+library, microphone, location — location specifically will matter once
+section 2's GPS work starts) needs its `Info.plist` string declared
+*before* it's ever called, or iOS kills the app outright rather than
+prompting. Same is true for the Android equivalent
+(`AndroidManifest.xml` permissions) once Android work starts.
+
 ---
 
 ## 2. Geolocation Check-In/Check-Out Feature
