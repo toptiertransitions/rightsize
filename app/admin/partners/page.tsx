@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { isTTTAdmin } from "@/lib/config";
 import { getAllLoyaltyRecords } from "@/lib/airtable-loyalty";
 import { getCurrentProgramYear, getProgramYearLabel } from "@/lib/loyalty";
+import { getReferralCompanies } from "@/lib/airtable";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { PartnersAdminClient } from "@/components/admin/PartnersAdminClient";
 
@@ -13,10 +14,17 @@ export default async function AdminPartnersPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/admin");
 
-  const partners = await getAllLoyaltyRecords().catch(() => []);
+  const [partners, companies] = await Promise.all([
+    getAllLoyaltyRecords().catch(() => []),
+    getReferralCompanies().catch(() => []),
+  ]);
   const year = getCurrentProgramYear();
   const { start, end } = getProgramYearLabel(year);
   const programYearLabel = `Program Year: ${start} – ${end}`;
+  // Loyalty records are keyed by either a real ReferralCompany id (points
+  // shared across every contact at that company) or a solo contact's id —
+  // this tells the client which rows can expand into a per-contact breakdown.
+  const companyIds = companies.map(c => c.id);
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -28,7 +36,7 @@ export default async function AdminPartnersPage() {
             Premier Partner loyalty program — tier tracking, point history, and account actions.
           </p>
         </div>
-        <PartnersAdminClient initialPartners={partners} programYearLabel={programYearLabel} />
+        <PartnersAdminClient initialPartners={partners} programYearLabel={programYearLabel} companyIds={companyIds} />
       </main>
     </div>
   );

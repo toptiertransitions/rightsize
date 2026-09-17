@@ -1,8 +1,119 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import type { PartnerLoyaltyRecord, PartnerLedgerEntry } from "@/lib/types";
 import { TIER_COLORS, type TierName } from "@/lib/loyalty";
+
+interface CompanyContact {
+  id: string;
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  stage: string;
+  lastActivityDate: string | null;
+  activityCount: number;
+  portalStatus: "active" | "invited" | "none";
+  allTimeTotalReferred: number;
+  allTimeWonCount: number;
+  allTimeWonValue: number;
+  pointsEarned: number;
+}
+
+function StageBadge({ stage }: { stage: string }) {
+  const color =
+    stage === "Active Referral" ? "bg-green-900/40 text-green-400" :
+    stage === "Shared Leads" ? "bg-teal-900/40 text-teal-400" :
+    stage === "Agreed to Refer" ? "bg-blue-900/40 text-blue-400" :
+    stage === "Met" ? "bg-indigo-900/40 text-indigo-400" :
+    stage === "Identified" ? "bg-gray-700 text-gray-400" :
+    stage === "Inactive Referral" ? "bg-red-900/40 text-red-400" :
+    "bg-gray-700 text-gray-400";
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${color}`}>
+      {stage || "—"}
+    </span>
+  );
+}
+
+function PortalStatusBadge({ status }: { status: "active" | "invited" | "none" }) {
+  if (status === "none") return null;
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+      status === "active" ? "bg-green-900/40 text-green-400" : "bg-amber-900/40 text-amber-400"
+    }`}>
+      {status === "active" ? "Portal Active" : "Invite Sent"}
+    </span>
+  );
+}
+
+function fmtDollar(n: number): string {
+  if (n === 0) return "$0";
+  return "$" + n.toLocaleString("en-US");
+}
+
+// ─── Company contacts drill-down (the "carrot-style dropdown") ───────────────
+// Loyalty points are shared at the company level, but referrals and leads
+// are tracked per contact — this panel is what answers "who at this company
+// is actually driving these points."
+function CompanyContactsPanel({ companyId }: { companyId: string }) {
+  const [contacts, setContacts] = useState<CompanyContact[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setContacts(null);
+    setError("");
+    fetch(`/api/admin/partners/company-contacts?companyId=${companyId}`)
+      .then(r => r.json())
+      .then(d => setContacts(d.contacts ?? []))
+      .catch(e => setError(String(e)));
+  }, [companyId]);
+
+  if (error) {
+    return <div className="px-6 py-3 text-xs text-red-400 bg-red-950/30">Failed to load contacts: {error}</div>;
+  }
+  if (!contacts) {
+    return <div className="px-6 py-3 text-xs text-gray-500 italic">Loading contacts…</div>;
+  }
+  if (contacts.length === 0) {
+    return <div className="px-6 py-3 text-xs text-gray-500 italic">No referral contacts recorded for this company.</div>;
+  }
+
+  return (
+    <div className="bg-gray-900/60 border-t border-gray-700 px-5 py-4 space-y-2.5">
+      {contacts.map(c => (
+        <div key={c.id} className="bg-gray-800 rounded-xl border border-gray-700 p-3.5">
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div className="min-w-0">
+              <div className="flex items-center flex-wrap gap-2 mb-1">
+                <span className="font-semibold text-gray-100 text-sm">{c.name}</span>
+                {c.title && <span className="text-xs text-gray-500">{c.title}</span>}
+                <StageBadge stage={c.stage} />
+                <PortalStatusBadge status={c.portalStatus} />
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                {c.email && <span>{c.email}</span>}
+                {c.phone && <span>{c.phone}</span>}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-lg font-bold text-white tabular-nums">{c.pointsEarned}</div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wide">pts earned</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 border-t border-gray-700 text-xs text-gray-400">
+            <span>{c.allTimeTotalReferred} referred</span>
+            <span>
+              {c.allTimeWonCount} won
+              {c.allTimeWonValue > 0 && <span className="text-green-400 font-medium ml-1">{fmtDollar(c.allTimeWonValue)}</span>}
+            </span>
+            {c.lastActivityDate && <span className="text-gray-500">Last activity: {fmtDate(c.lastActivityDate)}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const EVENT_LABELS: Record<string, string> = {
   project_completed: "Project",
@@ -12,7 +123,7 @@ const EVENT_LABELS: Record<string, string> = {
   year_reset: "Year Reset",
 };
 
-function fmtDate(iso: string | undefined): string {
+function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -271,6 +382,7 @@ function LedgerDrawer({
                     <th className="px-4 py-2.5 font-medium">Date</th>
                     <th className="px-4 py-2.5 font-medium">Type</th>
                     <th className="px-4 py-2.5 font-medium">Description</th>
+                    <th className="px-4 py-2.5 font-medium">Tier</th>
                     <th className="px-4 py-2.5 font-medium text-right">Delta</th>
                     <th className="px-4 py-2.5 font-medium text-right">Balance</th>
                   </tr>
@@ -295,6 +407,15 @@ function LedgerDrawer({
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-700 text-xs max-w-[200px] truncate">{entry.note || "—"}</td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                        {entry.tierBefore !== entry.tierAfter ? (
+                          <span className="font-medium" style={{ color: TIER_COLORS[entry.tierAfter] }}>
+                            {entry.tierBefore} → {entry.tierAfter}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">{entry.tierAfter}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-right font-semibold tabular-nums"
                         style={{ color: entry.pointsDelta > 0 ? "#16a34a" : "#dc2626" }}
                       >
@@ -341,11 +462,12 @@ function LedgerDrawer({
 interface Props {
   initialPartners: PartnerLoyaltyRecord[];
   programYearLabel: string;
+  companyIds: string[];
 }
 
 type SortField = "currentYearPoints" | "lifetimePoints" | "currentMultiplier" | "lastUpdated";
 
-export function PartnersAdminClient({ initialPartners, programYearLabel }: Props) {
+export function PartnersAdminClient({ initialPartners, programYearLabel, companyIds }: Props) {
   const [partners, setPartners] = useState(initialPartners);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("currentYearPoints");
@@ -356,6 +478,20 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
   const [resetPartner, setResetPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ created: string[]; skipped: string[]; errors: string[] } | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // A loyalty record's partnerId is either a real ReferralCompany id (points
+  // shared across every contact there) or a solo contact's id — only the
+  // former has a "who's driving these points" breakdown to expand into.
+  const companyIdSet = useMemo(() => new Set(companyIds), [companyIds]);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const runBackfill = async () => {
     if (!confirm("This will create PartnerLoyalty records for all referral contacts with at least 1 Won referral who are not already in the loyalty table. Proceed?")) return;
@@ -411,6 +547,7 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
   const goldPlus = partners.filter(p => ["Gold", "Platinum", "Diamond"].includes(p.currentTier)).length;
   const totalPtsThisYear = partners.reduce((s, p) => s + p.currentYearPoints, 0);
   const diamondCount = partners.filter(p => p.currentTier === "Diamond").length;
+  const silverBonusCount = partners.filter(p => p.silverBonusApplied).length;
 
   const SortBtn = ({ field, label }: { field: SortField; label: string }) => (
     <button
@@ -427,11 +564,12 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
   return (
     <>
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         {[
           { label: "Active Partners", value: totalActive },
           { label: "Gold+ Status", value: goldPlus },
           { label: "Total Pts This Year", value: totalPtsThisYear },
+          { label: "Silver Bonus Earned", value: silverBonusCount },
           { label: "Diamond Partners", value: diamondCount },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl bg-gray-800 border border-gray-700 px-4 py-4">
@@ -511,6 +649,7 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
           <table className="w-full text-sm">
             <thead className="border-b border-gray-700">
               <tr className="text-xs text-gray-500 text-left">
+                <th className="px-2 py-3 w-8" />
                 <th className="px-4 py-3 font-medium">Partner / Company</th>
                 <th className="px-4 py-3 font-medium">Tier</th>
                 <th className="px-4 py-3 font-medium text-right">
@@ -529,66 +668,108 @@ export function PartnersAdminClient({ initialPartners, programYearLabel }: Props
               </tr>
             </thead>
             <tbody>
-              {filtered.map(partner => (
-                <tr key={partner.id} className="border-b border-gray-700/50 hover:bg-gray-750">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Initials name={partner.companyName || partner.partnerName || "?"} />
-                      <div className="min-w-0">
-                        <div className="text-gray-200 font-medium text-sm truncate">
-                          {partner.companyName || "—"}
+              {filtered.map(partner => {
+                const isCompanyBacked = companyIdSet.has(partner.partnerId);
+                const isExpanded = expandedIds.has(partner.id);
+                return (
+                <Fragment key={partner.id}>
+                  <tr className="border-b border-gray-700/50 hover:bg-gray-750">
+                    <td className="px-2 py-3 text-center">
+                      {isCompanyBacked && (
+                        <button
+                          onClick={() => toggleExpanded(partner.id)}
+                          className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors"
+                          title={isExpanded ? "Hide contacts" : "Show contacts driving these points"}
+                        >
+                          <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <Initials name={partner.companyName || partner.partnerName || "?"} />
+                        <div className="min-w-0">
+                          <div className="text-gray-200 font-medium text-sm truncate">
+                            {partner.companyName || "—"}
+                          </div>
+                          {/* partnerName drifts to whoever most recently earned a point — only
+                              meaningful for solo (non-company) records where it IS the partner. */}
+                          {!isCompanyBacked && partner.partnerName && partner.partnerName !== partner.companyName && (
+                            <div className="text-xs text-gray-500 truncate">{partner.partnerName}</div>
+                          )}
                         </div>
-                        {partner.partnerName && partner.partnerName !== partner.companyName && (
-                          <div className="text-xs text-gray-500 truncate">{partner.partnerName}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <TierBadge tier={partner.currentTier} />
+                        {partner.statusEarnedYear && (
+                          <span className="text-[10px] text-gray-500">since {partner.statusEarnedYear}</span>
+                        )}
+                        {partner.silverBonusApplied && (
+                          <span
+                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{ background: `${TIER_COLORS.Silver}20`, color: TIER_COLORS.Silver }}
+                            title="One-time Silver milestone bonus (+5 pts) applied"
+                          >
+                            ★ Silver Bonus
+                          </span>
                         )}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <TierBadge tier={partner.currentTier} />
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-200 tabular-nums">
-                    {partner.currentYearPoints}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-400 tabular-nums">
-                    {partner.lifetimePoints}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-400">
-                    {partner.currentMultiplier}×
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
-                    {fmtDate(partner.lastUpdated)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => setLedgerPartner(partner)}
-                        className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-                      >
-                        Ledger
-                      </button>
-                      <button
-                        onClick={() => setBonusPartner(partner)}
-                        className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-                      >
-                        Bonus
-                      </button>
-                      <button
-                        onClick={() => setRedeemPartner(partner)}
-                        className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-                      >
-                        Redeem
-                      </button>
-                      <button
-                        onClick={() => setResetPartner(partner)}
-                        className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-                      >
-                        ↗ Link
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-200 tabular-nums">
+                      {partner.currentYearPoints}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-400 tabular-nums">
+                      {partner.lifetimePoints}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-400">
+                      {partner.currentMultiplier}×
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {fmtDate(partner.lastUpdated)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setLedgerPartner(partner)}
+                          className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                        >
+                          Ledger
+                        </button>
+                        <button
+                          onClick={() => setBonusPartner(partner)}
+                          className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                        >
+                          Bonus
+                        </button>
+                        <button
+                          onClick={() => setRedeemPartner(partner)}
+                          className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                        >
+                          Redeem
+                        </button>
+                        <button
+                          onClick={() => setResetPartner(partner)}
+                          className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                        >
+                          ↗ Link
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && isCompanyBacked && (
+                    <tr>
+                      <td colSpan={8} className="p-0">
+                        <CompanyContactsPanel companyId={partner.partnerId} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

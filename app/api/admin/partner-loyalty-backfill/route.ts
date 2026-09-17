@@ -56,13 +56,20 @@ export async function POST() {
   const skipped: string[] = [];
   const errors: string[] = [];
 
-  // Deduplicate by loyaltyKey — multiple contacts at the same company share one loyalty record
-  const processedKeys = new Set<string>();
+  // Group by loyaltyKey FIRST, then sum wonCount across every Active
+  // Referral contact sharing that key — points are awarded at the company
+  // level (see awardLoyaltyPoint in app/api/invoices/route.ts), so a
+  // company's true historical total is the SUM across all its contacts,
+  // not just whichever contact happens to be processed first. The previous
+  // version created a record from the first contact's wonCount alone and
+  // then skipped every other contact at that company as "already exists",
+  // silently under-counting real historical referrals.
+  type Group = { loyaltyKey: string; companyName: string; wonCount: number; contactNames: string[]; firstContactEmail: string };
+  const groups = new Map<string, Group>();
 
   for (const contact of referralContacts.filter(c => c.stage === "Active Referral")) {
     const ccIds = refToClientContacts.get(contact.id) ?? [];
     const wonCount = ccIds.reduce((sum, ccId) => sum + (wonCountByClientContact.get(ccId) ?? 0), 0);
-
     if (wonCount === 0) continue;
 
     const companyId = contact.referralCompanyId || null;
@@ -70,8 +77,21 @@ export async function POST() {
     const loyaltyKey = companyId || contact.clerkUserId || contact.id;
     const companyName = company?.name || contact.name || loyaltyKey;
 
-    if (existingKeys.has(loyaltyKey) || processedKeys.has(loyaltyKey)) {
-      skipped.push(`${contact.name} (${companyName}) — record already exists`);
+    const existing = groups.get(loyaltyKey);
+    if (existing) {
+      existing.wonCount += wonCount;
+      existing.contactNames.push(contact.name);
+    } else {
+      groups.set(loyaltyKey, { loyaltyKey, companyName, wonCount, contactNames: [contact.name], firstContactEmail: contact.email });
+    }
+  }
+
+  for (const group of groups.values()) {
+    const { loyaltyKey, companyName, wonCount, contactNames, firstContactEmail } = group;
+    const label = `${companyName} (${contactNames.join(", ")})`;
+
+    if (existingKeys.has(loyaltyKey)) {
+      skipped.push(`${label} — record already exists`);
       continue;
     }
 
@@ -79,16 +99,16 @@ export async function POST() {
       // Double-check live (in case of race or stale getAllLoyaltyRecords cache)
       const live = await getLoyaltyRecord(loyaltyKey);
       if (live) {
-        skipped.push(`${contact.name} (${companyName}) — record already exists`);
-        processedKeys.add(loyaltyKey);
+        skipped.push(`${label} — record already exists`);
+        existingKeys.add(loyaltyKey);
         continue;
       }
 
       const tierData = getTierForPoints(wonCount);
-      const record = await createLoyaltyRecord({
+      await createLoyaltyRecord({
         partnerId: loyaltyKey,
-        partnerName: contact.name,
-        partnerEmail: contact.email,
+        partnerName: contactNames[0],
+        partnerEmail: firstContactEmail,
         companyName,
         currentTier: tierData.name,
         currentYearPoints: wonCount,
@@ -96,7 +116,7 @@ export async function POST() {
         currentProgramYear: programYear,
         currentMultiplier: tierData.multiplier,
         silverBonusApplied: false,
-        notes: `Backfilled ${now.slice(0, 10)}: ${wonCount} historical won referral(s)`,
+        notes: `Backfilled ${now.slice(0, 10)}: ${wonCount} historical won referral(s) across ${contactNames.length} contact(s)`,
       });
 
       await createLedgerEntry({
@@ -113,11 +133,10 @@ export async function POST() {
         adminUserId: userId,
       });
 
-      processedKeys.add(loyaltyKey);
       existingKeys.add(loyaltyKey);
-      created.push(`${contact.name} (${companyName}) — ${wonCount} pt(s), tier: ${tierData.name}`);
+      created.push(`${label} — ${wonCount} pt(s), tier: ${tierData.name}`);
     } catch (e) {
-      errors.push(`${contact.name}: ${String(e)}`);
+      errors.push(`${label}: ${String(e)}`);
     }
   }
 
