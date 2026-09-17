@@ -2,7 +2,10 @@ import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.toptiertransitions.rightsize",
-  appName: "Rightsize by TTT",
+  // On-device home-screen name. Kept short deliberately — the fuller
+  // "Rightsize by Top Tier Transitions" is the separate App Store Connect
+  // listing name, set directly in App Store Connect, not here.
+  appName: "Rightsize",
   // webDir is required by Capacitor CLI but unused in remote-URL mode
   webDir: "out",
   server: {
