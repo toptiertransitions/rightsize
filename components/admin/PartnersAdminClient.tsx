@@ -117,7 +117,7 @@ function CompanyContactsPanel({ companyId }: { companyId: string }) {
 
 const EVENT_LABELS: Record<string, string> = {
   project_completed: "Project",
-  manual_bonus: "Bonus",
+  manual_bonus: "Adjustment",
   manual_redemption: "Redemption",
   silver_one_time_bonus: "Silver Bonus",
   year_reset: "Year Reset",
@@ -154,6 +154,13 @@ function TierBadge({ tier }: { tier: TierName }) {
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
 
+// Replaces the old "Bonus" button (which could only ever add points).
+// "Adjust" accepts a signed number — positive to add, negative to
+// subtract — for any manual correction (backfill fixes, error
+// corrections, event bonuses, etc). "Redeem" stays a separate, distinct
+// flow: it's the deliberate business action of a partner cashing points
+// in for a service, not a data correction, so it keeps its own framing
+// and always subtracts.
 function AdjustModal({
   partner,
   type,
@@ -161,7 +168,7 @@ function AdjustModal({
   onDone,
 }: {
   partner: PartnerLoyaltyRecord;
-  type: "bonus" | "redeem";
+  type: "adjust" | "redeem";
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -172,7 +179,8 @@ function AdjustModal({
 
   const submit = async () => {
     const n = parseInt(points, 10);
-    if (!n || n <= 0) { setError("Enter a positive number"); return; }
+    if (!n || isNaN(n)) { setError(type === "redeem" ? "Enter a positive number" : "Enter a non-zero number"); return; }
+    if (type === "redeem" && n <= 0) { setError("Enter a positive number"); return; }
     if (!note.trim()) { setError("Note is required"); return; }
     setLoading(true);
     setError("");
@@ -202,7 +210,7 @@ function AdjustModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h3 className="text-base font-bold text-gray-900 mb-1">
-          {type === "bonus" ? "Add Bonus Points" : "Redeem Points"}
+          {type === "redeem" ? "Redeem Points" : "Adjust Points"}
         </h3>
         <p className="text-sm text-gray-500 mb-4">
           {partner.companyName} — current balance: <strong>{partner.lifetimePoints} pts</strong>
@@ -210,15 +218,15 @@ function AdjustModal({
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Points {type === "redeem" ? "to Redeem" : "to Add"}
+              {type === "redeem" ? "Points to Redeem" : "Points (+ to add, − to subtract)"}
             </label>
             <input
               type="number"
-              min={1}
+              {...(type === "redeem" ? { min: 1 } : {})}
               value={points}
               onChange={e => setPoints(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-              placeholder="e.g. 5"
+              placeholder={type === "redeem" ? "e.g. 5" : "e.g. 4 or -2"}
             />
           </div>
           <div>
@@ -228,7 +236,7 @@ function AdjustModal({
               value={note}
               onChange={e => setNote(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-              placeholder="e.g. Referral event attendance"
+              placeholder={type === "redeem" ? "e.g. Referral event attendance" : "e.g. Backfill correction — missed won referral"}
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -247,7 +255,7 @@ function AdjustModal({
             className="flex-1 h-10 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
             style={{ background: type === "redeem" ? "#dc2626" : "#2d4a3e" }}
           >
-            {loading ? "Saving…" : type === "redeem" ? "Redeem" : "Add Points"}
+            {loading ? "Saving…" : type === "redeem" ? "Redeem" : "Save Adjustment"}
           </button>
         </div>
       </div>
@@ -473,7 +481,7 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
   const [sortField, setSortField] = useState<SortField>("currentYearPoints");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [ledgerPartner, setLedgerPartner] = useState<PartnerLoyaltyRecord | null>(null);
-  const [bonusPartner, setBonusPartner] = useState<PartnerLoyaltyRecord | null>(null);
+  const [adjustPartner, setAdjustPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [redeemPartner, setRedeemPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [resetPartner, setResetPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [backfilling, setBackfilling] = useState(false);
@@ -740,10 +748,10 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
                           Ledger
                         </button>
                         <button
-                          onClick={() => setBonusPartner(partner)}
+                          onClick={() => setAdjustPartner(partner)}
                           className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
                         >
-                          Bonus
+                          Adjust
                         </button>
                         <button
                           onClick={() => setRedeemPartner(partner)}
@@ -778,12 +786,12 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
       {ledgerPartner && (
         <LedgerDrawer partner={ledgerPartner} onClose={() => setLedgerPartner(null)} />
       )}
-      {bonusPartner && (
+      {adjustPartner && (
         <AdjustModal
-          partner={bonusPartner}
-          type="bonus"
-          onClose={() => setBonusPartner(null)}
-          onDone={() => { setBonusPartner(null); reload(); }}
+          partner={adjustPartner}
+          type="adjust"
+          onClose={() => setAdjustPartner(null)}
+          onDone={() => { setAdjustPartner(null); reload(); }}
         />
       )}
       {redeemPartner && (

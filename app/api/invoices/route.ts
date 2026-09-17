@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
   getSystemRole,
@@ -271,9 +271,17 @@ export async function POST(req: NextRequest) {
     createdByClerkId: userId,
   });
 
-  // Auto-award partner point for $0 invoices created as Paid
+  // Auto-award partner point for $0 invoices created as Paid — runs via
+  // after() so it reliably completes on serverless. A bare unawaited
+  // promise here can get killed mid-flight as soon as the response below
+  // is sent, silently dropping the ledger write and/or the
+  // silverBonusApplied flag update (confirmed live: this is exactly what
+  // happened to The Roosevelt at Salt Creek's loyalty record — a Silver
+  // milestone bonus ledger entry exists with no matching flag update).
   if (isZeroInvoice) {
-    autoAwardPartnerPoint(invoice.id, tenantId).catch(() => {});
+    after(async () => {
+      await autoAwardPartnerPoint(invoice.id, tenantId).catch(e => console.error("[invoices] autoAwardPartnerPoint failed:", e));
+    });
   }
 
   // Send email with a link back to the platform payment page.
@@ -328,9 +336,13 @@ export async function PATCH(req: NextRequest) {
 
   let invoice = await updateInvoice(id, { status, paidAmount, paidAt, notes, sentToEmail, ccEmail });
 
-  // Auto-award partner point when invoice is first marked Paid (idempotent via PartnerPointAwarded flag)
+  // Auto-award partner point when invoice is first marked Paid (idempotent
+  // via PartnerPointAwarded flag) — via after(), see note on the POST
+  // handler above for why a bare unawaited promise here is unsafe.
   if (status === "Paid" && invoice.tenantId) {
-    autoAwardPartnerPoint(invoice.id, invoice.tenantId).catch(() => {});
+    after(async () => {
+      await autoAwardPartnerPoint(invoice.id, invoice.tenantId).catch(e => console.error("[invoices] autoAwardPartnerPoint failed:", e));
+    });
   }
 
   // Send email for existing invoice if requested
@@ -453,8 +465,12 @@ async function autoAwardPartnerPoint(invoiceId: string, tenantId: string): Promi
     opportunityId: wonOpp.id,
   });
 
-  // Also award loyalty program point (non-blocking)
-  awardLoyaltyPoint(clientContact.referralPartnerId, tenantId).catch(
+  // Also award loyalty program point. Must be awaited, not fire-and-forget —
+  // this whole function now runs inside the caller's after() specifically so
+  // this multi-step write (ledger entry, possible Silver-bonus ledger entry,
+  // then the record update) finishes before the process can be torn down;
+  // an unawaited call here would defeat that.
+  await awardLoyaltyPoint(clientContact.referralPartnerId, tenantId).catch(
     e => console.error("[loyalty] award failed:", e)
   );
 
