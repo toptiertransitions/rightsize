@@ -59,6 +59,7 @@ function fmtDollar(n: number): string {
 function CompanyContactsPanel({ companyId }: { companyId: string }) {
   const [contacts, setContacts] = useState<CompanyContact[] | null>(null);
   const [error, setError] = useState("");
+  const [resetTarget, setResetTarget] = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
     setContacts(null);
@@ -101,16 +102,27 @@ function CompanyContactsPanel({ companyId }: { companyId: string }) {
               <div className="text-[10px] text-gray-500 uppercase tracking-wide">pts earned</div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 border-t border-gray-700 text-xs text-gray-400">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 border-t border-gray-700 text-xs text-gray-400">
             <span>{c.allTimeTotalReferred} referred</span>
             <span>
               {c.allTimeWonCount} won
               {c.allTimeWonValue > 0 && <span className="text-green-400 font-medium ml-1">{fmtDollar(c.allTimeWonValue)}</span>}
             </span>
             {c.lastActivityDate && <span className="text-gray-500">Last activity: {fmtDate(c.lastActivityDate)}</span>}
+            {c.email && (
+              <button
+                onClick={() => setResetTarget({ name: c.name, email: c.email! })}
+                className="ml-auto text-[11px] px-2 py-0.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              >
+                ↗ Send Portal Link
+              </button>
+            )}
           </div>
         </div>
       ))}
+      {resetTarget && (
+        <ResetPasswordModal contact={resetTarget} onClose={() => setResetTarget(null)} />
+      )}
     </div>
   );
 }
@@ -263,11 +275,16 @@ function AdjustModal({
   );
 }
 
+// Sends a portal sign-in link to ONE person's email. Portal access is a
+// per-contact thing (each contact logs in with their own account), so this
+// takes a plain {name, email} rather than a whole company-level loyalty
+// record — reused both for solo (non-company) partner rows and for
+// individual contacts inside a company's expanded contact list.
 function ResetPasswordModal({
-  partner,
+  contact,
   onClose,
 }: {
-  partner: PartnerLoyaltyRecord;
+  contact: { name: string; email: string };
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -281,7 +298,7 @@ function ResetPasswordModal({
       const res = await fetch("/api/partner-loyalty/reset-partner-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partnerEmail: partner.partnerEmail }),
+        body: JSON.stringify({ partnerEmail: contact.email }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -301,7 +318,7 @@ function ResetPasswordModal({
           <>
             <p className="text-sm font-semibold text-green-700 mb-2">Sign-in link sent!</p>
             <p className="text-sm text-gray-500 mb-4">
-              An email was sent to {partner.partnerEmail || partner.companyName}.
+              An email was sent to {contact.email || contact.name}.
             </p>
             <button onClick={onClose} className="w-full h-10 rounded-xl bg-gray-100 text-sm font-medium text-gray-700">
               Close
@@ -311,7 +328,7 @@ function ResetPasswordModal({
           <>
             <h3 className="text-base font-bold text-gray-900 mb-2">Send Sign-In Link</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Send a 24-hour sign-in link to <strong>{partner.partnerEmail || partner.companyName}</strong>?
+              Send a 24-hour sign-in link to <strong>{contact.name}</strong> ({contact.email || "no email on file"})?
             </p>
             {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
             <div className="flex gap-3">
@@ -483,7 +500,7 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
   const [ledgerPartner, setLedgerPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [adjustPartner, setAdjustPartner] = useState<PartnerLoyaltyRecord | null>(null);
   const [redeemPartner, setRedeemPartner] = useState<PartnerLoyaltyRecord | null>(null);
-  const [resetPartner, setResetPartner] = useState<PartnerLoyaltyRecord | null>(null);
+  const [resetTarget, setResetTarget] = useState<{ name: string; email: string } | null>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ created: string[]; skipped: string[]; errors: string[] } | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -759,12 +776,18 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
                         >
                           Redeem
                         </button>
-                        <button
-                          onClick={() => setResetPartner(partner)}
-                          className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-                        >
-                          ↗ Link
-                        </button>
+                        {/* Portal sign-in is a per-contact thing — for company-backed
+                            rows the link lives on each contact in the expanded
+                            panel below, not here (partner.partnerEmail is just
+                            whoever last earned a point, not a real portal login). */}
+                        {!isCompanyBacked && (
+                          <button
+                            onClick={() => setResetTarget({ name: partner.partnerName || partner.companyName, email: partner.partnerEmail })}
+                            className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+                          >
+                            ↗ Link
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -802,8 +825,8 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
           onDone={() => { setRedeemPartner(null); reload(); }}
         />
       )}
-      {resetPartner && (
-        <ResetPasswordModal partner={resetPartner} onClose={() => setResetPartner(null)} />
+      {resetTarget && (
+        <ResetPasswordModal contact={resetTarget} onClose={() => setResetTarget(null)} />
       )}
     </>
   );

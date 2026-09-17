@@ -10,7 +10,9 @@ export async function POST(req: NextRequest) {
   const sysRole = await getSystemRole(userId).catch(() => null);
   if (sysRole !== "TTTAdmin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // partnerEmail: primary email for the company's portal contact
+  // partnerEmail: the individual contact's own email — portal access is
+  // per-contact, not per-company (see the admin Partner Management page,
+  // where this is sent from each contact's card, not the company row).
   const { partnerEmail } = await req.json() as { partnerEmail: string };
   if (!partnerEmail) return NextResponse.json({ error: "Missing partnerEmail" }, { status: 400 });
 
