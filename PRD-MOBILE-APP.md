@@ -2,6 +2,19 @@
 **Top Tier Transitions · Internal Platform Evolution**
 **Status: Draft for Review · September 2026**
 
+> **Audience update (2026-09):** originally scoped as staff-only (see
+> sections 3.1/3.2 below, written assuming an internal-only app). The
+> intended audience is now broader: TTT staff, existing clients, and
+> referral partners — each already gets their own role-based view on
+> the web app via Clerk, and the Capacitor shell just wraps that same
+> authenticated web app, so no separate codebase is needed per
+> audience. GPS background location (section 2) stays staff-only
+> permanently regardless — see OD-8. The App Store Review Guideline
+> 5.1.1 discussion, privacy policy scope, and "who is this app for"
+> App Review framing in sections 3.1–3.3 will need a pass once a
+> public (not TestFlight-only) listing is actually being prepared —
+> not blocking for the current TestFlight milestone.
+
 ---
 
 ## Table of Contents
@@ -610,9 +623,9 @@ These require input before implementation begins:
 | **OD-3** | What happens when GPS mismatch exceeds threshold | Flag for Admin review only / require staff note / auto-hold pay entry | Pay tab UX changes, potential staff friction |
 | **OD-4** | Employee consent mechanism | In-app first-run checkbox / separate paper/DocuSign / email acknowledgment | Legal, timing before rollout |
 | **OD-5** | App name and bundle ID | Bundle ID decided: `com.toptiertransitions.rightsizeapp` (not `...rightsize` — that string got claimed against the Apple ID during earlier Personal Team testing, before the paid Organization account existed, and Apple won't release it). On-device display name decided: "Rightsize". **App Store Connect public listing name still pending** — must fit Apple's 30-character cap ("Rightsize by Top Tier Transitions" is 34, too long); candidates under discussion: "Rightsize by TTT" / "Rightsize — TopTier" / "TTT Rightsize" / "Rightsize (TTT)" | Needed before the App Store Connect app record is finalized |
-| **OD-6** | Initial rollout scope | All TTT staff simultaneously / pilot with one team / iOS only first | Store review timeline planning |
+| **OD-6** | Initial rollout scope | **Decided: eventual public release intended** — staff, existing clients, and referral partners are all in scope as users of the app (each sees their existing role-based web view). Sequencing still open: TestFlight staff pilot first (in progress), public App Store listing is a later phase, not blocking current work. | Store review timeline planning, App Store listing copy/category scoped for a broader audience |
 | **OD-7** | `startOnBoot` behavior | True (resume tracking if device reboots mid-shift) / False (require manual reopen) | Complexity, Play Store foreground service behavior |
-| **OD-8** | Client/Partner-facing impact | Confirm: no GPS data ever surfaced in client portal | Scope boundary confirmation |
+| **OD-8** | Client/Partner-facing impact | **Decided: clients and referral partners ARE intended users of the app itself** (their existing web portal views, unchanged). GPS Check-In/Check-Out specifically remains staff-only, permanently — no location permission should ever be requested for a Client or Partner-role session. | Scope boundary confirmation — GPS code must gate on role, not just "is native app" |
 
 ---
 
