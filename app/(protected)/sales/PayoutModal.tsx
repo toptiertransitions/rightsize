@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { saveOrShareBlob } from "@/lib/native";
+import { viewOrShareBlob } from "@/lib/native";
 import type { Item, ItemSaleEvent, LocalVendor, ProjectFile } from "@/lib/types";
 import type { PayoutLineItem } from "@/lib/payout-pdf";
 
@@ -333,12 +333,12 @@ export function PayoutModal({
       const data = await res.json();
 
       // Open the generated PDF — new tab via blob URL on web (unchanged), or
-      // the native Share sheet on the app (see saveOrShareBlob in lib/native.ts).
+      // the native Share sheet on the app (see viewOrShareBlob in lib/native.ts).
       if (data.pdfBase64) {
         const bytes = Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0));
         const blob = new Blob([bytes], { type: "application/pdf" });
         const safeName = tenantName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_{2,}/g, "_");
-        await saveOrShareBlob(blob, `Payout-${safeName}.pdf`);
+        await viewOrShareBlob(blob, `Payout-${safeName}.pdf`);
       }
 
       if (!reprint) {

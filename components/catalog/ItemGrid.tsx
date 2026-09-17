@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { GroupedSelect } from "@/components/ui/GroupedSelect";
 import { CATEGORY_GROUPS, isValidCategory } from "@/lib/categories";
 import { formatCurrency } from "@/lib/utils";
-import { openInBrowser, saveOrShareBlob } from "@/lib/native";
+import { openInBrowser, downloadOrShareBlob } from "@/lib/native";
 import { NativeFileLink } from "@/components/shared/NativeFileLink";
 import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor, StaffMember } from "@/lib/types";
 import { VendorFileModal } from "./VendorFileModal";
@@ -1797,7 +1797,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       });
       if (!res.ok) throw new Error("Failed to generate PDF");
       const blob = await res.blob();
-      await saveOrShareBlob(blob, `movers-list-${new Date().toISOString().slice(0, 10)}.pdf`);
+      await downloadOrShareBlob(blob, `movers-list-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch {
       // silently ignore — browser will show nothing downloaded
     } finally {
@@ -1871,7 +1871,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
 
       const csv = [headers.join(","), ...rows].join("\n");
       const csvBlob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      await saveOrShareBlob(csvBlob, `catalog-export-${new Date().toISOString().slice(0, 10)}.csv`);
+      await downloadOrShareBlob(csvBlob, `catalog-export-${new Date().toISOString().slice(0, 10)}.csv`);
 
       // ── Images ───────────────────────────────────────────────────────────────
       const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9 \-]/g, "").trim().replace(/\s+/g, " ");
