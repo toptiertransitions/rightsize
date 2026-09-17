@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { prepareImageForUpload } from "@/lib/image-utils";
 import { safeJson } from "@/lib/utils";
+import { NativeFileLink } from "@/components/shared/NativeFileLink";
 import type { ProjectFile, FileTag } from "@/lib/types";
 import {
   DndContext,
@@ -355,7 +356,7 @@ function FileCard({ file, canEdit, onEdit, projectName }: FileCardProps) {
       style={style}
       className={`relative group${isDragging ? " opacity-50" : ""}`}
     >
-      <a
+      <NativeFileLink
         href={file.resourceType === "image" ? file.cloudinaryUrl : file.cloudinaryUrl.replace("/upload/", "/upload/fl_attachment/")}
         target={file.resourceType === "image" ? "_blank" : undefined}
         rel={file.resourceType === "image" ? "noopener noreferrer" : undefined}
@@ -404,9 +405,9 @@ function FileCard({ file, canEdit, onEdit, projectName }: FileCardProps) {
             </svg>
           </button>
         )}
-      </a>
+      </NativeFileLink>
 
-      {/* Drag handle — top-right, outside <a> so it doesn't navigate */}
+      {/* Drag handle — top-right, outside <a>/NativeFileLink so it doesn't navigate */}
       {canEdit && (
         <button
           {...attributes}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
+import { openInBrowser } from "@/lib/native";
 import type { ItemPhoto } from "@/lib/types";
 
 interface PhotoLightboxProps {
@@ -47,7 +48,7 @@ export function PhotoLightbox({ photos, initialIndex, itemName, onClose }: Photo
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch {
-      window.open(url, "_blank");
+      await openInBrowser(url);
     } finally {
       setDownloading(false);
     }
@@ -76,7 +77,7 @@ export function PhotoLightbox({ photos, initialIndex, itemName, onClose }: Photo
         }, i * 800));
       }
     } catch {
-      if (photos.length) window.open(photos[0].url, "_blank");
+      if (photos.length) await openInBrowser(photos[0].url);
     } finally {
       setDownloading(false);
     }

@@ -12,6 +12,8 @@ import { Select } from "@/components/ui/Select";
 import { GroupedSelect } from "@/components/ui/GroupedSelect";
 import { CATEGORY_GROUPS, isValidCategory } from "@/lib/categories";
 import { formatCurrency } from "@/lib/utils";
+import { openInBrowser, saveOrShareBlob } from "@/lib/native";
+import { NativeFileLink } from "@/components/shared/NativeFileLink";
 import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor, StaffMember } from "@/lib/types";
 import { VendorFileModal } from "./VendorFileModal";
 import { PhotoLightbox } from "./PhotoLightbox";
@@ -1111,7 +1113,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
                     <span className="text-sm text-gray-700 truncate flex-1">{form.shippingLabelFileName || "shipping-label.pdf"}</span>
-                    <a
+                    <NativeFileLink
                       href={form.shippingLabelUrl.replace("/upload/", "/upload/fl_attachment/")}
                       download={form.shippingLabelFileName || "shipping-label.pdf"}
                       target="_blank"
@@ -1119,7 +1121,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                       className="text-sm font-semibold text-blue-600 hover:text-blue-800 whitespace-nowrap"
                     >
                       Download
-                    </a>
+                    </NativeFileLink>
                   </div>
                 ) : (
                   <p className="text-xs text-blue-500/80">No label uploaded yet. Upload a PDF to automatically email it to the staff seller.</p>
@@ -1525,7 +1527,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch {
-      window.open(url, "_blank");
+      await openInBrowser(url);
     }
   }, []);
 
@@ -1562,7 +1564,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         }, i * 800));
       }
     } catch {
-      if (photos.length) window.open(photos[0].url, "_blank");
+      if (photos.length) await openInBrowser(photos[0].url);
     }
   }, []);
 
@@ -1795,12 +1797,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       });
       if (!res.ok) throw new Error("Failed to generate PDF");
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `movers-list-${new Date().toISOString().slice(0, 10)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveOrShareBlob(blob, `movers-list-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch {
       // silently ignore — browser will show nothing downloaded
     } finally {
@@ -1874,14 +1871,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
 
       const csv = [headers.join(","), ...rows].join("\n");
       const csvBlob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const csvUrl = URL.createObjectURL(csvBlob);
-      const csvA = document.createElement("a");
-      csvA.href = csvUrl;
-      csvA.download = `catalog-export-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(csvA);
-      csvA.click();
-      document.body.removeChild(csvA);
-      setTimeout(() => URL.revokeObjectURL(csvUrl), 1000);
+      await saveOrShareBlob(csvBlob, `catalog-export-${new Date().toISOString().slice(0, 10)}.csv`);
 
       // ── Images ───────────────────────────────────────────────────────────────
       const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9 \-]/g, "").trim().replace(/\s+/g, " ");

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { NativeFileLink } from "@/components/shared/NativeFileLink";
 import { EstimatorSection } from "@/app/(protected)/rooms/EstimatorSection";
 import { AddRoomButton } from "@/app/(protected)/rooms/RoomsClient";
 import type { Tenant, Room, ContractSettings, ContractTemplate, Contract, DensityLevel, RoomType, Service, InvoiceSettings, TimeEntry, Invoice, InvoiceStatus, ItemPhoto, Item, ProjectFile } from "@/lib/types";
@@ -1308,13 +1309,13 @@ function ClientFilesSection({
           {files.map(f => (
             <li key={f.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
               <FileIcon fileName={f.fileName} />
-              <a
+              <NativeFileLink
                 href={f.cloudinaryUrl.replace("/upload/", "/upload/fl_attachment/")}
                 download={f.fileName}
-                className="flex-1 text-sm text-gray-800 font-medium hover:text-forest-700 hover:underline truncate"
+                className="flex-1 text-sm text-gray-800 font-medium hover:text-forest-700 hover:underline truncate text-left"
               >
                 {f.fileName}
-              </a>
+              </NativeFileLink>
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </span>

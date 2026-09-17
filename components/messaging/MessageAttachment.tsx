@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { prepareImageForUpload } from "@/lib/image-utils";
 import { safeJson } from "@/lib/utils";
+import { NativeFileLink } from "@/components/shared/NativeFileLink";
 
 export interface MessageAttachmentData {
   url: string;
@@ -101,29 +102,29 @@ export function AttachmentView({ attachment }: { attachment: MessageAttachmentDa
   if (attachment.resourceType === "image") {
     return (
       <div className="mt-2 max-w-xs">
-        <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+        <NativeFileLink href={attachment.url} target="_blank" rel="noopener noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={attachment.url}
             alt={attachment.fileName}
             className="rounded-lg border border-gray-200 max-h-64 w-auto object-contain block"
           />
-        </a>
-        <a
+        </NativeFileLink>
+        <NativeFileLink
           href={downloadUrl}
           download={attachment.fileName}
           className="mt-1 inline-flex items-center gap-1 text-[11px] text-forest-700 hover:text-forest-800 font-medium"
         >
           <DownloadIcon className="w-3 h-3" />
           Download {attachment.fileName}
-        </a>
+        </NativeFileLink>
       </div>
     );
   }
 
   return (
     <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 w-fit max-w-full">
-      <a
+      <NativeFileLink
         href={attachment.url}
         target="_blank"
         rel="noopener noreferrer"
@@ -132,15 +133,15 @@ export function AttachmentView({ attachment }: { attachment: MessageAttachmentDa
       >
         <FileIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
         <span className="text-xs text-gray-700 truncate max-w-[220px]">{attachment.fileName}</span>
-      </a>
-      <a
+      </NativeFileLink>
+      <NativeFileLink
         href={downloadUrl}
         download={attachment.fileName}
         title={`Download ${attachment.fileName}`}
         className="text-gray-400 hover:text-forest-600 flex-shrink-0 ml-1"
       >
         <DownloadIcon className="w-3.5 h-3.5" />
-      </a>
+      </NativeFileLink>
     </div>
   );
 }

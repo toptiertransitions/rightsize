@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { saveOrShareBlob } from "@/lib/native";
 import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod, StaffMember, Estate } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
 import { PayoutModal } from "./PayoutModal";
@@ -993,7 +994,8 @@ function ProofOfPaymentSection({
     if (data.pdfBase64) {
       const bytes = Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0));
       const blob = new Blob([bytes], { type: "application/pdf" });
-      window.open(URL.createObjectURL(blob), "_blank");
+      const safeName = tenantName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_{2,}/g, "_");
+      await saveOrShareBlob(blob, `Payout-${safeName}.pdf`);
     }
   }
 
