@@ -8,6 +8,10 @@
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
         <string>Rightsize</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Rightsize uses your camera to let you take photos of items directly when adding them to a project's catalog.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Rightsize uses your photo library to let you attach existing photos when adding items to a project's catalog or uploading files.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
