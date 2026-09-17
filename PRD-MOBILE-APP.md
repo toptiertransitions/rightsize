@@ -31,7 +31,7 @@ Capacitor supports a `server.url` configuration that instructs the native WebVie
 import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.toptiertransitions.rightsize",
+  appId: "com.toptiertransitions.rightsizeapp",
   appName: "Rightsize by TTT",
   webDir: "out",                          // Required by Capacitor CLI, but unused in remote mode
   server: {
@@ -70,7 +70,7 @@ Clerk's standard `@clerk/nextjs` setup uses HTTP-only cookies for session persis
 
 **Auth redirect URLs:**
 - Clerk requires redirect URLs to be whitelisted in the Clerk Dashboard.
-- Add `com.toptiertransitions.rightsize://` as an allowed redirect URL in Clerk Dashboard → Paths → Allowed Redirect URLs.
+- Add `com.toptiertransitions.rightsizeapp://` as an allowed redirect URL in Clerk Dashboard → Paths → Allowed Redirect URLs.
 - In `capacitor.config.ts` above, `allowNavigation` already includes Clerk's domain.
 
 **OAuth popups (Google/Apple Sign-In, if ever added):**
@@ -609,7 +609,7 @@ These require input before implementation begins:
 | **OD-2** | Check-in radius per project | Single global value (300 ft) / configurable per project by Admin | Admin UI complexity; if per-project, need a radius field on the tenant/project record |
 | **OD-3** | What happens when GPS mismatch exceeds threshold | Flag for Admin review only / require staff note / auto-hold pay entry | Pay tab UX changes, potential staff friction |
 | **OD-4** | Employee consent mechanism | In-app first-run checkbox / separate paper/DocuSign / email acknowledgment | Legal, timing before rollout |
-| **OD-5** | App name and bundle ID | "Rightsize by TTT" / "Top Tier Rightsize" / other | Needs to be decided before first App Store Connect app record is created |
+| **OD-5** | App name and bundle ID | Bundle ID decided: `com.toptiertransitions.rightsizeapp` (not `...rightsize` — that string got claimed against the Apple ID during earlier Personal Team testing, before the paid Organization account existed, and Apple won't release it). On-device display name decided: "Rightsize". **App Store Connect public listing name still pending** — must fit Apple's 30-character cap ("Rightsize by Top Tier Transitions" is 34, too long); candidates under discussion: "Rightsize by TTT" / "Rightsize — TopTier" / "TTT Rightsize" / "Rightsize (TTT)" | Needed before the App Store Connect app record is finalized |
 | **OD-6** | Initial rollout scope | All TTT staff simultaneously / pilot with one team / iOS only first | Store review timeline planning |
 | **OD-7** | `startOnBoot` behavior | True (resume tracking if device reboots mid-shift) / False (require manual reopen) | Complexity, Play Store foreground service behavior |
 | **OD-8** | Client/Partner-facing impact | Confirm: no GPS data ever surfaced in client portal | Scope boundary confirmation |
