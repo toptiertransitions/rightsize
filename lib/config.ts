@@ -98,6 +98,7 @@ export const AIRTABLE_TABLES = {
   QUARTERLY_CONVERSION_TARGETS: process.env.AIRTABLE_QUARTERLY_CONVERSION_TARGETS_TABLE || "QuarterlyConversionTargets",
   REP_QUARTERLY_GOALS: process.env.AIRTABLE_REP_QUARTERLY_GOALS_TABLE || "RepQuarterlyGoals",
   QUARTERLY_COMPANY_PLANS: process.env.AIRTABLE_QUARTERLY_COMPANY_PLANS_TABLE || "QuarterlyCompanyPlans",
+  WAR_ROOM_SPOTLIGHT: process.env.AIRTABLE_WAR_ROOM_SPOTLIGHT_TABLE || "WarRoomSpotlight",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────

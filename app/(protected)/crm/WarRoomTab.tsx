@@ -1715,50 +1715,62 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
   const [showEditQuarter, setShowEditQuarter] = useState(false);
   const [spotlightIds, setSpotlightIds] = useState<string[]>([]);
   const [spotlightOnlyMode, setSpotlightOnlyMode] = useState(false);
+  const [spotlightError, setSpotlightError] = useState("");
 
   const isAdmin = sysRole === "TTTAdmin";
   const [viewMode, setViewMode] = useState<"team" | string>(
     sysRole === "TTTSales" ? currentUserId : "team"
   );
 
-  // Load spotlight selection from localStorage when quarter changes
+  // Load spotlight selection from Airtable when quarter changes — this used
+  // to be browser localStorage only, which silently disappeared on
+  // privacy-mode browsers, cleared site data, or simply a different device.
   useEffect(() => {
     if (!selectedQuarterId) return;
-    try {
-      const stored = localStorage.getItem(`ttt_warroom_spotlight_${currentUserId}_${selectedQuarterId}`);
-      setSpotlightIds(stored ? JSON.parse(stored) : []);
-    } catch {
-      setSpotlightIds([]);
-    }
-  }, [selectedQuarterId, currentUserId]);
+    fetch(`/api/crm/warroom-spotlight?quarterId=${selectedQuarterId}`)
+      .then((r) => r.json())
+      .then((data) => setSpotlightIds(data.companyIds ?? []))
+      .catch(() => setSpotlightIds([]));
+  }, [selectedQuarterId]);
 
-  function toggleSpotlight(companyId: string) {
-    setSpotlightIds((prev) => {
-      let next: string[];
-      if (prev.includes(companyId)) {
-        next = prev.filter((id) => id !== companyId);
-      } else if (prev.length < 3) {
-        next = [...prev, companyId];
-      } else {
-        return prev;
-      }
-      try {
-        localStorage.setItem(`ttt_warroom_spotlight_${currentUserId}_${selectedQuarterId}`, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+  async function toggleSpotlight(companyId: string) {
+    if (!selectedQuarterId) return;
+    const prev = spotlightIds;
+    const isSpotlit = prev.includes(companyId);
+    if (!isSpotlit && prev.length >= 3) return;
+    const next = isSpotlit ? prev.filter((id) => id !== companyId) : [...prev, companyId];
+
+    setSpotlightIds(next); // optimistic
+    setSpotlightError("");
+    try {
+      const res = await fetch("/api/crm/warroom-spotlight", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quarterId: selectedQuarterId, companyIds: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      // Revert so the star reflects what's actually saved, and surface the
+      // failure — silently losing the pick is exactly what broke this before.
+      setSpotlightIds(prev);
+      setSpotlightError("Couldn't save Spotlight — try again.");
+    }
   }
 
   useEffect(() => {
     fetch("/api/crm/quarters")
       .then((r) => r.json())
       .then((data) => {
+        // Default to the most recently created quarter (API returns them
+        // sorted by StartDate desc, so qs[0] is the newest) rather than
+        // whichever quarter's date range contains today — reps start
+        // working a new quarter's pipeline before its start date arrives,
+        // so "current" means the latest quarter that exists, not the one
+        // today's calendar date happens to fall inside.
         const qs: Quarter[] = data.quarters ?? [];
         setQuarters(qs);
         if (qs.length > 0) {
-          const today = new Date().toISOString().slice(0, 10);
-          const current = qs.find((q) => q.startDate <= today && q.endDate >= today);
-          setSelectedQuarterId((current ?? qs[0]).id);
+          setSelectedQuarterId(qs[0].id);
         }
       })
       .catch(console.error)
@@ -1978,6 +1990,10 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
             </button>
           )}
         </div>
+      )}
+
+      {spotlightError && (
+        <p className="text-xs text-red-500 mb-3">{spotlightError}</p>
       )}
 
       {loading && <div className="py-12 text-center text-sm text-gray-400">Loading plan data...</div>}
