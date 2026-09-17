@@ -564,7 +564,7 @@ These are thin Airtable-write routes matching the existing pattern in the codeba
 - [x] Verify all existing routes work — Home, Plan, Catalog, CRM — **confirmed working in iOS simulator 2026-09-16, and confirmed running end-to-end on a real physical iPhone via Xcode (device pairing + Developer Mode + code signing all working)**
 - [~] Configure app icons and splash screen — **iOS done (TTT house/hands mark, brand green). Android not started.**
 - [x] Add safe-area CSS tweaks (`env(safe-area-inset-*)`) to main layout
-- [ ] First TestFlight build distributed to TTT team for smoke testing — **unblocked; next milestone, see plan below**
+- [~] First TestFlight build distributed to TTT team for smoke testing — **build uploaded, processed, Export Compliance cleared, installed and confirmed working via TestFlight on Matt's own phone. Deliberately not yet distributed to the rest of the team — solo testing first, wider internal testers is a follow-up step, not blocking.**
 
 **Phase 2 — GPS Check-In (foreground first, background second):**
 - [ ] Airtable: add `CheckInEvents` table + GPS fields to `TimeEntry` (schema change, no data migration needed)
