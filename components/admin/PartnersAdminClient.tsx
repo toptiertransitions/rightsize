@@ -488,11 +488,12 @@ interface Props {
   initialPartners: PartnerLoyaltyRecord[];
   programYearLabel: string;
   companyIds: string[];
+  companyNames: Record<string, string>;
 }
 
 type SortField = "currentYearPoints" | "lifetimePoints" | "currentMultiplier" | "lastUpdated";
 
-export function PartnersAdminClient({ initialPartners, programYearLabel, companyIds }: Props) {
+export function PartnersAdminClient({ initialPartners, programYearLabel, companyIds, companyNames }: Props) {
   const [partners, setPartners] = useState(initialPartners);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("currentYearPoints");
@@ -696,6 +697,10 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
               {filtered.map(partner => {
                 const isCompanyBacked = companyIdSet.has(partner.partnerId);
                 const isExpanded = expandedIds.has(partner.id);
+                // companyName on the loyalty record is a denormalized snapshot
+                // written only when a point is awarded — renaming the company
+                // in the CRM never touches it. Always prefer the live name.
+                const displayName = (isCompanyBacked && companyNames[partner.partnerId]) || partner.companyName;
                 return (
                 <Fragment key={partner.id}>
                   <tr className="border-b border-gray-700/50 hover:bg-gray-750">
@@ -714,10 +719,10 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <Initials name={partner.companyName || partner.partnerName || "?"} />
+                        <Initials name={displayName || partner.partnerName || "?"} />
                         <div className="min-w-0">
                           <div className="text-gray-200 font-medium text-sm truncate">
-                            {partner.companyName || "—"}
+                            {displayName || "—"}
                           </div>
                           {/* partnerName drifts to whoever most recently earned a point — only
                               meaningful for solo (non-company) records where it IS the partner. */}
@@ -759,19 +764,19 @@ export function PartnersAdminClient({ initialPartners, programYearLabel, company
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => setLedgerPartner(partner)}
+                          onClick={() => setLedgerPartner({ ...partner, companyName: displayName })}
                           className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
                         >
                           Ledger
                         </button>
                         <button
-                          onClick={() => setAdjustPartner(partner)}
+                          onClick={() => setAdjustPartner({ ...partner, companyName: displayName })}
                           className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
                         >
                           Adjust
                         </button>
                         <button
-                          onClick={() => setRedeemPartner(partner)}
+                          onClick={() => setRedeemPartner({ ...partner, companyName: displayName })}
                           className="text-xs px-2 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
                         >
                           Redeem

@@ -25,6 +25,11 @@ export default async function AdminPartnersPage() {
   // shared across every contact at that company) or a solo contact's id —
   // this tells the client which rows can expand into a per-contact breakdown.
   const companyIds = companies.map(c => c.id);
+  // PartnerLoyaltyRecord.companyName is a denormalized snapshot written only
+  // when a point is awarded — renaming a company in the CRM never touches
+  // it, so it silently goes stale. Pass the live name for every company so
+  // the client can always prefer it over the frozen one.
+  const companyNames = Object.fromEntries(companies.map(c => [c.id, c.name]));
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -36,7 +41,7 @@ export default async function AdminPartnersPage() {
             Premier Partner loyalty program — tier tracking, point history, and account actions.
           </p>
         </div>
-        <PartnersAdminClient initialPartners={partners} programYearLabel={programYearLabel} companyIds={companyIds} />
+        <PartnersAdminClient initialPartners={partners} programYearLabel={programYearLabel} companyIds={companyIds} companyNames={companyNames} />
       </main>
     </div>
   );
