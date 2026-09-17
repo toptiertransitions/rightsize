@@ -537,7 +537,7 @@ These are thin Airtable-write routes matching the existing pattern in the codeba
 ### 5.1 Order of Operations — Prerequisites Before First Build
 
 **Phase 0 — Accounts & Certificates (blocking):**
-- [x] Apple Developer Program account — **approved and paid 2026-09-17, Organization (Top Tier Transitions)**
+- [~] Apple Developer Program account — **paid 2026-09-17, but developer.apple.com/account shows "Top Tier Transitions LLC (Pending)" — Organization enrollment verification still in progress with Apple. Payment and final approval are separate gates for Organization accounts. Xcode will only show the real team once this flips to Active.**
 - [ ] Google Play Console account active (25 USD one-time)
 - [x] Xcode installed and Command Line Tools configured on dev Mac
 - [ ] Android Studio installed with Android SDK 34 (API 34 / Android 14)
