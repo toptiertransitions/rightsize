@@ -4970,6 +4970,130 @@ export function buildActiveReferralCelebrationEmail(p: ActiveReferralCelebration
 </html>`;
 }
 
+// ─── CRM: New Partner Portal Account ─────────────────────────────────────────
+
+export interface NewPartnerAccountEmailParams {
+  contactName: string;
+  contactTitle?: string;
+  contactEmail: string;
+  contactPhone?: string;
+  companyName: string;
+  currentStage?: string;
+  ownerName: string;
+  activatedAt: string;
+  crmUrl: string;
+}
+
+export function buildNewPartnerAccountEmail(p: NewPartnerAccountEmailParams): string {
+  const STAGE_BADGE: Record<string, string> = {
+    "Identified": "background:#f3f4f6;color:#374151;",
+    "Met": "background:#fef9c3;color:#92400e;",
+    "Agreed to Refer": "background:#dbeafe;color:#1e40af;",
+    "Shared Leads": "background:#dcfce7;color:#166534;",
+    "Active Referral": "background:#ede9fe;color:#5b21b6;",
+    "Inactive Referral": "background:#fee2e2;color:#991b1b;",
+  };
+  const stageBadge = p.currentStage
+    ? `<span style="${STAGE_BADGE[p.currentStage] ?? "background:#f3f4f6;color:#374151;"}padding:2px 7px;border-radius:9999px;font-size:11px;font-weight:600;white-space:nowrap;">${p.currentStage}</span>`
+    : "";
+
+  const PERKS = [
+    "Track progress on every project their company referred",
+    "See and add Key Dates on their active referred projects",
+    "View floorplans and photos as they're added",
+    "Get real-time updates without having to call in",
+  ];
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>New Partner Portal Account</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px 48px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+  <!-- Header bar -->
+  <tr><td>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1f2937;border-radius:12px 12px 0 0;">
+      <tr><td style="padding:22px 28px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td>
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;">Top Tier Transitions &middot; CRM</div>
+            <div style="font-size:20px;font-weight:700;color:#ffffff;margin-top:4px;line-height:1.2;">Partner Portal Activated</div>
+          </td>
+          <td align="right" style="padding-left:12px;white-space:nowrap;font-size:26px;vertical-align:middle;">&#127881;</td>
+        </tr></table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Card -->
+  <tr><td style="background:#ffffff;border-radius:0 0 12px 12px;box-shadow:0 4px 20px rgba(0,0,0,0.07);">
+    <table width="100%" cellpadding="0" cellspacing="0">
+
+      <!-- Congrats opener -->
+      <tr><td style="padding:28px 28px 4px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6d9e7a;margin-bottom:6px;">Partnership Milestone</div>
+        <div style="font-size:24px;font-weight:700;color:#111827;line-height:1.25;margin-bottom:10px;">Great news, ${p.ownerName}!</div>
+        <div style="font-size:15px;color:#4b5563;line-height:1.65;">
+          <strong style="color:#111827;">${p.contactName}</strong>${p.contactTitle ? ` <span style="color:#9ca3af;font-size:13px;">(${p.contactTitle})</span>` : ""} at <strong style="color:#111827;">${p.companyName}</strong> just created their Partner Portal account — one more sign this relationship is sticking.
+          ${stageBadge ? `<div style="margin-top:10px;">Currently at ${stageBadge}</div>` : ""}
+        </div>
+      </td></tr>
+
+      <tr><td style="padding:20px 24px 0;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+
+      <!-- Contact card -->
+      <tr><td style="padding:20px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;">
+          <tr><td style="padding:16px 18px;">
+            <div style="font-size:15px;font-weight:700;color:#111827;">${p.contactName}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:3px;">${p.contactTitle ? `${p.contactTitle} &middot; ` : ""}${p.companyName}</div>
+            <div style="height:1px;background:#e2e8f0;margin:12px 0;"></div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+              <tr><td style="padding:3px 0;color:#6b7280;width:70px;">Email</td><td style="padding:3px 0;color:#111827;">${p.contactEmail}</td></tr>
+              ${p.contactPhone ? `<tr><td style="padding:3px 0;color:#6b7280;">Phone</td><td style="padding:3px 0;color:#111827;">${p.contactPhone}</td></tr>` : ""}
+              <tr><td style="padding:3px 0;color:#6b7280;">Activated</td><td style="padding:3px 0;color:#111827;">${p.activatedAt}</td></tr>
+            </table>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:0 24px;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+
+      <!-- What they can do now -->
+      <tr><td style="padding:20px 24px 0;">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#9ca3af;margin-bottom:10px;">What ${p.contactName.split(" ")[0]} can do now</div>
+      </td></tr>
+      <tr><td style="padding:0 24px 4px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${PERKS.map(perk => `
+          <tr><td style="padding:5px 0;font-size:13px;color:#374151;line-height:1.5;">
+            <span style="color:#3d6b4f;font-weight:700;margin-right:6px;">&#10003;</span>${perk}
+          </td></tr>`).join("")}
+        </table>
+      </td></tr>
+
+      <!-- CTA -->
+      <tr><td style="padding:20px 28px 28px;">
+        <a href="${p.crmUrl}" style="display:inline-block;background:#3d6b4f;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:13px 26px;border-radius:8px;letter-spacing:0.02em;">Open in CRM &rarr;</a>
+      </td></tr>
+
+    </table>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="padding:20px 0 0;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.7;">Top Tier Transitions &middot; CRM Notifications</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 export function buildQuoteAlertEmail({
   clientName,
   clientEmail,

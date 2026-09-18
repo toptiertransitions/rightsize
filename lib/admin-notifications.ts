@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -170,6 +170,84 @@ export async function sendStageProgressNotification(params: {
       html,
     });
   }
+}
+
+// ─── Partner Portal account activation ────────────────────────────────────────
+// TO the TTTSales owner of the referral company; CC every other active
+// TTTSales rep + all TTTAdmins. Falls back to admins-as-TO if the company has
+// no assigned owner, so the notification never silently disappears.
+export async function sendNewPartnerAccountNotification(params: {
+  contactName: string;
+  contactTitle?: string;
+  contactEmail: string;
+  contactPhone?: string;
+  referralCompanyId?: string;
+  currentStage?: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const [company, staff, adminEmails] = await Promise.all([
+    params.referralCompanyId
+      ? getReferralCompanyById(params.referralCompanyId).catch(() => null)
+      : Promise.resolve(null),
+    getStaffMembers().catch(() => []),
+    getAdminEmails().catch(() => [] as string[]),
+  ]);
+
+  const companyName = company?.name ?? "Unknown Company";
+
+  const ownerClerkId = company?.assignedToClerkId;
+  const ownerStaff = ownerClerkId ? staff.find(s => s.isActive && s.email && s.clerkUserId === ownerClerkId) : undefined;
+  const ownerEmail = ownerStaff?.email as string | undefined;
+  const ownerName = ownerStaff?.displayName ?? "the team";
+
+  const isOwner = (email: string) => !!ownerEmail && email.toLowerCase() === ownerEmail.toLowerCase();
+
+  const salesEmails = staff
+    .filter(s => s.isActive && s.email && s.role === "TTTSales" && !isOwner(s.email as string))
+    .map(s => s.email as string);
+
+  const filteredAdminEmails = adminEmails.filter(e => !isOwner(e));
+
+  const to = ownerEmail ? [ownerEmail] : (filteredAdminEmails.length > 0 ? filteredAdminEmails : salesEmails);
+  if (to.length === 0) return;
+
+  const ccSet = new Set<string>();
+  for (const e of [...salesEmails, ...filteredAdminEmails]) {
+    if (!to.some(t => t.toLowerCase() === e.toLowerCase())) ccSet.add(e);
+  }
+  const cc = [...ccSet];
+
+  const activatedAt = new Date().toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const crmUrl = params.referralCompanyId
+    ? `${appUrl}/crm?tab=referrals&company=${params.referralCompanyId}`
+    : `${appUrl}/crm?tab=referrals`;
+
+  const html = buildNewPartnerAccountEmail({
+    contactName: params.contactName,
+    contactTitle: params.contactTitle,
+    contactEmail: params.contactEmail,
+    contactPhone: params.contactPhone,
+    companyName,
+    currentStage: params.currentStage,
+    ownerName,
+    activatedAt,
+    crmUrl,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to,
+    ...(cc.length > 0 ? { cc } : {}),
+    subject: `🎉 ${params.contactName} at ${companyName} activated their Partner Portal`,
+    html,
+  });
 }
 
 export async function sendNewVendorNotification(params: {
