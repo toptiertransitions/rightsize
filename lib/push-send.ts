@@ -9,6 +9,25 @@ import { getDeviceTokensForUsers, unregisterDeviceToken } from "./airtable";
 // and serverless functions don't reliably share module-scope state between
 // invocations anyway, so caching would save little and risks sending a stale
 // token past Apple's ~1hr recommended lifetime.
+// Normalizes APNS_PRIVATE_KEY into a real PEM string no matter how it was
+// pasted into the env var: quoted (stray leading/trailing " or '), with
+// escaped \n sequences instead of real newlines, or base64-encoded (a common
+// way people store multi-line secrets in env vars to sidestep newline
+// handling entirely).
+function normalizeApnsPrivateKey(raw: string): string {
+  let key = raw.trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+  if (!key.includes("BEGIN PRIVATE KEY")) {
+    try {
+      const decoded = Buffer.from(key, "base64").toString("utf8");
+      if (decoded.includes("BEGIN PRIVATE KEY")) key = decoded;
+    } catch {}
+  }
+  return key.includes("BEGIN PRIVATE KEY") ? key.replace(/\\n/g, "\n") : key;
+}
+
 function signProviderToken(): string {
   const teamId = process.env.APNS_TEAM_ID;
   const keyId = process.env.APNS_KEY_ID;
@@ -16,7 +35,7 @@ function signProviderToken(): string {
   if (!teamId || !keyId || !rawKey) {
     throw new Error("APNS_TEAM_ID / APNS_KEY_ID / APNS_PRIVATE_KEY not configured");
   }
-  const privateKey = rawKey.includes("BEGIN PRIVATE KEY") ? rawKey.replace(/\\n/g, "\n") : rawKey;
+  const privateKey = normalizeApnsPrivateKey(rawKey);
   return jwt.sign({ iss: teamId, iat: Math.floor(Date.now() / 1000) }, privateKey, {
     algorithm: "ES256",
     keyid: keyId,
