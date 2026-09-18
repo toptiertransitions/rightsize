@@ -1545,6 +1545,7 @@ export async function createPlanEntry(data: {
   endTime?: string;
   helpers?: PlanHelper[];
   entryType?: import("./types").PlanEntryType;
+  createdByUserId?: string;
 }): Promise<PlanEntry> {
   const res = await planFetch("", {
     method: "POST",
@@ -1562,6 +1563,7 @@ export async function createPlanEntry(data: {
         Helpers: data.helpers?.length ? JSON.stringify(data.helpers) : "",
         GoogleEventId: "",
         EntryType: data.entryType || "focus",
+        CreatedByUserId: data.createdByUserId || "",
         CreatedAt: new Date().toISOString(),
       },
     }),
@@ -1638,6 +1640,7 @@ function mapPlanEntry(record: AirtableRecord): PlanEntry {
     helpers,
     googleEventId: toStr(f["GoogleEventId"]) || undefined,
     entryType: (toStr(f["EntryType"]) as import("./types").PlanEntryType) || "focus",
+    createdByUserId: toStr(f["CreatedByUserId"]) || undefined,
     createdAt: toStr(f["CreatedAt"]),
   };
 }

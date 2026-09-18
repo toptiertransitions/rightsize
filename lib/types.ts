@@ -603,6 +603,7 @@ export interface PlanEntry {
   helpers?: PlanHelper[];
   googleEventId?: string; // Google Calendar event ID once invites are sent
   entryType?: PlanEntryType; // "focus" (default) or "keydate"
+  createdByUserId?: string; // Clerk user ID of the creator — used to scope partner edit/delete to their own entries
   createdAt: string;
 }
 

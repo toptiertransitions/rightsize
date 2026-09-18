@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getPartnerContact, partnerHasAccessToTenant } from "@/lib/partner";
 import { getPlanEntriesForTenant, getTenantById, getProjectFiles } from "@/lib/airtable";
 import type { PlanEntry, ProjectFile } from "@/lib/types";
+import { PartnerKeyDatesSection } from "@/components/partner/PartnerKeyDatesSection";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -67,19 +68,13 @@ export default async function PartnerPlanPage({
       </div>
 
       {/* Key Dates */}
-      {keyDates.length > 0 && (
-        <section>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Key Dates</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {keyDates.sort((a, b) => a.date.localeCompare(b.date)).map((e) => (
-              <div key={e.id} className="bg-[#2d4a3e]/5 border border-[#2d4a3e]/10 rounded-xl px-4 py-3">
-                <p className="text-xs font-medium text-[#2d4a3e]">{e.activity}</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{formatDate(e.date)}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <PartnerKeyDatesSection
+        tenantId={tenant.id}
+        tenantName={tenant.name}
+        initialKeyDates={keyDates}
+        currentUserId={userId}
+        isArchived={tenant.isArchived}
+      />
 
       {/* Schedule */}
       <section>

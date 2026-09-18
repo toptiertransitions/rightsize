@@ -89,9 +89,11 @@ export default async function PartnerPlansPage({
 
       {/* Calendar */}
       <PartnerCalendar
+        key={selectedId}
         entries={keyDateEntries}
         projects={activeProjects}
         selectedTenantId={selectedId}
+        currentUserId={userId}
       />
 
       {/* Floorplans */}

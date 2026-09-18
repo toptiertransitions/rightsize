@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PlanEntry } from "@/lib/types";
+import { PartnerKeyDateModal } from "@/components/partner/PartnerKeyDateModal";
 
 // ─── Color palettes ───────────────────────────────────────────────────────────
 const PROJECT_COLOR_PALETTE = [
@@ -63,9 +64,11 @@ interface ChipProps {
   entry: PlanEntry;
   projectColor?: string; // when in all-projects mode
   projectName?: string;
+  isOwn?: boolean; // key date was added by the current partner user — clickable to edit
+  onClick?: () => void;
 }
 
-function ActivityChip({ entry, projectColor, projectName }: ChipProps) {
+function ActivityChip({ entry, projectColor, projectName, isOwn, onClick }: ChipProps) {
   const isKeyDate = entry.entryType === "keydate";
   let colorClass: string;
   if (projectColor) {
@@ -77,8 +80,13 @@ function ActivityChip({ entry, projectColor, projectName }: ChipProps) {
   }
 
   if (isKeyDate) {
+    const Tag = isOwn ? "button" : "div";
     return (
-      <div className={`w-full text-left px-2 py-1 rounded-lg text-xs font-semibold leading-snug ${colorClass}`}>
+      <Tag
+        type={isOwn ? "button" : undefined}
+        onClick={isOwn ? onClick : undefined}
+        className={`w-full text-left px-2 py-1 rounded-lg text-xs font-semibold leading-snug ${colorClass} ${isOwn ? "ring-1 ring-inset ring-current/30 hover:ring-current/60 cursor-pointer transition-shadow" : ""}`}
+      >
         <div className="flex items-center gap-1 truncate">
           <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
@@ -86,7 +94,7 @@ function ActivityChip({ entry, projectColor, projectName }: ChipProps) {
           <span className="truncate">{entry.activity}</span>
         </div>
         {projectName && <div className="truncate font-medium text-[10px] opacity-70 pl-4">{projectName}</div>}
-      </div>
+      </Tag>
     );
   }
 
@@ -111,13 +119,16 @@ interface Props {
   entries: PlanEntry[];
   projects: PartnerProject[];
   selectedTenantId: string; // "all" or a tenantId
+  currentUserId: string;
 }
 
-export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) {
+export function PartnerCalendar({ entries: initialEntries, projects, selectedTenantId, currentUserId }: Props) {
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [entries, setEntries] = useState(initialEntries);
+  const [modalState, setModalState] = useState<{ mode: "add" | "edit"; entry?: PlanEntry; date?: string } | null>(null);
 
   const isAllMode = selectedTenantId === "all";
 
@@ -173,14 +184,19 @@ export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) 
     else setCurrentDate(d => addDays(d, dir));
   };
 
-  const renderChip = (entry: PlanEntry) => (
-    <ActivityChip
-      key={entry.id}
-      entry={entry}
-      projectColor={isAllMode ? projectColorMap[entry.tenantId] : undefined}
-      projectName={isAllMode ? projectNameMap[entry.tenantId] : undefined}
-    />
-  );
+  const renderChip = (entry: PlanEntry) => {
+    const isOwn = entry.entryType === "keydate" && entry.createdByUserId === currentUserId;
+    return (
+      <ActivityChip
+        key={entry.id}
+        entry={entry}
+        projectColor={isAllMode ? projectColorMap[entry.tenantId] : undefined}
+        projectName={isAllMode ? projectNameMap[entry.tenantId] : undefined}
+        isOwn={isOwn}
+        onClick={isOwn ? () => setModalState({ mode: "edit", entry }) : undefined}
+      />
+    );
+  };
 
   return (
     <>
@@ -215,6 +231,17 @@ export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) 
         </div>
 
         <div className="flex items-center gap-2">
+          {projects.length > 0 && (
+            <button
+              onClick={() => setModalState({ mode: "add", date: toISO(currentDate) })}
+              className="px-3 h-9 text-sm font-medium rounded-lg bg-[#2d4a3e] text-white hover:bg-[#243d33] transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Key Date
+            </button>
+          )}
           {view !== "day" && (
             <button
               onClick={() => setShowWeekends(w => !w)}
@@ -335,6 +362,28 @@ export function PartnerCalendar({ entries, projects, selectedTenantId }: Props) 
             })}
           </div>
         </div>
+      )}
+
+      {/* ── Add / Edit Key Date modal ───────────────────────────────────────── */}
+      {modalState && (
+        <PartnerKeyDateModal
+          projects={projects}
+          defaultTenantId={selectedTenantId !== "all" ? selectedTenantId : undefined}
+          defaultDate={modalState.date}
+          entry={modalState.entry}
+          onClose={() => setModalState(null)}
+          onSaved={(saved) => {
+            setEntries(prev => {
+              const exists = prev.some(e => e.id === saved.id);
+              return exists ? prev.map(e => (e.id === saved.id ? saved : e)) : [...prev, saved];
+            });
+            setModalState(null);
+          }}
+          onDeleted={(id) => {
+            setEntries(prev => prev.filter(e => e.id !== id));
+            setModalState(null);
+          }}
+        />
       )}
     </>
   );
