@@ -34,6 +34,13 @@ export default function SignUpPage() {
           },
         }}
       />
+      <p className="text-xs text-gray-400 mt-6 text-center max-w-md">
+        By creating an account, you agree to our{" "}
+        <Link href="/privacy" className="underline hover:text-gray-600">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </div>
   );
 }

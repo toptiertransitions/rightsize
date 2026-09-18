@@ -12,6 +12,8 @@
 	<string>Rightsize uses your camera to let you take photos of items directly when adding them to a project's catalog.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Rightsize uses your photo library to let you attach existing photos when adding items to a project's catalog or uploading files.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
