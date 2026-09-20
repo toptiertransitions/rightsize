@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { SignUp } from "@clerk/nextjs";
+import { isNativeApp } from "@/lib/native";
 
 const TYPE_LABELS: Record<string, string> = {
   "Senior Living": "Senior Living Partner",
@@ -26,6 +27,10 @@ function PartnerSignUpContent() {
   const canContinue = companyName.trim().length > 0;
 
   const applyUrl = `/api/partner/apply?type=${encodeURIComponent(partnerType)}&company=${encodeURIComponent(companyName.trim())}${phone.trim() ? `&phone=${encodeURIComponent(phone.trim())}` : ""}`;
+
+  // Google OAuth doesn't work inside the Capacitor app's embedded webview —
+  // same fix already applied on the main sign-in/sign-up pages.
+  const hideSocialButtons = isNativeApp();
 
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center px-6 py-10">
@@ -120,6 +125,8 @@ function PartnerSignUpContent() {
                   primaryButton: "bg-forest-600 hover:bg-forest-700 text-white rounded-xl h-12",
                   socialButtonsBlockButton: "border border-gray-300 rounded-xl h-12 hover:bg-gray-50",
                   formFieldInput: "rounded-xl h-12 border-gray-300",
+                  socialButtons: hideSocialButtons ? "hidden" : undefined,
+                  dividerRow: hideSocialButtons ? "hidden" : undefined,
                 },
               }}
             />

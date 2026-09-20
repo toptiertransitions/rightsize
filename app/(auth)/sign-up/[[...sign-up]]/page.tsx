@@ -1,8 +1,16 @@
+"use client";
+
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
 import InAppBrowserWarning from "./InAppBrowserWarning";
+import { isNativeApp } from "@/lib/native";
 
 export default function SignUpPage() {
+  // Google OAuth doesn't work inside the Capacitor app's embedded webview
+  // (Google blocks sign-in from non-standard browser webviews) — same fix
+  // already applied on the sign-in page. Email code / password still works.
+  const hideSocialButtons = isNativeApp();
+
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
       <div className="mb-8 text-center">
@@ -31,6 +39,8 @@ export default function SignUpPage() {
             socialButtonsBlockButton:
               "border border-gray-300 rounded-xl h-12 hover:bg-gray-50",
             formFieldInput: "rounded-xl h-12 border-gray-300",
+            socialButtons: hideSocialButtons ? "hidden" : undefined,
+            dividerRow: hideSocialButtons ? "hidden" : undefined,
           },
         }}
       />

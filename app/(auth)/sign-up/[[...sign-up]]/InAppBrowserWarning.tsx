@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isNativeApp } from "@/lib/native";
 
 function isInAppBrowser(): boolean {
   if (typeof navigator === "undefined") return false;
+  // The Rightsize native app is itself a WKWebView/Android WebView — it would
+  // otherwise match the generic WebView heuristic below and falsely warn users
+  // to leave the app they're already correctly using.
+  if (isNativeApp()) return false;
   const ua = navigator.userAgent;
   return (
     /FBAN|FBAV|FB_IAB/i.test(ua) ||       // Facebook
