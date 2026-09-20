@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
 import { createTenant, createMembership, upsertUser, getTenantBySlug, updateTenant, deleteTenantCascade, getUserRoleForTenant, getSystemRole, getTenants, getSignedTenantIds } from "@/lib/airtable";
+import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 import { slugify } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
@@ -68,6 +69,38 @@ export async function POST(req: NextRequest) {
 
   // Create owner membership
   await createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" });
+
+  // Notify admins directly for genuine self-serve client signups — this is
+  // the real "a new client just showed up" moment for the self-serve flow,
+  // and doing it here (rather than depending on the Clerk user.created
+  // webhook, which has proven unreliable) mirrors the same direct-call
+  // pattern the invite-accept flow already uses. Staff creating a project
+  // on someone else's behalf isn't a new-user event, so skip those.
+  if (!isTTTCreator) {
+    try {
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId);
+      const primaryEmailId = clerkUser.primaryEmailAddressId;
+      const userEmail =
+        clerkUser.emailAddresses.find(e => e.id === primaryEmailId)?.emailAddress ??
+        clerkUser.emailAddresses[0]?.emailAddress ??
+        email ?? "";
+      const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || displayName || userEmail;
+      const addrParts = [tenant.address, tenant.city, tenant.state, tenant.zip].filter(Boolean);
+
+      await sendNewUserAdminNotification({
+        fullName,
+        email: userEmail,
+        imageUrl: clerkUser.imageUrl,
+        userType: "client",
+        roleLabel: "Owner",
+        projectName: tenant.name,
+        projectAddress: addrParts.length > 0 ? addrParts.join(", ") : null,
+      });
+    } catch {
+      // never block tenant creation on a notification failure
+    }
+  }
 
   return NextResponse.json({ tenant });
 }
