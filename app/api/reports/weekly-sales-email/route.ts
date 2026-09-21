@@ -377,6 +377,23 @@ interface SignedDetail {
   amount: number;
 }
 
+interface UnpaidInvoiceRow {
+  invoiceNumber: string;
+  type: string;
+  status: string;
+  invoiceDate: string;
+  daysOutstanding: number;
+  amountDue: number;
+}
+
+interface UnpaidClientGroup {
+  clientName: string;
+  address: string;
+  rep: string;
+  totalDue: number;
+  invoices: UnpaidInvoiceRow[];
+}
+
 function buildEmail({
   reportDate,
   currentMonthLabel,
@@ -397,6 +414,7 @@ function buildEmail({
   priorBilledDetails,
   priorSignedDetails,
   newFeatures,
+  unpaidClientGroups,
 }: {
   reportDate: string;
   currentMonthLabel: string;
@@ -426,6 +444,7 @@ function buildEmail({
   priorBilledDetails: BilledDetail[];
   priorSignedDetails: SignedDetail[];
   newFeatures: string[];
+  unpaidClientGroups: UnpaidClientGroup[];
 }): string {
   const SAGE  = "#2d4a3e";
   const TINT  = "#f0f4f0";
@@ -599,7 +618,7 @@ function buildEmail({
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Weekly Revenue Report</title></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><title>Weekly Leadership Report</title></head>
 <body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:28px 16px;">
 <tr><td align="center">
@@ -611,7 +630,7 @@ function buildEmail({
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
         <td>
           <p style="margin:0;font-size:11px;font-weight:700;color:${SAGE};text-transform:uppercase;letter-spacing:1.5px;">Top Tier Transitions</p>
-          <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:${DARK};letter-spacing:-0.5px;">Weekly Revenue Report</p>
+          <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:${DARK};letter-spacing:-0.5px;">Weekly Leadership Report</p>
           <p style="margin:4px 0 0;font-size:14px;color:${MUTED};">${reportDate}</p>
         </td>
         <td align="right" style="vertical-align:middle;">
@@ -769,6 +788,61 @@ function buildEmail({
     return `<ul style="margin:0;padding:0 0 0 18px;">
       ${newFeatures.map(f => `<li style="font-size:13px;color:#374151;padding:3px 0;">${f}</li>`).join("")}
     </ul>`;
+  })())}
+
+  ${section(`Unpaid Invoices by Client — ${fmtMoneyFull(unpaidClientGroups.reduce((s, g) => s + g.totalDue, 0))} Outstanding`, (() => {
+    if (unpaidClientGroups.length === 0) {
+      return `<p style="font-size:13px;color:#9ca3af;text-align:center;margin:8px 0;">No unpaid invoices — everything's collected.</p>`;
+    }
+    const statusPill = (status: string) => {
+      const isPartial = status === "PartiallyPaid";
+      const bg = isPartial ? "#fef3c7" : "#fee2e2";
+      const text = isPartial ? "#92400e" : "#991b1b";
+      const label = isPartial ? "Partially Paid" : "Unpaid";
+      return `<span style="background:${bg};color:${text};font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;">${label}</span>`;
+    };
+    const groupsHtml = unpaidClientGroups.map((g) => {
+      const rows = g.invoices.map((r, i) => {
+        const bg = i % 2 === 0 ? "#fff" : TINT;
+        const agingColor = r.daysOutstanding >= 30 ? "#dc2626" : r.daysOutstanding >= 14 ? "#d97706" : MUTED;
+        return `<tr style="background:${bg};">
+          <td ${TDm}>${r.invoiceNumber}</td>
+          <td ${TDm}>${r.type}</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">${statusPill(r.status)}</td>
+          <td ${TDm}>${r.invoiceDate}</td>
+          <td style="padding:10px 12px;font-size:12px;font-weight:600;color:${agingColor};border-bottom:1px solid #f3f4f6;">${r.daysOutstanding}d</td>
+          <td style="padding:10px 12px;font-size:13px;font-weight:700;color:#dc2626;border-bottom:1px solid #f3f4f6;">${fmtMoneyFull(r.amountDue)}</td>
+        </tr>`;
+      }).join("");
+      return `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+        <tr style="background:#f9fafb;"><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td>
+              <span style="font-size:13px;font-weight:700;color:${DARK};">${g.clientName}</span>
+              ${g.address ? `<span style="font-size:11px;color:${MUTED};"> &middot; ${g.address}</span>` : ""}
+              <span style="font-size:11px;color:${MUTED};"> &middot; Rep: ${g.rep}</span>
+            </td>
+            <td align="right"><span style="font-size:13px;font-weight:700;color:#dc2626;">${fmtMoneyFull(g.totalDue)}</span></td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:0;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <thead><tr>
+              <th ${TH}>Invoice #</th><th ${TH}>Type</th><th ${TH}>Status</th>
+              <th ${TH}>Invoiced</th><th ${TH}>Age</th><th ${TH}>Amount Due</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </td></tr>
+      </table>`;
+    }).join("");
+    const grandTotal = unpaidClientGroups.reduce((s, g) => s + g.totalDue, 0);
+    return `${groupsHtml}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:2px solid #e5e7eb;margin-top:4px;"><tr>
+      <td style="padding:10px 12px;font-size:13px;font-weight:700;color:${DARK};">Total Outstanding</td>
+      <td align="right" style="padding:10px 12px;font-size:15px;font-weight:800;color:#dc2626;">${fmtMoneyFull(grandTotal)}</td>
+    </tr></table>`;
   })())}
 
   <!-- Footer -->
@@ -1015,6 +1089,45 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     });
   }
 
+  // ── Unpaid invoices by client ──
+  // Unlike the "Billed this month" section above, deposits are included here —
+  // an unpaid deposit is still real outstanding money owed, which is exactly
+  // what this section exists to surface. Covers both Unpaid and PartiallyPaid
+  // (the remaining balance on a partial payment is still uncollected revenue).
+  const unpaidByTenant = new Map<string, { inv: Invoice; outstanding: number }[]>();
+  for (const [tid, invs] of invoicesByTenant) {
+    for (const inv of invs) {
+      if (inv.status === "Paid") continue;
+      const outstanding = grossInvoiceAmount(inv) - (inv.paidAmount ?? 0);
+      if (outstanding <= 0) continue;
+      if (!unpaidByTenant.has(tid)) unpaidByTenant.set(tid, []);
+      unpaidByTenant.get(tid)!.push({ inv, outstanding });
+    }
+  }
+  const unpaidClientGroups: UnpaidClientGroup[] = Array.from(unpaidByTenant.entries())
+    .map(([tenantId, entries]) => {
+      const tenant = tenantMap.get(tenantId);
+      const opp = oppByTenant.get(tenantId);
+      const invoices: UnpaidInvoiceRow[] = [...entries]
+        .sort((a, b) => (a.inv.createdAt ?? "").localeCompare(b.inv.createdAt ?? ""))
+        .map(({ inv, outstanding }) => ({
+          invoiceNumber: inv.invoiceNumber || "—",
+          type: inv.type,
+          status: inv.status,
+          invoiceDate: fmtDate(inv.createdAt),
+          daysOutstanding: Math.max(0, Math.floor((Date.now() - new Date(inv.createdAt).getTime()) / 86_400_000)),
+          amountDue: outstanding,
+        }));
+      return {
+        clientName: tenant?.name || "Unknown",
+        address: tenant ? tenantAddress(tenant) : "",
+        rep: resolveRep(opp?.assignedToClerkId, staffMap),
+        totalDue: invoices.reduce((s, r) => s + r.amountDue, 0),
+        invoices,
+      };
+    })
+    .sort((a, b) => b.totalDue - a.totalDue);
+
   // ── Weekly activity by rep ──
   // Rolling 7-day window ending today CT (inclusive on both ends).
   const todayStr    = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -1075,6 +1188,7 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
     priorBilledDetails,
     priorSignedDetails,
     newFeatures,
+    unpaidClientGroups,
   });
 
   return { html, reportDate };
@@ -1107,7 +1221,7 @@ export async function POST() {
   await resend.emails.send({
     from: "Top Tier Transitions <noreply@toptiertransitions.com>",
     to: "matt@toptiertransitions.com",
-    subject: `Weekly Revenue Report — ${reportDate}`,
+    subject: `Weekly Leadership Report — ${reportDate}`,
     html,
   });
 
