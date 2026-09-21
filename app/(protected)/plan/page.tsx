@@ -19,6 +19,7 @@ import {
   getStaffMembers,
   getProjectTasksForTenant,
   getOpportunitiesForTenant,
+  getSignedTenantIds,
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -166,9 +167,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
         e => e.id === clerkUser.primaryEmailAddressId
       )?.emailAddress;
 
-      const [allTenantsRaw, serviceList] = await Promise.all([
+      const [allTenantsRaw, serviceList, signedTenantIds] = await Promise.all([
         getTenants().catch(() => []),
         getServices().catch(() => []),
+        getSignedTenantIds().catch(() => new Set<string>()),
       ]);
 
       const allTenants = allTenantsRaw.filter(t => t.isTTT ?? true);
@@ -186,7 +188,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const tenantIdsWithAccess = [...new Set(filteredEntries.map(e => e.tenantId).filter(Boolean))];
       const staffTimeEntries = await getTimeEntriesForTenants(tenantIdsWithAccess).catch(() => []);
 
-      const tenantOptions = allTenants.filter(t => !t.isArchived && !t.isLostDeal).map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      // Project picker: Active + Post-Move Consignment only — excludes Archived,
+      // Lost, and Not-Signed-Yet (no Signed contract on file) projects.
+      const tenantOptions = allTenants
+        .filter(t => !t.isArchived && !t.isLostDeal && signedTenantIds.has(t.id))
+        .map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
 
       return (
@@ -221,9 +227,10 @@ export default async function PlanPage({ searchParams }: PageProps) {
         e => e.id === clerkUser.primaryEmailAddressId
       )?.emailAddress;
 
-      const [allTenantsRaw, serviceList] = await Promise.all([
+      const [allTenantsRaw, serviceList, signedTenantIds] = await Promise.all([
         getTenants().catch(() => []),
         getServices().catch(() => []),
+        getSignedTenantIds().catch(() => new Set<string>()),
       ]);
 
       // TTTStaff only see TTT-managed projects
@@ -242,7 +249,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
       const tenantIdsWithEntries = [...new Set(staffEntries.map(e => e.tenantId).filter(Boolean))];
       const staffTimeEntries = await getTimeEntriesForTenants(tenantIdsWithEntries).catch(() => []);
 
-      const tenantOptions = allTenants.filter(t => !t.isArchived && !t.isLostDeal).map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
+      // Project picker: Active + Post-Move Consignment only — excludes Archived,
+      // Lost, and Not-Signed-Yet (no Signed contract on file) projects.
+      const tenantOptions = allTenants
+        .filter(t => !t.isArchived && !t.isLostDeal && signedTenantIds.has(t.id))
+        .map(t => ({ id: t.id, name: t.name, isArchived: t.isArchived ?? false, isLostDeal: t.isLostDeal ?? false, isConsignmentOnly: t.isConsignmentOnly ?? false, address: t.address, city: t.city, state: t.state, zip: t.zip, destAddress: t.destAddress, destCity: t.destCity, destState: t.destState, destZip: t.destZip }));
       const serviceNames = serviceList.map(s => s.name);
 
       return (

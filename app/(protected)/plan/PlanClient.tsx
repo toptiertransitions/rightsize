@@ -1074,6 +1074,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
   const [showScheduleModModal, setShowScheduleModModal] = useState(false);
 
   // TTT users for resolving helper names on calendar chips
@@ -1252,20 +1253,20 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
             </div>
           </div>
 
-          {/* ── Project picker modal ──────────────────────────────────────── */}
+          {/* ── Project picker modal — autocomplete search, not a dropdown ──── */}
           {showProjectPicker && tenantOptions && (
             <div
               className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4"
-              onClick={() => setShowProjectPicker(false)}
+              onClick={() => { setShowProjectPicker(false); setProjectSearch(""); }}
             >
               <div
-                className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden"
+                className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[80vh]"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                   <h3 className="text-base font-bold text-gray-900">Select a view</h3>
                   <button
-                    onClick={() => setShowProjectPicker(false)}
+                    onClick={() => { setShowProjectPicker(false); setProjectSearch(""); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1273,39 +1274,69 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                     </svg>
                   </button>
                 </div>
-                <div className="py-2 max-h-80 overflow-y-auto">
-                  {/* All My Projects option */}
-                  <button
-                    type="button"
-                    onClick={() => setShowProjectPicker(false)}
-                    className="w-full flex items-center gap-3 px-5 py-3 text-left bg-forest-50 hover:bg-forest-100 transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-forest-500 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-forest-700">All My Projects</p>
-                      <p className="text-xs text-forest-600/70">Your shifts across all projects</p>
-                    </div>
-                    <svg className="w-4 h-4 text-forest-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+
+                {/* Search bar */}
+                <div className="px-5 py-3 border-b border-gray-100 flex-shrink-0">
+                  <div className="relative">
+                    <svg className="w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
                     </svg>
-                  </button>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={projectSearch}
+                      onChange={e => setProjectSearch(e.target.value)}
+                      placeholder="Search projects…"
+                      className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 bg-gray-50"
+                    />
+                  </div>
+                </div>
 
-                  {/* Active projects */}
+                <div className="py-2 overflow-y-auto flex-1">
+                  {/* All My Projects — only shown while not actively searching */}
+                  {projectSearch.trim() === "" && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowProjectPicker(false); setProjectSearch(""); }}
+                      className="w-full flex items-center gap-3 px-5 py-3 text-left bg-forest-50 hover:bg-forest-100 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-forest-500 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-forest-700">All My Projects</p>
+                        <p className="text-xs text-forest-600/70">Your shifts across all projects</p>
+                      </div>
+                      <svg className="w-4 h-4 text-forest-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {/* Matching projects — tenantOptions is already scoped to Active + Post-Move
+                      (Archived, Lost, Not-Signed-Yet, and Non-TTT projects are filtered out
+                      server-side before this list ever reaches the client). */}
                   {(() => {
-                    const sort = (arr: TenantOption[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
-                    const active   = sort(tenantOptions.filter(t => !t.isArchived && !t.isConsignmentOnly));
-                    const postMove = sort(tenantOptions.filter(t => !t.isArchived && t.isConsignmentOnly));
-                    const archived = sort(tenantOptions.filter(t => t.isArchived && !t.isLostDeal));
+                    const q = projectSearch.trim().toLowerCase();
+                    const matches = [...tenantOptions]
+                      .filter(t => !q || t.name.toLowerCase().includes(q))
+                      .sort((a, b) => a.name.localeCompare(b.name));
 
-                    const ProjectBtn = ({ t, dim }: { t: TenantOption; dim?: boolean }) => (
+                    if (matches.length === 0) {
+                      return (
+                        <p className="px-5 py-6 text-sm text-gray-400 text-center">
+                          No projects match &ldquo;{projectSearch}&rdquo;
+                        </p>
+                      );
+                    }
+
+                    return matches.map(t => (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => { setShowProjectPicker(false); router.push(`/plan?tenantId=${t.id}`); }}
+                        onClick={() => { setShowProjectPicker(false); setProjectSearch(""); router.push(`/plan?tenantId=${t.id}`); }}
                         className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
                       >
                         <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -1313,41 +1344,15 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
-                        <p className={`flex-1 text-sm font-medium truncate ${dim ? "text-gray-400" : "text-gray-800"}`}>{t.name}</p>
+                        <p className="flex-1 text-sm font-medium truncate text-gray-800">{t.name}</p>
+                        {t.isConsignmentOnly && (
+                          <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide flex-shrink-0">Post-Move</span>
+                        )}
                         <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                       </button>
-                    );
-
-                    return (
-                      <>
-                        {active.length > 0 && (
-                          <>
-                            <div className="px-5 py-2">
-                              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Active Projects</p>
-                            </div>
-                            {active.map(t => <ProjectBtn key={t.id} t={t} />)}
-                          </>
-                        )}
-                        {postMove.length > 0 && (
-                          <>
-                            <div className="px-5 py-2 mt-1">
-                              <p className="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">Post-Move</p>
-                            </div>
-                            {postMove.map(t => <ProjectBtn key={t.id} t={t} />)}
-                          </>
-                        )}
-                        {archived.length > 0 && (
-                          <>
-                            <div className="px-5 py-2 mt-1">
-                              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Archived</p>
-                            </div>
-                            {archived.map(t => <ProjectBtn key={t.id} t={t} dim />)}
-                          </>
-                        )}
-                      </>
-                    );
+                    ));
                   })()}
                 </div>
               </div>
