@@ -1,15 +1,27 @@
 "use client";
 
+import { Suspense } from "react";
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import InAppBrowserWarning from "./InAppBrowserWarning";
 import { isNativeApp } from "@/lib/native";
 
-export default function SignUpPage() {
+function SignUpContent() {
   // Google OAuth doesn't work inside the Capacitor app's embedded webview
   // (Google blocks sign-in from non-standard browser webviews) — same fix
   // already applied on the sign-in page. Email code / password still works.
   const hideSocialButtons = isNativeApp();
+
+  // Clerk's legacy NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL env var behaves as an
+  // unconditional redirect that silently ignores any ?redirect_url= on the
+  // page — this is why a brand-new client signing up from an invite link
+  // was landing on /onboarding (create-your-own-project) instead of back at
+  // /invite to accept the project they were actually invited to. The fix is
+  // to always resolve it ourselves and pass it explicitly, since an
+  // explicit prop always wins over the env var.
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect_url") || "/onboarding";
 
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
@@ -29,6 +41,7 @@ export default function SignUpPage() {
       </div>
       <InAppBrowserWarning />
       <SignUp
+        fallbackRedirectUrl={redirectUrl}
         appearance={{
           elements: {
             rootBox: "w-full max-w-md",
@@ -52,5 +65,13 @@ export default function SignUpPage() {
         .
       </p>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream-50" />}>
+      <SignUpContent />
+    </Suspense>
   );
 }

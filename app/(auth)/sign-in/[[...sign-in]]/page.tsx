@@ -1,15 +1,25 @@
 "use client";
 
+import { Suspense } from "react";
 import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { isNativeApp } from "@/lib/native";
 
-export default function SignInPage() {
+function SignInContent() {
   // Google OAuth doesn't work inside the Capacitor app's embedded webview
   // (Google blocks sign-in from non-standard browser webviews). Hide the
   // social buttons there — email code / password sign-in still works fine.
   // TODO: revisit once native OAuth (system browser + deep link) is built.
   const hideSocialButtons = isNativeApp();
+
+  // Clerk's legacy NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL env var behaves as an
+  // unconditional redirect that silently ignores any ?redirect_url= on the
+  // page (e.g. from an invite link) — the fix is to always resolve it
+  // ourselves and pass it explicitly, since an explicit prop always wins
+  // over the env var.
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect_url") || "/home";
 
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
@@ -27,6 +37,7 @@ export default function SignInPage() {
         </Link>
       </div>
       <SignIn
+        fallbackRedirectUrl={redirectUrl}
         appearance={{
           elements: {
             rootBox: "w-full max-w-md",
@@ -43,5 +54,13 @@ export default function SignInPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream-50" />}>
+      <SignInContent />
+    </Suspense>
   );
 }

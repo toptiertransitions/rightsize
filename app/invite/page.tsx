@@ -69,17 +69,17 @@ export default async function InvitePage({ searchParams }: PageProps) {
           ) : (
             <div className="space-y-3">
               <Link
-                href={`/sign-in?redirect_url=${encodeURIComponent(returnUrl)}`}
+                href={`/sign-up?redirect_url=${encodeURIComponent(returnUrl)}`}
                 className="flex items-center justify-center w-full h-11 px-5 bg-forest-600 text-white rounded-xl font-medium text-sm hover:bg-forest-700 transition-colors"
               >
-                Sign in to access portal
+                Create your account to accept
               </Link>
-              <Link
-                href={`/sign-up?redirect_url=${encodeURIComponent(returnUrl)}`}
-                className="flex items-center justify-center w-full h-11 px-5 bg-cream-100 text-forest-700 rounded-xl font-medium text-sm border border-cream-300 hover:bg-cream-200 transition-colors"
-              >
-                Create an account
-              </Link>
+              <p className="text-center text-xs text-gray-400">
+                Already have a Rightsize account?{" "}
+                <Link href={`/sign-in?redirect_url=${encodeURIComponent(returnUrl)}`} className="text-forest-700 font-medium hover:underline">
+                  Sign in instead
+                </Link>
+              </p>
             </div>
           )}
         </div>
@@ -128,17 +128,17 @@ export default async function InvitePage({ searchParams }: PageProps) {
         ) : (
           <div className="space-y-3">
             <Link
-              href={`/sign-in?redirect_url=${encodeURIComponent(returnUrl)}`}
+              href={`/sign-up?redirect_url=${encodeURIComponent(returnUrl)}`}
               className="flex items-center justify-center w-full h-11 px-5 bg-forest-600 text-white rounded-xl font-medium text-sm hover:bg-forest-700 transition-colors"
             >
-              Sign in to accept
+              Create your account to accept
             </Link>
-            <Link
-              href={`/sign-up?redirect_url=${encodeURIComponent(returnUrl)}`}
-              className="flex items-center justify-center w-full h-11 px-5 bg-cream-100 text-forest-700 rounded-xl font-medium text-sm border border-cream-300 hover:bg-cream-200 transition-colors"
-            >
-              Create an account
-            </Link>
+            <p className="text-center text-xs text-gray-400">
+              Already have a Rightsize account?{" "}
+              <Link href={`/sign-in?redirect_url=${encodeURIComponent(returnUrl)}`} className="text-forest-700 font-medium hover:underline">
+                Sign in instead
+              </Link>
+            </p>
           </div>
         )}
       </div>
