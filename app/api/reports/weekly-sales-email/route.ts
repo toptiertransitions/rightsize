@@ -1094,11 +1094,20 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
   // an unpaid deposit is still real outstanding money owed, which is exactly
   // what this section exists to surface. Covers both Unpaid and PartiallyPaid
   // (the remaining balance on a partial payment is still uncollected revenue).
+  //
+  // Use inv.amount here, not grossInvoiceAmount() — that helper is built for
+  // MTD revenue-recognition totals and deliberately excludes expense
+  // pass-throughs and the "Deposit Applied" credit line (to avoid double-
+  // counting revenue across a deposit + full invoice pair). inv.amount is
+  // the actual final invoiced total (services + expenses − deposit credit −
+  // discounts), which is what the client actually owes — the same balance
+  // calculation already used everywhere else in the app (home/page.tsx,
+  // api/invoices/[id]/pay/route.ts).
   const unpaidByTenant = new Map<string, { inv: Invoice; outstanding: number }[]>();
   for (const [tid, invs] of invoicesByTenant) {
     for (const inv of invs) {
       if (inv.status === "Paid") continue;
-      const outstanding = grossInvoiceAmount(inv) - (inv.paidAmount ?? 0);
+      const outstanding = inv.amount - (inv.paidAmount ?? 0);
       if (outstanding <= 0) continue;
       if (!unpaidByTenant.has(tid)) unpaidByTenant.set(tid, []);
       unpaidByTenant.get(tid)!.push({ inv, outstanding });
