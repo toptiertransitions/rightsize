@@ -4135,9 +4135,17 @@ function DashboardTab({
   const closedCount = wonCount + lostCount;
   const winRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
 
+  // Oldest expected close date first; opportunities with no close date set sort last.
+  const byExpectedCloseAsc = (a: ClientOpportunity, b: ClientOpportunity) => {
+    if (!a.expectedCloseDate && !b.expectedCloseDate) return 0;
+    if (!a.expectedCloseDate) return 1;
+    if (!b.expectedCloseDate) return -1;
+    return a.expectedCloseDate.localeCompare(b.expectedCloseDate);
+  };
+
   const byStage = STAGES.map((stage) => ({
     stage,
-    opps: filteredOpps.filter((o) => o.stage === stage),
+    opps: filteredOpps.filter((o) => o.stage === stage).sort(byExpectedCloseAsc),
     value: filteredOpps.filter((o) => o.stage === stage).reduce((s, o) => s + o.estimatedValue, 0),
   }));
 
@@ -4575,10 +4583,7 @@ function DashboardTab({
                 {opps.length === 0 && (
                   <p className="text-xs text-gray-400 px-4 py-3">No opportunities</p>
                 )}
-                {(expandedStages.has(stage)
-                  ? [...opps].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-                  : opps.slice(0, 5)
-                ).map((o) => {
+                {(expandedStages.has(stage) ? opps : opps.slice(0, 5)).map((o) => {
                   const oppOwner = staffById.get(o.assignedToClerkId || "");
                   return (
                     <button
@@ -4589,7 +4594,7 @@ function DashboardTab({
                       <p className="text-xs font-medium text-gray-800 truncate">{getContactName(o.clientContactId)}</p>
                       <p className="text-xs text-gray-400">
                         {o.estimatedValue > 0 ? fmtExact(o.estimatedValue) : "No value"}
-                        {o.nextStepDate ? ` · ${new Date(o.nextStepDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                        {o.expectedCloseDate ? ` · ${new Date(o.expectedCloseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : " · No close date"}
                         {oppOwner ? ` · ${oppOwner}` : ""}
                       </p>
                     </button>
