@@ -10,7 +10,8 @@ import NurtureTab from "./NurtureTab";
 
 const CRMActivityCharts = dynamic(() => import("./CRMActivityCharts"), { ssr: false });
 import { cn } from "@/lib/utils";
-import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority, Tenant } from "@/lib/types";
+import type { ClientOpportunity, ClientContact, ReferralCompany, OpportunityStage, CRMActivityType, KeyPerson, CRMActivity, ReferralContact, ReferralContactStage, StaffMember, ReferralPriority, Tenant, PlanEntry } from "@/lib/types";
+import { PartnerActiveProjectsCalendar } from "./PartnerActiveProjectsCalendar";
 
 // ─── CSV Helpers ─────────────────────────────────────────────────────────────
 function parseCSVLine(line: string): string[] {
@@ -3999,6 +4000,7 @@ function DashboardTab({
   companies,
   referralContacts,
   staffMembers,
+  tenants,
   onNavigate,
 }: {
   opportunities: ClientOpportunity[];
@@ -4006,6 +4008,7 @@ function DashboardTab({
   companies: ReferralCompany[];
   referralContacts: ReferralContact[];
   staffMembers: StaffMember[];
+  tenants: Tenant[];
   onNavigate: (tab: Tab, options?: { stage?: OpportunityStage | "All"; oppId?: string; refContactStage?: ReferralContactStage | ""; refType?: string }) => void;
 }) {
   const [ownerFilter, setOwnerFilter] = useState<Set<string>>(new Set());
@@ -4365,6 +4368,35 @@ function DashboardTab({
       .filter(rc => rc.name.toLowerCase().includes(q) || (companies.find(c => c.id === rc.referralCompanyId)?.name || "").toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [referralContacts, companies, spotlightQuery]);
+
+  // Active projects tied back to this partner's referred opportunities (Opportunity → Tenant),
+  // excluding archived/lost — the "one stop shop" set for the Key Dates calendar below.
+  const spotlightActiveProjects = useMemo(() => {
+    const tenantMap = new Map(tenants.map(t => [t.id, t]));
+    const seen = new Set<string>();
+    const projects: { tenantId: string; name: string }[] = [];
+    for (const o of spotlightOpps) {
+      if (!o.tenantId || seen.has(o.tenantId)) continue;
+      const t = tenantMap.get(o.tenantId);
+      if (!t || t.isArchived || t.isLostDeal) continue;
+      seen.add(o.tenantId);
+      projects.push({ tenantId: t.id, name: t.name });
+    }
+    return projects.sort((a, b) => a.name.localeCompare(b.name));
+  }, [spotlightOpps, tenants]);
+
+  const [spotlightKeyDates, setSpotlightKeyDates] = useState<PlanEntry[]>([]);
+  const [spotlightKeyDatesLoading, setSpotlightKeyDatesLoading] = useState(false);
+  const activeProjectIdsKey = spotlightActiveProjects.map(p => p.tenantId).join(",");
+  useEffect(() => {
+    if (!activeProjectIdsKey) { setSpotlightKeyDates([]); return; }
+    setSpotlightKeyDatesLoading(true);
+    fetch(`/api/crm/partner-key-dates?tenantIds=${encodeURIComponent(activeProjectIdsKey)}`)
+      .then(r => r.json())
+      .then(d => setSpotlightKeyDates(d.entries ?? []))
+      .catch(() => setSpotlightKeyDates([]))
+      .finally(() => setSpotlightKeyDatesLoading(false));
+  }, [activeProjectIdsKey]);
 
   return (
     <div className="space-y-8">
@@ -5088,6 +5120,18 @@ function DashboardTab({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Active Projects and Timelines */}
+            {(spotlightActiveProjects.length > 0 || spotlightKeyDatesLoading) && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Active Projects and Timelines</p>
+                <PartnerActiveProjectsCalendar
+                  projects={spotlightActiveProjects}
+                  entries={spotlightKeyDates}
+                  loading={spotlightKeyDatesLoading}
+                />
               </div>
             )}
 
@@ -6051,6 +6095,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           companies={companies}
           referralContacts={referralContacts}
           staffMembers={staffMembers}
+          tenants={tenants}
           onNavigate={handleDashboardNavigate}
         />
       )}
