@@ -438,7 +438,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({})) as Record<string, unknown>;
+        throw new Error((errData.error as string) || `Failed to save (${res.status})`);
+      }
       const { item: savedItem } = await res.json();
       if (isReassign) {
         // Item moved to another project — remove from this view

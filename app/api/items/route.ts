@@ -168,8 +168,8 @@ export async function PATCH(req: NextRequest) {
   // TTTStaff and above can update any item without needing tenant membership
   const sysRole = await getSystemRole(userId).catch(() => null);
   const isSystemStaff = sysRole !== null && ["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole);
-  // isAdmin = can reassign items across projects (manager/admin only)
-  const isAdmin = sysRole === "TTTAdmin" || sysRole === "TTTManager";
+  // isAdmin = can reassign items across projects (manager/admin/team lead)
+  const isAdmin = sysRole === "TTTAdmin" || sysRole === "TTTManager" || sysRole === "TTTTeamLead";
 
   if (!isSystemStaff) {
     if (!tenantId) return NextResponse.json({ error: "Missing tenantId" }, { status: 400 });

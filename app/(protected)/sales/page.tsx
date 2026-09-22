@@ -84,7 +84,7 @@ export default async function SalesPage({ searchParams }: PageProps) {
   const canPayoutClient = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditExpense = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canDeleteProof = sysRole === "TTTManager" || sysRole === "TTTAdmin";
-  const canReassign = sysRole === "TTTManager" || sysRole === "TTTAdmin";
+  const canReassign = sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canEditPricing = sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const canApplyPriceDrop = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin";
   const isStaff = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
