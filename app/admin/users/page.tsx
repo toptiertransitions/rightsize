@@ -29,20 +29,39 @@ export type AdminUser = {
   }>;
 };
 
+// Clerk's getUserList caps each response at 500 rows and never tells the
+// caller there's more unless they check — a plain single call silently
+// truncates once the org passes that many users. Page through with offset
+// until a page comes back short, so the admin list always reflects everyone,
+// not just however many fit under whatever limit someone typed at the time.
+async function getAllClerkUsers() {
+  const client = await clerkClient();
+  const PAGE_SIZE = 500;
+  const MAX_PAGES = 40; // safety cap: 20,000 users:
+  const all: Awaited<ReturnType<typeof client.users.getUserList>>["data"] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data } = await client.users.getUserList({
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      orderBy: "-created_at",
+    });
+    all.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return all;
+}
+
 export default async function AdminUsersPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [memberships, tenants, staffMembers, localVendors, clerkRes] = await Promise.all([
+  const [memberships, tenants, staffMembers, localVendors, clerkUsers] = await Promise.all([
     getAllMemberships().catch(() => []),
     getTenants().catch(() => []),
     getStaffMembers().catch(() => []),
     getAllLocalVendors().catch(() => []),
-    (async () => {
-      const client = await clerkClient();
-      return client.users.getUserList({ limit: 100, orderBy: "-created_at" });
-    })().catch(() => ({ data: [] as never[] })),
+    getAllClerkUsers().catch(() => []),
   ]);
 
   const staffRoleByClerkId = new Map(staffMembers.map(s => [s.clerkUserId, s.role]));
@@ -67,7 +86,7 @@ export default async function AdminUsersPage() {
     membershipsByUser.set(m.userId, list);
   }
 
-  const users: AdminUser[] = clerkRes.data.map(u => ({
+  const users: AdminUser[] = clerkUsers.map(u => ({
     clerkUserId: u.id,
     email: (u.emailAddresses.find(e => e.id === u.primaryEmailAddressId) ?? u.emailAddresses[0])?.emailAddress ?? "",
     name: (`${u.firstName ?? ""} ${u.lastName ?? ""}`).trim() || ((u.emailAddresses.find(e => e.id === u.primaryEmailAddressId) ?? u.emailAddresses[0])?.emailAddress ?? "Unknown"),
