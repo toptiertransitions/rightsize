@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { revalidateTag } from "next/cache";
 import { isTTTAdmin, isTTTStaff } from "@/lib/config";
 import {
   getLocalVendors,
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const vendor = await createLocalVendor(body);
+    revalidateTag("partners-directory");
 
     const source = (req.headers.get("x-vendor-source") ?? "Admin Page");
     sendNewVendorNotification({ vendor, addedByClerkId: userId, source }).catch(() => {});
@@ -50,6 +52,7 @@ export async function PATCH(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const vendor = await updateLocalVendor(id, data);
+    revalidateTag("partners-directory");
     return NextResponse.json({ vendor });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
@@ -66,6 +69,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     await deleteLocalVendor(id);
+    revalidateTag("partners-directory");
     return NextResponse.json({ success: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
