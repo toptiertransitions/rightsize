@@ -2,38 +2,40 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
-import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
-import { selectPartnerAction, deselectPartnerAction, activateServiceInterestAction, deactivateServiceInterestAction } from "@/app/(protected)/partners/actions";
+import type { PartnerProfile } from "@/lib/partners/types";
+import { activateServiceInterestAction, deactivateServiceInterestAction } from "@/app/(protected)/partners/actions";
 import { nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
+import type { PrefillTenant } from "@/lib/partners/questions";
 import { SelectedPartnersTray } from "./SelectedPartnersTray";
-import { CategorySection } from "./CategorySection";
 import { GreyedCategoryCard } from "./GreyedCategoryCard";
 import { TTTMoveManagerCard } from "./TTTMoveManagerCard";
-import { PartnerDetailModal } from "./PartnerDetailModal";
+import { PartnerRequestCard } from "./PartnerRequestCard";
+import { PartnerRequestFlow } from "./PartnerRequestFlow";
 
 interface Props {
   tenantId: string;
   tenantName: string;
   initialActiveCategories: PartnerCategory[];
   initialGreyedCategories: PartnerCategory[];
-  matchesByCategory: Record<PartnerCategory, MatchResult[]>;
   initialSelections: Partial<Record<PartnerCategory, string>>;
   partnersById: Record<string, PartnerProfile>;
   canEdit: boolean;
   appOnlyIntent: boolean;
+  initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>>;
+  prefillTenant: PrefillTenant;
 }
 
 export function NonTTTPartnersPageClient({
-  tenantId, tenantName, initialActiveCategories, initialGreyedCategories, matchesByCategory,
-  initialSelections, partnersById, canEdit, appOnlyIntent,
+  tenantId, tenantName, initialActiveCategories, initialGreyedCategories,
+  initialSelections, partnersById, canEdit, appOnlyIntent, initialRequestAnswers, prefillTenant,
 }: Props) {
   const [activeCategories, setActiveCategories] = useState(initialActiveCategories);
   const [greyedCategories, setGreyedCategories] = useState(initialGreyedCategories);
-  const [selections, setSelections] = useState(initialSelections);
-  const [pendingCategory, setPendingCategory] = useState<PartnerCategory | null>(null);
+  const [selections] = useState(initialSelections);
   const [pendingToggle, setPendingToggle] = useState<PartnerCategory | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [detailPartnerId, setDetailPartnerId] = useState<string | null>(null);
+  const [requestAnswers, setRequestAnswers] = useState(initialRequestAnswers);
+  const [flowCategory, setFlowCategory] = useState<PartnerCategory | null>(null);
 
   const sectionRefs = useRef<Partial<Record<PartnerCategory, HTMLElement>>>({});
 
@@ -49,34 +51,6 @@ export function NonTTTPartnersPageClient({
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
   }, []);
-
-  const handleSelect = useCallback(async (category: PartnerCategory, partnerId: string) => {
-    const prev = selections[category];
-    setSelections((s) => ({ ...s, [category]: partnerId }));
-    setPendingCategory(category);
-    const result = await selectPartnerAction(tenantId, category, partnerId);
-    setPendingCategory(null);
-    if (!result.ok) {
-      setSelections((s) => ({ ...s, [category]: prev }));
-      setToast(result.error);
-    }
-  }, [selections, tenantId]);
-
-  const handleDeselect = useCallback(async (category: PartnerCategory) => {
-    const prev = selections[category];
-    setSelections((s) => {
-      const next = { ...s };
-      delete next[category];
-      return next;
-    });
-    setPendingCategory(category);
-    const result = await deselectPartnerAction(tenantId, category);
-    setPendingCategory(null);
-    if (!result.ok) {
-      setSelections((s) => ({ ...s, [category]: prev }));
-      setToast(result.error);
-    }
-  }, [selections, tenantId]);
 
   const handleActivate = useCallback(async (category: PartnerCategory) => {
     setPendingToggle(category);
@@ -132,17 +106,12 @@ export function NonTTTPartnersPageClient({
             {category === "Move Manager" ? (
               <TTTMoveManagerCard tenantName={tenantName} />
             ) : (
-              <CategorySection
+              <PartnerRequestCard
                 category={category}
-                label={nonTTTCategoryLabel(category)}
-                matches={matchesByCategory[category] ?? []}
-                selectedPartnerId={selections[category]}
-                canEdit={canEdit}
-                pending={pendingCategory === category}
-                onSelect={(partnerId) => handleSelect(category, partnerId)}
-                onDeselect={() => handleDeselect(category)}
-                onLearnMore={(partnerId) => setDetailPartnerId(partnerId)}
+                answers={requestAnswers[category] ?? {}}
+                onOpenFlow={() => setFlowCategory(category)}
                 sectionRef={(el) => { if (el) sectionRefs.current[category] = el; }}
+                canEdit={canEdit}
               />
             )}
             {!selections[category] && (
@@ -176,8 +145,17 @@ export function NonTTTPartnersPageClient({
         )}
       </div>
 
-      {detailPartnerId && partnersById[detailPartnerId] && (
-        <PartnerDetailModal partner={partnersById[detailPartnerId]} onClose={() => setDetailPartnerId(null)} />
+      {flowCategory && canEdit && (
+        <PartnerRequestFlow
+          tenantId={tenantId}
+          category={flowCategory}
+          initialAnswers={requestAnswers[flowCategory] ?? {}}
+          prefillTenant={prefillTenant}
+          onClose={() => setFlowCategory(null)}
+          onSaved={(patch) =>
+            setRequestAnswers((a) => ({ ...a, [flowCategory]: { ...(a[flowCategory] ?? {}), ...patch } }))
+          }
+        />
       )}
 
       {toast && (

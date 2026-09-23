@@ -34,6 +34,7 @@ import type {
   LocalVendor,
   PartnerCategory,
   PartnerSelection,
+  PartnerRequest,
   PartnerReview,
   ProjectFile,
   FileTag,
@@ -2181,6 +2182,101 @@ export async function deletePartnerSelection(tenantId: string, category: Partner
   if (!existing) return;
   const res = await partnerSelectionFetch(`/${existing.id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Partner Requests (NonTTTClient guided matching, one per tenant+category) ─
+function partnerRequestFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PARTNER_REQUESTS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+// Answers has no fixed shape across categories (each has its own question
+// set), so it's stored as a single JSON-text Airtable field rather than one
+// column per possible question.
+function mapPartnerRequest(record: AirtableRecord): PartnerRequest {
+  const f = record.fields;
+  let answers: Record<string, string | string[]> = {};
+  try {
+    const raw = toStr(f["Answers"]);
+    if (raw) answers = JSON.parse(raw);
+  } catch {
+    answers = {};
+  }
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantId"]),
+    category: toStr(f["Category"]) as PartnerCategory,
+    status: (toStr(f["Status"]) || "draft") as PartnerRequest["status"],
+    answers,
+    createdAt: toStr(f["CreatedAt"]),
+    updatedAt: toStr(f["UpdatedAt"]),
+    createdBy: toStr(f["CreatedBy"]),
+  };
+}
+
+export async function getPartnerRequestsForTenant(tenantId: string): Promise<PartnerRequest[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await partnerRequestFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapPartnerRequest);
+}
+
+// Upsert: one record per (tenantId, category). Merges `patchAnswers` into
+// whatever answers already exist rather than replacing them, so saving one
+// question's answer never clobbers previously-saved ones.
+export async function savePartnerRequestAnswers(data: {
+  tenantId: string;
+  category: PartnerCategory;
+  patchAnswers: Record<string, string | string[]>;
+  createdBy: string;
+}): Promise<PartnerRequest> {
+  const formula = encodeURIComponent(`AND({TenantId} = "${data.tenantId}", {Category} = "${data.category}")`);
+  const findRes = await partnerRequestFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const findData = await findRes.json();
+  const existing = findData.records?.[0] as AirtableRecord | undefined;
+
+  const now = new Date().toISOString().slice(0, 10);
+  if (existing) {
+    const current = mapPartnerRequest(existing);
+    const mergedAnswers = { ...current.answers, ...data.patchAnswers };
+    const res = await partnerRequestFetch(`/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: { Answers: JSON.stringify(mergedAnswers), UpdatedAt: now },
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapPartnerRequest(await res.json());
+  }
+
+  const res = await partnerRequestFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId,
+        Category: data.category,
+        Status: "draft",
+        Answers: JSON.stringify(data.patchAnswers),
+        CreatedAt: now,
+        UpdatedAt: now,
+        CreatedBy: data.createdBy,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerRequest(await res.json());
 }
 
 // ─── Partner Reviews (client-facing Partners marketplace) ────────────────────

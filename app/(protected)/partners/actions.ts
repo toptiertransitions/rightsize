@@ -2,9 +2,10 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection } from "@/lib/airtable";
+import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers } from "@/lib/airtable";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import { CATEGORY_TO_SERVICE_INTEREST } from "@/lib/partners/nonTTTCategories";
+import { getPartnerQuestions } from "@/lib/partners/questions";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -106,6 +107,55 @@ export async function activateServiceInterestAction(
     return { ok: true };
   } catch {
     return { ok: false, error: "Couldn't update this. Please try again." };
+  }
+}
+
+// Builds a per-category zod schema from that category's question set, so an
+// answer is only accepted if it's a known question id with a value that
+// matches the question's own type (and, for select/chips questions, one of
+// its declared options) — .strict() rejects any other key outright.
+function buildAnswersSchema(category: PartnerCategory) {
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const q of getPartnerQuestions(category)) {
+    if (q.type === "single-select") {
+      const values = q.options?.map((o) => o.value) ?? [];
+      shape[q.id] = values.length ? z.enum(values as [string, ...string[]]).optional() : z.never().optional();
+    } else if (q.type === "chips-multi") {
+      const values = q.options?.map((o) => o.value) ?? [];
+      shape[q.id] = values.length ? z.array(z.enum(values as [string, ...string[]])).max(10).optional() : z.never().optional();
+    } else {
+      shape[q.id] = z.string().max(500).optional();
+    }
+  }
+  return z.object(shape).strict();
+}
+
+export async function savePartnerRequestAnswersAction(
+  tenantId: string,
+  category: PartnerCategory,
+  patchAnswers: Record<string, string | string[]>
+): Promise<ActionResult> {
+  const base = z.object({ tenantId: tenantIdSchema, category: categorySchema }).safeParse({ tenantId, category });
+  if (!base.success) return { ok: false, error: "That request wasn't valid — please try again." };
+
+  const parsedAnswers = buildAnswersSchema(category).safeParse(patchAnswers);
+  if (!parsedAnswers.success) return { ok: false, error: "That answer wasn't valid — please try again." };
+
+  const userId = await assertCanEdit(tenantId);
+  if (!userId) return { ok: false, error: "You don't have permission to update this project's partner requests." };
+
+  try {
+    await withRetry(() =>
+      savePartnerRequestAnswers({
+        tenantId,
+        category,
+        patchAnswers: parsedAnswers.data as Record<string, string | string[]>,
+        createdBy: userId,
+      })
+    );
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Couldn't save your answer — please try again." };
   }
 }
 

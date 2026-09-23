@@ -766,6 +766,26 @@ export interface PartnerSelection {
   selectedBy: string; // Clerk user id
 }
 
+export type PartnerRequestStatus = "draft" | "matched" | "intro_requested";
+
+// NonTTTClient-only: one row per (tenantId, category) the guided matching
+// flow has been started for. `answers` holds the category's question-set
+// responses keyed by question id; a chips-multi question stores string[].
+// `status` starts "draft" and is only ever advanced to "matched" /
+// "intro_requested" by the Phase 3 scoring/consent flow — Phase 2 (the
+// question-collection UI) only ever writes "draft".
+export interface PartnerRequest {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  category: PartnerCategory;
+  status: PartnerRequestStatus;
+  answers: Record<string, string | string[]>;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string; // Clerk user id
+}
+
 export interface PartnerReview {
   id: string;
   airtableId: string;

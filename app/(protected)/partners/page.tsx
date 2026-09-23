@@ -9,6 +9,7 @@ import {
   getTenants,
   getSignedTenantIds,
   getStaffMembers,
+  getPartnerRequestsForTenant,
 } from "@/lib/airtable";
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { matchPartnersForCategory } from "@/lib/partners/match";
@@ -125,17 +126,33 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   // self-serve project.
   if (!isStaff && tenant.isTTT !== true) {
     const { active, greyed } = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
+    const partnerRequests = await getPartnerRequestsForTenant(tenantId).catch(() => []);
+    const initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>> = {};
+    for (const r of partnerRequests) initialRequestAnswers[r.category] = r.answers;
+
     return (
       <NonTTTPartnersPageClient
         tenantId={tenantId}
         tenantName={tenant.name}
         initialActiveCategories={active}
         initialGreyedCategories={greyed}
-        matchesByCategory={matchesByCategory}
         initialSelections={selections}
         partnersById={partnersById}
         canEdit={canEdit}
         appOnlyIntent={tenant.appOnlyIntent ?? false}
+        initialRequestAnswers={initialRequestAnswers}
+        prefillTenant={{
+          currentZip: tenant.currentZip,
+          destinationZip: tenant.destinationZip,
+          destinationType: tenant.destinationType,
+          destinationCommunity: tenant.destinationCommunity,
+          destinationCommunityOther: tenant.destinationCommunityOther,
+          timelineType: tenant.timelineType,
+          timelineValue: tenant.timelineValue,
+          sqftRange: tenant.sqftRange,
+          homeDensity: tenant.homeDensity,
+          bedrooms: tenant.bedrooms,
+        }}
       />
     );
   }
