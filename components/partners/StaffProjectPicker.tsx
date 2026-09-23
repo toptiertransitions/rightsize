@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export interface StaffPickerProject {
@@ -9,7 +10,25 @@ export interface StaffPickerProject {
 }
 
 export function StaffProjectPicker({ projects }: { projects: StaffPickerProject[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
+  // Header persists the last-viewed real project to localStorage on every
+  // page that carries ?tenantId= — checking it here means a TTT user who
+  // arrives from Plan/Catalog/Vendors/etc. with a project already selected
+  // lands straight on that project's Partners view instead of re-picking.
+  const [checkedStorage, setCheckedStorage] = useState(false);
+
+  useEffect(() => {
+    let persisted: string | null = null;
+    try { persisted = localStorage.getItem("rz_tenantId"); } catch {}
+    if (persisted) {
+      router.replace(`/partners?tenantId=${persisted}`);
+      return;
+    }
+    setCheckedStorage(true);
+  }, [router]);
+
+  if (!checkedStorage) return null;
 
   const q = query.trim().toLowerCase();
   const matches = [...projects]
@@ -44,7 +63,7 @@ export function StaffProjectPicker({ projects }: { projects: StaffPickerProject[
           matches.map((p) => (
             <Link
               key={p.id}
-              href={`/partners?project=${p.id}`}
+              href={`/partners?tenantId=${p.id}`}
               className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
             >
               <span className="text-sm font-medium text-gray-800 truncate">{p.name}</span>

@@ -23,24 +23,27 @@ const STAFF_EDIT_ROLES = ["TTTTeamLead", "TTTManager", "TTTAdmin"];
 const CLIENT_EDIT_ROLES = ["Owner", "Collaborator"];
 
 interface PageProps {
-  searchParams: Promise<{ project?: string }>;
+  // Named to match the app-wide convention (Plan/Catalog/Vendors/etc.) so the
+  // shared Header's ProjectSwitcher dropdown and its localStorage-persisted
+  // "last viewed project" both work here without any special-casing.
+  searchParams: Promise<{ tenantId?: string }>;
 }
 
 export default async function PartnersPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { project } = await searchParams;
+  const { tenantId: urlTenantId } = await searchParams;
   const sysRole = await getSystemRole(userId).catch(() => null);
   const isStaff = !!sysRole;
 
   let tenantId: string | null = null;
   let tenantRole: string | null = null;
 
-  if (project) {
-    tenantRole = await getUserRoleForTenant(userId, project).catch(() => null);
+  if (urlTenantId) {
+    tenantRole = await getUserRoleForTenant(userId, urlTenantId).catch(() => null);
     if (!tenantRole && !isStaff) notFound();
-    tenantId = project;
+    tenantId = urlTenantId;
   } else if (isStaff) {
     // No project selected — same search-driven picker as Plan/Catalog, scoped
     // to Active + Post-Move Consignment (signed, not archived, not lost, TTT-
@@ -74,7 +77,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
           <p className="text-gray-500 mb-6">Select a project to see its matched partners.</p>
           <div className="grid sm:grid-cols-2 gap-4">
             {valid.map(({ tenant }) => (
-              <Link key={tenant.id} href={`/partners?project=${tenant.id}`}>
+              <Link key={tenant.id} href={`/partners?tenantId=${tenant.id}`}>
                 <Card hover>
                   <CardContent>
                     <h3 className="font-bold text-gray-900">{tenant.name}</h3>

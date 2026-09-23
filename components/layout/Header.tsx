@@ -8,7 +8,7 @@ import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 
-const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan"];
+const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan", "/partners"];
 const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
 
 interface HeaderProps {
