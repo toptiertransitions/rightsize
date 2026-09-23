@@ -22,6 +22,13 @@ export interface PartnerProfile {
   reviewCount: number;
   /** Dynamic count (via linked Vendor engagements on completed projects) + manual adjustment. */
   projectsCompleted: number;
+  /** Set only on the system-injected "Top Tier Transitions" Move Manager
+   * entry built from the project's assigned Team Lead — never a real
+   * LocalVendors record. Drives PartnerCard's non-interactive, no-rating
+   * display and the phone link. */
+  isTeamLead?: boolean;
+  teamLeadName?: string;
+  phone?: string;
 }
 
 export interface MatchResult {

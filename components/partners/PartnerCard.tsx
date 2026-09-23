@@ -25,6 +25,33 @@ interface Props {
 }
 
 export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, canEdit, pending, onSelect, onDeselect }: Props) {
+  if (partner.isTeamLead) {
+    return (
+      <div className="relative flex gap-4 rounded-2xl border border-forest-200 bg-forest-50/40 p-4 sm:p-5">
+        <PartnerLogo logo={partner.logo} name={partner.vendorName} />
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <div>
+            <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
+            {partner.teamLeadName && (
+              <p className="text-sm text-gray-600 mt-0.5">Your Move Manager: {partner.teamLeadName}</p>
+            )}
+          </div>
+          {partner.phone && (
+            <a
+              href={`tel:${partner.phone.replace(/[^\d+]/g, "")}`}
+              className="inline-flex items-center gap-1.5 text-sm text-forest-600 hover:text-forest-800 font-medium min-h-[44px] sm:min-h-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+              {partner.phone}
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative flex gap-4 rounded-2xl border p-4 sm:p-5 bg-white transition-all duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md motion-safe:active:scale-[0.99] ${

@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,6 +8,7 @@ import {
   getTenantById,
   getTenants,
   getSignedTenantIds,
+  getStaffMembers,
 } from "@/lib/airtable";
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { matchPartnersForCategory } from "@/lib/partners/match";
@@ -115,6 +116,42 @@ export default async function PartnersPage({ searchParams }: PageProps) {
 
   const partnersById: Record<string, PartnerProfile> = {};
   for (const p of directory) partnersById[p.id] = p;
+
+  // TTT-managed projects with an assigned Team Lead get Top Tier Transitions
+  // itself as the sole Move Manager — not a marketplace choice, so it
+  // replaces (not adds to) whatever the normal directory match returned and
+  // is never written to PartnerSelections.
+  if (tenant.isTTT === true && tenant.teamLeadClerkId) {
+    const [staffMembers, teamLeadClerkUser] = await Promise.all([
+      getStaffMembers().catch(() => []),
+      (await clerkClient()).users.getUser(tenant.teamLeadClerkId).catch(() => null),
+    ]);
+    const lead = staffMembers.find((m) => m.clerkUserId === tenant.teamLeadClerkId);
+    const teamLeadName = lead?.displayName || [teamLeadClerkUser?.firstName, teamLeadClerkUser?.lastName].filter(Boolean).join(" ") || undefined;
+
+    if (teamLeadName) {
+      const syntheticId = `team-lead-${tenant.teamLeadClerkId}`;
+      const teamLeadPartner: PartnerProfile = {
+        id: syntheticId,
+        vendorName: "Top Tier Transitions",
+        category: "Move Manager",
+        logo: teamLeadClerkUser?.imageUrl || undefined,
+        zipCodesServed: "",
+        city: tenant.city ?? "",
+        state: tenant.state ?? "",
+        avgRating: 0,
+        rawAvgRating: 0,
+        reviewCount: 0,
+        projectsCompleted: 0,
+        isTeamLead: true,
+        teamLeadName,
+        phone: lead?.phone || undefined,
+      };
+      matchesByCategory["Move Manager"] = [{ partner: teamLeadPartner, rank: 1, matchedLocation: "area" }];
+      partnersById[syntheticId] = teamLeadPartner;
+      selections["Move Manager"] = syntheticId;
+    }
+  }
 
   return (
     <PartnersPageClient
