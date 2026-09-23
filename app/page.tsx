@@ -50,7 +50,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-cream-50">
       {/* Nav */}
-      <nav className="max-w-md mx-auto px-6 pt-[max(20px,env(safe-area-inset-top))] pb-2 flex items-center justify-between">
+      <nav className="max-w-md mx-auto px-6 pt-[max(20px,env(safe-area-inset-top))] pb-2 flex items-center">
         <div className="flex items-center gap-2.5">
           <Image
             src="/ttt-icon.png"
@@ -65,9 +65,6 @@ export default async function HomePage() {
             <div className="text-[10px] text-gray-400">by Top Tier</div>
           </div>
         </div>
-        <Link href="/calculator" className="text-xs text-gray-400 hover:text-forest-600 font-medium">
-          Calculator
-        </Link>
       </nav>
 
       <main className="max-w-md mx-auto px-6 pb-16">

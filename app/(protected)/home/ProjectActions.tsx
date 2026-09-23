@@ -442,7 +442,7 @@ export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Your Account</h3>
             <p className="text-sm text-gray-500 mb-3">
-              Your project, <span className="font-semibold text-gray-700">{tenantName}</span>, will be archived — not erased, in case you change your mind.
+              Your project, <span className="font-semibold text-gray-700">{tenantName}</span>, will be archived for a brief period of time in case you change your mind.
               Your Rightsize account itself will be permanently deleted and you&apos;ll be signed out.
             </p>
             <p className="text-sm text-red-600 font-medium mb-4">This cannot be undone.</p>
