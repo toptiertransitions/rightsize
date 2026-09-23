@@ -38,6 +38,8 @@ export const AIRTABLE_TABLES = {
   PLAN_ENTRIES: process.env.AIRTABLE_PLAN_ENTRIES_TABLE || "PlanEntries",
   VENDORS: process.env.AIRTABLE_VENDORS_TABLE || "Vendors",
   LOCAL_VENDORS: process.env.AIRTABLE_LOCAL_VENDORS_TABLE || "LocalVendors",
+  PARTNER_SELECTIONS: process.env.AIRTABLE_PARTNER_SELECTIONS_TABLE || "PartnerSelections",
+  PARTNER_REVIEWS: process.env.AIRTABLE_PARTNER_REVIEWS_TABLE || "PartnerReviews",
   FILES: process.env.AIRTABLE_FILES_TABLE || "ProjectFiles",
   TIME_ENTRIES: process.env.TIME_ENTRIES_TABLE_ID || "TimeEntries",
   STAFF_ROLES: process.env.STAFF_ROLES_TABLE_ID || "StaffRoles",

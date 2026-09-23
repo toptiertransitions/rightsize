@@ -186,6 +186,12 @@ export async function PATCH(req: NextRequest) {
     quoteVendorNotes: isTTTInternalRole && quoteVendorNotes !== undefined ? (quoteVendorNotes as string | null) : undefined,
   });
   revalidateTag("tenants");
+  // A project's archived/lost status feeds the Partners marketplace's
+  // "projects completed" counts — invalidate that cache too so it doesn't
+  // wait out the full 5-minute window when a project is closed out.
+  if (resolvedIsArchived !== undefined || resolvedIsLostDeal !== undefined) {
+    revalidateTag("partners-directory");
+  }
   return NextResponse.json({ tenant });
 }
 

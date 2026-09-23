@@ -7,8 +7,8 @@ import { Pagination } from "../components/Pagination";
 import { OtherConsignmentClient } from "./OtherConsignmentClient";
 
 const PAGE_SIZE = 25;
-import { VENDOR_TYPES, ITEM_CATEGORIES } from "@/lib/types";
-import type { LocalVendor, VendorType, Item } from "@/lib/types";
+import { VENDOR_TYPES, ITEM_CATEGORIES, PARTNER_CATEGORIES } from "@/lib/types";
+import type { LocalVendor, VendorType, Item, PartnerCategory } from "@/lib/types";
 
 // ─── Type badge colors ────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -49,6 +49,11 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   const [zipCodesServed, setZipCodesServed] = useState(vendor?.zipCodesServed ?? "");
   const [notes, setNotes] = useState(vendor?.notes ?? "");
   const [isActive, setIsActive] = useState(vendor?.isActive ?? true);
+  // Partners marketplace fields
+  const [category, setCategory] = useState<PartnerCategory | "">(vendor?.category ?? "");
+  const [logo, setLogo] = useState(vendor?.logo ?? "");
+  const [featuredRank, setFeaturedRank] = useState(vendor?.featuredRank !== undefined ? String(vendor.featuredRank) : "");
+  const [projectsAdjustment, setProjectsAdjustment] = useState(String(vendor?.projectsCompletedAdjustment ?? 0));
   const [prefSlots, setPrefSlots] = useState<Array<{ category: string; minPrice: string; maxPrice: string }>>(() => {
     const slots = (vendor?.prefCategories ?? []).map(p => ({
       category: p.category,
@@ -104,6 +109,10 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
         consignmentTake: Number(consignmentTake) || 0,
         zipCodesServed: zipCodesServed.trim(), notes: notes.trim(), isActive,
         prefCategories,
+        category: category || undefined,
+        logo: logo.trim(),
+        featuredRank: featuredRank.trim() ? Number(featuredRank) : null,
+        projectsCompletedAdjustment: Number(projectsAdjustment) || 0,
       };
       const payload = isEdit ? { id: vendor.id, ...base } : base;
       const res = await fetch("/api/local-vendors", {
@@ -283,6 +292,41 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
             <input type="text" value={zipCodesServed} onChange={(e) => setZipCodesServed(e.target.value)}
               placeholder="80202, 80203, 80204"
               className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+          </div>
+
+          {/* Partners marketplace fields */}
+          <div className="border-t border-gray-700 pt-4 space-y-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Client-Facing Partners Page</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">Partner Category</label>
+              <p className="text-xs text-gray-500 mb-1.5">Only vendors with a category set appear on the client-facing Partners page.</p>
+              <select value={category} onChange={(e) => setCategory(e.target.value as PartnerCategory | "")}
+                className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400">
+                <option value="">— Not shown on Partners page —</option>
+                {PARTNER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">Logo URL</label>
+              <input type="text" value={logo} onChange={(e) => setLogo(e.target.value)}
+                placeholder="https://res.cloudinary.com/..."
+                className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+            </div>
+            <div className="flex gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Featured Rank</label>
+                <p className="text-xs text-gray-500 mb-1.5">Lower shows first. Leave blank for normal ranking.</p>
+                <input type="number" value={featuredRank} onChange={(e) => setFeaturedRank(e.target.value)}
+                  placeholder="e.g. 1"
+                  className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Projects Completed Adjustment</label>
+                <p className="text-xs text-gray-500 mb-1.5">Manual +/- on top of the auto-computed count.</p>
+                <input type="number" value={projectsAdjustment} onChange={(e) => setProjectsAdjustment(e.target.value)}
+                  className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+              </div>
+            </div>
           </div>
 
           {/* Item Category Preferences */}

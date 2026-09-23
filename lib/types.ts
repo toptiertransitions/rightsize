@@ -652,6 +652,7 @@ export interface Vendor {
   date3Label: string;
   date3: string;
   createdAt: string;
+  localVendorId?: string; // links this project's engagement back to the LocalVendors directory entry
 }
 
 // ─── Vendor Decision ──────────────────────────────────────────────────────────
@@ -700,6 +701,35 @@ export interface LocalVendor {
   createdAt: string;
   clerkUserId?: string;
   prefCategories: Array<{ category: string; minPrice: number; maxPrice: number }>;
+  // ─── Partners marketplace fields ──
+  category?: PartnerCategory;
+  logo?: string;             // Cloudinary URL
+  featuredRank?: number;     // lower = shown first, manual override
+  projectsCompletedAdjustment?: number; // manual +/- on top of the dynamically computed count
+}
+
+// ─── Client-facing Partners marketplace ──────────────────────────────────────
+export const PARTNER_CATEGORIES = ["Realtor", "Move Manager", "Mover", "Donation", "Hauler", "Community"] as const;
+export type PartnerCategory = typeof PARTNER_CATEGORIES[number];
+
+export interface PartnerSelection {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  category: PartnerCategory;
+  partnerId: string; // LocalVendor record id
+  selectedAt: string;
+  selectedBy: string; // Clerk user id
+}
+
+export interface PartnerReview {
+  id: string;
+  airtableId: string;
+  partnerId: string; // LocalVendor record id
+  tenantId: string;
+  score: 1 | 2 | 3 | 4 | 5;
+  comment: string;
+  date: string;
 }
 
 // ─── Project Files ────────────────────────────────────────────────────────────

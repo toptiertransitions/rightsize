@@ -32,6 +32,9 @@ import type {
   Vendor,
   VendorType,
   LocalVendor,
+  PartnerCategory,
+  PartnerSelection,
+  PartnerReview,
   ProjectFile,
   FileTag,
   TimeEntry,
@@ -1766,6 +1769,7 @@ export async function updateVendor(
     date2: string;
     date3Label: string;
     date3: string;
+    localVendorId: string;
   }>
 ): Promise<Vendor> {
   const fields: Record<string, string> = {};
@@ -1781,6 +1785,7 @@ export async function updateVendor(
   if (data.date2 !== undefined) fields["Date2"] = data.date2;
   if (data.date3Label !== undefined) fields["Date3Label"] = data.date3Label;
   if (data.date3 !== undefined) fields["Date3"] = data.date3;
+  if (data.localVendorId !== undefined) fields["LocalVendorId"] = data.localVendorId;
   const res = await vendorFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
@@ -1792,6 +1797,24 @@ export async function updateVendor(
 export async function deleteVendor(id: string): Promise<void> {
   const res = await vendorFetch(`/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+}
+
+// All per-project Vendor engagements that have been linked back to a
+// LocalVendors directory entry — used to compute each partner's dynamic
+// "projects completed" count (see lib/partners/queries.ts).
+export async function getAllVendorsWithLocalVendorLink(): Promise<Vendor[]> {
+  const formula = encodeURIComponent(`{LocalVendorId} != ""`);
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`;
+    const res = await vendorFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapVendor);
 }
 
 function mapVendor(record: AirtableRecord): Vendor {
@@ -1813,6 +1836,7 @@ function mapVendor(record: AirtableRecord): Vendor {
     date3Label: toStr(f["Date3Label"]),
     date3: toStr(f["Date3"]),
     createdAt: toStr(f["CreatedAt"]),
+    localVendorId: toStr(f["LocalVendorId"]) || undefined,
   };
 }
 
@@ -1868,6 +1892,10 @@ export async function createLocalVendor(data: {
   zipCodesServed?: string;
   notes?: string;
   isActive?: boolean;
+  category?: LocalVendor["category"];
+  logo?: string;
+  featuredRank?: number;
+  projectsCompletedAdjustment?: number;
 }): Promise<LocalVendor> {
   const res = await localVendorFetch("", {
     method: "POST",
@@ -1889,6 +1917,10 @@ export async function createLocalVendor(data: {
         Notes: data.notes || "",
         IsActive: data.isActive ?? true,
         CreatedAt: new Date().toISOString(),
+        ...(data.category !== undefined ? { Category: data.category } : {}),
+        ...(data.logo !== undefined ? { Logo: data.logo } : {}),
+        ...(data.featuredRank !== undefined ? { FeaturedRank: data.featuredRank } : {}),
+        ...(data.projectsCompletedAdjustment !== undefined ? { ProjectsCompletedAdjustment: data.projectsCompletedAdjustment } : {}),
       },
     }),
   });
@@ -1916,6 +1948,10 @@ export async function updateLocalVendor(
     isActive: boolean;
     clerkUserId: string;
     prefCategories: Array<{ category: string; minPrice: number; maxPrice: number }>;
+    category: LocalVendor["category"];
+    logo: string;
+    featuredRank: number | null;
+    projectsCompletedAdjustment: number;
   }>
 ): Promise<LocalVendor> {
   const fields: Record<string, unknown> = {};
@@ -1935,6 +1971,10 @@ export async function updateLocalVendor(
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.isActive !== undefined) fields["IsActive"] = data.isActive;
   if (data.clerkUserId !== undefined) fields["ClerkUserId"] = data.clerkUserId;
+  if (data.category !== undefined) fields["Category"] = data.category;
+  if (data.logo !== undefined) fields["Logo"] = data.logo;
+  if (data.featuredRank !== undefined) fields["FeaturedRank"] = data.featuredRank;
+  if (data.projectsCompletedAdjustment !== undefined) fields["ProjectsCompletedAdjustment"] = data.projectsCompletedAdjustment;
   if (data.prefCategories !== undefined) {
     for (let i = 1; i <= 5; i++) {
       const slot = data.prefCategories[i - 1];
@@ -1983,6 +2023,140 @@ export async function getItemsForVendor(vendorId: string): Promise<Item[]> {
     .select({ filterByFormula: encoded, sort: [{ field: "CreatedAt", direction: "desc" }] })
     .all();
   return records.map(mapItem);
+}
+
+// ─── Partner Selections (client-facing Partners marketplace) ─────────────────
+function partnerSelectionFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PARTNER_SELECTIONS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapPartnerSelection(record: AirtableRecord): PartnerSelection {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantId"]),
+    category: toStr(f["Category"]) as PartnerCategory,
+    partnerId: toStr(f["PartnerId"]),
+    selectedAt: toStr(f["SelectedAt"]),
+    selectedBy: toStr(f["SelectedBy"]),
+  };
+}
+
+export async function getPartnerSelectionsForTenant(tenantId: string): Promise<PartnerSelection[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await partnerSelectionFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapPartnerSelection);
+}
+
+// Upsert: one record per (tenantId, category). Finds and updates the
+// existing record if present, otherwise creates a new one.
+export async function upsertPartnerSelection(data: {
+  tenantId: string;
+  category: PartnerCategory;
+  partnerId: string;
+  selectedBy: string;
+}): Promise<PartnerSelection> {
+  const formula = encodeURIComponent(`AND({TenantId} = "${data.tenantId}", {Category} = "${data.category}")`);
+  const findRes = await partnerSelectionFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const findData = await findRes.json();
+  const existing = findData.records?.[0] as AirtableRecord | undefined;
+
+  const selectedAt = new Date().toISOString();
+  if (existing) {
+    const res = await partnerSelectionFetch(`/${existing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        fields: { PartnerId: data.partnerId, SelectedAt: selectedAt, SelectedBy: data.selectedBy },
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return mapPartnerSelection(await res.json());
+  }
+
+  const res = await partnerSelectionFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        TenantId: data.tenantId,
+        Category: data.category,
+        PartnerId: data.partnerId,
+        SelectedAt: selectedAt,
+        SelectedBy: data.selectedBy,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerSelection(await res.json());
+}
+
+export async function deletePartnerSelection(tenantId: string, category: PartnerCategory): Promise<void> {
+  const formula = encodeURIComponent(`AND({TenantId} = "${tenantId}", {Category} = "${category}")`);
+  const findRes = await partnerSelectionFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const findData = await findRes.json();
+  const existing = findData.records?.[0] as AirtableRecord | undefined;
+  if (!existing) return;
+  const res = await partnerSelectionFetch(`/${existing.id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ─── Partner Reviews (client-facing Partners marketplace) ────────────────────
+function partnerReviewFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PARTNER_REVIEWS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapPartnerReview(record: AirtableRecord): PartnerReview {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    partnerId: toStr(f["PartnerId"]),
+    tenantId: toStr(f["TenantId"]),
+    score: (typeof f["Score"] === "number" ? f["Score"] : 0) as PartnerReview["score"],
+    comment: toStr(f["Comment"]),
+    date: toStr(f["Date"]),
+  };
+}
+
+// Small table — fetched in full (paginated) and grouped in memory by the
+// caller rather than queried per-partner, to avoid N+1 requests when
+// building the whole partner directory.
+export async function getAllPartnerReviews(): Promise<PartnerReview[]> {
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = offset ? `?offset=${offset}` : "";
+    const res = await partnerReviewFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapPartnerReview);
 }
 
 // ─── Routing Rules ────────────────────────────────────────────────────────────
@@ -2241,6 +2415,10 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
       }
       return slots;
     })(),
+    category: (toStr(f["Category"]) || undefined) as LocalVendor["category"],
+    logo: toStr(f["Logo"]) || undefined,
+    featuredRank: typeof f["FeaturedRank"] === "number" ? f["FeaturedRank"] : undefined,
+    projectsCompletedAdjustment: typeof f["ProjectsCompletedAdjustment"] === "number" ? f["ProjectsCompletedAdjustment"] : undefined,
   };
 }
 
