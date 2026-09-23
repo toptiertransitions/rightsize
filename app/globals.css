@@ -16,11 +16,18 @@
       "Helvetica Neue", Arial, sans-serif;
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    /* Stops any one page's overflow (a wide table, an unwrapped long string,
+       a fixed-width element) from making the whole app scroll sideways on
+       mobile. Content that legitimately needs horizontal scroll (tables,
+       code blocks) should wrap itself in its own overflow-x-auto container —
+       several already do — which stays unaffected by this. */
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-cream-50 text-gray-900 antialiased;
     min-height: 100dvh;
+    overflow-x: hidden;
   }
 
   *:focus-visible {

@@ -529,11 +529,14 @@ export default async function PlanPage({ searchParams }: PageProps) {
         />
       )}
 
-      {/* Google Reviews — bottom of page */}
-      <GoogleReviewsSection
-        tenantId={tenantId}
-        canEdit={isManagerOrAdmin}
-      />
+      {/* Google Reviews — bottom of page. Hidden for self-serve (non-TTT)
+          client users; not relevant to their project. */}
+      {(isTTTStaffOrAbove || tenant.isTTT === true) && (
+        <GoogleReviewsSection
+          tenantId={tenantId}
+          canEdit={isManagerOrAdmin}
+        />
+      )}
     </div>
   );
 }
