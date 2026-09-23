@@ -217,6 +217,11 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
   const [tenantSearch, setTenantSearch] = useState("");
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
 
+  // Airtable checkboxes never round-trip as an explicit `false` — an unchecked
+  // IsTTT is just absent, so `undefined` means non-TTT (self-serve client),
+  // never assume TTT unless it's explicitly `true`.
+  const tenantIsTTTMap = useMemo(() => new Map(tenants.map(t => [t.id, t.isTTT === true])), [tenants]);
+
   // Only active projects (not archived, not lost deals) — includes post-move consignment
   const availableTenants = tenants.filter(t =>
     !t.isArchived &&
@@ -698,7 +703,18 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
               <div className="space-y-2">
                 {current.memberships.map(m => (
                   <div key={m.membershipId} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm text-white truncate">{m.tenantName}</span>
+                    <span className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className="text-sm text-white truncate">{m.tenantName}</span>
+                      <span
+                        className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          tenantIsTTTMap.get(m.tenantId)
+                            ? "bg-red-900/40 text-red-300 border border-red-800"
+                            : "bg-emerald-900/40 text-emerald-300 border border-emerald-800"
+                        }`}
+                      >
+                        {tenantIsTTTMap.get(m.tenantId) ? "TTT" : "Client"}
+                      </span>
+                    </span>
                     <select
                       value={m.role}
                       onChange={e => handleRoleChange(m.membershipId, e.target.value)}

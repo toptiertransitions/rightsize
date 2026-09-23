@@ -319,7 +319,7 @@ export default async function DashboardPage({
                 tenantCity={tenant.city}
                 tenantState={tenant.state}
                 tenantZip={tenant.zip}
-                canDeleteAccount={!isStaff && !(tenant.isTTT ?? true) && membership.role === "Owner"}
+                canDeleteAccount={!isStaff && tenant.isTTT !== true && membership.role === "Owner"}
               />
             )}
           </div>
@@ -362,7 +362,7 @@ export default async function DashboardPage({
         </div>
 
         {/* Free Estimator — for Non-TTT owners/collaborators */}
-        {!(tenant.isTTT ?? true) && isOwnerOrCollab && (
+        {tenant.isTTT !== true && isOwnerOrCollab && (
           <div className="mb-8">
             <FreeEstimatorCard
               tenantId={tenant.id}
@@ -637,7 +637,7 @@ export default async function DashboardPage({
                     tenantCity={tenant!.city}
                     tenantState={tenant!.state}
                     tenantZip={tenant!.zip}
-                    canDeleteAccount={!isStaff && !(tenant!.isTTT ?? true) && membership.role === "Owner"}
+                    canDeleteAccount={!isStaff && tenant!.isTTT !== true && membership.role === "Owner"}
                   />
                   </div>
                 )}
