@@ -13,10 +13,11 @@ interface Props {
   pending: boolean;
   onSelect: (partnerId: string) => void;
   onDeselect: () => void;
+  onLearnMore: (partnerId: string) => void;
   sectionRef: (el: HTMLElement | null) => void;
 }
 
-export function CategorySection({ category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, sectionRef }: Props) {
+export function CategorySection({ category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef }: Props) {
   const slug = category.toLowerCase().replace(/\s+/g, "-");
 
   return (
@@ -45,6 +46,7 @@ export function CategorySection({ category, matches, selectedPartnerId, canEdit,
               pending={pending}
               onSelect={() => onSelect(m.partner.id)}
               onDeselect={onDeselect}
+              onLearnMore={() => onLearnMore(m.partner.id)}
             />
           ))}
         </div>

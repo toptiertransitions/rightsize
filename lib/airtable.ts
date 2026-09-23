@@ -206,6 +206,7 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     estimatedHours: f["EstimatedHours"] != null ? toNum(f["EstimatedHours"]) : undefined,
     estimatedServiceHours: (() => { try { const s = toStr(f["EstimatedServiceHours"]); return s ? JSON.parse(s) : undefined; } catch { return undefined; } })(),
     isArchived: f["IsArchived"] === true,
+    archivedAt: toStr(f["ArchivedAt"]) || undefined,
     isLostDeal: f["IsLostDeal"] === true,
     isTTT: f["IsTTT"] == null ? undefined : f["IsTTT"] === true,
     isConsignmentOnly: f["IsConsignmentOnly"] === true,
@@ -1386,7 +1387,15 @@ export async function updateTenant(
   if (data.seniorCommunityName !== undefined) fields["SeniorCommunityName"] = data.seniorCommunityName ?? "";
   if (data.estimatedHours !== undefined) fields["EstimatedHours"] = data.estimatedHours;
   if (data.estimatedServiceHours !== undefined) fields["EstimatedServiceHours"] = data.estimatedServiceHours ? JSON.stringify(data.estimatedServiceHours) : "";
-  if (data.isArchived !== undefined) fields["IsArchived"] = data.isArchived;
+  if (data.isArchived !== undefined) {
+    fields["IsArchived"] = data.isArchived;
+    // Stamp when a project is archived — every archive path (lost-deal,
+    // account self-deletion, the admin toggle) goes through this one
+    // function, so this is the single place that can catch all of them.
+    // Date-only, matching Airtable's plain Date field (a full ISO datetime
+    // is rejected — same pitfall just fixed on PartnerSelections.SelectedAt).
+    if (data.isArchived === true) fields["ArchivedAt"] = new Date().toISOString().slice(0, 10);
+  }
   if (data.isLostDeal !== undefined) fields["IsLostDeal"] = data.isLostDeal;
   if (data.isTTT !== undefined) fields["IsTTT"] = data.isTTT;
   if (data.isConsignmentOnly !== undefined) fields["IsConsignmentOnly"] = data.isConsignmentOnly;
@@ -1948,6 +1957,7 @@ export async function createLocalVendor(data: {
   logo?: string;
   featuredRank?: number;
   projectsCompletedAdjustment?: number;
+  aboutUs?: string;
 }): Promise<LocalVendor> {
   const res = await localVendorFetch("", {
     method: "POST",
@@ -1973,6 +1983,7 @@ export async function createLocalVendor(data: {
         ...(data.logo !== undefined ? { Logo: data.logo } : {}),
         ...(data.featuredRank !== undefined ? { FeaturedRank: data.featuredRank } : {}),
         ...(data.projectsCompletedAdjustment !== undefined ? { ProjectsCompletedAdjustment: data.projectsCompletedAdjustment } : {}),
+        ...(data.aboutUs !== undefined ? { AboutUs: data.aboutUs } : {}),
       },
     }),
   });
@@ -2004,6 +2015,7 @@ export async function updateLocalVendor(
     logo: string;
     featuredRank: number | null;
     projectsCompletedAdjustment: number;
+    aboutUs: string;
   }>
 ): Promise<LocalVendor> {
   const fields: Record<string, unknown> = {};
@@ -2027,6 +2039,7 @@ export async function updateLocalVendor(
   if (data.logo !== undefined) fields["Logo"] = data.logo;
   if (data.featuredRank !== undefined) fields["FeaturedRank"] = data.featuredRank;
   if (data.projectsCompletedAdjustment !== undefined) fields["ProjectsCompletedAdjustment"] = data.projectsCompletedAdjustment;
+  if (data.aboutUs !== undefined) fields["AboutUs"] = data.aboutUs;
   if (data.prefCategories !== undefined) {
     for (let i = 1; i <= 5; i++) {
       const slot = data.prefCategories[i - 1];
@@ -2475,6 +2488,7 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     logo: toStr(f["Logo"]) || undefined,
     featuredRank: typeof f["FeaturedRank"] === "number" ? f["FeaturedRank"] : undefined,
     projectsCompletedAdjustment: typeof f["ProjectsCompletedAdjustment"] === "number" ? f["ProjectsCompletedAdjustment"] : undefined,
+    aboutUs: toStr(f["AboutUs"]) || undefined,
   };
 }
 

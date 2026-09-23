@@ -22,6 +22,15 @@ export interface PartnerProfile {
   reviewCount: number;
   /** Dynamic count (via linked Vendor engagements on completed projects) + manual adjustment. */
   projectsCompleted: number;
+  /** Paragraph shown in the "Learn More" detail popup, editable in /admin/local-vendors. */
+  aboutUs?: string;
+  /**
+   * "Month YYYY" labels, one per completed (archived) project this partner
+   * worked on, newest first — only for projects archived since ArchivedAt
+   * started being stamped (older archives predate the field and won't
+   * appear). Omitted entirely when there are none.
+   */
+  recentProjectMonths?: string[];
   /** Set only on the system-injected "Top Tier Transitions" Move Manager
    * entry built from the project's assigned Team Lead — never a real
    * LocalVendors record. Drives PartnerCard's non-interactive, no-rating

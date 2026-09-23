@@ -22,9 +22,10 @@ interface Props {
   pending?: boolean;
   onSelect: () => void;
   onDeselect: () => void;
+  onLearnMore: () => void;
 }
 
-export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, canEdit, pending, onSelect, onDeselect }: Props) {
+export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, canEdit, pending, onSelect, onDeselect, onLearnMore }: Props) {
   if (partner.isTeamLead) {
     return (
       <div className="relative flex gap-4 rounded-2xl border border-forest-200 bg-forest-50/40 p-4 sm:p-5">
@@ -83,6 +84,14 @@ export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, 
             {partner.projectsCompleted} project{partner.projectsCompleted !== 1 ? "s" : ""} with Top Tier
           </p>
         )}
+
+        <button
+          type="button"
+          onClick={onLearnMore}
+          className="self-start text-xs font-medium text-gray-500 hover:text-forest-700 underline underline-offset-2 min-h-[28px] flex items-center"
+        >
+          Learn more
+        </button>
 
         <div className="flex items-center justify-between gap-3 mt-1">
           {partner.website ? (

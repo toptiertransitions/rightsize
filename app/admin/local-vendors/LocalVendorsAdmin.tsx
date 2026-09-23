@@ -54,6 +54,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   const [logo, setLogo] = useState(vendor?.logo ?? "");
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState("");
+  const [aboutUs, setAboutUs] = useState(vendor?.aboutUs ?? "");
   const [featuredRank, setFeaturedRank] = useState(vendor?.featuredRank !== undefined ? String(vendor.featuredRank) : "");
   const [projectsAdjustment, setProjectsAdjustment] = useState(String(vendor?.projectsCompletedAdjustment ?? 0));
   const [prefSlots, setPrefSlots] = useState<Array<{ category: string; minPrice: string; maxPrice: string }>>(() => {
@@ -135,6 +136,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
         logo: logo.trim(),
         featuredRank: featuredRank.trim() ? Number(featuredRank) : null,
         projectsCompletedAdjustment: Number(projectsAdjustment) || 0,
+        aboutUs: aboutUs.trim(),
       };
       const payload = isEdit ? { id: vendor.id, ...base } : base;
       const res = await fetch("/api/local-vendors", {
@@ -366,6 +368,14 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
                 )}
               </div>
               {logoError && <p className="text-xs text-red-400 mt-1.5">{logoError}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">About Us</label>
+              <p className="text-xs text-gray-500 mb-1.5">Shown in the "Learn More" popup on the client-facing Partners page.</p>
+              <textarea value={aboutUs} onChange={(e) => setAboutUs(e.target.value)}
+                rows={4}
+                placeholder="A short paragraph introducing this partner to clients…"
+                className="w-full px-3 py-2 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400 resize-y" />
             </div>
             <div className="flex gap-4">
               <div>

@@ -128,6 +128,7 @@ export interface Tenant {
   estimatedHours?: number;
   estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }>;
   isArchived?: boolean;
+  archivedAt?: string; // stamped automatically the moment isArchived is set true
   isLostDeal?: boolean;
   isTTT?: boolean;
   isConsignmentOnly?: boolean;
@@ -748,6 +749,7 @@ export interface LocalVendor {
   logo?: string;             // Cloudinary URL
   featuredRank?: number;     // lower = shown first, manual override
   projectsCompletedAdjustment?: number; // manual +/- on top of the dynamically computed count
+  aboutUs?: string;          // paragraph shown in the Partners "Learn More" detail popup
 }
 
 // ─── Client-facing Partners marketplace ──────────────────────────────────────

@@ -44,8 +44,9 @@ export const getPartnerDirectory = unstable_cache(
       ? Math.round((allScores.reduce((s, n) => s + n, 0) / allScores.length) * 10) / 10
       : DEFAULT_PRIOR_MEAN;
 
-    // Completed-project counts: distinct completed tenantIds per linked partner.
-    // "Completed" = archived and not a lost deal.
+    // Completed-project counts + dates: distinct completed tenantIds per
+    // linked partner. "Completed" = archived and not a lost deal.
+    const archivedAtByTenantId = new Map(tenants.map((t) => [t.id, t.archivedAt]));
     const completedTenantIds = new Set(
       tenants.filter((t) => t.isArchived && !t.isLostDeal).map((t) => t.id)
     );
@@ -62,8 +63,21 @@ export const getPartnerDirectory = unstable_cache(
         ? Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) / 10
         : 0;
       const avgRating = computeBayesianRating(rawAvgRating, scores.length, priorMean, BAYESIAN_CONFIDENCE);
-      const dynamicCount = completedTenantsByPartner.get(v.id)?.size ?? 0;
+      const completedTenants = completedTenantsByPartner.get(v.id) ?? new Set<string>();
+      const dynamicCount = completedTenants.size;
       const projectsCompleted = Math.max(0, dynamicCount + (v.projectsCompletedAdjustment ?? 0));
+
+      // Only tenants archived since ArchivedAt started being stamped carry a
+      // date — older archives are silently skipped rather than shown with a
+      // guessed date. No client-identifying info goes into this list, just
+      // the month.
+      const archivedDates = [...completedTenants]
+        .map((tenantId) => archivedAtByTenantId.get(tenantId))
+        .filter((d): d is string => !!d)
+        .sort((a, b) => b.localeCompare(a)); // "YYYY-MM-DD" sorts correctly as a string
+      const recentProjectMonths = archivedDates.length > 0
+        ? archivedDates.map((d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }))
+        : undefined;
 
       return {
         id: v.id,
@@ -79,6 +93,8 @@ export const getPartnerDirectory = unstable_cache(
         rawAvgRating,
         reviewCount: scores.length,
         projectsCompleted,
+        aboutUs: v.aboutUs,
+        recentProjectMonths,
       };
     });
   },

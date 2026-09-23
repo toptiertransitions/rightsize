@@ -7,6 +7,7 @@ import { selectPartnerAction, deselectPartnerAction } from "@/app/(protected)/pa
 import { SelectedPartnersTray } from "./SelectedPartnersTray";
 import { CategoryChipBar } from "./CategoryChipBar";
 import { CategorySection } from "./CategorySection";
+import { PartnerDetailModal } from "./PartnerDetailModal";
 
 interface Props {
   tenantId: string;
@@ -23,6 +24,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
   const [pendingCategory, setPendingCategory] = useState<PartnerCategory | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<PartnerCategory>(PARTNER_CATEGORIES[0]);
+  const [detailPartnerId, setDetailPartnerId] = useState<string | null>(null);
 
   const sectionRefs = useRef<Partial<Record<PartnerCategory, HTMLElement>>>({});
 
@@ -128,10 +130,15 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
             pending={pendingCategory === category}
             onSelect={(partnerId) => handleSelect(category, partnerId)}
             onDeselect={() => handleDeselect(category)}
+            onLearnMore={(partnerId) => setDetailPartnerId(partnerId)}
             sectionRef={(el) => { if (el) sectionRefs.current[category] = el; }}
           />
         ))}
       </div>
+
+      {detailPartnerId && partnersById[detailPartnerId] && (
+        <PartnerDetailModal partner={partnersById[detailPartnerId]} onClose={() => setDetailPartnerId(null)} />
+      )}
 
       {toast && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom,0px)+20px)] z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg max-w-[90vw]">
