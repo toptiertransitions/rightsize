@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getAllInvoiceCount, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers, getContractsForTenant, getAllServices } from "@/lib/airtable";
+import { getContractByToken, updateContract, updateTenant, getTenantById, createInvoice, getNextInvoiceNumber, getInvoiceSettings, getOpportunitiesForTenant, getOpportunitiesForContact, getClientContactByEmail, updateOpportunity, getStaffMembers, getContractsForTenant, getAllServices } from "@/lib/airtable";
 import { buildContractSignedEmail, buildInvoiceEmail } from "@/lib/email";
 import { renderContractPDF } from "@/lib/contract-pdf";
 import { isTTTAdmin } from "@/lib/config";
@@ -46,10 +46,9 @@ export async function POST(req: NextRequest) {
   let createdInvoice: Awaited<ReturnType<typeof createInvoice>> | null = null;
   if (contract.autoSendDeposit) {
     try {
-      const invoiceCount = await getAllInvoiceCount().catch(() => 0);
       const depositPct = 40;
       const depositAmount = Math.round(contract.totalCost * depositPct / 100 * 100) / 100;
-      const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(4, "0")}`;
+      const invoiceNumber = await getNextInvoiceNumber();
       const primaryService = contract.lineItems?.[0];
       createdInvoice = await createInvoice({
         tenantId: contract.tenantId,

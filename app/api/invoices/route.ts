@@ -4,7 +4,7 @@ import {
   getSystemRole,
   getUserRoleForTenant,
   getInvoicesForTenant,
-  getAllInvoiceCount,
+  getNextInvoiceNumber,
   createInvoice,
   updateInvoice,
   deleteInvoice,
@@ -143,8 +143,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Generate invoice number
-  const count = await getAllInvoiceCount().catch(() => 0);
-  const invoiceNumber = `INV-${String(count + 1).padStart(4, "0")}`;
+  const invoiceNumber = await getNextInvoiceNumber();
 
   let qboInvoiceId: string | undefined;
   let qboDocNumber: string | undefined;

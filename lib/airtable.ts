@@ -1534,16 +1534,30 @@ export async function getPlanEntryById(id: string): Promise<PlanEntry | null> {
 }
 
 // Find all plan entries for a given date where `email` is in the helpers array.
-// Fetches up to 200 entries sorted by Date DESC and filters entirely in JS to
-// avoid Airtable formula edge cases (special chars in emails, date format mismatches).
+// Scopes the fetch server-side to the given date (paginated, so it can never
+// silently drop entries once the table grows past one page) using the same
+// >= / < next-day range trick as getPlanEntriesForDateRange below — an exact
+// {Date} = "..." match would miss entries stored with a time component. Email
+// matching stays in JS to sidestep Airtable formula-escaping edge cases for
+// arbitrary email strings.
 export async function getPlanEntriesForTodayByEmail(email: string, date: string): Promise<PlanEntry[]> {
   try {
-    const res = await planFetch(`?maxRecords=200&sort[0][field]=Date&sort[0][direction]=desc`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const all = (data.records as AirtableRecord[]).map(mapPlanEntry);
+    const [y, m, d] = date.split("-").map(Number);
+    const next = new Date(y, m - 1, d + 1);
+    const nextDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    const formula = encodeURIComponent(`AND({Date} >= "${date}", {Date} < "${nextDate}")`);
+    const all: PlanEntry[] = [];
+    let offset: string | undefined;
+    do {
+      const qs = `?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`;
+      const res = await planFetch(qs);
+      if (!res.ok) return [];
+      const data = await res.json();
+      all.push(...(data.records as AirtableRecord[]).map(mapPlanEntry));
+      offset = data.offset;
+    } while (offset);
     const emailLower = email.toLowerCase();
-    return all.filter(e => e.date === date && e.helpers?.some(h => h.email.toLowerCase() === emailLower));
+    return all.filter(e => e.helpers?.some(h => h.email.toLowerCase() === emailLower));
   } catch {
     return [];
   }
@@ -2765,10 +2779,17 @@ export const getServices = unstable_cache(
 );
 
 export async function getAllServices(): Promise<Service[]> {
-  const res = await servicesFetch(`?sort[0][field]=SortOrder&sort[0][direction]=asc`);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapService);
+  const all: Service[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=SortOrder&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await servicesFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapService));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function createService(data: {
@@ -3487,10 +3508,17 @@ function mapDiscountCode(record: AirtableRecord): import("./types").DiscountCode
 }
 
 export async function getAllDiscountCodes(): Promise<import("./types").DiscountCode[]> {
-  const res = await discountFetch(`?sort[0][field]=CreatedAt&sort[0][direction]=desc`);
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapDiscountCode);
+  const all: import("./types").DiscountCode[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=CreatedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await discountFetch(qs);
+    if (!res.ok) return all;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapDiscountCode));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function getDiscountCodeByCode(code: string): Promise<import("./types").DiscountCode | null> {
@@ -4436,13 +4464,17 @@ function mapGmailToken(record: AirtableRecord): GmailToken {
 /** Returns all stored Gmail tokens (one per connected user, excluding the system calendar key). */
 export async function getAllGmailTokens(): Promise<GmailToken[]> {
   const formula = encodeURIComponent(`AND(LEN({RefreshToken}) > 10, {ClerkUserId} != "__gcal__")`);
-  const res = await crmFetch(
-    AIRTABLE_TABLES.GMAIL_TOKENS,
-    `?filterByFormula=${formula}&sort[0][field]=UpdatedAt&sort[0][direction]=desc`,
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapGmailToken);
+  const all: GmailToken[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?filterByFormula=${formula}&sort[0][field]=UpdatedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, qs);
+    if (!res.ok) return all;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapGmailToken));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function getGmailToken(clerkUserId: string): Promise<GmailToken | null> {
@@ -4725,11 +4757,44 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
   return mapInvoice(await res.json() as AirtableRecord);
 }
 
-export async function getAllInvoiceCount(): Promise<number> {
-  const res = await invoicesFetch(`?fields[]=InvoiceNumber`);
-  if (!res.ok) return 0;
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).length;
+// Finds the next invoice number by scanning every existing InvoiceNumber
+// (paginated — a single unpaginated page silently undercounts past ~100
+// invoices, and two concurrent requests reading the same total both get the
+// same "next" number). Airtable has no atomic increment, so after computing
+// a candidate this also checks it isn't already taken and retries a few
+// numbers forward if it is — narrows the remaining race window from "the
+// whole table" to "one specific number," which is as close to safe as
+// Airtable's API allows without an external lock.
+export async function getNextInvoiceNumber(): Promise<string> {
+  const existing: string[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?fields[]=InvoiceNumber${offset ? `&offset=${offset}` : ""}`;
+    const res = await invoicesFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    existing.push(...(data.records as AirtableRecord[]).map(r => toStr(r.fields["InvoiceNumber"])));
+    offset = data.offset;
+  } while (offset);
+
+  let maxNum = 0;
+  for (const num of existing) {
+    const m = /^INV-(\d+)$/.exec(num);
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  }
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = `INV-${String(maxNum + 1 + attempt).padStart(4, "0")}`;
+    const checkRes = await invoicesFetch(
+      `?filterByFormula=${encodeURIComponent(`{InvoiceNumber} = "${candidate}"`)}&maxRecords=1&fields[]=InvoiceNumber`
+    );
+    if (checkRes.ok) {
+      const checkData = await checkRes.json();
+      if (!checkData.records?.length) return candidate;
+    }
+  }
+  // Should be unreachable in practice — never block invoice creation over it.
+  return `INV-${String(maxNum + 1 + (Date.now() % 1000)).padStart(4, "0")}`;
 }
 
 export async function createInvoice(data: {
@@ -6573,11 +6638,17 @@ export async function getOutreachSequences(clerkUserId?: string): Promise<Outrea
 }
 
 export async function getAllOutreachSequences(): Promise<OutreachSequence[]> {
-  const qs = `?sort[0][field]=Name&sort[0][direction]=asc`;
-  const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, qs);
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapOutreachSequence);
+  const all: OutreachSequence[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = `?sort[0][field]=Name&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`;
+    const res = await crmFetch(AIRTABLE_TABLES.OUTREACH_SEQUENCES, qs);
+    if (!res.ok) return all;
+    const data = await res.json();
+    all.push(...(data.records as AirtableRecord[]).map(mapOutreachSequence));
+    offset = data.offset;
+  } while (offset);
+  return all;
 }
 
 export async function getOutreachSequenceById(id: string): Promise<OutreachSequence | null> {
