@@ -100,7 +100,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: "/home", label: "Home" },
     { href: `/plan${isStaff ? staffPlanTq : tq}`, base: "/plan", label: "Plan" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
-    { href: `/vendors${tq}`, base: "/vendors", label: "Vendors" },
+    { href: `/partners${tq}`, base: "/partners", label: "Partners" },
     { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     // Quoting — Manager and Admin; carry current project if one is selected
     ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
