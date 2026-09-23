@@ -15,9 +15,13 @@ interface Props {
   onDeselect: () => void;
   onLearnMore: (partnerId: string) => void;
   sectionRef: (el: HTMLElement | null) => void;
+  /** Display-only override (e.g. "Senior Community" instead of "Community"
+   * for the NonTTTClient view). Never passed by the TTT client path, which
+   * keeps seeing the plain category value exactly as before. */
+  label?: string;
 }
 
-export function CategorySection({ category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef }: Props) {
+export function CategorySection({ category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label }: Props) {
   const slug = category.toLowerCase().replace(/\s+/g, "-");
 
   return (
@@ -26,7 +30,7 @@ export function CategorySection({ category, matches, selectedPartnerId, canEdit,
         <span className="w-8 h-8 rounded-lg bg-forest-50 text-forest-600 flex items-center justify-center flex-shrink-0">
           <CategoryIcon category={category} className="w-4 h-4" />
         </span>
-        <h2 className="text-base sm:text-lg font-bold text-gray-900">{category}</h2>
+        <h2 className="text-base sm:text-lg font-bold text-gray-900">{label ?? category}</h2>
       </div>
 
       {matches.length === 0 ? (

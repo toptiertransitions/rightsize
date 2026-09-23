@@ -35,15 +35,24 @@ function transformLogoUrl(url: string): string {
 interface Props {
   logo?: string;
   name: string;
-  size?: "mobile" | "desktop";
+  size?: "mobile" | "desktop" | "tray";
 }
 
+const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
+  mobile: "w-16 h-16",
+  desktop: "w-16 h-16 sm:w-[72px] sm:h-[72px]",
+  // Small, subtle mark for the "Your Partners" tray cards — a corner
+  // accent that never competes with the partner name for attention.
+  tray: "w-9 h-9",
+};
+
 export function PartnerLogo({ logo, name, size = "desktop" }: Props) {
-  const dims = size === "mobile" ? "w-16 h-16" : "w-16 h-16 sm:w-[72px] sm:h-[72px]";
+  const dims = SIZE_CLASSES[size];
+  const isTray = size === "tray";
 
   if (logo) {
     return (
-      <div className={`${dims} flex-shrink-0 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex items-center justify-center p-1.5`}>
+      <div className={`${dims} flex-shrink-0 ${isTray ? "rounded-lg" : "rounded-xl"} bg-gray-50 border border-gray-100 overflow-hidden flex items-center justify-center ${isTray ? "p-1" : "p-1.5"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={transformLogoUrl(logo)}
@@ -56,7 +65,7 @@ export function PartnerLogo({ logo, name, size = "desktop" }: Props) {
 
   const palette = MONOGRAM_PALETTE[hashString(name) % MONOGRAM_PALETTE.length];
   return (
-    <div className={`${dims} flex-shrink-0 rounded-xl ${palette} flex items-center justify-center font-bold text-lg`}>
+    <div className={`${dims} flex-shrink-0 ${isTray ? "rounded-lg" : "rounded-xl"} ${palette} flex items-center justify-center font-bold ${isTray ? "text-[11px]" : "text-lg"}`}>
       <span aria-hidden="true">{initials(name)}</span>
       <span className="sr-only">{name} logo</span>
     </div>

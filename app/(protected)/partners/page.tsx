@@ -12,9 +12,11 @@ import {
 } from "@/lib/airtable";
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { matchPartnersForCategory } from "@/lib/partners/match";
+import { orderCategoriesForNonTTTClient } from "@/lib/partners/nonTTTCategories";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
 import { PartnersPageClient } from "@/components/partners/PartnersPageClient";
+import { NonTTTPartnersPageClient } from "@/components/partners/NonTTTPartnersPageClient";
 import { StaffProjectPicker } from "@/components/partners/StaffProjectPicker";
 import { Card, CardContent } from "@/components/ui/Card";
 
@@ -116,6 +118,27 @@ export default async function PartnersPage({ searchParams }: PageProps) {
 
   const partnersById: Record<string, PartnerProfile> = {};
   for (const p of directory) partnersById[p.id] = p;
+
+  // NonTTTClient: entirely separate render path, computed and returned here
+  // so the TTT branch below (including the Team Lead injection, which only
+  // ever applies to isTTT===true projects anyway) is never reached for a
+  // self-serve project.
+  if (!isStaff && tenant.isTTT !== true) {
+    const { active, greyed } = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
+    return (
+      <NonTTTPartnersPageClient
+        tenantId={tenantId}
+        tenantName={tenant.name}
+        initialActiveCategories={active}
+        initialGreyedCategories={greyed}
+        matchesByCategory={matchesByCategory}
+        initialSelections={selections}
+        partnersById={partnersById}
+        canEdit={canEdit}
+        appOnlyIntent={tenant.appOnlyIntent ?? false}
+      />
+    );
+  }
 
   // TTT-managed projects with an assigned Team Lead get Top Tier Transitions
   // itself as the sole Move Manager — not a marketplace choice, so it

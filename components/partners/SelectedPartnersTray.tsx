@@ -43,7 +43,7 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 gap-3">
         {categories.map((category) => {
           const partner = selectedPartners[category];
           if (!partner) {
@@ -52,17 +52,28 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
           return (
             <div
               key={category}
-              className="flex flex-col items-center gap-2 rounded-2xl border border-forest-200 bg-white p-3 text-center motion-safe:animate-[fadeInScale_0.25s_ease-out]"
+              className="min-w-0 h-full flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-md hover:border-forest-200 hover:-translate-y-0.5 transition-all duration-150 motion-reduce:transition-none motion-reduce:transform-none motion-safe:animate-[fadeInScale_0.25s_ease-out]"
             >
-              <PartnerLogo logo={partner.logo} name={partner.vendorName} size="mobile" />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-900 truncate max-w-[100px]">{partner.vendorName}</p>
-                <p className="text-[10px] text-gray-400">{category}</p>
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  {category}
+                </span>
+                <PartnerLogo logo={partner.logo} name={partner.vendorName} size="tray" />
               </div>
+
+              <p
+                className="min-h-[2.5rem] text-[15px] font-semibold text-gray-900 leading-snug [text-wrap:balance] line-clamp-2 break-words"
+                title={partner.vendorName}
+              >
+                {partner.vendorName}
+              </p>
+
+              <p className="text-xs text-gray-400 mt-auto">Selected</p>
+
               <button
                 type="button"
                 onClick={() => onChangeClick(category)}
-                className="text-[11px] font-medium text-forest-600 hover:text-forest-800 hover:underline"
+                className="self-start text-[11px] font-medium text-forest-600 hover:text-forest-800 hover:underline min-h-[28px] flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 rounded"
               >
                 Change
               </button>
