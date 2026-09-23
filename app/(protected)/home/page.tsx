@@ -321,7 +321,7 @@ export default async function DashboardPage({
                 tenantCity={tenant.city}
                 tenantState={tenant.state}
                 tenantZip={tenant.zip}
-                canDeleteAccount={!isStaff && tenant.isTTT !== true && membership.role === "Owner"}
+                canDeleteAccount={!isStaff && membership.role === "Owner"}
               />
             )}
           </div>
@@ -639,7 +639,7 @@ export default async function DashboardPage({
                     tenantCity={tenant!.city}
                     tenantState={tenant!.state}
                     tenantZip={tenant!.zip}
-                    canDeleteAccount={!isStaff && tenant!.isTTT !== true && membership.role === "Owner"}
+                    canDeleteAccount={!isStaff && membership.role === "Owner"}
                   />
                   </div>
                 )}

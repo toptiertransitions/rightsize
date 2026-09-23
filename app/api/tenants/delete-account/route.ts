@@ -3,10 +3,11 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
 import { getTenantById, getUserRoleForTenant, getMembershipsForUser, deleteMembership, updateTenant } from "@/lib/airtable";
 
-// Self-service account deletion for non-TTT client users. Archives the
-// project (so TTT admins can still review it) but permanently deletes the
-// Clerk account — unlike /api/tenants/delete-request, which only notifies
-// staff and leaves both untouched.
+// Self-service account deletion for client users — both TTT-managed and
+// self-serve non-TTT projects. Archives the project (so TTT admins can
+// still review it) but permanently deletes the Clerk account — unlike
+// /api/tenants/delete-request, which only notifies staff and leaves both
+// untouched.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,12 +24,6 @@ export async function POST(req: NextRequest) {
   if (!tenant) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (role !== "Owner") {
     return NextResponse.json({ error: "Only the project owner can delete their account" }, { status: 403 });
-  }
-  if (tenant.isTTT) {
-    return NextResponse.json(
-      { error: "TTT-managed projects can't be self-deleted. Use Request Deletion instead." },
-      { status: 400 }
-    );
   }
 
   try {
