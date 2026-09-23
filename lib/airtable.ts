@@ -2127,7 +2127,11 @@ export async function upsertPartnerSelection(data: {
   const findData = await findRes.json();
   const existing = findData.records?.[0] as AirtableRecord | undefined;
 
-  const selectedAt = new Date().toISOString();
+  // SelectedAt is configured in Airtable as a plain Date field (no time
+  // component) — a full ISO datetime is rejected outright with a 422
+  // (INVALID_VALUE_FOR_COLUMN), which is what was actually causing every
+  // partner selection to fail. Send just the date portion.
+  const selectedAt = new Date().toISOString().slice(0, 10);
   if (existing) {
     const res = await partnerSelectionFetch(`/${existing.id}`, {
       method: "PATCH",
