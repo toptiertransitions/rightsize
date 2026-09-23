@@ -156,6 +156,9 @@ export async function createTenant(data: {
   isTTT?: boolean;
   clientEmail?: string;
   clientPhone?: string;
+  currentZip?: string;
+  onboardingCurrentStep?: number;
+  onboardingComplete?: boolean;
 }): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {
@@ -172,6 +175,9 @@ export async function createTenant(data: {
   if (data.zip) fields["Zip"] = data.zip;
   if (data.clientEmail) fields["ClientEmail"] = data.clientEmail;
   if (data.clientPhone) fields["ClientPhone"] = data.clientPhone;
+  if (data.currentZip) fields["CurrentZip"] = data.currentZip;
+  if (data.onboardingCurrentStep !== undefined) fields["OnboardingCurrentStep"] = data.onboardingCurrentStep;
+  if (data.onboardingComplete !== undefined) fields["OnboardingComplete"] = data.onboardingComplete;
   const record = await base(AIRTABLE_TABLES.TENANTS).create(fields);
   return mapTenant(record);
 }
@@ -234,6 +240,22 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     quoteDisposalNotes: toStr(f["QuoteDisposalNotes"]) || undefined,
     quoteSpecialItems: toStr(f["QuoteSpecialItems"]) || undefined,
     quoteVendorNotes: toStr(f["QuoteVendorNotes"]) || undefined,
+    currentZip: toStr(f["CurrentZip"]) || undefined,
+    serviceInterests: Array.isArray(f["ServiceInterests"]) ? (f["ServiceInterests"] as import("./types").ServiceInterest[]) : undefined,
+    appOnlyIntent: f["AppOnlyIntent"] === true,
+    timelineType: (toStr(f["TimelineType"]) as import("./types").TimelineType) || undefined,
+    timelineValue: toStr(f["TimelineValue"]) || undefined,
+    destinationType: (toStr(f["DestinationType"]) as import("./types").DestinationType) || undefined,
+    destinationZip: toStr(f["DestinationZip"]) || undefined,
+    destinationCommunity: toStr(f["DestinationCommunity"]) || undefined,
+    destinationCommunityOther: toStr(f["DestinationCommunityOther"]) || undefined,
+    sqftRange: (toStr(f["SqftRange"]) as import("./types").SqftRange) || undefined,
+    sqftExact: f["SqftExact"] != null ? toNum(f["SqftExact"]) : undefined,
+    homeDensity: (toStr(f["HomeDensity"]) as import("./types").HomeDensity) || undefined,
+    bedrooms: f["Bedrooms"] != null ? toNum(f["Bedrooms"]) : undefined,
+    bathrooms: f["Bathrooms"] != null ? toNum(f["Bathrooms"]) : undefined,
+    onboardingCurrentStep: f["OnboardingCurrentStep"] != null ? toNum(f["OnboardingCurrentStep"]) : undefined,
+    onboardingComplete: f["OnboardingComplete"] === true,
   };
 }
 
@@ -1346,7 +1368,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null; quoteTargetStartDate?: string | null; quoteTargetMoveDate?: string | null; quoteDatesFlexible?: boolean; quoteDeadlineNotes?: string | null; quoteDisposalNotes?: string | null; quoteSpecialItems?: string | null; quoteVendorNotes?: string | null }
+  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null; quoteTargetStartDate?: string | null; quoteTargetMoveDate?: string | null; quoteDatesFlexible?: boolean; quoteDeadlineNotes?: string | null; quoteDisposalNotes?: string | null; quoteSpecialItems?: string | null; quoteVendorNotes?: string | null; currentZip?: string | null; serviceInterests?: import("./types").ServiceInterest[] | null; appOnlyIntent?: boolean; timelineType?: import("./types").TimelineType | null; timelineValue?: string | null; destinationType?: import("./types").DestinationType | null; destinationZip?: string | null; destinationCommunity?: string | null; destinationCommunityOther?: string | null; sqftRange?: import("./types").SqftRange | null; sqftExact?: number | null; homeDensity?: import("./types").HomeDensity | null; bedrooms?: number | null; bathrooms?: number | null; onboardingCurrentStep?: number; onboardingComplete?: boolean }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -1401,6 +1423,22 @@ export async function updateTenant(
   if (data.quoteDisposalNotes !== undefined) fields["QuoteDisposalNotes"] = data.quoteDisposalNotes || "";
   if (data.quoteSpecialItems !== undefined) fields["QuoteSpecialItems"] = data.quoteSpecialItems || "";
   if (data.quoteVendorNotes !== undefined) fields["QuoteVendorNotes"] = data.quoteVendorNotes || "";
+  if (data.currentZip !== undefined) fields["CurrentZip"] = data.currentZip ?? "";
+  if (data.serviceInterests !== undefined) fields["ServiceInterests"] = data.serviceInterests ?? [];
+  if (data.appOnlyIntent !== undefined) fields["AppOnlyIntent"] = data.appOnlyIntent;
+  if (data.timelineType !== undefined) fields["TimelineType"] = data.timelineType ?? "";
+  if (data.timelineValue !== undefined) fields["TimelineValue"] = data.timelineValue ?? "";
+  if (data.destinationType !== undefined) fields["DestinationType"] = data.destinationType ?? "";
+  if (data.destinationZip !== undefined) fields["DestinationZip"] = data.destinationZip ?? "";
+  if (data.destinationCommunity !== undefined) fields["DestinationCommunity"] = data.destinationCommunity ?? "";
+  if (data.destinationCommunityOther !== undefined) fields["DestinationCommunityOther"] = data.destinationCommunityOther ?? "";
+  if (data.sqftRange !== undefined) fields["SqftRange"] = data.sqftRange ?? "";
+  if (data.sqftExact !== undefined) fields["SqftExact"] = (data.sqftExact ?? null) as unknown as number;
+  if (data.homeDensity !== undefined) fields["HomeDensity"] = data.homeDensity ?? "";
+  if (data.bedrooms !== undefined) fields["Bedrooms"] = (data.bedrooms ?? null) as unknown as number;
+  if (data.bathrooms !== undefined) fields["Bathrooms"] = (data.bathrooms ?? null) as unknown as number;
+  if (data.onboardingCurrentStep !== undefined) fields["OnboardingCurrentStep"] = data.onboardingCurrentStep;
+  if (data.onboardingComplete !== undefined) fields["OnboardingComplete"] = data.onboardingComplete;
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }
@@ -3574,6 +3612,27 @@ export async function getReferralCompanies(): Promise<ReferralCompany[]> {
     offset = data.offset;
   } while (offset);
   return all;
+}
+
+// Typeahead for the onboarding wizard's "search senior communities" step.
+// Scoped to Type = "Senior Living" so client users only ever see communities,
+// never realtors/movers/etc. from the same CRM Companies table.
+export async function searchSeniorCommunities(query: string): Promise<Array<{ id: string; name: string; city: string }>> {
+  const q = query.trim().replace(/"/g, '\\"');
+  const formula = q
+    ? `AND({Type} = "Senior Living", FIND(LOWER("${q}"), LOWER({Name})))`
+    : `{Type} = "Senior Living"`;
+  const res = await crmFetch(
+    AIRTABLE_TABLES.CRM_COMPANIES,
+    `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Name&sort[0][direction]=asc&maxRecords=15&fields[]=Name&fields[]=City`
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(r => ({
+    id: r.id,
+    name: toStr(r.fields["Name"]),
+    city: toStr(r.fields["City"]),
+  }));
 }
 
 export async function findReferralCompanyByName(name: string): Promise<ReferralCompany | null> {

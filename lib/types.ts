@@ -163,7 +163,37 @@ export interface Tenant {
   quoteDisposalNotes?: string;
   quoteSpecialItems?: string;
   quoteVendorNotes?: string;
+  // ── Self-serve onboarding wizard ──────────────────────────────────────────
+  currentZip?: string;
+  serviceInterests?: ServiceInterest[];
+  appOnlyIntent?: boolean;
+  timelineType?: TimelineType;
+  timelineValue?: string;
+  destinationType?: DestinationType;
+  destinationZip?: string;
+  destinationCommunity?: string; // linked CRMCompanies record ID
+  destinationCommunityOther?: string;
+  sqftRange?: SqftRange;
+  sqftExact?: number;
+  homeDensity?: HomeDensity;
+  bedrooms?: number;
+  bathrooms?: number;
+  onboardingCurrentStep?: number;
+  onboardingComplete?: boolean;
 }
+
+export type ServiceInterest =
+  | "full_service"
+  | "realtor"
+  | "mover"
+  | "senior_community"
+  | "donation"
+  | "hauling";
+
+export type TimelineType = "range" | "month" | "date";
+export type DestinationType = "house" | "condo" | "senior_community" | "other";
+export type SqftRange = "under_1000" | "1000_2000" | "2000_3000" | "3000_4500" | "4500_plus" | "not_sure";
+export type HomeDensity = "light" | "comfortable" | "full" | "collector";
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 export interface User {
@@ -203,6 +233,12 @@ export type RoomType =
   | "Closet"
   | "Storage Room"
   | "Sunroom"
+  | "Family Room"
+  | "Laundry"
+  | "Patio/Outdoor"
+  | "Guest Room"
+  | "Storage Unit"
+  | "Half Bath"
   | "Other";
 
 export const ROOM_TYPES: RoomType[] = [
@@ -219,6 +255,12 @@ export const ROOM_TYPES: RoomType[] = [
   "Closet",
   "Storage Room",
   "Sunroom",
+  "Family Room",
+  "Laundry",
+  "Patio/Outdoor",
+  "Guest Room",
+  "Storage Unit",
+  "Half Bath",
   "Other",
 ];
 

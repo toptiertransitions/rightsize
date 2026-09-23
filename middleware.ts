@@ -27,7 +27,7 @@ export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect();
     const { sessionClaims } = await auth();
-    const meta = sessionClaims?.public_metadata as { suspended?: boolean; userType?: string } | undefined;
+    const meta = sessionClaims?.public_metadata as { suspended?: boolean; userType?: string; onboardingComplete?: boolean } | undefined;
 
     if (meta?.suspended === true) {
       return NextResponse.redirect(new URL("/suspended", req.url));
@@ -41,6 +41,18 @@ export default clerkMiddleware(async (auth, req) => {
       !path.startsWith("/api/")
     ) {
       return NextResponse.redirect(new URL("/partner/home", req.url));
+    }
+
+    // Self-serve (non-TTT) client mid-onboarding — bounce back to the wizard
+    // until it's finished. Only ever explicitly false (set by the wizard
+    // itself once a project exists); missing/undefined never gates anyone,
+    // which is what keeps TTT staff and invited TTT clients untouched.
+    if (
+      meta?.onboardingComplete === false &&
+      !path.startsWith("/get-started") &&
+      !path.startsWith("/api/")
+    ) {
+      return NextResponse.redirect(new URL("/get-started", req.url));
     }
   }
 });
