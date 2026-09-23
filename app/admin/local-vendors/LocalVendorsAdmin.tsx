@@ -52,6 +52,8 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   // Partners marketplace fields
   const [category, setCategory] = useState<PartnerCategory | "">(vendor?.category ?? "");
   const [logo, setLogo] = useState(vendor?.logo ?? "");
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState("");
   const [featuredRank, setFeaturedRank] = useState(vendor?.featuredRank !== undefined ? String(vendor.featuredRank) : "");
   const [projectsAdjustment, setProjectsAdjustment] = useState(String(vendor?.projectsCompletedAdjustment ?? 0));
   const [prefSlots, setPrefSlots] = useState<Array<{ category: string; minPrice: string; maxPrice: string }>>(() => {
@@ -86,6 +88,26 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
       setInviteMsg({ msg: e instanceof Error ? e.message : "Error sending invite", ok: false });
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file after an error
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setLogo(data.photoUrl);
+    } catch (e) {
+      setLogoError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setLogoUploading(false);
     }
   };
 
@@ -307,10 +329,43 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Logo URL</label>
-              <input type="text" value={logo} onChange={(e) => setLogo(e.target.value)}
-                placeholder="https://res.cloudinary.com/..."
-                className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">Logo</label>
+              <div className="flex items-center gap-3">
+                {logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logo}
+                    alt="Vendor logo"
+                    className="w-14 h-14 object-contain rounded-lg border border-gray-700 bg-white p-1.5"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg border border-dashed border-gray-600 flex items-center justify-center text-gray-600 text-[10px] text-center px-1">
+                    No logo
+                  </div>
+                )}
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <span className="px-4 py-2 rounded-xl border border-gray-600 text-sm font-medium text-gray-300 hover:bg-gray-800 hover:border-gray-500 transition-colors">
+                    {logoUploading ? "Uploading…" : logo ? "Replace Logo" : "Upload Logo"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                    disabled={logoUploading}
+                  />
+                </label>
+                {logo && !logoUploading && (
+                  <button
+                    type="button"
+                    onClick={() => setLogo("")}
+                    className="text-xs text-gray-500 hover:text-red-400"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {logoError && <p className="text-xs text-red-400 mt-1.5">{logoError}</p>}
             </div>
             <div className="flex gap-4">
               <div>
