@@ -24,7 +24,7 @@ interface HeaderProps {
 
 export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds }: HeaderProps) {
   const pathname = usePathname();
-  const { actor } = useAuth();
+  const { actor, userId } = useAuth();
   const { signOut } = useClerk();
   const { user } = useUser();
   const isImpersonating = isImpersonatingProp || !!actor;
@@ -33,6 +33,23 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const allowAllProjects = ALL_PROJECTS_PAGES.some((p) => pathname.startsWith(p));
   const searchParams = useSearchParams();
   const urlTenantId = searchParams.get("tenantId");
+
+  // If a different account signs in on this browser than the one that last
+  // left a tenantId here (or none did before), drop the stale value — it
+  // points at someone else's project. Nav links would otherwise carry it
+  // straight through, the server would correctly reject it as unrelated to
+  // the new user, and every tab (Plan, Catalog, ...) would silently bounce
+  // back to Home with no visible error.
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      const lastUserId = localStorage.getItem("rz_lastUserId");
+      if (lastUserId !== userId) {
+        localStorage.removeItem("rz_tenantId");
+        localStorage.setItem("rz_lastUserId", userId);
+      }
+    } catch {}
+  }, [userId]);
 
   // Persist the last known real tenantId (never sentinels) so nav links survive
   // navigating to pages that don't carry ?tenantId= (e.g. /crm, /home).
