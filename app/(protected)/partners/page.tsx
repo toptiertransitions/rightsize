@@ -6,12 +6,15 @@ import {
   getUserRoleForTenant,
   getMembershipsForUser,
   getTenantById,
+  getTenants,
+  getSignedTenantIds,
 } from "@/lib/airtable";
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { matchPartnersForCategory } from "@/lib/partners/match";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
 import { PartnersPageClient } from "@/components/partners/PartnersPageClient";
+import { StaffProjectPicker } from "@/components/partners/StaffProjectPicker";
 import { Card, CardContent } from "@/components/ui/Card";
 
 export const metadata = { robots: "noindex, nofollow" };
@@ -39,16 +42,19 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     if (!tenantRole && !isStaff) notFound();
     tenantId = project;
   } else if (isStaff) {
-    // No project selected — staff always preview via an explicit ?project=,
-    // there's no default "all projects" view here.
-    return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <h1 className="text-lg font-bold text-gray-900 mb-2">Partners — staff preview</h1>
-        <p className="text-sm text-gray-500">
-          Add <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">?project=&lt;tenantId&gt;</code> to the URL to preview a client&rsquo;s Partners page.
-        </p>
-      </div>
-    );
+    // No project selected — same search-driven picker as Plan/Catalog, scoped
+    // to Active + Post-Move Consignment (signed, not archived, not lost, TTT-
+    // managed). Partners is always single-project, so unlike Catalog there's
+    // no "all projects" aggregate mode to offer here.
+    const [allTenantsRaw, signedTenantIds] = await Promise.all([
+      getTenants().catch(() => []),
+      getSignedTenantIds().catch(() => new Set<string>()),
+    ]);
+    const projects = allTenantsRaw
+      .filter((t) => (t.isTTT ?? true) && !t.isArchived && !t.isLostDeal && signedTenantIds.has(t.id))
+      .map((t) => ({ id: t.id, name: t.name }));
+
+    return <StaffProjectPicker projects={projects} />;
   } else {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
     if (memberships.length === 0) redirect("/onboarding");
