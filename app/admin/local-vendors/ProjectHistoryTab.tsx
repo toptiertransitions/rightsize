@@ -22,6 +22,8 @@ export interface AdminProject {
   destinationCommunity?: string;
   destinationCommunityOther?: string;
   seniorCommunityName?: string;
+  createdAt: string;
+  archivedAt?: string;
 }
 
 export interface AdminCommunityOption {
@@ -35,6 +37,13 @@ interface Props {
   vendors: LocalVendor[];
   seniorCommunities: AdminCommunityOption[];
   completions: PartnerCommunityCompletion[];
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function resolveDisplayCommunity(
@@ -264,6 +273,25 @@ export function ProjectHistoryTab({ projects, vendors, seniorCommunities, comple
   const [taggedFilter, setTaggedFilter] = useState<"all" | "tagged" | "untagged">("all");
   const [page, setPage] = useState(1);
   const [editingProject, setEditingProject] = useState<AdminProject | null>(null);
+  const [sortCol, setSortCol] = useState<string>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const sortTh = (col: string, label: string) => (
+    <th
+      onClick={() => handleSort(col)}
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-gray-200 transition-colors"
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className="text-[9px]">{sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+      </span>
+    </th>
+  );
 
   const communitiesById = useMemo(() => new Map(seniorCommunities.map((c) => [c.id, c])), [seniorCommunities]);
 
@@ -295,8 +323,22 @@ export function ProjectHistoryTab({ projects, vendors, seniorCommunities, comple
         if (taggedFilter === "untagged" && r.taggedCount > 0) return false;
         return true;
       })
-      .sort((a, b) => a.project.name.localeCompare(b.project.name));
-  }, [projects, completionsByTenant, communitiesById, search, statusFilter, taggedFilter]);
+      .sort((a, b) => {
+        let av: string | number = "";
+        let bv: string | number = "";
+        switch (sortCol) {
+          case "name":       av = a.project.name.toLowerCase();    bv = b.project.name.toLowerCase();    break;
+          case "status":     av = a.project.isArchived ? 1 : 0;    bv = b.project.isArchived ? 1 : 0;    break;
+          case "community":  av = a.communityDisplay.toLowerCase(); bv = b.communityDisplay.toLowerCase(); break;
+          case "createdAt":  av = a.project.createdAt ?? "";       bv = b.project.createdAt ?? "";       break;
+          case "archivedAt": av = a.project.archivedAt ?? "";      bv = b.project.archivedAt ?? "";      break;
+          case "tagged":     av = a.taggedCount;                   bv = b.taggedCount;                   break;
+        }
+        if (av < bv) return sortDir === "asc" ? -1 : 1;
+        if (av > bv) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+  }, [projects, completionsByTenant, communitiesById, search, statusFilter, taggedFilter, sortCol, sortDir]);
 
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -349,10 +391,12 @@ export function ProjectHistoryTab({ projects, vendors, seniorCommunities, comple
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Project</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Community</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Partners Tagged</th>
+                {sortTh("name", "Project")}
+                {sortTh("status", "Status")}
+                {sortTh("community", "Community")}
+                {sortTh("createdAt", "Created")}
+                {sortTh("archivedAt", "Archived")}
+                {sortTh("tagged", "Partners Tagged")}
                 <th className="sticky right-0 bg-gray-900 px-4 py-3 border-l border-gray-700"></th>
               </tr>
             </thead>
@@ -371,6 +415,8 @@ export function ProjectHistoryTab({ projects, vendors, seniorCommunities, comple
                   <td className="px-4 py-3 text-gray-300">
                     {r.communityDisplay || <span className="text-gray-600">—</span>}
                   </td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDate(r.project.createdAt)}</td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDate(r.project.archivedAt)}</td>
                   <td className="px-4 py-3 text-gray-400">
                     {r.taggedCount > 0 ? `${r.taggedCount} tagged` : <span className="text-gray-600">Untagged</span>}
                   </td>

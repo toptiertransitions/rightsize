@@ -66,6 +66,8 @@ export default async function LocalVendorsPage() {
         destinationCommunity: t.destinationCommunity,
         destinationCommunityOther: t.destinationCommunityOther,
         seniorCommunityName: t.seniorCommunityName,
+        createdAt: t.createdAt,
+        archivedAt: t.archivedAt,
       }))}
       seniorCommunities={seniorCommunities.map((c) => ({ id: c.id, name: c.name, city: c.city }))}
       completions={completions}
