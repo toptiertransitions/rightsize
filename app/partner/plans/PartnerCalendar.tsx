@@ -61,10 +61,29 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 
 // Pulls the color family (e.g. "teal") out of a pastel chip class like
 // "bg-teal-100 text-teal-800" so the compact mobile dot can use a solid
-// -500 shade of the same family instead of the washed-out pastel.
+// -500 shade of the same family instead of the washed-out pastel. The map
+// values must appear as literal strings (not built via template literal)
+// so Tailwind's build-time class scanner actually generates the CSS —
+// `bg-${family}-500` looks correct in dev but silently renders with no
+// background in production since Tailwind never sees that exact string.
+const DOT_COLOR_MAP: Record<string, string> = {
+  teal: "bg-teal-500",
+  indigo: "bg-indigo-500",
+  purple: "bg-purple-500",
+  orange: "bg-orange-500",
+  amber: "bg-amber-500",
+  blue: "bg-blue-500",
+  emerald: "bg-emerald-500",
+  cyan: "bg-cyan-500",
+  pink: "bg-pink-500",
+  rose: "bg-rose-500",
+  red: "bg-red-500",
+  gray: "bg-gray-400",
+};
+
 function dotColorFromClass(colorClass: string): string {
   const m = colorClass.match(/bg-([a-z]+)-\d+/);
-  return m ? `bg-${m[1]}-500` : "bg-gray-400";
+  return (m && DOT_COLOR_MAP[m[1]]) || "bg-gray-400";
 }
 
 // ─── ActivityChip ─────────────────────────────────────────────────────────────
