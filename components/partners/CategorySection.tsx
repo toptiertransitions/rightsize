@@ -43,7 +43,7 @@ export function CategorySection({ category, matches, selectedPartnerId, canEdit,
             <PartnerCard
               key={m.partner.id}
               partner={m.partner}
-              isTopMatch={m.rank === 1}
+              isTopMatch={m.rank === 1 && category !== "Community"}
               matchedLocation={m.matchedLocation}
               isSelected={selectedPartnerId === m.partner.id}
               canEdit={canEdit}

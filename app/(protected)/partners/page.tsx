@@ -132,7 +132,11 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   const location = { zip: tenant.zip, state: tenant.state };
   const matchesByCategory = {} as Record<PartnerCategory, MatchResult[]>;
   for (const category of PARTNER_CATEGORIES) {
-    matchesByCategory[category] = matchPartnersForCategory(directory, category, location, 3);
+    // Community is a browsable listing of every CRM Active Referral senior-
+    // living community, not a curated top pick — never capped at 3 like the
+    // other service categories.
+    const topN = category === "Community" ? Infinity : 3;
+    matchesByCategory[category] = matchPartnersForCategory(directory, category, location, topN);
   }
 
   const partnersById: Record<string, PartnerProfile> = {};

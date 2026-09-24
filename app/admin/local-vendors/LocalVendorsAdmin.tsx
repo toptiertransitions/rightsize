@@ -556,6 +556,28 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [inviteMsg, setInviteMsg] = useState<{ vendorId: string; msg: string; ok: boolean } | null>(null);
+  const [syncingCommunities, setSyncingCommunities] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const syncCommunitiesFromCrm = async () => {
+    setSyncingCommunities(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/admin/sync-community-partners", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Sync failed");
+      setSyncResult(
+        `Added ${d.created.length} new communit${d.created.length === 1 ? "y" : "ies"}` +
+        (d.skipped.length > 0 ? ` · ${d.skipped.length} already listed` : "") +
+        ` · ${d.qualifyingCount} total Active Referral communities in CRM`
+      );
+      if (d.created.length > 0) router.refresh();
+    } catch (e) {
+      setSyncResult(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncingCommunities(false);
+    }
+  };
 
   const sendPortalInvite = async (vendor: LocalVendor) => {
     setInvitingId(vendor.id);
@@ -669,6 +691,17 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
               {states.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <button
+              onClick={syncCommunitiesFromCrm}
+              disabled={syncingCommunities}
+              title="Add a Community-category vendor for every CRM Senior Living company with an Active Referral partner, skipping ones already listed"
+              className="h-10 px-4 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <svg className={`w-4 h-4 ${syncingCommunities ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncingCommunities ? "Syncing…" : "Sync Communities from CRM"}
+            </button>
+            <button
               onClick={openAdd}
               className="h-10 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors flex items-center gap-2"
             >
@@ -679,6 +712,12 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
             </button>
           </div>
         </div>
+
+        {syncResult && (
+          <div className="mb-6 -mt-2 rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-2.5 text-sm text-gray-300">
+            {syncResult}
+          </div>
+        )}
 
         {filtered.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
