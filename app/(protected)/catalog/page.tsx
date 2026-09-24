@@ -42,7 +42,11 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       getTenants().catch(() => []),
       getSignedTenantIds().catch(() => new Set<string>()),
     ]);
-    const allTenants = allTenantsRaw.map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
+    // Non-TTT (undefined or false) excluded from All Active/Archived/All-Time views —
+    // applies to every role that can reach this sentinel, including TTTStaff.
+    const allTenants = allTenantsRaw
+      .filter(t => t.isTTT === true)
+      .map(t => ({ ...t, isContractSigned: signedIds.has(t.id) }));
     const selectedTenants =
       tenantId === "__all_active__" ? allTenants.filter((t) => !t.isArchived) :
       tenantId === "__all_archived__" ? allTenants.filter((t) => t.isArchived) :

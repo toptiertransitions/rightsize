@@ -59,9 +59,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
     }
 
     const allTenants = await getTenants().catch(() => []);
-    const isAdminCaller = sysRole === "TTTAdmin";
-    // Non-admin staff can only see TTT projects
-    const visibleTenants = isAdminCaller ? allTenants : allTenants.filter(t => t.isTTT ?? true);
+    // Non-TTT (undefined or false) excluded from All Active/Archived/All-Time views — TTTAdmin included, no bypass
+    const visibleTenants = allTenants.filter(t => t.isTTT === true);
     const selectedTenants =
       tenantId === "__all_active__" ? visibleTenants.filter((t) => !t.isArchived) :
       tenantId === "__all_archived__" ? visibleTenants.filter((t) => t.isArchived && !t.isLostDeal) :
@@ -115,8 +114,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
     if (isManagerOrAdmin) {
       const allTenants = await getTenants().catch(() => []);
-      const isAdminCaller2 = sysRole === "TTTAdmin";
-      const visibleTenants2 = isAdminCaller2 ? allTenants : allTenants.filter(t => t.isTTT ?? true);
+      // Non-TTT (undefined or false) excluded from All Active/Archived views — TTTAdmin included, no bypass
+      const visibleTenants2 = allTenants.filter(t => t.isTTT === true);
       const showArchived = view === "archived";
       const selectedTenants = showArchived
         ? visibleTenants2.filter(t => t.isArchived && !t.isLostDeal)
@@ -173,7 +172,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
         getSignedTenantIds().catch(() => new Set<string>()),
       ]);
 
-      const allTenants = allTenantsRaw.filter(t => t.isTTT ?? true);
+      // Non-TTT (undefined or false) excluded from the Team Lead's "all my projects" view
+      const allTenants = allTenantsRaw.filter(t => t.isTTT === true);
       const leadProjectIds = new Set(allTenants.filter(t => t.teamLeadClerkId === userId).map(t => t.id));
 
       const allEntries = await Promise.all(
