@@ -75,7 +75,7 @@ export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, en
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-x-hidden">
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-bold text-gray-900">{isEdit ? "Edit Key Date" : "Add Key Date"}</h2>
@@ -87,7 +87,7 @@ export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, en
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto overflow-x-hidden flex-1">
           {!isEdit && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Project</label>

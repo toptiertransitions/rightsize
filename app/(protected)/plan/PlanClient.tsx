@@ -511,7 +511,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-x-hidden">
         {/* Header */}
         <div className="px-6 py-5 border-b border-cream-100 flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-bold text-gray-900">
@@ -527,7 +527,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto overflow-x-hidden flex-1">
           {/* Type toggle */}
           {!isEdit && (
             <div className="flex rounded-xl border border-gray-200 overflow-hidden">
@@ -606,23 +606,23 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Time <span className="text-xs text-gray-400 font-normal">(optional)</span>
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">Start</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Start</label>
                 <input
                   type="time"
                   value={startTime}
                   onChange={e => setStartTime(e.target.value)}
-                  className="w-full h-11 pl-12 pr-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+                  className={inputCls}
                 />
               </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">End</span>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">End</label>
                 <input
                   type="time"
                   value={endTime}
                   onChange={e => setEndTime(e.target.value)}
-                  className="w-full h-11 pl-10 pr-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+                  className={inputCls}
                 />
               </div>
             </div>
@@ -954,8 +954,16 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   );
 }
 
+// Pulls the color family (e.g. "teal") out of a pastel chip class like
+// "bg-teal-100 text-teal-800" so the compact mobile dot can use a solid
+// -500 shade of the same family instead of the washed-out pastel.
+function dotColorFromClass(colorClass: string): string {
+  const m = colorClass.match(/bg-([a-z]+)-\d+/);
+  return m ? `bg-${m[1]}-500` : "bg-gray-400";
+}
+
 // ─── ActivityChip ──────────────────────────────────────────────────────────────
-function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUsers, syncFailed }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[]; tttUsers?: TTTUser[]; syncFailed?: boolean }) {
+function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUsers, syncFailed, dot = false }: { entry: PlanEntry; rooms: Room[]; onClick?: () => void; projectName?: string; serviceList?: string[]; tttUsers?: TTTUser[]; syncFailed?: boolean; dot?: boolean }) {
   const room = entry.roomId ? rooms.find(r => r.id === entry.roomId) : null;
   const roomLabel = room?.name ?? entry.roomLabel ?? "";
   const isKeyDate = entry.entryType === "keydate";
@@ -968,6 +976,22 @@ function ActivityChip({ entry, rooms, onClick, projectName, serviceList, tttUser
     : "";
 
   const MAX_VISIBLE = 4;
+
+  // Month view on mobile: a small colored dot instead of a full text pill —
+  // 5-7 grid columns on a phone leave no room for readable text, so this
+  // trades detail for glanceability (tap still opens the same edit modal;
+  // full text is available in Week/Day view, which now render at full width).
+  if (dot) {
+    const label = `${entry.activity}${timeLabel ? `, ${timeLabel}` : ""}${projectName ? ` — ${projectName}` : ""}`;
+    return (
+      <button
+        onClick={onClick}
+        title={label}
+        aria-label={label}
+        className={`rounded-full flex-shrink-0 ${isKeyDate ? "w-2.5 h-2.5 ring-2 ring-white" : "w-2 h-2"} ${dotColorFromClass(colorClass)} ${onClick ? "hover:scale-125 transition-transform" : ""}`}
+      />
+    );
+  }
 
   if (isKeyDate) {
     return (
@@ -1442,7 +1466,8 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
       {/* ── Weekly View ─────────────────────────────────────────────────────── */}
       {view === "week" && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <div className={`grid ${colClass} divide-x divide-gray-100`}>
+          {/* Desktop: side-by-side day columns */}
+          <div className={`hidden md:grid ${colClass} divide-x divide-gray-100`}>
             {weekDays.map((day, idx) => {
               const iso = toISO(day);
               const dayEntries = entriesByDate[iso] ?? [];
@@ -1484,6 +1509,64 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                       <button
                         onClick={() => openAdd(iso)}
                         className="w-full py-1 rounded-lg text-xs text-gray-400 hover:text-forest-600 hover:bg-forest-50 transition-colors"
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Mobile: stacked one-day-per-row agenda — side-by-side columns
+              are too narrow on a phone for Key Dates/Focus Shifts to be
+              readable, so each day gets a full-width row instead. */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {weekDays.map((day, idx) => {
+              const iso = toISO(day);
+              const dayEntries = entriesByDate[iso] ?? [];
+              const isToday = iso === todayISO;
+
+              return (
+                <div key={iso}>
+                  {/* Header — click to jump to day view */}
+                  <button
+                    type="button"
+                    onClick={() => { setCurrentDate(day); setView("day"); }}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-forest-50 transition-colors ${isToday ? "bg-forest-50" : ""}`}
+                  >
+                    <span className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold ${isToday ? "bg-forest-600 text-white" : "text-gray-700"}`}>
+                      {day.getDate()}
+                    </span>
+                    <span className={`text-sm font-medium ${isToday ? "text-forest-700" : "text-gray-500"}`}>{dayNames[idx]}</span>
+                    {dayEntries.length === 0 && <span className="text-xs text-gray-300 ml-auto">No events</span>}
+                  </button>
+
+                  {/* Entries */}
+                  {dayEntries.length > 0 && (
+                    <div className="px-3 pb-2 space-y-1">
+                      {dayEntries.map(entry => (
+                        <ActivityChip
+                          key={entry.id}
+                          entry={entry}
+                          rooms={rooms}
+                          onClick={effectiveCanEdit ? () => openEdit(entry) : undefined}
+                          projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
+                          serviceList={services}
+                          tttUsers={tttUsers}
+                          syncFailed={failedSyncIds.has(entry.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add button */}
+                  {effectiveCanEdit && (
+                    <div className="px-3 pb-2.5">
+                      <button
+                        onClick={() => openAdd(iso)}
+                        className="w-full py-1.5 rounded-lg text-xs text-gray-400 hover:text-forest-600 hover:bg-forest-50 transition-colors"
                       >
                         + Add
                       </button>
@@ -1573,7 +1656,8 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                   }`}>
                     {day.getDate()}
                   </div>
-                  <div className="space-y-0.5 flex-1">
+                  {/* Desktop: full chips */}
+                  <div className="hidden md:block space-y-0.5 flex-1">
                     {visible.map(entry => (
                       <div key={entry.id} onClick={e => { e.stopPropagation(); if (effectiveCanEdit) openEdit(entry); }}>
                         <ActivityChip
@@ -1592,6 +1676,33 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                         className="text-[10px] text-forest-600 font-medium px-1 hover:underline text-left"
                       >
                         {isExpanded ? "show less" : `+${overflow} more`}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Mobile: compact colored dots — 5-7 grid columns leave no
+                      room for readable text on a phone; tap still opens the
+                      same edit modal, and Week/Day view now show full text. */}
+                  <div className="md:hidden flex flex-wrap gap-1 items-center flex-1 content-start">
+                    {visible.map(entry => (
+                      <div key={entry.id} onClick={e => { e.stopPropagation(); if (effectiveCanEdit) openEdit(entry); }}>
+                        <ActivityChip
+                          entry={entry}
+                          rooms={rooms}
+                          projectName={isAllProjectsMode ? tenantNameMap[entry.tenantId] : undefined}
+                          serviceList={services}
+                          tttUsers={tttUsers}
+                          syncFailed={failedSyncIds.has(entry.id)}
+                          dot
+                        />
+                      </div>
+                    ))}
+                    {overflow > 0 && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setExpandedDay(isExpanded ? null : iso); }}
+                        className="text-[9px] text-forest-600 font-semibold hover:underline"
+                      >
+                        +{overflow}
                       </button>
                     )}
                   </div>

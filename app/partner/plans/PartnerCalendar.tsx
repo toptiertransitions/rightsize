@@ -59,6 +59,14 @@ const WORK_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 const FULL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
+// Pulls the color family (e.g. "teal") out of a pastel chip class like
+// "bg-teal-100 text-teal-800" so the compact mobile dot can use a solid
+// -500 shade of the same family instead of the washed-out pastel.
+function dotColorFromClass(colorClass: string): string {
+  const m = colorClass.match(/bg-([a-z]+)-\d+/);
+  return m ? `bg-${m[1]}-500` : "bg-gray-400";
+}
+
 // ─── ActivityChip ─────────────────────────────────────────────────────────────
 interface ChipProps {
   entry: PlanEntry;
@@ -66,9 +74,10 @@ interface ChipProps {
   projectName?: string;
   isOwn?: boolean; // key date was added by the current partner user — clickable to edit
   onClick?: () => void;
+  dot?: boolean;
 }
 
-function ActivityChip({ entry, projectColor, projectName, isOwn, onClick }: ChipProps) {
+function ActivityChip({ entry, projectColor, projectName, isOwn, onClick, dot = false }: ChipProps) {
   const isKeyDate = entry.entryType === "keydate";
   let colorClass: string;
   if (projectColor) {
@@ -77,6 +86,22 @@ function ActivityChip({ entry, projectColor, projectName, isOwn, onClick }: Chip
     colorClass = KEY_DATE_COLORS[entry.activity];
   } else {
     colorClass = ACTIVITY_COLORS[entry.activity] ?? "bg-gray-100 text-gray-700";
+  }
+
+  // Month view on mobile: a small colored dot instead of a full text pill —
+  // 5-7 grid columns on a phone leave no room for readable text.
+  if (dot) {
+    const label = `${entry.activity}${projectName ? ` — ${projectName}` : ""}`;
+    const Tag = isOwn ? "button" : "div";
+    return (
+      <Tag
+        type={isOwn ? "button" : undefined}
+        onClick={isOwn ? onClick : undefined}
+        title={label}
+        aria-label={label}
+        className={`rounded-full flex-shrink-0 ${isKeyDate ? "w-2.5 h-2.5 ring-2 ring-white" : "w-2 h-2"} ${dotColorFromClass(colorClass)} ${isOwn ? "hover:scale-125 transition-transform" : ""}`}
+      />
+    );
   }
 
   if (isKeyDate) {
@@ -184,7 +209,7 @@ export function PartnerCalendar({ entries: initialEntries, projects, selectedTen
     else setCurrentDate(d => addDays(d, dir));
   };
 
-  const renderChip = (entry: PlanEntry) => {
+  const renderChip = (entry: PlanEntry, dot = false) => {
     const isOwn = entry.entryType === "keydate" && entry.createdByUserId === currentUserId;
     return (
       <ActivityChip
@@ -194,6 +219,7 @@ export function PartnerCalendar({ entries: initialEntries, projects, selectedTen
         projectName={isAllMode ? projectNameMap[entry.tenantId] : undefined}
         isOwn={isOwn}
         onClick={isOwn ? () => setModalState({ mode: "edit", entry }) : undefined}
+        dot={dot}
       />
     );
   };
@@ -273,7 +299,8 @@ export function PartnerCalendar({ entries: initialEntries, projects, selectedTen
       {/* ── Week View ────────────────────────────────────────────────────────── */}
       {view === "week" && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <div className={`grid ${colClass} divide-x divide-gray-100`}>
+          {/* Desktop: side-by-side day columns */}
+          <div className={`hidden md:grid ${colClass} divide-x divide-gray-100`}>
             {weekDays.map((day, idx) => {
               const iso = toISO(day);
               const dayEntries = entriesByDate[iso] ?? [];
@@ -293,6 +320,36 @@ export function PartnerCalendar({ entries: initialEntries, projects, selectedTen
                   <div className="flex-1 p-1.5 space-y-1">
                     {dayEntries.map(e => renderChip(e))}
                   </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Mobile: stacked one-day-per-row agenda — side-by-side columns
+              are too narrow on a phone for Key Dates to be readable. */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {weekDays.map((day, idx) => {
+              const iso = toISO(day);
+              const dayEntries = entriesByDate[iso] ?? [];
+              const isToday = iso === todayISO;
+              return (
+                <div key={iso}>
+                  <button
+                    type="button"
+                    onClick={() => { setCurrentDate(day); setView("day"); }}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-[#2d4a3e]/5 transition-colors ${isToday ? "bg-[#2d4a3e]/5" : ""}`}
+                  >
+                    <span className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold ${isToday ? "bg-[#2d4a3e] text-white" : "text-gray-700"}`}>
+                      {day.getDate()}
+                    </span>
+                    <span className={`text-sm font-medium ${isToday ? "text-[#2d4a3e]" : "text-gray-500"}`}>{dayNames[idx]}</span>
+                    {dayEntries.length === 0 && <span className="text-xs text-gray-300 ml-auto">No events</span>}
+                  </button>
+                  {dayEntries.length > 0 && (
+                    <div className="px-3 pb-2.5 space-y-1">
+                      {dayEntries.map(e => renderChip(e))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -346,7 +403,8 @@ export function PartnerCalendar({ entries: initialEntries, projects, selectedTen
                   }`}>
                     {day.getDate()}
                   </div>
-                  <div className="space-y-0.5 flex-1">
+                  {/* Desktop: full chips */}
+                  <div className="hidden md:block space-y-0.5 flex-1">
                     {visible.map(e => renderChip(e))}
                     {overflow > 0 && (
                       <button
@@ -354,6 +412,19 @@ export function PartnerCalendar({ entries: initialEntries, projects, selectedTen
                         className="text-[10px] text-[#2d4a3e] font-medium px-1 hover:underline text-left"
                       >
                         {isExpanded ? "show less" : `+${overflow} more`}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Mobile: compact colored dots */}
+                  <div className="md:hidden flex flex-wrap gap-1 items-center flex-1 content-start">
+                    {visible.map(e => renderChip(e, true))}
+                    {overflow > 0 && (
+                      <button
+                        onClick={() => setExpandedDay(isExpanded ? null : iso)}
+                        className="text-[9px] text-[#2d4a3e] font-semibold hover:underline"
+                      >
+                        +{overflow}
                       </button>
                     )}
                   </div>
