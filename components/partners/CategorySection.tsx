@@ -6,6 +6,7 @@ import { PartnerCard } from "./PartnerCard";
 import { CategoryIcon } from "./categoryIcons";
 
 interface Props {
+  tenantId: string;
   category: PartnerCategory;
   matches: MatchResult[];
   selectedPartnerId?: string;
@@ -21,7 +22,7 @@ interface Props {
   label?: string;
 }
 
-export function CategorySection({ category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label }: Props) {
+export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label }: Props) {
   const slug = category.toLowerCase().replace(/\s+/g, "-");
 
   return (
@@ -42,6 +43,7 @@ export function CategorySection({ category, matches, selectedPartnerId, canEdit,
           {matches.map((m) => (
             <PartnerCard
               key={m.partner.id}
+              tenantId={tenantId}
               partner={m.partner}
               isTopMatch={m.rank === 1 && category !== "Community"}
               matchedLocation={m.matchedLocation}

@@ -4,6 +4,7 @@ import type { PartnerProfile } from "@/lib/partners/types";
 import { communityCompletionLabel } from "@/lib/partners/copy";
 import { PartnerLogo } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
+import { PartnerFilesSection } from "./PartnerFilesSection";
 
 function cleanDomain(url: string): string {
   try {
@@ -15,6 +16,7 @@ function cleanDomain(url: string): string {
 }
 
 interface Props {
+  tenantId: string;
   partner: PartnerProfile;
   isTopMatch?: boolean;
   matchedLocation: "area" | "nearby";
@@ -26,7 +28,7 @@ interface Props {
   onLearnMore: () => void;
 }
 
-export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, canEdit, pending, onSelect, onDeselect, onLearnMore }: Props) {
+export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, isSelected, canEdit, pending, onSelect, onDeselect, onLearnMore }: Props) {
   if (partner.isTeamLead) {
     return (
       <div className="relative flex gap-4 rounded-2xl border border-forest-200 bg-forest-50/40 p-4 sm:p-5">
@@ -140,6 +142,8 @@ export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, 
             )}
           </button>
         </div>
+
+        {isSelected && <PartnerFilesSection tenantId={tenantId} partnerId={partner.id} />}
       </div>
     </div>
   );

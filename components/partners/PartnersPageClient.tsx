@@ -110,6 +110,8 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         selectedPartners={selectedPartners}
         onEmptyClick={scrollToCategory}
         onChangeClick={scrollToCategory}
+        filesEnabled
+        onFilesClick={scrollToCategory}
       />
 
       <CategoryChipBar
@@ -123,6 +125,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         {PARTNER_CATEGORIES.map((category) => (
           <CategorySection
             key={category}
+            tenantId={tenantId}
             category={category}
             matches={matchesByCategory[category] ?? []}
             selectedPartnerId={selections[category]}
