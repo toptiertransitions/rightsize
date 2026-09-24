@@ -38,6 +38,16 @@ export interface PartnerProfile {
   isTeamLead?: boolean;
   teamLeadName?: string;
   phone?: string;
+  /** Admin-set in /admin/local-vendors — feeds the scoring engine's "senior
+   * specialty" factor (see lib/partners/scoring.ts). */
+  seniorSpecialty?: boolean;
+  /** Admin-set 1-5 in /admin/local-vendors — feeds the "responsiveness"
+   * factor; unset is treated as neutral (3) rather than penalized. */
+  responsivenessScore?: number;
+  /** Vendor contact email — only populated for real LocalVendors records
+   * (never the synthetic Team Lead entry), used to send the Phase 3 intro
+   * request notification. Not shown anywhere in the client-facing UI. */
+  email?: string;
 }
 
 export interface MatchResult {

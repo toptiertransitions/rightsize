@@ -750,6 +750,8 @@ export interface LocalVendor {
   featuredRank?: number;     // lower = shown first, manual override
   projectsCompletedAdjustment?: number; // manual +/- on top of the dynamically computed count
   aboutUs?: string;          // paragraph shown in the Partners "Learn More" detail popup
+  seniorSpecialty?: boolean;    // admin-set: experienced working with senior/downsizing clients
+  responsivenessScore?: number; // admin-set, 1-5; unset treated as neutral (3) when scoring
 }
 
 // ─── Client-facing Partners marketplace ──────────────────────────────────────
@@ -774,6 +776,11 @@ export type PartnerRequestStatus = "draft" | "matched" | "intro_requested";
 // `status` starts "draft" and is only ever advanced to "matched" /
 // "intro_requested" by the Phase 3 scoring/consent flow — Phase 2 (the
 // question-collection UI) only ever writes "draft".
+export interface PartnerIntroRequest {
+  partnerId: string; // LocalVendor record id
+  requestedAt: string;
+}
+
 export interface PartnerRequest {
   id: string;
   airtableId: string;
@@ -781,6 +788,7 @@ export interface PartnerRequest {
   category: PartnerCategory;
   status: PartnerRequestStatus;
   answers: Record<string, string | string[]>;
+  introRequests: PartnerIntroRequest[]; // capped at 2 per category — see MAX_INTRO_REQUESTS_PER_CATEGORY
   createdAt: string;
   updatedAt: string;
   createdBy: string; // Clerk user id

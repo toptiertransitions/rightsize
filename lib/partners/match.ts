@@ -19,14 +19,14 @@ export function computeBayesianRating(
   return Math.round(weighted * 10) / 10;
 }
 
-function parseZipList(zipCodesServed: string): string[] {
+export function parseZipList(zipCodesServed: string): string[] {
   return zipCodesServed
     .split(/[,\s]+/)
     .map((z) => z.trim())
     .filter(Boolean);
 }
 
-function isInServiceArea(partner: PartnerProfile, location: ClientLocation): boolean {
+export function isInServiceArea(partner: PartnerProfile, location: ClientLocation): boolean {
   if (location.zip) {
     const zips = parseZipList(partner.zipCodesServed);
     if (zips.length > 0) return zips.includes(location.zip);

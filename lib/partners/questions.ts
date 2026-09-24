@@ -341,3 +341,22 @@ export function isPartnerRequestComplete(category: PartnerCategory, answers: Rec
     return Array.isArray(value) ? value.length > 0 : !!value;
   });
 }
+
+// Human-readable {label, value} pairs for a request's answers, used to
+// render them in the intro-request notification email — option slugs
+// (e.g. "1_3_months") are resolved to their display labels, chips-multi
+// arrays are joined into a comma list.
+export function formatAnswersForEmail(
+  category: PartnerCategory,
+  answers: Record<string, string | string[]>
+): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const q of getPartnerQuestions(category)) {
+    const raw = answers[q.id];
+    if (raw == null || (Array.isArray(raw) && raw.length === 0) || raw === "") continue;
+    const values = Array.isArray(raw) ? raw : [raw];
+    const display = values.map((v) => q.options?.find((o) => o.value === v)?.label ?? v).join(", ");
+    rows.push({ label: q.prompt, value: display });
+  }
+  return rows;
+}

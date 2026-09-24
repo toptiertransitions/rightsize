@@ -1959,6 +1959,8 @@ export async function createLocalVendor(data: {
   featuredRank?: number;
   projectsCompletedAdjustment?: number;
   aboutUs?: string;
+  seniorSpecialty?: boolean;
+  responsivenessScore?: number;
 }): Promise<LocalVendor> {
   const res = await localVendorFetch("", {
     method: "POST",
@@ -1985,6 +1987,8 @@ export async function createLocalVendor(data: {
         ...(data.featuredRank !== undefined ? { FeaturedRank: data.featuredRank } : {}),
         ...(data.projectsCompletedAdjustment !== undefined ? { ProjectsCompletedAdjustment: data.projectsCompletedAdjustment } : {}),
         ...(data.aboutUs !== undefined ? { AboutUs: data.aboutUs } : {}),
+        ...(data.seniorSpecialty !== undefined ? { SeniorSpecialty: data.seniorSpecialty } : {}),
+        ...(data.responsivenessScore !== undefined ? { ResponsivenessScore: data.responsivenessScore } : {}),
       },
     }),
   });
@@ -2017,6 +2021,8 @@ export async function updateLocalVendor(
     featuredRank: number | null;
     projectsCompletedAdjustment: number;
     aboutUs: string;
+    seniorSpecialty: boolean;
+    responsivenessScore: number | null;
   }>
 ): Promise<LocalVendor> {
   const fields: Record<string, unknown> = {};
@@ -2041,6 +2047,8 @@ export async function updateLocalVendor(
   if (data.featuredRank !== undefined) fields["FeaturedRank"] = data.featuredRank;
   if (data.projectsCompletedAdjustment !== undefined) fields["ProjectsCompletedAdjustment"] = data.projectsCompletedAdjustment;
   if (data.aboutUs !== undefined) fields["AboutUs"] = data.aboutUs;
+  if (data.seniorSpecialty !== undefined) fields["SeniorSpecialty"] = data.seniorSpecialty;
+  if (data.responsivenessScore !== undefined) fields["ResponsivenessScore"] = data.responsivenessScore;
   if (data.prefCategories !== undefined) {
     for (let i = 1; i <= 5; i++) {
       const slot = data.prefCategories[i - 1];
@@ -2211,6 +2219,13 @@ function mapPartnerRequest(record: AirtableRecord): PartnerRequest {
   } catch {
     answers = {};
   }
+  let introRequests: PartnerRequest["introRequests"] = [];
+  try {
+    const raw = toStr(f["IntroRequests"]);
+    if (raw) introRequests = JSON.parse(raw);
+  } catch {
+    introRequests = [];
+  }
   return {
     id: record.id,
     airtableId: record.id,
@@ -2218,6 +2233,7 @@ function mapPartnerRequest(record: AirtableRecord): PartnerRequest {
     category: toStr(f["Category"]) as PartnerCategory,
     status: (toStr(f["Status"]) || "draft") as PartnerRequest["status"],
     answers,
+    introRequests,
     createdAt: toStr(f["CreatedAt"]),
     updatedAt: toStr(f["UpdatedAt"]),
     createdBy: toStr(f["CreatedBy"]),
@@ -2273,6 +2289,63 @@ export async function savePartnerRequestAnswers(data: {
         UpdatedAt: now,
         CreatedBy: data.createdBy,
       },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerRequest(await res.json());
+}
+
+// Best-effort status bump (e.g. "draft" -> "matched" once scoring produces a
+// real result) — a no-op if the request doesn't exist yet or is already at
+// that status, so callers can call this unconditionally on every render
+// without worrying about redundant writes.
+export async function setPartnerRequestStatus(
+  tenantId: string,
+  category: PartnerCategory,
+  status: PartnerRequest["status"]
+): Promise<void> {
+  const formula = encodeURIComponent(`AND({TenantId} = "${tenantId}", {Category} = "${category}")`);
+  const findRes = await partnerRequestFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const findData = await findRes.json();
+  const existing = findData.records?.[0] as AirtableRecord | undefined;
+  if (!existing || toStr(existing.fields["Status"]) === status) return;
+
+  const res = await partnerRequestFetch(`/${existing.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: { Status: status } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// Appends one {partnerId, requestedAt} to IntroRequests and bumps Status to
+// "intro_requested" — idempotent (re-requesting the same partner is a
+// no-op) and enforces the per-category cap server-side as a second line of
+// defense behind the caller's own check.
+export async function addPartnerIntroRequest(
+  tenantId: string,
+  category: PartnerCategory,
+  partnerId: string,
+  maxPerCategory: number
+): Promise<PartnerRequest> {
+  const formula = encodeURIComponent(`AND({TenantId} = "${tenantId}", {Category} = "${category}")`);
+  const findRes = await partnerRequestFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const findData = await findRes.json();
+  const existing = findData.records?.[0] as AirtableRecord | undefined;
+  if (!existing) throw new Error("No PartnerRequest found for this tenant/category — complete the questions first.");
+
+  const current = mapPartnerRequest(existing);
+  if (current.introRequests.some((r) => r.partnerId === partnerId)) return current;
+  if (current.introRequests.length >= maxPerCategory) {
+    throw new Error(`Already requested an intro for the maximum of ${maxPerCategory} partners in this category.`);
+  }
+
+  const introRequests = [...current.introRequests, { partnerId, requestedAt: new Date().toISOString() }];
+  const res = await partnerRequestFetch(`/${existing.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      fields: { IntroRequests: JSON.stringify(introRequests), Status: "intro_requested" },
     }),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -2585,6 +2658,8 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     featuredRank: typeof f["FeaturedRank"] === "number" ? f["FeaturedRank"] : undefined,
     projectsCompletedAdjustment: typeof f["ProjectsCompletedAdjustment"] === "number" ? f["ProjectsCompletedAdjustment"] : undefined,
     aboutUs: toStr(f["AboutUs"]) || undefined,
+    seniorSpecialty: f["SeniorSpecialty"] === true,
+    responsivenessScore: typeof f["ResponsivenessScore"] === "number" ? f["ResponsivenessScore"] : undefined,
   };
 }
 

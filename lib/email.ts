@@ -5874,3 +5874,133 @@ export function buildShelfAlertEmail({
 </body>
 </html>`;
 }
+
+// ─── Partner Matching (Phase 3 guided matching, consent-gated intro requests) ─
+export function buildPartnerIntroConfirmationEmail({
+  clientName,
+  partnerName,
+  category,
+  companyName = "Top Tier Transitions",
+}: {
+  clientName: string;
+  partnerName: string;
+  category: string;
+  companyName?: string;
+}): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intro Requested</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">${companyName}</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Partner Introduction Requested</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${clientName},</p>
+              <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+                We've let <strong>${partnerName}</strong> know you're interested in their ${category.toLowerCase()} services for your move.
+                They'll reach out directly to get things started.
+              </p>
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5;">
+                If you don't hear back in a couple of days, reply to this email and we'll follow up.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">${companyName} &mdash; Partner Introduction</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export function buildPartnerIntroRequestNotificationEmail({
+  vendorName,
+  clientName,
+  category,
+  clientEmail,
+  clientPhone,
+  answers,
+  companyName = "Top Tier Transitions",
+}: {
+  vendorName: string;
+  clientName: string;
+  category: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  answers: Array<{ label: string; value: string }>;
+  companyName?: string;
+}): string {
+  const answerRows = answers
+    .map(
+      (a) => `
+      <tr>
+        <td style="padding:6px 0;border-bottom:1px solid #F3F4F6;font-size:13px;color:#6B7280;width:40%;">${a.label}</td>
+        <td style="padding:6px 0;border-bottom:1px solid #F3F4F6;font-size:14px;color:#374151;">${a.value}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Client Introduction</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">${companyName}</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">New Client Introduction — ${category}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">Hi ${vendorName},</p>
+              <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+                <strong>${clientName}</strong>, one of our clients, asked to be connected with you for ${category.toLowerCase()} help. Here's what they shared:
+              </p>
+              <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+                <tbody>${answerRows}</tbody>
+              </table>
+              <p style="margin:0 0 4px;font-size:14px;color:#374151;">
+                <strong>Contact:</strong> ${clientEmail ?? "—"}${clientPhone ? ` &middot; ${clientPhone}` : ""}
+              </p>
+              <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;line-height:1.5;">
+                Please reach out to them directly. Questions about this introduction? Reply to this email.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">${companyName} &mdash; Partners Marketplace</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}

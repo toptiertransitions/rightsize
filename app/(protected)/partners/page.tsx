@@ -10,10 +10,13 @@ import {
   getSignedTenantIds,
   getStaffMembers,
   getPartnerRequestsForTenant,
+  setPartnerRequestStatus,
 } from "@/lib/airtable";
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { matchPartnersForCategory } from "@/lib/partners/match";
 import { orderCategoriesForNonTTTClient } from "@/lib/partners/nonTTTCategories";
+import { isPartnerRequestComplete } from "@/lib/partners/questions";
+import { scoreAndRankPartners, getRequestLocation, type ScoringResult } from "@/lib/partners/scoring";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
 import { PartnersPageClient } from "@/components/partners/PartnersPageClient";
@@ -128,7 +131,30 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     const { active, greyed } = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
     const partnerRequests = await getPartnerRequestsForTenant(tenantId).catch(() => []);
     const initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>> = {};
-    for (const r of partnerRequests) initialRequestAnswers[r.category] = r.answers;
+    const initialIntroRequests: Partial<Record<PartnerCategory, { partnerId: string; requestedAt: string }[]>> = {};
+    for (const r of partnerRequests) {
+      initialRequestAnswers[r.category] = r.answers;
+      initialIntroRequests[r.category] = r.introRequests;
+    }
+
+    // Score + rank real matches for every active, completed, non-Move-Manager
+    // request — Move Manager never has a PartnerRequest (static TTT card).
+    const initialMatches: Partial<Record<PartnerCategory, ScoringResult>> = {};
+    const statusBumps: Promise<unknown>[] = [];
+    for (const category of active) {
+      if (category === "Move Manager") continue;
+      const request = partnerRequests.find((r) => r.category === category);
+      if (!request || !isPartnerRequestComplete(category, request.answers)) continue;
+
+      const location = getRequestLocation(category, request.answers, { zip: tenant.currentZip, state: tenant.state });
+      const result = scoreAndRankPartners(directory, category, location);
+      initialMatches[category] = result;
+
+      if (result.best && request.status === "draft") {
+        statusBumps.push(setPartnerRequestStatus(tenantId, category, "matched").catch(() => {}));
+      }
+    }
+    if (statusBumps.length > 0) await Promise.all(statusBumps);
 
     return (
       <NonTTTPartnersPageClient
@@ -141,6 +167,8 @@ export default async function PartnersPage({ searchParams }: PageProps) {
         canEdit={canEdit}
         appOnlyIntent={tenant.appOnlyIntent ?? false}
         initialRequestAnswers={initialRequestAnswers}
+        initialIntroRequests={initialIntroRequests}
+        initialMatches={initialMatches}
         prefillTenant={{
           currentZip: tenant.currentZip,
           destinationZip: tenant.destinationZip,

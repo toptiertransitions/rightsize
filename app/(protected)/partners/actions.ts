@@ -1,11 +1,16 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { Resend } from "resend";
 import { z } from "zod";
-import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers } from "@/lib/airtable";
+import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest } from "@/lib/airtable";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
-import { CATEGORY_TO_SERVICE_INTEREST } from "@/lib/partners/nonTTTCategories";
-import { getPartnerQuestions } from "@/lib/partners/questions";
+import { CATEGORY_TO_SERVICE_INTEREST, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
+import { getPartnerQuestions, formatAnswersForEmail } from "@/lib/partners/questions";
+import { getPartnerDirectory } from "@/lib/partners/queries";
+import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
+import { logPartnerMatchEvent } from "@/lib/partners/analytics";
+import { buildPartnerIntroConfirmationEmail, buildPartnerIntroRequestNotificationEmail } from "@/lib/email";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -156,6 +161,85 @@ export async function savePartnerRequestAnswersAction(
     return { ok: true };
   } catch {
     return { ok: false, error: "Couldn't save your answer — please try again." };
+  }
+}
+
+// Consent-gated: the client explicitly confirms in the UI before this is
+// called (see PartnerMatchResults.tsx's two-step confirm). Capped at
+// MAX_INTRO_REQUESTS_PER_CATEGORY per category, enforced both here and
+// again inside addPartnerIntroRequest itself.
+export async function requestPartnerIntroAction(
+  tenantId: string,
+  category: PartnerCategory,
+  partnerId: string
+): Promise<ActionResult> {
+  const input = z.object({ tenantId: tenantIdSchema, category: categorySchema, partnerId: partnerIdSchema }).safeParse({ tenantId, category, partnerId });
+  if (!input.success) return { ok: false, error: "That request wasn't valid — please try again." };
+
+  const userId = await assertCanEdit(tenantId);
+  if (!userId) return { ok: false, error: "You don't have permission to request an introduction for this project." };
+
+  try {
+    const [tenant, directory, requests, user] = await Promise.all([
+      getTenantById(tenantId),
+      getPartnerDirectory(),
+      getPartnerRequestsForTenant(tenantId),
+      currentUser().catch(() => null),
+    ]);
+    if (!tenant) return { ok: false, error: "Project not found." };
+
+    const partner = directory.find((p) => p.id === partnerId && p.category === category);
+    if (!partner) return { ok: false, error: "That partner isn't available anymore." };
+
+    const request = requests.find((r) => r.category === category);
+    if (request && request.introRequests.length >= MAX_INTRO_REQUESTS_PER_CATEGORY && !request.introRequests.some((r) => r.partnerId === partnerId)) {
+      return { ok: false, error: `You've already requested an intro for the maximum of ${MAX_INTRO_REQUESTS_PER_CATEGORY} partners in this category.` };
+    }
+
+    await withRetry(() => addPartnerIntroRequest(tenantId, category, partnerId, MAX_INTRO_REQUESTS_PER_CATEGORY));
+
+    const clientEmail = user?.emailAddresses?.[0]?.emailAddress || tenant.clientEmail;
+    const clientName = user?.firstName || tenant.name;
+    const categoryLabel = nonTTTCategoryLabel(category);
+
+    // Email delivery is best-effort — the intro request is already saved
+    // above, so a Resend failure here never undoes it.
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      const resend = new Resend(resendKey);
+      if (clientEmail) {
+        resend.emails
+          .send({
+            from: "Rightsize Alerts <notifications@toptiertransitions.com>",
+            to: clientEmail,
+            subject: `You're connected with ${partner.vendorName}`,
+            html: buildPartnerIntroConfirmationEmail({ clientName, partnerName: partner.vendorName, category: categoryLabel }),
+          })
+          .catch((e) => console.error("Partner intro confirmation email failed:", e));
+      }
+      if (partner.email) {
+        resend.emails
+          .send({
+            from: "Rightsize Alerts <notifications@toptiertransitions.com>",
+            to: partner.email,
+            subject: `New client introduction — ${categoryLabel}`,
+            html: buildPartnerIntroRequestNotificationEmail({
+              vendorName: partner.vendorName,
+              clientName,
+              category: categoryLabel,
+              clientEmail: clientEmail || undefined,
+              clientPhone: tenant.clientPhone,
+              answers: formatAnswersForEmail(category, request?.answers ?? {}),
+            }),
+          })
+          .catch((e) => console.error("Partner intro notification email failed:", e));
+      }
+    }
+
+    logPartnerMatchEvent("intro_requested", { tenantId, category, partnerId });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't request that introduction — please try again." };
   }
 }
 

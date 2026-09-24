@@ -95,6 +95,9 @@ export const getPartnerDirectory = unstable_cache(
         projectsCompleted,
         aboutUs: v.aboutUs,
         recentProjectMonths,
+        seniorSpecialty: v.seniorSpecialty,
+        responsivenessScore: v.responsivenessScore,
+        email: v.email || undefined,
       };
     });
   },

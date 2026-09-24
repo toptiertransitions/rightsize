@@ -57,6 +57,8 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   const [aboutUs, setAboutUs] = useState(vendor?.aboutUs ?? "");
   const [featuredRank, setFeaturedRank] = useState(vendor?.featuredRank !== undefined ? String(vendor.featuredRank) : "");
   const [projectsAdjustment, setProjectsAdjustment] = useState(String(vendor?.projectsCompletedAdjustment ?? 0));
+  const [seniorSpecialty, setSeniorSpecialty] = useState(vendor?.seniorSpecialty ?? false);
+  const [responsivenessScore, setResponsivenessScore] = useState(vendor?.responsivenessScore !== undefined ? String(vendor.responsivenessScore) : "");
   const [prefSlots, setPrefSlots] = useState<Array<{ category: string; minPrice: string; maxPrice: string }>>(() => {
     const slots = (vendor?.prefCategories ?? []).map(p => ({
       category: p.category,
@@ -137,6 +139,8 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
         featuredRank: featuredRank.trim() ? Number(featuredRank) : null,
         projectsCompletedAdjustment: Number(projectsAdjustment) || 0,
         aboutUs: aboutUs.trim(),
+        seniorSpecialty,
+        responsivenessScore: responsivenessScore.trim() ? Number(responsivenessScore) : null,
       };
       const payload = isEdit ? { id: vendor.id, ...base } : base;
       const res = await fetch("/api/local-vendors", {
@@ -391,7 +395,19 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
                 <input type="number" value={projectsAdjustment} onChange={(e) => setProjectsAdjustment(e.target.value)}
                   className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Responsiveness (1-5)</label>
+                <p className="text-xs text-gray-500 mb-1.5">Feeds guided matching. Blank = neutral.</p>
+                <input type="number" min={1} max={5} value={responsivenessScore} onChange={(e) => setResponsivenessScore(e.target.value)}
+                  placeholder="3"
+                  className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+              </div>
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" checked={seniorSpecialty} onChange={(e) => setSeniorSpecialty(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-forest-500 focus:ring-forest-400" />
+              Experienced with senior/downsizing clients
+            </label>
           </div>
 
           {/* Item Category Preferences */}
