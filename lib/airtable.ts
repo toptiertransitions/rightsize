@@ -36,6 +36,7 @@ import type {
   PartnerSelection,
   PartnerRequest,
   PartnerReview,
+  PartnerCommunityCompletion,
   ProjectFile,
   FileTag,
   TimeEntry,
@@ -2395,6 +2396,119 @@ export async function getAllPartnerReviews(): Promise<PartnerReview[]> {
     offset = data.offset;
   } while (offset);
   return records.map(mapPartnerReview);
+}
+
+// ─── Partner Community Completions (admin-tagged, per project) ──────────────
+// One row per (tenantId, category, partnerId) — which partner(s) completed
+// work for a project at a given senior-living community. Backfilled and
+// maintained via the "Project History" tab on /admin/local-vendors. A
+// project's whole tagging is saved as a unit: existing rows for the tenant
+// are deleted and replaced, rather than diffed, since this is a low-
+// frequency admin action rather than a hot write path.
+function partnerCommunityCompletionFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PARTNER_COMMUNITY_COMPLETIONS;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+function mapPartnerCommunityCompletion(record: AirtableRecord): PartnerCommunityCompletion {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    tenantId: toStr(f["TenantId"]),
+    category: toStr(f["Category"]) as PartnerCategory,
+    partnerId: toStr(f["PartnerId"]),
+    communityId: toStr(f["CommunityId"]) || undefined,
+    communityName: toStr(f["CommunityName"]),
+    taggedBy: toStr(f["TaggedBy"]),
+    createdAt: toStr(f["CreatedAt"]),
+  };
+}
+
+export async function getPartnerCommunityCompletionsForTenant(tenantId: string): Promise<PartnerCommunityCompletion[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await partnerCommunityCompletionFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapPartnerCommunityCompletion);
+}
+
+// Small table — fetched in full (paginated) for the admin Project History
+// list and for computing directory-wide "completed N at community Y" counts.
+export async function getAllPartnerCommunityCompletions(): Promise<PartnerCommunityCompletion[]> {
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const qs = offset ? `?offset=${offset}` : "";
+    const res = await partnerCommunityCompletionFetch(qs);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapPartnerCommunityCompletion);
+}
+
+// Replaces the full set of completion rows for a project: deletes whatever
+// exists for this tenantId, then creates one row per {category, partnerId}
+// entry. `entries` may be empty to clear a project's tagging entirely.
+export async function savePartnerCommunityCompletionsForTenant(data: {
+  tenantId: string;
+  communityId?: string;
+  communityName: string;
+  entries: Array<{ category: PartnerCategory; partnerId: string }>;
+  taggedBy: string;
+}): Promise<PartnerCommunityCompletion[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${data.tenantId}"`);
+  const findRes = await partnerCommunityCompletionFetch(`?filterByFormula=${formula}`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const findData = await findRes.json();
+  const existing = (findData.records as AirtableRecord[]) ?? [];
+
+  // Airtable's REST API deletes/creates up to 10 records per batch call.
+  for (let i = 0; i < existing.length; i += 10) {
+    const batch = existing.slice(i, i + 10);
+    const qs = batch.map((r) => `records[]=${r.id}`).join("&");
+    const res = await partnerCommunityCompletionFetch(`?${qs}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await res.text());
+  }
+
+  if (data.entries.length === 0) return [];
+
+  const now = new Date().toISOString().slice(0, 10);
+  const created: PartnerCommunityCompletion[] = [];
+  for (let i = 0; i < data.entries.length; i += 10) {
+    const batch = data.entries.slice(i, i + 10);
+    const res = await partnerCommunityCompletionFetch("", {
+      method: "POST",
+      body: JSON.stringify({
+        records: batch.map((entry) => ({
+          fields: {
+            TenantId: data.tenantId,
+            Category: entry.category,
+            PartnerId: entry.partnerId,
+            CommunityId: data.communityId || "",
+            CommunityName: data.communityName,
+            TaggedBy: data.taggedBy,
+            CreatedAt: now,
+          },
+        })),
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const resData = await res.json();
+    created.push(...(resData.records as AirtableRecord[]).map(mapPartnerCommunityCompletion));
+  }
+  return created;
 }
 
 // ─── Routing Rules ────────────────────────────────────────────────────────────

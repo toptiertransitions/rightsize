@@ -7,6 +7,9 @@ import {
   getTenantById,
   getMembershipsForTenant,
   getUserByClerkId,
+  getTenants,
+  getReferralCompanies,
+  getAllPartnerCommunityCompletions,
 } from "@/lib/airtable";
 import { LocalVendorsAdmin } from "./LocalVendorsAdmin";
 
@@ -15,10 +18,14 @@ export default async function LocalVendorsPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [vendors, consignmentItems] = await Promise.all([
+  const [vendors, consignmentItems, allTenants, referralCompanies, completions] = await Promise.all([
     getLocalVendors().catch(() => []),
     getItemsByPrimaryRoute("Other Consignment").catch(() => []),
+    getTenants().catch(() => []),
+    getReferralCompanies().catch(() => []),
+    getAllPartnerCommunityCompletions().catch(() => []),
   ]);
+  const seniorCommunities = referralCompanies.filter((c) => c.type === "Senior Living");
 
   // Resolve tenant name + owner email for each unique tenant
   const uniqueTenantIds = [...new Set(consignmentItems.map(i => i.tenantId).filter(Boolean))];
@@ -49,6 +56,19 @@ export default async function LocalVendorsPage() {
       vendors={vendors}
       consignmentItems={consignmentItems}
       tenantInfoMap={tenantInfoMap}
+      projects={allTenants.map((t) => ({
+        id: t.id,
+        name: t.name,
+        city: t.city ?? "",
+        state: t.state ?? "",
+        isArchived: t.isArchived ?? false,
+        isTTT: t.isTTT ?? true,
+        destinationCommunity: t.destinationCommunity,
+        destinationCommunityOther: t.destinationCommunityOther,
+        seniorCommunityName: t.seniorCommunityName,
+      }))}
+      seniorCommunities={seniorCommunities.map((c) => ({ id: c.id, name: c.name, city: c.city }))}
+      completions={completions}
     />
   );
 }

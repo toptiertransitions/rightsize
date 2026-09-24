@@ -48,6 +48,19 @@ export interface PartnerProfile {
    * (never the synthetic Team Lead entry), used to send the Phase 3 intro
    * request notification. Not shown anywhere in the client-facing UI. */
   email?: string;
+  /**
+   * Only set (and only when > 0) when the viewing project has a resolved
+   * destination community — this partner's count of completed (archived,
+   * non-lost) projects tagged with that same community via the
+   * /admin/local-vendors "Project History" tool. Attached per-request in
+   * app/(protected)/partners/page.tsx onto a cloned partner object, never
+   * onto the cached getPartnerDirectory() result — see
+   * lib/partners/communityCompletions.ts.
+   */
+  communityCompletionCount?: number;
+  /** The resolved community name this count is relative to; paired with
+   * communityCompletionCount, always set together. */
+  communityName?: string;
 }
 
 export interface MatchResult {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ScoredMatch, ScoringResult } from "@/lib/partners/scoring";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
+import { communityCompletionLabel } from "@/lib/partners/copy";
 import { PartnerLogo } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
 
@@ -46,6 +47,12 @@ function MatchCard({
         <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
         {partner.reviewCount > 0 && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
         <p className="text-sm text-gray-600 leading-relaxed">{match.whyThisMatch}</p>
+
+        {!!partner.communityCompletionCount && partner.communityName && (
+          <p className="text-xs font-medium text-forest-700">
+            {communityCompletionLabel(partner.category, partner.communityCompletionCount, partner.communityName)}
+          </p>
+        )}
 
         {requested ? (
           <p className="mt-1 text-sm font-medium text-forest-600 inline-flex items-center gap-1.5">

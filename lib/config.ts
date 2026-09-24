@@ -41,6 +41,7 @@ export const AIRTABLE_TABLES = {
   PARTNER_SELECTIONS: process.env.AIRTABLE_PARTNER_SELECTIONS_TABLE || "PartnerSelections",
   PARTNER_REQUESTS: process.env.AIRTABLE_PARTNER_REQUESTS_TABLE || "PartnerRequest",
   PARTNER_REVIEWS: process.env.AIRTABLE_PARTNER_REVIEWS_TABLE || "PartnerReviews",
+  PARTNER_COMMUNITY_COMPLETIONS: process.env.AIRTABLE_PARTNER_COMMUNITY_COMPLETIONS_TABLE || "PartnerCommunityCompletions",
   FILES: process.env.AIRTABLE_FILES_TABLE || "ProjectFiles",
   TIME_ENTRIES: process.env.TIME_ENTRIES_TABLE_ID || "TimeEntries",
   STAFF_ROLES: process.env.STAFF_ROLES_TABLE_ID || "StaffRoles",

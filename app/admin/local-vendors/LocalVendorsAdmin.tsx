@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { AdminHeader } from "../components/AdminHeader";
 import { Pagination } from "../components/Pagination";
 import { OtherConsignmentClient } from "./OtherConsignmentClient";
+import { ProjectHistoryTab, type AdminProject, type AdminCommunityOption } from "./ProjectHistoryTab";
 
 const PAGE_SIZE = 25;
 import { VENDOR_TYPES, ITEM_CATEGORIES, PARTNER_CATEGORIES } from "@/lib/types";
-import type { LocalVendor, VendorType, Item, PartnerCategory } from "@/lib/types";
+import type { LocalVendor, VendorType, Item, PartnerCategory, PartnerCommunityCompletion } from "@/lib/types";
 
 // ─── Type badge colors ────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -537,10 +538,16 @@ interface LocalVendorsAdminProps {
   vendors: LocalVendor[];
   consignmentItems: Item[];
   tenantInfoMap: Record<string, { name: string; ownerEmail: string; isTTT: boolean }>;
+  projects: AdminProject[];
+  seniorCommunities: AdminCommunityOption[];
+  completions: PartnerCommunityCompletion[];
 }
 
-export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, tenantInfoMap }: LocalVendorsAdminProps) {
+type AdminTab = "directory" | "history";
+
+export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, tenantInfoMap, projects, seniorCommunities, completions }: LocalVendorsAdminProps) {
   const router = useRouter();
+  const [tab, setTab] = useState<AdminTab>("directory");
   const [stateFilter, setStateFilter] = useState("");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -621,6 +628,31 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
     <div className="min-h-screen bg-gray-950">
       <AdminHeader active="local-vendors" />
 
+      <div className="max-w-7xl mx-auto px-6 pt-8">
+        <div className="flex gap-1 mb-2 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setTab("directory")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === "directory" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
+          >
+            Directory
+          </button>
+          <button
+            onClick={() => setTab("history")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === "history" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
+          >
+            Project History
+          </button>
+        </div>
+      </div>
+
+      {tab === "history" && (
+        <main className="max-w-7xl mx-auto px-6 py-6">
+          <ProjectHistoryTab projects={projects} vendors={initialVendors} seniorCommunities={seniorCommunities} completions={completions} />
+        </main>
+      )}
+
+      {tab === "directory" && (
+      <>
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -786,6 +818,8 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
           vendors={initialVendors}
         />
       </div>
+      </>
+      )}
 
       {showModal && (
         <LocalVendorModal

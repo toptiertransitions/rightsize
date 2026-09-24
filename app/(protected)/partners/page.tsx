@@ -13,6 +13,7 @@ import {
   setPartnerRequestStatus,
 } from "@/lib/airtable";
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
+import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
 import { orderCategoriesForNonTTTClient } from "@/lib/partners/nonTTTCategories";
 import { isPartnerRequestComplete } from "@/lib/partners/questions";
@@ -109,10 +110,24 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     (!!sysRole && STAFF_EDIT_ROLES.includes(sysRole)) ||
     (!!tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole));
 
-  const [directory, selections] = await Promise.all([
+  const [rawDirectory, selections] = await Promise.all([
     getPartnerDirectory(),
     getSelectionsMapForTenant(tenantId),
   ]);
+
+  // Attach this project's community-completion stats onto CLONED partner
+  // objects — getPartnerDirectory() is a 5-minute shared cache, so mutating
+  // its entries directly would leak one tenant's community stat into every
+  // other tenant's view for the rest of the cache window.
+  const tenantCommunity = await resolveTenantCommunity(tenant);
+  let directory = rawDirectory;
+  if (tenantCommunity) {
+    const counts = await getCommunityCompletionCounts();
+    directory = rawDirectory.map((p) => {
+      const count = counts[communityCompletionKey(tenantCommunity.communityKey, p.category, p.id)] ?? 0;
+      return count > 0 ? { ...p, communityCompletionCount: count, communityName: tenantCommunity.communityName } : p;
+    });
+  }
 
   const location = { zip: tenant.zip, state: tenant.state };
   const matchesByCategory = {} as Record<PartnerCategory, MatchResult[]>;

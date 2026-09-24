@@ -804,6 +804,23 @@ export interface PartnerReview {
   date: string;
 }
 
+// One row per (tenantId, category, partnerId) — which partner(s) completed
+// work for a project at a given senior-living community. Admin-tagged via
+// /admin/local-vendors "Project History" tab (both backfill and ongoing),
+// counted toward a partner's community stat only once the project is
+// archived and not a lost deal (computed at read time, not stored here).
+export interface PartnerCommunityCompletion {
+  id: string;
+  airtableId: string;
+  tenantId: string;
+  category: PartnerCategory;
+  partnerId: string; // LocalVendor record id
+  communityId?: string; // CRMReferralCompanies record id, when resolved to a real community
+  communityName: string; // denormalized display name — always set
+  taggedBy: string; // Clerk user id
+  createdAt: string;
+}
+
 // ─── Project Files ────────────────────────────────────────────────────────────
 export type FileTag = "Daily Recap" | "Floorplan" | "Room Image" | "Layout Image" | "Damage Image" | "Vendor File" | "Payment Proof" | "Client File";
 

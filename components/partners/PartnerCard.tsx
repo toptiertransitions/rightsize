@@ -1,6 +1,7 @@
 "use client";
 
 import type { PartnerProfile } from "@/lib/partners/types";
+import { communityCompletionLabel } from "@/lib/partners/copy";
 import { PartnerLogo } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
 
@@ -82,6 +83,12 @@ export function PartnerCard({ partner, isTopMatch, matchedLocation, isSelected, 
         {partner.projectsCompleted > 0 && (
           <p className="text-xs text-gray-500">
             {partner.projectsCompleted} project{partner.projectsCompleted !== 1 ? "s" : ""} with Top Tier
+          </p>
+        )}
+
+        {!!partner.communityCompletionCount && partner.communityName && (
+          <p className="text-xs font-medium text-forest-700">
+            {communityCompletionLabel(partner.category, partner.communityCompletionCount, partner.communityName)}
           </p>
         )}
 
