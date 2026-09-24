@@ -192,7 +192,7 @@ export type ServiceInterest =
   | "hauling";
 
 export type TimelineType = "range" | "month" | "date";
-export type DestinationType = "house" | "condo" | "senior_community" | "other";
+export type DestinationType = "house" | "condo" | "senior_community" | "other" | "not_sure";
 export type SqftRange = "under_1000" | "1000_2000" | "2000_3000" | "3000_4500" | "4500_plus" | "not_sure";
 export type HomeDensity = "light" | "comfortable" | "full" | "collector";
 

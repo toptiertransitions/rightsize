@@ -29,7 +29,7 @@ export const step3Schema = z.object({
 export type Step3Input = z.infer<typeof step3Schema>;
 
 export const step4Schema = z.object({
-  destinationType: z.enum(["house", "condo", "senior_community", "other"]),
+  destinationType: z.enum(["house", "condo", "senior_community", "other", "not_sure"]),
   destinationZip: z.string().trim().regex(/^\d{5}$/).optional().or(z.literal("")),
   destinationCommunity: z.string().trim().optional(),
   destinationCommunityOther: z.string().trim().max(200).optional(),

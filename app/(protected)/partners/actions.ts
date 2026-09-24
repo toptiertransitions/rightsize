@@ -11,6 +11,7 @@ import { getPartnerDirectory } from "@/lib/partners/queries";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
 import { buildPartnerIntroConfirmationEmail, buildPartnerIntroRequestNotificationEmail } from "@/lib/email";
+import { sendMoveManagementCrossSellNotification } from "@/lib/admin-notifications";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -150,7 +151,7 @@ export async function savePartnerRequestAnswersAction(
   if (!userId) return { ok: false, error: "You don't have permission to update this project's partner requests." };
 
   try {
-    await withRetry(() =>
+    const updated = await withRetry(() =>
       savePartnerRequestAnswers({
         tenantId,
         category,
@@ -158,6 +159,29 @@ export async function savePartnerRequestAnswersAction(
         createdBy: userId,
       })
     );
+
+    // Cross-sell signal: they told the Mover survey they need packing help
+    // too (not just the move), which is effectively Full Move Management —
+    // but they haven't selected that service interest. Best-effort, never
+    // blocks the save the user is waiting on.
+    if (category === "Mover" && parsedAnswers.data.packingHelp === "packing_and_move") {
+      getTenantById(tenantId)
+        .then(async (tenant) => {
+          if (!tenant || (tenant.serviceInterests ?? []).includes("full_service")) return;
+          const clerkUser = await currentUser().catch(() => null);
+          const clientName = clerkUser?.firstName
+            ? [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ")
+            : tenant.name;
+          await sendMoveManagementCrossSellNotification({
+            clientName,
+            projectName: tenant.name,
+            tenantId,
+            answers: formatAnswersForEmail("Mover", updated.answers),
+          });
+        })
+        .catch((e) => console.error("Move Management cross-sell notification failed:", e));
+    }
+
     return { ok: true };
   } catch {
     return { ok: false, error: "Couldn't save your answer — please try again." };

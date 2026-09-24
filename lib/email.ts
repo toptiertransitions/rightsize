@@ -5538,6 +5538,81 @@ export function buildNewVendorAdminEmail({
 </html>`;
 }
 
+// ─── Move Management Cross-Sell Alert ────────────────────────────────────────
+// Sent to TTTAdmins when a NonTTTClient's Mover survey answer signals they
+// want packing help too — a strong Full Move Management upsell signal —
+// but they haven't already selected that service interest.
+export function buildMoveManagementCrossSellEmail({
+  clientName,
+  projectName,
+  answers,
+  partnersUrl,
+}: {
+  clientName: string;
+  projectName: string;
+  answers: Array<{ label: string; value: string }>;
+  partnersUrl: string;
+}): string {
+  const row = (label: string, value: string) => `
+    <tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;width:38%;">${label}</td>
+      <td style="padding:11px 16px;font-size:13px;color:#111827;">${value}</td>
+    </tr>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cross-Sell Opportunity — Top Tier Transitions</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">Top Tier Transitions &nbsp;&middot;&nbsp; Internal Alert</p>
+            <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">Cross-Sell Opportunity: Full Move Management</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;margin-bottom:24px;">
+              <tr>
+                <td style="padding:20px 24px;">
+                  <p style="margin:0;font-size:14px;color:#9a3412;line-height:1.6;">
+                    <strong>${clientName}</strong> answered the Mover survey saying they need <strong>packing help, not just the move</strong> —
+                    but they haven&rsquo;t selected Full Move Management as a service interest yet. Worth a quick outreach.
+                  </p>
+                </td>
+              </tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+              <tr style="background:#f9fafb;">
+                <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Mover Survey Answers</td>
+              </tr>
+              ${row("Project", projectName)}
+              ${answers.map((a) => row(a.label, a.value)).join("")}
+            </table>
+            <a href="${partnersUrl}"
+               style="display:block;background:#2E6B4F;color:#ffffff;font-size:14px;font-weight:700;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;">
+              View Project&rsquo;s Partners Page &rarr;
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Notification</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ─── Daily Recap Notification Email ──────────────────────────────────────────
 export function buildDailyRecapEmail({
   projectName,

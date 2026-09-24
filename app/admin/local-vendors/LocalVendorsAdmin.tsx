@@ -6,6 +6,7 @@ import { AdminHeader } from "../components/AdminHeader";
 import { Pagination } from "../components/Pagination";
 import { OtherConsignmentClient } from "./OtherConsignmentClient";
 import { ProjectHistoryTab, type AdminProject, type AdminCommunityOption } from "./ProjectHistoryTab";
+import { ZipCoverageTab } from "./ZipCoverageTab";
 
 const PAGE_SIZE = 25;
 import { VENDOR_TYPES, ITEM_CATEGORIES, PARTNER_CATEGORIES } from "@/lib/types";
@@ -543,7 +544,7 @@ interface LocalVendorsAdminProps {
   completions: PartnerCommunityCompletion[];
 }
 
-type AdminTab = "directory" | "history";
+type AdminTab = "directory" | "history" | "zip-coverage";
 
 export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, tenantInfoMap, projects, seniorCommunities, completions }: LocalVendorsAdminProps) {
   const router = useRouter();
@@ -664,12 +665,24 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
           >
             Project History
           </button>
+          <button
+            onClick={() => setTab("zip-coverage")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === "zip-coverage" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
+          >
+            Zip Coverage
+          </button>
         </div>
       </div>
 
       {tab === "history" && (
         <main className="max-w-7xl mx-auto px-6 py-6">
           <ProjectHistoryTab projects={projects} vendors={initialVendors} seniorCommunities={seniorCommunities} completions={completions} />
+        </main>
+      )}
+
+      {tab === "zip-coverage" && (
+        <main className="max-w-7xl mx-auto px-6 py-6">
+          <ZipCoverageTab vendors={initialVendors} />
         </main>
       )}
 

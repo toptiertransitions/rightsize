@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -478,6 +478,35 @@ export async function sendDailyRecapNotification(params: {
     subject: `Internal Notification - Daily Recap for ${params.projectName} on ${displayDate}`,
     html,
     ...(attachments ? { attachments } : {}),
+  });
+}
+
+export async function sendMoveManagementCrossSellNotification(params: {
+  clientName: string;
+  projectName: string;
+  tenantId: string;
+  answers: Array<{ label: string; value: string }>;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  if (adminEmails.length === 0) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildMoveManagementCrossSellEmail({
+    clientName: params.clientName,
+    projectName: params.projectName,
+    answers: params.answers,
+    partnersUrl: `${appUrl}/partners?tenantId=${params.tenantId}`,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject: `Cross-Sell Opportunity: Full Move Management — ${params.clientName}`,
+    html,
   });
 }
 

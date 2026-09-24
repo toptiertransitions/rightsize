@@ -63,10 +63,21 @@ export function PartnerRequestCard({
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           {complete ? (
             <>
-              <p className="text-sm font-semibold text-gray-900 mb-1">We&rsquo;re finding your matches</p>
-              <p className="text-sm text-gray-500 mb-4">
-                We&rsquo;ll let you know as soon as we&rsquo;ve matched you with the right {label.toLowerCase()} partner.
-              </p>
+              <div className="flex items-start gap-3.5 mb-4">
+                <span className="relative flex-shrink-0 w-10 h-10 rounded-full bg-forest-50 flex items-center justify-center">
+                  <span className="absolute inset-0 rounded-full bg-forest-200/60 motion-safe:animate-ping" />
+                  <svg className="relative w-5 h-5 text-forest-600 motion-safe:animate-spin" style={{ animationDuration: "1.4s" }} fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+                    <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <div className="flex-1 pt-0.5">
+                  <p className="text-sm font-semibold text-gray-900 mb-1">Finding your best match&hellip;</p>
+                  <p className="text-sm text-gray-500 leading-relaxed">
+                    We&rsquo;re comparing trusted {label.toLowerCase()} partners near you — this only takes a moment.
+                  </p>
+                </div>
+              </div>
               {canEdit && (
                 <button
                   type="button"

@@ -47,7 +47,7 @@ export function Step4Destination({ data, update }: Props) {
     <div>
       <h2 className="text-xl font-bold text-gray-900 mb-5">Where are you moving?</h2>
 
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         {OPTIONS.map(opt => (
           <Tile
             key={opt.key}
@@ -55,10 +55,18 @@ export function Step4Destination({ data, update }: Props) {
             icon={opt.icon}
             multi={false}
             selected={data.destinationType === opt.key}
-            onClick={() => update({ destinationType: opt.key, destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "" })}
+            onClick={() => update({ destinationType: opt.key, destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "", destinationZip: "" })}
           />
         ))}
       </div>
+
+      <button
+        type="button"
+        onClick={() => update({ destinationType: "not_sure", destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "", destinationZip: "" })}
+        className={`text-sm italic mb-5 min-h-[32px] ${data.destinationType === "not_sure" ? "text-forest-700 font-medium" : "text-gray-400 hover:text-gray-600"}`}
+      >
+        I don&rsquo;t know yet
+      </button>
 
       {data.destinationType === "senior_community" && !notListed && (
         <div>
@@ -117,7 +125,7 @@ export function Step4Destination({ data, update }: Props) {
         </div>
       )}
 
-      {data.destinationType && data.destinationType !== "senior_community" && (
+      {data.destinationType && data.destinationType !== "senior_community" && data.destinationType !== "not_sure" && (
         <DestZipField data={data} update={update} />
       )}
     </div>

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
 import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction } from "@/app/(protected)/partners/actions";
 import { nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
-import type { PrefillTenant } from "@/lib/partners/questions";
+import { isPartnerRequestComplete, type PrefillTenant } from "@/lib/partners/questions";
 import type { ScoringResult } from "@/lib/partners/scoring";
 import { SelectedPartnersTray } from "./SelectedPartnersTray";
 import { GreyedCategoryCard } from "./GreyedCategoryCard";
@@ -33,6 +34,7 @@ export function NonTTTPartnersPageClient({
   initialSelections, partnersById, canEdit, appOnlyIntent, initialRequestAnswers,
   initialIntroRequests, initialMatches, prefillTenant,
 }: Props) {
+  const router = useRouter();
   const [activeCategories, setActiveCategories] = useState(initialActiveCategories);
   const [greyedCategories, setGreyedCategories] = useState(initialGreyedCategories);
   const [selections] = useState(initialSelections);
@@ -179,7 +181,15 @@ export function NonTTTPartnersPageClient({
           prefillTenant={prefillTenant}
           onClose={() => setFlowCategory(null)}
           onSaved={(patch) =>
-            setRequestAnswers((a) => ({ ...a, [flowCategory]: { ...(a[flowCategory] ?? {}), ...patch } }))
+            setRequestAnswers((a) => {
+              const mergedForCategory = { ...(a[flowCategory] ?? {}), ...patch };
+              // Re-fetch server-computed matches the moment this category's
+              // questions are all answered — initialMatches is a static
+              // server prop, so without this the "finding your matches" card
+              // would otherwise sit there until an unrelated page reload.
+              if (isPartnerRequestComplete(flowCategory, mergedForCategory)) router.refresh();
+              return { ...a, [flowCategory]: mergedForCategory };
+            })
           }
         />
       )}

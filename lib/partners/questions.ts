@@ -30,10 +30,13 @@ export interface PartnerQuestion {
   optional?: boolean;
   /** Best-guess answer from onboarding data, shown pre-selected so the user
    * can just confirm or change it rather than re-entering what we already
-   * know. Only fires for `timelineType === "range"` — a month/date value
-   * from onboarding doesn't line up with these categories' timeline chip
-   * options, so those users still answer fresh. */
+   * know. */
   prefill?: (tenant: PrefillTenant) => string | undefined;
+  /** When true AND prefill() returns a value, this question is skipped
+   * entirely (auto-answered, never shown as a step) rather than merely
+   * pre-selected — for data we already collected during onboarding and
+   * shouldn't make the user re-confirm. */
+  skipIfPrefilled?: boolean;
 }
 
 const TIMELINE_OPTIONS: PartnerQuestionOption[] = [
@@ -44,8 +47,39 @@ const TIMELINE_OPTIONS: PartnerQuestionOption[] = [
   { value: "not_sure", label: "Not sure yet" },
 ];
 
+// Onboarding's "range" chip keys ("1_3", "3_6", "6_12") don't match these
+// categories' TIMELINE_OPTIONS values ("1_3_months", "3_6_months",
+// "6_plus_months") — this maps between the two vocabularies rather than
+// passing the raw onboarding value through unmatched.
+const ONBOARDING_RANGE_TO_TIMELINE_OPTION: Record<string, string> = {
+  asap: "asap",
+  "1_3": "1_3_months",
+  "3_6": "3_6_months",
+  "6_12": "6_plus_months",
+  not_sure: "not_sure",
+};
+
+// A "month"/"date" onboarding timeline has no direct chip equivalent, so it's
+// bucketed by how far away it is — same buckets TIMELINE_OPTIONS already uses.
+function bucketByMonthsAway(target: Date): string {
+  if (isNaN(target.getTime())) return "not_sure";
+  const now = new Date();
+  const monthsAway = (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
+  if (monthsAway <= 0) return "asap";
+  if (monthsAway <= 3) return "1_3_months";
+  if (monthsAway <= 6) return "3_6_months";
+  return "6_plus_months";
+}
+
 function prefillTimeline(tenant: PrefillTenant): string | undefined {
-  if (tenant.timelineType === "range" && tenant.timelineValue) return tenant.timelineValue;
+  if (!tenant.timelineType || !tenant.timelineValue) return undefined;
+  if (tenant.timelineType === "range") return ONBOARDING_RANGE_TO_TIMELINE_OPTION[tenant.timelineValue];
+  if (tenant.timelineType === "month") {
+    const [y, m] = tenant.timelineValue.split("-").map(Number);
+    if (!y || !m) return undefined;
+    return bucketByMonthsAway(new Date(y, m - 1, 1));
+  }
+  if (tenant.timelineType === "date") return bucketByMonthsAway(new Date(`${tenant.timelineValue}T00:00:00`));
   return undefined;
 }
 
@@ -107,6 +141,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       type: "single-select",
       options: TIMELINE_OPTIONS,
       prefill: prefillTimeline,
+      skipIfPrefilled: true,
     },
     {
       id: "propertyType",
@@ -160,6 +195,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       type: "single-select",
       options: TIMELINE_OPTIONS,
       prefill: prefillTimeline,
+      skipIfPrefilled: true,
     },
     {
       id: "budget",
@@ -188,6 +224,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       type: "single-select",
       options: TIMELINE_OPTIONS,
       prefill: prefillTimeline,
+      skipIfPrefilled: true,
     },
     {
       id: "homeSize",
@@ -252,6 +289,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       type: "single-select",
       options: TIMELINE_OPTIONS,
       prefill: prefillTimeline,
+      skipIfPrefilled: true,
     },
     {
       id: "specialItems",
@@ -315,6 +353,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       type: "single-select",
       options: TIMELINE_OPTIONS,
       prefill: prefillTimeline,
+      skipIfPrefilled: true,
       optional: true,
     },
   ],
@@ -331,6 +370,14 @@ export function getPrefillAnswers(category: PartnerCategory, tenant: PrefillTena
     if (value) answers[q.id] = value;
   }
   return answers;
+}
+
+/** The question steps actually shown to the user — everything except
+ * skipIfPrefilled questions that already have a confident prefilled value
+ * (those are auto-answered instead, see PartnerRequestFlow). */
+export function getVisibleQuestions(category: PartnerCategory, tenant: PrefillTenant): PartnerQuestion[] {
+  const prefill = getPrefillAnswers(category, tenant);
+  return getPartnerQuestions(category).filter((q) => !(q.skipIfPrefilled && prefill[q.id]));
 }
 
 export function isPartnerRequestComplete(category: PartnerCategory, answers: Record<string, string | string[]>): boolean {

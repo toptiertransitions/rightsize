@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { PartnerCategory } from "@/lib/types";
-import { getPartnerQuestions, getPrefillAnswers, type PrefillTenant } from "@/lib/partners/questions";
+import { getVisibleQuestions, getPrefillAnswers, type PrefillTenant } from "@/lib/partners/questions";
 import { nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { savePartnerRequestAnswersAction } from "@/app/(protected)/partners/actions";
 import { ProgressBar, BackLink, SkipLink, ChoiceCard, Chip, BottomCTA } from "@/components/onboarding/shared";
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefillTenant, onClose, onSaved }: Props) {
-  const questions = useMemo(() => getPartnerQuestions(category), [category]);
+  const questions = useMemo(() => getVisibleQuestions(category, prefillTenant), [category, prefillTenant]);
   const prefill = useMemo(() => getPrefillAnswers(category, prefillTenant), [category, prefillTenant]);
 
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({ ...prefill, ...initialAnswers });
@@ -32,6 +32,25 @@ export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefill
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  // Persist any auto-answered (skipIfPrefilled) values the first time this
+  // category's flow is opened, so they're saved even though the user never
+  // sees or clicks through a step for them.
+  useEffect(() => {
+    const visibleIds = new Set(questions.map((q) => q.id));
+    const toPersist: Record<string, string> = {};
+    for (const id of Object.keys(prefill)) {
+      if (!visibleIds.has(id) && initialAnswers[id] === undefined && prefill[id]) {
+        toPersist[id] = prefill[id];
+      }
+    }
+    if (Object.keys(toPersist).length > 0) {
+      savePartnerRequestAnswersAction(tenantId, category, toPersist).then((result) => {
+        if (result.ok) onSaved(toPersist);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, tenantId]);
 
   const question = questions[step];
   const value = question ? answers[question.id] : undefined;
