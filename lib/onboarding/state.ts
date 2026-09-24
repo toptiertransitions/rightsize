@@ -1,10 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getMembershipsForUser, getTenantById } from "@/lib/airtable";
+import { resolveAndLinkPartner } from "@/lib/partner";
 import type { Tenant } from "@/lib/types";
 
 export type OnboardingState =
   | { status: "signed_out" }
   | { status: "ineligible" } // TTT staff, or an invited TTT client
+  | { status: "partner" } // Referral Partner — belongs in the Partner Portal, not this wizard
   | { status: "done"; tenantId: string }
   | { status: "fresh" }
   | { status: "resume"; tenant: Tenant };
@@ -28,5 +30,13 @@ export async function getOnboardingState(): Promise<OnboardingState> {
     if (tenant.onboardingComplete === true) return { status: "done", tenantId: tenant.id };
     return { status: "resume", tenant };
   }
+
+  // No staff role, no project memberships — before treating this as a
+  // brand-new self-serve signup, check whether it's actually a Referral
+  // Partner whose Clerk account never got linked to CRMReferralContacts
+  // (see lib/partner.ts's resolveAndLinkPartner for why that happens).
+  const partnerContact = await resolveAndLinkPartner(userId).catch(() => null);
+  if (partnerContact) return { status: "partner" };
+
   return { status: "fresh" };
 }

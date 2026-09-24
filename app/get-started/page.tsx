@@ -32,6 +32,7 @@ export default async function GetStartedPage() {
 
   if (state.status === "signed_out") redirect("/sign-in");
   if (state.status === "ineligible") redirect("/home");
+  if (state.status === "partner") redirect("/partner/home");
   if (state.status === "done") redirect("/home");
 
   const user = await currentUser().catch(() => null);

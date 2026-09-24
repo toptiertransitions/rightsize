@@ -1,6 +1,8 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import {
   findReferralContactByClerkUserId,
+  findReferralContactByEmail,
+  setReferralContactClerkUserId,
   getPartnerTenantIdsByCompany,
   getPartnerTenantIds,
   getClientContactEmailsForPartner,
@@ -18,6 +20,45 @@ export async function isPartner(clerkUserId: string): Promise<boolean> {
 
 export async function getPartnerContact(clerkUserId: string): Promise<ReferralContact | null> {
   return findReferralContactByClerkUserId(clerkUserId).catch(() => null);
+}
+
+/**
+ * Finds a CRMReferralContacts record for this Clerk user, self-healing the
+ * link if it's missing. Normally ClerkUserId gets set (and Clerk's
+ * publicMetadata.userType gets marked "partner") by the invite/apply flow
+ * or a one-shot signup webhook — see app/api/partner/{apply,activate}/route.ts
+ * and app/api/webhooks/clerk/route.ts. A partner who first (or only) ever
+ * authenticates via a plain /sign-in link skips all three of those, so
+ * middleware's cheap `userType === "partner"` check silently no-ops and
+ * they fall through to the self-serve NonTTTClient "no projects yet" flow.
+ *
+ * Call this from any "no staff role, no memberships" fallback (see
+ * app/(protected)/home/page.tsx and lib/onboarding/state.ts) before
+ * concluding the user is a brand-new self-serve client — it links by email
+ * and flips the metadata flag so subsequent requests hit the fast path.
+ */
+export async function resolveAndLinkPartner(clerkUserId: string): Promise<ReferralContact | null> {
+  const existing = await findReferralContactByClerkUserId(clerkUserId).catch(() => null);
+  if (existing) return existing;
+
+  const clerk = await clerkClient();
+  const user = await clerk.users.getUser(clerkUserId).catch(() => null);
+  const email =
+    user?.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ??
+    user?.emailAddresses[0]?.emailAddress;
+  if (!email) return null;
+
+  const contact = await findReferralContactByEmail(email).catch(() => null);
+  if (!contact) return null;
+
+  // Only claim if genuinely unlinked — never reassign a contact that's
+  // already linked to a different Clerk account (mirrors the same guard in
+  // app/api/partner/activate/route.ts).
+  if (!contact.clerkUserId) {
+    await setReferralContactClerkUserId(contact.id, clerkUserId).catch(() => {});
+  }
+  await clerk.users.updateUserMetadata(clerkUserId, { publicMetadata: { userType: "partner" } }).catch(() => {});
+  return contact;
 }
 
 // Resolve client emails → Clerk user IDs → memberships → tenant IDs

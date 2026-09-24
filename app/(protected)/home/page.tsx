@@ -2,6 +2,7 @@ import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getTimeEntriesForTenants, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds } from "@/lib/airtable";
+import { resolveAndLinkPartner } from "@/lib/partner";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -196,6 +197,18 @@ export default async function DashboardPage({
         )}
       </div>
     );
+  }
+
+  // ── Referral Partner ─────────────────────────────────────────────────────────
+  // Normally caught by middleware's cheap userType==="partner" metadata
+  // check, but that flag only gets set by the invite/apply flow or a
+  // one-shot signup webhook — a partner whose first (or only) sign-in was a
+  // plain /sign-in link skips all of those and lands here looking exactly
+  // like a brand-new self-serve client. Self-heals the link by email so
+  // middleware's fast path works on every request after this one.
+  if (!systemRole && memberships.length === 0) {
+    const partnerContact = await resolveAndLinkPartner(userId).catch(() => null);
+    if (partnerContact) redirect("/partner/home");
   }
 
   // ── Vendor-only user ─────────────────────────────────────────────────────────
