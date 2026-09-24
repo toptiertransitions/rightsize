@@ -20,6 +20,7 @@ import {
   type Step1Input, type Step2Input, type Step3Input, type Step4Input, type Step5Input, type Step6Input,
 } from "@/lib/onboarding/schema";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
+import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 import type { RoomType, Tenant } from "@/lib/types";
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
@@ -102,6 +103,21 @@ export async function submitStep1(input: Step1Input): Promise<{ tenantId: string
   }));
   await withRetry(() => createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" }));
   await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: false } });
+
+  // Sent directly here rather than relying solely on the Clerk user.created
+  // webhook — that webhook fires before this project/tenant exists, so it
+  // can only ever label a self-serve signup as a generic "unknown" user
+  // with no project info. This fires once, at the point a real NonTTTClient
+  // project actually exists, with proper labeling. Best-effort, never blocks.
+  sendNewUserAdminNotification({
+    fullName,
+    email,
+    imageUrl: clerkUser.imageUrl,
+    userType: "client",
+    roleLabel: "Self-Serve Client (NonTTT)",
+    projectName: tenant.name,
+    projectAddress: parsed.currentZip ? `Zip ${parsed.currentZip}` : null,
+  }).catch((e) => console.error("New self-serve client admin notification failed:", e));
 
   logOnboardingEvent("step_completed", { step: 1, tenantId: tenant.id, resumed: false });
   revalidateTag("tenants");
