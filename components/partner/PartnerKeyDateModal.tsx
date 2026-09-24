@@ -34,6 +34,10 @@ export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, en
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const inputCls = "w-full h-11 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#2d4a3e]/30 bg-white";
+  // Native <input type="date"> doesn't reliably fill its container on mobile
+  // Safari/Chrome the way a <select> does — appearance-none drops the native
+  // theming that causes it.
+  const dateInputCls = `${inputCls} appearance-none block min-w-0`;
 
   const handleSave = async () => {
     if (!tenantId) { setError("Please select a project"); return; }
@@ -100,8 +104,13 @@ export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, en
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Date
+            </label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={dateInputCls} />
           </div>
 
           <div>
@@ -161,14 +170,14 @@ export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, en
             <button
               onClick={onClose}
               disabled={loading}
-              className="flex-1 h-11 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50"
+              className="flex-1 h-11 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 active:scale-[0.99] transition-all disabled:opacity-50 disabled:active:scale-100"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={loading}
-              className="flex-1 h-11 rounded-xl bg-[#2d4a3e] text-white font-medium hover:bg-[#243d33] disabled:opacity-50"
+              className="flex-1 h-11 rounded-xl bg-[#2d4a3e] text-white font-semibold shadow-sm hover:bg-[#243d33] active:scale-[0.99] transition-all disabled:opacity-50 disabled:active:scale-100"
             >
               {loading ? "Saving…" : isEdit ? "Save Changes" : "Add Key Date"}
             </button>

@@ -508,6 +508,13 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   };
 
   const inputCls = "w-full h-11 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white";
+  // Native <input type="date"/"time"> controls don't reliably fill their
+  // container on mobile Safari/Chrome the way a <select>/<textarea> does —
+  // their built-in theming can keep an intrinsic content width regardless
+  // of `w-full`. `appearance-none` drops that native theming so the box
+  // model behaves like every other field; `block` + `min-w-0` guard against
+  // the default inline-block sizing and grid-item intrinsic-width quirks.
+  const dateTimeInputCls = `${inputCls} appearance-none block min-w-0`;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
@@ -589,8 +596,13 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
           {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Date
+            </label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={dateTimeInputCls} />
           </div>
 
           {/* Activity */}
@@ -603,7 +615,10 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
 
           {/* Time range */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               Time <span className="text-xs text-gray-400 font-normal">(optional)</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -613,7 +628,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                   type="time"
                   value={startTime}
                   onChange={e => setStartTime(e.target.value)}
-                  className={inputCls}
+                  className={dateTimeInputCls}
                 />
               </div>
               <div>
@@ -622,7 +637,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                   type="time"
                   value={endTime}
                   onChange={e => setEndTime(e.target.value)}
-                  className={inputCls}
+                  className={dateTimeInputCls}
                 />
               </div>
             </div>
@@ -941,11 +956,11 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
             </div>
           )}
           <button onClick={onClose} disabled={loading}
-            className="flex-1 h-11 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
+            className="flex-1 h-11 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 active:scale-[0.99] transition-all disabled:opacity-50 disabled:active:scale-100">
             Cancel
           </button>
           <button onClick={handleSave} disabled={loading}
-            className="flex-1 h-11 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors disabled:opacity-50">
+            className="flex-1 h-11 rounded-xl bg-forest-600 text-white text-sm font-semibold shadow-sm hover:bg-forest-700 active:scale-[0.99] transition-all disabled:opacity-50 disabled:active:scale-100">
             {loading ? "Saving…" : isEdit ? "Save Changes" : entryType === "keydate" ? "Add Key Date" : "Add Focus"}
           </button>
         </div>
