@@ -33,7 +33,9 @@ export async function GET(req: NextRequest) {
   const { start, end } = getProgramYearLabel(programYear);
 
   const record = await getLoyaltyRecord(loyaltyKey);
-  const recentActivity = record ? await getLedgerEntries(loyaltyKey, 10) : [];
+  // 50, not 10 — the home page's Recent Activity accordion paginates this
+  // client-side at 10/page, so it needs more than one page's worth to page through.
+  const recentActivity = record ? await getLedgerEntries(loyaltyKey, 50) : [];
 
   if (!record) {
     return NextResponse.json({

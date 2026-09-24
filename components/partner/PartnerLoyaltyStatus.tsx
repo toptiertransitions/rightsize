@@ -42,6 +42,8 @@ const TIER_PERK: Partial<Record<TierName, string>> = {
   Diamond: "4× points per referral — maximum",
 };
 
+const ACTIVITY_PAGE_SIZE = 10;
+
 const EVENT_LABELS: Record<string, string> = {
   project_completed: "Project",
   manual_bonus: "Bonus",
@@ -64,6 +66,8 @@ export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
   const [data, setData] = useState<LoyaltyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEarn, setShowEarn] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
 
   const load = () => {
     fetch(`/api/partner-loyalty/status?partnerId=${encodeURIComponent(partnerId)}`)
@@ -407,42 +411,78 @@ export function PartnerLoyaltyStatus({ partnerId, compact = false }: Props) {
         )}
       </div>
 
-      {/* Recent activity */}
-      {data.recentActivity.length > 0 && (
-        <div className="border-t border-gray-100 px-6 py-4">
-          <p className="text-xs font-medium text-gray-500 mb-3">Recent Activity</p>
-          <div className="space-y-2">
-            {data.recentActivity.map(entry => (
-              <div key={entry.id} className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
-                    style={
-                      entry.pointsDelta > 0
-                        ? { background: "#dcfce7", color: "#16a34a" }
-                        : { background: "#fee2e2", color: "#dc2626" }
-                    }
-                  >
-                    {EVENT_LABELS[entry.eventType] ?? entry.eventType}
-                  </span>
-                  <span className="text-xs text-gray-500 truncate">{entry.note || "—"}</span>
+      {/* Recent activity (collapsible, paginated — same treatment as "How you earn" above) */}
+      {data.recentActivity.length > 0 && (() => {
+        const totalPages = Math.max(1, Math.ceil(data.recentActivity.length / ACTIVITY_PAGE_SIZE));
+        const page = Math.min(activityPage, totalPages);
+        const pageEntries = data.recentActivity.slice((page - 1) * ACTIVITY_PAGE_SIZE, page * ACTIVITY_PAGE_SIZE);
+        return (
+          <div className="border-t border-gray-100">
+            <button
+              onClick={() => setShowActivity(v => !v)}
+              className="w-full px-6 py-3 text-left text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center justify-between transition-colors"
+            >
+              Recent Activity
+              <span className="text-[10px] text-gray-400">{showActivity ? "▲" : "▼"}</span>
+            </button>
+            {showActivity && (
+              <div className="px-6 pb-5">
+                <div className="space-y-2">
+                  {pageEntries.map(entry => (
+                    <div key={entry.id} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                          style={
+                            entry.pointsDelta > 0
+                              ? { background: "#dcfce7", color: "#16a34a" }
+                              : { background: "#fee2e2", color: "#dc2626" }
+                          }
+                        >
+                          {EVENT_LABELS[entry.eventType] ?? entry.eventType}
+                        </span>
+                        <span className="text-xs text-gray-500 truncate">{entry.note || "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span
+                          className="text-xs font-semibold tabular-nums"
+                          style={{ color: entry.pointsDelta > 0 ? "#16a34a" : "#dc2626" }}
+                        >
+                          {entry.pointsDelta > 0 ? "+" : ""}{entry.pointsDelta}
+                        </span>
+                        <span className="text-[10px] text-gray-400 tabular-nums w-14 text-right">
+                          {fmtDate(entry.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span
-                    className="text-xs font-semibold tabular-nums"
-                    style={{ color: entry.pointsDelta > 0 ? "#16a34a" : "#dc2626" }}
-                  >
-                    {entry.pointsDelta > 0 ? "+" : ""}{entry.pointsDelta}
-                  </span>
-                  <span className="text-[10px] text-gray-400 tabular-nums w-14 text-right">
-                    {fmtDate(entry.createdAt)}
-                  </span>
-                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed"
+                    >
+                      &larr; Prev
+                    </button>
+                    <span className="text-[10px] text-gray-400">Page {page} of {totalPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed"
+                    >
+                      Next &rarr;
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Program year */}
       <div className="border-t border-gray-100 px-6 py-2.5">
