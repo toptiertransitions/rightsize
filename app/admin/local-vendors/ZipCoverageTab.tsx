@@ -62,17 +62,32 @@ export function ZipCoverageTab({ vendors }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
+  const [radiusZip, setRadiusZip] = useState("");
+  const [radiusMiles, setRadiusMiles] = useState("");
+  const [radiusLoading, setRadiusLoading] = useState(false);
+  const [radiusMsg, setRadiusMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, CircleMarker>>(new Map());
 
+  // A session-local copy of the vendor list, updated in place on every save
+  // so re-selecting a partner from the picker — even after saving another
+  // partner in between — always shows the just-saved coverage immediately.
+  // Without this, the picker kept handing back the original server-rendered
+  // `vendors` prop, silently reverting to pre-save zips until a full page
+  // reload re-fetched it.
+  const [localVendors, setLocalVendors] = useState<LocalVendor[]>(vendors);
+  useEffect(() => setLocalVendors(vendors), [vendors]);
+
   const filteredVendors = useMemo(() => {
     const q = vendorQuery.trim().toLowerCase();
-    if (!q) return vendors.slice(0, 20);
-    return vendors.filter((v) => v.vendorName.toLowerCase().includes(q)).slice(0, 20);
-  }, [vendorQuery, vendors]);
+    if (!q) return localVendors.slice(0, 20);
+    return localVendors.filter((v) => v.vendorName.toLowerCase().includes(q)).slice(0, 20);
+  }, [vendorQuery, localVendors]);
 
-  // Load a partner's current coverage
+  // Load a partner's current coverage — keyed on id (not the object itself)
+  // so saving doesn't itself re-trigger this and wipe the just-set saveMsg.
   useEffect(() => {
     if (!selectedVendor) return;
     setSelectedZips(new Set(parseZipList(selectedVendor.zipCodesServed)));
@@ -80,7 +95,8 @@ export function ZipCoverageTab({ vendors }: Props) {
     setSaveMsg(null);
     const vendorState = selectedVendor.state?.trim().toUpperCase();
     if (vendorState && US_STATES.some((s) => s.code === vendorState)) setStateCode(vendorState);
-  }, [selectedVendor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVendor?.id]);
 
   // Load the chosen state's zip list
   useEffect(() => {
@@ -132,6 +148,38 @@ export function ZipCoverageTab({ vendors }: Props) {
     setSaveMsg(null);
   }
 
+  async function handleAddRadius() {
+    const zip = radiusZip.trim();
+    const miles = Number(radiusMiles);
+    if (!/^\d{5}$/.test(zip)) { setRadiusMsg({ text: "Enter a valid 5-digit zip code.", ok: false }); return; }
+    if (!Number.isFinite(miles) || miles <= 0) { setRadiusMsg({ text: "Enter a radius in miles.", ok: false }); return; }
+
+    setRadiusLoading(true);
+    setRadiusMsg(null);
+    try {
+      const res = await fetch(`/api/admin/zip-coverage?zip=${zip}&radiusMiles=${miles}`);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Couldn't look up that radius");
+      const found: ZipRecord[] = d.zips ?? [];
+      let added = 0;
+      setSelectedZips((prev) => {
+        const next = new Set(prev);
+        for (const z of found) { if (!next.has(z.zip)) added++; next.add(z.zip); }
+        return next;
+      });
+      setDirty(true);
+      setSaveMsg(null);
+      setRadiusMsg({
+        text: `Added ${added.toLocaleString()} new zip${added !== 1 ? "s" : ""} (${found.length.toLocaleString()} total within ${miles} mi of ${zip}).`,
+        ok: true,
+      });
+    } catch (e) {
+      setRadiusMsg({ text: e instanceof Error ? e.message : "Couldn't look up that radius", ok: false });
+    } finally {
+      setRadiusLoading(false);
+    }
+  }
+
   async function handleSave() {
     if (!selectedVendor) return;
     setSaving(true);
@@ -144,7 +192,10 @@ export function ZipCoverageTab({ vendors }: Props) {
         body: JSON.stringify({ id: selectedVendor.id, zipCodesServed }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to save");
-      setSelectedVendor((v) => (v ? { ...v, zipCodesServed } : v));
+      // Update the session-local vendor copy (not selectedVendor itself —
+      // that would re-trigger the id-keyed load effect above) so the picker
+      // reflects this immediately if the user switches away and back.
+      setLocalVendors((prev) => prev.map((v) => (v.id === selectedVendor.id ? { ...v, zipCodesServed } : v)));
       setDirty(false);
       setSaveMsg(`Saved — ${selectedZips.size.toLocaleString()} zip${selectedZips.size !== 1 ? "s" : ""} total.`);
     } catch (e) {
@@ -297,6 +348,42 @@ export function ZipCoverageTab({ vendors }: Props) {
                 {saving ? "Saving…" : dirty ? "Save Changes" : "Saved"}
               </button>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3 mb-4 bg-gray-900 border border-gray-700 rounded-2xl px-5 py-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Home Zip Code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={5}
+                value={radiusZip}
+                onChange={(e) => setRadiusZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                placeholder="60601"
+                className="w-28 h-10 px-3 rounded-xl border border-gray-600 bg-gray-800 text-white text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-forest-500/40"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">Radius (miles)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={radiusMiles}
+                onChange={(e) => setRadiusMiles(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="25"
+                className="w-24 h-10 px-3 rounded-xl border border-gray-600 bg-gray-800 text-white text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-forest-500/40"
+              />
+            </div>
+            <button
+              onClick={handleAddRadius}
+              disabled={radiusLoading}
+              className="h-10 px-4 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 transition-colors disabled:opacity-40"
+            >
+              {radiusLoading ? "Searching…" : "Add Zips in Radius"}
+            </button>
+            {radiusMsg && (
+              <span className={`text-xs ${radiusMsg.ok ? "text-forest-400" : "text-red-400"}`}>{radiusMsg.text}</span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 mb-4">
