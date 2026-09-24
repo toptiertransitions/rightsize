@@ -369,37 +369,361 @@ function SalesTableRow({
   );
 }
 
-// ─── PF Table Row (table-based, with expandable Square sale events) ───────────
+// ─── Sales Item Card (mobile) ──────────────────────────────────────────────────
 
-function PFTableRow({
+function SalesItemCard({
   item,
-  initialEvents,
   canEditPayout,
   canEdit,
-  localVendors,
+  calcPayout,
+  onPayoutSaved,
+  onSalePriceSaved,
   onEdit,
-  onEventUpdated,
+  isNonTTT = false,
   isTTTUser = false,
 }: {
   item: Item;
-  initialEvents: ItemSaleEvent[];
   canEditPayout: boolean;
   canEdit: boolean;
-  localVendors: LocalVendor[];
+  calcPayout: CalcPayout | null;
+  onPayoutSaved: (itemId: string, amount: number, paidAt?: string) => void;
+  onSalePriceSaved: (itemId: string, price: number) => void;
   onEdit: (item: Item) => void;
-  onEventUpdated: (updated: ItemSaleEvent) => void;
+  isNonTTT?: boolean;
   isTTTUser?: boolean;
 }) {
+  const [editingPayout, setEditingPayout] = useState(false);
+  const [payoutInput, setPayoutInput] = useState(String(item.payoutPaidAmount ?? 0));
+  const [savingPayout, setSavingPayout] = useState(false);
+
+  const [editingSalePrice, setEditingSalePrice] = useState(false);
+  const [salePriceInput, setSalePriceInput] = useState(String(item.salePrice ?? ""));
+  const [savingSalePrice, setSavingSalePrice] = useState(false);
+
+  const isSold = item.status === "Sold";
+
+  async function savePayout() {
+    const amount = parseFloat(payoutInput) || 0;
+    setSavingPayout(true);
+    try {
+      const paidAt = amount > 0 ? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }) : undefined;
+      const res = await fetch("/api/sales/payout", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, payoutPaidAmount: amount, payoutPaidAt: paidAt }),
+      });
+      if (res.ok) { onPayoutSaved(item.id, amount, paidAt); setEditingPayout(false); }
+    } finally { setSavingPayout(false); }
+  }
+
+  async function saveSalePrice() {
+    const price = parseFloat(salePriceInput) || 0;
+    setSavingSalePrice(true);
+    try {
+      const res = await fetch("/api/sales/payout", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, salePrice: price }),
+      });
+      if (res.ok) { onSalePriceSaved(item.id, price); setEditingSalePrice(false); }
+    } finally { setSavingSalePrice(false); }
+  }
+
+  const previewSalePrice = editingSalePrice ? (parseFloat(salePriceInput) || 0) : (item.salePrice ?? 0);
+  const previewCalcPayout: CalcPayout | null = calcPayout && previewSalePrice > 0
+    ? { ...calcPayout, amount: previewSalePrice * (1 - calcPayout.rate / 100) }
+    : calcPayout;
+  const clientPayout = previewSalePrice > 0
+    ? (previewCalcPayout ? previewCalcPayout.amount : (item.consignorPayout ?? 0))
+    : null;
+
+  const inlineInput = "w-full border border-forest-400 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-500";
+  const confirmBtn = (onClick: () => void, saving: boolean) => (
+    <button onClick={onClick} disabled={saving}
+      className="text-[10px] bg-forest-600 text-white px-1.5 py-0.5 rounded hover:bg-forest-700 disabled:opacity-50 shrink-0">
+      {saving ? "…" : "✓"}
+    </button>
+  );
+  const cancelBtn = (onClick: () => void) => (
+    <button onClick={onClick} className="text-[10px] text-gray-400 hover:text-gray-600 shrink-0">{"✕"}</button>
+  );
+
+  return (
+    <div className={cn("rounded-xl border p-3", isSold ? "border-green-100 bg-green-50/20" : "border-gray-200 bg-white")}>
+      <div className="flex gap-3">
+        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+          {item.photoUrl ? (
+            <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="48px" />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-200">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+                {(item.quantity ?? 1) > 1 && (
+                  <span className="flex-shrink-0 text-[10px] font-semibold text-forest-700 bg-forest-50 border border-forest-100 px-1.5 py-0.5 rounded-full">×{item.quantity}</span>
+                )}
+              </div>
+              {item.category && <div className="text-[11px] text-gray-400 truncate">{item.category}</div>}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap", STATUS_COLORS[item.status])}>
+                {item.status}
+              </span>
+              {canEdit && (
+                <button onClick={() => onEdit(item)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="Edit item">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-2.5 pt-2.5 border-t border-gray-100">
+        {/* Value */}
+        <div>
+          <div className="text-[10px] text-gray-400 uppercase tracking-wide">Value</div>
+          <div className="text-sm text-gray-600 tabular-nums">
+            {item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">{"—"}</span>}
+          </div>
+          {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
+            <div className="text-[10px] text-red-400 tabular-nums leading-tight">
+              orig {fmtCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
+            </div>
+          )}
+        </div>
+
+        {/* Sale Price (editable) */}
+        <div>
+          <div className="text-[10px] text-gray-400 uppercase tracking-wide">Sale Price</div>
+          {canEditPayout ? (
+            editingSalePrice ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="text-xs text-gray-400">$</span>
+                <input type="number" min="0" step="0.01" value={salePriceInput}
+                  onChange={e => setSalePriceInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") saveSalePrice(); if (e.key === "Escape") setEditingSalePrice(false); }}
+                  className={inlineInput} autoFocus />
+                {confirmBtn(saveSalePrice, savingSalePrice)}
+                {cancelBtn(() => setEditingSalePrice(false))}
+              </div>
+            ) : (
+              <button onClick={() => { setEditingSalePrice(true); setSalePriceInput(String(item.salePrice ?? "")); }}
+                className="text-sm font-medium text-gray-800 hover:underline tabular-nums">
+                {item.salePrice ? fmtCurrency(item.salePrice) : <span className="text-gray-300 text-xs italic">Set</span>}
+              </button>
+            )
+          ) : (
+            <span className="text-sm text-gray-700 tabular-nums">{item.salePrice ? fmtCurrency(item.salePrice) : <span className="text-gray-300">{"—"}</span>}</span>
+          )}
+        </div>
+
+        {/* Client Payout — hidden for NonTTT */}
+        {!isNonTTT && (
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Client Payout</div>
+            {clientPayout != null ? (
+              <div>
+                <span className="text-sm font-semibold text-green-700 tabular-nums">{fmtCurrency(clientPayout)}</span>
+                {isTTTUser && previewCalcPayout && previewCalcPayout.vendorName && previewCalcPayout.rate > 0 && <div className="text-[9px] text-gray-400">{previewCalcPayout.rate}% take</div>}
+              </div>
+            ) : (
+              <span className="text-gray-300 text-sm">{"—"}</span>
+            )}
+          </div>
+        )}
+
+        {/* Paid to Client — hidden for NonTTT */}
+        {!isNonTTT && (
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Paid</div>
+            {canEditPayout ? (
+              editingPayout ? (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-xs text-gray-400">$</span>
+                  <input type="number" min="0" step="0.01" value={payoutInput}
+                    onChange={e => setPayoutInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") savePayout(); if (e.key === "Escape") setEditingPayout(false); }}
+                    className={inlineInput} autoFocus />
+                  {confirmBtn(savePayout, savingPayout)}
+                  {cancelBtn(() => setEditingPayout(false))}
+                </div>
+              ) : (
+                <button onClick={() => { setEditingPayout(true); setPayoutInput(String(item.payoutPaidAmount ?? 0)); }}
+                  className="text-left hover:underline tabular-nums">
+                  <div className="text-sm font-semibold text-forest-700">
+                    {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+                  </div>
+                  {item.payoutPaidAt && (
+                    <div className="text-[10px] text-green-600 font-normal">
+                      Paid {new Date(item.payoutPaidAt + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  )}
+                </button>
+              )
+            ) : (
+              <div className="tabular-nums">
+                <div className="text-sm font-semibold text-gray-700">
+                  {item.payoutPaidAmount ? fmtCurrency(item.payoutPaidAmount) : "$0.00"}
+                </div>
+                {item.payoutPaidAt && (
+                  <div className="text-[10px] text-green-600">
+                    Paid {new Date(item.payoutPaidAt + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── PF payout summary + expanded events (shared between table row and mobile card) ─
+
+function PFPayoutSummary({
+  item, events, localVendors, isTTTUser, isSold, itemOverridePaid, totalOwed, totalPaidAmt, totalEventPayout,
+}: {
+  item: Item;
+  events: ItemSaleEvent[];
+  localVendors: LocalVendor[];
+  isTTTUser: boolean;
+  isSold: boolean;
+  itemOverridePaid: boolean;
+  totalOwed: number;
+  totalPaidAmt: number;
+  totalEventPayout: number;
+}) {
+  if (events.length > 0) {
+    return (
+      <div>
+        {!itemOverridePaid && totalOwed > 0 && <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(totalOwed)} owed</div>}
+        {(itemOverridePaid ? totalEventPayout : totalPaidAmt) > 0 && <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(itemOverridePaid ? totalEventPayout : totalPaidAmt)} paid</div>}
+      </div>
+    );
+  }
+  // No Square events — compute fallback payout for sold items
+  if (!isSold) {
+    return isTTTUser && item.clientSharePercent != null
+      ? <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
+      : <span className="text-gray-300">—</span>;
+  }
+  const calc = computeCalcPayout(item, localVendors);
+  if (calc && calc.amount > 0) {
+    if ((item.payoutPaidAmount ?? 0) >= calc.amount * 0.99) {
+      return <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(item.payoutPaidAmount!)} paid</div>;
+    }
+    return (
+      <div>
+        <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
+        {isTTTUser && calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
+      </div>
+    );
+  }
+  return <span className="text-gray-300">—</span>;
+}
+
+function PFEventsExpanded({
+  loading, events, canEditPayout, togglingId, onToggle,
+}: {
+  loading: boolean;
+  events: ItemSaleEvent[];
+  canEditPayout: boolean;
+  togglingId: string | null;
+  onToggle: (event: ItemSaleEvent) => void;
+}) {
+  const totalOwed = events.reduce((s, e) => s + (e.payoutPaid ? 0 : e.clientPayout), 0);
+  const totalPaidAmt = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
+
+  if (loading) return <div className="px-6 py-4 text-center text-xs text-gray-400">Loading sale events…</div>;
+  if (events.length === 0) return <div className="px-6 py-4 text-center text-xs text-gray-400">No Square sales recorded yet</div>;
+
+  return (
+    <>
+      <div className="divide-y divide-gray-100">
+        {events.map(evt => (
+          <div key={evt.id} className="px-4 sm:px-6 py-2.5 flex items-center gap-3">
+            <div className="text-[11px] text-gray-400 w-20 flex-shrink-0">
+              {new Date(evt.saleDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-700">
+                <span className="font-medium">{evt.quantitySold} unit{evt.quantitySold !== 1 ? "s" : ""}</span>
+                {" @ "}
+                <span>{fmtCurrency(evt.unitPrice)}</span>
+                {" = "}
+                <span className="font-medium">{fmtCurrency(evt.totalAmount)}</span>
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                Client payout: <span className="font-medium text-green-700">{fmtCurrency(evt.clientPayout)}</span>
+                {evt.payoutPaidAt && (
+                  <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt + "T12:00:00").toLocaleDateString()}</span>
+                )}
+              </div>
+            </div>
+            {canEditPayout ? (
+              <button
+                onClick={() => onToggle(evt)}
+                disabled={togglingId === evt.id}
+                className={cn(
+                  "text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
+                  evt.payoutPaid
+                    ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
+                  togglingId === evt.id && "opacity-50 cursor-wait"
+                )}
+              >
+                {togglingId === evt.id ? "…" : evt.payoutPaid ? "Paid" : "Unpaid"}
+              </button>
+            ) : (
+              <span className={cn(
+                "text-[10px] font-semibold px-2 py-1 rounded-full border",
+                evt.payoutPaid
+                  ? "bg-green-50 border-green-200 text-green-700"
+                  : "bg-amber-50 border-amber-200 text-amber-700"
+              )}>
+                {evt.payoutPaid ? "Paid" : "Unpaid"}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="px-4 sm:px-6 py-2.5 border-t border-gray-100 flex gap-6 text-xs bg-white/60">
+        <div>
+          <span className="text-gray-400">Total owed: </span>
+          <span className="font-semibold text-amber-700">{fmtCurrency(totalOwed)}</span>
+        </div>
+        <div>
+          <span className="text-gray-400">Total paid: </span>
+          <span className="font-semibold text-green-700">{fmtCurrency(totalPaidAmt)}</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Shared state/logic for one PF item's row — used by both the desktop table row
+// and the mobile card, so the Square-events fetch/toggle logic exists once.
+function usePFItemState(item: Item, initialEvents: ItemSaleEvent[]) {
   const [expanded, setExpanded] = useState(false);
   const [localEvents, setLocalEvents] = useState<ItemSaleEvent[]>(initialEvents);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(initialEvents.length > 0);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Always reflect the latest payoutPaid from the parent's pfSaleEvents state.
-  // useState ignores prop changes after mount, so we derive events as a merge of
-  // local state (for lazy-loaded events and optimistic toggles) and initialEvents
-  // (for payoutPaid updates pushed down after a bulk payout).
   const parentEventMap = new Map(initialEvents.map(e => [e.id, e]));
   const events: ItemSaleEvent[] = localEvents.map(e => {
     const parent = parentEventMap.get(e.id);
@@ -439,11 +763,12 @@ function PFTableRow({
       if (res.ok) {
         const data = await res.json();
         setLocalEvents(prev => prev.map(e => e.id === event.id ? data.event : e));
-        onEventUpdated(data.event);
+        return data.event as ItemSaleEvent;
       }
     } finally {
       setTogglingId(null);
     }
+    return null;
   }
 
   function handleToggle() {
@@ -453,13 +778,45 @@ function PFTableRow({
 
   const totalOwed = events.reduce((s, e) => s + (e.payoutPaid ? 0 : e.clientPayout), 0);
   const totalPaidAmt = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
-  // If item-level payout was set directly (e.g. events weren't marked but item was), treat as fully paid
   const totalEventPayout = totalOwed + totalPaidAmt;
   const itemOverridePaid = totalOwed > 0 && (item.payoutPaidAmount ?? 0) >= totalEventPayout * 0.99;
 
+  return {
+    expanded, events, loading, togglingId, isSold, qtySold, qtyTotal,
+    totalOwed, totalPaidAmt, totalEventPayout, itemOverridePaid,
+    handleToggle, togglePayout,
+  };
+}
+
+function PFTableRow({
+  item,
+  initialEvents,
+  canEditPayout,
+  canEdit,
+  localVendors,
+  onEdit,
+  onEventUpdated,
+  isTTTUser = false,
+}: {
+  item: Item;
+  initialEvents: ItemSaleEvent[];
+  canEditPayout: boolean;
+  canEdit: boolean;
+  localVendors: LocalVendor[];
+  onEdit: (item: Item) => void;
+  onEventUpdated: (updated: ItemSaleEvent) => void;
+  isTTTUser?: boolean;
+}) {
+  const s = usePFItemState(item, initialEvents);
+
+  async function handleTogglePayout(event: ItemSaleEvent) {
+    const updated = await s.togglePayout(event);
+    if (updated) onEventUpdated(updated);
+  }
+
   return (
     <>
-      <tr className={cn("group border-b border-gray-50 transition-colors", isSold ? "bg-green-50/20 hover:bg-green-50/40" : "hover:bg-gray-50/60", expanded && "border-b-0")}>
+      <tr className={cn("group border-b border-gray-50 transition-colors", s.isSold ? "bg-green-50/20 hover:bg-green-50/40" : "hover:bg-gray-50/60", s.expanded && "border-b-0")}>
         {/* Thumbnail */}
         <td className="pl-3 py-2.5 w-10">
           <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
@@ -490,7 +847,7 @@ function PFTableRow({
         </td>
         {/* Value */}
         <td className="px-2 py-2.5 text-right text-sm whitespace-nowrap tabular-nums">
-          <span className="text-gray-600">{item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">—</span>}</span>
+          <span className="text-gray-600">{item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">{"—"}</span>}</span>
           {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
             <div className="text-[10px] text-red-400 tabular-nums leading-tight mt-0.5">
               orig {fmtCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
@@ -499,37 +856,15 @@ function PFTableRow({
         </td>
         {/* Qty Sold */}
         <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
-          {qtyTotal > 1 ? (
-            <span className="text-sm font-semibold text-gray-900 tabular-nums">{qtySold}/{qtyTotal}</span>
-          ) : <span className="text-gray-300 text-sm">—</span>}
+          {s.qtyTotal > 1 ? (
+            <span className="text-sm font-semibold text-gray-900 tabular-nums">{s.qtySold}/{s.qtyTotal}</span>
+          ) : <span className="text-gray-300 text-sm">{"—"}</span>}
         </td>
         {/* Payout summary */}
         <td className="px-2 py-2.5 text-right whitespace-nowrap hidden sm:table-cell">
-          {events.length > 0 ? (
-            <div>
-              {!itemOverridePaid && totalOwed > 0 && <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(totalOwed)} owed</div>}
-              {(itemOverridePaid ? totalEventPayout : totalPaidAmt) > 0 && <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(itemOverridePaid ? totalEventPayout : totalPaidAmt)} paid</div>}
-            </div>
-          ) : (() => {
-            // No Square events — compute fallback payout for sold items
-            if (!isSold) return (isTTTUser && item.clientSharePercent != null)
-              ? <span className="text-[10px] text-gray-400">{item.clientSharePercent}% share</span>
-              : <span className="text-gray-300">—</span>;
-            const calc = computeCalcPayout(item, localVendors);
-            if (calc && calc.amount > 0) {
-              // If item-level payout already covers the calculated amount, show as paid
-              if ((item.payoutPaidAmount ?? 0) >= calc.amount * 0.99) {
-                return <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(item.payoutPaidAmount!)} paid</div>;
-              }
-              return (
-                <div>
-                  <div className="text-xs text-amber-600 font-semibold tabular-nums">{fmtCurrency(calc.amount)} owed</div>
-                  {isTTTUser && calc.rate > 0 && <div className="text-[9px] text-gray-400">{calc.rate}% take</div>}
-                </div>
-              );
-            }
-            return <span className="text-gray-300">—</span>;
-          })()}
+          <PFPayoutSummary item={item} events={s.events} localVendors={localVendors} isTTTUser={isTTTUser}
+            isSold={s.isSold} itemOverridePaid={s.itemOverridePaid} totalOwed={s.totalOwed}
+            totalPaidAmt={s.totalPaidAmt} totalEventPayout={s.totalEventPayout} />
         </td>
         {/* Actions */}
         <td className="pr-3 py-2.5 w-16">
@@ -546,12 +881,12 @@ function PFTableRow({
               </button>
             )}
             <button
-              onClick={handleToggle}
+              onClick={s.handleToggle}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              title={expanded ? "Hide sales" : "Show sales"}
+              title={s.expanded ? "Hide sales" : "Show sales"}
             >
               <svg
-                className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")}
+                className={cn("w-4 h-4 transition-transform", s.expanded && "rotate-180")}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -561,79 +896,128 @@ function PFTableRow({
         </td>
       </tr>
       {/* Expanded sale events sub-row */}
-      {expanded && (
-        <tr className={cn(isSold ? "bg-green-50/10" : "bg-gray-50/30")}>
+      {s.expanded && (
+        <tr className={cn(s.isSold ? "bg-green-50/10" : "bg-gray-50/30")}>
           <td colSpan={7} className="px-0 py-0 border-b border-gray-100">
-            {loading ? (
-              <div className="px-6 py-4 text-center text-xs text-gray-400">Loading sale events…</div>
-            ) : events.length === 0 ? (
-              <div className="px-6 py-4 text-center text-xs text-gray-400">No Square sales recorded yet</div>
-            ) : (
-              <>
-                <div className="divide-y divide-gray-100">
-                  {events.map(evt => (
-                    <div key={evt.id} className="px-6 py-2.5 flex items-center gap-3">
-                      <div className="text-[11px] text-gray-400 w-20 flex-shrink-0">
-                        {new Date(evt.saleDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-gray-700">
-                          <span className="font-medium">{evt.quantitySold} unit{evt.quantitySold !== 1 ? "s" : ""}</span>
-                          {" @ "}
-                          <span>{fmtCurrency(evt.unitPrice)}</span>
-                          {" = "}
-                          <span className="font-medium">{fmtCurrency(evt.totalAmount)}</span>
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">
-                          Client payout: <span className="font-medium text-green-700">{fmtCurrency(evt.clientPayout)}</span>
-                          {evt.payoutPaidAt && (
-                            <span className="ml-2 text-gray-300">paid {new Date(evt.payoutPaidAt + "T12:00:00").toLocaleDateString()}</span>
-                          )}
-                        </div>
-                      </div>
-                      {canEditPayout ? (
-                        <button
-                          onClick={() => togglePayout(evt)}
-                          disabled={togglingId === evt.id}
-                          className={cn(
-                            "text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
-                            evt.payoutPaid
-                              ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                              : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
-                            togglingId === evt.id && "opacity-50 cursor-wait"
-                          )}
-                        >
-                          {togglingId === evt.id ? "\u2026" : evt.payoutPaid ? "Paid" : "Unpaid"}
-                        </button>
-                      ) : (
-                        <span className={cn(
-                          "text-[10px] font-semibold px-2 py-1 rounded-full border",
-                          evt.payoutPaid
-                            ? "bg-green-50 border-green-200 text-green-700"
-                            : "bg-amber-50 border-amber-200 text-amber-700"
-                        )}>
-                          {evt.payoutPaid ? "Paid" : "Unpaid"}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="px-6 py-2.5 border-t border-gray-100 flex gap-6 text-xs bg-white/60">
-                  <div>
-                    <span className="text-gray-400">Total owed: </span>
-                    <span className="font-semibold text-amber-700">{fmtCurrency(totalOwed)}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Total paid: </span>
-                    <span className="font-semibold text-green-700">{fmtCurrency(totalPaidAmt)}</span>
-                  </div>
-                </div>
-              </>
-            )}
+            <PFEventsExpanded loading={s.loading} events={s.events} canEditPayout={canEditPayout}
+              togglingId={s.togglingId} onToggle={handleTogglePayout} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+// ─── PF Item Card (mobile) ────────────────────────────────────────────
+
+function PFItemCard({
+  item,
+  initialEvents,
+  canEditPayout,
+  canEdit,
+  localVendors,
+  onEdit,
+  onEventUpdated,
+  isTTTUser = false,
+}: {
+  item: Item;
+  initialEvents: ItemSaleEvent[];
+  canEditPayout: boolean;
+  canEdit: boolean;
+  localVendors: LocalVendor[];
+  onEdit: (item: Item) => void;
+  onEventUpdated: (updated: ItemSaleEvent) => void;
+  isTTTUser?: boolean;
+}) {
+  const s = usePFItemState(item, initialEvents);
+
+  async function handleTogglePayout(event: ItemSaleEvent) {
+    const updated = await s.togglePayout(event);
+    if (updated) onEventUpdated(updated);
+  }
+
+  return (
+    <div className={cn("rounded-xl border overflow-hidden", s.isSold ? "border-green-100 bg-green-50/10" : "border-gray-200 bg-white")}>
+      <div className="p-3 flex gap-3">
+        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+          {item.photoUrl ? (
+            <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="48px" />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-200">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-medium text-gray-900 text-sm truncate">{item.itemName}</div>
+              <div className="flex items-center gap-2">
+                {item.category && <div className="text-[11px] text-gray-400 truncate">{item.category}</div>}
+                {item.barcodeNumber && <span className="text-[10px] text-gray-300 shrink-0">#{item.barcodeNumber}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap", STATUS_COLORS[item.status])}>
+                {item.status}
+              </span>
+              {canEdit && (
+                <button onClick={() => onEdit(item)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="Edit item">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2.5 pt-2.5 border-t border-gray-100">
+            <div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wide">Value</div>
+              <div className="text-sm text-gray-700 tabular-nums">
+                {item.valueMid > 0 ? fmtCurrency(item.valueMid) : <span className="text-gray-300">{"—"}</span>}
+                {item.originalValue && item.originalValue > 0 && item.originalValue !== item.valueMid && (
+                  <div className="text-[10px] text-red-400 tabular-nums leading-tight">
+                    orig {fmtCurrency(item.originalValue)} &middot; {Math.round(((item.valueMid - item.originalValue) / item.originalValue) * 100)}%
+                  </div>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wide">Qty Sold</div>
+              <div className="text-sm tabular-nums">
+                {s.qtyTotal > 1 ? (
+                  <span className="font-semibold text-gray-900">{s.qtySold}/{s.qtyTotal}</span>
+                ) : <span className="text-gray-300">{"—"}</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+            <PFPayoutSummary item={item} events={s.events} localVendors={localVendors} isTTTUser={isTTTUser}
+              isSold={s.isSold} itemOverridePaid={s.itemOverridePaid} totalOwed={s.totalOwed}
+              totalPaidAmt={s.totalPaidAmt} totalEventPayout={s.totalEventPayout} />
+            <button onClick={s.handleToggle}
+              className="flex items-center gap-1 text-[11px] font-medium text-gray-400 hover:text-gray-600 transition-colors">
+              {s.expanded ? "Hide sales" : "Sales"}
+              <svg className={cn("w-3.5 h-3.5 transition-transform", s.expanded && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      {s.expanded && (
+        <div className={cn("border-t", s.isSold ? "border-green-100 bg-green-50/10" : "border-gray-100 bg-gray-50/30")}>
+          <PFEventsExpanded loading={s.loading} events={s.events} canEditPayout={canEditPayout}
+            togglingId={s.togglingId} onToggle={handleTogglePayout} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -755,24 +1139,66 @@ function PFSalesSection({
         <p className="text-xs text-gray-400 mb-2 -mt-1">Includes an additional 3% fee due to credit card processing fees.</p>
       )}
       {open && (
-        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="pl-3 py-2.5 w-10" />
-                <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
-                <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
-                <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
-                <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="qty" label="Qty Sold" right /></th>
-                <th className="px-2 py-2.5 text-right hidden sm:table-cell">
-                  <span className="flex items-center justify-end text-[11px] font-semibold uppercase tracking-wide text-gray-400">Payout</span>
-                </th>
-                <th className="pr-3 py-2.5 w-16" />
-              </tr>
-            </thead>
-            <tbody>
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block rounded-xl border border-gray-200 overflow-hidden bg-white">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="pl-3 py-2.5 w-10" />
+                  <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
+                  <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
+                  <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
+                  <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="qty" label="Qty Sold" right /></th>
+                  <th className="px-2 py-2.5 text-right hidden sm:table-cell">
+                    <span className="flex items-center justify-end text-[11px] font-semibold uppercase tracking-wide text-gray-400">Payout</span>
+                  </th>
+                  <th className="pr-3 py-2.5 w-16" />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(item => (
+                  <PFTableRow
+                    key={item.id}
+                    item={item}
+                    initialEvents={allEvents.filter(e => e.itemId === item.id)}
+                    canEditPayout={canEditPayout}
+                    canEdit={canEdit}
+                    localVendors={localVendors}
+                    onEdit={onEdit}
+                    onEventUpdated={onEventUpdated}
+                    isTTTUser={isTTTUser}
+                  />
+                ))}
+              </tbody>
+            </table>
+            {sorted.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+            )}
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden">
+            {sorted.length > 1 && (
+              <div className="flex items-center justify-end gap-1.5 mb-2">
+                <span className="text-[11px] text-gray-400">Sort</span>
+                <select
+                  value={`${sort.col}:${sort.dir}`}
+                  onChange={e => { const [col, dir] = e.target.value.split(":") as [SortCol, "asc" | "desc"]; setSort({ col, dir }); }}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                >
+                  <option value="name:asc">Name (A–Z)</option>
+                  <option value="name:desc">Name (Z–A)</option>
+                  <option value="status:asc">Status</option>
+                  <option value="value:desc">Value (high–low)</option>
+                  <option value="value:asc">Value (low–high)</option>
+                  <option value="qty:desc">Qty sold</option>
+                </select>
+              </div>
+            )}
+            <div className="space-y-2">
               {sorted.map(item => (
-                <PFTableRow
+                <PFItemCard
                   key={item.id}
                   item={item}
                   initialEvents={allEvents.filter(e => e.itemId === item.id)}
@@ -784,12 +1210,12 @@ function PFSalesSection({
                   isTTTUser={isTTTUser}
                 />
               ))}
-            </tbody>
-          </table>
-          {sorted.length === 0 && (
-            <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
-          )}
-        </div>
+            </div>
+            {sorted.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -913,24 +1339,68 @@ function SalesTable({
         <p className="text-xs text-gray-400 mb-2 -mt-1">{CLIENT_FEE_NOTES[title]}</p>
       )}
       {open && (
-        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="pl-3 py-2.5 w-10" />
-                <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
-                <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
-                <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
-                <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
-                {!isNonTTT && <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>}
-                {!isNonTTT && <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>}
-                {!isNonTTT && <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>}
-                <th className="pr-3 py-2.5 w-8" />
-              </tr>
-            </thead>
-            <tbody>
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block rounded-xl border border-gray-200 overflow-hidden bg-white">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="pl-3 py-2.5 w-10" />
+                  <th className="px-3 py-2.5 text-left"><ThBtn col="name" label="Item" /></th>
+                  <th className="px-2 py-2.5 text-left"><ThBtn col="status" label="Status" /></th>
+                  <th className="px-2 py-2.5 text-right"><ThBtn col="value" label="Value" right /></th>
+                  <th className="px-2 py-2.5 text-right"><ThBtn col="salePrice" label="Sale Price" right /></th>
+                  {!isNonTTT && <th className="px-2 py-2.5 text-right"><ThBtn col="payout" label="Client Payout" right /></th>}
+                  {!isNonTTT && <th className="px-2 py-2.5 text-right"><ThBtn col="paid" label="Paid" right /></th>}
+                  {!isNonTTT && <th className="px-2 py-2.5 text-right hidden sm:table-cell"><ThBtn col="paidDate" label="Paid Date" right /></th>}
+                  <th className="pr-3 py-2.5 w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(item => (
+                  <SalesTableRow
+                    key={item.id}
+                    item={item}
+                    canEditPayout={canEditPayout}
+                    canEdit={canEdit}
+                    calcPayout={calcPayouts.get(item.id) ?? null}
+                    onPayoutSaved={onPayoutSaved}
+                    onSalePriceSaved={onSalePriceSaved}
+                    onEdit={onEdit}
+                    isNonTTT={isNonTTT}
+                    isTTTUser={isTTTUser}
+                  />
+                ))}
+              </tbody>
+            </table>
+            {sorted.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+            )}
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden">
+            {sorted.length > 1 && (
+              <div className="flex items-center justify-end gap-1.5 mb-2">
+                <span className="text-[11px] text-gray-400">Sort</span>
+                <select
+                  value={`${sort.col}:${sort.dir}`}
+                  onChange={e => { const [col, dir] = e.target.value.split(":") as [SortCol, "asc" | "desc"]; setSort({ col, dir }); }}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                >
+                  <option value="name:asc">Name (A–Z)</option>
+                  <option value="name:desc">Name (Z–A)</option>
+                  <option value="status:asc">Status</option>
+                  <option value="value:desc">Value (high–low)</option>
+                  <option value="salePrice:desc">Sale price (high–low)</option>
+                  {!isNonTTT && <option value="payout:desc">Client payout (high–low)</option>}
+                  {!isNonTTT && <option value="paidDate:desc">Paid date (newest)</option>}
+                </select>
+              </div>
+            )}
+            <div className="space-y-2">
               {sorted.map(item => (
-                <SalesTableRow
+                <SalesItemCard
                   key={item.id}
                   item={item}
                   canEditPayout={canEditPayout}
@@ -943,12 +1413,12 @@ function SalesTable({
                   isTTTUser={isTTTUser}
                 />
               ))}
-            </tbody>
-          </table>
-          {sorted.length === 0 && (
-            <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
-          )}
-        </div>
+            </div>
+            {sorted.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">No items match this filter</div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
