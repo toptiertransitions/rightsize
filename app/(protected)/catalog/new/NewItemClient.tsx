@@ -407,8 +407,8 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
           {bgRemoving
             ? "AI is removing the background from your photo."
             : shelfMode
-            ? "Claude AI is identifying every media item on the shelf from the spines. This may take a moment."
-            : "Claude AI is examining the photo to identify the item, estimate value, and suggest the best route."}
+            ? "Proprietary AI is identifying every media item on the shelf from the spines. This may take a moment."
+            : "Proprietary AI is examining the photo to identify the item, estimate value, and suggest the best route."}
         </p>
       </div>
     );

@@ -42,7 +42,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
         </div>
         <h1 className="text-2xl font-bold text-gray-900">Add Item</h1>
         <p className="text-gray-500 mt-0.5">
-          Upload a photo — Claude AI will analyze the item and pre-fill the details.
+          Upload a photo — Proprietary AI will analyze the item and pre-fill the details.
         </p>
       </div>
 
