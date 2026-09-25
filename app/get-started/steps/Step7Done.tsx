@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { PartyPopper } from "lucide-react";
 import type { WizardData } from "../wizardTypes";
 import { OnboardingTour } from "./OnboardingTour";
 
@@ -15,36 +13,11 @@ function summaryLine(data: WizardData): string {
   return "your project, plus matches across everything you picked.";
 }
 
+// The tour (OnboardingTour) IS the completion screen now — a celebration
+// slide followed by four quick app-overview slides, all one click-through
+// sequence. Earlier this was a separate "You're all set" screen with
+// "Take a tour" / "Skip, go to my dashboard" as two equal-weight buttons,
+// which let people skip the tour without ever really seeing it.
 export function Step7Done({ data, firstName, onFinish }: { data: WizardData; firstName: string; onFinish: () => void }) {
-  const [showTour, setShowTour] = useState(false);
-
-  if (showTour) {
-    return <OnboardingTour onFinish={onFinish} />;
-  }
-
-  return (
-    <div className="flex flex-col items-center text-center pt-6">
-      <div className="w-16 h-16 rounded-2xl bg-forest-50 flex items-center justify-center mb-5">
-        <PartyPopper className="w-8 h-8 text-forest-600" />
-      </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re all set, {firstName || "there"}.</h2>
-      <p className="text-sm text-gray-500 max-w-xs mb-8">
-        We&apos;ve set up {summaryLine(data)}
-      </p>
-      <button
-        type="button"
-        onClick={() => setShowTour(true)}
-        className="w-full max-w-xs min-h-[48px] h-12 rounded-2xl bg-forest-600 text-white font-semibold text-[15px] shadow-sm hover:bg-forest-700 active:scale-[0.99] transition-all mb-3"
-      >
-        Take a 60-second tour
-      </button>
-      <button
-        type="button"
-        onClick={onFinish}
-        className="w-full max-w-xs min-h-[44px] text-gray-500 font-medium text-sm hover:text-gray-700 transition-colors"
-      >
-        Skip, go to my dashboard
-      </button>
-    </div>
-  );
+  return <OnboardingTour firstName={firstName} summary={summaryLine(data)} onFinish={onFinish} />;
 }

@@ -253,7 +253,7 @@ export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, cur
                             <select
                               value={room.roomType}
                               onChange={e => updateRoom(room.localId, { roomType: e.target.value as RoomType })}
-                              className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-forest-500"
+                              className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-base sm:text-sm bg-white focus:outline-none focus:ring-1 focus:ring-forest-500"
                             >
                               {ROOM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
@@ -264,7 +264,7 @@ export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, cur
                               type="number" min="1"
                               value={room.squareFeet || ""}
                               onChange={e => updateRoom(room.localId, { squareFeet: Number(e.target.value) })}
-                              className={`w-full border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 ${errors[`sf-${idx}`] ? "border-red-400" : "border-gray-300"}`}
+                              className={`w-full border rounded-lg px-2.5 py-1.5 text-base sm:text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 ${errors[`sf-${idx}`] ? "border-red-400" : "border-gray-300"}`}
                             />
                           </div>
                           <div>
@@ -325,7 +325,7 @@ export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, cur
                     type="number" min="1" placeholder="1200"
                     value={destSqFt || ""}
                     onChange={e => setDestSqFt(Number(e.target.value))}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 ${errors.dest ? "border-red-400" : "border-gray-300"}`}
+                    className={`w-full border rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 ${errors.dest ? "border-red-400" : "border-gray-300"}`}
                   />
                   {errors.dest && <p className="mt-1 text-xs text-red-600">{errors.dest}</p>}
                 </div>
