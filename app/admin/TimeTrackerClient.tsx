@@ -21,6 +21,7 @@ interface Props {
   tenants: TenantOption[];
   isAdmin: boolean;
   isManager?: boolean;
+  isTeamLead?: boolean;
   currentUserId: string;
   currentUserName: string;
   staffMembers?: StaffOption[];
@@ -323,10 +324,11 @@ function ExportModal({ entries, onClose, weekStart }: {
 
 // ─── Entry Row ────────────────────────────────────────────────────────────────
 function EntryRow({
-  entry, canViewAll, currentUserId, onEdit,
+  entry, canViewAll, canSeeStaffNames, currentUserId, onEdit,
 }: {
   entry: TimeEntry;
   canViewAll: boolean;
+  canSeeStaffNames: boolean;
   currentUserId: string;
   onEdit: (e: TimeEntry) => void;
 }) {
@@ -338,7 +340,7 @@ function EntryRow({
             {new Date(entry.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </span>
           <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{entry.focusArea}</span>
-          {canViewAll && <span className="text-xs text-gray-500">{entry.staffName}</span>}
+          {canSeeStaffNames && <span className="text-xs text-gray-500">{entry.staffName}</span>}
         </div>
         <p className="text-sm font-medium text-white mt-0.5 truncate">{entry.projectName}</p>
         <p className="text-xs text-gray-400 mt-0.5">
@@ -1117,7 +1119,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, currentUserId, currentUserName, staffMembers, services, todayShift }: Props) {
+export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager = false, isTeamLead = false, currentUserId, currentUserName, staffMembers, services, todayShift }: Props) {
   const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
   const [staffFilter, setStaffFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
@@ -1134,6 +1136,14 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
 
   // ── Derived permissions ───────────────────────────────────────────────────
   const canViewAll = isAdmin || isManager;
+  // Team leads see everyone's entries on their lead projects (merged in on
+  // the Home page server-side), but EntryRow's staff-name label and the
+  // staff filter were still gated on canViewAll only — so a lead saw a pile
+  // of unlabeled entries mixed with their own, indistinguishable from a
+  // duplicate or something the system logged on their behalf. Edit rights
+  // stay canViewAll-only (Admin/Manager); this only affects whether a
+  // viewer can tell whose entry is whose.
+  const canSeeStaffNames = canViewAll || isTeamLead;
 
   // ── Current week bounds (fixed to today's week) ───────────────────────────
   const currentWeekStart = useMemo(() => getWeekStart(new Date()), []);
@@ -1153,9 +1163,9 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
   useEffect(() => { setVisiblePastWeeksCount(PAST_WEEKS_PAGE_SIZE); }, [staffFilter]);
 
   const visibleEntries = useMemo(() => {
-    if (canViewAll && staffFilter) return entries.filter(e => e.clerkUserId === staffFilter);
+    if (canSeeStaffNames && staffFilter) return entries.filter(e => e.clerkUserId === staffFilter);
     return entries;
-  }, [entries, canViewAll, staffFilter]);
+  }, [entries, canSeeStaffNames, staffFilter]);
 
   // ── This week ────────────────────────────────────────────────────────────
   const thisWeekEntries = useMemo(() =>
@@ -1263,7 +1273,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
     <div>
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        {canViewAll && (
+        {canSeeStaffNames && (
           <StaffFilterCombobox
             value={staffFilter}
             onChange={setStaffFilter}
@@ -1362,7 +1372,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
             </div>
           ) : (
             displayEntries.map(entry => (
-              <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} currentUserId={currentUserId} onEdit={openEdit} />
+              <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} canSeeStaffNames={canSeeStaffNames} currentUserId={currentUserId} onEdit={openEdit} />
             ))
           )}
         </div>
@@ -1396,7 +1406,7 @@ export function TimeTrackerClient({ initialEntries, tenants, isAdmin, isManager 
                 {isOpen && (
                   <div className="space-y-2 mt-1 mb-2 pl-5">
                     {wEntries.map(entry => (
-                      <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} currentUserId={currentUserId} onEdit={openEdit} />
+                      <EntryRow key={entry.id} entry={entry} canViewAll={canViewAll} canSeeStaffNames={canSeeStaffNames} currentUserId={currentUserId} onEdit={openEdit} />
                     ))}
                   </div>
                 )}

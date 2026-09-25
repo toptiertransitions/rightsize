@@ -144,7 +144,9 @@ export default async function DashboardPage({
 
     const serviceNames = serviceList.map(s => s.name);
 
-    const staffMembers = canViewAll
+    // Team leads also need this (to label/filter their led-projects' merged
+    // entries by who logged them) even though they can't edit anyone else's.
+    const staffMembers = (canViewAll || isTeamLead)
       ? allStaff.filter((s) => s.isActive).map((s) => ({ id: s.clerkUserId, name: s.displayName }))
       : undefined;
 
@@ -171,6 +173,7 @@ export default async function DashboardPage({
               tenants={filteredTenants.map(t => ({ id: t.id, name: t.name }))}
               isAdmin={isAdmin}
               isManager={isManager}
+              isTeamLead={isTeamLead}
               currentUserId={userId}
               currentUserName={firstName}
               staffMembers={staffMembers}
