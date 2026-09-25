@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
-import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction } from "@/app/(protected)/partners/actions";
+import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction, selectPartnerAction, deselectPartnerAction } from "@/app/(protected)/partners/actions";
 import { nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { isPartnerRequestComplete, type PrefillTenant } from "@/lib/partners/questions";
 import type { ScoringResult } from "@/lib/partners/scoring";
@@ -37,13 +37,14 @@ export function NonTTTPartnersPageClient({
   const router = useRouter();
   const [activeCategories, setActiveCategories] = useState(initialActiveCategories);
   const [greyedCategories, setGreyedCategories] = useState(initialGreyedCategories);
-  const [selections] = useState(initialSelections);
+  const [selections, setSelections] = useState(initialSelections);
   const [pendingToggle, setPendingToggle] = useState<PartnerCategory | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [requestAnswers, setRequestAnswers] = useState(initialRequestAnswers);
   const [flowCategory, setFlowCategory] = useState<PartnerCategory | null>(null);
   const [introRequests, setIntroRequests] = useState(initialIntroRequests);
   const [pendingRequest, setPendingRequest] = useState<{ category: PartnerCategory; partnerId: string } | null>(null);
+  const [pendingSelect, setPendingSelect] = useState<PartnerCategory | null>(null);
 
   const sectionRefs = useRef<Partial<Record<PartnerCategory, HTMLElement>>>({});
 
@@ -100,6 +101,41 @@ export function NonTTTPartnersPageClient({
     setToast("Intro requested — we'll let you know when they reach out.");
   }, [tenantId]);
 
+  // Requesting an intro is just inquiring — up to 2 per category are
+  // allowed, so it can't double as "this is who I'm going with." This is
+  // the separate, explicit action that actually puts a partner on "Your
+  // Team," same mechanism (and same PartnerSelections data) the TTT-managed
+  // marketplace flow already uses.
+  const handleSelect = useCallback(async (category: PartnerCategory, partnerId: string) => {
+    const prev = selections[category];
+    setSelections((s) => ({ ...s, [category]: partnerId }));
+    setPendingSelect(category);
+    const result = await selectPartnerAction(tenantId, category, partnerId);
+    setPendingSelect(null);
+    if (!result.ok) {
+      setSelections((s) => ({ ...s, [category]: prev }));
+      setToast(result.error);
+      return;
+    }
+    setToast("Added to your team.");
+  }, [selections, tenantId]);
+
+  const handleDeselect = useCallback(async (category: PartnerCategory) => {
+    const prev = selections[category];
+    setSelections((s) => {
+      const next = { ...s };
+      delete next[category];
+      return next;
+    });
+    setPendingSelect(category);
+    const result = await deselectPartnerAction(tenantId, category);
+    setPendingSelect(null);
+    if (!result.ok) {
+      setSelections((s) => ({ ...s, [category]: prev }));
+      setToast(result.error);
+    }
+  }, [selections, tenantId]);
+
   const selectedPartners: Partial<Record<PartnerCategory, PartnerProfile>> = {};
   for (const cat of PARTNER_CATEGORIES) {
     const id = selections[cat];
@@ -147,6 +183,10 @@ export function NonTTTPartnersPageClient({
                 requestedPartnerIds={(introRequests[category] ?? []).map((r) => r.partnerId)}
                 pendingPartnerId={pendingRequest?.category === category ? pendingRequest.partnerId : null}
                 onRequestIntro={(partnerId) => handleRequestIntro(category, partnerId)}
+                selectedPartnerId={selections[category]}
+                pendingSelect={pendingSelect === category}
+                onSelect={(partnerId) => handleSelect(category, partnerId)}
+                onDeselect={() => handleDeselect(category)}
               />
             )}
             {!selections[category] && (

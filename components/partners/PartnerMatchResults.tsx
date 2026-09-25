@@ -13,6 +13,10 @@ interface Props {
   canEdit: boolean;
   pendingPartnerId: string | null;
   onRequestIntro: (partnerId: string) => void;
+  selectedPartnerId?: string;
+  pendingSelect: boolean;
+  onSelect: (partnerId: string) => void;
+  onDeselect: () => void;
 }
 
 function MatchCard({
@@ -23,6 +27,10 @@ function MatchCard({
   canEdit,
   pending,
   onRequestIntro,
+  isSelected,
+  selectPending,
+  onSelect,
+  onDeselect,
 }: {
   match: ScoredMatch;
   featured: boolean;
@@ -31,6 +39,10 @@ function MatchCard({
   canEdit: boolean;
   pending: boolean;
   onRequestIntro: (partnerId: string) => void;
+  isSelected: boolean;
+  selectPending: boolean;
+  onSelect: (partnerId: string) => void;
+  onDeselect: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const { partner } = match;
@@ -95,12 +107,36 @@ function MatchCard({
             </div>
           </div>
         ) : null}
+
+        {canEdit && (
+          <div className="pt-2 mt-0.5 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => (isSelected ? onDeselect() : onSelect(partner.id))}
+              disabled={selectPending}
+              className={`min-h-[36px] -ml-2 inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2 transition-colors disabled:opacity-50 ${
+                isSelected ? "text-forest-700" : "text-gray-400 hover:text-forest-700"
+              }`}
+            >
+              {isSelected ? (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  On your team
+                </>
+              ) : (
+                "Choose this partner"
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pendingPartnerId, onRequestIntro }: Props) {
+export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pendingPartnerId, onRequestIntro, selectedPartnerId, pendingSelect, onSelect, onDeselect }: Props) {
   const remaining = Math.max(0, MAX_INTRO_REQUESTS_PER_CATEGORY - requestedPartnerIds.length);
   const atCap = remaining <= 0;
 
@@ -125,6 +161,10 @@ export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pend
         canEdit={canEdit}
         pending={pendingPartnerId === result.best.partner.id}
         onRequestIntro={onRequestIntro}
+        isSelected={selectedPartnerId === result.best.partner.id}
+        selectPending={pendingSelect}
+        onSelect={onSelect}
+        onDeselect={onDeselect}
       />
       {result.alternates.map((m) => (
         <MatchCard
@@ -136,6 +176,10 @@ export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pend
           canEdit={canEdit}
           pending={pendingPartnerId === m.partner.id}
           onRequestIntro={onRequestIntro}
+          isSelected={selectedPartnerId === m.partner.id}
+          selectPending={pendingSelect}
+          onSelect={onSelect}
+          onDeselect={onDeselect}
         />
       ))}
       {atCap && (

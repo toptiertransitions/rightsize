@@ -1,7 +1,6 @@
 "use server";
 
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { Resend } from "resend";
 import { z } from "zod";
 import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest } from "@/lib/airtable";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
@@ -10,7 +9,6 @@ import { getPartnerQuestions, formatAnswersForEmail } from "@/lib/partners/quest
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
-import { buildPartnerIntroConfirmationEmail, buildPartnerIntroRequestNotificationEmail } from "@/lib/email";
 import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification } from "@/lib/admin-notifications";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -226,42 +224,12 @@ export async function requestPartnerIntroAction(
     const clientName = user?.firstName || tenant.name;
     const categoryLabel = nonTTTCategoryLabel(category);
 
-    // Email delivery is best-effort — the intro request is already saved
-    // above, so a Resend failure here never undoes it.
-    const resendKey = process.env.RESEND_API_KEY;
-    if (resendKey) {
-      const resend = new Resend(resendKey);
-      if (clientEmail) {
-        resend.emails
-          .send({
-            from: "Rightsize Alerts <notifications@toptiertransitions.com>",
-            to: clientEmail,
-            subject: `You're connected with ${partner.vendorName}`,
-            html: buildPartnerIntroConfirmationEmail({ clientName, partnerName: partner.vendorName, category: categoryLabel }),
-          })
-          .catch((e) => console.error("Partner intro confirmation email failed:", e));
-      }
-      if (partner.email) {
-        resend.emails
-          .send({
-            from: "Rightsize Alerts <notifications@toptiertransitions.com>",
-            to: partner.email,
-            subject: `New client introduction — ${categoryLabel}`,
-            html: buildPartnerIntroRequestNotificationEmail({
-              vendorName: partner.vendorName,
-              clientName,
-              category: categoryLabel,
-              clientEmail: clientEmail || undefined,
-              clientPhone: tenant.clientPhone,
-              answers: formatAnswersForEmail(category, request?.answers ?? {}),
-            }),
-          })
-          .catch((e) => console.error("Partner intro notification email failed:", e));
-      }
-    }
+    // Client- and partner-facing intro emails (buildPartnerIntroConfirmationEmail /
+    // buildPartnerIntroRequestNotificationEmail) are intentionally OFF for now —
+    // internal-only visibility via the TTTAdmin notification below until staff
+    // are ready to have this go out automatically to clients/partners.
 
-    // Internal visibility — neither of the two emails above reaches TTT
-    // staff, so nobody at Top Tier otherwise learns an intro was requested.
+    // Internal visibility — this is currently the only email an intro request sends.
     sendPartnerIntroAdminNotification({
       clientName,
       projectName: tenant.name,
