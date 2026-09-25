@@ -11,6 +11,7 @@ interface Quarter {
   label: string;
   startDate: string;
   endDate: string;
+  isArchived?: boolean;
 }
 
 interface ActivePartner {
@@ -153,6 +154,7 @@ function EditQuarterModal({ quarter, onClose, onSaved }: { quarter: Quarter; onC
   const [startDate, setStartDate] = useState(quarter.startDate);
   const [endDate, setEndDate] = useState(quarter.endDate);
   const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -171,6 +173,24 @@ function EditQuarterModal({ quarter, onClose, onSaved }: { quarter: Quarter; onC
     } catch {
       setError("Failed to save. Please try again.");
       setSaving(false);
+    }
+  }
+
+  async function handleToggleArchive() {
+    setArchiving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/crm/quarters", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: quarter.id, isArchived: !quarter.isArchived }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      onSaved(data.quarter);
+    } catch {
+      setError(`Failed to ${quarter.isArchived ? "unarchive" : "archive"}. Please try again.`);
+      setArchiving(false);
     }
   }
 
@@ -197,12 +217,22 @@ function EditQuarterModal({ quarter, onClose, onSaved }: { quarter: Quarter; onC
             </div>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-            <button type="submit" disabled={saving}
-              className="px-4 py-2 text-sm bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50">
-              {saving ? "Saving..." : "Save"}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleToggleArchive}
+              disabled={archiving || saving}
+              className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 disabled:opacity-50"
+            >
+              {archiving ? "Saving..." : quarter.isArchived ? "Unarchive this quarter" : "Archive this quarter"}
             </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button type="submit" disabled={saving || archiving}
+                className="px-4 py-2 text-sm bg-forest-600 text-white rounded-lg hover:bg-forest-700 disabled:opacity-50">
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -1713,6 +1743,7 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
   const [quartersLoading, setQuartersLoading] = useState(true);
   const [showAddQuarter, setShowAddQuarter] = useState(false);
   const [showEditQuarter, setShowEditQuarter] = useState(false);
+  const [showArchivedQuarters, setShowArchivedQuarters] = useState(false);
   const [spotlightIds, setSpotlightIds] = useState<string[]>([]);
   const [spotlightOnlyMode, setSpotlightOnlyMode] = useState(false);
   const [spotlightError, setSpotlightError] = useState("");
@@ -1770,7 +1801,11 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
         const qs: Quarter[] = data.quarters ?? [];
         setQuarters(qs);
         if (qs.length > 0) {
-          setSelectedQuarterId(qs[0].id);
+          // Skip archived quarters when picking the default — an archived
+          // quarter shouldn't become the working quarter just because it's
+          // newest by date.
+          const defaultQuarter = qs.find((q) => !q.isArchived) ?? qs[0];
+          setSelectedQuarterId(defaultQuarter.id);
         }
       })
       .catch(console.error)
@@ -1851,9 +1886,19 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
   }
 
   function handleQuarterSaved(q: Quarter) {
-    setQuarters((prev) => prev.map((existing) => (existing.id === q.id ? q : existing)));
+    const updated = quarters.map((existing) => (existing.id === q.id ? q : existing));
+    setQuarters(updated);
     setShowEditQuarter(false);
-    if (selectedQuarterId === q.id) loadPlan(q.id);
+    if (selectedQuarterId === q.id) {
+      if (q.isArchived) {
+        // Don't leave the user viewing a quarter they just archived —
+        // move them to the newest one still active, if any.
+        const next = updated.find((u) => !u.isArchived);
+        if (next) { setSelectedQuarterId(next.id); loadPlan(next.id); }
+      } else {
+        loadPlan(q.id);
+      }
+    }
   }
 
   const selectedQuarter = quarters.find((q) => q.id === selectedQuarterId);
@@ -1912,25 +1957,37 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
     );
   }
 
+  const archivedCount = quarters.filter((q) => q.isArchived).length;
+  const visibleQuarters = showArchivedQuarters ? quarters : quarters.filter((q) => !q.isArchived);
+
   return (
     <div>
       {/* Quarter tabs */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white">
-          {quarters.map((q) => (
+          {visibleQuarters.map((q) => (
             <button
               key={q.id}
               onClick={() => setSelectedQuarterId(q.id)}
               className={cn(
                 "px-3 py-1.5 text-sm font-medium transition-colors",
-                q.id === selectedQuarterId ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-50"
+                q.id === selectedQuarterId
+                  ? "bg-forest-600 text-white"
+                  : q.isArchived ? "text-gray-400 hover:bg-gray-50" : "text-gray-600 hover:bg-gray-50"
               )}
             >
               {q.label}
+              {q.isArchived && <span className="ml-1 text-[10px]">(Archived)</span>}
               {!q.startDate && <span className="ml-1 text-amber-300 text-xs">!</span>}
             </button>
           ))}
         </div>
+        {archivedCount > 0 && (
+          <button onClick={() => setShowArchivedQuarters((s) => !s)}
+            className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2">
+            {showArchivedQuarters ? "Hide Archived" : `Show Archived (${archivedCount})`}
+          </button>
+        )}
         {isAdmin && selectedQuarter && (
           <button onClick={() => setShowEditQuarter(true)}
             className="text-sm border border-gray-300 text-gray-500 hover:text-forest-600 hover:border-forest-400 rounded-lg px-3 py-1.5 transition-colors">

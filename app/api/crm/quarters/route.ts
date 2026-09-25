@@ -47,16 +47,18 @@ export interface Quarter {
   endDate: string;
   createdByClerkId: string;
   createdAt: string;
+  isArchived: boolean;
 }
 
-function mapQuarter(r: { id: string; fields: Record<string, string> }): Quarter {
+function mapQuarter(r: { id: string; fields: Record<string, unknown> }): Quarter {
   return {
     id: r.id,
-    label: r.fields["Label"] ?? "",
-    startDate: r.fields["StartDate"] ?? "",
-    endDate: r.fields["EndDate"] ?? "",
-    createdByClerkId: r.fields["CreatedByClerkId"] ?? "",
-    createdAt: r.fields["CreatedAt"] ?? "",
+    label: (r.fields["Label"] as string) ?? "",
+    startDate: (r.fields["StartDate"] as string) ?? "",
+    endDate: (r.fields["EndDate"] as string) ?? "",
+    createdByClerkId: (r.fields["CreatedByClerkId"] as string) ?? "",
+    createdAt: (r.fields["CreatedAt"] as string) ?? "",
+    isArchived: r.fields["IsArchived"] === true,
   };
 }
 
@@ -77,7 +79,7 @@ export async function GET() {
     const res = await atFetch(AIRTABLE_TABLES.QUARTERS, qs);
     if (!res.ok) return NextResponse.json({ error: "Failed to fetch quarters" }, { status: 500 });
     const data = await res.json();
-    quarters.push(...(data.records as { id: string; fields: Record<string, string> }[]).map(mapQuarter));
+    quarters.push(...(data.records as { id: string; fields: Record<string, unknown> }[]).map(mapQuarter));
     offset = data.offset;
   } while (offset);
 
@@ -183,14 +185,26 @@ export async function PATCH(req: NextRequest) {
   if (sysRole !== "TTTAdmin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { id, label, startDate, endDate } = body as { id: string; label: string; startDate: string; endDate: string };
-  if (!id || !label || !startDate || !endDate) {
-    return NextResponse.json({ error: "id, label, startDate, endDate required" }, { status: 400 });
+  const { id, label, startDate, endDate, isArchived } = body as {
+    id: string; label?: string; startDate?: string; endDate?: string; isArchived?: boolean;
+  };
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Full edit (label/startDate/endDate) always sends all three together;
+  // the archive/unarchive toggle sends only isArchived — both go through
+  // this one endpoint since both are TTTAdmin-only quarter mutations.
+  const fields: Record<string, unknown> = {};
+  if (label !== undefined) fields["Label"] = label;
+  if (startDate !== undefined) fields["StartDate"] = startDate;
+  if (endDate !== undefined) fields["EndDate"] = endDate;
+  if (isArchived !== undefined) fields["IsArchived"] = isArchived;
+  if (Object.keys(fields).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const res = await atFetch(AIRTABLE_TABLES.QUARTERS, `/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ fields: { Label: label, StartDate: startDate, EndDate: endDate } }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) return NextResponse.json({ error: "Failed to update quarter" }, { status: 500 });
   const data = await res.json();
