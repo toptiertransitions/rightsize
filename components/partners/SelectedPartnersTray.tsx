@@ -4,20 +4,21 @@ import type { PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
 import { PartnerLogo } from "./PartnerLogo";
 import { EmptySlot } from "./EmptySlot";
+import { PartnerFilesSection } from "./PartnerFilesSection";
 
 interface Props {
   categories: readonly PartnerCategory[];
   selectedPartners: Partial<Record<PartnerCategory, PartnerProfile>>;
   onEmptyClick: (category: PartnerCategory) => void;
   onChangeClick: (category: PartnerCategory) => void;
-  /** Only the TTT-managed flow has a real file-management UI to jump to
-   * (on the selected PartnerCard below) — omitted (default false) in the
-   * NonTTTClient flow, which has no "selected partner" card to land on. */
+  /** File management renders inline, right in this tray — only the
+   * TTT-managed flow has a real tenantId/partner-selection concept to hang
+   * it off; omitted (default false) in the NonTTTClient flow. */
   filesEnabled?: boolean;
-  onFilesClick?: (category: PartnerCategory) => void;
+  tenantId?: string;
 }
 
-export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClick, onChangeClick, filesEnabled, onFilesClick }: Props) {
+export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClick, onChangeClick, filesEnabled, tenantId }: Props) {
   const filledCount = categories.filter((c) => selectedPartners[c]).length;
   const total = categories.length;
   const pct = Math.round((filledCount / total) * 100);
@@ -75,27 +76,15 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
 
               <p className="text-xs text-gray-400 mt-auto">Selected</p>
 
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => onChangeClick(category)}
-                  className="self-start text-[11px] font-medium text-forest-600 hover:text-forest-800 hover:underline min-h-[28px] flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 rounded"
-                >
-                  Change
-                </button>
-                {filesEnabled && (
-                  <button
-                    type="button"
-                    onClick={() => (onFilesClick ?? onChangeClick)(category)}
-                    className="self-start text-[11px] font-medium text-gray-500 hover:text-gray-700 hover:underline min-h-[28px] flex items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 rounded"
-                  >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                    Files
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => onChangeClick(category)}
+                className="self-start text-[11px] font-medium text-forest-600 hover:text-forest-800 hover:underline min-h-[28px] flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 rounded"
+              >
+                Change
+              </button>
+
+              {filesEnabled && tenantId && <PartnerFilesSection tenantId={tenantId} partnerId={partner.id} />}
             </div>
           );
         })}

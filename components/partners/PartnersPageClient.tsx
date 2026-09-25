@@ -111,7 +111,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         onEmptyClick={scrollToCategory}
         onChangeClick={scrollToCategory}
         filesEnabled
-        onFilesClick={scrollToCategory}
+        tenantId={tenantId}
       />
 
       <div className="flex items-center gap-3 mt-10 mb-1">

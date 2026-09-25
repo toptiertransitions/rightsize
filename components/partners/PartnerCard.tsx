@@ -51,6 +51,8 @@ export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, is
               {partner.phone}
             </a>
           )}
+
+          {isSelected && <PartnerFilesSection tenantId={tenantId} partnerId={partner.id} />}
         </div>
       </div>
     );
