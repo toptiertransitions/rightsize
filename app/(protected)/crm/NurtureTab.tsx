@@ -29,6 +29,53 @@ interface Quarter {
   endDate: string;
 }
 
+// Server-backed Spotlight picks (up to 3 companies), reusing the same
+// /api/crm/warroom-spotlight endpoint and WarRoomSpotlight Airtable table
+// the War Room tab's own Discussion Spotlight already uses — that one was
+// fixed from browser-localStorage-only (silently lost on a different
+// device/browser or cleared site data) to Airtable persistence; this
+// tab's three Spotlight lists never got the same fix and were still
+// localStorage-only, plus two of them shared one localStorage key despite
+// being logically separate lists. `contextKey` partitions each of this
+// tab's lists from War Room's own and from each other — the endpoint just
+// treats it as an opaque string, no API changes needed.
+function useServerSpotlight(contextKey: string) {
+  const [spotlightIds, setSpotlightIds] = useState<string[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!contextKey) return;
+    fetch(`/api/crm/warroom-spotlight?quarterId=${encodeURIComponent(contextKey)}`)
+      .then((r) => r.json())
+      .then((data) => setSpotlightIds(data.companyIds ?? []))
+      .catch(() => setSpotlightIds([]));
+  }, [contextKey]);
+
+  async function toggleSpotlight(id: string) {
+    if (!contextKey) return;
+    const prev = spotlightIds;
+    const isSpotlit = prev.includes(id);
+    if (!isSpotlit && prev.length >= 3) return;
+    const next = isSpotlit ? prev.filter((x) => x !== id) : [...prev, id];
+
+    setSpotlightIds(next); // optimistic
+    setError("");
+    try {
+      const res = await fetch("/api/crm/warroom-spotlight", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quarterId: contextKey, companyIds: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setSpotlightIds(prev);
+      setError("Couldn't save Spotlight — try again.");
+    }
+  }
+
+  return { spotlightIds: new Set(spotlightIds), toggleSpotlight, spotlightError: error };
+}
+
 interface ConversionTarget {
   companyId: string;
   companyName: string;
@@ -284,35 +331,17 @@ function StageChangesTable({
   rows,
   loading,
   repFilter,
-  currentUserId,
+  quarterId,
 }: {
   rows: StageChangeRow[];
   loading: boolean;
   repFilter: string | null;
-  currentUserId: string;
+  quarterId: string;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("nextStepDate");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [spotlightIds, setSpotlightIds] = useState<Set<string>>(new Set());
+  const { spotlightIds, toggleSpotlight, spotlightError } = useServerSpotlight(quarterId ? `${quarterId}:nurture-stage-changes` : "");
   const [showOnlySpotlit, setShowOnlySpotlit] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`ttt_nurture_spotlight_${currentUserId}`);
-      setSpotlightIds(stored ? new Set(JSON.parse(stored)) : new Set());
-    } catch { setSpotlightIds(new Set()); }
-  }, [currentUserId]);
-
-  function toggleSpotlight(contactId: string) {
-    setSpotlightIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(contactId)) next.delete(contactId); else next.add(contactId);
-      try {
-        localStorage.setItem(`ttt_nurture_spotlight_${currentUserId}`, JSON.stringify([...next]));
-      } catch {}
-      return next;
-    });
-  }
 
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -381,6 +410,7 @@ function StageChangesTable({
           )}
         </button>
       </div>
+      {spotlightError && <p className="px-4 py-1.5 text-xs text-red-600 bg-red-50 border-b border-red-100">{spotlightError}</p>}
       <div className="overflow-x-auto">
         <table className="text-xs w-full" style={{ minWidth: 660 }}>
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -451,28 +481,10 @@ interface FlatTarget extends ConversionTarget {
   repClerkId: string;
 }
 
-function TeamNurtureTable({ targets, quarterId, currentUserId }: { targets: FlatTarget[]; quarterId: string; currentUserId: string }) {
+function TeamNurtureTable({ targets, quarterId }: { targets: FlatTarget[]; quarterId: string }) {
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
-  const [spotlightIds, setSpotlightIds] = useState<Set<string>>(new Set());
+  const { spotlightIds, toggleSpotlight, spotlightError } = useServerSpotlight(quarterId ? `${quarterId}:nurture-pipeline` : "");
   const [showOnlySpotlit, setShowOnlySpotlit] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`);
-      setSpotlightIds(stored ? new Set(JSON.parse(stored)) : new Set());
-    } catch { setSpotlightIds(new Set()); }
-  }, [currentUserId]);
-
-  function toggleSpotlight(companyId: string) {
-    setSpotlightIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
-      try {
-        localStorage.setItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`, JSON.stringify([...next]));
-      } catch {}
-      return next;
-    });
-  }
 
   function toggleCompany(companyId: string) {
     setExpandedCompanies((prev) => {
@@ -518,6 +530,7 @@ function TeamNurtureTable({ targets, quarterId, currentUserId }: { targets: Flat
           )}
         </button>
       </div>
+      {spotlightError && <p className="px-4 py-1.5 text-xs text-red-600 bg-red-50 border-b border-red-100">{spotlightError}</p>}
       <table className="text-sm w-full" style={{ minWidth: 700 }}>
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
@@ -606,7 +619,6 @@ function RepNurtureSection({
   isPast,
   canManageTargets,
   toggling,
-  currentUserId,
   onAddTarget,
   onRemoveTarget,
 }: {
@@ -615,31 +627,12 @@ function RepNurtureSection({
   isPast: boolean;
   canManageTargets: boolean;
   toggling: string | null;
-  currentUserId: string;
   onAddTarget: (companyId: string, currentStage: string, forClerkUserId?: string) => Promise<void>;
   onRemoveTarget: (targetId: string, companyId: string) => Promise<void>;
 }) {
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
-  const [spotlightIds, setSpotlightIds] = useState<Set<string>>(new Set());
+  const { spotlightIds, toggleSpotlight, spotlightError } = useServerSpotlight(quarterId ? `${quarterId}:nurture-pipeline` : "");
   const [showOnlySpotlit, setShowOnlySpotlit] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`);
-      setSpotlightIds(stored ? new Set(JSON.parse(stored)) : new Set());
-    } catch { setSpotlightIds(new Set()); }
-  }, [currentUserId]);
-
-  function toggleSpotlight(companyId: string) {
-    setSpotlightIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
-      try {
-        localStorage.setItem(`ttt_nurture_pipeline_spotlight_${currentUserId}`, JSON.stringify([...next]));
-      } catch {}
-      return next;
-    });
-  }
 
   function toggleCompany(companyId: string) {
     setExpandedCompanies((prev) => {
@@ -679,6 +672,7 @@ function RepNurtureSection({
               )}
             </button>
           </div>
+          {spotlightError && <p className="px-4 py-1.5 text-xs text-red-600 bg-red-50 border-b border-red-100">{spotlightError}</p>}
           <table className="text-sm w-full" style={{ minWidth: 700 }}>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -957,7 +951,7 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
         rows={stageChanges}
         loading={stageChangesLoading}
         repFilter={selectedRepName}
-        currentUserId={currentUserId}
+        quarterId={selectedQuarterId ?? ""}
       />
 
       {/* Not Yet Referring Pipeline */}
@@ -1009,7 +1003,7 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
           {planLoading && <div className="py-8 text-center text-sm text-gray-400">Loading pipeline data...</div>}
 
           {!planLoading && planData && viewMode === "team" && (
-            <TeamNurtureTable targets={allFlatTargets} quarterId={selectedQuarterId ?? ""} currentUserId={currentUserId} />
+            <TeamNurtureTable targets={allFlatTargets} quarterId={selectedQuarterId ?? ""} />
           )}
 
           {!planLoading && planData && activeRep && (
@@ -1019,7 +1013,6 @@ export default function NurtureTab({ currentUserId, sysRole }: { currentUserId: 
               isPast={isPast}
               canManageTargets={canManageActiveRep}
               toggling={toggling}
-              currentUserId={currentUserId}
               onAddTarget={handleAddTarget}
               onRemoveTarget={handleRemoveTarget}
             />

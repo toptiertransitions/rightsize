@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import sharp from "sharp";
 import { getSystemRole } from "@/lib/airtable";
+import { uploadFile } from "@/lib/cloudinary";
 import Anthropic from "@anthropic-ai/sdk";
 
 export const maxDuration = 60;
@@ -90,11 +92,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not generate a valid SVG" }, { status: 500 });
   }
 
-  // Return SVG as a data URI — works natively in <img> tags and avoids Cloudinary SVG restrictions
-  const dataUri = `data:image/svg+xml;base64,${Buffer.from(svgContent, "utf-8").toString("base64")}`;
+  // ContentItems.ThumbnailUrl is an Airtable URL field, which rejects
+  // data: URIs (they don't match its expected http(s):// format) — a raw
+  // SVG data URI displayed fine in the modal's own preview but silently
+  // failed to save, leaving a broken image link everywhere else the item's
+  // thumbnail was rendered. Rasterize to PNG (also sidesteps Cloudinary's
+  // separate restriction on serving raw SVGs) and upload for a real,
+  // permanent, savable URL — same path every other image in the app uses.
+  let uploadResult;
+  try {
+    const pngBuffer = await sharp(Buffer.from(svgContent, "utf-8")).resize(200, 200).png().toBuffer();
+    uploadResult = await uploadFile(pngBuffer, {
+      folder: "rightsize/content/icons",
+      mimeType: "image/png",
+      resourceType: "image",
+      originalFileName: `icon-${Date.now()}.png`,
+    });
+  } catch (e) {
+    console.error("[generate-icon] Rasterize/upload error:", e);
+    return NextResponse.json({ error: "Failed to save the generated icon" }, { status: 500 });
+  }
 
   return NextResponse.json({
-    thumbnailUrl: dataUri,
-    thumbnailPublicId: "",
+    thumbnailUrl: uploadResult.secureUrl,
+    thumbnailPublicId: uploadResult.publicId,
   });
 }
