@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -506,6 +506,43 @@ export async function sendMoveManagementCrossSellNotification(params: {
     from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
     to: adminEmails,
     subject: `Cross-Sell Opportunity: Full Move Management — ${params.clientName}`,
+    html,
+  });
+}
+
+export async function sendPartnerIntroAdminNotification(params: {
+  clientName: string;
+  projectName: string;
+  tenantId: string;
+  partnerName: string;
+  category: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  answers: Array<{ label: string; value: string }>;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  if (adminEmails.length === 0) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildPartnerIntroAdminNotificationEmail({
+    clientName: params.clientName,
+    projectName: params.projectName,
+    partnerName: params.partnerName,
+    category: params.category,
+    clientEmail: params.clientEmail,
+    clientPhone: params.clientPhone,
+    answers: params.answers,
+    partnersUrl: `${appUrl}/partners?tenantId=${params.tenantId}`,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject: `Partner Intro Requested — ${params.clientName} → ${params.partnerName}`,
     html,
   });
 }

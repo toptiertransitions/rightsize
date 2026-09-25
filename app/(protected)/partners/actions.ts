@@ -11,7 +11,7 @@ import { getPartnerDirectory } from "@/lib/partners/queries";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
 import { buildPartnerIntroConfirmationEmail, buildPartnerIntroRequestNotificationEmail } from "@/lib/email";
-import { sendMoveManagementCrossSellNotification } from "@/lib/admin-notifications";
+import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification } from "@/lib/admin-notifications";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -259,6 +259,19 @@ export async function requestPartnerIntroAction(
           .catch((e) => console.error("Partner intro notification email failed:", e));
       }
     }
+
+    // Internal visibility — neither of the two emails above reaches TTT
+    // staff, so nobody at Top Tier otherwise learns an intro was requested.
+    sendPartnerIntroAdminNotification({
+      clientName,
+      projectName: tenant.name,
+      tenantId,
+      partnerName: partner.vendorName,
+      category: categoryLabel,
+      clientEmail: clientEmail || undefined,
+      clientPhone: tenant.clientPhone,
+      answers: formatAnswersForEmail(category, request?.answers ?? {}),
+    }).catch((e) => console.error("Partner intro admin notification failed:", e));
 
     logPartnerMatchEvent("intro_requested", { tenantId, category, partnerId });
     return { ok: true };
