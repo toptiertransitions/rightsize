@@ -98,12 +98,12 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         </div>
       )}
 
-      <header className="mb-6">
+      <header className="mb-1">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Your Partners</h1>
-        <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
-          We&rsquo;ve matched you with our most trusted partners. Choose one in each category to build your team.
-        </p>
       </header>
+      <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+        Track who&rsquo;s on your team below, and browse our vetted network to choose one in each category.
+      </p>
 
       <SelectedPartnersTray
         categories={PARTNER_CATEGORIES}
@@ -113,6 +113,14 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         filesEnabled
         onFilesClick={scrollToCategory}
       />
+
+      <div className="flex items-center gap-3 mt-10 mb-1">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 whitespace-nowrap">Vetted Partner Matching</h2>
+        <div className="h-px flex-1 bg-gray-200" />
+      </div>
+      <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+        Every partner below has been vetted by Top Tier Transitions. Browse each category and select who you&rsquo;d like on your team.
+      </p>
 
       <CategoryChipBar
         categories={PARTNER_CATEGORIES}

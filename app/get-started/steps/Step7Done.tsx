@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { PartyPopper } from "lucide-react";
 import type { WizardData } from "../wizardTypes";
+import { OnboardingTour } from "./OnboardingTour";
 
 function summaryLine(data: WizardData): string {
   if (data.appOnlyIntent) {
@@ -14,6 +16,12 @@ function summaryLine(data: WizardData): string {
 }
 
 export function Step7Done({ data, firstName, onFinish }: { data: WizardData; firstName: string; onFinish: () => void }) {
+  const [showTour, setShowTour] = useState(false);
+
+  if (showTour) {
+    return <OnboardingTour onFinish={onFinish} />;
+  }
+
   return (
     <div className="flex flex-col items-center text-center pt-6">
       <div className="w-16 h-16 rounded-2xl bg-forest-50 flex items-center justify-center mb-5">
@@ -25,10 +33,17 @@ export function Step7Done({ data, firstName, onFinish }: { data: WizardData; fir
       </p>
       <button
         type="button"
-        onClick={onFinish}
-        className="w-full max-w-xs min-h-[48px] h-12 rounded-2xl bg-forest-600 text-white font-semibold text-[15px] shadow-sm hover:bg-forest-700 active:scale-[0.99] transition-all"
+        onClick={() => setShowTour(true)}
+        className="w-full max-w-xs min-h-[48px] h-12 rounded-2xl bg-forest-600 text-white font-semibold text-[15px] shadow-sm hover:bg-forest-700 active:scale-[0.99] transition-all mb-3"
       >
-        Go to my dashboard
+        Take a 60-second tour
+      </button>
+      <button
+        type="button"
+        onClick={onFinish}
+        className="w-full max-w-xs min-h-[44px] text-gray-500 font-medium text-sm hover:text-gray-700 transition-colors"
+      >
+        Skip, go to my dashboard
       </button>
     </div>
   );

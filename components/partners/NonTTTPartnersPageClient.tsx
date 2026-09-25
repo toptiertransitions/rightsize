@@ -108,14 +108,14 @@ export function NonTTTPartnersPageClient({
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-[calc(env(safe-area-inset-bottom,0px)+40px)] pt-[max(20px,env(safe-area-inset-top))]">
-      <header className="mb-6">
+      <header className="mb-1">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Your Partners</h1>
-        <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
-          {appOnlyIntent && activeCategories.length === 0
-            ? "You told us you just want to use the app to simplify your move. If you change your mind on any of these, just say so below."
-            : "We’ve matched you with our most trusted partners. Choose one in each category to build your team."}
-        </p>
       </header>
+      <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+        {appOnlyIntent && activeCategories.length === 0
+          ? "You told us you just want to use the app to simplify your move. If you change your mind on any of these, just say so below."
+          : "Track who’s on your team below, and answer a few quick questions to get matched in each category."}
+      </p>
 
       <SelectedPartnersTray
         categories={PARTNER_CATEGORIES}
@@ -124,7 +124,14 @@ export function NonTTTPartnersPageClient({
         onChangeClick={scrollToCategory}
       />
 
-      <div className="mt-8 space-y-6">
+      {(activeCategories.length > 0 || greyedCategories.length > 0) && (
+        <div className="flex items-center gap-3 mt-10 mb-1">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 whitespace-nowrap">Vetted Partner Matching</h2>
+          <div className="h-px flex-1 bg-gray-200" />
+        </div>
+      )}
+
+      <div className="mt-4 space-y-6">
         {activeCategories.map((category) => (
           <div key={category} className="motion-safe:animate-[fadeInScale_0.3s_ease-out]">
             {category === "Move Manager" ? (
