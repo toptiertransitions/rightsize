@@ -107,7 +107,13 @@ function PersonRow({ member, distance }: { member: GeoStaff; distance: number })
 export default function AvailabilityTab() {
   const [zip, setZip] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS);
+  // Kept as raw text, not a number, while the field is being edited — a
+  // controlled numeric value snaps back the instant the field goes empty
+  // (Number("") || fallback), which makes the leading digit undeletable
+  // when trying to retype (e.g. 15 -> 20). Clamped to a real number only
+  // when actually used below, and cleaned up on blur.
+  const [radiusInput, setRadiusInput] = useState(String(DEFAULT_RADIUS));
+  const radiusMiles = Math.max(1, Math.min(200, Math.round(Number(radiusInput)) || DEFAULT_RADIUS));
 
   const [staff, setStaff] = useState<AvailabilityStaff[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -259,8 +265,10 @@ export default function AvailabilityTab() {
                 type="number"
                 min={1}
                 max={200}
-                value={radiusMiles}
-                onChange={(e) => setRadiusMiles(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+                value={radiusInput}
+                onChange={(e) => setRadiusInput(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => setRadiusInput(String(radiusMiles))}
                 className="w-full h-11 pl-3 pr-10 rounded-xl border border-gray-300 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-forest-500/30"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">mi</span>
