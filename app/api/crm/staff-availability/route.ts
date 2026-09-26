@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getStaffMembers, getSystemRole } from "@/lib/airtable";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 
 // Read-only, self-contained data source for the CRM "Availability" planning
 // tool — deliberately its own route (rather than extending the existing
@@ -18,7 +19,13 @@ export async function GET() {
   }
 
   const allStaff = await getStaffMembers().catch(() => []);
-  const pool = allStaff.filter((s) => s.isActive && (s.role === "TTTTeamLead" || s.role === "TTTStaff"));
+  const activePool = allStaff.filter((s) => s.isActive && (s.role === "TTTTeamLead" || s.role === "TTTStaff"));
+
+  // Suspension lives only in Clerk (publicMetadata.suspended) — Airtable's
+  // IsActive is a separate flag, so a suspended/deleted account can still
+  // pass the isActive check above. Must never be offered up as available.
+  const excludedIds = await getSuspendedOrDeletedClerkUserIds(activePool.map((s) => s.clerkUserId));
+  const pool = activePool.filter((s) => !excludedIds.has(s.clerkUserId));
 
   const clerkIds = pool.map((s) => s.clerkUserId).filter(Boolean);
   let photoMap = new Map<string, string>();
