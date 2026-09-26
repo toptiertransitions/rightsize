@@ -240,3 +240,106 @@ export async function analyzeItemPhoto(
 
   return analysis;
 }
+
+// ─── Reverse Item Lookup (Resale "Item Lookup" tab) ───────────────────────────
+// Two-stage picture-to-picture matching: (1) classify the query photo to
+// narrow the candidate pool from the full inventory down to one category,
+// (2) show the query photo alongside a batch of that category's existing
+// item photos and ask Claude which one (if any) is the same physical
+// object — not just a similar style. Batched because a category can hold
+// well over what fits in one message; batches run in parallel by the caller.
+
+export async function identifyItemForLookup(imageBase64: string): Promise<{ category: string; description: string }> {
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 300,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64" as const, media_type: "image/jpeg" as const, data: imageBase64 } },
+          {
+            type: "text",
+            text: `Identify the single physical item in this photo.
+
+Choose the single best-fitting category from this exact list (copy the text exactly):
+${ALL_CATEGORIES.join(", ")}
+
+Return ONLY this JSON, no markdown fences, no explanation:
+{"category": "<one of the categories above>", "description": "<one sentence noting the item's distinguishing visual features — color, material, shape, size, brand marks, condition/wear>"}`,
+          },
+        ],
+      },
+    ],
+  });
+
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  let result: { category: string; description: string };
+  try {
+    result = JSON.parse(cleaned);
+  } catch {
+    throw new Error(`Claude returned invalid JSON for item identification: ${text.slice(0, 200)}`);
+  }
+  if (!isValidCategory(result.category)) {
+    const fallback = ALL_CATEGORIES.find(c =>
+      c.toLowerCase().includes((result.category || "").toLowerCase()) ||
+      (result.category || "").toLowerCase().includes(c.toLowerCase())
+    ) ?? "Other";
+    result = { ...result, category: fallback };
+  }
+  return result;
+}
+
+export interface PhotoMatchCandidate {
+  index: number; // 1-based, stable across batches for the caller to map back
+  url: string;
+}
+
+export interface PhotoMatchResult {
+  matchIndex: number | null;
+  confidence: "High" | "Medium" | "Low" | null;
+  reasoning: string;
+}
+
+export async function findBestPhotoMatch(
+  queryImageBase64: string,
+  candidates: PhotoMatchCandidate[]
+): Promise<PhotoMatchResult> {
+  const content: Anthropic.Messages.ContentBlockParam[] = [
+    { type: "text", text: "PHOTO TO IDENTIFY (this is the item we're trying to find in inventory):" },
+    { type: "image", source: { type: "base64" as const, media_type: "image/jpeg" as const, data: queryImageBase64 } },
+  ];
+  for (const c of candidates) {
+    content.push({ type: "text", text: `CANDIDATE #${c.index}:` });
+    content.push({ type: "image", source: { type: "url" as const, url: c.url } });
+  }
+  content.push({
+    type: "text",
+    text: `Does the photo to identify show the exact same physical object as any of the numbered candidates above — not just a similar style, model, or type, but the literal same physical item (matching color, material, proportions, and any distinguishing marks, wear, or damage)?
+
+A different chair of the same design, a different vase of the same pattern, etc. is NOT a match unless you have strong visual evidence it's the same physical object.
+
+Return ONLY this JSON, no markdown fences, no explanation:
+{"matchIndex": <the candidate number 1-${candidates.length > 0 ? Math.max(...candidates.map((c) => c.index)) : 0} that matches, or null if none do>, "confidence": "High" | "Medium" | "Low" (null if matchIndex is null), "reasoning": "<one sentence>"}`,
+  });
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 300,
+    messages: [{ role: "user", content }],
+  });
+
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    return {
+      matchIndex: typeof parsed.matchIndex === "number" ? parsed.matchIndex : null,
+      confidence: ["High", "Medium", "Low"].includes(parsed.confidence) ? parsed.confidence : null,
+      reasoning: String(parsed.reasoning || ""),
+    };
+  } catch {
+    return { matchIndex: null, confidence: null, reasoning: "Couldn't parse the comparison result." };
+  }
+}

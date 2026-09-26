@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { VendorFileModal } from "@/components/catalog/VendorFileModal";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
+import { ItemLookupTab } from "./ItemLookupTab";
 import { KEY_DATE_ACTIVITIES, VENDOR_TYPES } from "@/lib/types";
 import type { Item, ItemStatus, LocalVendor, PlanEntry, StaffMember, Room, VendorType } from "@/lib/types";
 import { CATEGORY_GROUPS } from "@/lib/categories";
@@ -367,6 +368,8 @@ function CalendarSection({
 
       {/* Calendar grid */}
       <div className="border border-gray-200 rounded-xl overflow-hidden">
+       <div className="overflow-x-auto">
+        <div className="min-w-[600px]">
         {/* Day headers */}
         <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
           {viewMode === "month"
@@ -447,6 +450,8 @@ function CalendarSection({
             })}
           </div>
         )}
+        </div>
+       </div>
       </div>
     </div>
   );
@@ -1399,10 +1404,11 @@ function VendorsSection({ initialVendors }: { initialVendors: LocalVendor[] }) {
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
-type TabId = "projects" | "items" | "fb" | "ebay" | "vendors" | "flyp";
+type TabId = "projects" | "lookup" | "items" | "fb" | "ebay" | "vendors" | "flyp";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "projects", label: "Projects" },
+  { id: "lookup",   label: "Item Lookup" },
   { id: "items",    label: "ProFound" },
   { id: "fb",       label: "FB Marketplace" },
   { id: "ebay",     label: "eBay" },
@@ -1424,7 +1430,7 @@ export function ResaleClient({
   const router = useRouter();
 
   const rawTab = searchParams.get("tab") as TabId | null;
-  const activeTab: TabId = (rawTab && ["projects", "items", "fb", "ebay", "vendors", "flyp"].includes(rawTab))
+  const activeTab: TabId = (rawTab && ["projects", "lookup", "items", "fb", "ebay", "vendors", "flyp"].includes(rawTab))
     ? rawTab : "projects";
 
   const tenantNames: Record<string, string> = {};
@@ -1446,13 +1452,16 @@ export function ResaleClient({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 border-b border-gray-200 mb-8">
+        <div
+          className="flex gap-1 border-b border-gray-200 mb-8 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none" }}
+        >
           {TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => setTab(tab.id)}
               className={[
-                "px-5 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors",
+                "flex-shrink-0 whitespace-nowrap px-5 py-2.5 text-sm font-medium rounded-t-lg -mb-px border-b-2 transition-colors",
                 activeTab === tab.id
                   ? "border-[#2d4a3e] text-[#2d4a3e] bg-white"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100/70"
@@ -1479,6 +1488,9 @@ export function ResaleClient({
             </section>
           </div>
         )}
+
+        {/* Tab: Item Lookup */}
+        {activeTab === "lookup" && <ItemLookupTab />}
 
         {/* Tab: ProFound */}
         {activeTab === "items" && (
