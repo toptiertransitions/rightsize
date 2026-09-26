@@ -7,6 +7,7 @@ import VoiceLogTab from "./VoiceLogTab";
 import TasksTab from "./TasksTab";
 import WarRoomTab from "./WarRoomTab";
 import NurtureTab from "./NurtureTab";
+import AvailabilityTab from "./AvailabilityTab";
 
 const CRMActivityCharts = dynamic(() => import("./CRMActivityCharts"), { ssr: false });
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ function parseCSV(text: string): Record<string, string>[] {
   }).filter(row => Object.values(row).some(v => v.trim()));
 }
 
-type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "voice" | "activity" | "settings" | "warroom" | "nurture";
+type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "voice" | "activity" | "settings" | "warroom" | "nurture" | "availability";
 
 interface CRMClientProps {
   opportunities: ClientOpportunity[];
@@ -6060,6 +6061,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     { key: "referrals", label: "Referral Partners" },
     { key: "warroom", label: "War Room" },
     { key: "nurture", label: "Referral Funnel" },
+    { key: "availability", label: "Availability" },
     { key: "tasks", label: "Tasks" },
     { key: "voice", label: "Log with Voice" },
     { key: "activity", label: "Activity Log" },
@@ -6161,6 +6163,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       {tab === "settings" && <GmailSettingsTab gmailConnected={gmailConnected} gmailEmail={gmailEmail} gmailTokenRevoked={gmailTokenRevoked} />}
       {tab === "warroom" && <WarRoomTab currentUserId={currentUserId} sysRole={sysRole} />}
       {tab === "nurture" && <NurtureTab currentUserId={currentUserId} sysRole={sysRole} />}
+      {tab === "availability" && <AvailabilityTab />}
     </div>
   );
 }
