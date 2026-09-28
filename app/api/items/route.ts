@@ -280,6 +280,12 @@ export async function PATCH(req: NextRequest) {
     if (autoCommission !== undefined && !(updates as Record<string, unknown>).staffCommissionPercent && !existing?.staffCommissionPercent) {
       (updates as Record<string, unknown>).staffCommissionPercent = autoCommission;
     }
+    // ProFoundFinds Consignment sales have no individual staff seller — clear
+    // any stale/incoming value before it's written or reaches the sold-item email.
+    if (soldRoute === "ProFoundFinds Consignment") {
+      (updates as Record<string, unknown>).staffSellerId = "";
+      (updates as Record<string, unknown>).staffSellerName = "";
+    }
   }
   // When reverting from Sold → clear sale fields and delete orphaned sale events
   if (updates.status && updates.status !== "Sold" && existing?.status === "Sold") {

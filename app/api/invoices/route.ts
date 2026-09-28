@@ -286,6 +286,7 @@ export async function POST(req: NextRequest) {
   // Send email with a link back to the platform payment page.
   // Only fires when "Send Email" is explicitly checked — not when pushing to QBO
   // (QBO sends its own email with its payment link).
+  let emailError: string | undefined;
   if (sendEmail && sentToEmail) {
     try {
       const settings = await getInvoiceSettings().catch(() => null);
@@ -304,20 +305,30 @@ export async function POST(req: NextRequest) {
         expenseItems: expenseItems?.length ? expenseItems : undefined,
       });
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
-        from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
+        from: process.env.RESEND_FROM_EMAIL || "hello@toptiertransitions.com",
         to: sentToEmail,
         subject: `Invoice ${invoiceNumber} — ${type} Invoice`,
         html,
         cc: ccEmail ? ["billing@toptiertransitions.com", ccEmail] : "billing@toptiertransitions.com",
       };
-      await resend.emails.send(emailOpts);
-      invoice = await updateInvoice(invoice.id, { emailSent: true });
+      // Resend resolves (doesn't throw) with { error } on validation/API failures —
+      // e.g. an unverified sending domain — so this must be checked explicitly, or
+      // the send silently "succeeds" with nothing in Resend's own logs and no email
+      // ever reaching the client, while emailSent still gets marked true.
+      const { error: sendError } = await resend.emails.send(emailOpts);
+      if (sendError) {
+        console.error("[invoices/POST] Invoice email send failed (Resend error):", sendError);
+        emailError = sendError.message || "Failed to send invoice email";
+      } else {
+        invoice = await updateInvoice(invoice.id, { emailSent: true });
+      }
     } catch (e) {
-      console.error("Invoice email send failed:", e);
+      console.error("[invoices/POST] Invoice email send threw:", e);
+      emailError = e instanceof Error ? e.message : "Failed to send invoice email";
     }
   }
 
-  return NextResponse.json({ invoice, ...(qboError ? { qboError } : {}) });
+  return NextResponse.json({ invoice, ...(qboError ? { qboError } : {}), ...(emailError ? { emailError } : {}) });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -345,14 +356,18 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Send email for existing invoice if requested
+  let emailError: string | undefined;
   if (sendEmail && sentToEmail) {
     try {
-      const settings = await getInvoiceSettings().catch(() => null);
+      const [settings, tenant] = await Promise.all([
+        getInvoiceSettings().catch(() => null),
+        invoice.tenantId ? getTenantById(invoice.tenantId).catch(() => null) : Promise.resolve(null),
+      ]);
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
       const payUrl = `${appUrl}/pay/${invoice.id}`;
       const html = buildInvoiceEmail({
         invoiceNumber: invoice.invoiceNumber,
-        tenantName: "Client",
+        tenantName: invoice.billToName || tenant?.name || "Client",
         type: invoice.type,
         amount: invoice.amount,
         serviceName: invoice.serviceName || "Services",
@@ -363,27 +378,36 @@ export async function PATCH(req: NextRequest) {
         expenseItems: invoice.expenseItems?.length ? invoice.expenseItems : undefined,
       });
       const emailOpts: Parameters<typeof resend.emails.send>[0] = {
-        from: process.env.RESEND_FROM_EMAIL || "invoices@yourdomain.com",
+        from: process.env.RESEND_FROM_EMAIL || "hello@toptiertransitions.com",
         to: sentToEmail,
         subject: `Invoice ${invoice.invoiceNumber} — ${invoice.type} Invoice`,
         html,
         cc: ccEmail ? ["billing@toptiertransitions.com", ccEmail] : "billing@toptiertransitions.com",
       };
-      await resend.emails.send(emailOpts);
-      invoice = await updateInvoice(invoice.id, { emailSent: true });
+      // See POST handler above — Resend returns { error } instead of throwing on
+      // validation/API failures, so this must be checked explicitly or the send
+      // silently "succeeds" with nothing in Resend's logs.
+      const { error: sendError } = await resend.emails.send(emailOpts);
+      if (sendError) {
+        console.error("[invoices/PATCH] Invoice email send failed (Resend error):", sendError);
+        emailError = sendError.message || "Failed to send invoice email";
+      } else {
+        invoice = await updateInvoice(invoice.id, { emailSent: true });
 
-      // Fire internal wrap notification when a Full Invoice goes out
-      if (invoice.type === "Full") {
-        sendWrapNotification(invoice).catch(e =>
-          console.error("[wrapNotification] error:", e)
-        );
+        // Fire internal wrap notification when a Full Invoice goes out
+        if (invoice.type === "Full") {
+          sendWrapNotification(invoice).catch(e =>
+            console.error("[wrapNotification] error:", e)
+          );
+        }
       }
     } catch (e) {
-      console.error("Invoice email send failed:", e);
+      console.error("[invoices/PATCH] Invoice email send threw:", e);
+      emailError = e instanceof Error ? e.message : "Failed to send invoice email";
     }
   }
 
-  return NextResponse.json({ invoice });
+  return NextResponse.json({ invoice, ...(emailError ? { emailError } : {}) });
 }
 
 export async function DELETE(req: NextRequest) {

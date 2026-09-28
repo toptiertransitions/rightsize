@@ -120,6 +120,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#eff6ff",
     borderBottom: "1pt solid #dbeafe",
   },
+  expenseRow: {
+    flexDirection: "row",
+    padding: "8 12",
+    borderBottom: "1pt solid #f3f4f6",
+  },
+  expenseRowAlt: {
+    flexDirection: "row",
+    padding: "8 12",
+    backgroundColor: "#f9fafb",
+    borderBottom: "1pt solid #f3f4f6",
+  },
   colService: { flex: 3, fontSize: 9, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
   colHrs: { flex: 1, fontSize: 9, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
   colRate: { flex: 1, fontSize: 9, color: "#6b7280", fontFamily: "Helvetica-Bold", textTransform: "uppercase", textAlign: "right" },
@@ -128,6 +139,9 @@ const styles = StyleSheet.create({
   cellHrs: { flex: 1, fontSize: 10, color: "#374151", textAlign: "right" },
   cellRate: { flex: 1, fontSize: 10, color: "#374151", textAlign: "right" },
   cellAmount: { flex: 1.5, fontSize: 10, color: "#374151", textAlign: "right" },
+  expenseLabel: { flex: 5, fontSize: 10, color: "#374151" },
+  expenseDate: { fontSize: 9, color: "#9ca3af" },
+  expenseValue: { flex: 1.5, fontSize: 10, color: "#374151", textAlign: "right" },
   subtotalLabel: { flex: 5, fontSize: 10, color: "#6b7280" },
   subtotalValue: { flex: 1.5, fontSize: 10, color: "#6b7280", textAlign: "right" },
   creditLabel: { flex: 5, fontSize: 10, color: "#1d4ed8", fontFamily: "Helvetica-Oblique" },
@@ -187,16 +201,21 @@ export function InvoicePDF({ invoice, tenantName, billToName, settings, payUrl }
     year: "numeric",
   });
 
-  // Build line items — for Full invoices with lineItems array, or single-row for deposit
-  const lineItems =
-    invoice.lineItems && invoice.lineItems.length > 0
-      ? invoice.lineItems
-      : [{ serviceId: invoice.serviceId, serviceName: invoice.serviceName, hours: 1, rate: invoice.amount }];
+  // Build line items — for Full invoices with lineItems and/or expenseItems, or a
+  // single fallback row for legacy invoices with neither (e.g. plain deposits).
+  const rawLineItems = invoice.lineItems ?? [];
+  const hasDetailedBreakdown = rawLineItems.length > 0 || (invoice.expenseItems?.length ?? 0) > 0;
+  const lineItems = hasDetailedBreakdown
+    ? rawLineItems
+    : [{ serviceId: invoice.serviceId, serviceName: invoice.serviceName, hours: 1, rate: invoice.amount }];
 
+  const expenseItems = invoice.expenseItems ?? [];
   const positiveItems = lineItems.filter((item) => item.rate >= 0);
   const creditItems = lineItems.filter((item) => item.rate < 0);
   const hasCredits = creditItems.length > 0;
-  const subtotalAmount = positiveItems.reduce((s, item) => s + item.hours * item.rate, 0);
+  const serviceSubtotal = positiveItems.reduce((s, item) => s + item.hours * item.rate, 0);
+  const expenseSubtotal = expenseItems.reduce((s, ei) => s + ei.amount, 0);
+  const subtotalAmount = serviceSubtotal + expenseSubtotal;
 
   return (
     <Document>
@@ -264,6 +283,15 @@ export function InvoicePDF({ invoice, tenantName, billToName, settings, payUrl }
               <Text style={styles.cellHrs}>{item.hours}</Text>
               <Text style={styles.cellRate}>{fmt(item.rate)}</Text>
               <Text style={styles.cellAmount}>{fmt(item.hours * item.rate)}</Text>
+            </View>
+          ))}
+          {expenseItems.map((ei, i) => (
+            <View key={`expense-${i}`} style={(positiveItems.length + i) % 2 === 0 ? styles.expenseRow : styles.expenseRowAlt}>
+              <Text style={styles.expenseLabel}>
+                {ei.description}{ei.vendor ? ` — ${ei.vendor}` : ""}{ei.date ? ` ` : ""}
+                {ei.date ? <Text style={styles.expenseDate}>({ei.date})</Text> : null}
+              </Text>
+              <Text style={styles.expenseValue}>{fmt(ei.amount)}</Text>
             </View>
           ))}
           {hasCredits && (

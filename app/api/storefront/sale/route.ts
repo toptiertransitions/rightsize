@@ -65,9 +65,15 @@ async function attemptRecordSale(data: {
     completedDate: saleDate,
   };
 
+  // ProFoundFinds Consignment sales have no individual staff seller — clear any
+  // stale value from before the item was listed on the storefront.
+  const clearStaffSeller = item.primaryRoute === "ProFoundFinds Consignment"
+    ? { staffSellerId: "", staffSellerName: "" }
+    : {};
+
   if (qtyPurchased >= itemTotalQty) {
     // Buying all available units — mark the original item sold (existing behavior)
-    await updateItem(data.itemId, { status: "Sold", quantity: qtyPurchased, ...saleFields });
+    await updateItem(data.itemId, { status: "Sold", quantity: qtyPurchased, ...saleFields, ...clearStaffSeller });
   } else {
     // Partial purchase — create a sold copy for the units purchased, reduce original
     const soldCopy = await createItem({

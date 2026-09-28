@@ -51,6 +51,7 @@ export function InvoiceCreatorModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [qboWarning, setQboWarning] = useState<{ message: string; invoice: Invoice } | null>(null);
+  const [emailWarning, setEmailWarning] = useState<{ message: string; invoice: Invoice } | null>(null);
 
   // Deposit state
   const [depositMode, setDepositMode] = useState<DepositMode>("percent");
@@ -431,6 +432,11 @@ export function InvoiceCreatorModal({
       if (data.qboError) {
         // Keep modal open so the error is visible before closing
         setQboWarning({ message: data.qboError, invoice: data.invoice });
+        return;
+      }
+      if (data.emailError) {
+        // Keep modal open so the error is visible before closing
+        setEmailWarning({ message: data.emailError, invoice: data.invoice });
         return;
       }
       onCreated(data.invoice);
@@ -1151,8 +1157,22 @@ export function InvoiceCreatorModal({
             </div>
           )}
 
+          {/* Email Warning — invoice saved but the client email failed to send */}
+          {emailWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-800">Invoice created — email to client failed to send</p>
+              <p className="text-xs text-amber-700 font-mono break-all">{emailWarning.message}</p>
+              <button
+                onClick={() => onCreated(emailWarning.invoice)}
+                className="text-xs font-semibold text-amber-800 underline hover:text-amber-900"
+              >
+                Close and go to invoices
+              </button>
+            </div>
+          )}
+
           {/* Actions */}
-          {!qboWarning && (
+          {!qboWarning && !emailWarning && (
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleSubmit}

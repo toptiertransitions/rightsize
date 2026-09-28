@@ -174,6 +174,7 @@ export async function POST(req: NextRequest) {
           currentQuantitySold: item.quantitySold ?? 0,
           salePrice: unitPriceDollars,
           clientPayout,
+          primaryRoute: item.primaryRoute,
         });
 
         soldItems.push(item.itemName);

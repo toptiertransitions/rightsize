@@ -5874,6 +5874,7 @@ export async function applySquareSaleToItem(opts: {
   currentQuantitySold: number;
   salePrice?: number;
   clientPayout?: number;
+  primaryRoute?: string;
 }): Promise<Item> {
   const newQty = Math.max(0, opts.currentQuantity - opts.quantitySold);
   const newQtySold = opts.currentQuantitySold + opts.quantitySold;
@@ -5889,6 +5890,12 @@ export async function applySquareSaleToItem(opts: {
     fields["CompletedDate"] = saleDateIso.split("T")[0];
     if (opts.salePrice != null) fields["SalePrice"] = opts.salePrice;
     if (opts.clientPayout != null) fields["ConsignorPayout"] = opts.clientPayout;
+    // ProFoundFinds Consignment sales have no individual staff seller — clear
+    // any stale value before the sold-item email reads it.
+    if (opts.primaryRoute === "ProFoundFinds Consignment") {
+      fields["StaffSellerId"] = "";
+      fields["StaffSellerName"] = "";
+    }
   }
   const base = getBase();
   const record = await base(AIRTABLE_TABLES.ITEMS).update(opts.itemId, fields, { typecast: true });
