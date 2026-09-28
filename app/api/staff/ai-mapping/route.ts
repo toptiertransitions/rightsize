@@ -22,7 +22,9 @@ const SYSTEM_PROMPT = `You are an AI staff assignment advisor for Top Tier Trans
 
 You will receive:
 - Project details: address(es), date, team composition needed, required skills, notes
-- Staff roster with: name, role (Staff/Team Lead), skills, weekly hour goals, estimated scheduled hours this week, home address, and — critically — their availability status for the project date
+- Staff roster with: name, role (Staff/Team Lead), skills, weekly hour goals, estimated scheduled hours this week, home address, an estimated driving distance from the project (when computable), and — critically — their availability status for the project date
+
+Each staff member's Location line may include "(~N mi from project, est.)" — this is a real geocoded estimate (straight-line distance inflated ~20% for roads/turns), not a guess. When no distance is shown, it couldn't be computed (missing/ungeocodable address) — do not assume proximity either way in that case.
 
 Each staff member's entry includes an AVAILABILITY line:
 - "Available (Mon 9:00–17:00)" or similar means they are scheduled to work and have no conflicts
@@ -49,7 +51,7 @@ List each flag as a bullet. Flags must include:
 - Any selected person who is a trade-off (conflict, at max hours, etc.)
 - Anyone approaching their max weekly hours if selected
 - Any skill gaps if no fully qualified staff are available
-- If max drive distance is set, note anyone outside that radius
+- If max drive distance is set, do not select anyone whose shown distance exceeds it unless every closer option is unavailable or unqualified — and flag it explicitly if you do
 
 ## Alternative Options
 If there are reasonable alternatives, list them briefly (1-3 bullets max).
@@ -108,16 +110,24 @@ interface StaffGoalRow {
   id: string;
   displayName: string;
   email: string;
-  roleType: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
   maxWeeklyHours?: number;
   skillIds: string[];
 }
 
+// Candidate pool for AI-recommended crew: field staff, Team Leads, and
+// Managers (Managers occasionally join crews directly — they carry hour
+// goals in Airtable same as Staff/Team Leads). TTTSales/TTTAdmin are
+// office roles, never crew.
+//
+// NOTE: Role/Team-Lead status comes from Airtable's real `Role` field via
+// getStaffMembers() below, not from this table's own `RoleType` field —
+// RoleType is a separate, independently-set column that drifts out of sync
+// (confirmed live: 6 of 7 active Team Leads had RoleType stuck on "Staff").
 async function fetchStaffGoals(): Promise<StaffGoalRow[]> {
   const formula = encodeURIComponent(
-    `AND({IsActive}=TRUE(),OR({Role}="TTTStaff",{Role}="TTTManager"))`
+    `AND({IsActive}=TRUE(),OR({Role}="TTTStaff",{Role}="TTTTeamLead",{Role}="TTTManager"))`
   );
   const records: AirtableRecord[] = [];
   let offset: string | undefined;
@@ -144,7 +154,6 @@ async function fetchStaffGoals(): Promise<StaffGoalRow[]> {
       id: r.id,
       displayName: typeof f["DisplayName"] === "string" ? f["DisplayName"] : "",
       email: typeof f["Email"] === "string" ? f["Email"] : "",
-      roleType: f["RoleType"] === "Team Lead" ? "Team Lead" : "Staff",
       minWeeklyHours: typeof f["MinWeeklyHours"] === "number" ? f["MinWeeklyHours"] : undefined,
       targetWeeklyHours: typeof f["TargetWeeklyHours"] === "number" ? f["TargetWeeklyHours"] : undefined,
       maxWeeklyHours: typeof f["MaxWeeklyHours"] === "number" ? f["MaxWeeklyHours"] : undefined,
@@ -203,20 +212,34 @@ function getWeekRange(dateStr: string): { weekStart: string; weekEnd: string } {
   return { weekStart: fmt(monday), weekEnd: fmt(sunday) };
 }
 
-/** Rough scheduled hours: count shifts per person, assume 8h each */
+/** Duration of a shift from its start/end time; falls back to an 8h estimate
+ * when either time is missing (e.g. a TBD shift). */
+function shiftHours(e: PlanEntry): number {
+  if (e.startTime && e.endTime) {
+    const [sh, sm] = e.startTime.split(":").map(Number);
+    const [eh, em] = e.endTime.split(":").map(Number);
+    if (!Number.isNaN(sh) && !Number.isNaN(eh)) {
+      const minutes = (eh * 60 + em) - (sh * 60 + sm);
+      if (minutes > 0) return minutes / 60;
+    }
+  }
+  return 8;
+}
+
+/** Scheduled hours this week, summing actual shift durations where set. */
 function computeScheduledHours(
   entries: PlanEntry[],
   email: string
 ): number {
   const emailLower = email.toLowerCase();
-  let shifts = 0;
+  let hours = 0;
   for (const e of entries) {
     if (e.entryType === "keydate") continue;
     if (e.helpers?.some(h => h.email.toLowerCase() === emailLower && h.status !== "declined")) {
-      shifts++;
+      hours += shiftHours(e);
     }
   }
-  return shifts * 8;
+  return Math.round(hours * 10) / 10;
 }
 
 /** Returns count of non-keydate shifts on a specific date that include this person */
@@ -228,6 +251,41 @@ function conflictsOnDate(entries: PlanEntry[], email: string, date: string): num
       e.entryType !== "keydate" &&
       e.helpers?.some(h => h.email.toLowerCase() === emailLower && h.status !== "declined")
   ).length;
+}
+
+// ─── Distance (server-side geocoding) ─────────────────────────────────────────
+// The AI previously had no real distance data — just a "City, State" string
+// parsed out of the address — so "max drive distance" was pure guesswork on
+// the model's part. Geocodes the project address and every candidate's home
+// address, then computes straight-line distance inflated 1.2x for roads/
+// turns, matching the same estimate used by the CRM Availability tool.
+const ROAD_DISTANCE_FACTOR = 1.2;
+
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * ROAD_DISTANCE_FACTOR;
+}
+
+async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+  if (!address?.trim() || !apiKey) return null;
+  try {
+    const res = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const loc = data.results?.[0]?.geometry?.location;
+    if (typeof loc?.lat !== "number" || typeof loc?.lng !== "number") return null;
+    return { lat: loc.lat, lng: loc.lng };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Build staff context string ───────────────────────────────────────────────
@@ -242,6 +300,7 @@ interface EnrichedMember {
   maxWeeklyHours?: number;
   scheduledHoursThisWeek: number;
   address?: string;
+  distanceMiles?: number;
   availabilityNote: string;
   calendarConflicts: number;
 }
@@ -269,6 +328,7 @@ function buildStaffContext(members: EnrichedMember[]): string {
     const location = m.address
       ? extractCityState(m.address) || m.address
       : "address not on file";
+    const distance = m.distanceMiles != null ? ` (~${m.distanceMiles.toFixed(1)} mi from project, est.)` : "";
 
     const conflictNote =
       m.calendarConflicts > 0
@@ -278,7 +338,7 @@ function buildStaffContext(members: EnrichedMember[]): string {
     return [
       `- ${name} | Role: ${m.roleType} | Skills: ${skills}`,
       `  Weekly goals: ${hoursGoal} | Scheduled this week: ~${m.scheduledHoursThisWeek}h${remaining}`,
-      `  Location: ${location}`,
+      `  Location: ${location}${distance}`,
       `  Availability: ${conflictNote}`,
     ].join("\n");
   });
@@ -399,7 +459,9 @@ export async function POST(req: NextRequest) {
     return {
       displayName,
       email: g.email,
-      roleType: g.roleType,
+      // Real Role field, not the separate/stale RoleType column — see note
+      // on fetchStaffGoals above.
+      roleType: (fullMember?.role === "TTTTeamLead" ? "Team Lead" : "Staff") as "Staff" | "Team Lead",
       skills,
       minWeeklyHours: g.minWeeklyHours,
       targetWeeklyHours: g.targetWeeklyHours,
@@ -410,6 +472,25 @@ export async function POST(req: NextRequest) {
       calendarConflicts,
     };
   });
+
+  // ── Distance from project (structured mode, real address only) ─────────────
+  // Geocodes the project origin and every candidate's home address so the AI
+  // gets an actual mileage estimate instead of guessing off a City/State
+  // string — this is what makes "max drive distance" enforceable at all.
+  const originAddress = body.mode === "structured" ? body.structuredInput?.originAddress : undefined;
+  const gmapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+  if (originAddress?.trim() && gmapsKey) {
+    const origin = await geocodeAddress(originAddress, gmapsKey);
+    if (origin) {
+      await Promise.all(
+        enrichedMembers.map(async (m) => {
+          if (!m.address) return;
+          const loc = await geocodeAddress(m.address, gmapsKey);
+          if (loc) m.distanceMiles = haversineMiles(origin.lat, origin.lng, loc.lat, loc.lng);
+        })
+      );
+    }
+  }
 
   const projectDescription = buildProjectDescription(body);
   const staffContext = buildStaffContext(enrichedMembers);
