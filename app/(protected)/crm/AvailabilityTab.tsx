@@ -47,6 +47,11 @@ function loadGMaps(key: string): Promise<void> {
   return gmapsLoading;
 }
 
+// Straight-line distance understates real driving distance (roads, turns,
+// no direct route) — inflate by a flat factor so the radius filter and the
+// displayed mileage are a closer proxy for actual travel distance.
+const ROAD_DISTANCE_FACTOR = 1.2;
+
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -55,7 +60,7 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * ROAD_DISTANCE_FACTOR;
 }
 
 // Same day-of-week / time-off logic as the Plan page's helper-conflict
@@ -316,11 +321,11 @@ export default function AvailabilityTab() {
         <div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mb-2">
             <div className="bg-white border border-gray-200 rounded-2xl p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Team Leads Available</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Team Leads Potentially Free</p>
               <p className="text-3xl font-bold text-gray-900">{results.teamLeads.length}</p>
             </div>
             <div className="bg-white border border-gray-200 rounded-2xl p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Staff Available</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Staff Potentially Free</p>
               <p className="text-3xl font-bold text-gray-900">{results.staffOnly.length}</p>
             </div>
           </div>
