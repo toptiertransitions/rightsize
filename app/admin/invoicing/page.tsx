@@ -7,6 +7,7 @@ import { InvoicingSettingsClient } from "./InvoicingSettingsClient";
 import { WeeklySalesReportButton } from "./WeeklySalesReportButton";
 import { WeeklyActiveProjectsButton } from "./WeeklyActiveProjectsButton";
 import { ClientPipelineReportButton } from "./ClientPipelineReportButton";
+import { SendQPlanningReportButton } from "./SendQPlanningReportButton";
 import { SalesGoalsClient } from "./SalesGoalsClient";
 
 export default async function InvoicingSettingsPage() {
@@ -33,6 +34,7 @@ export default async function InvoicingSettingsPage() {
           <WeeklySalesReportButton />
           <WeeklyActiveProjectsButton />
           <ClientPipelineReportButton />
+          <SendQPlanningReportButton />
         </div>
         <InvoicingSettingsClient initialSettings={settings} />
 

@@ -3740,6 +3740,220 @@ export function buildClientPipelineEmail({
 </html>`;
 }
 
+// ─── Quarterly (Q) Planning Report Email ─────────────────────────────────────
+// Summary of the CRM War Room / Referral Funnel quarterly plans — grouped by
+// TTTSalesRep, then by referral company, with each company's goal/actual,
+// stage, competitors and the meetings/resources plan set for the quarter.
+
+export interface QPlanningCompanyRow {
+  companyName: string;
+  priority: "High" | "Medium" | "Low" | "";
+  goal: number;
+  actual: number;
+  bestStage?: string;
+  nextStepDate?: string | null;
+  nextStepNote?: string | null;
+  stageDurationDays?: number | null;
+  competitors?: string | null;
+  plan: {
+    meeting1: string; meeting2: string; meeting3: string;
+    resource1: string; resource2: string; resource3: string;
+    monthlyMeetingGoal: number; monthlyCheckinGoal: number;
+  } | null;
+}
+
+export interface QPlanningAvailableRow {
+  companyName: string;
+  priority: "High" | "Medium" | "Low" | "";
+  bestStage: string;
+}
+
+export interface QPlanningRepSection {
+  displayName: string;
+  goal: number;
+  actual: number;
+  activePartners: QPlanningCompanyRow[];
+  conversionTargets: QPlanningCompanyRow[];
+  availableToConvert: QPlanningAvailableRow[];
+}
+
+export function buildQuarterlyPlanningReportEmail({
+  quarterLabel,
+  quarterRange,
+  reps,
+  generatedAt,
+}: {
+  quarterLabel: string;
+  quarterRange: string;
+  reps: QPlanningRepSection[];
+  generatedAt: string;
+}): string {
+  function fmtDate(d?: string | null): string {
+    if (!d) return "—";
+    const [y, m, day] = d.slice(0, 10).split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}, ${y}`;
+  }
+
+  function priorityBadge(p: string): string {
+    const styles: Record<string, { bg: string; text: string }> = {
+      High:   { bg: "#fee2e2", text: "#b91c1c" },
+      Medium: { bg: "#fef3c7", text: "#b45309" },
+    };
+    const s = styles[p] ?? { bg: "#f3f4f6", text: "#4b5563" };
+    return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:${s.bg};color:${s.text};text-transform:uppercase;letter-spacing:0.04em;">${p || "—"}</span>`;
+  }
+
+  function planBlock(plan: QPlanningCompanyRow["plan"]): string {
+    if (!plan) {
+      return `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;font-style:italic;">No plan set for this quarter yet.</p>`;
+    }
+    const meetings = [plan.meeting1, plan.meeting2, plan.meeting3].filter(Boolean);
+    const resources = [plan.resource1, plan.resource2, plan.resource3].filter(Boolean);
+    const goals = (plan.monthlyMeetingGoal > 0 || plan.monthlyCheckinGoal > 0)
+      ? `<p style="margin:8px 0 0;font-size:11px;color:#6b7280;">Monthly goals: <strong style="color:#374151;">${plan.monthlyMeetingGoal || 0} in-person meeting${plan.monthlyMeetingGoal === 1 ? "" : "s"}</strong> &middot; <strong style="color:#374151;">${plan.monthlyCheckinGoal || 0} check-in${plan.monthlyCheckinGoal === 1 ? "" : "s"}</strong></p>`
+      : "";
+    const meetingsHtml = meetings.length > 0
+      ? `<div style="margin-top:8px;"><p style="margin:0;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Planned Meetings</p>
+          <ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:#374151;line-height:1.6;">
+            ${meetings.map(m => `<li>${m}</li>`).join("")}
+          </ul></div>`
+      : "";
+    const resourcesHtml = resources.length > 0
+      ? `<div style="margin-top:8px;"><p style="margin:0;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Resources / Support Needed</p>
+          <ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:#374151;line-height:1.6;">
+            ${resources.map(r => `<li>${r}</li>`).join("")}
+          </ul></div>`
+      : "";
+    if (!meetingsHtml && !resourcesHtml && !goals) {
+      return `<p style="margin:8px 0 0;font-size:12px;color:#9ca3af;font-style:italic;">No plan set for this quarter yet.</p>`;
+    }
+    return `${goals}${meetingsHtml}${resourcesHtml}`;
+  }
+
+  function companyCard(row: QPlanningCompanyRow, accent: string): string {
+    const details: string[] = [];
+    if (row.bestStage) details.push(`Stage: <strong style="color:#374151;">${row.bestStage}</strong>`);
+    if (row.nextStepDate) details.push(`Next step ${fmtDate(row.nextStepDate)}${row.nextStepNote ? `: ${row.nextStepNote}` : ""}`);
+    if (row.stageDurationDays != null) details.push(`${row.stageDurationDays}d in stage`);
+    if (row.competitors) details.push(`Competitors: ${row.competitors}`);
+
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-left:3px solid ${accent};border-radius:8px;margin-bottom:10px;">
+      <tr><td style="padding:12px 16px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td>
+            <span style="font-size:13px;font-weight:700;color:#1f2937;">${row.companyName}</span>
+            <span style="margin-left:8px;">${priorityBadge(row.priority)}</span>
+          </td>
+          <td align="right" style="font-size:12px;font-weight:600;color:#2d4a3e;white-space:nowrap;">${row.actual} / ${row.goal}</td>
+        </tr></table>
+        ${details.length > 0 ? `<p style="margin:6px 0 0;font-size:11px;color:#6b7280;">${details.join(" &middot; ")}</p>` : ""}
+        ${planBlock(row.plan)}
+      </td></tr>
+    </table>`;
+  }
+
+  function repSection(rep: QPlanningRepSection): string {
+    const hasAnything = rep.activePartners.length > 0 || rep.conversionTargets.length > 0 || rep.availableToConvert.length > 0;
+    return `
+      <tr><td style="padding:28px 0 12px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="border-left:4px solid #2d4a3e;padding-left:12px;">
+            <span style="font-size:16px;font-weight:700;color:#1f2937;">${rep.displayName}</span>
+            <span style="margin-left:10px;font-size:12px;font-weight:600;color:#2d4a3e;">${rep.actual} / ${rep.goal} quarterly goal</span>
+          </td>
+        </tr></table>
+      </td></tr>
+      ${rep.activePartners.length > 0 ? `<tr><td style="padding:4px 0 4px;">
+        <p style="margin:0;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.06em;">Active Partners &middot; ${rep.activePartners.length}</p>
+      </td></tr>
+      <tr><td>${rep.activePartners.map(r => companyCard(r, "#16a34a")).join("")}</td></tr>` : ""}
+      ${rep.conversionTargets.length > 0 ? `<tr><td style="padding:8px 0 4px;">
+        <p style="margin:0;font-size:11px;font-weight:700;color:#C9A96E;text-transform:uppercase;letter-spacing:0.06em;">Conversion Targets &middot; ${rep.conversionTargets.length}</p>
+      </td></tr>
+      <tr><td>${rep.conversionTargets.map(r => companyCard(r, "#C9A96E")).join("")}</td></tr>` : ""}
+      ${rep.availableToConvert.length > 0 ? `<tr><td style="padding:8px 0 4px;">
+        <p style="margin:0;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Available to Convert &middot; ${rep.availableToConvert.length}</p>
+      </td></tr>
+      <tr><td style="padding-bottom:4px;">
+        <p style="margin:0;font-size:12px;color:#374151;line-height:1.9;">
+          ${rep.availableToConvert.map(a => `${a.companyName} ${priorityBadge(a.priority)} <span style="color:#9ca3af;">(${a.bestStage})</span>`).join("<br/>")}
+        </p>
+      </td></tr>` : ""}
+      ${!hasAnything ? `<tr><td style="padding:0 0 4px;"><p style="margin:0;font-size:12px;color:#9ca3af;font-style:italic;">No companies assigned this quarter.</p></td></tr>` : ""}
+    `;
+  }
+
+  const totalActive = reps.reduce((s, r) => s + r.activePartners.length, 0);
+  const totalTargets = reps.reduce((s, r) => s + r.conversionTargets.length, 0);
+  const totalGoal = reps.reduce((s, r) => s + r.goal, 0);
+  const totalActual = reps.reduce((s, r) => s + r.actual, 0);
+
+  const sortedReps = [...reps].sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:960px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+
+        <!-- Header -->
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions</p>
+            <h1 style="margin:6px 0 0;font-size:24px;font-weight:700;color:#ffffff;">Q Planning Report</h1>
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">${quarterLabel} &middot; ${quarterRange}</p>
+            <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Generated ${generatedAt}</p>
+          </td>
+        </tr>
+
+        <!-- Summary bar -->
+        <tr><td style="padding:0;border-bottom:1px solid #e5e7eb;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding:16px 32px;border-right:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Sales Reps</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#2d4a3e;">${reps.length}</p>
+              </td>
+              <td style="padding:16px 32px;border-right:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Active Partners</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#16a34a;">${totalActive}</p>
+              </td>
+              <td style="padding:16px 32px;border-right:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Conversion Targets</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#C9A96E;">${totalTargets}</p>
+              </td>
+              <td style="padding:16px 32px;">
+                <p style="margin:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;">Quarterly Goal</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#2d4a3e;">${totalActual} / ${totalGoal}</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:8px 32px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${sortedReps.length > 0 ? sortedReps.map(repSection).join("") : `<tr><td style="padding:40px 0;text-align:center;color:#9ca3af;font-size:14px;">No sales reps found for this quarter.</td></tr>`}
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Rightsize &middot; Top Tier Transitions &middot; Internal use only &middot; War Room &amp; Referral Funnel quarterly plan summary
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ─── Partner Active Project Update Email ─────────────────────────────────────
 export function buildPartnerActiveUpdateEmail({
   contactFirstName,
