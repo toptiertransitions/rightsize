@@ -6,12 +6,15 @@ import type { WeeklySchedule, TimeOffEntry, SystemRole } from "@/lib/types";
 interface AvailabilityStaff {
   clerkUserId: string;
   name: string;
+  email: string;
   role: SystemRole;
   address: string | null;
   profileImageUrl: string | null;
   weeklySchedule: WeeklySchedule | null;
   timeOff: TimeOffEntry[];
 }
+
+type ShiftConflicts = Record<string, { projectName: string; startTime?: string; endTime?: string }[]>;
 
 interface GeoStaff extends AvailabilityStaff {
   lat: number;
@@ -63,7 +66,7 @@ const ISO_TO_DAY: Record<number, keyof WeeklySchedule> = {
   0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat",
 };
 
-function isAvailableOnDate(member: AvailabilityStaff, dateStr: string): boolean {
+function isAvailableOnDate(member: AvailabilityStaff, dateStr: string, conflicts: ShiftConflicts): boolean {
   if (member.timeOff?.some((t) => t.date === dateStr)) return false;
   if (member.weeklySchedule) {
     const [y, m, d] = dateStr.split("-").map(Number);
@@ -71,6 +74,9 @@ function isAvailableOnDate(member: AvailabilityStaff, dateStr: string): boolean 
     const sched = member.weeklySchedule[ISO_TO_DAY[dow]];
     if (sched && !sched.available) return false;
   }
+  // Already assigned as a helper on an actual project shift that date —
+  // separate from their own declared weekly schedule/time-off above.
+  if (member.email && conflicts[member.email.toLowerCase()]?.length) return false;
   return true;
 }
 
@@ -131,7 +137,24 @@ export default function AvailabilityTab() {
   const [zipLookupError, setZipLookupError] = useState("");
   const [zipLookupLoading, setZipLookupLoading] = useState(false);
 
+  const [shiftConflicts, setShiftConflicts] = useState<ShiftConflicts>({});
+  const [conflictsLoading, setConflictsLoading] = useState(false);
+
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+
+  // Who's already assigned as a helper on an actual project shift that date —
+  // same source the Plan page's double-booking warning uses. Without this,
+  // someone already working a shift on another project would still show up
+  // as "Available" here based purely on their own declared weekly schedule.
+  useEffect(() => {
+    if (!date) { setShiftConflicts({}); return; }
+    setConflictsLoading(true);
+    fetch(`/api/plan/shift-conflicts?date=${date}`)
+      .then((r) => r.json())
+      .then((d) => setShiftConflicts(d.conflicts ?? {}))
+      .catch(() => setShiftConflicts({}))
+      .finally(() => setConflictsLoading(false));
+  }, [date]);
 
   // Load staff pool once
   useEffect(() => {
@@ -202,7 +225,8 @@ export default function AvailabilityTab() {
   }, [mapsReady, zip]);
 
   // Distance + date-availability, recomputed live as radius/date change —
-  // no extra API calls needed since everything's already geocoded.
+  // no extra API calls needed since everything's already geocoded (shift
+  // conflicts are the one exception, fetched separately above per date).
   const results = useMemo(() => {
     if (!queryLatLng) return null;
     const inRadius = geocodedStaff
@@ -210,13 +234,13 @@ export default function AvailabilityTab() {
       .filter((r) => r.distance <= radiusMiles)
       .sort((a, b) => a.distance - b.distance);
 
-    const available = inRadius.filter((r) => isAvailableOnDate(r.member, date));
+    const available = inRadius.filter((r) => isAvailableOnDate(r.member, date, shiftConflicts));
     const teamLeads = available.filter((r) => r.member.role === "TTTTeamLead");
     const staffOnly = available.filter((r) => r.member.role === "TTTStaff");
     return { inRadiusCount: inRadius.length, teamLeads, staffOnly };
-  }, [queryLatLng, geocodedStaff, radiusMiles, date]);
+  }, [queryLatLng, geocodedStaff, radiusMiles, date, shiftConflicts]);
 
-  const loading = staffLoading || geocodingStaff || zipLookupLoading;
+  const loading = staffLoading || geocodingStaff || zipLookupLoading || conflictsLoading;
 
   return (
     <div>

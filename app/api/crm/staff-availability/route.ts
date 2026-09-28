@@ -42,6 +42,7 @@ export async function GET() {
   const staff = pool.map((s) => ({
     clerkUserId: s.clerkUserId,
     name: s.displayName,
+    email: s.email ?? "",
     role: s.role,
     address: s.address ?? null,
     profileImageUrl: photoMap.get(s.clerkUserId) ?? null,
