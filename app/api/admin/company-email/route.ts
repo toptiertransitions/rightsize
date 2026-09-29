@@ -147,15 +147,19 @@ export async function POST(req: NextRequest) {
   }
 
   // ── CRM pipeline (active leads) ──────────────────────────────────────────────
+  // Name must come from the live ClientContacts join (clientContactId), same
+  // as the Client Pipeline Report — never from keyPeople[0]. keyPeople is a
+  // manually-entered, unordered list of people connected to the opportunity
+  // (client, adult children, a referral partner, etc.) that isn't kept in
+  // sync with the contact's actual name — index [0] could easily be a
+  // referral partner's name or a name that was later corrected on the
+  // contact record itself, which is exactly what was showing up here.
   const ACTIVE_STAGES = new Set(["Lead", "Qualifying", "Proposing"]);
   const contactMap = new Map(contacts.map((c) => [c.id, c]));
   const pipelineItems = opps
     .filter((o) => ACTIVE_STAGES.has(o.stage))
     .map((o) => ({
-      name:
-        o.keyPeople?.[0]?.name ||
-        contactMap.get(o.clientContactId)?.name ||
-        "—",
+      name: contactMap.get(o.clientContactId)?.name || "Unknown",
       city: o.city || "—",
     }));
 
