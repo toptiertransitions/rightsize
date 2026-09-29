@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, KeyRound, Truck, Building2, Gift, Trash2 } from "lucide-react";
+import { Home, KeyRound, Truck, Building2, HeartHandshake, Scale, PiggyBank, Gift, Trash2 } from "lucide-react";
 import { Tile } from "@/components/onboarding/shared";
 import type { WizardData } from "../wizardTypes";
 import type { ServiceInterest } from "@/lib/types";
@@ -10,6 +10,9 @@ const OPTIONS: { key: ServiceInterest; label: string; icon: React.ReactNode }[] 
   { key: "realtor", label: "Realtor Recommendations", icon: <KeyRound className="w-[18px] h-[18px]" /> },
   { key: "mover", label: "Mover Recommendations", icon: <Truck className="w-[18px] h-[18px]" /> },
   { key: "senior_community", label: "Senior Community Recommendations", icon: <Building2 className="w-[18px] h-[18px]" /> },
+  { key: "companion_care", label: "Companion Care Recommendations", icon: <HeartHandshake className="w-[18px] h-[18px]" /> },
+  { key: "estate_attorney", label: "Estate Attorney Recommendations", icon: <Scale className="w-[18px] h-[18px]" /> },
+  { key: "financial_advisory", label: "Financial Advisory Recommendations", icon: <PiggyBank className="w-[18px] h-[18px]" /> },
   { key: "donation", label: "Donation Organization Recommendations", icon: <Gift className="w-[18px] h-[18px]" /> },
   { key: "hauling", label: "Junk Hauling Recommendations", icon: <Trash2 className="w-[18px] h-[18px]" /> },
 ];

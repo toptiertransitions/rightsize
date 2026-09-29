@@ -51,6 +51,9 @@ const ZIP_QUESTION_BY_CATEGORY: Partial<Record<PartnerCategory, string>> = {
   Mover: "fromZip",
   Hauler: "pickupZip",
   Donation: "zip",
+  "Estate Attorney": "zip",
+  "Financial Advisory": "zip",
+  "Companion Care": "zip",
 };
 
 export function getRequestLocation(

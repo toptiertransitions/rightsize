@@ -10,6 +10,9 @@ const COMPLETION_WORD: Partial<Record<PartnerCategory, [singular: string, plural
   Realtor: ["Home Sale", "Home Sales"],
   Hauler: ["Haul-Away", "Haul-Aways"],
   Donation: ["Donation", "Donations"],
+  "Estate Attorney": ["Estate Plan", "Estate Plans"],
+  "Financial Advisory": ["Financial Plan", "Financial Plans"],
+  "Companion Care": ["Care Placement", "Care Placements"],
 };
 
 export function communityCompletionLabel(category: PartnerCategory, count: number, communityName: string): string {

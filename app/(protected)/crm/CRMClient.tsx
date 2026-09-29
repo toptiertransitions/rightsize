@@ -2878,7 +2878,7 @@ function ReferralPartnersTab({
     setCsvResult(`Imported ${imported} ${csvType === "companies" ? "compan" : "contact"}${imported !== 1 ? (csvType === "companies" ? "ies" : "s") : (csvType === "companies" ? "y" : "")}${errors ? `, ${errors} failed` : ""}.`);
   }
 
-  const COMPANY_TYPES = ["Senior Living", "Realtor", "Broker", "Moving Company", "Doctor", "Attorney", "Hospital", "Financial Advisor", "Other"];
+  const COMPANY_TYPES = ["Senior Living", "Realtor", "Broker", "Moving Company", "Doctor", "Attorney", "Hospital", "Financial Advisor", "Companion Care", "Other"];
 
   async function loadContacts(companyId: string) {
     if (contacts[companyId]) return;
@@ -3953,6 +3953,7 @@ const COMPANY_TYPE_COLORS: Record<string, string> = {
   "Attorney": "bg-amber-100 text-amber-700",
   "Hospital": "bg-pink-100 text-pink-700",
   "Financial Advisor": "bg-green-100 text-green-700",
+  "Companion Care": "bg-rose-100 text-rose-700",
   "Other": "bg-gray-100 text-gray-600",
 };
 

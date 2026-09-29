@@ -12,6 +12,9 @@ export const SERVICE_INTERESTS = [
   "realtor",
   "mover",
   "senior_community",
+  "companion_care",
+  "estate_attorney",
+  "financial_advisory",
   "donation",
   "hauling",
 ] as const;

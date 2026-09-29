@@ -357,6 +357,146 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       optional: true,
     },
   ],
+
+  "Estate Attorney": [
+    {
+      id: "serviceType",
+      prompt: "What kind of legal help do you need?",
+      type: "single-select",
+      options: [
+        { value: "estate_trust_planning", label: "Estate / trust planning" },
+        { value: "probate", label: "Probate" },
+        { value: "power_of_attorney", label: "Power of attorney / guardianship" },
+        { value: "elder_law_medicaid", label: "Elder law / Medicaid planning" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+    },
+    {
+      id: "zip",
+      prompt: "What zip code should we use to find someone nearby?",
+      type: "zip",
+      prefill: prefillZipFromCurrent,
+    },
+    {
+      id: "timeline",
+      prompt: "How soon do you need to get started?",
+      type: "single-select",
+      options: TIMELINE_OPTIONS,
+      prefill: prefillTimeline,
+      skipIfPrefilled: true,
+    },
+    {
+      id: "hasExistingDocuments",
+      prompt: "Do you already have a will or estate plan in place?",
+      type: "single-select",
+      options: [
+        { value: "needs_updating", label: "Yes, but it needs updating" },
+        { value: "current", label: "Yes, and it's current" },
+        { value: "starting_fresh", label: "No, starting from scratch" },
+        { value: "not_sure", label: "Not sure" },
+      ],
+    },
+    {
+      id: "notes",
+      prompt: "Anything else the attorney should know?",
+      type: "text",
+      optional: true,
+    },
+  ],
+
+  "Financial Advisory": [
+    {
+      id: "focusArea",
+      prompt: "What would you like help with?",
+      helper: "Choose all that apply.",
+      type: "chips-multi",
+      options: [
+        { value: "retirement_income", label: "Retirement income planning" },
+        { value: "long_term_care_costs", label: "Long-term care / senior living costs" },
+        { value: "selling_home_proceeds", label: "Selling a home & managing proceeds" },
+        { value: "estate_legacy_planning", label: "Estate & legacy planning" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+    },
+    {
+      id: "zip",
+      prompt: "What zip code should we use?",
+      type: "zip",
+      prefill: prefillZipFromCurrent,
+    },
+    {
+      id: "timeline",
+      prompt: "How soon are you hoping to meet with someone?",
+      type: "single-select",
+      options: TIMELINE_OPTIONS,
+      prefill: prefillTimeline,
+      skipIfPrefilled: true,
+    },
+    {
+      id: "hasAdvisor",
+      prompt: "Do you currently work with a financial advisor?",
+      type: "single-select",
+      options: [
+        { value: "second_opinion", label: "Yes, looking for a second opinion" },
+        { value: "want_a_change", label: "Yes, but want a change" },
+        { value: "first_time", label: "No, this is my first time" },
+      ],
+    },
+    {
+      id: "notes",
+      prompt: "Anything else the advisor should know?",
+      type: "text",
+      optional: true,
+    },
+  ],
+
+  "Companion Care": [
+    {
+      id: "careNeeds",
+      prompt: "What kind of support are you looking for?",
+      helper: "Choose all that apply.",
+      type: "chips-multi",
+      options: [
+        { value: "companionship_housekeeping", label: "Companionship & light housekeeping" },
+        { value: "meal_prep", label: "Meal preparation" },
+        { value: "transportation", label: "Transportation to appointments" },
+        { value: "personal_care", label: "Personal care assistance" },
+        { value: "medication_reminders", label: "Medication reminders" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+    },
+    {
+      id: "frequency",
+      prompt: "How often is care needed?",
+      type: "single-select",
+      options: [
+        { value: "few_hours_week", label: "A few hours a week" },
+        { value: "daily_visits", label: "Daily visits" },
+        { value: "live_in", label: "Live-in / 24-7 care" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+    },
+    {
+      id: "zip",
+      prompt: "What zip code is the care needed in?",
+      type: "zip",
+      prefill: prefillZipFromCurrent,
+    },
+    {
+      id: "timeline",
+      prompt: "How soon do you need care to begin?",
+      type: "single-select",
+      options: TIMELINE_OPTIONS,
+      prefill: prefillTimeline,
+      skipIfPrefilled: true,
+    },
+    {
+      id: "notes",
+      prompt: "Anything else the caregiver should know?",
+      type: "text",
+      optional: true,
+    },
+  ],
 };
 
 export function getPartnerQuestions(category: PartnerCategory): PartnerQuestion[] {
