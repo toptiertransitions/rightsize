@@ -5,11 +5,27 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
+import { getPlatform } from "@/lib/native";
 
 const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan", "/partners"];
 const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
+
+// iOS native app only (see showIOSNav below) — the six items and their
+// icons the compact top nav shows, in display order. Reuses the same
+// navLinks entries (same hrefs, same tenant-id query logic) the text nav
+// already computes, so routing/behavior is identical — only the UI differs.
+const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Help"] as const;
+const IOS_NAV_ICONS: Record<(typeof IOS_NAV_ORDER)[number], React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+  Home: House,
+  Plan: Calendar,
+  Catalog: LayoutList,
+  Partners: Handshake,
+  Sales: DollarSign,
+  Help: CircleHelp,
+};
 
 interface HeaderProps {
   tenantName?: string;
@@ -20,9 +36,24 @@ interface HeaderProps {
   isAdmin?: boolean;
   isSales?: boolean;
   tttTenantIds?: string[]; // non-staff only: tenants where isTTT is true
+  // Server-computed: true only for the roles the iOS app's compact icon nav
+  // targets (client/TTTStaff/TTTTeamLead). Combined client-side with an
+  // actual native-iOS-platform check before the icon nav ever renders —
+  // this prop alone is not enough, since it says nothing about web vs. app.
+  showIOSNav?: boolean;
 }
 
-export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds }: HeaderProps) {
+export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav }: HeaderProps) {
+  // Capacitor's bridge isn't available during SSR/first paint, so this
+  // starts false (matching the server-rendered text nav) and flips after
+  // mount if we're actually in the native iOS shell — same pattern as
+  // every other native-only branch in this codebase (see lib/native.ts).
+  const [isIOSNative, setIsIOSNative] = useState(false);
+  useEffect(() => {
+    setIsIOSNative(getPlatform() === "ios");
+  }, []);
+  const useIOSNav = !!showIOSNav && isIOSNative;
+
   const pathname = usePathname();
   const { actor, userId } = useAuth();
   const { signOut } = useClerk();
@@ -160,23 +191,25 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
             </div>
           </Link>
 
-          {/* Nav */}
-          <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
-                className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase))
-                    ? "bg-forest-50 text-forest-700"
-                    : "text-gray-600 hover:text-forest-700 hover:bg-gray-50"
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          {/* Nav — hidden entirely in the iOS native compact nav (below) */}
+          {!useIOSNav && (
+            <nav className="hidden md:flex items-center gap-1">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                    pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase))
+                      ? "bg-forest-50 text-forest-700"
+                      : "text-gray-600 hover:text-forest-700 hover:bg-gray-50"
+                  )}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
 
           {/* Right side */}
           <div className="flex items-center gap-3">
@@ -198,23 +231,50 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
           </div>
         </div>
 
-        {/* Mobile nav */}
-        <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
-                pathname.startsWith(link.base ?? link.href)
-                  ? "bg-forest-50 text-forest-700"
-                  : "text-gray-600 hover:text-forest-700"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
+        {/* Mobile nav (web/browser only) */}
+        {!useIOSNav && (
+          <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
+            {navLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
+                  pathname.startsWith(link.base ?? link.href)
+                    ? "bg-forest-50 text-forest-700"
+                    : "text-gray-600 hover:text-forest-700"
+                )}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* iOS native app nav — replaces the text nav above for client/TTTStaff/TTTTeamLead */}
+        {useIOSNav && (
+          <nav className="grid grid-cols-6">
+            {IOS_NAV_ORDER.map((label) => {
+              const link = navLinks.find((l) => l.label === label);
+              if (!link) return null;
+              const Icon = IOS_NAV_ICONS[label];
+              const isActive = pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase));
+              return (
+                <Link
+                  key={label}
+                  href={link.href}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 transition-colors",
+                    isActive ? "text-forest-700" : "text-gray-500"
+                  )}
+                >
+                  <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 1.75} />
+                  <span className="text-[10px] leading-none font-medium whitespace-nowrap">{label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        )}
       </div>
     </header>
   );
