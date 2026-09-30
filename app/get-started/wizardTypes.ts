@@ -20,7 +20,7 @@ export interface WizardData {
 
   destinationType: DestinationType | null;
   destinationZip: string;
-  destinationCommunity: string; // CRM Companies record id
+  destinationCommunity: string; // LocalVendors record id (VendorType = "Future Home/Community")
   destinationCommunityName: string; // display only
   destinationCommunityOther: string;
 

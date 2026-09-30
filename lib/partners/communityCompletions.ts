@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { getAllPartnerCommunityCompletions, getTenants, getReferralCompanyById } from "@/lib/airtable";
+import { getAllPartnerCommunityCompletions, getTenants, getLocalVendorById } from "@/lib/airtable";
 import type { PartnerCategory } from "@/lib/types";
 
 /** `${communityKey}::${category}::${partnerId}` -> count */
@@ -39,9 +39,10 @@ export const getCommunityCompletionCounts = unstable_cache(
 
 /**
  * Best-effort resolution of a project's destination community, in priority
- * order: the linked CRM Community record, then the free-text "other"
- * community, then the legacy seniorCommunityName field. Returns null when
- * none of these are set (most non-senior-living projects).
+ * order: the linked LocalVendors community record (VendorType = "Future
+ * Home/Community"), then the free-text "other" community, then the legacy
+ * seniorCommunityName field. Returns null when none of these are set (most
+ * non-senior-living projects).
  */
 export async function resolveTenantCommunity(tenant: {
   destinationCommunity?: string;
@@ -49,8 +50,8 @@ export async function resolveTenantCommunity(tenant: {
   seniorCommunityName?: string;
 }): Promise<{ communityKey: string; communityName: string } | null> {
   if (tenant.destinationCommunity) {
-    const c = await getReferralCompanyById(tenant.destinationCommunity).catch(() => null);
-    if (c) return { communityKey: tenant.destinationCommunity, communityName: c.name };
+    const c = await getLocalVendorById(tenant.destinationCommunity).catch(() => null);
+    if (c) return { communityKey: tenant.destinationCommunity, communityName: c.vendorName };
   }
   const name = (tenant.destinationCommunityOther || tenant.seniorCommunityName || "").trim();
   if (name) return { communityKey: name.toLowerCase(), communityName: name };

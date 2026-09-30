@@ -3948,22 +3948,22 @@ export async function getReferralCompanies(): Promise<ReferralCompany[]> {
 // Typeahead for the onboarding wizard's "search senior communities" step.
 // Scoped to Type = "Senior Living" so client users only ever see communities,
 // never realtors/movers/etc. from the same CRM Companies table.
+// Sourced from LocalVendors (VendorType = "Future Home/Community") — the same
+// list managed at /admin/local-vendors — rather than the CRM's "Senior
+// Living" companies, which is a separate, Sales-managed list with its own
+// data-quality issues (typos, duplicates) unsuitable for a client-facing
+// search. Uses the cached getAllLocalVendors() since this is queried on
+// every keystroke; IsActive isn't filtered by that cache's own query, so
+// it's applied here.
 export async function searchSeniorCommunities(query: string): Promise<Array<{ id: string; name: string; city: string }>> {
-  const q = query.trim().replace(/"/g, '\\"');
-  const formula = q
-    ? `AND({Type} = "Senior Living", FIND(LOWER("${q}"), LOWER({Name})))`
-    : `{Type} = "Senior Living"`;
-  const res = await crmFetch(
-    AIRTABLE_TABLES.CRM_COMPANIES,
-    `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=Name&sort[0][direction]=asc&maxRecords=15&fields[]=Name&fields[]=City`
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(r => ({
-    id: r.id,
-    name: toStr(r.fields["Name"]),
-    city: toStr(r.fields["City"]),
-  }));
+  const q = query.trim().toLowerCase();
+  const allVendors = await getAllLocalVendors().catch(() => [] as LocalVendor[]);
+  const communities = allVendors.filter(v => v.vendorType === "Future Home/Community" && v.isActive);
+  const matches = q ? communities.filter(v => v.vendorName.toLowerCase().includes(q)) : communities;
+  return matches
+    .sort((a, b) => a.vendorName.localeCompare(b.vendorName))
+    .slice(0, 15)
+    .map(v => ({ id: v.id, name: v.vendorName, city: v.city }));
 }
 
 export async function findReferralCompanyByName(name: string): Promise<ReferralCompany | null> {

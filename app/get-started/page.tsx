@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { getOnboardingState } from "@/lib/onboarding/state";
-import { getReferralCompanyById } from "@/lib/airtable";
+import { getLocalVendorById } from "@/lib/airtable";
 import { emptyWizardData, type WizardData } from "./wizardTypes";
 import { OnboardingWizard } from "./OnboardingWizard";
 import type { Tenant } from "@/lib/types";
@@ -41,13 +41,13 @@ export default async function GetStartedPage() {
 
   if (state.status === "resume") {
     const community = state.tenant.destinationCommunity
-      ? await getReferralCompanyById(state.tenant.destinationCommunity).catch(() => null)
+      ? await getLocalVendorById(state.tenant.destinationCommunity).catch(() => null)
       : null;
     return (
       <OnboardingWizard
         initialStep={Math.max(state.tenant.onboardingCurrentStep ?? 1, 1)}
         initialTenantId={state.tenant.id}
-        initialData={tenantToWizardData(state.tenant, fallbackFirstName, fallbackLastName, community?.name ?? "")}
+        initialData={tenantToWizardData(state.tenant, fallbackFirstName, fallbackLastName, community?.vendorName ?? "")}
       />
     );
   }

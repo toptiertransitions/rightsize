@@ -8,7 +8,6 @@ import {
   getMembershipsForTenant,
   getUserByClerkId,
   getTenants,
-  getReferralCompanies,
   getAllPartnerCommunityCompletions,
 } from "@/lib/airtable";
 import { LocalVendorsAdmin } from "./LocalVendorsAdmin";
@@ -18,14 +17,17 @@ export default async function LocalVendorsPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [vendors, consignmentItems, allTenants, referralCompanies, completions] = await Promise.all([
+  const [vendors, consignmentItems, allTenants, completions] = await Promise.all([
     getLocalVendors().catch(() => []),
     getItemsByPrimaryRoute("Other Consignment").catch(() => []),
     getTenants().catch(() => []),
-    getReferralCompanies().catch(() => []),
     getAllPartnerCommunityCompletions().catch(() => []),
   ]);
-  const seniorCommunities = referralCompanies.filter((c) => c.type === "Senior Living");
+  // Same source as the onboarding "Where are you moving" community search —
+  // not the CRM's Sales-managed "Senior Living" company list — so an
+  // admin-tagged completion's communityId always lands in the same ID
+  // namespace as a client's destinationCommunity (see resolveTenantCommunity).
+  const seniorCommunities = vendors.filter((v) => v.vendorType === "Future Home/Community");
 
   // Resolve tenant name + owner email for each unique tenant
   const uniqueTenantIds = [...new Set(consignmentItems.map(i => i.tenantId).filter(Boolean))];
@@ -69,7 +71,7 @@ export default async function LocalVendorsPage() {
         createdAt: t.createdAt,
         archivedAt: t.archivedAt,
       }))}
-      seniorCommunities={seniorCommunities.map((c) => ({ id: c.id, name: c.name, city: c.city }))}
+      seniorCommunities={seniorCommunities.map((c) => ({ id: c.id, name: c.vendorName, city: c.city }))}
       completions={completions}
     />
   );

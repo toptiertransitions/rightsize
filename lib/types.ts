@@ -172,7 +172,7 @@ export interface Tenant {
   timelineValue?: string;
   destinationType?: DestinationType;
   destinationZip?: string;
-  destinationCommunity?: string; // linked CRMCompanies record ID
+  destinationCommunity?: string; // linked LocalVendors record ID (VendorType = "Future Home/Community")
   destinationCommunityOther?: string;
   sqftRange?: SqftRange;
   sqftExact?: number;
