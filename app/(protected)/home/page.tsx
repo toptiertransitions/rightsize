@@ -7,6 +7,7 @@ import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
+import { DeleteAccountAction } from "./DeleteAccountAction";
 import { AdminProjectsClient } from "./AdminProjectsClient";
 import { FreeEstimatorCard } from "./FreeEstimatorCard";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
@@ -338,6 +339,7 @@ export default async function DashboardPage({
                 tenantState={tenant.state}
                 tenantZip={tenant.zip}
                 canDeleteAccount={!isStaff && membership.role === "Owner"}
+                hideDangerZone
               />
             )}
           </div>
@@ -605,6 +607,15 @@ export default async function DashboardPage({
               })}
             </div>
           </div>
+        )}
+
+        {isOwner && (
+          <DeleteAccountAction
+            tenantId={tenant.id}
+            tenantName={tenant.name}
+            canDeleteAccount={!isStaff && membership.role === "Owner"}
+            variant="standalone"
+          />
         )}
       </div>
     );
