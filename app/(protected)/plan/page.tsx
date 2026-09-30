@@ -435,6 +435,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
             initialTeamLeadName={teamLeadName}
             initialTeamLeadPhoto={teamLeadPhoto}
             initialTeamLeadPhone={teamLeadPhone}
+            isTTT={tenant.isTTT === true}
           />
           {isTTTStaffOrAbove && (
             <ClientContactBar

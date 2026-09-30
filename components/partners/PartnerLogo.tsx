@@ -41,9 +41,10 @@ interface Props {
 const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
   mobile: "w-16 h-16",
   desktop: "w-16 h-16 sm:w-[72px] sm:h-[72px]",
-  // Small, subtle mark for the "Your Partners" tray cards — a corner
-  // accent that never competes with the partner name for attention.
-  tray: "w-9 h-9",
+  // Mark for the "Your Partners" tray cards — a corner accent that never
+  // competes with the partner name for attention. 50% bigger than the
+  // original w-9 h-9, same corner placement (set by the tray's own layout).
+  tray: "w-[54px] h-[54px]",
 };
 
 export function PartnerLogo({ logo, name, size = "desktop" }: Props) {

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
 import { DeleteAccountAction } from "./DeleteAccountAction";
+import { RenameProjectAction } from "./RenameProjectAction";
 import { AdminProjectsClient } from "./AdminProjectsClient";
 import { FreeEstimatorCard } from "./FreeEstimatorCard";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
@@ -277,6 +278,7 @@ export default async function DashboardPage({
 
     const canEdit = EDIT_ROLES.includes(membership.role);
     const isOwner = OWNER_ROLES.includes(membership.role);
+    const isNonTTTClient = !isStaff && tenant.isTTT !== true;
     const totalSqFt = rooms.reduce((s, r) => s + r.squareFeet, 0);
     const itemsByStatus = items.reduce((acc, item) => {
       acc[item.status] = (acc[item.status] ?? 0) + 1;
@@ -322,9 +324,11 @@ export default async function DashboardPage({
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              {!isStaff && tenant.isTTT !== true ? `Welcome, ${firstName}` : tenant.name}
+              {isNonTTTClient ? `Welcome, ${firstName}` : tenant.name}
             </h1>
-            <p className="text-gray-500 mt-0.5 capitalize">{membership.role}</p>
+            {!(isNonTTTClient && membership.role === "Owner") && (
+              <p className="text-gray-500 mt-0.5 capitalize">{membership.role}</p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {isStaff && (
@@ -340,6 +344,8 @@ export default async function DashboardPage({
                 tenantZip={tenant.zip}
                 canDeleteAccount={!isStaff && membership.role === "Owner"}
                 hideDangerZone
+                hideRename={isNonTTTClient}
+                inviteLabel={isNonTTTClient ? "Invite Family Member" : "Invite Member"}
               />
             )}
           </div>
@@ -614,6 +620,18 @@ export default async function DashboardPage({
             tenantId={tenant.id}
             tenantName={tenant.name}
             canDeleteAccount={!isStaff && membership.role === "Owner"}
+            variant="standalone"
+          />
+        )}
+
+        {isOwner && isNonTTTClient && (
+          <RenameProjectAction
+            tenantId={tenant.id}
+            tenantName={tenant.name}
+            tenantAddress={tenant.address}
+            tenantCity={tenant.city}
+            tenantState={tenant.state}
+            tenantZip={tenant.zip}
             variant="standalone"
           />
         )}

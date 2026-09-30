@@ -428,9 +428,15 @@ interface FloorplansSectionProps {
   canEdit: boolean;
   initialFiles: ProjectFile[];
   projectNames?: Record<string, string>; // tenantId → project name, shown in "All" modes
+  // Used only to pick the section heading wording for NonTTTClient users
+  // (isStaff false, isTTT not true) — "Daily Recaps" doesn't apply to them
+  // since staff-authored recaps are a TTT-managed-project concept.
+  isStaff?: boolean;
+  isTTT?: boolean;
 }
 
-export function FloorplansSection({ tenantId, canEdit, initialFiles, projectNames }: FloorplansSectionProps) {
+export function FloorplansSection({ tenantId, canEdit, initialFiles, projectNames, isStaff, isTTT }: FloorplansSectionProps) {
+  const isNonTTTClient = !isStaff && isTTT !== true;
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
   const [showUpload, setShowUpload] = useState(false);
   const [editingFile, setEditingFile] = useState<ProjectFile | null>(null);
@@ -504,13 +510,15 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles, projectName
       {/* Section header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Daily Recaps, Floorplans & Images</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {isNonTTTClient ? "Floorplans & Images" : "Daily Recaps, Floorplans & Images"}
+          </h2>
           <p className="text-sm text-gray-500 mt-0.5">Reference documents and daily notes for your project</p>
         </div>
         {canEdit && (
           <button
             onClick={() => setShowUpload(true)}
-            className="h-9 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
+            className={`px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors flex items-center justify-center ${isNonTTTClient ? "h-11" : "h-9"}`}
           >
             + Add Files
           </button>

@@ -31,6 +31,11 @@ interface Props {
   initialTeamLeadName?: string;
   initialTeamLeadPhoto?: string;
   initialTeamLeadPhone?: string;
+  // Whether this is a TTT-managed client project. Only affects the
+  // unassigned-state wording below ("Not assigned" vs "Not applicable") —
+  // NonTTTClient (self-service) projects never get a TTT team lead, so
+  // "Not assigned" reads like something is missing when it isn't.
+  isTTT?: boolean;
 }
 
 function PencilIcon() {
@@ -67,7 +72,7 @@ function AddressBlock({ label, street, unitNumber, city, state, zip, communityNa
   );
 }
 
-function TeamLeadBlock({ name, photo, phone }: { name?: string; photo?: string; phone?: string }) {
+function TeamLeadBlock({ name, photo, phone, isTTT }: { name?: string; photo?: string; phone?: string; isTTT?: boolean }) {
   const initials = name
     ? name.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase()
     : "?";
@@ -90,7 +95,7 @@ function TeamLeadBlock({ name, photo, phone }: { name?: string; photo?: string; 
           </div>
         </div>
       ) : (
-        <div className="text-sm text-gray-400 italic mt-0.5">Not assigned</div>
+        <div className="text-sm text-gray-400 italic mt-0.5">{isTTT === true ? "Not assigned" : "Not applicable"}</div>
       )}
     </div>
   );
@@ -118,6 +123,7 @@ export function ProjectAddressBar({
   initialTeamLeadName,
   initialTeamLeadPhoto,
   initialTeamLeadPhone,
+  isTTT,
 }: Props) {
   const [editing, setEditing] = useState(false);
 
@@ -318,6 +324,7 @@ export function ProjectAddressBar({
         name={teamLeadName || initialTeamLeadName}
         photo={teamLeadPhoto || initialTeamLeadPhoto}
         phone={teamLeadPhone || initialTeamLeadPhone}
+        isTTT={isTTT}
       />
       {(canEditAddresses !== false || canEditTeamLead) && (
         <button

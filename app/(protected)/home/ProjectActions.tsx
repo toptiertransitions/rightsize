@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { DeleteAccountAction } from "./DeleteAccountAction";
+import { RenameProjectAction } from "./RenameProjectAction";
 
 // ─── Invite Modal ──────────────────────────────────────────────────────────────
-function InviteModal({ tenantId, onClose }: { tenantId: string; onClose: () => void }) {
+function InviteModal({ tenantId, title, onClose }: { tenantId: string; title: string; onClose: () => void }) {
   const [role, setRole] = useState<"Collaborator" | "Viewer">("Collaborator");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,7 +61,7 @@ function InviteModal({ tenantId, onClose }: { tenantId: string; onClose: () => v
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="px-6 py-5 border-b border-cream-100 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Invite Member</h2>
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -184,52 +184,17 @@ interface ProjectActionsProps {
   // actions). Multi-project card views keep the inline button since there's
   // no single "bottom of the page" for an individual card.
   hideDangerZone?: boolean;
+  // Suppresses the inline Rename button — used on the single-project home
+  // view, where it's instead rendered standalone at the bottom of the page
+  // (right below Delete Account), labeled "Name Project" there.
+  hideRename?: boolean;
+  // Overrides the Invite button/modal label — e.g. "Invite Family Member"
+  // on the single-project NonTTTClient home view.
+  inviteLabel?: string;
 }
 
-export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity, tenantState, tenantZip, canDeleteAccount, hideDangerZone }: ProjectActionsProps) {
-  const router = useRouter();
+export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity, tenantState, tenantZip, canDeleteAccount, hideDangerZone, hideRename, inviteLabel = "Invite Member" }: ProjectActionsProps) {
   const [showInvite, setShowInvite] = useState(false);
-  const [showRename, setShowRename] = useState(false);
-  const [newName, setNewName] = useState(tenantName);
-  const [address, setAddress] = useState(tenantAddress ?? "");
-  const [city, setCity] = useState(tenantCity ?? "");
-  const [state, setState] = useState(tenantState ?? "");
-  const [zip, setZip] = useState(tenantZip ?? "");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleRename() {
-    if (!newName.trim()) {
-      setShowRename(false);
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/tenants", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantId,
-          name: newName.trim(),
-          address: address.trim(),
-          city: city.trim(),
-          state: state.trim().toUpperCase(),
-          zip: zip.trim(),
-        }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error || "Failed to rename");
-      }
-      setShowRename(false);
-      router.refresh();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   return (
     <>
@@ -239,85 +204,24 @@ export function ProjectActions({ tenantId, tenantName, tenantAddress, tenantCity
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
           </svg>
-          Invite Member
+          {inviteLabel}
         </Button>
-        <button
-          onClick={() => { setNewName(tenantName); setAddress(tenantAddress ?? ""); setCity(tenantCity ?? ""); setState(tenantState ?? ""); setZip(tenantZip ?? ""); setError(""); setShowRename(true); }}
-          className="text-sm text-gray-500 hover:text-gray-700 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          Rename
-        </button>
+        {!hideRename && (
+          <RenameProjectAction
+            tenantId={tenantId}
+            tenantName={tenantName}
+            tenantAddress={tenantAddress}
+            tenantCity={tenantCity}
+            tenantState={tenantState}
+            tenantZip={tenantZip}
+          />
+        )}
         {!hideDangerZone && (
           <DeleteAccountAction tenantId={tenantId} tenantName={tenantName} canDeleteAccount={canDeleteAccount} />
         )}
       </div>
 
-      {showInvite && <InviteModal tenantId={tenantId} onClose={() => setShowInvite(false)} />}
-
-      {/* Rename modal */}
-      {showRename && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Rename Project</h3>
-            <input
-              type="text"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleRename()}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 mb-4"
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 font-medium mb-2">Project Address <span className="font-normal">(optional — used to filter local vendors)</span></p>
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={address}
-                onChange={e => setAddress(e.target.value)}
-                placeholder="Street address"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-              />
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={city}
-                  onChange={e => setCity(e.target.value)}
-                  placeholder="City"
-                  className="flex-1 min-w-0 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-                />
-                <input
-                  type="text"
-                  value={state}
-                  onChange={e => setState(e.target.value)}
-                  placeholder="ST"
-                  maxLength={2}
-                  className="w-16 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 uppercase"
-                />
-                <input
-                  type="text"
-                  value={zip}
-                  onChange={e => setZip(e.target.value)}
-                  placeholder="Zip"
-                  className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-                />
-              </div>
-            </div>
-            {error && <p className="text-sm text-red-500 mt-3 mb-1">{error}</p>}
-            <div className="flex gap-2 justify-end mt-4">
-              <button
-                onClick={() => setShowRename(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <Button onClick={handleRename} disabled={loading || !newName.trim()}>
-                {loading ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {showInvite && <InviteModal tenantId={tenantId} title={inviteLabel} onClose={() => setShowInvite(false)} />}
     </>
   );
 }

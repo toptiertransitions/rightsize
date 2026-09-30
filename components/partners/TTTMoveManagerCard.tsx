@@ -27,8 +27,9 @@ export function TTTMoveManagerCard({ tenantName }: Props) {
       </div>
 
       <div className="relative flex gap-4 rounded-2xl border border-forest-200 bg-forest-50/40 p-4 sm:p-5">
-        <div className="w-16 h-16 flex-shrink-0 rounded-xl bg-forest-600 text-white flex items-center justify-center font-bold text-lg">
-          TTT
+        <div className="w-16 h-16 flex-shrink-0 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex items-center justify-center p-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/ttt-icon.png" alt="Top Tier Transitions logo" className="w-full h-full object-contain" />
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">Top Tier Transitions</h3>

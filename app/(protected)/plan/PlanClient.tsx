@@ -1789,6 +1789,8 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           canEdit={effectiveCanEdit}
           initialFiles={projectFiles}
           projectNames={isAllProjectsMode ? projectNamesMap : undefined}
+          isStaff={isStaff}
+          isTTT={isTTT}
         />
       </div>
 
