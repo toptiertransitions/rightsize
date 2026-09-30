@@ -1378,6 +1378,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [staffSellerFilter, setStaffSellerFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkApproveResult, setBulkApproveResult] = useState<{ approved: number; skipped: number; skippedByStatus: Record<string, number> } | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -1597,8 +1598,19 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     if (selected.size === 0) return;
     setBulkLoading(true);
     try {
-      // Only approve items that are still "Pending Review"; skip anything already further along
-      const toApprove = [...selected].filter(id => items.find(i => i.id === id)?.status === "Pending Review");
+      // Only approve items that are still "Pending Review"; everything else
+      // (Approved, Listed, In Cart, Sold, Donated, Discarded, Rejected /
+      // Revisit) is skipped and stays in its current status — this action
+      // only ever moves items forward out of the review queue, never resets
+      // an item that's already further along (e.g. already Sold).
+      const selectedIds = [...selected];
+      const toApprove = selectedIds.filter(id => items.find(i => i.id === id)?.status === "Pending Review");
+      const skipped = selectedIds.filter(id => !toApprove.includes(id));
+      const skippedByStatus: Record<string, number> = {};
+      for (const id of skipped) {
+        const status = items.find(i => i.id === id)?.status ?? "Unknown";
+        skippedByStatus[status] = (skippedByStatus[status] ?? 0) + 1;
+      }
       await Promise.all(toApprove.map(id =>
         fetch("/api/items", {
           method: "PATCH",
@@ -1608,6 +1620,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       ));
       setItems(prev => prev.map(i => (toApprove.includes(i.id) ? { ...i, status: "Approved" as const } : i)));
       setSelected(new Set());
+      // Only surface a result modal when something was actually skipped —
+      // the common case (everything selected was Pending Review) stays a
+      // silent success, same as before.
+      if (skipped.length > 0) {
+        setBulkApproveResult({ approved: toApprove.length, skipped: skipped.length, skippedByStatus });
+      }
     } finally {
       setBulkLoading(false);
     }
@@ -2271,6 +2289,38 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
             </div>
             <div className="px-6 pb-6 flex justify-end">
               <button onClick={() => setBulkAIResult(null)} className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Approve Result Modal */}
+      {bulkApproveResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Approve Route Complete</h2>
+            </div>
+            <div className="px-6 py-4 space-y-2 max-h-72 overflow-y-auto">
+              <p className="text-sm text-forest-700 font-medium">
+                {bulkApproveResult.approved} item{bulkApproveResult.approved !== 1 ? "s" : ""} approved.
+              </p>
+              {bulkApproveResult.skipped > 0 && (
+                <>
+                  <p className="text-sm text-amber-600 font-medium">
+                    {bulkApproveResult.skipped} item{bulkApproveResult.skipped !== 1 ? "s" : ""} skipped — only items still in
+                    Pending Review can be approved this way, so these were left in their current status:
+                  </p>
+                  <ul className="text-xs text-gray-600 ml-2 space-y-0.5">
+                    {Object.entries(bulkApproveResult.skippedByStatus).map(([status, count]) => (
+                      <li key={status}>{count} × {status}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex justify-end">
+              <button onClick={() => setBulkApproveResult(null)} className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors">Done</button>
             </div>
           </div>
         </div>

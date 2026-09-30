@@ -391,12 +391,18 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Internal notification when any non-Estate-Sale item is marked Sold (new sale or adjustment)
-  if (newStatus === "Sold" && item.primaryRoute !== "Estate Sale") {
+  // Internal notification when any non-Estate-Sale item is marked Sold (new
+  // sale or adjustment), OR when an already-Sold item's status is changed
+  // away from Sold (e.g. corrected to Donated/Discarded/Rejected — still
+  // needs the "Sale Record Updated" flow so admins/the seller know the sale
+  // record changed, with the status flip itself called out below).
+  const wasSold = existing?.status === "Sold";
+  const statusChangedAwayFromSold = wasSold && !!newStatus && newStatus !== "Sold";
+  if ((newStatus === "Sold" || statusChangedAwayFromSold) && item.primaryRoute !== "Estate Sale") {
     try {
       console.log(`[items/PATCH] item-sold notification start — item=${item.id} route=${item.primaryRoute}`);
 
-      const isAdjustment = existing?.status === "Sold";
+      const isAdjustment = wasSold;
 
       // Resolve who triggered this change
       const markedSoldBy = await (async () => {
@@ -414,6 +420,7 @@ export async function PATCH(req: NextRequest) {
       const changedFields: Array<{ label: string; oldValue: string; newValue: string }> = [];
       if (isAdjustment && existing) {
         const fmtPrice = (n?: number | null) => n != null ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+        if ((existing.status ?? "") !== (item.status ?? "")) changedFields.push({ label: "Status", oldValue: existing.status || "—", newValue: item.status || "—" });
         const oldPrice = existing.salePrice ?? existing.valueMid ?? 0;
         const newPrice = item.salePrice ?? item.valueMid ?? 0;
         if (Math.abs(oldPrice - newPrice) >= 0.01) changedFields.push({ label: "Sale Price", oldValue: fmtPrice(oldPrice), newValue: fmtPrice(newPrice) });
