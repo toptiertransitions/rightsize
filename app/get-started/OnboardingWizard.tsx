@@ -11,7 +11,7 @@ import { Step5Starting, step5Valid } from "./steps/Step5Starting";
 import { Step6Layout } from "./steps/Step6Layout";
 import { Step7Done } from "./steps/Step7Done";
 import type { WizardData } from "./wizardTypes";
-import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding } from "./actions";
+import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, finishOnboardingTour } from "./actions";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 
 const TOTAL_STEPS = 6; // the progress bar tracks steps 1-6; step 7 is the completion screen
@@ -24,7 +24,7 @@ interface Props {
 
 export function OnboardingWizard({ initialStep, initialTenantId, initialData }: Props) {
   const router = useRouter();
-  const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), 6));
+  const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), 7));
   const [tenantId, setTenantId] = useState<string | null>(initialTenantId);
   const [data, setData] = useState<WizardData>(initialData);
   const [saving, setSaving] = useState(false);
@@ -133,8 +133,19 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, canContinue, saving, data, tenantId]);
 
-  function handleFinish() {
-    router.push("/home");
+  const finishingRef = useRef(false);
+  async function handleFinish() {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    try {
+      if (tenantId) await finishOnboardingTour(tenantId);
+    } catch {
+      // If this fails, onboardingComplete stays false and the user simply
+      // resumes the tour next time they load /get-started — safe fallback,
+      // so we still let them into the app now rather than trap them here.
+    } finally {
+      router.push("/home");
+    }
   }
 
   return (

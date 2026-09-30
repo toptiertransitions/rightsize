@@ -189,10 +189,17 @@ function roomTypeForSpaceKey(key: string): RoomType {
   return map[key] ?? "Other";
 }
 
-// Step 6 + completion are one submit — Step 7 has no inputs of its own, it's
-// just the confirmation screen, so there's no reason to round-trip twice.
+// Step 6 saves the layout and creates rooms, advancing to step 7 (the
+// tour/completion screen). Onboarding itself isn't marked complete until
+// the user actually finishes or skips the tour (see finishOnboardingTour) —
+// marking it complete here would flip tenant.onboardingComplete to true
+// while the tour is still mounting, and since this is a Server Action that
+// calls revalidateTag, Next.js's automatic router-cache refresh would then
+// re-run getOnboardingState() on the still-mounted /get-started page,
+// which redirects "done" tenants to /home — interrupting the tour a
+// fraction of a second after it appears, before anyone can read it.
 export async function completeOnboarding(tenantId: string, input: Step6Input): Promise<{ tenantId: string }> {
-  const { userId, tenant } = await requireOwnedOnboardingTenant(tenantId);
+  const { tenant } = await requireOwnedOnboardingTenant(tenantId);
   const parsed = step6Schema.parse(input);
 
   await withRetry(() => updateTenant(tenant.id, {
@@ -221,12 +228,23 @@ export async function completeOnboarding(tenantId: string, input: Step6Input): P
     ))
   );
 
+  logOnboardingEvent("step_completed", { step: 6, tenantId: tenant.id, roomCount: roomsToCreate.length });
+  return { tenantId: tenant.id };
+}
+
+// Called when the user finishes or skips the step-7 tour — the actual end
+// of onboarding. Marking onboardingComplete here (rather than in
+// completeOnboarding above) is what lets the tour render and stay mounted
+// long enough to read.
+export async function finishOnboardingTour(tenantId: string): Promise<{ tenantId: string }> {
+  const { userId, tenant } = await requireOwnedOnboardingTenant(tenantId);
+
   await withRetry(() => updateTenant(tenant.id, { onboardingComplete: true }));
 
   const clerk = await clerkClient();
   await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: true } });
 
-  logOnboardingEvent("onboarding_completed", { tenantId: tenant.id, roomCount: roomsToCreate.length });
+  logOnboardingEvent("onboarding_completed", { tenantId: tenant.id });
   revalidateTag("tenants");
   return { tenantId: tenant.id };
 }
