@@ -44,6 +44,19 @@
   }
 }
 
+/* iOS app only (see Header.tsx's useIOSNav): the compact icon nav is a
+   fixed bottom bar, so it's removed from normal document flow and would
+   otherwise sit on top of each page's last bit of content. Header.tsx
+   toggles this class on <body> once it knows (client-side) that the fixed
+   nav is actually showing; ~56px covers the bar's own content height with
+   a little breathing room, plus the safe-area inset for the home
+   indicator below it. Deliberately unlayered (outside @layer) so it
+   overrides <main>'s Tailwind py-8 utility — a @layer components rule
+   would lose to utilities regardless of selector specificity. */
+body.ios-bottom-nav main {
+  padding-bottom: calc(56px + var(--sab)) !important;
+}
+
 @layer components {
   .page-container {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8;

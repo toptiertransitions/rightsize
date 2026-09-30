@@ -54,6 +54,15 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   }, []);
   const useIOSNav = !!showIOSNav && isIOSNative;
 
+  // The fixed bottom nav sits outside normal document flow, so <main>
+  // (rendered by the server layout, which has no way to know isIOSNative)
+  // needs bottom padding to keep the last bit of page content from sitting
+  // underneath it — see the body.ios-bottom-nav rule in globals.css.
+  useEffect(() => {
+    document.body.classList.toggle("ios-bottom-nav", useIOSNav);
+    return () => { document.body.classList.remove("ios-bottom-nav"); };
+  }, [useIOSNav]);
+
   const pathname = usePathname();
   const { actor, userId } = useAuth();
   const { signOut } = useClerk();
@@ -153,6 +162,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   ];
 
   return (
+    <>
     <header className="sticky top-0 z-50 bg-white border-b border-cream-200 shadow-sm" style={{ paddingTop: "var(--sat)" }}>
       {/* Impersonation Banner */}
       {isImpersonating && (
@@ -250,32 +260,38 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
             ))}
           </div>
         )}
-
-        {/* iOS native app nav — replaces the text nav above for client/TTTStaff/TTTTeamLead */}
-        {useIOSNav && (
-          <nav className="grid grid-cols-6">
-            {IOS_NAV_ORDER.map((label) => {
-              const link = navLinks.find((l) => l.label === label);
-              if (!link) return null;
-              const Icon = IOS_NAV_ICONS[label];
-              const isActive = pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase));
-              return (
-                <Link
-                  key={label}
-                  href={link.href}
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 transition-colors",
-                    isActive ? "text-forest-700" : "text-gray-500"
-                  )}
-                >
-                  <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 1.75} />
-                  <span className="text-[10px] leading-none font-medium whitespace-nowrap">{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        )}
       </div>
     </header>
+
+    {/* iOS native app nav — replaces the text nav above for client/TTTStaff/TTTTeamLead.
+        Fixed to the bottom (not part of <header>) so vertical scrolling never hides it;
+        <main>'s bottom padding for this lives in globals.css (body.ios-bottom-nav). */}
+    {useIOSNav && (
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 bg-white border-t border-cream-200"
+        style={{ paddingBottom: "var(--sab)" }}
+      >
+        {IOS_NAV_ORDER.map((label) => {
+          const link = navLinks.find((l) => l.label === label);
+          if (!link) return null;
+          const Icon = IOS_NAV_ICONS[label];
+          const isActive = pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase));
+          return (
+            <Link
+              key={label}
+              href={link.href}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 transition-colors",
+                isActive ? "text-forest-700" : "text-gray-500"
+              )}
+            >
+              <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 1.75} />
+              <span className="text-[10px] leading-none font-medium whitespace-nowrap">{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    )}
+    </>
   );
 }
