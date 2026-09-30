@@ -752,7 +752,7 @@ function ContentFormModal({
               type="date"
               value={scheduledDate}
               onChange={e => setScheduledDate(e.target.value)}
-              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500"
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
 

@@ -108,7 +108,7 @@ function TaskModal({ tenantId, task, maxSortOrder, onSaved, onClose }: TaskModal
               type="date"
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
 

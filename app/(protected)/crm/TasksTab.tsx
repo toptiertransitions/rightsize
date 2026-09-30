@@ -622,7 +622,7 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Activity Date</label>
                 <input type="date" value={confirm.activityDate}
                   onChange={e => setConfirm(c => c ? { ...c, activityDate: e.target.value } : c)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 />
               </div>
 
@@ -657,7 +657,7 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
                     type="date"
                     value={confirm.nextStepDate}
                     onChange={e => setConfirm(c => c ? { ...c, nextStepDate: e.target.value } : c)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                   />
                 </div>
               </div>

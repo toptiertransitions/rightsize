@@ -247,9 +247,9 @@ function FilterBar({ from, to, staffId, paid, staffMembers, onFromChange, onToCh
   const inputCls = "h-8 px-2 text-sm rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-1 focus:ring-forest-500";
   return (
     <div className="flex flex-wrap gap-2 mb-4 items-center">
-      <input type="date" value={from} onChange={e => onFromChange(e.target.value)} className={inputCls} />
+      <input type="date" value={from} onChange={e => onFromChange(e.target.value)} className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`} />
       <span className="text-gray-500 text-sm">to</span>
-      <input type="date" value={to} onChange={e => onToChange(e.target.value)} className={inputCls} />
+      <input type="date" value={to} onChange={e => onToChange(e.target.value)} className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`} />
       <StaffCombobox staffMembers={staffMembers} value={staffId} onChange={onStaffChange} />
       <select value={paid} onChange={e => onPaidChange(e.target.value)} className={inputCls}>
         <option value="all">All</option>
@@ -962,9 +962,9 @@ function AuditTab({ staffMembers }: { staffMembers: StaffOption[] }) {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <input type="date" value={from} onChange={e => setFrom(e.target.value)} className={inputCls} />
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)} className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`} />
         <span className="text-gray-500 text-sm">to</span>
-        <input type="date" value={to} onChange={e => setTo(e.target.value)} className={inputCls} />
+        <input type="date" value={to} onChange={e => setTo(e.target.value)} className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`} />
         <StaffCombobox staffMembers={staffMembers} value={staffId} onChange={setStaffId} />
         {typeFilter !== "all" && (
           <button onClick={() => setTypeFilter("all")} className="h-8 px-3 text-sm rounded-lg border border-gray-700 bg-gray-800 text-gray-300 hover:text-white transition-colors">

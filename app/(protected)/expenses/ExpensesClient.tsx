@@ -236,7 +236,7 @@ function EditRow({
     <tr className="bg-forest-50/60 border-b border-forest-100">
       <td className="px-3 py-2"><input type="checkbox" disabled /></td>
       <td className="px-3 py-2">
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={cn(inputCls, "w-32")} />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={cn(inputCls, "w-32 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left")} />
       </td>
       <td className="px-3 py-2">
         <input value={vendor} onChange={e => setVendor(e.target.value)} className={cn(inputCls, "w-32")} />
@@ -339,7 +339,7 @@ function NewExpenseRow({
     <tr className="bg-amber-50/60 border-b border-amber-100">
       <td className="px-3 py-2"><input type="checkbox" disabled /></td>
       <td className="px-3 py-2">
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={cn(inputCls, "w-32")} />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={cn(inputCls, "w-32 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left")} />
       </td>
       <td className="px-3 py-2">
         <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor *" className={cn(inputCls, "w-32")} autoFocus />
@@ -421,7 +421,7 @@ function BulkEditBar({
         {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
       <input type="date" value={date} onChange={e => setDate(e.target.value)}
-        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5" />
+        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
       <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Set vendor…"
         className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-32" />
       <TenantCombobox

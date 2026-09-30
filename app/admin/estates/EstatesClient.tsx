@@ -98,7 +98,7 @@ function nextDropLabel(estate: Estate): string {
 
 function Spinner() {
   return (
-    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="w-3 h-3 animate-spin min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   );
@@ -955,13 +955,13 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 <div className="flex gap-2">
                   <input
                     type="date"
-                    className={inputCls}
+                    className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                     value={form.saleStartDate}
                     onChange={e => setForm(f => ({ ...f, saleStartDate: e.target.value }))}
                   />
                   <input
                     type="time"
-                    className={`${inputCls} w-32 flex-shrink-0`}
+                    className={`${inputCls} w-32 flex-shrink-0 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                     value={to24h(form.saleStartTime ?? "")}
                     onChange={e => setForm(f => ({ ...f, saleStartTime: to12h(e.target.value) }))}
                   />
@@ -971,13 +971,13 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 <div className="flex gap-2">
                   <input
                     type="date"
-                    className={inputCls}
+                    className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                     value={form.saleEndDate}
                     onChange={e => setForm(f => ({ ...f, saleEndDate: e.target.value }))}
                   />
                   <input
                     type="time"
-                    className={`${inputCls} w-32 flex-shrink-0`}
+                    className={`${inputCls} w-32 flex-shrink-0 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                     value={to24h(form.saleEndTime ?? "")}
                     onChange={e => setForm(f => ({ ...f, saleEndTime: to12h(e.target.value) }))}
                   />
@@ -1071,21 +1071,21 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       </div>
                       <input
                         type="date"
-                        className={inputCls}
+                        className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                         value={pd.date}
                         onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
                       />
                       <div className="flex items-center gap-2">
                         <input
                           type="time"
-                          className={`${inputCls} flex-1`}
+                          className={`${inputCls} flex-1 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                           value={to24h(pd.startTime)}
                           onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, startTime: to12h(e.target.value) } : x))}
                         />
                         <span className="text-gray-500 text-sm flex-shrink-0">–</span>
                         <input
                           type="time"
-                          className={`${inputCls} flex-1`}
+                          className={`${inputCls} flex-1 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
                           value={to24h(pd.endTime)}
                           onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, endTime: to12h(e.target.value) } : x))}
                         />

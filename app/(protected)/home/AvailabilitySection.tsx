@@ -90,14 +90,14 @@ function WeeklyTab({
                   type="time"
                   value={day.start}
                   onChange={(e) => setDay(key, { start: e.target.value })}
-                  className="h-8 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+                  className="h-8 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 />
                 <span className="text-xs text-gray-400">to</span>
                 <input
                   type="time"
                   value={day.end}
                   onChange={(e) => setDay(key, { end: e.target.value })}
-                  className="h-8 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+                  className="h-8 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 />
               </div>
             ) : (
@@ -212,7 +212,7 @@ function TimeOffTab({
             value={date}
             min={todayStr()}
             onChange={(e) => setDate(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+            className="h-9 px-3 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
           />
           <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
             <input
@@ -231,14 +231,14 @@ function TimeOffTab({
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="h-9 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+              className="h-9 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
             <span className="text-xs text-gray-400">to</span>
             <input
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              className="h-9 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400"
+              className="h-9 px-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
         )}

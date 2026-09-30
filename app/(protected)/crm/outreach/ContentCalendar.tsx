@@ -378,7 +378,7 @@ function ItemDetailSlideout({ item, category, onClose, isAdmin, onEditInReposito
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Scheduled Date</label>
               <div className="flex gap-2">
                 <input type="date" defaultValue={item.scheduledDate ?? ""} id={`reschedule-${item.id}`}
-                  className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-500" />
+                  className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
                 <button
                   onClick={() => {
                     const input = document.getElementById(`reschedule-${item.id}`) as HTMLInputElement;

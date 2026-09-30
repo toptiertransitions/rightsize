@@ -90,7 +90,7 @@ export function MyPaySection({ clerkUserId }: { clerkUserId: string }) {
 
   void clerkUserId;
 
-  const inputClass = "h-8 px-2 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-1 focus:ring-forest-500";
+  const inputClass = "h-8 px-2 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left";
 
   return (
     <section className="mt-10 mb-10">

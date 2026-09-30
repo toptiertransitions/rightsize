@@ -325,7 +325,7 @@ function EditForm({ form, setField, bringChecked, setBringChecked, onSave, onCan
           type="date"
           value={form.financialTakeoverDate ?? ""}
           onChange={(e) => setField("financialTakeoverDate", e.target.value || undefined)}
-          className={inputCls}
+          className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
         />
       </StackedRow>
       <StackedRow label="Preferred date to begin packing / sorting">
@@ -333,7 +333,7 @@ function EditForm({ form, setField, bringChecked, setBringChecked, onSave, onCan
           type="date"
           value={form.beginPackingDate ?? ""}
           onChange={(e) => setField("beginPackingDate", e.target.value || undefined)}
-          className={inputCls}
+          className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
         />
       </StackedRow>
       <StackedRow label="Ideal move-in date">
@@ -341,7 +341,7 @@ function EditForm({ form, setField, bringChecked, setBringChecked, onSave, onCan
           type="date"
           value={form.moveInDate ?? ""}
           onChange={(e) => setField("moveInDate", e.target.value || undefined)}
-          className={inputCls}
+          className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
         />
       </StackedRow>
       <div className="divide-y divide-gray-50 mt-1">
@@ -355,7 +355,7 @@ function EditForm({ form, setField, bringChecked, setBringChecked, onSave, onCan
                 type="date"
                 value={form.closingDate ?? ""}
                 onChange={(e) => setField("closingDate", e.target.value || undefined)}
-                className={inputCls}
+                className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
               />
             </StackedRow>
           </ConditionalField>

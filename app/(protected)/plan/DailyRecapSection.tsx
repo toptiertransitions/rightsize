@@ -85,7 +85,7 @@ function RecapCard({ file, canEdit, onSaved }: RecapCardProps) {
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
-              className="text-sm font-semibold text-gray-900 border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="text-sm font-semibold text-gray-900 border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           ) : (
             <span className="text-sm font-semibold text-gray-900">{displayDate}</span>

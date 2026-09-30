@@ -406,7 +406,7 @@ function TemplatesTab({
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 title="Created from"
               />
               <span className="text-gray-400 text-sm">–</span>
@@ -414,7 +414,7 @@ function TemplatesTab({
                 type="date"
                 value={dateTo}
                 onChange={e => setDateTo(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 title="Created to"
               />
             </div>

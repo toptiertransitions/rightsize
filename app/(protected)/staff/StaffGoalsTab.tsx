@@ -144,7 +144,7 @@ function HireDateInput({ value, canEdit, onBlur }: { value?: string; canEdit: bo
       type="date" value={local}
       onChange={e => setLocal(e.target.value)}
       onBlur={e => onBlur(e.target.value)}
-      className="text-sm text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-forest-600 focus:ring-1 focus:ring-forest-600/20 rounded px-1.5 py-0.5 focus:outline-none transition-colors"
+      className="text-sm text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-forest-600 focus:ring-1 focus:ring-forest-600/20 rounded px-1.5 py-0.5 focus:outline-none transition-colors min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
     />
   );
 }
@@ -209,7 +209,7 @@ function BulkEditBar({ count, values, onChange, onApply, onClear, saving }: {
           <input
             type="date" value={values.hireDate}
             onChange={e => onChange({ ...values, hireDate: e.target.value })}
-            className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-forest-600/30 bg-white"
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-forest-600/30 bg-white min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
           />
         </div>
       </div>

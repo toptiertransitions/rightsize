@@ -197,7 +197,7 @@ function ActivityCard({
               type="date"
               value={act.date || today}
               onChange={e => onChange({ ...act, date: e.target.value })}
-              className="w-full h-8 px-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
+              className="w-full h-8 px-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
         </div>
@@ -255,7 +255,7 @@ function NextStepCard({
               type="date"
               value={step.nextStepDate}
               onChange={e => onChange({ ...step, nextStepDate: e.target.value })}
-              className="w-full h-8 px-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-forest-500"
+              className="w-full h-8 px-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
         </div>

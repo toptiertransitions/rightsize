@@ -1119,7 +1119,7 @@ function ProjectDetailsSection({
             value={targetStartDate}
             onChange={e => setTargetStartDate(e.target.value)}
             onBlur={() => save()}
-            className={inputCls}
+            className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
           />
         </div>
         <div>
@@ -1131,7 +1131,7 @@ function ProjectDetailsSection({
             value={targetMoveDate}
             onChange={e => setTargetMoveDate(e.target.value)}
             onBlur={() => save()}
-            className={inputCls}
+            className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`}
           />
         </div>
         <div>

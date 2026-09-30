@@ -348,7 +348,7 @@ function BulkBar({ count, onClear, onBulkStatus, onBulkShare, onBulkStaffSeller,
       <div className="flex items-center gap-1">
         <span className="text-xs text-gray-400">Sold Date:</span>
         <input type="date" value={bulkSoldDate} onChange={(e) => setBulkSoldDate(e.target.value)}
-          className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-forest-500"
+          className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
         />
         <button onClick={() => { if (bulkSoldDate) { onBulkSoldDate(bulkSoldDate); setBulkSoldDate(""); } }}
           disabled={!bulkSoldDate}

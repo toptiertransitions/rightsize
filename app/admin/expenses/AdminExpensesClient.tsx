@@ -146,7 +146,7 @@ function EditRow({
   return (
     <tr className="bg-gray-800 border-b border-gray-700">
       <td className="px-3 py-2" />
-      <td className="px-3 py-2"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></td>
+      <td className="px-3 py-2"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={`${inputCls} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`} /></td>
       <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">{expense.staffName}</td>
       <td className="px-3 py-2"><input value={vendor} onChange={(e) => setVendor(e.target.value)} className={inputCls} /></td>
       <td className="px-3 py-2">

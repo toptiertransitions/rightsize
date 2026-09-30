@@ -514,7 +514,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
   // of `w-full`. `appearance-none` drops that native theming so the box
   // model behaves like every other field; `block` + `min-w-0` guard against
   // the default inline-block sizing and grid-item intrinsic-width quirks.
-  const dateTimeInputCls = `${inputCls} appearance-none block min-w-0`;
+  const dateTimeInputCls = `${inputCls} appearance-none block min-w-0 max-w-full [&::-webkit-date-and-time-value]:text-left`;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">

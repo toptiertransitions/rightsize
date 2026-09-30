@@ -682,7 +682,7 @@ export function AIStaffMappingTab({ members: initialMembers, skills: initialSkil
                     type="date"
                     value={structured.projectDate}
                     onChange={e => setStructured(s => ({ ...s, projectDate: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-forest-600/30 focus:border-forest-600"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-forest-600/30 focus:border-forest-600 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                   />
                 </div>
                 <div className="flex gap-6">

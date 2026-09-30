@@ -999,7 +999,7 @@ function DiscountCodesSection() {
                 type="date"
                 value={formExpires}
                 onChange={(e) => setFormExpires(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                className="w-full h-9 px-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
             </div>
             <div className="flex items-end pb-1">

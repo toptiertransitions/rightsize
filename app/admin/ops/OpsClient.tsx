@@ -183,7 +183,7 @@ function EditRow({
           value={paidDate}
           onChange={(e) => setPaidDate(e.target.value)}
           disabled={!paid}
-          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white disabled:opacity-40 focus:outline-none focus:border-forest-500"
+          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white disabled:opacity-40 focus:outline-none focus:border-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
         />
       </td>
       <td className="px-4 py-2">
@@ -287,7 +287,7 @@ function AddRow({
           value={form.paidDate}
           onChange={(e) => setForm((f) => ({ ...f, paidDate: e.target.value }))}
           disabled={!form.paid}
-          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white disabled:opacity-40 focus:outline-none focus:border-forest-500"
+          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white disabled:opacity-40 focus:outline-none focus:border-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
         />
       </td>
       <td className="px-4 py-2">

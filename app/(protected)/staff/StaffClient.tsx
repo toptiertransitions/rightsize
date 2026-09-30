@@ -1219,7 +1219,7 @@ function SubEditRow({
         <input type="checkbox" checked={paid} onChange={(e) => handlePaidToggle(e.target.checked)} className="w-4 h-4 accent-forest-500 cursor-pointer" />
       </td>
       <td className="px-4 py-2">
-        <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} disabled={!paid} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 disabled:opacity-40 focus:outline-none focus:border-forest-500" />
+        <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} disabled={!paid} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 disabled:opacity-40 focus:outline-none focus:border-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
       </td>
       <td className="px-4 py-2">
         <SubFileUpload fileUrl={fileUrl} onUploaded={(url, pid) => { setFileUrl(url); setFilePublicId(pid); }} />
@@ -1318,7 +1318,7 @@ function SubAddRow({ tenants, onAdd, onCancel }: { tenants: { id: string; name: 
         <input type="checkbox" checked={form.paid} onChange={(e) => handlePaidToggle(e.target.checked)} className="w-4 h-4 accent-forest-500 cursor-pointer" />
       </td>
       <td className="px-4 py-2">
-        <input type="date" value={form.paidDate} onChange={(e) => setForm((f) => ({ ...f, paidDate: e.target.value }))} disabled={!form.paid} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 disabled:opacity-40 focus:outline-none focus:border-forest-500" />
+        <input type="date" value={form.paidDate} onChange={(e) => setForm((f) => ({ ...f, paidDate: e.target.value }))} disabled={!form.paid} className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 disabled:opacity-40 focus:outline-none focus:border-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
       </td>
       <td className="px-4 py-2">
         <SubFileUpload fileUrl={form.fileUrl} onUploaded={(url, pid) => setForm((f) => ({ ...f, fileUrl: url, filePublicId: pid }))} />
@@ -1825,7 +1825,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
                         type="date"
                         value={addTODateFrom}
                         onChange={e => setAddTODateFrom(e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                        className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                       />
                     </div>
                     {addTOIsRange && (
@@ -1836,7 +1836,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
                           value={addTODateTo}
                           min={addTODateFrom}
                           onChange={e => setAddTODateTo(e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                         />
                       </div>
                     )}
@@ -1863,7 +1863,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
                           type="time"
                           value={addTOStartTime}
                           onChange={e => setAddTOStartTime(e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                         />
                       </div>
                       <div>
@@ -1872,7 +1872,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
                           type="time"
                           value={addTOEndTime}
                           onChange={e => setAddTOEndTime(e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500"
+                          className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                         />
                       </div>
                     </div>

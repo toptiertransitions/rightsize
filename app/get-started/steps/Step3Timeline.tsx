@@ -61,7 +61,7 @@ export function Step3Timeline({ data, update }: Props) {
             type="date"
             value={data.timelineValue}
             onChange={e => update({ timelineValue: e.target.value })}
-            className="w-full max-w-[220px] h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white"
+            className="w-full max-w-[220px] h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
           />
         )}
       </div>

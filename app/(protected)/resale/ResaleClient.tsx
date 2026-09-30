@@ -781,7 +781,7 @@ function InventorySection({
           ) : (
             <div className="flex items-center gap-2">
               <input type="date" value={bulkDeliveryDate} onChange={e => setBulkDeliveryDate(e.target.value)}
-                className="h-8 px-2 rounded-lg border border-forest-300 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
+                className="h-8 px-2 rounded-lg border border-forest-300 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
               <button onClick={applyBulkDelivery} disabled={!bulkDeliveryDate || bulkDeliveryLoading}
                 className="px-3 h-8 rounded-lg text-xs font-semibold bg-forest-600 text-white hover:bg-forest-700 disabled:opacity-50">
                 {bulkDeliveryLoading ? "Saving…" : "Apply"}

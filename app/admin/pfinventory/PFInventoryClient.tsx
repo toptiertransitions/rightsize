@@ -101,7 +101,7 @@ function EditCell({ value, type = "text", onSave, className = "", prefix = "", s
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-      className={`bg-gray-700 border border-forest-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full ${className}`}
+      className={`bg-gray-700 border border-forest-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full ${type === "date" ? "min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" : ""} ${className}`}
     />
   );
   const display = value != null && value !== "" ? `${prefix}${value}${suffix}` : null;
@@ -626,7 +626,7 @@ function BulkBar({
       <div className="flex items-center gap-1">
         <span className="text-xs text-gray-400">Delivery:</span>
         <input type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)}
-          className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-forest-500"
+          className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
         />
         <button onClick={() => { if (bulkDate) { onBulkDelivery(bulkDate); setBulkDate(""); } }}
           disabled={!bulkDate}
@@ -915,7 +915,7 @@ function OpenHouseInlineForm({ draft, setDraft, saving, error, onSave, onCancel 
       <div>
         <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Date *</label>
         <input type="date" value={draft.date} onChange={e => setDraft(d => ({ ...d, date: e.target.value }))}
-          className={OHD_INPUT_CLS} autoFocus />
+          className={`${OHD_INPUT_CLS} min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left`} autoFocus />
       </div>
       <div>
         <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Time Range *</label>

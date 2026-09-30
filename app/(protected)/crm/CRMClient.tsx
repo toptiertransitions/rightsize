@@ -148,7 +148,7 @@ function ActivityEditModal({
             type="date"
             value={activityDate}
             onChange={(e) => setActivityDate(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
           />
         </div>
         <div>
@@ -1403,7 +1403,7 @@ function OpportunityPanel({
               type="date"
               value={expectedCloseDate}
               onChange={(e) => setExpectedCloseDate(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs"
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
 
@@ -1486,7 +1486,7 @@ function OpportunityPanel({
                 type="date"
                 value={nextStepDate}
                 onChange={(e) => setNextStepDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
             </div>
             <div>
@@ -1591,7 +1591,7 @@ function OpportunityPanel({
                   type="date"
                   value={activityDate}
                   onChange={(e) => setActivityDate(e.target.value)}
-                  className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
+                  className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 />
                 <input
                   value={activityNote}
@@ -1761,7 +1761,7 @@ function ContactActivityPanel({
                 type="date"
                 value={activityDate}
                 onChange={(e) => setActivityDate(e.target.value)}
-                className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
+                className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
             </div>
             <div className="flex gap-2">
@@ -3739,7 +3739,7 @@ function ReferralPartnersTab({
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date Introduced</label>
-                  <input type="date" value={contactForm.dateIntroduced} onChange={(e) => setContactForm((f) => ({ ...f, dateIntroduced: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <input type="date" value={contactForm.dateIntroduced} onChange={(e) => setContactForm((f) => ({ ...f, dateIntroduced: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Coffee Order</label>
@@ -3766,7 +3766,7 @@ function ReferralPartnersTab({
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Next Step Date</label>
-                  <input type="date" value={contactForm.nextStepDate} onChange={(e) => setContactForm((f) => ({ ...f, nextStepDate: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <input type="date" value={contactForm.nextStepDate} onChange={(e) => setContactForm((f) => ({ ...f, nextStepDate: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Next Step Note</label>
@@ -3833,7 +3833,7 @@ function ReferralPartnersTab({
                   type="date"
                   value={nextStepContact.nextStepDate}
                   onChange={(e) => setNextStepContact((s) => s ? { ...s, nextStepDate: e.target.value } : s)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 />
               </div>
               <div>
@@ -4435,14 +4435,14 @@ function DashboardTab({
                 type="date"
                 value={createdCustomStart}
                 onChange={e => setCreatedCustomStart(e.target.value)}
-                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
               <span className="text-xs text-gray-400">–</span>
               <input
                 type="date"
                 value={createdCustomEnd}
                 onChange={e => setCreatedCustomEnd(e.target.value)}
-                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
             </>
           )}
@@ -4471,14 +4471,14 @@ function DashboardTab({
                 type="date"
                 value={wonLostCustomStart}
                 onChange={e => setWonLostCustomStart(e.target.value)}
-                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
               <span className="text-xs text-gray-400">–</span>
               <input
                 type="date"
                 value={wonLostCustomEnd}
                 onChange={e => setWonLostCustomEnd(e.target.value)}
-                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                className="h-7 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
               />
             </>
           )}
@@ -5833,7 +5833,7 @@ function ActivityLogTab({
                   type="date"
                   value={logForm.date}
                   onChange={(e) => setLogForm((f) => ({ ...f, date: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                 />
               </div>
             </div>

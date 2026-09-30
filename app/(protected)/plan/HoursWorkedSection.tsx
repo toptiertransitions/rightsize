@@ -164,7 +164,7 @@ function EditEntryModal({ entry, focusAreas, onClose, onSaved }: EditModalProps)
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
           </div>
 
           <div>
@@ -182,12 +182,12 @@ function EditEntryModal({ entry, focusAreas, onClose, onSaved }: EditModalProps)
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
               <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">End Time</label>
               <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
             </div>
           </div>
 
@@ -681,7 +681,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, isTeamLead
                     type="date"
                     value={logDateFrom}
                     onChange={e => setLogDateFrom(e.target.value)}
-                    className="h-7 px-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                    className="h-7 px-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                     placeholder="From"
                   />
                   <span className="text-xs text-gray-400">–</span>
@@ -689,7 +689,7 @@ export function HoursWorkedSection({ timeEntries, isAdmin, isManager, isTeamLead
                     type="date"
                     value={logDateTo}
                     onChange={e => setLogDateTo(e.target.value)}
-                    className="h-7 px-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                    className="h-7 px-2 rounded-lg border border-gray-200 text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                     placeholder="To"
                   />
                 </div>

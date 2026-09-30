@@ -37,7 +37,7 @@ export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, en
   // Native <input type="date"> doesn't reliably fill its container on mobile
   // Safari/Chrome the way a <select> does — appearance-none drops the native
   // theming that causes it.
-  const dateInputCls = `${inputCls} appearance-none block min-w-0`;
+  const dateInputCls = `${inputCls} appearance-none block min-w-0 max-w-full [&::-webkit-date-and-time-value]:text-left`;
 
   const handleSave = async () => {
     if (!tenantId) { setError("Please select a project"); return; }

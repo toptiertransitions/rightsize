@@ -1008,7 +1008,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                         type="date"
                         value={form.completedDate ?? ""}
                         onChange={e => set("completedDate", e.target.value)}
-                        className="w-full min-w-0 rounded-xl border border-gray-300 px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent"
+                        className="w-full min-w-0 rounded-xl border border-gray-300 px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
                       />
                     </div>
                   ) : <div />}
@@ -1029,7 +1029,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                         value={form.approvedDate ?? ""}
                         onChange={e => set("approvedDate", e.target.value)}
                         disabled={approvedLocked}
-                        className={`w-full min-w-0 rounded-xl border border-gray-300 px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent ${approvedLocked ? "bg-gray-50 text-gray-500 cursor-not-allowed" : ""}`}
+                        className={`w-full min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left rounded-xl border border-gray-300 px-2 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent ${approvedLocked ? "bg-gray-50 text-gray-500 cursor-not-allowed" : ""}`}
                       />
                       {item.approvedByName && (
                         <p className="mt-1 text-xs text-gray-400">{item.approvedByName}</p>

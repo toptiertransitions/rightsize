@@ -923,7 +923,7 @@ export function InvoiceCreatorModal({
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Date</label>
                             <input type="date" value={ei.date} onChange={e => setExpenseItems(prev => prev.map((x, i) => i === idx ? { ...x, date: e.target.value } : x))}
-                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -974,7 +974,7 @@ export function InvoiceCreatorModal({
                         <div>
                           <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Date</label>
                           <input type="date" value={newExpense.date ?? ""} onChange={e => setNewExpense(p => ({ ...p!, date: e.target.value }))}
-                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400" />
+                            className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-forest-400 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">

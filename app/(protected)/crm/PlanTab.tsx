@@ -145,12 +145,12 @@ function AddQuarterModal({ onClose, onCreated, priorQuarterId }: { onClose: () =
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
-                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
             </div>
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
-                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
             </div>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
@@ -209,12 +209,12 @@ function EditQuarterModal({ quarter, onClose, onSaved }: { quarter: Quarter; onC
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required
-                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
             </div>
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
-                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500" />
+                className="w-full h-9 border border-gray-300 rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-forest-500 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left" />
             </div>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
