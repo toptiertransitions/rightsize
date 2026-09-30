@@ -261,22 +261,22 @@ function ExportModal({ entries, onClose, weekStart }: {
 
         {/* Date range inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-medium text-gray-400 mb-1">From</label>
             <input
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+              className="w-full min-w-0 max-w-full appearance-none bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-medium text-gray-400 mb-1">To</label>
             <input
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500"
+              className="w-full min-w-0 max-w-full appearance-none bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 [&::-webkit-date-and-time-value]:text-left"
             />
           </div>
         </div>
@@ -932,7 +932,7 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               <div className="flex-1">
                 <label className="block text-xs font-medium text-gray-400 mb-1">Date</label>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+                  className="w-full min-w-0 max-w-full appearance-none bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 [&::-webkit-date-and-time-value]:text-left" />
               </div>
               <label className="flex items-center gap-2 sm:pb-2 cursor-pointer select-none">
                 <input
@@ -1049,12 +1049,12 @@ function LogTimeModal({ entry, tenants, onClose, onSaved, onDeleted, staffMember
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">Start Time</label>
                 <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                  className="w-full min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+                  className="w-full min-w-0 max-w-full appearance-none bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 [&::-webkit-date-and-time-value]:text-left" />
               </div>
               <div className="min-w-0">
                 <label className="block text-xs font-medium text-gray-400 mb-1">End Time</label>
                 <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                  className="w-full min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500" />
+                  className="w-full min-w-0 max-w-full appearance-none bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-forest-500 [&::-webkit-date-and-time-value]:text-left" />
               </div>
             </div>
 
