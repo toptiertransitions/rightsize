@@ -178,7 +178,7 @@ function EditEntryModal({ entry, focusAreas, onClose, onSaved }: EditModalProps)
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Start Time</label>
               <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
@@ -195,7 +195,7 @@ function EditEntryModal({ entry, focusAreas, onClose, onSaved }: EditModalProps)
             <p className="text-xs text-gray-500">Duration: {fmtMins(duration)}</p>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Travel Time (min)</label>
               <input type="number" min="0" value={travelMinutes} onChange={e => setTravelMinutes(e.target.value)}

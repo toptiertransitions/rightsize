@@ -379,7 +379,7 @@ export function StaffSkillsTab({ members: initialMembers, skills: initialSkills,
 
       {/* Bulk skill popover */}
       {bulkSkillPopoverOpen && bulkAction && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 space-y-4">
             <h3 className="font-semibold text-gray-900">
               {bulkAction === "assign" ? "Assign" : "Remove"} Skill — {selectedIds.size} members

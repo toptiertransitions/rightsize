@@ -296,7 +296,7 @@ function MassEmailModal({
         </div>
         <div className="px-6 py-5 space-y-5">
           {/* Sender */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">From Name</label>
               <input

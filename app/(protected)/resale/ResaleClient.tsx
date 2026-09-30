@@ -133,7 +133,7 @@ function LabelModal({ count, onClose, onPrint }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white border border-gray-200 rounded-2xl shadow-2xl p-6 w-80">
         <h3 className="font-bold text-lg text-gray-900 mb-1">Print Labels</h3>

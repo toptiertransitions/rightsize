@@ -383,7 +383,7 @@ function ServiceModal({ service, nextSortOrder, onClose, onSaved, onDeleted }: S
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4}
               className="w-full px-3 py-2 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400 resize-y" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">Hourly Rate ($/hr)</label>
               <input type="number" min={0} step={0.01} value={hourlyRate} onChange={(e) => setHourlyRate(Number(e.target.value))}

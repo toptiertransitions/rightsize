@@ -690,7 +690,7 @@ function ContentFormModal({
           </div>
 
           {/* Audience + Stage */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Audience</label>
               <select value={audience} onChange={e => { setAudience(e.target.value as ContentAudience); setPipelineStage("All"); }}
@@ -713,7 +713,7 @@ function ContentFormModal({
           </div>
 
           {/* Category + Status */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Category</label>
               <select value={categoryId} onChange={e => setCategoryId(e.target.value)}

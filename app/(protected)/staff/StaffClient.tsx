@@ -742,7 +742,7 @@ function StorageEditForm({ draft, setDraft, saving, error, onSave, onCancel }: {
 }) {
   return (
     <div className="mt-3 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Name *</label>
           <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
@@ -762,7 +762,7 @@ function StorageEditForm({ draft, setDraft, saving, error, onSave, onCancel }: {
           placeholder="e.g. 123 N Wells St, Chicago IL 60610"
           className={STORAGE_INPUT_CLS} />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Access Code</label>
           <input value={draft.accessCode} onChange={e => setDraft(d => ({ ...d, accessCode: e.target.value }))}
@@ -1816,7 +1816,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
                   </div>
 
                   {/* Date picker(s) */}
-                  <div className={addTOIsRange ? "grid grid-cols-2 gap-3" : ""}>
+                  <div className={addTOIsRange ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : ""}>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                         {addTOIsRange ? "From" : "Date"}
@@ -1856,7 +1856,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
 
                   {/* Time range (if not all day) */}
                   {!addTOAllDay && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Start Time</label>
                         <input

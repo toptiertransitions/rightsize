@@ -85,7 +85,7 @@ export function WeeklyEmailButton({ tenantId }: { tenantId: string }) {
                 <>
                   {/* Email type selection */}
                   <p className="text-sm font-medium text-gray-700 mb-3">Choose email type</p>
-                  <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
                     {/* Client */}
                     <button
                       onClick={() => setType("client")}

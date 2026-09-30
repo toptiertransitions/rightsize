@@ -260,7 +260,7 @@ function ExportModal({ entries, onClose, weekStart }: {
         </div>
 
         {/* Date range inputs */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">From</label>
             <input

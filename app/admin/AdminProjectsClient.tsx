@@ -97,7 +97,7 @@ function DestEditCell({ row }: { row: ProjectRow }) {
         <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />
         <div className="flex gap-1">
           <input type="text" placeholder="State" value={destState} onChange={e => setDestState(e.target.value)} className={`${inputCls} w-20`} />
-          <input type="text" placeholder="Zip" value={destZip} onChange={e => setDestZip(e.target.value)} className={inputCls} />
+          <input type="text" placeholder="Zip" value={destZip} onChange={e => setDestZip(e.target.value)} className={`${inputCls} min-w-0 flex-1`} />
         </div>
         <div className="flex gap-1 mt-0.5">
           <button

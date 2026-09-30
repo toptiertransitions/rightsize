@@ -180,7 +180,7 @@ function RuleModal({ rule, onClose, onSaved }: RuleModalProps) {
           {/* Output */}
           <div className="bg-gray-800/50 rounded-xl p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Output — what to recommend</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">Recommended Route</label>
                 <select value={primaryRoute} onChange={e => setPrimaryRoute(e.target.value as PrimaryRoute)} className={sel}>
@@ -203,7 +203,7 @@ function RuleModal({ rule, onClose, onSaved }: RuleModalProps) {
             <CheckboxGroup label="Size" options={SIZE_OPTIONS} value={matchSizeClasses} onChange={setMatchSizeClasses} />
             <CheckboxGroup label="Fragility" options={FRAGILITY_OPTIONS} value={matchFragility} onChange={setMatchFragility} />
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">Min Target Value ($) <span className="text-gray-500 font-normal">0 = none</span></label>
                 <input type="number" min={0} value={minValueMid} onChange={e => setMinValueMid(Number(e.target.value))} className={inp} />
@@ -230,7 +230,7 @@ function RuleModal({ rule, onClose, onSaved }: RuleModalProps) {
           </div>
 
           {/* Meta */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">Priority <span className="text-gray-500 font-normal">(lower = runs first)</span></label>
               <input type="number" min={1} value={priority} onChange={e => setPriority(Number(e.target.value))} className={inp} />

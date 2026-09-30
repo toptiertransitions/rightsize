@@ -265,7 +265,7 @@ function BulkPhotoImport({ items, onClose, onItemUpdated }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={!state?.running ? onClose : undefined} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[480px] max-h-[80vh] flex flex-col">
         <h3 className="text-white font-bold text-lg mb-1">Bulk Photo Import</h3>
@@ -295,7 +295,7 @@ function BulkPhotoImport({ items, onClose, onItemUpdated }: {
 
         {state && (
           <>
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
               {[
                 { label: "Total", value: state.total, cls: "text-white" },
                 { label: "Matched", value: state.matched, cls: "text-forest-300" },
@@ -529,7 +529,7 @@ function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () =>
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-80">
         <h3 className="text-white font-bold text-lg mb-1">Print Labels</h3>
@@ -707,7 +707,7 @@ function SquareFullResetModal({ onClose, onDone }: { onClose: () => void; onDone
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={phase !== "running" ? onClose : undefined} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[520px] max-h-[80vh] flex flex-col">
         <h3 className="text-white font-bold text-lg mb-1">Full Square Reset + Re-Sync</h3>
@@ -762,7 +762,7 @@ function SquareFullResetModal({ onClose, onDone }: { onClose: () => void; onDone
                 { label: "Deleted", value: summary.squareDeleted, cls: summary.squareDeleted > 0 ? "text-red-300" : "text-gray-500" },
                 { label: "AT Cleared", value: summary.airtableCleared, cls: "text-amber-300" },
               ].map(({ label, value, cls }) => (
-                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <div key={label} className="min-w-0 bg-gray-800 rounded-xl px-3 py-2 text-center">
                   <p className={`text-xl font-bold ${cls}`}>{value}</p>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
                 </div>
@@ -822,7 +822,7 @@ function SquareCleanupModal({ onClose, onDone }: { onClose: () => void; onDone: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={phase !== "running" ? onClose : undefined} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[520px] max-h-[80vh] flex flex-col">
         <h3 className="text-white font-bold text-lg mb-1">Clean Up Square Duplicates</h3>
@@ -866,7 +866,7 @@ function SquareCleanupModal({ onClose, onDone }: { onClose: () => void; onDone: 
                 { label: "Duplicates", value: summary.duplicatesFound, cls: "text-amber-300" },
                 { label: "Deleted", value: summary.totalDeleted, cls: summary.totalDeleted > 0 ? "text-red-300" : "text-gray-500" },
               ].map(({ label, value, cls }) => (
-                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2 text-center">
+                <div key={label} className="min-w-0 bg-gray-800 rounded-xl px-3 py-2 text-center">
                   <p className={`text-xl font-bold ${cls}`}>{value}</p>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
                 </div>

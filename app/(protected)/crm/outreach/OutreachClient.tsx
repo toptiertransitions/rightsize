@@ -653,7 +653,7 @@ function TemplatesTab({
                     className={cn(inputCls, "resize-none")}
                     rows={3}
                   />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">CTA link (optional)</label>
                       <input type="url" value={form.ctaLink} onChange={e => setForm(f => ({ ...f, ctaLink: e.target.value }))} className={inputCls} placeholder="https://..." />
@@ -713,7 +713,7 @@ function TemplatesTab({
 
               {/* CTA link for text emails */}
               {form.emailType === "text" && form.channel === "Email" && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">CTA link (optional)</label>
                     <input type="url" value={form.ctaLink} onChange={e => setForm(f => ({ ...f, ctaLink: e.target.value }))} className={inputCls} placeholder="https://..." />

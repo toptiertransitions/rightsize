@@ -540,7 +540,7 @@ function ManageModal({ user, tenants, currentUserId, onClose, onUpdate, onDelete
           <section>
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Profile</h3>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">First Name</label>
                   <input
@@ -1002,7 +1002,7 @@ function CreateStaffModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">First Name <span className="text-gray-600">*</span></label>
               <input value={firstName} onChange={e => setFirstName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()} className={inputClass} placeholder="Jane" autoFocus />

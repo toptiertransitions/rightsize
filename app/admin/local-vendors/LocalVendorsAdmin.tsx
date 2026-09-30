@@ -245,7 +245,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
           </div>
 
           {/* Email + Phone */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -269,7 +269,7 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
           </div>
 
           {/* City / State / Zip */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="col-span-1">
               <label className="block text-sm font-medium text-gray-300 mb-1.5">City</label>
               <input type="text" value={city} onChange={(e) => setCity(e.target.value)}

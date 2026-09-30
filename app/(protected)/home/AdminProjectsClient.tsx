@@ -594,7 +594,7 @@ export function AdminProjectsClient({ initialTenants, isManager, isAdmin }: Prop
                               value={editCity}
                               onChange={e => setEditCity(e.target.value)}
                               placeholder="City"
-                              className="flex-1 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-500"
+                              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-forest-500"
                             />
                             <input
                               value={editState}

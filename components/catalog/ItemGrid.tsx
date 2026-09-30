@@ -1256,7 +1256,7 @@ function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () =>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-80">
         <h3 className="text-white font-bold text-lg mb-1">Print Labels</h3>
@@ -2948,7 +2948,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
 
       {sendToPFItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => { if (!sendToPFLoading) { setSendToPFItem(null); setSendToPFError(null); } }}
         >
           <div
@@ -2988,7 +2988,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
 
       {downloadItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => setDownloadItem(null)}
         >
           <div

@@ -350,7 +350,7 @@ function StepModal({
           </div>
 
           {/* Delay */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Delay (days)</label>
               <input

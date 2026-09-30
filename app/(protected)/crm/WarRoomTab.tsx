@@ -113,7 +113,7 @@ function AddQuarterModal({ onClose, onCreated, priorQuarterId }: { onClose: () =
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
         <h2 className="text-base font-semibold text-gray-900 mb-4">Add Quarter</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -195,7 +195,7 @@ function EditQuarterModal({ quarter, onClose, onSaved }: { quarter: Quarter; onC
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
         <h2 className="text-base font-semibold text-gray-900 mb-4">Edit Quarter</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
