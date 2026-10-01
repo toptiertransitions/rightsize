@@ -71,7 +71,7 @@ function CommentRow({ comment }: { comment: EnrichedComment }) {
           <span className="text-xs font-semibold text-gray-900">{comment.authorName}</span>
           <span className="text-[11px] text-gray-400">{formatCT(comment.createdAt)}</span>
         </div>
-        <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{comment.body}</p>
+        <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{comment.body}</p>
       </div>
     </div>
   );
@@ -135,7 +135,7 @@ function MessageCard({ message, currentUserId, currentUserName, currentUserPhoto
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${style.badge}`}>{style.label}</span>
             <span className="text-[11px] text-gray-400">{formatCT(message.timestamp)}</span>
           </div>
-          {message.body && <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{message.body}</p>}
+          {message.body && <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{message.body}</p>}
           {message.attachment && <AttachmentView attachment={message.attachment} />}
           {message.urgency === "Urgent" && !message.channel.startsWith("lead:") && (
             <p className="mt-1.5 text-[11px] font-medium">
@@ -182,14 +182,14 @@ function MessageCard({ message, currentUserId, currentUserName, currentUserPhoto
       {showReply && (
         <div className="mt-3 ml-11 flex items-start gap-2.5">
           <Avatar name={currentUserName} photoUrl={currentUserPhoto} size={28} />
-          <div className="flex-1 flex gap-2">
+          <div className="flex-1 min-w-0 flex gap-2">
             <input
               type="text"
               autoFocus
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
               placeholder="Write a comment…"
-              className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400"
+              className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400"
               onKeyDown={e => {
                 if (e.key === "Enter") handleAddComment();
                 if (e.key === "Escape") { setShowReply(false); setCommentText(""); }
@@ -357,7 +357,7 @@ export function ProjectChannelThread({ tenantId, currentUserId, currentUserName,
       {/* Compose */}
       <div className="flex gap-3 mb-6">
         <Avatar name={currentUserName} photoUrl={currentUserPhoto} size={36} />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {pendingFile && <AttachmentPendingChip file={pendingFile} onRemove={() => setPendingFile(null)} />}
           <textarea
             value={body}

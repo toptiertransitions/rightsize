@@ -204,7 +204,7 @@ function BroadcastPanel({ canBroadcast, currentUserName, onSent }: { canBroadcas
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${URGENCY_BADGE[m.urgency]}`}>{m.urgency}</span>
                     <span className="text-[11px] text-gray-400">{formatRelative(m.timestamp)}</span>
                   </div>
-                  {m.body && <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{m.body}</p>}
+                  {m.body && <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap break-words">{m.body}</p>}
                   {m.attachment && <AttachmentView attachment={m.attachment} />}
                 </div>
               ))}
