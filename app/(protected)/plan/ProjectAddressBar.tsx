@@ -228,11 +228,11 @@ export function ProjectAddressBar({
 
   if (editing) {
     return (
-      <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+      <div className="min-w-0 mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
         {canEditAddresses !== false && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Origin */}
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Origin</p>
               <div className="flex flex-col gap-1.5">
                 <input type="text" placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} autoFocus />
@@ -243,7 +243,7 @@ export function ProjectAddressBar({
               </div>
             </div>
             {/* Destination */}
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Destination</p>
               <div className="flex flex-col gap-1.5">
                 <input
@@ -266,7 +266,7 @@ export function ProjectAddressBar({
 
         {/* Team Lead (manager/admin only) */}
         {canEditTeamLead && (
-          <div className="mt-3">
+          <div className="min-w-0 mt-3">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Team Lead</p>
             <select
               value={teamLeadClerkId}
