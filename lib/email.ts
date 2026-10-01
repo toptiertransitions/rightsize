@@ -649,6 +649,83 @@ export function buildVendorFileEmail({
 </html>`;
 }
 
+export function buildPartnerDocumentSharedEmail({
+  partnerName,
+  companyName,
+  fileNames,
+  note,
+  portalUrl,
+}: {
+  partnerName: string;
+  companyName?: string;
+  fileNames: string[];
+  note?: string;
+  portalUrl: string;
+}): string {
+  const fileWord = fileNames.length === 1 ? "document" : "documents";
+  const fileRows = fileNames
+    .map(
+      (name) => `
+      <tr>
+        <td style="padding:7px 0;border-bottom:1px solid #F3F4F6;font-size:14px;color:#374151;">${name}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Document Shared</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+              <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+              <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">New Document Shared</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#1a1a1a;">
+                ${partnerName}${companyName ? ` (${companyName})` : ""} shared ${fileNames.length} ${fileWord} with you.
+              </p>
+              <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:${note ? "16px" : "24px"};">
+                <tbody>${fileRows}</tbody>
+              </table>
+              ${note ? `<p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.6;font-style:italic;">&ldquo;${note}&rdquo;</p>` : ""}
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background-color:#2E6B4F;border-radius:8px;padding:12px 24px;">
+                    <a href="${portalUrl}" style="color:#F5F0E8;font-size:15px;font-weight:bold;text-decoration:none;">
+                      View in Rightsize &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:28px 0 0;font-size:13px;color:#9ca3af;line-height:1.5;">
+                Sign in to view or download. For your security, documents aren't attached to this email.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Rightsize Client Portal</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildVendorAssignmentEmail({
   vendorName,
   itemCount,

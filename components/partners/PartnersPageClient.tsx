@@ -8,6 +8,7 @@ import { SelectedPartnersTray } from "./SelectedPartnersTray";
 import { CategoryChipBar } from "./CategoryChipBar";
 import { CategorySection } from "./CategorySection";
 import { PartnerDetailModal } from "./PartnerDetailModal";
+import { DocumentsSection } from "./DocumentsSection";
 
 interface Props {
   tenantId: string;
@@ -113,6 +114,8 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         filesEnabled
         tenantId={tenantId}
       />
+
+      <DocumentsSection tenantId={tenantId} canMatch={canEdit || isStaffPreview} selectedPartners={selectedPartners} />
 
       <div className="flex items-center gap-3 mt-10 mb-1">
         <h2 className="text-lg sm:text-xl font-bold text-gray-900 whitespace-nowrap">Vetted Partner Matching</h2>

@@ -129,6 +129,37 @@ export async function deleteFile(publicId: string, resourceType: string): Promis
   });
 }
 
+// ─── Private/authenticated delivery (Documents feature) ──────────────────────
+// Uses Cloudinary's "authenticated" delivery type (distinct from the public
+// uploads above) so the asset is never servable via a guessable/public URL —
+// every download requires a freshly-signed, short-lived API URL.
+export async function uploadAuthenticatedFile(
+  buffer: Buffer,
+  options: { publicId: string; mimeType: string }
+): Promise<{ publicId: string }> {
+  const result = await cloudinary.uploader.upload(
+    `data:${options.mimeType};base64,${buffer.toString("base64")}`,
+    {
+      public_id: options.publicId,
+      resource_type: "raw",
+      type: "authenticated",
+    }
+  );
+  return { publicId: result.public_id };
+}
+
+export function getAuthenticatedDownloadUrl(publicId: string, format: string, expiresInSeconds = 90): string {
+  return cloudinary.utils.private_download_url(publicId, format, {
+    resource_type: "raw",
+    type: "authenticated",
+    expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+  });
+}
+
+export async function deleteAuthenticatedFile(publicId: string): Promise<void> {
+  await cloudinary.uploader.destroy(publicId, { resource_type: "raw", type: "authenticated" });
+}
+
 export function getOptimizedUrl(
   publicId: string,
   options: { width?: number; height?: number } = {}

@@ -844,6 +844,41 @@ export interface ProjectFile {
   recapDate?: string; // YYYY-MM-DD in CST
 }
 
+// ─── Documents (Partner → Client document sharing) ────────────────────────────
+export type DocumentStatus = "Pending Scan" | "Clean" | "Quarantined" | "Deleted";
+export type DocumentActivityAction = "Upload" | "View" | "Download" | "Delete" | "Denied";
+export type DocumentActorRole = "Partner" | "Client" | "Staff" | "Unauthenticated";
+
+export interface DocumentRecord {
+  id: string;
+  airtableId: string;
+  fileKey: string;
+  originalFileName: string;
+  partnerContactId: string;
+  partnerName: string;
+  partnerCompanyName?: string;
+  tenantId: string;
+  note?: string;
+  status: DocumentStatus;
+  fileSize: number;
+  mimeType: string;
+  cloudinaryPublicId: string;
+  matchedVendorId?: string;
+  uploadedAt: string;
+}
+
+export interface DocumentActivityLogEntry {
+  id: string;
+  airtableId: string;
+  fileKey: string;
+  action: DocumentActivityAction;
+  actorUserId: string;
+  actorRole: DocumentActorRole;
+  ipAddress?: string;
+  detail?: string;
+  timestamp: string;
+}
+
 // ─── Time Tracking ────────────────────────────────────────────────────────────
 export const TIME_FOCUS_AREAS: string[] = [
   "Coordinating",

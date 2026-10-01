@@ -39,6 +39,11 @@ import type {
   PartnerCommunityCompletion,
   ProjectFile,
   FileTag,
+  DocumentRecord,
+  DocumentStatus,
+  DocumentActivityLogEntry,
+  DocumentActivityAction,
+  DocumentActorRole,
   TimeEntry,
   FocusArea,
   VendorDecision,
@@ -8130,4 +8135,168 @@ export async function updateProjectTask(
 export async function deleteProjectTask(taskId: string): Promise<void> {
   const res = await projectTasksFetch(`/${taskId}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`deleteProjectTask failed: ${await res.text()}`);
+}
+
+// ─── Documents (Partner → Client document sharing) ────────────────────────────
+function mapDocument(record: AirtableRecord): DocumentRecord {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    fileKey: toStr(f["FileKey"]),
+    originalFileName: toStr(f["OriginalFileName"]),
+    partnerContactId: toStr(f["PartnerContactId"]),
+    partnerName: toStr(f["PartnerName"]),
+    tenantId: toStr(f["TenantId"]),
+    note: toStr(f["Note"]) || undefined,
+    status: (toStr(f["Status"]) || "Pending Scan") as DocumentStatus,
+    fileSize: toNum(f["FileSize"]),
+    mimeType: toStr(f["MimeType"]),
+    cloudinaryPublicId: toStr(f["CloudinaryPublicId"]),
+    matchedVendorId: toStr(f["MatchedVendorId"]) || undefined,
+    uploadedAt: toStr(f["UploadedAt"]),
+  };
+}
+
+export async function createDocument(data: {
+  fileKey: string;
+  originalFileName: string;
+  partnerContactId: string;
+  partnerName: string;
+  tenantId: string;
+  note?: string;
+  fileSize: number;
+  mimeType: string;
+  cloudinaryPublicId: string;
+}): Promise<DocumentRecord> {
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.DOCUMENTS).create({
+    FileKey: data.fileKey,
+    OriginalFileName: data.originalFileName,
+    PartnerContactId: data.partnerContactId,
+    PartnerName: data.partnerName,
+    TenantId: data.tenantId,
+    Note: data.note || "",
+    Status: "Pending Scan",
+    FileSize: data.fileSize,
+    MimeType: data.mimeType,
+    CloudinaryPublicId: data.cloudinaryPublicId,
+    UploadedAt: new Date().toISOString(),
+  });
+  return mapDocument(record);
+}
+
+export async function getDocumentByFileKey(fileKey: string): Promise<DocumentRecord | null> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.DOCUMENTS)
+    .select({ filterByFormula: `{FileKey} = "${fileKey}"`, maxRecords: 1 })
+    .all();
+  if (records.length === 0) return null;
+  return mapDocument(records[0]);
+}
+
+export async function getDocumentsByPartnerContact(partnerContactId: string): Promise<DocumentRecord[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.DOCUMENTS)
+    .select({
+      filterByFormula: `AND({PartnerContactId} = "${partnerContactId}", {Status} != "Deleted")`,
+      sort: [{ field: "UploadedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapDocument);
+}
+
+// Client/staff-visible documents for a project — only ones that have passed
+// the malware scan. Pending/Quarantined/Deleted are never shown client-side.
+export async function getVisibleDocumentsForTenant(tenantId: string): Promise<DocumentRecord[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.DOCUMENTS)
+    .select({
+      filterByFormula: `AND({TenantId} = "${tenantId}", {Status} = "Clean")`,
+      sort: [{ field: "UploadedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapDocument);
+}
+
+export async function getVisibleDocumentsMatchedToVendor(tenantId: string, vendorId: string): Promise<DocumentRecord[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.DOCUMENTS)
+    .select({
+      filterByFormula: `AND({TenantId} = "${tenantId}", {Status} = "Clean", {MatchedVendorId} = "${vendorId}")`,
+      sort: [{ field: "UploadedAt", direction: "desc" }],
+    })
+    .all();
+  return records.map(mapDocument);
+}
+
+export async function updateDocumentStatus(fileKey: string, status: DocumentStatus): Promise<void> {
+  const doc = await getDocumentByFileKey(fileKey);
+  if (!doc) throw new Error(`Document not found: ${fileKey}`);
+  const base = getBase();
+  await base(AIRTABLE_TABLES.DOCUMENTS).update(doc.airtableId, { Status: status });
+}
+
+export async function updateDocumentMatch(fileKey: string, matchedVendorId: string | null): Promise<void> {
+  const doc = await getDocumentByFileKey(fileKey);
+  if (!doc) throw new Error(`Document not found: ${fileKey}`);
+  const base = getBase();
+  await base(AIRTABLE_TABLES.DOCUMENTS).update(doc.airtableId, { MatchedVendorId: matchedVendorId ?? "" });
+}
+
+function mapDocumentActivityLogEntry(record: AirtableRecord): DocumentActivityLogEntry {
+  const f = record.fields;
+  return {
+    id: record.id,
+    airtableId: record.id,
+    fileKey: toStr(f["FileKey"]),
+    action: toStr(f["Action"]) as DocumentActivityAction,
+    actorUserId: toStr(f["ActorUserId"]),
+    actorRole: toStr(f["ActorRole"]) as DocumentActorRole,
+    ipAddress: toStr(f["IPAddress"]) || undefined,
+    detail: toStr(f["Detail"]) || undefined,
+    timestamp: toStr(f["Timestamp"]),
+  };
+}
+
+export async function createDocumentActivityLogEntry(data: {
+  fileKey: string;
+  action: DocumentActivityAction;
+  actorUserId: string;
+  actorRole: DocumentActorRole;
+  ipAddress?: string;
+  detail?: string;
+}): Promise<DocumentActivityLogEntry> {
+  const base = getBase();
+  const record = await base(AIRTABLE_TABLES.DOCUMENT_ACTIVITY_LOG).create({
+    FileKey: data.fileKey,
+    Action: data.action,
+    ActorUserId: data.actorUserId,
+    ActorRole: data.actorRole,
+    IPAddress: data.ipAddress || "",
+    Detail: data.detail || "",
+    Timestamp: new Date().toISOString(),
+  });
+  return mapDocumentActivityLogEntry(record);
+}
+
+// Counts denied attempts BY this actor (e.g. a partner probing files that
+// aren't theirs), regardless of whose file was targeted — keyed by the
+// actor's own Clerk user ID, which every log entry records.
+export async function getRecentDeniedCountForActor(actorUserId: string, sinceIso: string): Promise<number> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.DOCUMENT_ACTIVITY_LOG)
+    .select({
+      filterByFormula: `AND({ActorUserId} = "${actorUserId}", {Action} = "Denied", IS_AFTER({Timestamp}, "${sinceIso}"))`,
+    })
+    .all();
+  return records.length;
+}
+
+export async function getDocumentActivityLog(limit = 200): Promise<DocumentActivityLogEntry[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.DOCUMENT_ACTIVITY_LOG)
+    .select({ sort: [{ field: "Timestamp", direction: "desc" }], maxRecords: limit })
+    .all();
+  return records.map(mapDocumentActivityLogEntry);
 }

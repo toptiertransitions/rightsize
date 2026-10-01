@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
-import type { ProjectFile } from "@/lib/types";
+import type { ProjectFile, DocumentRecord } from "@/lib/types";
 
 interface Props {
   tenantId: string;
@@ -47,6 +47,7 @@ export function PartnerFilesSection({ tenantId, partnerId }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [sharedDocs, setSharedDocs] = useState<DocumentRecord[]>([]);
   const [uploading, setUploading] = useState<UploadingFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -56,10 +57,17 @@ export function PartnerFilesSection({ tenantId, partnerId }: Props) {
     if (loaded) return;
     setLoaded(true);
     try {
-      const res = await fetch(`/api/files?tenantId=${tenantId}`);
-      const d = await res.json();
-      const all: ProjectFile[] = d.files ?? [];
+      const [filesRes, docsRes] = await Promise.all([
+        fetch(`/api/files?tenantId=${tenantId}`),
+        fetch(`/api/documents?tenantId=${tenantId}`),
+      ]);
+      const filesData = await filesRes.json();
+      const all: ProjectFile[] = filesData.files ?? [];
       setFiles(all.filter((f) => f.vendorId === partnerId));
+
+      const docsData = await docsRes.json().catch(() => ({ documents: [] }));
+      const allDocs: DocumentRecord[] = docsData.documents ?? [];
+      setSharedDocs(allDocs.filter((d) => d.matchedVendorId === partnerId));
     } catch {
       setError("Couldn't load files");
     }
@@ -127,7 +135,7 @@ export function PartnerFilesSection({ tenantId, partnerId }: Props) {
     }
   };
 
-  const totalCount = files.length + uploading.length;
+  const totalCount = files.length + uploading.length + sharedDocs.length;
 
   return (
     <div className="border-t border-gray-100 mt-1 pt-1">
@@ -191,7 +199,25 @@ export function PartnerFilesSection({ tenantId, partnerId }: Props) {
             </div>
           ))}
 
-          {files.length === 0 && uploading.length === 0 && (
+          {sharedDocs.map((doc) => (
+            <div key={doc.fileKey} className="flex items-center gap-2">
+              <div className="w-8 h-8 flex-shrink-0 rounded bg-forest-50 border border-forest-100 flex items-center justify-center">
+                <svg className="w-4 h-4 text-forest-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <a
+                href={`/api/documents/${doc.fileKey}/download`}
+                className="flex-1 text-xs text-gray-700 hover:text-forest-600 hover:underline truncate"
+                title={doc.originalFileName}
+              >
+                {doc.originalFileName}
+              </a>
+              <span className="text-[10px] text-gray-400 shrink-0">via {doc.partnerName}</span>
+            </div>
+          ))}
+
+          {files.length === 0 && uploading.length === 0 && sharedDocs.length === 0 && (
             <p className="text-xs text-gray-400 px-1">No files yet.</p>
           )}
 

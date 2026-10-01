@@ -1,8 +1,8 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
-import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById } from "./airtable";
+import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -588,4 +588,113 @@ export async function sendScheduleModificationRequest(params: {
     subject: `${priorityLabel}Schedule Modification Request — ${params.projectName} (${params.requesterName})`,
     html,
   });
+}
+
+// ─── Documents feature notifications ───────────────────────────────────────────
+
+// Batches every file from one upload action into a single email to the
+// project's Owner. Send failures are logged, never thrown — a notification
+// problem must never block or roll back the upload itself.
+export async function sendPartnerDocumentSharedNotification(params: {
+  tenantId: string;
+  partnerName: string;
+  companyName?: string;
+  fileNames: string[];
+  note?: string;
+  portalUrl: string;
+}): Promise<void> {
+  try {
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) return;
+
+    const memberships = await getMembershipsForTenant(params.tenantId).catch(() => []);
+    const ownerIds = memberships.filter(m => m.role === "Owner").map(m => m.userId);
+    if (ownerIds.length === 0) return;
+
+    const clerk = await clerkClient();
+    const ownerEmails: string[] = [];
+    for (const id of ownerIds) {
+      const u = await clerk.users.getUser(id).catch(() => null);
+      const email = u?.emailAddresses.find(e => e.id === u.primaryEmailAddressId)?.emailAddress ?? u?.emailAddresses[0]?.emailAddress;
+      if (email) ownerEmails.push(email);
+    }
+    if (ownerEmails.length === 0) return;
+
+    const html = buildPartnerDocumentSharedEmail({
+      partnerName: params.partnerName,
+      companyName: params.companyName,
+      fileNames: params.fileNames,
+      note: params.note,
+      portalUrl: params.portalUrl,
+    });
+
+    const resend = new Resend(resendKey);
+    await resend.emails.send({
+      from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+      to: ownerEmails,
+      subject: `New document from ${params.partnerName}`,
+      html,
+    });
+  } catch (e) {
+    console.error("[sendPartnerDocumentSharedNotification] failed:", e);
+  }
+}
+
+// A file failed (or couldn't complete) its malware scan — it's quarantined,
+// never shown to the Client, and staff needs to review it manually.
+export async function sendDocumentQuarantineAlert(params: {
+  fileKey: string;
+  originalFileName: string;
+  partnerName: string;
+  tenantId: string;
+  detail: string;
+}): Promise<void> {
+  try {
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) return;
+
+    const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+    if (adminEmails.length === 0) return;
+
+    const resend = new Resend(resendKey);
+    await resend.emails.send({
+      from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+      to: adminEmails,
+      subject: `Document quarantined — ${params.originalFileName}`,
+      html: `<p>A partner-uploaded document was quarantined and is not visible to the client.</p>
+        <p><strong>File:</strong> ${params.originalFileName}</p>
+        <p><strong>Partner:</strong> ${params.partnerName}</p>
+        <p><strong>Project:</strong> ${params.tenantId}</p>
+        <p><strong>Reason:</strong> ${params.detail}</p>
+        <p><strong>File key:</strong> ${params.fileKey}</p>`,
+    });
+  } catch (e) {
+    console.error("[sendDocumentQuarantineAlert] failed:", e);
+  }
+}
+
+// Staff alert on Documents abuse signals (repeated denied access, unusual
+// upload volume). Caller (lib/documents.ts's shouldSendAbuseAlert) already
+// dedupes so this fires at most once per actor per hour.
+export async function sendDocumentAbuseAlert(params: {
+  actorUserId: string;
+  reason: string;
+}): Promise<void> {
+  try {
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) return;
+
+    const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+    if (adminEmails.length === 0) return;
+
+    const resend = new Resend(resendKey);
+    await resend.emails.send({
+      from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+      to: adminEmails,
+      subject: `Documents abuse alert — ${params.actorUserId}`,
+      html: `<p>Possible abuse detected on the Documents feature.</p><p><strong>Actor:</strong> ${params.actorUserId}</p><p><strong>Reason:</strong> ${params.reason}</p>`,
+    });
+  } catch (e) {
+    console.error("[sendDocumentAbuseAlert] failed:", e);
+  }
 }
