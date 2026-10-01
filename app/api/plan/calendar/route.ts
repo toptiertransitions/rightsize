@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getPlanEntryById, getUserRoleForTenant, updatePlanEntry, getRoomsForTenant, getTenantById, getSystemRole, getStaffMembers } from "@/lib/airtable";
 import { createOrUpdateCalendarEvent, syncCalendarEventRSVPs, cancelCalendarEvent } from "@/lib/googleCalendar";
-import { buildShiftDeclinedEmail } from "@/lib/email";
-import { Resend } from "resend";
+import { applyHelperResponse, notifyShiftDeclined } from "@/lib/shift-response";
+import { sendPushToClerkUsers } from "@/lib/push-send";
+import { formatShiftDateTime } from "@/lib/shift-time";
 import type { PlanHelper } from "@/lib/types";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 
@@ -118,6 +118,43 @@ export async function POST(req: NextRequest) {
       );
 
       const updated = await updatePlanEntry(planEntryId, { googleEventId: eventId });
+
+      // Push "New shift invite" to every TTTStaff/TTTTeamLead helper who is
+      // newly on this shift (not just re-sent to someone already invited —
+      // Google's own calendar-invite email already covers everyone on every
+      // send, same as before this feature; this is additive, in-app only).
+      const previousEmails = new Set((entry.helpers || []).map((h) => h.email.toLowerCase()));
+      const newlyAddedEmails = helpersToInvite
+        .map((h) => h.email.toLowerCase())
+        .filter((email) => !previousEmails.has(email));
+
+      if (newlyAddedEmails.length > 0) {
+        after(async () => {
+          try {
+            const allStaff = await getStaffMembers();
+            const recipients = allStaff.filter(
+              (s) =>
+                s.isActive &&
+                ["TTTStaff", "TTTTeamLead"].includes(s.role) &&
+                newlyAddedEmails.includes(s.email.toLowerCase())
+            );
+            if (recipients.length === 0) return;
+
+            await sendPushToClerkUsers(
+              recipients.map((s) => s.clerkUserId).filter(Boolean),
+              {
+                title: "New shift invite",
+                body: `${projectName} — ${formatShiftDateTime(entryForCalendar)}`,
+                url: `/shift-invite/${planEntryId}`,
+              },
+              { type: "ShiftInvite", shiftId: planEntryId }
+            );
+          } catch (e) {
+            console.error("[plan/calendar send] invite push failed:", e);
+          }
+        });
+      }
+
       return NextResponse.json({ entry: updated });
     }
 
@@ -128,63 +165,44 @@ export async function POST(req: NextRequest) {
 
       const rsvps = await syncCalendarEventRSVPs(entry.googleEventId);
 
-      // Merge latest status + comment back into helpers.
-      // Only overwrite the Rightsize status when Google Calendar gives a definitive
-      // answer (accepted / declined). If Google returns "pending" (needsAction), the
-      // attendee hasn't responded yet — preserve whatever status Rightsize already has
-      // so that a manager's manual "accepted" override isn't silently undone.
-      const updatedHelpers: PlanHelper[] = (entry.helpers || []).map((h) => {
+      // Merge latest status + comment back into helpers, one at a time
+      // through the same applyHelperResponse() the in-app Accept/Decline
+      // flow uses (lib/shift-response.ts) — one implementation of what a
+      // decline transition is, not two. Only overwrite the Rightsize status
+      // when Google Calendar gives a definitive answer (accepted/declined);
+      // "pending" (needsAction) means the attendee hasn't responded yet, so
+      // preserve whatever status Rightsize already has (a manager's manual
+      // "accepted" override shouldn't be silently undone) and just take the
+      // latest comment.
+      let workingHelpers = entry.helpers || [];
+      const newlyDeclinedEmails: string[] = [];
+      for (const h of entry.helpers || []) {
         const rsvp = rsvps.find((r) => r.email === h.email.toLowerCase());
-        if (!rsvp) return h;
-        if (rsvp.status === "pending") return { ...h, comment: rsvp.comment };
-        return { ...h, status: rsvp.status, comment: rsvp.comment };
-      });
+        if (!rsvp) continue;
+        if (rsvp.status === "pending") {
+          workingHelpers = workingHelpers.map((x) =>
+            x.email.toLowerCase() === h.email.toLowerCase() ? { ...x, comment: rsvp.comment } : x
+          );
+          continue;
+        }
+        const result = applyHelperResponse(workingHelpers, h.email, rsvp.status, rsvp.comment);
+        workingHelpers = result.helpers;
+        if (result.newlyDeclined) newlyDeclinedEmails.push(h.email);
+      }
 
-      // Detect helpers that newly transitioned to "declined"
-      const newlyDeclined = updatedHelpers.filter((h) => {
-        const prev = (entry.helpers || []).find((p) => p.email.toLowerCase() === h.email.toLowerCase());
-        return h.status === "declined" && prev?.status !== "declined";
-      });
+      const updated = await updatePlanEntry(planEntryId, { helpers: workingHelpers });
 
-      const updated = await updatePlanEntry(planEntryId, { helpers: updatedHelpers });
-
-      // Fire-and-forget decline notifications
-      if (newlyDeclined.length > 0) {
-        (async () => {
-          try {
-            const [allStaff, tenant] = await Promise.all([
-              getStaffMembers(),
-              getTenantById(entry.tenantId).catch(() => null),
-            ]);
-            const recipientEmails = allStaff
-              .filter((s) => s.isActive && (s.role === "TTTManager" || s.role === "TTTAdmin") && s.email)
-              .map((s) => s.email);
-            if (recipientEmails.length === 0) return;
-
-            const projectName = tenant?.name ?? "Unknown Project";
-            const planUrl = `${APP_URL}/plan?tenantId=${entry.tenantId}`;
-
-            for (const helper of newlyDeclined) {
-              const staffMember = allStaff.find((s) => s.email.toLowerCase() === helper.email.toLowerCase());
-              const html = buildShiftDeclinedEmail({
-                declinedByEmail: helper.email,
-                declinedByName: staffMember?.displayName,
-                shiftDate: entry.date,
-                activity: entry.activity,
-                projectName,
-                planUrl,
-              });
-              await resend.emails.send({
-                from: process.env.RESEND_FROM_EMAIL || "notifications@toptiertransitions.com",
-                to: recipientEmails,
-                subject: `Shift Declined — ${projectName} · ${entry.date}`,
-                html,
-              });
-            }
-          } catch (e) {
-            console.error("[plan/calendar sync] decline notification failed:", e);
+      // after() instead of a bare unawaited promise — the response returns
+      // immediately, but the notification reliably completes rather than
+      // risking getting killed mid-flight once the response is sent.
+      if (newlyDeclinedEmails.length > 0) {
+        after(async () => {
+          for (const email of newlyDeclinedEmails) {
+            await notifyShiftDeclined(updated, email).catch((e) =>
+              console.error("[plan/calendar sync] decline notification failed:", e)
+            );
           }
-        })();
+        });
       }
 
       return NextResponse.json({ entry: updated });

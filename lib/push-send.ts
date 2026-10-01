@@ -1,6 +1,6 @@
 import http2 from "node:http2";
 import jwt from "jsonwebtoken";
-import { getDeviceTokensForUsers, unregisterDeviceToken } from "./airtable";
+import { getDeviceTokensForUsers, unregisterDeviceToken, logPushAttempt, type PushLogType } from "./airtable";
 
 // ─── APNs provider JWT ─────────────────────────────────────────────────────────
 // Apple's HTTP/2 API auths each request with a short-lived JWT signed by an
@@ -106,15 +106,31 @@ async function sendOne(deviceToken: string, jwtToken: string, payload: PushPaylo
 // Pushes a notification to every registered device belonging to the given
 // Clerk users. Silently no-ops if APNs isn't configured yet, and never
 // throws — this is always a best-effort supplement to email, never a
-// caller's critical path.
-export async function sendPushToClerkUsers(clerkUserIds: string[], payload: PushPayload): Promise<void> {
+// caller's critical path. Every attempt is logged (lib/airtable.ts
+// logPushAttempt) so a "did my reminder actually send" question is
+// debuggable — one row per recipient, not per device.
+export async function sendPushToClerkUsers(
+  clerkUserIds: string[],
+  payload: PushPayload,
+  log: { type: PushLogType; shiftId?: string }
+): Promise<void> {
   if (!isPushConfigured()) {
     console.log("[push-send] APNs not configured — skipping push (set APNS_TEAM_ID / APNS_KEY_ID / APNS_PRIVATE_KEY / APNS_BUNDLE_ID)");
+    for (const clerkUserId of clerkUserIds) {
+      await logPushAttempt({ clerkUserId, shiftId: log.shiftId, type: log.type, result: "Failed", detail: "APNs not configured" });
+    }
     return;
   }
   try {
     const devices = await getDeviceTokensForUsers(clerkUserIds);
     const iosDevices = devices.filter((d) => d.platform === "iOS");
+
+    const devicedUserIds = new Set(iosDevices.map((d) => d.clerkUserId));
+    for (const clerkUserId of clerkUserIds) {
+      if (!devicedUserIds.has(clerkUserId)) {
+        await logPushAttempt({ clerkUserId, shiftId: log.shiftId, type: log.type, result: "SkippedNoDevice" });
+      }
+    }
     if (iosDevices.length === 0) return;
 
     const jwtToken = signProviderToken();
@@ -124,7 +140,26 @@ export async function sendPushToClerkUsers(clerkUserIds: string[], payload: Push
     await Promise.all(
       results.filter((r) => r.result === "bad-token").map((r) => unregisterDeviceToken(r.device.token))
     );
+    // One log row per recipient — if they have multiple devices, "Sent" wins
+    // over "Failed" if at least one device succeeded.
+    const byUser = new Map<string, "ok" | "bad-token" | "error">();
+    for (const r of results) {
+      const prev = byUser.get(r.device.clerkUserId);
+      if (prev !== "ok") byUser.set(r.device.clerkUserId, r.result);
+    }
+    for (const [clerkUserId, outcome] of byUser) {
+      await logPushAttempt({
+        clerkUserId,
+        shiftId: log.shiftId,
+        type: log.type,
+        result: outcome === "ok" ? "Sent" : "Failed",
+        detail: outcome !== "ok" ? outcome : undefined,
+      });
+    }
   } catch (e) {
     console.error("[push-send] failed:", e);
+    for (const clerkUserId of clerkUserIds) {
+      await logPushAttempt({ clerkUserId, shiftId: log.shiftId, type: log.type, result: "Failed", detail: String(e) });
+    }
   }
 }

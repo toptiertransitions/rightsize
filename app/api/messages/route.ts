@@ -242,7 +242,8 @@ export async function POST(req: NextRequest) {
 
         await sendPushToClerkUsers(
           liveRecipients.map(s => s.clerkUserId),
-          { title: `Urgent — ${label}`, body: `${authorDisplayName}: ${bodyPreview}`, url: "/inbox" }
+          { title: `Urgent — ${label}`, body: `${authorDisplayName}: ${bodyPreview}`, url: "/inbox" },
+          { type: "Urgent" }
         );
       } catch (e) {
         console.error("[messages] urgent notification failed:", e);
@@ -263,7 +264,7 @@ export async function POST(req: NextRequest) {
             title: authorDisplayName,
             body: text?.trim() || `[Attachment: ${attachment?.fileName}]`,
             url: "/inbox",
-          });
+          }, { type: "DM" });
         } catch (e) {
           console.error("[messages] DM push failed:", e);
         }

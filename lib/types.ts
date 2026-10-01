@@ -632,6 +632,14 @@ export interface PlanHelper {
   email: string;
   status: "pending" | "accepted" | "declined";
   comment?: string; // reply comment from the calendar invite
+  /**
+   * ISO timestamp of when the 2-hour-before push reminder was sent to this
+   * helper, for cron idempotency — absent means "not yet sent". Cleared
+   * whenever the shift's date/startTime changes (lib/shift-response.ts),
+   * so a rescheduled shift gets a fresh reminder at its new time instead of
+   * silently reusing the old one's sent-state.
+   */
+  reminderSentAt?: string;
 }
 
 export interface PlanEntry {

@@ -10,18 +10,24 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { token?: string; platform?: string };
+  let body: { token?: string; platform?: string; appVersion?: string; environment?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { token, platform } = body;
+  const { token, platform, appVersion, environment } = body;
   if (!token || (platform !== "iOS" && platform !== "Android")) {
     return NextResponse.json({ error: "token and platform (iOS|Android) are required" }, { status: 400 });
   }
 
-  await registerDeviceToken({ token, clerkUserId: userId, platform });
+  await registerDeviceToken({
+    token,
+    clerkUserId: userId,
+    platform,
+    appVersion,
+    environment: environment === "development" ? "development" : "production",
+  });
   return NextResponse.json({ success: true });
 }

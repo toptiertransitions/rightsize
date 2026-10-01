@@ -5,10 +5,11 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform } from "@/lib/native";
+import { getCachedDeviceToken } from "@/components/shared/PushNotificationBootstrap";
 
 const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan", "/partners"];
 const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
@@ -54,6 +55,21 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   }, []);
   const useIOSNav = !!showIOSNav && isIOSNative;
 
+  // Pending shift-invite count for the badge on the iOS nav's Plan icon.
+  // Safe to call unconditionally whenever the iOS nav shows — showIOSNav
+  // already scopes to client/TTTStaff/TTTTeamLead (see (protected)/layout.tsx),
+  // and the endpoint itself returns an empty list for anyone not eligible.
+  const [pendingInviteCount, setPendingInviteCount] = useState(0);
+  useEffect(() => {
+    if (!useIOSNav) return;
+    let cancelled = false;
+    fetch("/api/shift-invites/pending")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setPendingInviteCount(d.count ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [useIOSNav]);
+
   // The fixed bottom nav sits outside normal document flow, so <main>
   // (rendered by the server layout, which has no way to know isIOSNative)
   // needs bottom padding to keep the last bit of page content from sitting
@@ -66,6 +82,22 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const pathname = usePathname();
   const { actor, userId } = useAuth();
   const { signOut } = useClerk();
+
+  // Unregister this device's push token before the session actually ends —
+  // /api/push/unregister requires an active session, so this has to happen
+  // as part of the sign-out action itself, not in response to the user
+  // becoming signed-out afterward (by then the request would just 401).
+  function handleSignOut(): void {
+    const token = getCachedDeviceToken();
+    const unregister = token
+      ? fetch("/api/push/unregister", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        }).catch(() => {})
+      : Promise.resolve();
+    unregister.finally(() => { void signOut(); });
+  }
   const { user } = useUser();
   const isImpersonating = isImpersonatingProp || !!actor;
   const impersonatedName = actor ? (user?.firstName ? [user.firstName, user.lastName].filter(Boolean).join(" ") : user?.emailAddresses?.[0]?.emailAddress ?? "user") : undefined;
@@ -238,6 +270,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
               <UserButton.MenuItems>
                 <UserButton.Action label="manageAccount" />
                 <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
+                {isIOSNative && (
+                  <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />
+                )}
+                <UserButton.Action label="signOut" labelIcon={<LogOut className="w-4 h-4" />} onClick={handleSignOut} />
               </UserButton.MenuItems>
             </UserButton>
           </div>
@@ -283,11 +319,18 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
               key={label}
               href={link.href}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 transition-colors",
+                "relative flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 transition-colors",
                 isActive ? "text-forest-700" : "text-gray-500"
               )}
             >
-              <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 1.75} />
+              <span className="relative">
+                <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.5 : 1.75} />
+                {label === "Plan" && pendingInviteCount > 0 && (
+                  <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                    {pendingInviteCount > 9 ? "9+" : pendingInviteCount}
+                  </span>
+                )}
+              </span>
               <span className="text-[10px] leading-none font-medium whitespace-nowrap">{label}</span>
             </Link>
           );

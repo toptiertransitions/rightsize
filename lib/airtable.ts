@@ -1604,6 +1604,24 @@ export async function getPlanEntriesForDateRange(
   return records.map(mapPlanEntry);
 }
 
+// Pending shift invites for one person, scoped to a 60-day forward window
+// (Airtable's Helpers field is a JSON blob, not a real column, so this
+// can't be queried server-side by email — it fetches by date range, which
+// Airtable CAN filter on, then matches email/status in JS).
+export async function getPendingShiftInvitesForEmail(email: string): Promise<PlanEntry[]> {
+  const today = new Date();
+  const from = today.toISOString().slice(0, 10);
+  const future = new Date(today);
+  future.setDate(future.getDate() + 60);
+  const to = future.toISOString().slice(0, 10);
+
+  const entries = await getPlanEntriesForDateRange(from, to);
+  const emailLower = email.toLowerCase();
+  return entries.filter((e) =>
+    e.helpers?.some((h) => h.email.toLowerCase() === emailLower && h.status === "pending")
+  );
+}
+
 export async function createPlanEntry(data: {
   tenantId: string;
   date: string;
@@ -1668,15 +1686,96 @@ export async function updatePlanEntry(
   if (data.address !== undefined) fields["Address"] = data.address;
   if (data.startTime !== undefined) fields["StartTime"] = data.startTime;
   if (data.endTime !== undefined) fields["EndTime"] = data.endTime;
-  if (data.helpers !== undefined) fields["Helpers"] = data.helpers.length ? JSON.stringify(data.helpers) : "";
   if (data.googleEventId !== undefined) fields["GoogleEventId"] = data.googleEventId;
   if (data.entryType !== undefined) fields["EntryType"] = data.entryType;
+
+  // A shift's date/startTime changing invalidates any 2h-reminder already
+  // sent against the old time — clear reminderSentAt on every helper so the
+  // cron recomputes and sends fresh at the new time (lib/shift-time.ts /
+  // app/api/cron/shift-reminders). Helpers is a single JSON blob field, so
+  // this always has to rewrite the whole array, whether or not the caller
+  // also explicitly passed a new `helpers` value in this same call.
+  const timeChanged = data.date !== undefined || data.startTime !== undefined;
+  let helpersToWrite = data.helpers;
+  if (helpersToWrite === undefined && timeChanged) {
+    const current = await getPlanEntryById(id);
+    helpersToWrite = current?.helpers ?? [];
+  }
+  if (helpersToWrite !== undefined) {
+    const finalHelpers = timeChanged
+      ? helpersToWrite.map(({ reminderSentAt: _reminderSentAt, ...h }) => h)
+      : helpersToWrite;
+    fields["Helpers"] = finalHelpers.length ? JSON.stringify(finalHelpers) : "";
+  }
+
   const res = await planFetch(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapPlanEntry(await res.json());
+}
+
+function pushLogFetch(path: string, options?: RequestInit) {
+  const token = process.env.AIRTABLE_API_TOKEN!;
+  const base = process.env.AIRTABLE_BASE_ID!;
+  const table = AIRTABLE_TABLES.PUSH_NOTIFICATION_LOG;
+  return fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(table)}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+}
+
+export type PushLogType = "ShiftInvite" | "ShiftReminder" | "ShiftDeclined" | "Urgent" | "DM" | "Other";
+export type PushLogResult = "Sent" | "Failed" | "SkippedNoDevice" | "SkippedOptedOut";
+
+// Best-effort audit trail for "I never got the reminder" debugging — never
+// throws, never blocks the actual push send.
+export async function logPushAttempt(data: {
+  clerkUserId: string;
+  shiftId?: string;
+  type: PushLogType;
+  result: PushLogResult;
+  detail?: string;
+}): Promise<void> {
+  try {
+    await pushLogFetch("", {
+      method: "POST",
+      body: JSON.stringify({
+        fields: {
+          ClerkUserId: data.clerkUserId,
+          ShiftId: data.shiftId || "",
+          Type: data.type,
+          Result: data.result,
+          Detail: data.detail || "",
+          CreatedAt: new Date().toISOString(),
+        },
+      }),
+    });
+  } catch (e) {
+    console.error("[logPushAttempt] failed:", e);
+  }
+}
+
+// Marks one helper's 2h-reminder as sent, for cron idempotency — a direct
+// Helpers-blob write (not updatePlanEntry) so it never triggers the
+// date/startTime-change reminder-reset path above.
+export async function markShiftReminderSent(planEntryId: string, email: string, sentAt: string): Promise<void> {
+  const entry = await getPlanEntryById(planEntryId);
+  if (!entry) return;
+  const emailLower = email.toLowerCase();
+  const helpers = (entry.helpers ?? []).map((h) =>
+    h.email.toLowerCase() === emailLower ? { ...h, reminderSentAt: sentAt } : h
+  );
+  const res = await planFetch(`/${planEntryId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: { Helpers: helpers.length ? JSON.stringify(helpers) : "" } }),
+  });
+  if (!res.ok) throw new Error(await res.text());
 }
 
 export async function deletePlanEntry(id: string): Promise<void> {
@@ -3357,17 +3456,22 @@ export async function registerDeviceToken(data: {
   token: string;
   clerkUserId: string;
   platform: "iOS" | "Android";
+  appVersion?: string;
+  environment?: "production" | "development";
 }): Promise<void> {
   const formula = encodeURIComponent(`{Token} = "${data.token}"`);
   const res = await pushTokensFetch(`?filterByFormula=${formula}&maxRecords=1`);
   const existing = res.ok ? await res.json().catch(() => ({ records: [] })) : { records: [] };
   const now = new Date().toISOString();
-  const fields = {
+  const fields: Record<string, string | boolean> = {
     Token: data.token,
     ClerkUserId: data.clerkUserId,
     Platform: data.platform,
     LastSeenAt: now,
+    Active: true,
   };
+  if (data.appVersion) fields["AppVersion"] = data.appVersion;
+  if (data.environment) fields["Environment"] = data.environment;
   if (existing.records?.length) {
     await pushTokensFetch(`/${existing.records[0].id}`, {
       method: "PATCH",

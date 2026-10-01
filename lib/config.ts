@@ -106,6 +106,7 @@ export const AIRTABLE_TABLES = {
   QUARTERLY_COMPANY_PLANS: process.env.AIRTABLE_QUARTERLY_COMPANY_PLANS_TABLE || "QuarterlyCompanyPlans",
   WAR_ROOM_SPOTLIGHT: process.env.AIRTABLE_WAR_ROOM_SPOTLIGHT_TABLE || "WarRoomSpotlight",
   DEVICE_PUSH_TOKENS: process.env.AIRTABLE_DEVICE_PUSH_TOKENS_TABLE || "DevicePushTokens",
+  PUSH_NOTIFICATION_LOG: process.env.AIRTABLE_PUSH_NOTIFICATION_LOG_TABLE || "PushNotificationLog",
 } as const;
 
 // ─── Item Status Flow ─────────────────────────────────────────────────────────
