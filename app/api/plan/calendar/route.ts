@@ -119,16 +119,21 @@ export async function POST(req: NextRequest) {
 
       const updated = await updatePlanEntry(planEntryId, { googleEventId: eventId });
 
-      // Push "New shift invite" to every TTTStaff/TTTTeamLead helper who is
-      // newly on this shift (not just re-sent to someone already invited —
-      // Google's own calendar-invite email already covers everyone on every
-      // send, same as before this feature; this is additive, in-app only).
-      const previousEmails = new Set((entry.helpers || []).map((h) => h.email.toLowerCase()));
-      const newlyAddedEmails = helpersToInvite
-        .map((h) => h.email.toLowerCase())
-        .filter((email) => !previousEmails.has(email));
+      // Push "New shift invite" to every TTTStaff/TTTTeamLead helper this
+      // call is inviting. Not diffed against entry.helpers — by the time
+      // this action runs, the client has already PATCHed the new helper
+      // into Airtable via a prior /api/plan save (see PlanClient.tsx's
+      // handleSave), so `entry` fetched above already contains them and a
+      // diff here always comes back empty. The callers of action:"send"
+      // already gate *when* this fires to the moments that matter — a new
+      // entry with helpers, an edit with newly-added helpers, or an
+      // explicit "Send/Update Invites" click — so pushing everyone in
+      // helpersToInvite on each call is correct, not over-notifying.
+      // Google's own calendar-invite email still covers everyone on every
+      // send regardless, same as before this feature.
+      const inviteEmails = helpersToInvite.map((h) => h.email.toLowerCase());
 
-      if (newlyAddedEmails.length > 0) {
+      if (inviteEmails.length > 0) {
         after(async () => {
           try {
             const allStaff = await getStaffMembers();
@@ -136,7 +141,7 @@ export async function POST(req: NextRequest) {
               (s) =>
                 s.isActive &&
                 ["TTTStaff", "TTTTeamLead"].includes(s.role) &&
-                newlyAddedEmails.includes(s.email.toLowerCase())
+                inviteEmails.includes(s.email.toLowerCase())
             );
             if (recipients.length === 0) return;
 
