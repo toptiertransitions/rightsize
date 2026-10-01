@@ -1,8 +1,13 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSystemRole, getMembershipsForUser } from "@/lib/airtable";
 import { HelpClient } from "./HelpClient";
 
+// Standalone page — intentionally outside the (protected) layout's Header,
+// so it renders with no top/bottom nav. Reached only via the user menu
+// ("Get Help", under Manage Account). Still auth-gated: not in middleware's
+// public route list, so Clerk protects it the same as everything else.
 export default async function HelpPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
@@ -38,13 +43,23 @@ export default async function HelpPage() {
     : "Client";
 
   return (
-    <HelpClient
-      userEmail={userEmail}
-      userName={userName}
-      userTypeLabel={userTypeLabel}
-      isStaff={isStaff || isSales}
-      isClient={isClient}
-      isAdmin={isAdmin}
-    />
+    <div className="min-h-screen bg-cream-50" style={{ paddingTop: "max(20px, env(safe-area-inset-top))", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+      <div className="max-w-2xl mx-auto px-4 sm:px-6">
+        <Link href="/home" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-forest-700 mb-4">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Rightsize
+        </Link>
+        <HelpClient
+          userEmail={userEmail}
+          userName={userName}
+          userTypeLabel={userTypeLabel}
+          isStaff={isStaff || isSales}
+          isClient={isClient}
+          isAdmin={isAdmin}
+        />
+      </div>
+    </div>
   );
 }

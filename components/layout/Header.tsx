@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform } from "@/lib/native";
@@ -17,14 +17,14 @@ const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
 // icons the compact top nav shows, in display order. Reuses the same
 // navLinks entries (same hrefs, same tenant-id query logic) the text nav
 // already computes, so routing/behavior is identical — only the UI differs.
-const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Help"] as const;
+const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Inbox"] as const;
 const IOS_NAV_ICONS: Record<(typeof IOS_NAV_ORDER)[number], React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Home: House,
   Plan: Calendar,
   Catalog: LayoutList,
   Partners: Handshake,
   Sales: DollarSign,
-  Help: CircleHelp,
+  Inbox: Inbox,
 };
 
 interface HeaderProps {
@@ -133,7 +133,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: "/crm", base: "/crm", label: "CRM", excludeBase: "/crm/outreach" },
     { href: "/crm/outreach", base: "/crm/outreach", label: "Outreach" },
     { href: "/expenses", base: "/expenses", label: "Expenses" },
-    { href: "/help", base: "/help", label: "Help" },
+    { href: "/inbox", base: "/inbox", label: "Inbox" },
   ];
 
   const navLinks = isVendorPortal ? [] : isSales ? salesOnlyLinks : [
@@ -156,9 +156,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     ...((isManager || isStaff) ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
     // Ops — Manager, Admin, and Sales
     ...((isManager || isSales) ? [{ href: "/staff", base: "/staff", label: "Ops" }] : []),
-    { href: "/help", base: "/help", label: "Help" },
-    // Inbox — Admin only, piloting push-notification groundwork
-    ...(isAdmin ? [{ href: "/inbox", base: "/inbox", label: "Inbox" }] : []),
+    { href: "/inbox", base: "/inbox", label: "Inbox" },
   ];
 
   return (
@@ -231,13 +229,17 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
               </span>
             ) : null}
             <UserButton
-              
               appearance={{
                 elements: {
                   avatarBox: "w-9 h-9",
                 },
               }}
-            />
+            >
+              <UserButton.MenuItems>
+                <UserButton.Action label="manageAccount" />
+                <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
+              </UserButton.MenuItems>
+            </UserButton>
           </div>
         </div>
 
