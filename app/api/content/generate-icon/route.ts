@@ -22,6 +22,25 @@ const TYPE_CONTEXT: Record<string, string> = {
   LinkedIn: "a LinkedIn post",
 };
 
+// Claude sometimes emits a malformed root <svg> tag with a duplicated
+// attribute (e.g. `width="200" height="200" height="200"`) — invalid XML
+// that browsers render anyway via their lenient HTML parser, but that
+// sharp's SVG parser (librsvg) rejects outright: "Attribute X redefined".
+// Dedupe the root tag's attributes (last value wins) before rasterizing;
+// the shapes inside are never touched, only this one generated wrapper tag.
+function dedupeRootSvgAttributes(svg: string): string {
+  return svg.replace(/^<svg([^>]*)>/i, (_full, attrsRaw: string) => {
+    const attrRegex = /([\w:-]+)(?:=("[^"]*"|'[^']*'))?/g;
+    const seen = new Map<string, string>();
+    let m: RegExpExecArray | null;
+    while ((m = attrRegex.exec(attrsRaw)) !== null) {
+      const [, name, value] = m;
+      seen.set(name, value !== undefined ? `${name}=${value}` : name);
+    }
+    return `<svg ${[...seen.values()].join(" ")}>`;
+  });
+}
+
 function buildPrompt(title: string, description: string | undefined, contentType: string, audience: string): string {
   return `Generate a clean, minimal SVG icon for a piece of content with this context:
 
@@ -99,9 +118,11 @@ export async function POST(req: NextRequest) {
   // thumbnail was rendered. Rasterize to PNG (also sidesteps Cloudinary's
   // separate restriction on serving raw SVGs) and upload for a real,
   // permanent, savable URL — same path every other image in the app uses.
+  const cleanedSvg = dedupeRootSvgAttributes(svgContent);
+
   let uploadResult;
   try {
-    const pngBuffer = await sharp(Buffer.from(svgContent, "utf-8")).resize(200, 200).png().toBuffer();
+    const pngBuffer = await sharp(Buffer.from(cleanedSvg, "utf-8")).resize(200, 200).png().toBuffer();
     uploadResult = await uploadFile(pngBuffer, {
       folder: "rightsize/content/icons",
       mimeType: "image/png",
