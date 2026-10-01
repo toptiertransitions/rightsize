@@ -3,10 +3,12 @@ import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { AIRTABLE_TABLES } from "@/lib/config";
 
-// Per-user Discussion Spotlight picks (up to 3 companies) for the CRM War
+// Per-rep Discussion Spotlight picks (up to 3 companies) for the CRM War
 // Room, keyed by rep + quarter. Previously stored in browser localStorage
 // only — moved to Airtable so it reliably persists across devices/browsers
-// and doesn't silently disappear when a browser evicts local storage.
+// AND so every viewer (not just the rep who starred them) sees the same
+// picks when they open that rep's tab. Reads are open to any CRM user;
+// writes are restricted to the rep themselves or Admin/Manager.
 
 function atFetch(path: string, options?: RequestInit) {
   const token = process.env.AIRTABLE_API_TOKEN!;
@@ -45,7 +47,12 @@ export async function GET(req: NextRequest) {
   const quarterId = req.nextUrl.searchParams.get("quarterId");
   if (!quarterId) return NextResponse.json({ error: "Missing quarterId" }, { status: 400 });
 
-  const record = await findRecord(userId, quarterId);
+  // Any CRM user can view any rep's spotlight picks (same visibility as the
+  // rest of their War Room plan data) — only writes are ownership-gated.
+  // Defaults to the caller's own picks when no repUserId is given.
+  const repUserId = req.nextUrl.searchParams.get("repUserId") || userId;
+
+  const record = await findRecord(repUserId, quarterId);
   return NextResponse.json({ companyIds: record?.companyIds ?? [] });
 }
 
@@ -54,7 +61,7 @@ export async function PUT(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!(await requireCRMAccess(userId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let body: { quarterId?: string; companyIds?: string[] };
+  let body: { quarterId?: string; companyIds?: string[]; repUserId?: string };
   try {
     body = await req.json();
   } catch {
@@ -62,6 +69,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const { quarterId, companyIds } = body;
+  const repUserId = body.repUserId || userId;
   if (!quarterId || !Array.isArray(companyIds)) {
     return NextResponse.json({ error: "Missing quarterId or companyIds" }, { status: 400 });
   }
@@ -69,14 +77,24 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Spotlight is limited to 3 companies" }, { status: 400 });
   }
 
-  const existing = await findRecord(userId, quarterId);
+  // A rep can only edit their own picks — editing someone else's requires
+  // Admin/Manager, mirroring the same permission this page already uses
+  // for managing another rep's conversion targets.
+  if (repUserId !== userId) {
+    const sysRole = await getSystemRole(userId);
+    if (!["TTTAdmin", "TTTManager"].includes(sysRole ?? "")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  const existing = await findRecord(repUserId, quarterId);
   const fields = { CompanyIds: JSON.stringify(companyIds), UpdatedAt: new Date().toISOString() };
 
   const res = existing
     ? await atFetch(`/${existing.id}`, { method: "PATCH", body: JSON.stringify({ fields }) })
     : await atFetch("", {
         method: "POST",
-        body: JSON.stringify({ fields: { ClerkUserId: userId, QuarterId: quarterId, ...fields } }),
+        body: JSON.stringify({ fields: { ClerkUserId: repUserId, QuarterId: quarterId, ...fields } }),
       });
 
   if (!res.ok) return NextResponse.json({ error: "Failed to save spotlight" }, { status: 500 });

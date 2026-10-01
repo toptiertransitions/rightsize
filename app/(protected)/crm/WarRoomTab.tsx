@@ -1351,7 +1351,10 @@ function RepView({
   const activeGoalSum = rep.activePartners.reduce((s, p) => s + p.goal, 0);
   const notAccountedFor = rep.repGoal !== null ? Math.max(0, rep.goal - activeGoalSum) : null;
 
-  const hasSpotlight = !!(spotlightIds && onToggleSpotlight);
+  // Show the Spotlight column whenever there's spotlight data to display —
+  // viewers who can't edit it (not the rep, not admin/manager) still see
+  // which companies are starred, just without a clickable button.
+  const hasSpotlight = !!spotlightIds;
   const atMax = (spotlightIds?.length ?? 0) >= 3;
 
   const warRoomAvailable = sortByPriorityThenName(
@@ -1436,8 +1439,11 @@ function RepView({
                         </td>
                         {hasSpotlight && (
                           <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            {!onToggleSpotlight ? (
+                              <span className={cn("text-base", isSpotlit ? "text-amber-400" : "text-gray-200")}>★</span>
+                            ) : (
                             <button
-                              onClick={() => onToggleSpotlight!(p.companyId)}
+                              onClick={() => onToggleSpotlight(p.companyId)}
                               disabled={atMax && !isSpotlit}
                               title={isSpotlit ? "Remove from Spotlight" : atMax ? "Spotlight full (max 3)" : "Add to Spotlight"}
                               className={cn(
@@ -1447,6 +1453,7 @@ function RepView({
                             >
                               ★
                             </button>
+                            )}
                           </td>
                         )}
                         <td className="px-2 py-3 text-center text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</td>
@@ -1520,17 +1527,21 @@ function RepView({
                         </td>
                         {hasSpotlight && (
                           <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => onToggleSpotlight!(t.companyId)}
-                              disabled={atMax && !isSpotlit}
-                              title={isSpotlit ? "Remove from Spotlight" : atMax ? "Spotlight full (max 3)" : "Add to Spotlight"}
-                              className={cn(
-                                "text-base transition-colors disabled:opacity-30",
-                                isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-300 hover:text-amber-400"
-                              )}
-                            >
-                              ★
-                            </button>
+                            {!onToggleSpotlight ? (
+                              <span className={cn("text-base", isSpotlit ? "text-amber-400" : "text-gray-200")}>★</span>
+                            ) : (
+                              <button
+                                onClick={() => onToggleSpotlight(t.companyId)}
+                                disabled={atMax && !isSpotlit}
+                                title={isSpotlit ? "Remove from Spotlight" : atMax ? "Spotlight full (max 3)" : "Add to Spotlight"}
+                                className={cn(
+                                  "text-base transition-colors disabled:opacity-30",
+                                  isSpotlit ? "text-amber-400 hover:text-amber-600" : "text-gray-300 hover:text-amber-400"
+                                )}
+                              >
+                                ★
+                              </button>
+                            )}
                           </td>
                         )}
                         {canManageTargets && !isPast && (
@@ -1618,24 +1629,21 @@ type SpotlightCompany = {
 };
 
 function DiscussionSpotlight({
-  currentUserId,
-  planData,
+  viewedRep,
   quarterId,
   spotlightIds,
   onToggle,
+  canManage,
 }: {
-  currentUserId: string;
-  planData: PlanData;
+  viewedRep: RepPlan;
   quarterId: string;
   spotlightIds: string[];
   onToggle: (companyId: string) => void;
+  canManage: boolean;
 }) {
-  const myRep = planData.reps.find((r) => r.clerkUserId === currentUserId);
-  if (!myRep) return null;
-
   const myCompanies: SpotlightCompany[] = [
-    ...myRep.activePartners.map((p) => ({ companyId: p.companyId, companyName: p.companyName, priority: p.priority, type: "active" as const })),
-    ...myRep.conversionTargets.map((t) => ({ companyId: t.companyId, companyName: t.companyName, priority: t.priority, type: "target" as const })),
+    ...viewedRep.activePartners.map((p) => ({ companyId: p.companyId, companyName: p.companyName, priority: p.priority, type: "active" as const })),
+    ...viewedRep.conversionTargets.map((t) => ({ companyId: t.companyId, companyName: t.companyName, priority: t.priority, type: "target" as const })),
   ];
 
   if (myCompanies.length === 0) return null;
@@ -1654,20 +1662,22 @@ function DiscussionSpotlight({
         </span>
       </div>
       <p className="text-xs text-gray-500 mb-4">
-        Star up to 3 of your companies to feature in your team meeting. Selections are saved per quarter.
+        {canManage
+          ? "Star up to 3 of your companies to feature in your team meeting. Selections are saved per quarter."
+          : `${viewedRep.displayName}'s picks to feature in the team meeting.`}
       </p>
 
       {/* Company picker */}
       <div className="flex flex-wrap gap-2 mb-6">
         {sortByPriorityThenName(myCompanies).map((c) => {
           const isSelected = spotlightIds.includes(c.companyId);
-          const disabled = atMax && !isSelected;
+          const disabled = !canManage || (atMax && !isSelected);
           return (
             <button
               key={c.companyId}
-              onClick={() => !disabled && onToggle(c.companyId)}
+              onClick={() => canManage && !disabled && onToggle(c.companyId)}
               disabled={disabled}
-              title={disabled ? "Spotlight full — remove one to add another" : undefined}
+              title={!canManage ? undefined : atMax && !isSelected ? "Spotlight full — remove one to add another" : undefined}
               className={cn(
                 "inline-flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 border transition-colors",
                 isSelected
@@ -1705,12 +1715,14 @@ function DiscussionSpotlight({
                       {c.type === "active" ? "Active Partner" : "Nurture Target"}
                     </span>
                   </div>
-                  <button
-                    onClick={() => onToggle(id)}
-                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    Remove from Spotlight
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => onToggle(id)}
+                      className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      Remove from Spotlight
+                    </button>
+                  )}
                 </div>
                 <CompanyContactsPanel
                   companyId={c.companyId}
@@ -1725,7 +1737,9 @@ function DiscussionSpotlight({
 
       {spotlightIds.length === 0 && (
         <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl px-5 py-8 text-center">
-          <p className="text-sm text-gray-400 italic">Star companies above to add them to your Discussion Spotlight.</p>
+          <p className="text-sm text-gray-400 italic">
+            {canManage ? "Star companies above to add them to your Discussion Spotlight." : "No companies spotlighted yet."}
+          </p>
         </div>
       )}
     </div>
@@ -1753,19 +1767,25 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
     sysRole === "TTTSales" ? currentUserId : "team"
   );
 
-  // Load spotlight selection from Airtable when quarter changes — this used
-  // to be browser localStorage only, which silently disappeared on
-  // privacy-mode browsers, cleared site data, or simply a different device.
+  // Load the VIEWED rep's spotlight selection whenever quarter or viewMode
+  // changes — keyed by whichever rep's tab is open (viewMode), not the
+  // logged-in viewer, so everyone sees the same stars when they open that
+  // rep's tab. Previously this always loaded (and saved) the viewer's own
+  // picks regardless of whose tab was open, which is why stars only ever
+  // showed up for the person who set them.
   useEffect(() => {
-    if (!selectedQuarterId) return;
-    fetch(`/api/crm/warroom-spotlight?quarterId=${selectedQuarterId}`)
+    if (!selectedQuarterId || viewMode === "team") {
+      setSpotlightIds([]);
+      return;
+    }
+    fetch(`/api/crm/warroom-spotlight?quarterId=${selectedQuarterId}&repUserId=${viewMode}`)
       .then((r) => r.json())
       .then((data) => setSpotlightIds(data.companyIds ?? []))
       .catch(() => setSpotlightIds([]));
-  }, [selectedQuarterId]);
+  }, [selectedQuarterId, viewMode]);
 
   async function toggleSpotlight(companyId: string) {
-    if (!selectedQuarterId) return;
+    if (!selectedQuarterId || viewMode === "team") return;
     const prev = spotlightIds;
     const isSpotlit = prev.includes(companyId);
     if (!isSpotlit && prev.length >= 3) return;
@@ -1777,7 +1797,7 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
       const res = await fetch("/api/crm/warroom-spotlight", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quarterId: selectedQuarterId, companyIds: next }),
+        body: JSON.stringify({ quarterId: selectedQuarterId, companyIds: next, repUserId: viewMode }),
       });
       if (!res.ok) throw new Error();
     } catch {
@@ -1865,22 +1885,12 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
   }
 
   function handleQuarterCreated(q: Quarter, copiedCompanyIds: string[]) {
-    const priorQuarterId = quarters[0]?.id;
     setQuarters((prev) => [q, ...prev]);
     setSelectedQuarterId(q.id);
     setShowAddQuarter(false);
     if (copiedCompanyIds.length > 0) {
       try {
         localStorage.setItem(`ttt_plan_copied_${q.id}`, JSON.stringify(copiedCompanyIds));
-      } catch { /* ignore */ }
-    }
-    // Copy spotlight selections from prior quarter to new quarter
-    if (priorQuarterId) {
-      try {
-        const stored = localStorage.getItem(`ttt_warroom_spotlight_${currentUserId}_${priorQuarterId}`);
-        if (stored) {
-          localStorage.setItem(`ttt_warroom_spotlight_${currentUserId}_${q.id}`, stored);
-        }
       } catch { /* ignore */ }
     }
   }
@@ -1932,11 +1942,11 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
     : planData;
   const activeRepForView = planDataForView?.reps.find((r) => r.clerkUserId === viewMode);
 
-  // In rep view, show spotlight if viewing own data (or admin can view spotlight for any rep)
+  // Discussion Spotlight shows the VIEWED rep's picks (activeRep) to anyone
+  // who opens that rep's tab — editing is separately gated by
+  // canManageActiveRep, same as the rest of this page's rep-scoped actions.
   const showSpotlight = viewMode !== "team" && planData != null && selectedQuarterId != null;
-  // Spotlight picker is based on the current user's rep regardless of viewMode
-  const myRep = planData?.reps.find((r) => r.clerkUserId === currentUserId);
-  const showSpotlightSection = showSpotlight && myRep != null;
+  const showSpotlightSection = showSpotlight && activeRep != null;
 
   if (quartersLoading) {
     return <div className="py-12 text-center text-sm text-gray-400">Loading quarters...</div>;
@@ -2084,18 +2094,18 @@ export default function WarRoomTab({ currentUserId, sysRole }: WarRoomTabProps) 
           onAddTarget={handleAddTarget}
           onRemoveTarget={handleRemoveTarget}
           spotlightIds={spotlightIds}
-          onToggleSpotlight={toggleSpotlight}
+          onToggleSpotlight={canManageActiveRep ? toggleSpotlight : undefined}
         />
       )}
 
-      {/* Discussion Spotlight — only in rep view, for current user's companies */}
+      {/* Discussion Spotlight — shows the viewed rep's picks to anyone on their tab; only they (or admin/manager) can edit */}
       {showSpotlightSection && (
         <DiscussionSpotlight
-          currentUserId={currentUserId}
-          planData={planData!}
+          viewedRep={activeRep!}
           quarterId={selectedQuarterId!}
           spotlightIds={spotlightIds}
           onToggle={toggleSpotlight}
+          canManage={canManageActiveRep}
         />
       )}
 
