@@ -63,7 +63,7 @@ function CommentRow({ comment }: { comment: NoteComment }) {
           <span className="text-xs font-semibold text-gray-900">{comment.authorName}</span>
           <span className="text-[11px] text-gray-400">{formatCT(comment.createdAt)}</span>
         </div>
-        <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+        <p className="mt-0.5 text-xs text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
           {comment.content}
         </p>
       </div>
@@ -141,7 +141,7 @@ function NoteCard({
               </button>
             )}
           </div>
-          <p className="mt-1.5 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          <p className="mt-1.5 text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
             {note.content}
           </p>
         </div>
@@ -170,14 +170,14 @@ function NoteCard({
         ) : (
           <div className="flex items-start gap-2.5">
             <Avatar name={currentUserName} photoUrl={currentUserPhoto} size={28} />
-            <div className="flex-1 flex gap-2">
+            <div className="flex-1 min-w-0 flex gap-2">
               <input
                 type="text"
                 autoFocus
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Write a comment…"
-                className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400"
+                className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-400"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleAddComment();
                   if (e.key === "Escape") { setShowReply(false); setCommentText(""); }
@@ -289,7 +289,7 @@ export function InternalNotesSection({
       {/* Compose new note */}
       <div className="flex gap-3 mb-6">
         <Avatar name={currentUserName} photoUrl={currentUserPhoto} size={36} />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <textarea
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
