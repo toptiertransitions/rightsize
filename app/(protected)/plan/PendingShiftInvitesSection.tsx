@@ -71,26 +71,28 @@ export function PendingShiftInvitesSection() {
 
       <div className="space-y-2">
         {invites.map((inv) => (
-          <div
-            key={inv.shiftId}
-            className="flex items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 px-3.5 py-2.5"
-          >
-            <Link href={`/shift-invite/${inv.shiftId}`} className="min-w-0 flex-1 group">
-              <p className="text-sm font-semibold text-gray-900 truncate group-hover:underline">{inv.activity}</p>
-              <p className="text-xs text-gray-500 truncate">{inv.projectName} · {inv.dateTimeLabel}</p>
+          <div key={inv.shiftId} className="rounded-xl bg-white border border-amber-100 px-3.5 py-3">
+            {/* Stacked, not a single cramped row — on a narrow iOS screen a
+                horizontal layout squeezed the date/time out under truncate
+                once the Accept/Decline buttons took their share of the
+                width. Each line gets the full card width here instead. */}
+            <Link href={`/shift-invite/${inv.shiftId}`} className="block mb-2.5">
+              <p className="text-sm font-semibold text-gray-900 break-words">{inv.activity}</p>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{inv.projectName}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{inv.dateTimeLabel}</p>
             </Link>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => respond(inv.shiftId, "accepted")}
                 disabled={actingOn === inv.shiftId}
-                className="h-8 px-3 rounded-lg bg-forest-600 text-white text-xs font-semibold hover:bg-forest-700 disabled:opacity-50 transition-colors"
+                className="flex-1 h-9 rounded-lg bg-forest-600 text-white text-xs font-semibold hover:bg-forest-700 disabled:opacity-50 transition-colors"
               >
                 Accept
               </button>
               <button
                 onClick={() => respond(inv.shiftId, "declined")}
                 disabled={actingOn === inv.shiftId}
-                className="h-8 px-3 rounded-lg border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
+                className="flex-1 h-9 rounded-lg border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
               >
                 Decline
               </button>

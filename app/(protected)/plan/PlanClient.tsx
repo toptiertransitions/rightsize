@@ -1380,12 +1380,18 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
 
                   {/* Matching projects — tenantOptions is already scoped to Active + Post-Move
                       (Archived, Lost, Not-Signed-Yet, and Non-TTT projects are filtered out
-                      server-side before this list ever reaches the client). */}
+                      server-side before this list ever reaches the client). Grouped Active
+                      first then Post-Move, alphabetical within each group — a flat
+                      alphabetical list mixed both together, which was hard to scan/scroll
+                      through on a long list. */}
                   {(() => {
                     const q = projectSearch.trim().toLowerCase();
                     const matches = [...tenantOptions]
                       .filter(t => !q || t.name.toLowerCase().includes(q))
-                      .sort((a, b) => a.name.localeCompare(b.name));
+                      .sort((a, b) => {
+                        const groupDiff = (a.isConsignmentOnly ? 1 : 0) - (b.isConsignmentOnly ? 1 : 0);
+                        return groupDiff !== 0 ? groupDiff : a.name.localeCompare(b.name);
+                      });
 
                     if (matches.length === 0) {
                       return (
@@ -1395,27 +1401,37 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
                       );
                     }
 
-                    return matches.map(t => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => { setShowProjectPicker(false); setProjectSearch(""); router.push(`/plan?tenantId=${t.id}`); }}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                    let lastGroup: "active" | "consignment" | null = null;
+
+                    return matches.map(t => {
+                      const group = t.isConsignmentOnly ? "consignment" : "active";
+                      const showHeader = group !== lastGroup;
+                      lastGroup = group;
+                      return (
+                        <div key={t.id}>
+                          {showHeader && (
+                            <p className="px-5 pt-3 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide bg-gray-50 sticky top-0">
+                              {group === "active" ? "Active" : "Post-Move"}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => { setShowProjectPicker(false); setProjectSearch(""); router.push(`/plan?tenantId=${t.id}`); }}
+                            className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <p className="flex-1 text-sm font-medium truncate text-gray-800">{t.name}</p>
+                            <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
                         </div>
-                        <p className="flex-1 text-sm font-medium truncate text-gray-800">{t.name}</p>
-                        {t.isConsignmentOnly && (
-                          <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide flex-shrink-0">Post-Move</span>
-                        )}
-                        <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    ));
+                      );
+                    });
                   })()}
                 </div>
               </div>
