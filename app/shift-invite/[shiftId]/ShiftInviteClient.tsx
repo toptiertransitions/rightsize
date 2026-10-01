@@ -26,12 +26,16 @@ type LoadState =
   | { kind: "ready"; shift: ShiftDetail };
 
 function BackLink() {
+  // Routes to the Plan page, not the standalone /shift-invites list — if
+  // someone opens this from a push and decides not to respond right now,
+  // the Plan page's Pending Shift Invites section is where they'll find
+  // it waiting for them, in the same place either platform shows it.
   return (
-    <Link href="/shift-invites" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-forest-700 mb-4">
+    <Link href="/plan" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-forest-700 mb-4">
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
       </svg>
-      Pending Invites
+      Back to Plan
     </Link>
   );
 }
@@ -152,10 +156,10 @@ export function ShiftInviteClient({ shiftId }: { shiftId: string }) {
             </p>
             <p className="text-sm text-gray-500 mb-5">{state.shift.projectName} · {state.shift.dateLabel}</p>
             <button
-              onClick={() => router.push("/shift-invites")}
+              onClick={() => router.push("/plan")}
               className="h-10 px-5 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors"
             >
-              Back to Pending Invites
+              Back to Plan
             </button>
           </div>
         )}

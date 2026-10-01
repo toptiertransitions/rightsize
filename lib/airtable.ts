@@ -6,8 +6,10 @@
 import Airtable from "airtable";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
+import { DateTime } from "luxon";
 import { AIRTABLE_TABLES, isTTTAdmin, isTTTStaff } from "./config";
 import { getZipCentroid, haversineDistanceMiles } from "./zip-centroids";
+import { BUSINESS_TIMEZONE } from "./shift-time";
 import type {
   Tenant,
   User,
@@ -1609,16 +1611,19 @@ export async function getPlanEntriesForDateRange(
 // can't be queried server-side by email — it fetches by date range, which
 // Airtable CAN filter on, then matches email/status in JS).
 export async function getPendingShiftInvitesForEmail(email: string): Promise<PlanEntry[]> {
-  const today = new Date();
-  const from = today.toISOString().slice(0, 10);
-  const future = new Date(today);
-  future.setDate(future.getDate() + 60);
-  const to = future.toISOString().slice(0, 10);
+  // "Today" in the business timezone, not the server's (UTC in production)
+  // — a raw new Date().toISOString() would use the wrong calendar day for
+  // several hours around midnight Chicago time. See lib/shift-time.ts.
+  const todayChicago = DateTime.now().setZone(BUSINESS_TIMEZONE).toFormat("yyyy-MM-dd");
+  const to = DateTime.now().setZone(BUSINESS_TIMEZONE).plus({ days: 60 }).toFormat("yyyy-MM-dd");
 
-  const entries = await getPlanEntriesForDateRange(from, to);
+  const entries = await getPlanEntriesForDateRange(todayChicago, to);
   const emailLower = email.toLowerCase();
-  return entries.filter((e) =>
-    e.helpers?.some((h) => h.email.toLowerCase() === emailLower && h.status === "pending")
+  // Date-only cutoff (not time-of-day) — a pending invite for a shift later
+  // today still shows even once its start time has passed; it only falls
+  // off once the shift's date itself is in the past.
+  return entries.filter(
+    (e) => e.date >= todayChicago && e.helpers?.some((h) => h.email.toLowerCase() === emailLower && h.status === "pending")
   );
 }
 

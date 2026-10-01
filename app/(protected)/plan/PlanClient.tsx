@@ -7,6 +7,7 @@ import type { PlanEntry, PlanActivity, PlanHelper, PlanEntryType, Room, ProjectF
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
 import { ScheduleModificationModal } from "./ScheduleModificationModal";
+import { PendingShiftInvitesSection } from "./PendingShiftInvitesSection";
 
 // ─── Activity chip colors ──────────────────────────────────────────────────────
 const ACTIVITY_COLOR_PALETTE = [
@@ -1283,6 +1284,9 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
 
   return (
     <>
+      {/* ── Pending Shift Invites — TTTStaff/TTTTeamLead, every Plan mode ───── */}
+      <PendingShiftInvitesSection />
+
       {/* ── Staff: All My Projects toggle ───────────────────────────────────── */}
       {isStaff && (
         <>

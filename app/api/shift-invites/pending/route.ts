@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getStaffMembers, getPendingShiftInvitesForEmail, getTenantById } from "@/lib/airtable";
-import { formatShiftDateTime, isShiftInPast } from "@/lib/shift-time";
+import { formatShiftDateTime } from "@/lib/shift-time";
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,11 @@ export async function GET() {
     return NextResponse.json({ invites: [] });
   }
 
-  const entries = (await getPendingShiftInvitesForEmail(caller.email)).filter((e) => !isShiftInPast(e));
+  // Date-only cutoff lives in getPendingShiftInvitesForEmail (today and
+  // later in America/Chicago) — a same-day shift stays visible here even
+  // after its start time passes, so staff don't lose track of an
+  // unanswered invite just because the day is partway over.
+  const entries = await getPendingShiftInvitesForEmail(caller.email);
 
   const tenantCache = new Map<string, string>();
   const invites = await Promise.all(
