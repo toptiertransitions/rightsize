@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: "/partner/home", label: "Home", isActive: (p: string) => p === "/partner/home" || p === "/partner" },
   { href: "/partner/plans", label: "Project Plans", isActive: (p: string) => p.startsWith("/partner/plan") },
   { href: "/partner/loyalty", label: "Rewards", isActive: (p: string) => p === "/partner/loyalty" },
+  { href: "/partner/documents", label: "Documents", isActive: (p: string) => p.startsWith("/partner/documents") },
 ];
 
 export function PartnerNavLinks({ mobile = false }: { mobile?: boolean }) {
