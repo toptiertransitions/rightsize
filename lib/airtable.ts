@@ -3730,13 +3730,26 @@ function mapContract(record: AirtableRecord): Contract {
   };
 }
 
+// A tenant counts as "signed" if ANY contract of theirs is currently
+// Signed, OR Archived. Archived only ever happens to a contract that was
+// previously Signed (setPrimary archives the old Signed contract when a
+// newer one is promoted — see app/api/contracts/route.ts) — never to a
+// Draft/Sent contract, which becomes "Superseded" instead, not "Archived",
+// when replaced unsigned. So Archived here is "was signed, later
+// superseded by a renewal/revision," not "never signed" — a tenant like
+// ProFound Finds, whose original signed contract was archived once a later
+// one took over, is a real signed relationship and shouldn't disappear
+// from the staff scheduling picker just because its contract history moved
+// on. Superseded is deliberately excluded: that status only ever applies
+// to a Sent-but-never-signed contract, so including it would wrongly
+// un-exclude genuine not-yet-signed leads.
 export async function getSignedTenantIds(): Promise<Set<string>> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const ids = new Set<string>();
   let offset: string | undefined;
   do {
     const params = new URLSearchParams({
-      filterByFormula: `{Status} = "Signed"`,
+      filterByFormula: `OR({Status} = "Signed", {Status} = "Archived")`,
       "fields[]": "TenantId",
       pageSize: "100",
     });
