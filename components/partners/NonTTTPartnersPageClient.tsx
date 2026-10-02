@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
 import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction, selectPartnerAction, deselectPartnerAction } from "@/app/(protected)/partners/actions";
-import { nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
+import { nonTTTCategoryLabel, TTT_MOVE_MANAGER_PARTNER_ID } from "@/lib/partners/nonTTTCategories";
 import { isPartnerRequestComplete, type PrefillTenant } from "@/lib/partners/questions";
 import type { ScoringResult } from "@/lib/partners/scoring";
 import { SelectedPartnersTray } from "./SelectedPartnersTray";
@@ -171,7 +171,14 @@ export function NonTTTPartnersPageClient({
         {activeCategories.map((category) => (
           <div key={category} className="motion-safe:animate-[fadeInScale_0.3s_ease-out]">
             {category === "Move Manager" ? (
-              <TTTMoveManagerCard tenantName={tenantName} />
+              <TTTMoveManagerCard
+                tenantName={tenantName}
+                selected={selections["Move Manager"] === TTT_MOVE_MANAGER_PARTNER_ID}
+                selectPending={pendingSelect === "Move Manager"}
+                onTalkToTeam={() => handleSelect("Move Manager", TTT_MOVE_MANAGER_PARTNER_ID)}
+                onDeselect={() => handleDeselect("Move Manager")}
+                sectionRef={(el) => { if (el) sectionRefs.current[category] = el; }}
+              />
             ) : (
               <PartnerRequestCard
                 category={category}

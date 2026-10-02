@@ -1,4 +1,5 @@
 import { PARTNER_CATEGORIES, type PartnerCategory, type ServiceInterest } from "@/lib/types";
+import type { PartnerProfile } from "./types";
 
 // Maps the onboarding wizard's stable ServiceInterest keys to the existing
 // PartnerCategory values already used everywhere (matching, PartnerSelections,
@@ -42,6 +43,30 @@ export const NON_TTT_CATEGORY_LABELS: Partial<Record<PartnerCategory, string>> =
 
 export function nonTTTCategoryLabel(category: PartnerCategory): string {
   return NON_TTT_CATEGORY_LABELS[category] ?? category;
+}
+
+// Stable id for the generic "Top Tier Transitions" Move Manager entry a
+// NonTTTClient can add to their Your Team tray via TTTMoveManagerCard's
+// "Talk to our team" button — a real PartnerSelections row, unlike the
+// TTT-managed flow's isTeamLead-flagged synthetic entry (page.tsx, built
+// from the project's assigned Team Lead), which is never written there and
+// can't be unselected. This one can, same as any other partner.
+export const TTT_MOVE_MANAGER_PARTNER_ID = "ttt-move-manager";
+
+export function buildTTTMoveManagerPartner(): PartnerProfile {
+  return {
+    id: TTT_MOVE_MANAGER_PARTNER_ID,
+    vendorName: "Top Tier Transitions",
+    category: "Move Manager",
+    logo: "/ttt-icon.png",
+    zipCodesServed: "",
+    city: "",
+    state: "",
+    avgRating: 0,
+    rawAvgRating: 0,
+    reviewCount: 0,
+    projectsCompleted: 0,
+  };
 }
 
 /**

@@ -15,7 +15,7 @@ import {
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
-import { orderCategoriesForNonTTTClient } from "@/lib/partners/nonTTTCategories";
+import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID } from "@/lib/partners/nonTTTCategories";
 import { isPartnerRequestComplete } from "@/lib/partners/questions";
 import { scoreAndRankPartners, getRequestLocation, type ScoringResult } from "@/lib/partners/scoring";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
@@ -147,6 +147,10 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   // ever applies to isTTT===true projects anyway) is never reached for a
   // self-serve project.
   if (!isStaff && tenant.isTTT !== true) {
+    // The tray resolves a selection by looking up partnersById[selections[category]]
+    // — needs this entry present whether or not it's actually been selected yet.
+    partnersById[TTT_MOVE_MANAGER_PARTNER_ID] = buildTTTMoveManagerPartner();
+
     const { active, greyed } = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
     const partnerRequests = await getPartnerRequestsForTenant(tenantId).catch(() => []);
     const initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>> = {};
