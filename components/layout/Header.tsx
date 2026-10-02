@@ -5,26 +5,29 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, LogOut } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform } from "@/lib/native";
-import { getCachedDeviceToken } from "@/components/shared/PushNotificationBootstrap";
 
 const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan", "/partners"];
 const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
 
-// iOS native app only (see showIOSNav below) — the six items and their
-// icons the compact top nav shows, in display order. Reuses the same
+// iOS native app only (see showIOSNav below) — the full candidate list and
+// icons for the compact bottom nav, in display order. Reuses the same
 // navLinks entries (same hrefs, same tenant-id query logic) the text nav
 // already computes, so routing/behavior is identical — only the UI differs.
-const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Inbox"] as const;
+// Not every item applies to every role (e.g. Invoices is TTT-client-only,
+// Inbox is staff-only) — the render below filters to whichever of these
+// actually have a matching navLinks entry for the current user.
+const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Invoices", "Inbox"] as const;
 const IOS_NAV_ICONS: Record<(typeof IOS_NAV_ORDER)[number], React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Home: House,
   Plan: Calendar,
   Catalog: LayoutList,
   Partners: Handshake,
   Sales: DollarSign,
+  Invoices: Receipt,
   Inbox: Inbox,
 };
 
@@ -82,22 +85,6 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const pathname = usePathname();
   const { actor, userId } = useAuth();
   const { signOut } = useClerk();
-
-  // Unregister this device's push token before the session actually ends —
-  // /api/push/unregister requires an active session, so this has to happen
-  // as part of the sign-out action itself, not in response to the user
-  // becoming signed-out afterward (by then the request would just 401).
-  function handleSignOut(): void {
-    const token = getCachedDeviceToken();
-    const unregister = token
-      ? fetch("/api/push/unregister", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        }).catch(() => {})
-      : Promise.resolve();
-    unregister.finally(() => { void signOut(); });
-  }
   const { user } = useUser();
   const isImpersonating = isImpersonatingProp || !!actor;
   const impersonatedName = actor ? (user?.firstName ? [user.firstName, user.lastName].filter(Boolean).join(" ") : user?.emailAddresses?.[0]?.emailAddress ?? "user") : undefined;
@@ -106,12 +93,21 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const searchParams = useSearchParams();
   const urlTenantId = searchParams.get("tenantId");
 
-  // If a different account signs in on this browser than the one that last
-  // left a tenantId here (or none did before), drop the stale value — it
-  // points at someone else's project. Nav links would otherwise carry it
-  // straight through, the server would correctly reject it as unrelated to
-  // the new user, and every tab (Plan, Catalog, ...) would silently bounce
-  // back to Home with no visible error.
+  // Persist the last known real tenantId (never sentinels) so nav links survive
+  // navigating to pages that don't carry ?tenantId= (e.g. /crm, /home).
+  //
+  // Combined into one effect, gated on userId being known, rather than two
+  // separate ones keyed on [userId] and [urlTenantId] respectively — split
+  // that way, a slow Clerk hydration (common on an iOS native cold launch)
+  // let the second effect read a stale tenantId into state *before* the
+  // first had a chance to clear it for a new user, and since the second
+  // effect didn't depend on userId, it never re-ran to pick up the clear.
+  // Every nav link then carried someone else's tenantId straight through —
+  // the server correctly rejected it as unrelated to this user, and Plan/
+  // Catalog silently bounced to Home while Partners 404'd. Doing both the
+  // clear and the read in the same userId-gated effect makes that race
+  // impossible: nothing reads localStorage until we know who's asking.
+  const [persistedTenantId, setPersistedTenantId] = useState<string | null>(null);
   useEffect(() => {
     if (!userId) return;
     try {
@@ -120,21 +116,15 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
         localStorage.removeItem("rz_tenantId");
         localStorage.setItem("rz_lastUserId", userId);
       }
+      if (urlTenantId && !urlTenantId.startsWith("__all_")) {
+        // Sentinels (__all_*) are NOT stored so they don't leak to other pages
+        localStorage.setItem("rz_tenantId", urlTenantId);
+        setPersistedTenantId(urlTenantId);
+      } else if (!urlTenantId) {
+        setPersistedTenantId(localStorage.getItem("rz_tenantId"));
+      }
     } catch {}
-  }, [userId]);
-
-  // Persist the last known real tenantId (never sentinels) so nav links survive
-  // navigating to pages that don't carry ?tenantId= (e.g. /crm, /home).
-  const [persistedTenantId, setPersistedTenantId] = useState<string | null>(null);
-  useEffect(() => {
-    if (urlTenantId && !urlTenantId.startsWith("__all_")) {
-      try { localStorage.setItem("rz_tenantId", urlTenantId); } catch {}
-      setPersistedTenantId(urlTenantId);
-    } else if (!urlTenantId) {
-      try { setPersistedTenantId(localStorage.getItem("rz_tenantId")); } catch {}
-    }
-    // Sentinels (__all_*) are NOT stored so they don't leak to other pages
-  }, [urlTenantId]);
+  }, [userId, urlTenantId]);
 
   const tenantId = urlTenantId ?? persistedTenantId;
   // For nav links, always use the real (non-sentinel) tenantId
@@ -188,8 +178,19 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     ...((isManager || isStaff) ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
     // Ops — Manager, Admin, and Sales
     ...((isManager || isSales) ? [{ href: "/staff", base: "/staff", label: "Ops" }] : []),
-    { href: "/inbox", base: "/inbox", label: "Inbox" },
+    // Inbox — internal comms hub: Staff, TeamLead, Manager, and Admin only
+    // (Sales gets it via salesOnlyLinks above). Never shown to clients —
+    // the page itself redirects them to /home even if they reach the URL.
+    ...(isStaff ? [{ href: "/inbox", base: "/inbox", label: "Inbox" }] : []),
   ];
+
+  // iOS compact nav only ever shows a subset of IOS_NAV_ORDER for a given
+  // role (e.g. clients never get Inbox) — filter down first so the grid
+  // sizes itself to however many icons actually apply, instead of leaving
+  // a dead column where a skipped item used to sit.
+  const iosNavLinks = IOS_NAV_ORDER
+    .map((label) => ({ label, link: navLinks.find((l) => l.label === label) }))
+    .filter((item): item is { label: (typeof IOS_NAV_ORDER)[number]; link: NonNullable<typeof item.link> } => !!item.link);
 
   return (
     <>
@@ -273,7 +274,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
                 {isIOSNative && (
                   <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />
                 )}
-                <UserButton.Action label="signOut" labelIcon={<LogOut className="w-4 h-4" />} onClick={handleSignOut} />
+                <UserButton.Action label="signOut" />
               </UserButton.MenuItems>
             </UserButton>
           </div>
@@ -306,12 +307,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
         <main>'s bottom padding for this lives in globals.css (body.ios-bottom-nav). */}
     {useIOSNav && (
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 bg-white border-t border-cream-200"
-        style={{ paddingBottom: "var(--sab)" }}
+        className="fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200"
+        style={{ paddingBottom: "var(--sab)", gridTemplateColumns: `repeat(${iosNavLinks.length}, minmax(0, 1fr))` }}
       >
-        {IOS_NAV_ORDER.map((label) => {
-          const link = navLinks.find((l) => l.label === label);
-          if (!link) return null;
+        {iosNavLinks.map(({ label, link }) => {
           const Icon = IOS_NAV_ICONS[label];
           const isActive = pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase));
           return (
