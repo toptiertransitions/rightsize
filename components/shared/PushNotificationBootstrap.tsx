@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser, useAuth } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { isNativeApp } from "@/lib/native";
 
 const DEVICE_TOKEN_STORAGE_KEY = "rz_push_device_token";
@@ -23,37 +23,12 @@ interface ForegroundNotification {
 export function PushNotificationBootstrap() {
   const router = useRouter();
   const { user } = useUser();
-  const { isSignedIn } = useAuth();
   const [banner, setBanner] = useState<ForegroundNotification | null>(null);
 
   // Respect the opt-out toggle (components/shared/NotificationSettings
   // writes this on the user's own unsafeMetadata) — checked before ever
   // requesting permission or registering a device.
   const pushOptedOut = user?.unsafeMetadata?.pushOptOut === true;
-
-  // Unregister this device's token the moment Clerk's client-side state
-  // flips to signed-out (clicking Sign Out in the user menu), so a
-  // shared/reset device stops getting pushes for the account that just
-  // left. Reactive rather than hooked into the Sign Out menu item itself —
-  // Clerk's UserButton.MenuItems doesn't support attaching custom logic to
-  // the built-in signOut action without rendering a second, duplicate item
-  // alongside it (confirmed: that's what adding onClick there actually
-  // does, not an override).
-  const wasSignedIn = useRef(isSignedIn);
-  useEffect(() => {
-    if (wasSignedIn.current && !isSignedIn) {
-      const token = getCachedDeviceToken();
-      if (token) {
-        fetch("/api/push/unregister", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        }).catch(() => {});
-        try { localStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY); } catch {}
-      }
-    }
-    wasSignedIn.current = isSignedIn;
-  }, [isSignedIn]);
 
   useEffect(() => {
     if (!isNativeApp() || pushOptedOut) return;
@@ -139,8 +114,8 @@ export function PushNotificationBootstrap() {
   );
 }
 
-/** Reads the locally-cached device token, if any. */
-function getCachedDeviceToken(): string | null {
+/** Reads the locally-cached device token, if any — used by the sign-out flow to unregister it before the Clerk session actually ends. */
+export function getCachedDeviceToken(): string | null {
   try {
     return localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY);
   } catch {
