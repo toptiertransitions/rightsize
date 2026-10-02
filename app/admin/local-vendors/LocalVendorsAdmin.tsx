@@ -550,6 +550,8 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
   const router = useRouter();
   const [tab, setTab] = useState<AdminTab>("directory");
   const [stateFilter, setStateFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState<LocalVendor | undefined>(undefined);
@@ -620,7 +622,20 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
     ? initialVendors.filter((v) => v.state.toUpperCase() === stateFilter.toUpperCase())
     : initialVendors;
 
-  const filtered = [...stateFiltered].sort((a, b) => {
+  const searchQuery = search.trim().toLowerCase();
+  const searchFiltered = searchQuery
+    ? stateFiltered.filter((v) => v.vendorName.toLowerCase().includes(searchQuery))
+    : stateFiltered;
+
+  const nameSuggestions = searchQuery
+    ? Array.from(new Set(
+        stateFiltered
+          .filter((v) => v.vendorName.toLowerCase().includes(searchQuery))
+          .map((v) => v.vendorName)
+      )).slice(0, 8)
+    : [];
+
+  const filtered = [...searchFiltered].sort((a, b) => {
     let av: string | number = "";
     let bv: string | number = "";
     switch (sortCol) {
@@ -732,9 +747,55 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
           </div>
         )}
 
+        <div className="relative mb-4 w-full sm:w-80">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setShowSuggestions(true); setPage(1); }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setShowSuggestions(false)}
+            placeholder="Search vendors by name…"
+            className="w-full h-10 pl-9 pr-9 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400"
+          />
+          {search && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setSearch(""); setShowSuggestions(false); setPage(1); }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+              aria-label="Clear search"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+          {showSuggestions && nameSuggestions.length > 0 && (
+            <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-600 rounded-xl shadow-lg overflow-hidden">
+              {nameSuggestions.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setSearch(name); setShowSuggestions(false); setPage(1); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {filtered.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
-            <p>No vendors{stateFilter ? ` in ${stateFilter}` : ""} yet.</p>
+            <p>
+              No vendors{stateFilter ? ` in ${stateFilter}` : ""}
+              {search ? ` matching "${search}"` : ""}.
+            </p>
           </div>
         ) : (
           <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-x-auto">
