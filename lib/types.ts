@@ -1,3 +1,5 @@
+import { ALL_CATEGORIES } from "./categories";
+
 // ─── Roles ────────────────────────────────────────────────────────────────────
 export type UserRole =
   | "Owner"
@@ -731,7 +733,12 @@ export interface RoutingRule {
 
 // ─── Item Categories ──────────────────────────────────────────────────────────
 // Re-exported for backwards-compat — prefer importing ALL_CATEGORIES from lib/categories.ts directly.
-export { ALL_CATEGORIES as ITEM_CATEGORIES } from "./categories";
+// A plain import + const (not `export { X as Y } from "./module"`) — the
+// aliased re-export syntax is a known trigger for webpack scope-hoisting
+// bugs that surface as "ReferenceError: Cannot access 'X' before
+// initialization" in server bundles that pull in this binding under both
+// names across different chunks.
+export const ITEM_CATEGORIES = ALL_CATEGORIES;
 
 // ─── Local Vendor Directory ───────────────────────────────────────────────────
 export interface LocalVendor {
