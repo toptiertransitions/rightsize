@@ -153,12 +153,14 @@ export function NonTTTPartnersPageClient({
           : "Track who’s on your team below, and answer a few quick questions to get matched in each category."}
       </p>
 
-      <SelectedPartnersTray
-        categories={PARTNER_CATEGORIES}
-        selectedPartners={selectedPartners}
-        onEmptyClick={scrollToCategory}
-        onChangeClick={scrollToCategory}
-      />
+      {activeCategories.length > 0 && (
+        <SelectedPartnersTray
+          categories={activeCategories}
+          selectedPartners={selectedPartners}
+          onEmptyClick={scrollToCategory}
+          onChangeClick={scrollToCategory}
+        />
+      )}
 
       {(activeCategories.length > 0 || greyedCategories.length > 0) && (
         <div className="flex items-center gap-3 mt-10 mb-1">
