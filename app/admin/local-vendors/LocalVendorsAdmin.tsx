@@ -4,13 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminHeader } from "../components/AdminHeader";
 import { Pagination } from "../components/Pagination";
-import { OtherConsignmentClient } from "./OtherConsignmentClient";
 import { ProjectHistoryTab, type AdminProject, type AdminCommunityOption } from "./ProjectHistoryTab";
 import { ZipCoverageTab } from "./ZipCoverageTab";
 
 const PAGE_SIZE = 25;
 import { VENDOR_TYPES, ITEM_CATEGORIES, PARTNER_CATEGORIES } from "@/lib/types";
-import type { LocalVendor, VendorType, Item, PartnerCategory, PartnerCommunityCompletion } from "@/lib/types";
+import type { LocalVendor, VendorType, PartnerCategory, PartnerCommunityCompletion } from "@/lib/types";
 
 // ─── Type badge colors ────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -537,8 +536,6 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
 // ─── Main Component ────────────────────────────────────────────────────────────
 interface LocalVendorsAdminProps {
   vendors: LocalVendor[];
-  consignmentItems: Item[];
-  tenantInfoMap: Record<string, { name: string; ownerEmail: string; isTTT: boolean }>;
   projects: AdminProject[];
   seniorCommunities: AdminCommunityOption[];
   completions: PartnerCommunityCompletion[];
@@ -546,7 +543,7 @@ interface LocalVendorsAdminProps {
 
 type AdminTab = "directory" | "history" | "zip-coverage";
 
-export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, tenantInfoMap, projects, seniorCommunities, completions }: LocalVendorsAdminProps) {
+export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCommunities, completions }: LocalVendorsAdminProps) {
   const router = useRouter();
   const [tab, setTab] = useState<AdminTab>("directory");
   const [stateFilter, setStateFilter] = useState("");
@@ -913,24 +910,6 @@ export function LocalVendorsAdmin({ vendors: initialVendors, consignmentItems, t
           </div>
         )}
       </main>
-
-      {/* ─── Other Consignment Items ─────────────────────────────────────── */}
-      <div className="mt-12 mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="text-xl font-bold text-white">Other Consignment Store Items</h2>
-          <span className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">
-            {consignmentItems.length} item{consignmentItems.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-        <p className="text-gray-400 text-sm mb-6">
-          All client items routed to Other Consignment Store. Assign vendors, track responses, and manage payouts inline.
-        </p>
-        <OtherConsignmentClient
-          items={consignmentItems}
-          tenantInfoMap={tenantInfoMap}
-          vendors={initialVendors}
-        />
-      </div>
       </>
       )}
 
