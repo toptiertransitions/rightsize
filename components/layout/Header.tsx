@@ -93,12 +93,21 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   const searchParams = useSearchParams();
   const urlTenantId = searchParams.get("tenantId");
 
-  // If a different account signs in on this browser than the one that last
-  // left a tenantId here (or none did before), drop the stale value — it
-  // points at someone else's project. Nav links would otherwise carry it
-  // straight through, the server would correctly reject it as unrelated to
-  // the new user, and every tab (Plan, Catalog, ...) would silently bounce
-  // back to Home with no visible error.
+  // Persist the last known real tenantId (never sentinels) so nav links survive
+  // navigating to pages that don't carry ?tenantId= (e.g. /crm, /home).
+  //
+  // Combined into one effect, gated on userId being known, rather than two
+  // separate ones keyed on [userId] and [urlTenantId] respectively — split
+  // that way, a slow Clerk hydration (common on an iOS native cold launch)
+  // let the second effect read a stale tenantId into state *before* the
+  // first had a chance to clear it for a new user, and since the second
+  // effect didn't depend on userId, it never re-ran to pick up the clear.
+  // Every nav link then carried someone else's tenantId straight through —
+  // the server correctly rejected it as unrelated to this user, and Plan/
+  // Catalog silently bounced to Home while Partners 404'd. Doing both the
+  // clear and the read in the same userId-gated effect makes that race
+  // impossible: nothing reads localStorage until we know who's asking.
+  const [persistedTenantId, setPersistedTenantId] = useState<string | null>(null);
   useEffect(() => {
     if (!userId) return;
     try {
@@ -107,21 +116,15 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
         localStorage.removeItem("rz_tenantId");
         localStorage.setItem("rz_lastUserId", userId);
       }
+      if (urlTenantId && !urlTenantId.startsWith("__all_")) {
+        // Sentinels (__all_*) are NOT stored so they don't leak to other pages
+        localStorage.setItem("rz_tenantId", urlTenantId);
+        setPersistedTenantId(urlTenantId);
+      } else if (!urlTenantId) {
+        setPersistedTenantId(localStorage.getItem("rz_tenantId"));
+      }
     } catch {}
-  }, [userId]);
-
-  // Persist the last known real tenantId (never sentinels) so nav links survive
-  // navigating to pages that don't carry ?tenantId= (e.g. /crm, /home).
-  const [persistedTenantId, setPersistedTenantId] = useState<string | null>(null);
-  useEffect(() => {
-    if (urlTenantId && !urlTenantId.startsWith("__all_")) {
-      try { localStorage.setItem("rz_tenantId", urlTenantId); } catch {}
-      setPersistedTenantId(urlTenantId);
-    } else if (!urlTenantId) {
-      try { setPersistedTenantId(localStorage.getItem("rz_tenantId")); } catch {}
-    }
-    // Sentinels (__all_*) are NOT stored so they don't leak to other pages
-  }, [urlTenantId]);
+  }, [userId, urlTenantId]);
 
   const tenantId = urlTenantId ?? persistedTenantId;
   // For nav links, always use the real (non-sentinel) tenantId
