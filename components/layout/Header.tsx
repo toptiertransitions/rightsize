@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform } from "@/lib/native";
@@ -13,21 +13,17 @@ import { getPlatform } from "@/lib/native";
 const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan", "/partners"];
 const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
 
-// iOS native app only (see showIOSNav below) — the full candidate list and
-// icons for the compact bottom nav, in display order. Reuses the same
+// iOS native app only (see showIOSNav below) — the six items and their
+// icons the compact top nav shows, in display order. Reuses the same
 // navLinks entries (same hrefs, same tenant-id query logic) the text nav
 // already computes, so routing/behavior is identical — only the UI differs.
-// Not every item applies to every role (e.g. Invoices is TTT-client-only,
-// Inbox is staff-only) — the render below filters to whichever of these
-// actually have a matching navLinks entry for the current user.
-const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Invoices", "Inbox"] as const;
+const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Inbox"] as const;
 const IOS_NAV_ICONS: Record<(typeof IOS_NAV_ORDER)[number], React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Home: House,
   Plan: Calendar,
   Catalog: LayoutList,
   Partners: Handshake,
   Sales: DollarSign,
-  Invoices: Receipt,
   Inbox: Inbox,
 };
 
