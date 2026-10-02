@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ItemPriceHistory, PriceChangeType, Item, LocalVendor } from "@/lib/types";
 import type { ItemRouteHistory, ItemStatusHistory, FlaggedDonateItem } from "@/lib/airtable";
-import { OtherConsignmentClient } from "./OtherConsignmentClient";
+import { OtherConsignmentClient } from "@/app/admin/local-vendors/OtherConsignmentClient";
 
 interface Project { id: string; name: string; }
 
