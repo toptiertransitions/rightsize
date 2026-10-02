@@ -1,6 +1,7 @@
 import { getPlanEntryById, updatePlanEntry, getStaffMembers, getTenantById } from "./airtable";
 import { buildShiftDeclinedEmail } from "./email";
 import { sendPushToClerkUsers } from "./push-send";
+import { formatShiftDateTime } from "./shift-time";
 import { Resend } from "resend";
 import type { PlanEntry, PlanHelper } from "./types";
 
@@ -81,6 +82,95 @@ export async function notifyShiftDeclined(entry: PlanEntry, helperEmail: string)
     );
   } catch (e) {
     console.error("[notifyShiftDeclined] failed:", e);
+  }
+}
+
+// Shared by notifyShiftChanged/notifyShiftCancelled: resolves a shift's
+// still-invited helpers (pending or accepted — a helper who already
+// declined has opted out, same convention the "send"/"re-invite" push
+// already follows) to the active TTTStaff/TTTTeamLead Clerk accounts among
+// them. Helper emails with no matching active staff record (or no
+// clerkUserId yet) are silently excluded, same as every other push path.
+async function resolveActiveInviteeClerkIds(helpers: PlanHelper[] | undefined): Promise<string[]> {
+  const invitedEmails = (helpers ?? [])
+    .filter((h) => h.status !== "declined")
+    .map((h) => h.email.toLowerCase());
+  if (invitedEmails.length === 0) return [];
+
+  const allStaff = await getStaffMembers();
+  return allStaff
+    .filter((s) => s.isActive && ["TTTStaff", "TTTTeamLead"].includes(s.role) && invitedEmails.includes(s.email.toLowerCase()))
+    .map((s) => s.clerkUserId)
+    .filter(Boolean);
+}
+
+/**
+ * Additive to the existing Google Calendar invite flow, not a replacement —
+ * Google's own calendar-update email still goes out exactly as before (see
+ * app/api/plan/calendar/route.ts's "update" action). This just adds a push
+ * for the three fields the client asked for specifically: date, time, and
+ * location. Call from app/api/plan/route.ts's PATCH handler, which already
+ * has the pre-update entry on hand to diff against.
+ */
+export async function notifyShiftChanged(
+  entry: PlanEntry,
+  changed: { date: boolean; time: boolean; location: boolean }
+): Promise<void> {
+  try {
+    const clerkUserIds = await resolveActiveInviteeClerkIds(entry.helpers);
+    if (clerkUserIds.length === 0) return;
+
+    const parts = [
+      changed.date && "date",
+      changed.time && "time",
+      changed.location && "location",
+    ].filter(Boolean) as string[];
+    if (parts.length === 0) return;
+
+    const tenant = await getTenantById(entry.tenantId).catch(() => null);
+    const projectName = tenant?.name ?? "";
+    const whatChanged = parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
+
+    await sendPushToClerkUsers(
+      clerkUserIds,
+      {
+        title: "Shift updated",
+        body: `${entry.activity}${projectName ? ` — ${projectName}` : ""}: ${whatChanged} changed. Now ${formatShiftDateTime(entry)}.`,
+        url: `/shift-invite/${entry.id}`,
+      },
+      { type: "ShiftChanged", shiftId: entry.id }
+    );
+  } catch (e) {
+    console.error("[notifyShiftChanged] failed:", e);
+  }
+}
+
+/**
+ * Additive to the existing Google Calendar cancel flow (cancelCalendarEvent
+ * in app/api/plan/calendar/route.ts's "cancel" action, which already emails
+ * every attendee via Google) — this just adds a push. Call with the entry
+ * as it was *before* deletion (app/api/plan/route.ts's DELETE handler
+ * already fetches it for the permission check).
+ */
+export async function notifyShiftCancelled(entry: PlanEntry): Promise<void> {
+  try {
+    const clerkUserIds = await resolveActiveInviteeClerkIds(entry.helpers);
+    if (clerkUserIds.length === 0) return;
+
+    const tenant = await getTenantById(entry.tenantId).catch(() => null);
+    const projectName = tenant?.name ?? "";
+
+    await sendPushToClerkUsers(
+      clerkUserIds,
+      {
+        title: "Shift cancelled",
+        body: `${entry.activity}${projectName ? ` — ${projectName}` : ""}, ${formatShiftDateTime(entry)} has been cancelled.`,
+        url: `/plan?tenantId=${entry.tenantId}`,
+      },
+      { type: "ShiftCancelled", shiftId: entry.id }
+    );
+  } catch (e) {
+    console.error("[notifyShiftCancelled] failed:", e);
   }
 }
 

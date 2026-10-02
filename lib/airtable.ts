@@ -1735,7 +1735,7 @@ function pushLogFetch(path: string, options?: RequestInit) {
   });
 }
 
-export type PushLogType = "ShiftInvite" | "ShiftReminder" | "ShiftDeclined" | "Urgent" | "DM" | "Other";
+export type PushLogType = "ShiftInvite" | "ShiftReminder" | "ShiftDeclined" | "ShiftChanged" | "ShiftCancelled" | "Urgent" | "DM" | "Other";
 export type PushLogResult = "Sent" | "Failed" | "SkippedNoDevice" | "SkippedOptedOut";
 
 // Best-effort audit trail for "I never got the reminder" debugging — never
@@ -1751,6 +1751,12 @@ export async function logPushAttempt(data: {
     await pushLogFetch("", {
       method: "POST",
       body: JSON.stringify({
+        // typecast: lets Airtable auto-add a new Type select option on first
+        // use instead of rejecting the write — the Meta API's field-update
+        // endpoint refused to PATCH this field's choices directly (422,
+        // unrelated to the payload shape), so new PushLogType values rely on
+        // this instead.
+        typecast: true,
         fields: {
           ClerkUserId: data.clerkUserId,
           ShiftId: data.shiftId || "",

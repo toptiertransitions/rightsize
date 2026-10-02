@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
   getPlanEntriesForTenant,
@@ -9,6 +9,7 @@ import {
   getUserRoleForTenant,
   getSystemRole,
 } from "@/lib/airtable";
+import { notifyShiftChanged, notifyShiftCancelled } from "@/lib/shift-response";
 import type { PlanActivity, PlanHelper, PlanEntryType } from "@/lib/types";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTManager", "TTTAdmin"];
@@ -124,6 +125,22 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const entry = await updatePlanEntry(id, fields);
+
+    // Additive push notification — never touches the Google Calendar
+    // invite/update path (app/api/plan/calendar/route.ts), which keeps
+    // doing exactly what it already did. Only fires for fields actually
+    // present in this PATCH's body, compared against the pre-update values,
+    // so a save that doesn't touch date/time/location never fires it.
+    const dateChanged = fields.date !== undefined && fields.date !== existing.date;
+    const timeChanged =
+      (fields.startTime !== undefined && fields.startTime !== existing.startTime) ||
+      (fields.endTime !== undefined && fields.endTime !== existing.endTime);
+    const locationChanged = fields.address !== undefined && fields.address !== existing.address;
+
+    if ((dateChanged || timeChanged || locationChanged) && entry.helpers?.length) {
+      after(() => notifyShiftChanged(entry, { date: dateChanged, time: timeChanged, location: locationChanged }));
+    }
+
     return NextResponse.json({ entry });
   } catch (e) {
     console.error("updatePlanEntry error:", e);
@@ -151,6 +168,16 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await deletePlanEntry(id);
+
+    // Additive push notification — never touches the Google Calendar cancel
+    // path (app/api/plan/calendar/route.ts's "cancel" action, called
+    // separately by the client when a googleEventId exists), which keeps
+    // sending Google's own cancellation emails exactly as before. `existing`
+    // was fetched above, before the delete, so it still has the helpers list.
+    if (existing.helpers?.length) {
+      after(() => notifyShiftCancelled(existing));
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("deletePlanEntry error:", e);
