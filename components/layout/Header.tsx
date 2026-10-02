@@ -171,8 +171,19 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     ...((isManager || isStaff) ? [{ href: "/expenses", base: "/expenses", label: "Expenses" }] : []),
     // Ops — Manager, Admin, and Sales
     ...((isManager || isSales) ? [{ href: "/staff", base: "/staff", label: "Ops" }] : []),
-    { href: "/inbox", base: "/inbox", label: "Inbox" },
+    // Inbox — internal comms hub: Staff, TeamLead, Manager, and Admin only
+    // (Sales gets it via salesOnlyLinks above). Never shown to clients —
+    // the page itself redirects them to /home even if they reach the URL.
+    ...(isStaff ? [{ href: "/inbox", base: "/inbox", label: "Inbox" }] : []),
   ];
+
+  // iOS compact nav only ever shows a subset of IOS_NAV_ORDER for a given
+  // role (e.g. clients never get Inbox) — filter down first so the grid
+  // sizes itself to however many icons actually apply, instead of leaving
+  // a dead column where a skipped item used to sit.
+  const iosNavLinks = IOS_NAV_ORDER
+    .map((label) => ({ label, link: navLinks.find((l) => l.label === label) }))
+    .filter((item): item is { label: (typeof IOS_NAV_ORDER)[number]; link: NonNullable<typeof item.link> } => !!item.link);
 
   return (
     <>
@@ -289,12 +300,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
         <main>'s bottom padding for this lives in globals.css (body.ios-bottom-nav). */}
     {useIOSNav && (
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 bg-white border-t border-cream-200"
-        style={{ paddingBottom: "var(--sab)" }}
+        className="fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200"
+        style={{ paddingBottom: "var(--sab)", gridTemplateColumns: `repeat(${iosNavLinks.length}, minmax(0, 1fr))` }}
       >
-        {IOS_NAV_ORDER.map((label) => {
-          const link = navLinks.find((l) => l.label === label);
-          if (!link) return null;
+        {iosNavLinks.map(({ label, link }) => {
           const Icon = IOS_NAV_ICONS[label];
           const isActive = pathname.startsWith(link.base ?? link.href) && !(link.excludeBase && pathname.startsWith(link.excludeBase));
           return (
