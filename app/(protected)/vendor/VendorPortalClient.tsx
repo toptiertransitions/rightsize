@@ -379,6 +379,12 @@ function ItemDetailModal({ item, city, initialAction, isLoading, isCollector, on
 
 export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Props) {
   const router = useRouter();
+  // Declared up front — referenced inside the tabCounts/filtered useMemo
+  // callbacks below, which run synchronously during render; declaring this
+  // further down (after those useMemos) put it in the temporal dead zone
+  // at the point those callbacks actually executed, throwing "Cannot
+  // access 'isCollector' before initialization" on every single render.
+  const isCollector = vendor.vendorType === "Collector/Reseller";
   const [items, setItems] = useState<Item[]>(initialItems);
   const [activeTab, setActiveTab] = useState<Tab>("Pending");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -549,7 +555,6 @@ export function VendorPortalClient({ vendor, initialItems, tenantCityMap }: Prop
     }
   };
 
-  const isCollector = vendor.vendorType === "Collector/Reseller";
   const typeColor = VENDOR_TYPE_COLORS[vendor.vendorType] ?? "bg-gray-100 text-gray-700";
 
   return (
