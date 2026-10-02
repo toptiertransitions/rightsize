@@ -1,9 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ItemPriceHistory, PriceChangeType, Item, LocalVendor } from "@/lib/types";
+import type { ItemPriceHistory, PriceChangeType } from "@/lib/types";
 import type { ItemRouteHistory, ItemStatusHistory, FlaggedDonateItem } from "@/lib/airtable";
-import { OtherConsignmentClient } from "@/app/admin/local-vendors/OtherConsignmentClient";
 
 interface Project { id: string; name: string; }
 
@@ -14,9 +13,6 @@ interface Props {
   flaggedItems: FlaggedDonateItem[];
   projects: Project[];
   selectedTenantId: string;
-  consignmentItems: Item[];
-  tenantInfoMap: Record<string, { name: string; ownerEmail: string; isTTT: boolean }>;
-  vendors: LocalVendor[];
 }
 
 const CHANGE_TYPE_COLORS: Record<PriceChangeType, string> = {
@@ -58,9 +54,9 @@ function SourceChip({ source }: { source: string }) {
   return <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{source}</span>;
 }
 
-export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems, projects, selectedTenantId, consignmentItems, tenantInfoMap, vendors }: Props) {
+export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems, projects, selectedTenantId }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"price" | "route" | "status" | "issues" | "otherConsignment">("issues");
+  const [tab, setTab] = useState<"price" | "route" | "status" | "issues">("issues");
   const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
 
   function toggleItem(itemId: string) {
@@ -119,7 +115,6 @@ export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems,
     { id: "price" as const,  label: "Item Price History" },
     { id: "route" as const,  label: "Route Audit" },
     { id: "status" as const, label: "Statuses" },
-    { id: "otherConsignment" as const, label: "Other Consignment" },
   ];
 
   return (
@@ -389,24 +384,6 @@ export function ItemsAdmin({ history, routeHistory, statusHistory, flaggedItems,
               </table>
             </div>
           )}
-        </>
-      )}
-
-      {tab === "otherConsignment" && (
-        <>
-          <div className="flex items-center gap-3 -mt-3">
-            <span className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">
-              {consignmentItems.length} item{consignmentItems.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-          <p className="text-gray-400 text-sm">
-            All client items routed to Other Consignment Store. Assign vendors, track responses, and manage payouts inline.
-          </p>
-          <OtherConsignmentClient
-            items={consignmentItems}
-            tenantInfoMap={tenantInfoMap}
-            vendors={vendors}
-          />
         </>
       )}
     </div>
