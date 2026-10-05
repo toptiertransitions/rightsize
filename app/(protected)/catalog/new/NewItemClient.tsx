@@ -194,6 +194,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
               condition: ai.condition,
               category: ai.category,
               fragility: ai.fragility,
+              itemName: ai.item_name,
               tenantId,
             }),
           });

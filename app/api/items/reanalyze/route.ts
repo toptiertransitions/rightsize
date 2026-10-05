@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
             ? Math.round(analysis.value_mid * 0.6)
             : (existingItem.valueMid ?? 0);
         const effectiveCategory = analysis.category || existingItem.category;
+        const effectiveItemName = analysis.item_name || existingItem.itemName;
 
         const mockItem = {
           id: itemId,
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
           valueMid: effectiveValueMid,
           category: effectiveCategory,
           fragility: existingItem.fragility,
+          itemName: effectiveItemName,
           assignedVendorId: undefined,
           primaryRoute: undefined, // clear so rules engine considers this item
         } as unknown as Item;

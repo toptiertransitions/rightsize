@@ -2734,6 +2734,19 @@ function conditionMeetsThreshold(
 
 const ESTATE_SALE_REDIRECT_ROUTES: PrimaryRoute[] = ["FB/Marketplace", "Online Marketplace"];
 
+// Hard constraint: hutches, china/curio/display cabinets rarely sell and are
+// hard to move/store — always Donate regardless of AI-estimated value or
+// condition. Matched against the item's name (case-insensitive substring),
+// since that's how the AI actually identifies these pieces. Surfaced on
+// /admin/routing-rules for visibility, same as the other hard constraints.
+const ALWAYS_DONATE_NAME_KEYWORDS = ["hutch", "curio", "display cabinet", "display case", "china cabinet"];
+
+function isAlwaysDonateFurniture(itemName: string | undefined): boolean {
+  if (!itemName) return false;
+  const lower = itemName.toLowerCase();
+  return ALWAYS_DONATE_NAME_KEYWORDS.some(kw => lower.includes(kw));
+}
+
 export function applyRoutingRules(
   items: Item[],
   localVendors: LocalVendor[],
@@ -2752,6 +2765,15 @@ export function applyRoutingRules(
     // Skip items with no size class — routing relies on it and silently defaulting
     // caused items to be misclassified as "Fits in Car-SUV"
     if (!item.sizeClass) continue;
+
+    // Hard constraint: hutches/china cabinets/curio & display cabinets — always
+    // Donate, checked first so it takes precedence over every other rule below,
+    // including the condition-based override (a damaged one is still Donate,
+    // not Discard).
+    if (isAlwaysDonateFurniture(item.itemName)) {
+      assignments.push({ itemId: item.id, primaryRoute: "Donate" });
+      continue;
+    }
 
     // Hard constraint: large items can never go to Online Marketplace
     const isLarge = item.sizeClass === "Fits in Car-SUV" || item.sizeClass === "Needs Movers";

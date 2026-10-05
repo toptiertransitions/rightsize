@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { valueMid, sizeClass, condition, category, fragility, tenantId } = await req.json();
+  const { valueMid, sizeClass, condition, category, fragility, tenantId, itemName } = await req.json();
 
   if (!sizeClass) {
     return NextResponse.json({ primaryRoute: null });
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     valueMid: valueMid ?? 0,
     category: category ?? "",
     fragility: fragility ?? "Not Fragile",
+    itemName: itemName ?? "",
     assignedVendorId: undefined,
   } as unknown as Item;
 

@@ -366,8 +366,17 @@ export function RoutingRulesClient({ initialRules, vendors: _vendors }: Props) {
         {/* Hard-constraint notice */}
         <div className="mb-4 p-3 bg-gray-800/60 border border-gray-700 rounded-xl text-xs text-gray-400 space-y-0.5">
           <p className="font-semibold text-gray-300">Hard constraints (always enforced, override all rules):</p>
+          <p>· Items named <span className="text-white">Hutch, China Hutch, Display Cabinet, Curio Cabinet, Glass Display Case</span> (or similar) are <span className="text-teal-400">always</span> routed to Donate, regardless of value or condition</p>
           <p>· Fits in Car-SUV and Needs Movers items are <span className="text-red-400">never</span> routed to eBay</p>
           <p>· Items in Fair / Poor / For Parts condition are auto-routed to <span className="text-teal-400">Donate</span> (≥$100 target value) or <span className="text-red-400">Discard</span> (&lt;$100)</p>
+        </div>
+
+        {/* AI assessment adjustment notice — not a routing rule itself, but
+            directly affects what value these rules see, so it belongs here
+            for admin visibility alongside the hard constraints above. */}
+        <div className="mb-6 p-3 bg-gray-800/60 border border-gray-700 rounded-xl text-xs text-gray-400 space-y-0.5">
+          <p className="font-semibold text-gray-300">AI assessment adjustments (applied before any rule below runs):</p>
+          <p>· AI-estimated Value Low / Mid / High are discounted by <span className="text-white">40% (×0.6)</span> before being saved to the item or used for routing — the AI tends to overestimate resale value</p>
         </div>
 
         {/* Estate Sale override notice */}
