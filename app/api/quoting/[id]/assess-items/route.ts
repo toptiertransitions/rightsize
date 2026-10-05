@@ -102,10 +102,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       status: "Pending Review",
     });
 
-    // Apply routing rules (same logic as POST /api/items)
+    // Apply routing rules (same logic as POST /api/items). applyRoutingRules
+    // skips any item that already has a primaryRoute set (see lib/airtable.ts —
+    // "only assign to genuinely unrouted items"), and `item` here was just
+    // created *with* the AI's raw primaryRoute already populated — passing it
+    // straight through made this call a silent no-op for every single item
+    // created via this flow, letting the AI's unvalidated guess (its prompt
+    // has no awareness of the admin's configured value thresholds at all)
+    // stand in uncorrected. Clear primaryRoute on the copy passed in, same
+    // as the equivalent fix already in app/api/items/reanalyze/route.ts.
     if (activeRules.length > 0) {
       try {
-        const assignments = applyRoutingRules([item], localVendors, activeRules, projectZip, tenant.isEstateSale ?? false);
+        const itemForRouting = { ...item, primaryRoute: undefined } as unknown as Item;
+        const assignments = applyRoutingRules([itemForRouting], localVendors, activeRules, projectZip, tenant.isEstateSale ?? false);
         if (assignments.length > 0) {
           const { primaryRoute: ruleRoute, vendorId } = assignments[0];
           const ruleShare = isNonTTT && NON_TTT_SHARE[ruleRoute] !== undefined
