@@ -12,8 +12,10 @@ export const SERVICE_INTEREST_TO_CATEGORY: Record<ServiceInterest, PartnerCatego
   mover: "Mover",
   senior_community: "Community",
   companion_care: "Companion Care",
+  care_manager: "Care Manager",
   estate_attorney: "Estate Attorney",
   financial_advisory: "Financial Advisory",
+  after_loss_support: "After Loss Support",
   donation: "Donation",
   hauling: "Hauler",
 };
@@ -24,8 +26,10 @@ export const CATEGORY_TO_SERVICE_INTEREST: Record<PartnerCategory, ServiceIntere
   Mover: "mover",
   Community: "senior_community",
   "Companion Care": "companion_care",
+  "Care Manager": "care_manager",
   "Estate Attorney": "estate_attorney",
   "Financial Advisory": "financial_advisory",
+  "After Loss Support": "after_loss_support",
   Donation: "donation",
   Hauler: "hauling",
 };

@@ -358,6 +358,42 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
   ],
 
+  "Care Manager": [
+    {
+      id: "careNeeds",
+      prompt: "What would you like help with?",
+      helper: "Choose all that apply.",
+      type: "chips-multi",
+      options: [
+        { value: "care_assessment", label: "Assessing care needs" },
+        { value: "finding_services", label: "Finding & coordinating care services" },
+        { value: "navigating_healthcare", label: "Navigating healthcare / insurance" },
+        { value: "family_mediation", label: "Family communication & decision support" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+    },
+    {
+      id: "zip",
+      prompt: "What zip code should we use?",
+      type: "zip",
+      prefill: prefillZipFromCurrent,
+    },
+    {
+      id: "timeline",
+      prompt: "How soon do you need to get started?",
+      type: "single-select",
+      options: TIMELINE_OPTIONS,
+      prefill: prefillTimeline,
+      skipIfPrefilled: true,
+    },
+    {
+      id: "notes",
+      prompt: "Anything else the care manager should know?",
+      type: "text",
+      optional: true,
+    },
+  ],
+
   "Estate Attorney": [
     {
       id: "serviceType",
@@ -493,6 +529,43 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     {
       id: "notes",
       prompt: "Anything else the caregiver should know?",
+      type: "text",
+      optional: true,
+    },
+  ],
+
+  "After Loss Support": [
+    {
+      id: "supportType",
+      prompt: "What kind of support are you looking for?",
+      helper: "Choose all that apply.",
+      type: "chips-multi",
+      options: [
+        { value: "grief_counseling", label: "Grief counseling / support groups" },
+        { value: "estate_settlement", label: "Estate settlement assistance" },
+        { value: "home_clearing", label: "Clearing & preparing the home" },
+        { value: "paperwork_logistics", label: "Paperwork & logistics after a loss" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+    },
+    {
+      id: "zip",
+      prompt: "What zip code should we use?",
+      type: "zip",
+      prefill: prefillZipFromCurrent,
+    },
+    {
+      id: "timeline",
+      prompt: "How soon would you like to connect with someone?",
+      type: "single-select",
+      options: TIMELINE_OPTIONS,
+      prefill: prefillTimeline,
+      skipIfPrefilled: true,
+      optional: true,
+    },
+    {
+      id: "notes",
+      prompt: "Anything else that would help us connect you with the right support?",
       type: "text",
       optional: true,
     },

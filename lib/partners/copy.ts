@@ -13,6 +13,8 @@ const COMPLETION_WORD: Partial<Record<PartnerCategory, [singular: string, plural
   "Estate Attorney": ["Estate Plan", "Estate Plans"],
   "Financial Advisory": ["Financial Plan", "Financial Plans"],
   "Companion Care": ["Care Placement", "Care Placements"],
+  "Care Manager": ["Care Plan", "Care Plans"],
+  "After Loss Support": ["Family Supported", "Families Supported"],
 };
 
 export function communityCompletionLabel(category: PartnerCategory, count: number, communityName: string): string {
