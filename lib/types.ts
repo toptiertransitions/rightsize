@@ -775,7 +775,7 @@ export interface LocalVendor {
 }
 
 // ─── Client-facing Partners marketplace ──────────────────────────────────────
-export const PARTNER_CATEGORIES = ["Realtor", "Move Manager", "Mover", "Community", "Companion Care", "Care Manager", "Estate Attorney", "Financial Advisory", "After Loss Support", "Donation", "Hauler"] as const;
+export const PARTNER_CATEGORIES = ["Move Manager", "Realtor", "Mover", "Donation", "Hauler", "Community", "Care Manager", "Companion Care", "Financial Advisory", "Estate Attorney", "After Loss Support"] as const;
 export type PartnerCategory = typeof PARTNER_CATEGORIES[number];
 
 export interface PartnerSelection {
