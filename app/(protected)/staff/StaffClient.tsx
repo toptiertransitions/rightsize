@@ -9,6 +9,7 @@ import { StaffGoalsTab } from "./StaffGoalsTab";
 import { StaffSkillsTab } from "./StaffSkillsTab";
 import { AIStaffMappingTab } from "./AIStaffMappingTab";
 import { OpenIssuesTab } from "./OpenIssuesTab";
+import { StaffByZipTab } from "./StaffByZipTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1577,7 +1578,7 @@ interface Props {
 }
 
 export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, storageUnits, tenants, subcontractors, canEdit = false, canAccessOpenIssues = false }: Props) {
-  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors" | "open-issues">("availability");
+  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "zip" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors" | "open-issues">("availability");
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
@@ -1666,6 +1667,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
         {([
           { key: "ai-mapping", label: "AI Staff Mapping" },
           { key: "availability", label: "Staff Availability" },
+          { key: "zip", label: "Staff by Zip" },
           { key: "calendar", label: "Staff Calendar" },
           { key: "goals", label: "Staff Goals" },
           { key: "skills", label: "Staff Skills" },
@@ -1901,6 +1903,11 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
             </div>
           )}
         </div>
+      )}
+
+      {/* Staff by Zip Tab */}
+      {activeTab === "zip" && (
+        <StaffByZipTab />
       )}
 
       {/* Staff Calendar Tab */}
