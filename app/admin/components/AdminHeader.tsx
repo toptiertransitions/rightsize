@@ -20,7 +20,8 @@ type AdminTab =
   | "estates"
   | "pay"
   | "items"
-  | "partners";
+  | "partners"
+  | "marketplace";
 
 const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "projects", label: "Home", href: "/admin" },
@@ -39,6 +40,7 @@ const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "pay", label: "Pay", href: "/admin/pay" },
   { tab: "items", label: "Items", href: "/admin/items" },
   { tab: "partners", label: "Partners", href: "/admin/partners" },
+  { tab: "marketplace", label: "Marketplace", href: "/admin/marketplace" },
 ];
 
 interface AdminHeaderProps {
