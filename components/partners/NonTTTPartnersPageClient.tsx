@@ -6,7 +6,7 @@ import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
 import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction, selectPartnerAction, deselectPartnerAction } from "@/app/(protected)/partners/actions";
 import { nonTTTCategoryLabel, TTT_MOVE_MANAGER_PARTNER_ID } from "@/lib/partners/nonTTTCategories";
-import { isPartnerRequestComplete, type PrefillTenant } from "@/lib/partners/questions";
+import { isPartnerRequestComplete, getCrossCategoryAnswers, type PrefillTenant } from "@/lib/partners/questions";
 import type { ScoringResult } from "@/lib/partners/scoring";
 import { SelectedPartnersTray } from "./SelectedPartnersTray";
 import { GreyedCategoryCard } from "./GreyedCategoryCard";
@@ -235,6 +235,7 @@ export function NonTTTPartnersPageClient({
           category={flowCategory}
           initialAnswers={requestAnswers[flowCategory] ?? {}}
           prefillTenant={prefillTenant}
+          crossCategoryAnswers={getCrossCategoryAnswers(flowCategory, requestAnswers)}
           onClose={() => setFlowCategory(null)}
           onSaved={(patch) =>
             setRequestAnswers((a) => {

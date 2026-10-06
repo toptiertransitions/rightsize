@@ -12,13 +12,14 @@ interface Props {
   category: PartnerCategory;
   initialAnswers: Record<string, string | string[]>;
   prefillTenant: PrefillTenant;
+  crossCategoryAnswers: Record<string, string>;
   onClose: () => void;
   onSaved: (patch: Record<string, string | string[]>) => void;
 }
 
-export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefillTenant, onClose, onSaved }: Props) {
-  const questions = useMemo(() => getVisibleQuestions(category, prefillTenant), [category, prefillTenant]);
-  const prefill = useMemo(() => getPrefillAnswers(category, prefillTenant), [category, prefillTenant]);
+export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefillTenant, crossCategoryAnswers, onClose, onSaved }: Props) {
+  const questions = useMemo(() => getVisibleQuestions(category, prefillTenant, crossCategoryAnswers), [category, prefillTenant, crossCategoryAnswers]);
+  const prefill = useMemo(() => getPrefillAnswers(category, prefillTenant, crossCategoryAnswers), [category, prefillTenant, crossCategoryAnswers]);
 
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({ ...prefill, ...initialAnswers });
   const [step, setStep] = useState(0);

@@ -1,4 +1,4 @@
-import type { PartnerCategory, Tenant } from "@/lib/types";
+import { PARTNER_CATEGORIES, type PartnerCategory, type Tenant } from "@/lib/types";
 
 export type PartnerQuestionType = "single-select" | "chips-multi" | "text" | "zip";
 
@@ -105,6 +105,43 @@ export function migrateLegacyAnswerKeys(
     }
   }
   return migrated;
+}
+
+// Question ids that mean the exact same real-world thing in every category
+// that asks them — who the request is for, the client's zip, how soon they
+// need this — so once a client answers one of these for ANY category, every
+// other category's survey should reuse it instead of asking again. Deliberately
+// narrow: category-specific questions that happen to share a generic id
+// elsewhere in the app (there are none today) would need to be excluded here,
+// not just left out by accident. Mover's fromZip/toZip don't qualify — they're
+// a different id, not "zip", so they're unaffected and keep getting their own
+// tenant-based prefill.
+export const CROSS_CATEGORY_SHARED_QUESTION_IDS = new Set(["whoFor", "zip", "timeline"]);
+
+/** Answers already given for a DIFFERENT category's survey that apply here
+ * too — same person, same zip, same timeline. Scans every other category's
+ * saved answers (in PARTNER_CATEGORIES' stable order, so the result is
+ * deterministic when more than one other category has an answer) and
+ * returns a value only for CROSS_CATEGORY_SHARED_QUESTION_IDS. Feed the
+ * result into getPrefillAnswers/getVisibleQuestions as crossCategoryAnswers
+ * to both skip the question and carry the value into this category's own
+ * saved answers. */
+export function getCrossCategoryAnswers(
+  excludeCategory: PartnerCategory,
+  allAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>>
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const id of CROSS_CATEGORY_SHARED_QUESTION_IDS) {
+    for (const category of PARTNER_CATEGORIES) {
+      if (category === excludeCategory) continue;
+      const value = allAnswers[category]?.[id];
+      if (typeof value === "string" && value) {
+        result[id] = value;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 const TIMELINE_OPTIONS: PartnerQuestionOption[] = [
@@ -718,9 +755,20 @@ export function getPartnerQuestions(category: PartnerCategory): PartnerQuestion[
   return [...UNIVERSAL_QUESTIONS, ...categoryQuestions];
 }
 
-export function getPrefillAnswers(category: PartnerCategory, tenant: PrefillTenant): Record<string, string> {
+export function getPrefillAnswers(
+  category: PartnerCategory,
+  tenant: PrefillTenant,
+  crossCategoryAnswers: Record<string, string> = {}
+): Record<string, string> {
   const answers: Record<string, string> = {};
   for (const q of getPartnerQuestions(category)) {
+    // A value already given for another category wins over an inferred
+    // onboarding guess — it's a direct answer, not a guess.
+    const cross = CROSS_CATEGORY_SHARED_QUESTION_IDS.has(q.id) ? crossCategoryAnswers[q.id] : undefined;
+    if (cross) {
+      answers[q.id] = cross;
+      continue;
+    }
     const value = q.prefill?.(tenant);
     if (value) answers[q.id] = value;
   }
@@ -729,10 +777,20 @@ export function getPrefillAnswers(category: PartnerCategory, tenant: PrefillTena
 
 /** The question steps actually shown to the user — everything except
  * skipIfPrefilled questions that already have a confident prefilled value
- * (those are auto-answered instead, see PartnerRequestFlow). */
-export function getVisibleQuestions(category: PartnerCategory, tenant: PrefillTenant): PartnerQuestion[] {
-  const prefill = getPrefillAnswers(category, tenant);
-  return getPartnerQuestions(category).filter((q) => !(q.skipIfPrefilled && prefill[q.id]));
+ * (those are auto-answered instead, see PartnerRequestFlow), and any
+ * CROSS_CATEGORY_SHARED_QUESTION_IDS already answered for another category
+ * (always auto-answered, regardless of that question's own skipIfPrefilled
+ * setting — the point is never asking the same thing twice). */
+export function getVisibleQuestions(
+  category: PartnerCategory,
+  tenant: PrefillTenant,
+  crossCategoryAnswers: Record<string, string> = {}
+): PartnerQuestion[] {
+  const prefill = getPrefillAnswers(category, tenant, crossCategoryAnswers);
+  return getPartnerQuestions(category).filter((q) => {
+    if (CROSS_CATEGORY_SHARED_QUESTION_IDS.has(q.id) && crossCategoryAnswers[q.id]) return false;
+    return !(q.skipIfPrefilled && prefill[q.id]);
+  });
 }
 
 // The universal question is prepended first in every flow (see
