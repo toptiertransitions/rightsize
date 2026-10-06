@@ -11,6 +11,11 @@ const DESTINATION_SQFT_SERVICES = ["Unpacking", "Setting Up Your Space", "Managi
 // Services whose SqFt input is the delta (source total − destination)
 const DELTA_SQFT_SERVICES = ["Packing for Donation/Dispersal", "Donating/Dispersal"];
 
+// Services that start unchecked on a brand-new quote — still one click away
+// to add, just not assumed by default the way the rest of the service list
+// is. Matched by exact Service.name.
+const DEFAULT_OFF_SERVICES = ["Estate Sale Execution (Day of Staffing, Promotion)", "Cleaning", "Other Service", "Services"];
+
 function buildOriginRooms(high: number, med: number, low: number): Room[] {
   const make = (density: DensityLevel, sqFt: number): Room => ({
     id: `origin-${density}`,
@@ -330,7 +335,7 @@ export function EstimatorSection({
             rate: s.hourlyRate,
             calculatedHours: calc,
             hours,
-            included: true,
+            included: !DEFAULT_OFF_SERVICES.includes(s.name),
             overridden: false,
           };
         });
