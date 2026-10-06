@@ -676,10 +676,22 @@ export function getVisibleQuestions(category: PartnerCategory, tenant: PrefillTe
   return getPartnerQuestions(category).filter((q) => !(q.skipIfPrefilled && prefill[q.id]));
 }
 
+// The two universal questions are prepended first in every flow (see
+// getPartnerQuestions), so a genuinely new request can never reach any
+// category-specific answer without having already answered these —
+// PartnerRequestFlow.tsx's step UI enforces that order and blocks
+// advancing past a non-optional, unanswered question. The ONLY way a
+// request can have real category answers but be missing these two is if
+// it was completed before this migration shipped. Excluding them here
+// (but not from the step UI, where they're still asked normally) means a
+// pre-existing "matched" request keeps showing its matches instead of
+// silently going incomplete the next time that client visits.
+const COMPLETENESS_GATE_EXCLUDED_IDS = new Set(["deliveryPreference", "whoFor"]);
+
 export function isPartnerRequestComplete(category: PartnerCategory, answers: Record<string, string | string[]>): boolean {
   const questions = getPartnerQuestions(category);
   return questions.every((q) => {
-    if (q.optional) return true;
+    if (q.optional || COMPLETENESS_GATE_EXCLUDED_IDS.has(q.id)) return true;
     const value = answers[q.id];
     return Array.isArray(value) ? value.length > 0 : !!value;
   });
