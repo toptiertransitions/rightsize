@@ -17,6 +17,8 @@ function listing(overrides: Partial<MarketplaceListing> = {}): MarketplaceListin
     agreementOnFile: true,
     agreementDate: "2026-01-01",
     completenessPercent: 100,
+    introNotificationMethod: "TTTAdmin",
+    introNotificationValue: "",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -33,6 +35,8 @@ describe("toPublicListing", () => {
     expect(pub).not.toHaveProperty("referralNotes");
     expect(pub).not.toHaveProperty("agreementOnFile");
     expect(pub).not.toHaveProperty("agreementDate");
+    expect(pub).not.toHaveProperty("introNotificationMethod");
+    expect(pub).not.toHaveProperty("introNotificationValue");
   });
 
   it("keeps every non-referral-terms field intact", () => {

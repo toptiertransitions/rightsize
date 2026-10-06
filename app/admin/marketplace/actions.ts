@@ -40,7 +40,7 @@ async function requireMarketplaceRole(): Promise<MarketplaceRole> {
   return role as MarketplaceRole;
 }
 
-type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
+type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string; data?: T };
 
 // ─── Partner writes ─────────────────────────────────────────────────────────
 

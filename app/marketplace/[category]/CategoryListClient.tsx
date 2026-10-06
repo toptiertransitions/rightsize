@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { PartnerCard, type PartnerCardData } from "../PartnerCard";
 import { matchesLocation } from "@/lib/marketplace/serviceArea";
-import type { MarketplaceDeliveryMode, MarketplaceFieldDef, MarketplaceServiceArea } from "@/lib/marketplace/types";
+import type { MarketplaceDeliveryMode, MarketplaceFieldDef, MarketplacePriceTier, MarketplaceServiceArea } from "@/lib/marketplace/types";
 
 export interface PublicListingRow {
   slug: string;
@@ -14,12 +14,12 @@ export interface PublicListingRow {
   city: string;
   state: string;
   deliveryMode: MarketplaceDeliveryMode;
-  priceTier: string;
+  priceTier: MarketplacePriceTier | "";
   languages: string[];
   seniorSpecialty: string[];
   serviceArea: MarketplaceServiceArea;
-  featuredRank?: number;
-  responsivenessScore?: number;
+  featuredRank: number | undefined;
+  responsivenessScore: number | undefined;
   avgRating: number;
   reviewCount: number;
   projectsCompleted: number;

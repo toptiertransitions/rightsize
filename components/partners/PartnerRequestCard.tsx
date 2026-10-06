@@ -16,7 +16,7 @@ interface Props {
   matchResult?: ScoringResult;
   requestedPartnerIds: string[];
   pendingPartnerId: string | null;
-  onRequestIntro: (partnerId: string) => void;
+  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean) => void;
   selectedPartnerId?: string;
   pendingSelect: boolean;
   onSelect: (partnerId: string) => void;
