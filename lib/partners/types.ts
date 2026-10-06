@@ -34,9 +34,12 @@ export interface PartnerProfile {
   /** Set only on the system-injected "Top Tier Transitions" Move Manager
    * entry built from the project's assigned Team Lead — never a real
    * LocalVendors record. Drives PartnerCard's non-interactive, no-rating
-   * display and the phone link. */
+   * display. */
   isTeamLead?: boolean;
   teamLeadName?: string;
+  /** Vendor contact phone — populated both for the synthetic Team Lead
+   * entry and for real partners (via legacyAdapter.ts). Shown to the
+   * client once a partner is selected (see SelectedPartnersTray.tsx). */
   phone?: string;
   /** Admin-set in /admin/local-vendors — feeds the scoring engine's "senior
    * specialty" factor (see lib/partners/scoring.ts). */
@@ -46,7 +49,8 @@ export interface PartnerProfile {
   responsivenessScore?: number;
   /** Vendor contact email — only populated for real LocalVendors records
    * (never the synthetic Team Lead entry), used to send the Phase 3 intro
-   * request notification. Not shown anywhere in the client-facing UI. */
+   * request notification. Also shown to the client once this partner is
+   * selected (see SelectedPartnersTray.tsx). */
   email?: string;
   /**
    * Only set (and only when > 0) when the viewing project has a resolved

@@ -159,6 +159,8 @@ export function NonTTTPartnersPageClient({
           selectedPartners={selectedPartners}
           onEmptyClick={scrollToCategory}
           onChangeClick={scrollToCategory}
+          filesEnabled
+          tenantId={tenantId}
         />
       )}
 

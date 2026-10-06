@@ -115,6 +115,7 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
         : Boolean(legacyId && legacyVendorById.get(legacyId)?.seniorSpecialty),
       responsivenessScore: partner.responsivenessScore,
       email: partner.email || undefined,
+      phone: partner.phone || undefined,
       deliveryMode: partner.deliveryMode,
       servesStatewide: partner.serviceArea.statewide,
       servesNationwide: partner.serviceArea.nationwide,
