@@ -1,7 +1,7 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getTimeEntriesForTenants, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds } from "@/lib/airtable";
+import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getTimeEntriesForTenants, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds, getPartnerSelectionsForTenant } from "@/lib/airtable";
 import { resolveAndLinkPartner } from "@/lib/partner";
 import { TimeTrackerClient } from "@/app/admin/TimeTrackerClient";
 import { Button } from "@/components/ui/Button";
@@ -263,13 +263,14 @@ export default async function DashboardPage({
     const isStaffOnly = systemRole === "TTTStaff";
     const isOwnerOrCollab = membership.role === "Owner" || membership.role === "Collaborator";
 
-    const [tenant, items, rooms, contracts, invoices, services] = await Promise.all([
+    const [tenant, items, rooms, contracts, invoices, services, partnerSelections] = await Promise.all([
       getTenantById(membership.tenantId).catch(() => null),
       getItemsForTenant(membership.tenantId).catch(() => []),
       getRoomsForTenant(membership.tenantId).catch(() => []),
       (isOwnerOrCollab || isStaffOnly) ? getContractsForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
       isOwnerOrCollab ? getInvoicesForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
       isOwnerOrCollab ? getServices().catch(() => []) : Promise.resolve([]),
+      isOwnerOrCollab ? getPartnerSelectionsForTenant(membership.tenantId).catch(() => []) : Promise.resolve([]),
     ]);
 
     // Tenant not found — if we auto-selected (no explicit tenantId param), fall
@@ -280,6 +281,7 @@ export default async function DashboardPage({
     const isOwner = OWNER_ROLES.includes(membership.role);
     const isNonTTTClient = !isStaff && tenant.isTTT !== true;
     const totalSqFt = rooms.reduce((s, r) => s + r.squareFeet, 0);
+    const partnerCount = partnerSelections.length;
     const itemsByStatus = items.reduce((acc, item) => {
       acc[item.status] = (acc[item.status] ?? 0) + 1;
       return acc;
@@ -356,21 +358,48 @@ export default async function DashboardPage({
           <Link href={`/catalog?tenantId=${tenant.id}`} className="block h-full">
             <Card hover className="h-full">
               <CardContent className="py-5">
+                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center mb-2">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l1.5-3h15L21 7M3 7h18M3 7v12a1 1 0 001 1h16a1 1 0 001-1V7M9 11h6" />
+                  </svg>
+                </div>
                 <p className="text-3xl font-bold text-gray-900">{items.length}</p>
                 <p className="text-sm text-gray-500 mt-0.5">Items cataloged</p>
                 <p className="text-xs text-forest-600 mt-2 font-medium">View catalog →</p>
               </CardContent>
             </Card>
           </Link>
-          <Link href={`/rooms?tenantId=${tenant.id}`} className="block h-full">
-            <Card hover className="h-full">
-              <CardContent className="py-5">
-                <p className="text-3xl font-bold text-gray-900">{rooms.length}</p>
-                <p className="text-sm text-gray-500 mt-0.5">Rooms · {totalSqFt.toLocaleString()} SF</p>
-                <p className="text-xs text-forest-600 mt-2 font-medium">View rooms →</p>
-              </CardContent>
-            </Card>
-          </Link>
+          {isNonTTTClient ? (
+            <Link href={`/partners?tenantId=${tenant.id}`} className="block h-full">
+              <Card hover className="h-full">
+                <CardContent className="py-5">
+                  <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
+                    <svg className="w-4 h-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900">{partnerCount}</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Partners on Your Team</p>
+                  <p className="text-xs text-forest-600 mt-2 font-medium">View partners →</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ) : (
+            <Link href={`/rooms?tenantId=${tenant.id}`} className="block h-full">
+              <Card hover className="h-full">
+                <CardContent className="py-5">
+                  <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center mb-2">
+                    <svg className="w-4 h-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900">{rooms.length}</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Rooms · {totalSqFt.toLocaleString()} SF</p>
+                  <p className="text-xs text-forest-600 mt-2 font-medium">View rooms →</p>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
           <Link href={`/plan?tenantId=${tenant.id}`} className="col-span-2 sm:col-span-1 block h-full">
             <Card hover className="h-full">
               <CardContent className="py-5">

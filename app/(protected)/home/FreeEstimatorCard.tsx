@@ -62,6 +62,7 @@ interface Props {
 
 export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, currentEstimatedHours, savedDestinationSqFt, estimatedServiceHours: initialServiceRows }: Props) {
   const [open, setOpen] = useState(false);
+  const totalRoomsSqFt = initialRooms.reduce((s, r) => s + r.squareFeet, 0);
 
   // ── Modal state ──────────────────────────────────────────────────────────────
   const [localRooms, setLocalRooms] = useState<LocalRoom[]>([]);
@@ -213,6 +214,28 @@ export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, cur
             </CardContent>
           </Card>
         )}
+
+        {/* Rooms & Square Footage — the input that drives the estimate above,
+            kept right beneath it rather than off on its own page so the
+            connection is obvious. */}
+        <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50/60 p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900">
+                {initialRooms.length} room{initialRooms.length !== 1 ? "s" : ""} · {totalRoomsSqFt.toLocaleString()} SF
+              </p>
+              <p className="text-xs text-gray-500">Rooms & square footage drive the estimate above — keep them current.</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={openModal} className="shrink-0">
+            Edit Rooms
+          </Button>
+        </div>
       </div>
 
       {/* ── Modal ─────────────────────────────────────────────────────────────── */}
