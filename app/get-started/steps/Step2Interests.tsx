@@ -8,16 +8,16 @@ import type { ServiceInterest } from "@/lib/types";
 const OPTIONS: { key: ServiceInterest; label: string; icon: React.ReactNode }[] = [
   { key: "full_service", label: "Full Service Move Management", icon: <Home className="w-[18px] h-[18px]" /> },
   { key: "realtor", label: "Realtor Recommendations", icon: <KeyRound className="w-[18px] h-[18px]" /> },
-  { key: "mover", label: "Mover Recommendations", icon: <Truck className="w-[18px] h-[18px]" /> },
   { key: "senior_community", label: "Senior Community Recommendations", icon: <Building2 className="w-[18px] h-[18px]" /> },
+  { key: "mover", label: "Mover Recommendations", icon: <Truck className="w-[18px] h-[18px]" /> },
+  { key: "donation", label: "Donation Organization Recommendations", icon: <Gift className="w-[18px] h-[18px]" /> },
+  { key: "hauling", label: "Junk Hauling Recommendations", icon: <Trash2 className="w-[18px] h-[18px]" /> },
   { key: "companion_care", label: "Companion Care Recommendations", icon: <HeartHandshake className="w-[18px] h-[18px]" /> },
   { key: "home_health_care", label: "Home Health Care Recommendations", icon: <Stethoscope className="w-[18px] h-[18px]" /> },
   { key: "care_manager", label: "Care Manager Recommendations", icon: <ClipboardCheck className="w-[18px] h-[18px]" /> },
   { key: "estate_attorney", label: "Estate Attorney Recommendations", icon: <Scale className="w-[18px] h-[18px]" /> },
   { key: "financial_advisory", label: "Financial Advisory Recommendations", icon: <PiggyBank className="w-[18px] h-[18px]" /> },
   { key: "after_loss_support", label: "After Loss Support Recommendations", icon: <Flower2 className="w-[18px] h-[18px]" /> },
-  { key: "donation", label: "Donation Organization Recommendations", icon: <Gift className="w-[18px] h-[18px]" /> },
-  { key: "hauling", label: "Junk Hauling Recommendations", icon: <Trash2 className="w-[18px] h-[18px]" /> },
 ];
 
 interface Props {
