@@ -9,7 +9,7 @@ import { getPartnerQuestions, formatAnswersForEmail, migrateLegacyAnswerKeys } f
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
-import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification, sendPartnerIntroPartnerNotification, sendPartnerIntroClientConfirmation } from "@/lib/admin-notifications";
+import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification, sendPartnerIntroPartnerNotification, sendPartnerIntroClientConfirmation, sendPartnerIntroNotificationToAdmins, postPartnerIntroToCustomUrl } from "@/lib/admin-notifications";
 import { getAllPartners, getAllListingsAdmin, getAllCategories, createIntroductionEvent } from "@/lib/marketplace/data";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -274,19 +274,58 @@ export async function requestPartnerIntroAction(
         disclosureAcknowledgedAt: disclosureAcknowledged ? new Date().toISOString() : undefined,
       }).catch((e) => { console.error("createIntroductionEvent failed:", e); return null; });
 
-      // Partner-facing email — silently no-ops with no vendor email on
-      // file (see sendPartnerIntroPartnerNotification's own comment).
+      // Where this introduction's notification actually goes is per-
+      // listing (Listing.introNotificationMethod, default "TTTAdmin" for
+      // every listing right now — see app/admin/marketplace's Referral
+      // Terms tab). No automated email reaches a real partner or client
+      // until a TTTAdmin explicitly switches a specific listing off that
+      // default.
       if (introEvent) {
-        sendPartnerIntroPartnerNotification({
-          vendorName: partner.vendorName,
-          vendorEmail: marketplacePartner?.email,
-          clientName,
-          category: categoryLabel,
-          clientEmail: clientEmail || undefined,
-          clientPhone: tenant.clientPhone,
-          answers: formattedAnswers,
-          trackingToken: introEvent.trackingToken,
-        }).catch((e) => console.error("Partner intro partner notification failed:", e));
+        const method = listing.introNotificationMethod;
+        if (method === "PartnerEmail") {
+          sendPartnerIntroPartnerNotification({
+            vendorName: partner.vendorName,
+            vendorEmail: marketplacePartner?.email,
+            clientName,
+            category: categoryLabel,
+            clientEmail: clientEmail || undefined,
+            clientPhone: tenant.clientPhone,
+            answers: formattedAnswers,
+            trackingToken: introEvent.trackingToken,
+          }).catch((e) => console.error("Partner intro partner notification failed:", e));
+
+          sendPartnerIntroClientConfirmation({
+            clientEmail: clientEmail || undefined,
+            clientName,
+            partnerName: partner.vendorName,
+            category: categoryLabel,
+          }).catch((e) => console.error("Partner intro client confirmation failed:", e));
+        } else if (method === "CustomURL" && listing.introNotificationValue) {
+          postPartnerIntroToCustomUrl({
+            url: listing.introNotificationValue,
+            vendorName: partner.vendorName,
+            clientName,
+            category: categoryLabel,
+            clientEmail: clientEmail || undefined,
+            clientPhone: tenant.clientPhone,
+            answers: formattedAnswers,
+            trackingToken: introEvent.trackingToken,
+          }).catch((e) => console.error("Partner intro custom-URL post failed:", e));
+        } else {
+          // "TTTAdmin" (the default) — redirect the partner-facing content
+          // to TTT admins instead, and skip the client confirmation email
+          // entirely (no automated send to the client while this is off).
+          sendPartnerIntroNotificationToAdmins({
+            vendorName: partner.vendorName,
+            vendorEmail: marketplacePartner?.email,
+            clientName,
+            category: categoryLabel,
+            clientEmail: clientEmail || undefined,
+            clientPhone: tenant.clientPhone,
+            answers: formattedAnswers,
+            trackingToken: introEvent.trackingToken,
+          }).catch((e) => console.error("Partner intro admin-routed notification failed:", e));
+        }
       }
 
       // CRM lead — one ClientContact + one Opportunity (stage "Lead"),
@@ -312,14 +351,6 @@ export async function requestPartnerIntroAction(
           })
         )
         .catch((e) => console.error("CRM lead creation for marketplace intro failed:", e));
-
-      // Client-facing confirmation — silently no-ops with no client email.
-      sendPartnerIntroClientConfirmation({
-        clientEmail: clientEmail || undefined,
-        clientName,
-        partnerName: partner.vendorName,
-        category: categoryLabel,
-      }).catch((e) => console.error("Partner intro client confirmation failed:", e));
     }
 
     logPartnerMatchEvent("intro_requested", { tenantId, category, partnerId });

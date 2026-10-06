@@ -326,6 +326,8 @@ function mapListingAdmin(rec: AirtableRec): MarketplaceListing {
     agreementOnFile: bool(f["AgreementOnFile"]),
     agreementDate: str(f["AgreementDate"]),
     completenessPercent: num(f["CompletenessPercent"]),
+    introNotificationMethod: (str(f["IntroNotificationMethod"]) || "TTTAdmin") as MarketplaceListing["introNotificationMethod"],
+    introNotificationValue: str(f["IntroNotificationValue"]),
     createdAt: str(f["CreatedAt"]),
     updatedAt: str(f["UpdatedAt"]),
   };
@@ -339,6 +341,8 @@ export function toPublicListing(listing: MarketplaceListing): MarketplacePublicL
     referralNotes: _referralNotes,
     agreementOnFile: _agreementOnFile,
     agreementDate: _agreementDate,
+    introNotificationMethod: _introNotificationMethod,
+    introNotificationValue: _introNotificationValue,
     ...publicFields
   } = listing;
   return publicFields;
@@ -394,6 +398,7 @@ export async function createListing(data: CreateListingData): Promise<Marketplac
     CreditToSeniorPercent: 0,
     AgreementOnFile: false,
     CompletenessPercent: 0,
+    IntroNotificationMethod: "TTTAdmin",
     CreatedAt: now,
     UpdatedAt: now,
   };
@@ -494,6 +499,48 @@ export async function updateListingReferralTerms(
       oldValue: change.oldValue,
       newValue: change.newValue,
       confirmedRestrictedCategory: data.confirmedRestrictedCategory ?? false,
+    });
+  }
+}
+
+interface UpdateIntroNotificationData {
+  introNotificationMethod: MarketplaceListing["introNotificationMethod"];
+  introNotificationValue?: string;
+}
+
+/** Admin-only (canEditReferralTerms — same sensitivity level as referral
+ * terms, so reuses the same capability gate). Logged to the same audit
+ * table, since "where introductions get routed" is just as worth a trail
+ * as fee terms are. */
+export async function updateListingIntroNotification(
+  id: string,
+  data: UpdateIntroNotificationData,
+  changedBy: string
+): Promise<void> {
+  const before = mapListingAdmin(
+    await (await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_LISTINGS, `/${id}`)).json()
+  );
+
+  const fields: Record<string, unknown> = {
+    UpdatedAt: new Date().toISOString(),
+    IntroNotificationMethod: data.introNotificationMethod,
+    IntroNotificationValue: data.introNotificationValue ?? "",
+  };
+
+  const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_LISTINGS, "", {
+    method: "PATCH",
+    body: JSON.stringify({ records: [{ id, fields }] }),
+  });
+  if (!res.ok) throw new Error(`updateListingIntroNotification failed: ${await res.text()}`);
+
+  if (data.introNotificationMethod !== before.introNotificationMethod) {
+    await createReferralTermsAuditEntry({
+      listingId: id,
+      changedBy,
+      fieldChanged: "IntroNotificationMethod",
+      oldValue: before.introNotificationMethod,
+      newValue: data.introNotificationMethod,
+      confirmedRestrictedCategory: false,
     });
   }
 }

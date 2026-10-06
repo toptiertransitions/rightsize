@@ -642,6 +642,81 @@ export async function sendPartnerIntroPartnerNotification(params: {
   });
 }
 
+/** The TTTAdmin-routed path (the current default for every listing — see
+ * Listing.introNotificationMethod): sends the exact same partner-facing
+ * content and tracked link to TTT admins instead of the partner, so
+ * nothing is silently lost while automated external sends are off — staff
+ * can see precisely what would have gone out and relay it manually if
+ * they choose to. */
+export async function sendPartnerIntroNotificationToAdmins(params: {
+  vendorName: string;
+  vendorEmail?: string;
+  clientName: string;
+  category: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  answers: Array<{ label: string; value: string }>;
+  trackingToken: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  if (adminEmails.length === 0) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildPartnerIntroRequestNotificationEmail({
+    vendorName: `${params.vendorName} (routed to TTT admins — partner notifications are off for this listing)`,
+    clientName: params.clientName,
+    category: params.category,
+    clientEmail: params.clientEmail,
+    clientPhone: params.clientPhone,
+    answers: params.answers,
+    trackedLinkUrl: `${appUrl}/partner-lead/${params.trackingToken}`,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject: `[Would go to ${params.vendorName}] New Client Introduction — ${params.category}`,
+    html,
+  });
+}
+
+/** CustomURL path — POSTs the lead to a partner-provided webhook instead
+ * of sending an email. Best-effort; a failed POST doesn't block the rest
+ * of the intro-request flow. */
+export async function postPartnerIntroToCustomUrl(params: {
+  url: string;
+  vendorName: string;
+  clientName: string;
+  category: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  answers: Array<{ label: string; value: string }>;
+  trackingToken: string;
+}): Promise<void> {
+  try {
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+    await fetch(params.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendorName: params.vendorName,
+        clientName: params.clientName,
+        category: params.category,
+        clientEmail: params.clientEmail,
+        clientPhone: params.clientPhone,
+        answers: params.answers,
+        trackedLinkUrl: `${appUrl}/partner-lead/${params.trackingToken}`,
+      }),
+    });
+  } catch (e) {
+    console.error("postPartnerIntroToCustomUrl failed:", e);
+  }
+}
+
 /** The client-facing confirmation half — same Phase 5 note as above. */
 export async function sendPartnerIntroClientConfirmation(params: {
   clientEmail?: string;

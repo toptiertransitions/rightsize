@@ -15,6 +15,7 @@ import {
   updateListingAttributesAction,
   moveListingStatusAction,
   updateReferralTermsAction,
+  updateListingIntroNotificationAction,
   invitePartnerToPortalAction,
 } from "../../actions";
 import { FieldInput } from "../../FieldInput";
@@ -337,6 +338,19 @@ function ReferralTermsEditor({ listing, category }: { listing: MarketplaceListin
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  const [notifyMethod, setNotifyMethod] = useState(listing.introNotificationMethod);
+  const [notifyValue, setNotifyValue] = useState(listing.introNotificationValue);
+  const [notifySaving, setNotifySaving] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState("");
+
+  async function saveNotification() {
+    setNotifySaving(true);
+    setNotifyMsg("");
+    const result = await updateListingIntroNotificationAction(listing.id, notifyMethod, notifyValue);
+    setNotifySaving(false);
+    setNotifyMsg(result.ok ? "Saved." : result.error);
+  }
+
   const needsConfirm = !category.referralPolicy.feesAllowed && feeType !== "none";
 
   async function save() {
@@ -389,6 +403,39 @@ function ReferralTermsEditor({ listing, category }: { listing: MarketplaceListin
           {saving ? "Saving…" : "Save"}
         </button>
         {msg && <span className="text-xs text-gray-500">{msg}</span>}
+      </div>
+
+      <div className="border-t border-gray-800 mt-4 pt-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Introduction Routing</p>
+        <p className="text-xs text-gray-500 mb-3">
+          Defaults to TTTAdmin for every listing — no automated email goes to a partner or client until this is switched.
+        </p>
+        <div className="flex items-center gap-3 mb-2">
+          <select
+            value={notifyMethod}
+            onChange={(e) => setNotifyMethod(e.target.value as typeof notifyMethod)}
+            className="h-9 px-3 rounded-lg border border-gray-700 bg-gray-950 text-sm text-white"
+          >
+            <option value="TTTAdmin">TTT Admins (default)</option>
+            <option value="PartnerEmail">Partner's Email</option>
+            <option value="CustomURL">Custom URL</option>
+          </select>
+          {notifyMethod === "CustomURL" && (
+            <input
+              type="url"
+              placeholder="https://..."
+              value={notifyValue}
+              onChange={(e) => setNotifyValue(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-gray-700 bg-gray-950 text-sm text-white flex-1"
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={saveNotification} disabled={notifySaving} className="h-9 px-4 rounded-lg border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 disabled:opacity-50">
+            {notifySaving ? "Saving…" : "Save Routing"}
+          </button>
+          {notifyMsg && <span className="text-xs text-gray-500">{notifyMsg}</span>}
+        </div>
       </div>
     </div>
   );

@@ -112,6 +112,11 @@ export interface MarketplacePartner {
 
 export type MarketplaceListingStatus = "Draft" | "Submitted" | "Live" | "Paused";
 export type MarketplaceFeeType = "none" | "percent" | "flat";
+/** Where an introduction request for this listing actually goes. Defaults
+ * to TTTAdmin for every listing — no automated external send happens
+ * until a TTTAdmin explicitly switches a specific listing to PartnerEmail
+ * or CustomURL. See requestPartnerIntroAction. */
+export type MarketplaceIntroNotificationMethod = "TTTAdmin" | "PartnerEmail" | "CustomURL";
 
 export interface MarketplaceListing {
   id: string;
@@ -127,16 +132,19 @@ export interface MarketplaceListing {
   agreementOnFile: boolean;
   agreementDate: string;
   completenessPercent: number;
+  introNotificationMethod: MarketplaceIntroNotificationMethod;
+  introNotificationValue: string;
   createdAt: string;
   updatedAt: string;
 }
 
-/** The same shape, with referralTerms physically absent — never partial or
- * redacted, just not present on the type — for public/partner-facing reads.
- * See lib/marketplace/data.ts's getPublicListing/getPartnerOwnListing. */
+/** The same shape, with referralTerms (and the equally-internal intro
+ * notification routing) physically absent — never partial or redacted,
+ * just not present on the type — for public/partner-facing reads. See
+ * lib/marketplace/data.ts's getPublicListing/getPartnerOwnListing. */
 export type MarketplacePublicListing = Omit<
   MarketplaceListing,
-  "feeType" | "feeValue" | "creditToSeniorPercent" | "referralNotes" | "agreementOnFile" | "agreementDate"
+  "feeType" | "feeValue" | "creditToSeniorPercent" | "referralNotes" | "agreementOnFile" | "agreementDate" | "introNotificationMethod" | "introNotificationValue"
 >;
 
 export interface MarketplaceReferralTermsAuditEntry {

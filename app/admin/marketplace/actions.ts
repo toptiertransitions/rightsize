@@ -16,6 +16,7 @@ import {
   updatePartner,
   updateListing,
   updateListingReferralTerms,
+  updateListingIntroNotification,
   createListing,
   updateCategory,
 } from "@/lib/marketplace/data";
@@ -340,6 +341,28 @@ export async function updateReferralTermsAction(
   }
   try {
     await updateListingReferralTerms(listingId, data, userId ?? "");
+    revalidatePath("/admin/marketplace/partners");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Update failed" };
+  }
+}
+
+/** TTTAdmin only, same gate as referral terms. Defaults to TTTAdmin for
+ * every listing — this is the only place that changes it. */
+export async function updateListingIntroNotificationAction(
+  listingId: string,
+  introNotificationMethod: "TTTAdmin" | "PartnerEmail" | "CustomURL",
+  introNotificationValue?: string
+): Promise<ActionResult> {
+  const { userId } = await auth();
+  const role = await requireMarketplaceRole();
+  if (!hasCapability(role, "editReferralTerms")) return { ok: false, error: "Not permitted — TTTAdmin only." };
+  if (introNotificationMethod === "CustomURL" && !introNotificationValue?.trim()) {
+    return { ok: false, error: "Enter a URL to route introductions to." };
+  }
+  try {
+    await updateListingIntroNotification(listingId, { introNotificationMethod, introNotificationValue }, userId ?? "");
     revalidatePath("/admin/marketplace/partners");
     return { ok: true };
   } catch (e) {
