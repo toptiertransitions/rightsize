@@ -611,6 +611,68 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
   ],
 
+  // Distinct from Companion Care: this is skilled, medically-ordered care
+  // (nursing, therapy, medication management) delivered by licensed
+  // professionals, typically following a hospital/rehab stay or new
+  // diagnosis — vs. Companion Care's non-medical ADL support. The payer
+  // question matters a lot more here than for any other category: unlike
+  // Companion Care (almost always private pay), home health agencies are
+  // commonly Medicare-certified, and which payers a given agency accepts is
+  // often the single biggest factor in whether a match can actually help.
+  "Home Health Care": [
+    {
+      id: "careType",
+      prompt: "What kind of care is needed?",
+      helper: "Choose all that apply.",
+      type: "chips-multi",
+      options: [
+        { value: "skilled_nursing", label: "Skilled nursing care (wound care, injections, catheter or IV care)" },
+        { value: "physical_therapy", label: "Physical therapy" },
+        { value: "occupational_speech_therapy", label: "Occupational or speech therapy" },
+        { value: "medication_management", label: "Medication management" },
+        { value: "post_hospital_recovery", label: "Recovery after a hospital or rehab stay" },
+        { value: "chronic_disease_management", label: "Ongoing management of a chronic condition (diabetes, heart failure, COPD, etc.)" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+      matchQuestionKey: "careTypes",
+    },
+    {
+      id: "payer",
+      prompt: "How will this be paid for?",
+      type: "single-select",
+      options: [
+        { value: "medicare", label: "Medicare" },
+        { value: "medicare_advantage", label: "Medicare Advantage plan" },
+        { value: "medicaid", label: "Medicaid" },
+        { value: "private_insurance", label: "Private insurance" },
+        { value: "private_pay", label: "Private pay / self-pay" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+      matchQuestionKey: "acceptedPayers",
+    },
+    {
+      id: "zip",
+      prompt: "What zip code is the care needed in?",
+      type: "zip",
+      prefill: prefillZipFromCurrent,
+    },
+    {
+      id: "timeline",
+      prompt: "How soon do you need care to begin?",
+      type: "single-select",
+      options: TIMELINE_OPTIONS,
+      prefill: prefillTimeline,
+      skipIfPrefilled: true,
+    },
+    {
+      id: "notes",
+      prompt: "Anything else the care team should know?",
+      helper: "For example, if this follows a hospital or rehab stay, or if you already have a doctor's order for home health care.",
+      type: "text",
+      optional: true,
+    },
+  ],
+
   "After Loss Support": [
     {
       id: "supportType",

@@ -191,6 +191,7 @@ export type ServiceInterest =
   | "mover"
   | "senior_community"
   | "companion_care"
+  | "home_health_care"
   | "care_manager"
   | "estate_attorney"
   | "financial_advisory"
@@ -775,7 +776,7 @@ export interface LocalVendor {
 }
 
 // ─── Client-facing Partners marketplace ──────────────────────────────────────
-export const PARTNER_CATEGORIES = ["Move Manager", "Realtor", "Mover", "Donation", "Hauler", "Community", "Care Manager", "Companion Care", "Financial Advisory", "Estate Attorney", "After Loss Support"] as const;
+export const PARTNER_CATEGORIES = ["Move Manager", "Realtor", "Mover", "Donation", "Hauler", "Community", "Care Manager", "Companion Care", "Home Health Care", "Financial Advisory", "Estate Attorney", "After Loss Support"] as const;
 export type PartnerCategory = typeof PARTNER_CATEGORIES[number];
 
 export interface PartnerSelection {

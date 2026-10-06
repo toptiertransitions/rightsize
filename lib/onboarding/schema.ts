@@ -13,6 +13,7 @@ export const SERVICE_INTERESTS = [
   "mover",
   "senior_community",
   "companion_care",
+  "home_health_care",
   "care_manager",
   "estate_attorney",
   "financial_advisory",
