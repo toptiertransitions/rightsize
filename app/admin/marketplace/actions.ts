@@ -2,6 +2,7 @@
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import zipcodes from "zipcodes";
 import { getSystemRole, getReferralCompanies, createReferralCompany, createReferralContact, findReferralContactByEmail, getReferralCompanyById, getReferralContactById } from "@/lib/airtable";
 import { sendPartnerPortalInviteEmail } from "@/lib/admin-notifications";
 import { hasCapability, canAccessMarketplaceAdmin, type MarketplaceRole } from "@/lib/marketplace/permissions";
@@ -90,6 +91,31 @@ export async function updatePartnerServiceAreaAction(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Update failed" };
   }
+}
+
+/** Simple zip+radius helper for the Service Area tab — looks up every zip
+ * within radiusMiles of homeZip so staff don't have to type them out by
+ * hand. Purely additive to the existing zips[] list: this returns plain
+ * zip strings for the caller to merge into the same textarea the manual
+ * entry already uses, so Save and everything downstream (matching,
+ * scoring, the legacy /partners adapter) is completely unaffected — it
+ * only ever reads serviceArea.zips, same as before. Reuses the `zipcodes`
+ * package already used by the (separately gated, Local Vendors-only)
+ * /api/admin/zip-coverage route, but checked against the marketplace
+ * admin's own role so TTTManager can use it too, not just TTTAdmin. */
+export async function lookupZipsInRadiusAction(
+  homeZip: string,
+  radiusMiles: number
+): Promise<ActionResult<{ zips: string[] }>> {
+  await requireMarketplaceRole();
+  const zip = homeZip.trim();
+  if (!/^\d{5}$/.test(zip)) return { ok: false, error: "Enter a valid 5-digit home zip code" };
+  if (!Number.isFinite(radiusMiles) || radiusMiles <= 0 || radiusMiles > 500) {
+    return { ok: false, error: "Enter a radius between 1 and 500 miles" };
+  }
+  if (!zipcodes.lookup(zip)) return { ok: false, error: `Zip code ${zip} wasn't found` };
+  const zips = ((zipcodes.radius(zip, radiusMiles) ?? []) as string[]).sort();
+  return { ok: true, data: { zips } };
 }
 
 export async function bulkUpdatePartnerLifecycleAction(

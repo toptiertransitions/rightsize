@@ -12,6 +12,7 @@ import type {
 import {
   updatePartnerOverviewAction,
   updatePartnerServiceAreaAction,
+  lookupZipsInRadiusAction,
   updateListingAttributesAction,
   moveListingStatusAction,
   updateReferralTermsAction,
@@ -265,6 +266,28 @@ function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  const [radiusZip, setRadiusZip] = useState("");
+  const [radiusMiles, setRadiusMiles] = useState("");
+  const [radiusLoading, setRadiusLoading] = useState(false);
+  const [radiusMsg, setRadiusMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function addZipsInRadius() {
+    setRadiusLoading(true);
+    setRadiusMsg(null);
+    const miles = Number(radiusMiles);
+    const result = await lookupZipsInRadiusAction(radiusZip, miles);
+    setRadiusLoading(false);
+    if (!result.ok) {
+      setRadiusMsg({ text: result.error, ok: false });
+      return;
+    }
+    const existing = new Set(zipsText.split(/[,\s]+/).map((z) => z.trim()).filter(Boolean));
+    const added = result.data!.zips.filter((z) => !existing.has(z));
+    for (const z of added) existing.add(z);
+    setZipsText([...existing].sort().join(", "));
+    setRadiusMsg({ text: `Added ${added.length} zip${added.length === 1 ? "" : "s"} within ${miles} miles of ${radiusZip}. Review below, then Save.`, ok: true });
+  }
+
   async function save() {
     setSaving(true);
     setMsg("");
@@ -277,8 +300,45 @@ function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
   return (
     <div className="max-w-2xl space-y-4">
       <p className="text-xs text-gray-500">
-        Full map-based county picker is a planned fast-follow — for now, zips are entered directly.
+        Full map-based county picker is a planned fast-follow — for now, zips are entered directly, with an
+        optional zip+radius shortcut to fill in a batch at once.
       </p>
+      <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-3 space-y-2">
+        <label className="block text-xs font-medium text-gray-400">Add zips within a radius of a home zip</label>
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">Home zip</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={5}
+              value={radiusZip}
+              onChange={(e) => setRadiusZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+              placeholder="60601"
+              className="w-24 px-3 py-2 rounded-xl border border-gray-700 bg-gray-900 text-sm text-white focus:outline-none focus:ring-2 focus:ring-forest-500/30"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">Radius (miles)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={radiusMiles}
+              onChange={(e) => setRadiusMiles(e.target.value.replace(/\D/g, "").slice(0, 3))}
+              placeholder="25"
+              className="w-20 px-3 py-2 rounded-xl border border-gray-700 bg-gray-900 text-sm text-white focus:outline-none focus:ring-2 focus:ring-forest-500/30"
+            />
+          </div>
+          <button
+            onClick={addZipsInRadius}
+            disabled={radiusLoading || !radiusZip || !radiusMiles}
+            className="h-[38px] px-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 disabled:opacity-50"
+          >
+            {radiusLoading ? "Searching…" : "Add Zips in Radius"}
+          </button>
+        </div>
+        {radiusMsg && <p className={`text-xs ${radiusMsg.ok ? "text-forest-400" : "text-red-400"}`}>{radiusMsg.text}</p>}
+      </div>
       <div>
         <label className="block text-xs font-medium text-gray-400 mb-1.5">Zip Codes Served (comma-separated)</label>
         <textarea
