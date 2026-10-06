@@ -15,8 +15,9 @@ import {
 import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
 import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
-import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID } from "@/lib/partners/nonTTTCategories";
-import { isPartnerRequestComplete } from "@/lib/partners/questions";
+import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
+import { sendZeroMatchAdminNotification } from "@/lib/admin-notifications";
+import { isPartnerRequestComplete, migrateLegacyAnswerKeys } from "@/lib/partners/questions";
 import { scoreAndRankPartners, getRequestLocation, type ScoringResult } from "@/lib/partners/scoring";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
@@ -156,6 +157,11 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     const initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>> = {};
     const initialIntroRequests: Partial<Record<PartnerCategory, { partnerId: string; requestedAt: string }[]>> = {};
     for (const r of partnerRequests) {
+      // Migrated here, once, right where answers first enter this page —
+      // everything downstream (isPartnerRequestComplete, scoreAndRankPartners,
+      // the client wizard's initial state) sees only current-shape keys,
+      // whether this request predates the zip-id normalization or not.
+      r.answers = migrateLegacyAnswerKeys(r.category, r.answers);
       initialRequestAnswers[r.category] = r.answers;
       initialIntroRequests[r.category] = r.introRequests;
     }
@@ -170,11 +176,28 @@ export default async function PartnersPage({ searchParams }: PageProps) {
       if (!request || !isPartnerRequestComplete(category, request.answers)) continue;
 
       const location = getRequestLocation(category, request.answers, { zip: tenant.currentZip, state: tenant.state });
-      const result = scoreAndRankPartners(directory, category, location);
+      const result = scoreAndRankPartners(directory, category, location, request.answers);
       initialMatches[category] = result;
 
-      if (result.best && request.status === "draft") {
-        statusBumps.push(setPartnerRequestStatus(tenantId, category, "matched").catch(() => {}));
+      if (request.status === "draft") {
+        if (result.best) {
+          statusBumps.push(setPartnerRequestStatus(tenantId, category, "matched").catch(() => {}));
+        } else {
+          // Zero matches — alert staff once per request (the "matched"
+          // status bump here just marks this request as processed, so the
+          // alert doesn't re-fire on every page load; it's a loose reuse
+          // of the existing status field, not a claim that a match exists).
+          statusBumps.push(
+            sendZeroMatchAdminNotification({
+              clientName: tenant.name,
+              projectName: tenant.name,
+              tenantId,
+              category: nonTTTCategoryLabel(category),
+            })
+              .then(() => setPartnerRequestStatus(tenantId, category, "matched"))
+              .catch(() => {})
+          );
+        }
       }
     }
     if (statusBumps.length > 0) await Promise.all(statusBumps);

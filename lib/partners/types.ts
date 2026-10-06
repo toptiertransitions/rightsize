@@ -61,6 +61,31 @@ export interface PartnerProfile {
   /** The resolved community name this count is relative to; paired with
    * communityCompletionCount, always set together. */
   communityName?: string;
+  /** Phase 5 additions — populated only by the new-model adapter
+   * (lib/marketplace/legacyAdapter.ts); undefined is treated as the most
+   * conservative default (in-person only, no attributes) everywhere these
+   * are read, so nothing breaks for a row that predates these fields. */
+  deliveryMode?: "In-person" | "Virtual" | "Both";
+  servesStatewide?: boolean;
+  servesNationwide?: boolean;
+  /** This partner's Listing.attributes for the category being matched —
+   * used for matchQuestionKey attribute-overlap scoring (lib/partners/
+   * scoring.ts). Empty for any listing that hasn't had its attributes
+   * filled in yet, which is most of them today — scoring degrades
+   * gracefully to 0 bonus, not an error, when this is empty. */
+  attributes?: Record<string, unknown>;
+  /** Whether requesting an intro to this partner should show the referral-
+   * fee disclosure + acknowledgment (see PartnerMatchResults.tsx) — true
+   * when the matched listing has a configured fee, or the category always
+   * requires disclosure regardless of fee. */
+  hasReferralDisclosure?: boolean;
+  disclosureText?: string;
+  /** Dollar amount credited back to the client toward Top Tier move-
+   * management services, when this listing's referral terms configure a
+   * flat-fee credit and the category allows it. 0 when not configured, or
+   * when the fee is percent-based (no known dollar value to credit from
+   * yet). See lib/marketplace/seniorCredit.ts. */
+  seniorCreditAmount?: number;
 }
 
 export interface MatchResult {

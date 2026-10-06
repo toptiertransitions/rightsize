@@ -37,14 +37,14 @@ function request(overrides: Partial<PartnerRequest>): PartnerRequest {
 
 describe("SCORING_WEIGHTS", () => {
   // The originally-specified weights (fit 35 / seniorSpecialty 20 /
-  // responsiveness 15 / reviews 10 / pastOutcomes 10 / adminOrder 5) sum to
-  // 95%, not 100% — kept verbatim rather than silently rescaled, since
-  // relative ranking between partners is unaffected either way (every
-  // partner's score is scaled by the same weights). Flagging it here so a
-  // future change to any one weight doesn't silently drift further.
-  it("sums to the specified 0.95 (not 1.0 — see comment above)", () => {
+  // responsiveness 15 / reviews 10 / pastOutcomes 10 / adminOrder 5) summed
+  // to 95%, not 100%, kept verbatim rather than silently rescaled. Phase 5
+  // added attributeOverlap at 5%, bringing the total to exactly 100% —
+  // this test's job is just to flag any further silent drift, not to
+  // enforce a specific total.
+  it("sums to 1.0 after the Phase 5 attributeOverlap addition", () => {
     const total = Object.values(SCORING_WEIGHTS).reduce((s, w) => s + w, 0);
-    expect(Math.round(total * 100) / 100).toBe(0.95);
+    expect(Math.round(total * 100) / 100).toBe(1);
   });
 });
 

@@ -85,9 +85,9 @@ export function NonTTTPartnersPageClient({
     setGreyedCategories((g) => (g.includes(category) ? g : [...g, category]));
   }, [tenantId]);
 
-  const handleRequestIntro = useCallback(async (category: PartnerCategory, partnerId: string) => {
+  const handleRequestIntro = useCallback(async (category: PartnerCategory, partnerId: string, disclosureAcknowledged: boolean) => {
     setPendingRequest({ category, partnerId });
-    const result = await requestPartnerIntroAction(tenantId, category, partnerId);
+    const result = await requestPartnerIntroAction(tenantId, category, partnerId, disclosureAcknowledged);
     setPendingRequest(null);
     if (!result.ok) {
       setToast(result.error);
@@ -191,7 +191,7 @@ export function NonTTTPartnersPageClient({
                 matchResult={initialMatches[category]}
                 requestedPartnerIds={(introRequests[category] ?? []).map((r) => r.partnerId)}
                 pendingPartnerId={pendingRequest?.category === category ? pendingRequest.partnerId : null}
-                onRequestIntro={(partnerId) => handleRequestIntro(category, partnerId)}
+                onRequestIntro={(partnerId, disclosureAcknowledged) => handleRequestIntro(category, partnerId, disclosureAcknowledged)}
                 selectedPartnerId={selections[category]}
                 pendingSelect={pendingSelect === category}
                 onSelect={(partnerId) => handleSelect(category, partnerId)}

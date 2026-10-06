@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -543,6 +543,102 @@ export async function sendPartnerIntroAdminNotification(params: {
     from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
     to: adminEmails,
     subject: `Partner Intro Requested — ${params.clientName} → ${params.partnerName}`,
+    html,
+  });
+}
+
+/** Fires once per (tenant, category) the first time a guided-match search
+ * comes back with zero eligible partners — so an empty category generates
+ * a concrete follow-up for staff instead of just a client-facing dead end.
+ * Phase 5: previously this case had no alert and no demand signal beyond
+ * the PartnerRequest record itself. */
+export async function sendZeroMatchAdminNotification(params: {
+  clientName: string;
+  projectName: string;
+  tenantId: string;
+  category: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  if (adminEmails.length === 0) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject: `No ${params.category} match — ${params.clientName}`,
+    html: `<p style="font-family:sans-serif;font-size:14px;color:#374151;">
+      <strong>${params.clientName}</strong> (${params.projectName}) asked for a <strong>${params.category}</strong> match and we don't have anyone in their area yet.
+      <br /><br />
+      <a href="${appUrl}/partners?tenantId=${params.tenantId}">View their request</a> and follow up manually, or use this as a signal to recruit a partner in that area/category.
+    </p>`,
+  });
+}
+
+/** The partner-facing half of an intro request — Phase 5: this used to be
+ * built but never sent (see buildPartnerIntroRequestNotificationEmail's
+ * original comment). Silently no-ops when the partner has no email on
+ * file rather than throwing, since a real amount of partners don't yet
+ * (see the Phase 2 backfill notes) — the internal admin notification
+ * above still fires either way, so nothing is lost, just not automated
+ * for that one partner. */
+export async function sendPartnerIntroPartnerNotification(params: {
+  vendorName: string;
+  vendorEmail?: string;
+  clientName: string;
+  category: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  answers: Array<{ label: string; value: string }>;
+  trackingToken: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey || !params.vendorEmail) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildPartnerIntroRequestNotificationEmail({
+    vendorName: params.vendorName,
+    clientName: params.clientName,
+    category: params.category,
+    clientEmail: params.clientEmail,
+    clientPhone: params.clientPhone,
+    answers: params.answers,
+    trackedLinkUrl: `${appUrl}/partner-lead/${params.trackingToken}`,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: params.vendorEmail,
+    subject: `New Client Introduction — ${params.category}`,
+    html,
+  });
+}
+
+/** The client-facing confirmation half — same Phase 5 note as above. */
+export async function sendPartnerIntroClientConfirmation(params: {
+  clientEmail?: string;
+  clientName: string;
+  partnerName: string;
+  category: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey || !params.clientEmail) return;
+
+  const html = buildPartnerIntroConfirmationEmail({
+    clientName: params.clientName,
+    partnerName: params.partnerName,
+    category: params.category,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: params.clientEmail,
+    subject: `We've reached out to ${params.partnerName}`,
     html,
   });
 }

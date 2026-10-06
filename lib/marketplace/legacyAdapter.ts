@@ -14,6 +14,7 @@ import { getAllPartnerReviews, getAllVendorsWithLocalVendorLink, getTenants, get
 import { computeBayesianRating } from "@/lib/partners/match";
 import type { PartnerProfile, PartnerCategory } from "@/lib/partners/types";
 import { getAllPartners, getAllListingsAdmin, getAllCategories } from "./data";
+import { computeSeniorCredit } from "./seniorCredit";
 
 const BAYESIAN_CONFIDENCE = 5;
 const DEFAULT_PRIOR_MEAN = 4.5;
@@ -114,6 +115,15 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
         : Boolean(legacyId && legacyVendorById.get(legacyId)?.seniorSpecialty),
       responsivenessScore: partner.responsivenessScore,
       email: partner.email || undefined,
+      deliveryMode: partner.deliveryMode,
+      servesStatewide: partner.serviceArea.statewide,
+      servesNationwide: partner.serviceArea.nationwide,
+      attributes: listing.attributes,
+      hasReferralDisclosure: listing.feeType !== "none" || category.referralPolicy.requiresDisclosure,
+      disclosureText: category.referralPolicy.disclosureText,
+      seniorCreditAmount: category.referralPolicy.creditToSeniorAllowed
+        ? computeSeniorCredit(listing.feeType, listing.feeValue, listing.creditToSeniorPercent)
+        : 0,
     };
   });
 }

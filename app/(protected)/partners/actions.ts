@@ -2,14 +2,15 @@
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest } from "@/lib/airtable";
+import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity } from "@/lib/airtable";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import { CATEGORY_TO_SERVICE_INTEREST, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
-import { getPartnerQuestions, formatAnswersForEmail } from "@/lib/partners/questions";
+import { getPartnerQuestions, formatAnswersForEmail, migrateLegacyAnswerKeys } from "@/lib/partners/questions";
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
-import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification } from "@/lib/admin-notifications";
+import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification, sendPartnerIntroPartnerNotification, sendPartnerIntroClientConfirmation } from "@/lib/admin-notifications";
+import { getAllPartners, getAllListingsAdmin, getAllCategories, createIntroductionEvent } from "@/lib/marketplace/data";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -193,7 +194,8 @@ export async function savePartnerRequestAnswersAction(
 export async function requestPartnerIntroAction(
   tenantId: string,
   category: PartnerCategory,
-  partnerId: string
+  partnerId: string,
+  disclosureAcknowledged: boolean = false
 ): Promise<ActionResult> {
   const input = z.object({ tenantId: tenantIdSchema, category: categorySchema, partnerId: partnerIdSchema }).safeParse({ tenantId, category, partnerId });
   if (!input.success) return { ok: false, error: "That request wasn't valid — please try again." };
@@ -213,6 +215,10 @@ export async function requestPartnerIntroAction(
     const partner = directory.find((p) => p.id === partnerId && p.category === category);
     if (!partner) return { ok: false, error: "That partner isn't available anymore." };
 
+    if (partner.hasReferralDisclosure && !disclosureAcknowledged) {
+      return { ok: false, error: "Please acknowledge the disclosure before requesting an intro." };
+    }
+
     const request = requests.find((r) => r.category === category);
     if (request && request.introRequests.length >= MAX_INTRO_REQUESTS_PER_CATEGORY && !request.introRequests.some((r) => r.partnerId === partnerId)) {
       return { ok: false, error: `You've already requested an intro for the maximum of ${MAX_INTRO_REQUESTS_PER_CATEGORY} partners in this category.` };
@@ -223,13 +229,11 @@ export async function requestPartnerIntroAction(
     const clientEmail = user?.emailAddresses?.[0]?.emailAddress || tenant.clientEmail;
     const clientName = user?.firstName || tenant.name;
     const categoryLabel = nonTTTCategoryLabel(category);
+    const answers = migrateLegacyAnswerKeys(category, request?.answers ?? {});
+    const formattedAnswers = formatAnswersForEmail(category, answers);
 
-    // Client- and partner-facing intro emails (buildPartnerIntroConfirmationEmail /
-    // buildPartnerIntroRequestNotificationEmail) are intentionally OFF for now —
-    // internal-only visibility via the TTTAdmin notification below until staff
-    // are ready to have this go out automatically to clients/partners.
-
-    // Internal visibility — this is currently the only email an intro request sends.
+    // Internal visibility — unchanged, fires on every request regardless
+    // of what else succeeds below.
     sendPartnerIntroAdminNotification({
       clientName,
       projectName: tenant.name,
@@ -238,8 +242,81 @@ export async function requestPartnerIntroAction(
       category: categoryLabel,
       clientEmail: clientEmail || undefined,
       clientPhone: tenant.clientPhone,
-      answers: formatAnswersForEmail(category, request?.answers ?? {}),
+      answers: formattedAnswers,
     }).catch((e) => console.error("Partner intro admin notification failed:", e));
+
+    // Resolve the real Listing behind this match, so the tracked lead and
+    // the CRM opportunity both carry an accurate referral-terms snapshot —
+    // taken now, not read live later, since terms can change after this
+    // specific referral was made.
+    const [allPartners, allListings, allCategories] = await Promise.all([
+      getAllPartners(),
+      getAllListingsAdmin(),
+      getAllCategories(),
+    ]);
+    const marketplacePartner = allPartners.find((p) => p.id === partnerId);
+    const marketplaceCategory = allCategories.find((c) => c.label === category);
+    const listing = marketplaceCategory
+      ? allListings.find((l) => l.partnerId === partnerId && l.categoryId === marketplaceCategory.id && l.status === "Live")
+      : undefined;
+
+    if (listing) {
+      const introEvent = await createIntroductionEvent({
+        listingId: listing.id,
+        partnerId,
+        tenantId,
+        clientName,
+        clientEmail: clientEmail || "",
+        clientPhone: tenant.clientPhone || "",
+        categoryAnswersSnapshot: answers,
+        referralTermsSnapshot: { feeType: listing.feeType, feeValue: listing.feeValue, creditToSeniorPercent: listing.creditToSeniorPercent },
+        channel: marketplacePartner?.email ? "Both" : "Email",
+        disclosureAcknowledgedAt: disclosureAcknowledged ? new Date().toISOString() : undefined,
+      }).catch((e) => { console.error("createIntroductionEvent failed:", e); return null; });
+
+      // Partner-facing email — silently no-ops with no vendor email on
+      // file (see sendPartnerIntroPartnerNotification's own comment).
+      if (introEvent) {
+        sendPartnerIntroPartnerNotification({
+          vendorName: partner.vendorName,
+          vendorEmail: marketplacePartner?.email,
+          clientName,
+          category: categoryLabel,
+          clientEmail: clientEmail || undefined,
+          clientPhone: tenant.clientPhone,
+          answers: formattedAnswers,
+          trackingToken: introEvent.trackingToken,
+        }).catch((e) => console.error("Partner intro partner notification failed:", e));
+      }
+
+      // CRM lead — one ClientContact + one Opportunity (stage "Lead"),
+      // tagged so this referral is traceable back to the marketplace.
+      // Mirrors the standalone MCP server's create_client_lead tool, ported
+      // here since that tool runs in a separate process this app can't call.
+      createClientContact({
+        name: clientName,
+        email: clientEmail || undefined,
+        phone: tenant.clientPhone || undefined,
+        source: "Marketplace",
+      })
+        .then((contact) =>
+          createOpportunity({
+            tenantId,
+            clientContactId: contact.id,
+            stage: "Lead",
+            notes: `Marketplace introduction — ${categoryLabel} — ${partner.vendorName}. Referral terms at time of request: ${listing.feeType === "none" ? "no fee" : `${listing.feeType} ${listing.feeValue}${listing.creditToSeniorPercent ? `, ${listing.creditToSeniorPercent}% credited to client` : ""}`}.`,
+          })
+        )
+        .catch((e) => console.error("CRM lead creation for marketplace intro failed:", e));
+
+      // Client-facing confirmation — silently no-ops with no client email.
+      sendPartnerIntroClientConfirmation({
+        clientEmail: clientEmail || undefined,
+        clientName,
+        partnerName: partner.vendorName,
+        category: categoryLabel,
+      }).catch((e) => console.error("Partner intro client confirmation failed:", e));
+    }
 
     logPartnerMatchEvent("intro_requested", { tenantId, category, partnerId });
     return { ok: true };

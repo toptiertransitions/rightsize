@@ -1,6 +1,7 @@
 import type { PartnerProfile, PartnerCategory, ClientLocation } from "./types";
 import type { PartnerRequest } from "@/lib/types";
 import { parseZipList } from "./match";
+import { getPartnerQuestions } from "./questions";
 
 // Deterministic, no-LLM scoring for Phase 3 guided matching. Weights are
 // exactly as specified (fit 35 / seniorSpecialty 20 / responsiveness 15 /
@@ -21,6 +22,12 @@ export const SCORING_WEIGHTS = {
   reviews: 0.1,
   pastOutcomes: 0.1,
   adminOrder: 0.05,
+  // Phase 5 addition: how well the client's category-specific answers
+  // overlap with this listing's filled-in attributes (see
+  // attributeOverlapScore below). Small weight on purpose — most listings
+  // don't have attributes filled in yet, so this mostly contributes 0
+  // today and will matter more as admins complete profiles, not before.
+  attributeOverlap: 0.05,
 } as const;
 
 export const MAX_INTRO_REQUESTS_PER_CATEGORY = 2;
@@ -42,31 +49,70 @@ export interface ScoringResult {
   alternates: ScoredMatch[]; // up to 2
 }
 
-// Which question in each category's flow holds the zip most relevant to
-// service-area matching (see lib/partners/questions.ts). Falls back to the
-// tenant's own currentZip if that question wasn't answered yet.
-const ZIP_QUESTION_BY_CATEGORY: Partial<Record<PartnerCategory, string>> = {
-  Realtor: "propertyZip",
-  Community: "areaZip",
-  Mover: "fromZip",
-  Hauler: "pickupZip",
-  Donation: "zip",
-  "Estate Attorney": "zip",
-  "Financial Advisory": "zip",
-  "Companion Care": "zip",
-  "Care Manager": "zip",
-  "After Loss Support": "zip",
-};
+// Every category's question set now uses "zip" as the location question id
+// (see the matchQuestionKey/zip-normalization migration in questions.ts) —
+// except Mover, which genuinely has two (fromZip/toZip, origin vs.
+// destination), not a naming inconsistency to unify. Falls back to the
+// tenant's own currentZip if the question wasn't answered yet.
+function getRequestZipAnswer(category: PartnerCategory, answers: Record<string, string | string[]>): string | undefined {
+  const qid = category === "Mover" ? "fromZip" : "zip";
+  const value = answers[qid];
+  return typeof value === "string" && value ? value : undefined;
+}
 
 export function getRequestLocation(
   category: PartnerCategory,
   answers: Record<string, string | string[]>,
   fallback: ClientLocation
 ): ClientLocation {
-  const qid = ZIP_QUESTION_BY_CATEGORY[category];
-  const value = qid ? answers[qid] : undefined;
-  const zip = typeof value === "string" && value ? value : fallback.zip;
+  const zip = getRequestZipAnswer(category, answers) ?? fallback.zip;
   return { zip, state: fallback.state };
+}
+
+export type DeliveryPreference = "in_person" | "virtual" | "either";
+
+function getDeliveryPreference(answers: Record<string, string | string[]>): DeliveryPreference {
+  const value = answers["deliveryPreference"];
+  return value === "in_person" || value === "virtual" ? value : "either";
+}
+
+// Loose, case-insensitive label overlap between a client's chosen option
+// labels and a vendor's attribute values for the matched field — the two
+// vocabularies aren't guaranteed to align word-for-word (a question's chip
+// labels were written for clients, a field's options for admins), so this
+// rewards a partial match rather than requiring an exact one. Contributes 0,
+// not an error, when the listing's attributes are still empty — which is
+// most listings today (see Phase 2 backfill notes).
+function attributeOverlapScore(
+  category: PartnerCategory,
+  answers: Record<string, string | string[]>,
+  attributes: Record<string, unknown> | undefined
+): number {
+  if (!attributes) return 0;
+  const questions = getPartnerQuestions(category).filter((q) => q.matchQuestionKey);
+  if (questions.length === 0) return 0;
+
+  let totalScore = 0;
+  let scoredQuestions = 0;
+  for (const q of questions) {
+    const attrValue = attributes[q.matchQuestionKey!];
+    const attrLabels = Array.isArray(attrValue)
+      ? attrValue.map((v) => String(v).toLowerCase())
+      : attrValue != null
+        ? [String(attrValue).toLowerCase()]
+        : [];
+    if (attrLabels.length === 0) continue; // attribute not filled in — skip, don't penalize
+
+    const answerValue = answers[q.id];
+    const answerLabels = (Array.isArray(answerValue) ? answerValue : answerValue ? [answerValue] : [])
+      .map((v) => q.options?.find((o) => o.value === v)?.label.toLowerCase() ?? String(v).toLowerCase());
+    if (answerLabels.length === 0) continue;
+
+    scoredQuestions++;
+    const anyOverlap = answerLabels.some((a) => attrLabels.some((b) => b.includes(a) || a.includes(b)));
+    if (anyOverlap) totalScore += 1;
+  }
+  return scoredQuestions > 0 ? totalScore / scoredQuestions : 0;
 }
 
 function capitalize(s: string): string {
@@ -101,25 +147,42 @@ function buildWhyThisMatch(partner: PartnerProfile, zipMatch: boolean): string {
 export function scoreAndRankPartners(
   directory: PartnerProfile[],
   category: PartnerCategory,
-  location: ClientLocation
+  location: ClientLocation,
+  answers: Record<string, string | string[]> = {}
 ): ScoringResult {
   const inCategory = directory.filter((p) => p.category === category);
+  const deliveryPreference = getDeliveryPreference(answers);
 
   const scored: ScoredMatch[] = [];
   for (const partner of inCategory) {
+    // A partner who can't serve this client in the way they asked for
+    // doesn't belong in the results at all, regardless of location —
+    // checked before the location filter so an in-person-only partner
+    // never shows up for a client who explicitly wants virtual.
+    if (deliveryPreference === "virtual" && partner.deliveryMode === "In-person") continue;
+    if (deliveryPreference === "in_person" && partner.deliveryMode === "Virtual") continue;
+
     const zips = parseZipList(partner.zipCodesServed);
     const zipMatch = !!location.zip && zips.includes(location.zip);
     const stateMatch = !!location.state && partner.state.trim().toLowerCase() === location.state.trim().toLowerCase();
+    const canServeVirtually = partner.deliveryMode === "Virtual" || partner.deliveryMode === "Both";
+    const virtualCoverageMatch =
+      deliveryPreference !== "in_person" &&
+      canServeVirtually &&
+      (partner.servesNationwide || (partner.servesStatewide && stateMatch));
 
-    // Hard filter: not serving this client's zip or state at all.
-    if (!zipMatch && !stateMatch) continue;
+    // Hard filter: not serving this client's zip or state at all, and no
+    // virtual coverage that would reach them either.
+    if (!zipMatch && !stateMatch && !virtualCoverageMatch) continue;
 
-    const fitScore = zipMatch ? 1 : 0.5;
+    const locationMatched = zipMatch || virtualCoverageMatch;
+    const fitScore = zipMatch ? 1 : locationMatched ? 0.75 : 0.5;
     const seniorScore = partner.seniorSpecialty ? 1 : 0;
     const responsivenessScore = (partner.responsivenessScore ?? 3) / 5;
     const reviewsScore = partner.reviewCount > 0 ? partner.avgRating / 5 : 0.5; // no reviews yet — neutral, not penalized
     const pastOutcomesScore = Math.min(partner.projectsCompleted / PAST_OUTCOMES_CAP, 1);
     const adminOrderScore = partner.featuredRank != null ? Math.max(0, 1 - (partner.featuredRank - 1) * 0.1) : 0.5;
+    const attributeScore = attributeOverlapScore(category, answers, partner.attributes);
 
     const score =
       SCORING_WEIGHTS.fit * fitScore +
@@ -127,7 +190,8 @@ export function scoreAndRankPartners(
       SCORING_WEIGHTS.responsiveness * responsivenessScore +
       SCORING_WEIGHTS.reviews * reviewsScore +
       SCORING_WEIGHTS.pastOutcomes * pastOutcomesScore +
-      SCORING_WEIGHTS.adminOrder * adminOrderScore;
+      SCORING_WEIGHTS.adminOrder * adminOrderScore +
+      SCORING_WEIGHTS.attributeOverlap * attributeScore;
 
     scored.push({
       partner,

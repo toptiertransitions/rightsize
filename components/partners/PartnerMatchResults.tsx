@@ -12,7 +12,7 @@ interface Props {
   requestedPartnerIds: string[];
   canEdit: boolean;
   pendingPartnerId: string | null;
-  onRequestIntro: (partnerId: string) => void;
+  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean) => void;
   selectedPartnerId?: string;
   pendingSelect: boolean;
   onSelect: (partnerId: string) => void;
@@ -38,14 +38,16 @@ function MatchCard({
   atCap: boolean;
   canEdit: boolean;
   pending: boolean;
-  onRequestIntro: (partnerId: string) => void;
+  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean) => void;
   isSelected: boolean;
   selectPending: boolean;
   onSelect: (partnerId: string) => void;
   onDeselect: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
   const { partner } = match;
+  const needsAcknowledgment = Boolean(partner.hasReferralDisclosure);
 
   return (
     <div
@@ -87,11 +89,27 @@ function MatchCard({
             <p className="text-xs text-gray-600 mb-2.5 leading-relaxed">
               We&rsquo;ll share your answers and contact info with {partner.vendorName} so they can reach out.
             </p>
+            {!!partner.seniorCreditAmount && (
+              <p className="text-xs font-medium text-forest-700 mb-2.5 leading-relaxed">
+                Because you were referred through Top Tier, you&rsquo;ll receive a ${partner.seniorCreditAmount.toFixed(2)} credit toward move management services.
+              </p>
+            )}
+            {needsAcknowledgment && (
+              <label className="flex items-start gap-2 text-xs text-gray-500 mb-2.5 leading-relaxed">
+                <input
+                  type="checkbox"
+                  checked={acknowledged}
+                  onChange={(e) => setAcknowledged(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>{partner.disclosureText || "Top Tier Transitions may receive a referral fee from this partner. It does not affect our recommendation."}</span>
+              </label>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => onRequestIntro(partner.id)}
-                disabled={pending}
+                onClick={() => onRequestIntro(partner.id, acknowledged)}
+                disabled={pending || (needsAcknowledgment && !acknowledged)}
                 className="min-h-[40px] px-3.5 rounded-lg text-sm font-semibold bg-forest-600 text-white hover:bg-forest-700 disabled:opacity-50"
               >
                 {pending ? "Requesting…" : "Yes, request intro"}

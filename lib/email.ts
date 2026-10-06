@@ -6399,6 +6399,7 @@ export function buildPartnerIntroRequestNotificationEmail({
   clientEmail,
   clientPhone,
   answers,
+  trackedLinkUrl,
   companyName = "Top Tier Transitions",
 }: {
   vendorName: string;
@@ -6407,6 +6408,11 @@ export function buildPartnerIntroRequestNotificationEmail({
   clientEmail?: string;
   clientPhone?: string;
   answers: Array<{ label: string; value: string }>;
+  /** Link to the no-login lead page where this partner can view the full
+   * request and mark it Contacted/Engaged/Declined. Omitted entirely (no
+   * button rendered) when there's nowhere to send them — e.g. an email
+   * address this old hasn't been recreated as a trackable lead. */
+  trackedLinkUrl?: string;
   companyName?: string;
 }): string {
   const answerRows = answers
@@ -6449,6 +6455,12 @@ export function buildPartnerIntroRequestNotificationEmail({
               <p style="margin:0 0 4px;font-size:14px;color:#374151;">
                 <strong>Contact:</strong> ${clientEmail ?? "—"}${clientPhone ? ` &middot; ${clientPhone}` : ""}
               </p>
+              ${trackedLinkUrl ? `
+              <table cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+                <tr><td style="background-color:#2E6B4F;border-radius:8px;">
+                  <a href="${trackedLinkUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">View & Respond</a>
+                </td></tr>
+              </table>` : ""}
               <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;line-height:1.5;">
                 Please reach out to them directly. Questions about this introduction? Reply to this email.
               </p>

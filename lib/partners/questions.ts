@@ -37,6 +37,77 @@ export interface PartnerQuestion {
    * pre-selected — for data we already collected during onboarding and
    * shouldn't make the user re-confirm. */
   skipIfPrefilled?: boolean;
+  /** Maps this question to the Category.fieldSchema attribute key it should
+   * be scored against (lib/partners/scoring.ts's attribute-overlap factor).
+   * Left unset for questions with no vendor-attribute equivalent (zip,
+   * timeline, free-text notes) — those drive hard filtering or are purely
+   * informational, not scored. */
+  matchQuestionKey?: string;
+}
+
+// Prepended to every category's question list (see getPartnerQuestions) —
+// not duplicated into each PARTNER_QUESTIONS entry, so there's exactly one
+// place to change either one. deliveryPreference drives the hard filter in
+// scoring.ts; whoFor is informational only, shown to the partner on intro,
+// never scored.
+const UNIVERSAL_QUESTIONS: PartnerQuestion[] = [
+  {
+    id: "deliveryPreference",
+    prompt: "Would you prefer in-person, virtual, or either?",
+    type: "single-select",
+    options: [
+      { value: "in_person", label: "In-person" },
+      { value: "virtual", label: "Virtual" },
+      { value: "either", label: "Either" },
+    ],
+    prefill: () => "either",
+  },
+  {
+    id: "whoFor",
+    prompt: "Who are we helping?",
+    type: "single-select",
+    options: [
+      { value: "self", label: "Myself" },
+      { value: "parent", label: "My parent" },
+      { value: "spouse", label: "My spouse" },
+      { value: "other", label: "Someone else" },
+    ],
+  },
+];
+
+// Zip question ids used to vary by category (propertyZip, areaZip,
+// pickupZip) before this migration unified them to plain "zip" — kept here
+// so an existing PartnerRequest.Answers blob saved under the old key still
+// resolves correctly. Mover keeps fromZip/toZip as-is; those are two
+// genuinely different concepts (origin vs. destination), not a naming
+// inconsistency to fix.
+const LEGACY_ANSWER_KEY_ALIASES: Partial<Record<PartnerCategory, Record<string, string>>> = {
+  Realtor: { propertyZip: "zip" },
+  Community: { areaZip: "zip" },
+  Hauler: { pickupZip: "zip" },
+};
+
+/** Remaps any answer stored under a pre-migration key to its current key —
+ * apply this to every answers object read from Airtable before using it,
+ * so a client mid-flow when this shipped isn't silently treated as having
+ * skipped a question they already answered. Not applied inside the save
+ * path's own read-merge-write (lib/airtable.ts's savePartnerRequestAnswers,
+ * kept free of this domain-specific concern) — that just means an old key
+ * can linger alongside the new one in storage until overwritten, which is
+ * harmless since every read path normalizes through this function anyway. */
+export function migrateLegacyAnswerKeys(
+  category: PartnerCategory,
+  answers: Record<string, string | string[]>
+): Record<string, string | string[]> {
+  const aliases = LEGACY_ANSWER_KEY_ALIASES[category];
+  if (!aliases) return answers;
+  const migrated = { ...answers };
+  for (const [oldKey, newKey] of Object.entries(aliases)) {
+    if (migrated[oldKey] !== undefined && migrated[newKey] === undefined) {
+      migrated[newKey] = migrated[oldKey];
+    }
+  }
+  return migrated;
 }
 
 const TIMELINE_OPTIONS: PartnerQuestionOption[] = [
@@ -130,7 +201,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       ],
     },
     {
-      id: "propertyZip",
+      id: "zip",
       prompt: "What's the zip code for the property?",
       type: "zip",
       prefill: prefillZipFromCurrent,
@@ -174,6 +245,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "continuing_care", label: "Continuing care" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "careLevelsOffered",
     },
     {
       id: "communityName",
@@ -184,7 +256,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       prefill: (tenant) => tenant.destinationCommunityOther || undefined,
     },
     {
-      id: "areaZip",
+      id: "zip",
       prompt: "What zip code or area are you looking in?",
       type: "zip",
       prefill: prefillZipFromDestination,
@@ -248,6 +320,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "move_only", label: "Just the move" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "packingServices",
     },
   ],
 
@@ -264,6 +337,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "construction_debris", label: "Construction debris" },
         { value: "other", label: "Other" },
       ],
+      matchQuestionKey: "servicesOffered",
     },
     {
       id: "volume",
@@ -278,7 +352,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       prefill: prefillVolumeFromDensity,
     },
     {
-      id: "pickupZip",
+      id: "zip",
       prompt: "What zip code is the pickup?",
       type: "zip",
       prefill: prefillZipFromCurrent,
@@ -319,6 +393,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "electronics", label: "Electronics" },
         { value: "other", label: "Other" },
       ],
+      matchQuestionKey: "acceptedItemTypes",
     },
     {
       id: "volume",
@@ -371,6 +446,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "family_mediation", label: "Family communication & decision support" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "servicesOffered",
     },
     {
       id: "zip",
@@ -406,6 +482,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "elder_law_medicaid", label: "Elder law / Medicaid planning" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "practiceAreas",
     },
     {
       id: "zip",
@@ -431,6 +508,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "starting_fresh", label: "No, starting from scratch" },
         { value: "not_sure", label: "Not sure" },
       ],
+      matchQuestionKey: "documentsCommonlyHandled",
     },
     {
       id: "notes",
@@ -453,6 +531,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "estate_legacy_planning", label: "Estate & legacy planning" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "focusAreas",
     },
     {
       id: "zip",
@@ -500,6 +579,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "medication_reminders", label: "Medication reminders" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "careTypes",
     },
     {
       id: "frequency",
@@ -547,6 +627,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "paperwork_logistics", label: "Paperwork & logistics after a loss" },
         { value: "not_sure", label: "Not sure yet" },
       ],
+      matchQuestionKey: "servicesOffered",
     },
     {
       id: "zip",
@@ -573,7 +654,9 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
 };
 
 export function getPartnerQuestions(category: PartnerCategory): PartnerQuestion[] {
-  return PARTNER_QUESTIONS[category] ?? [];
+  const categoryQuestions = PARTNER_QUESTIONS[category];
+  if (!categoryQuestions) return []; // Move Manager — no flow, see comment above PARTNER_QUESTIONS
+  return [...UNIVERSAL_QUESTIONS, ...categoryQuestions];
 }
 
 export function getPrefillAnswers(category: PartnerCategory, tenant: PrefillTenant): Record<string, string> {
