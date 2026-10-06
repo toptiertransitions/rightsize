@@ -3,6 +3,14 @@ import { getAllCategories, getAllListingsAdmin, getAllPartners } from "@/lib/mar
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.toptiertransitions.com";
 
+// Forces this to render per-request instead of being prerendered at build
+// time. It has to be: build-time Airtable calls aren't reliably
+// authenticated in every deploy environment, and sitemap content (which
+// listings are Live, which partners exist) is exactly the kind of thing
+// that shouldn't be frozen to whatever it looked like at the last deploy
+// anyway — search engines re-fetch /sitemap.xml on their own schedule.
+export const dynamic = "force-dynamic";
+
 // Only the public /marketplace routes — everything else in this app sits
 // behind Clerk auth and has no business in a sitemap.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
