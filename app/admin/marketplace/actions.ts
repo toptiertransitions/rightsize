@@ -2,7 +2,7 @@
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { getSystemRole, getReferralCompanies, createReferralCompany, createReferralContact, findReferralContactByEmail } from "@/lib/airtable";
+import { getSystemRole, getReferralCompanies, createReferralCompany, createReferralContact, findReferralContactByEmail, getReferralCompanyById, getReferralContactById } from "@/lib/airtable";
 import { sendPartnerPortalInviteEmail } from "@/lib/admin-notifications";
 import { hasCapability, canAccessMarketplaceAdmin, type MarketplaceRole } from "@/lib/marketplace/permissions";
 import {
@@ -235,6 +235,39 @@ export async function invitePartnerToPortalAction(partnerId: string): Promise<Ac
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Invite failed" };
+  }
+}
+
+/** CRM is the source of truth for a linked partner's business details — a
+ * company can be CRM-only, marketplace-only, or both, and when it's both,
+ * the shared fields (name, address, phone, email, website) always come
+ * from the CRM record, never the other way. Called on every partner-detail
+ * page load for a linked partner, so the Partners record (and anything
+ * reading it, including the public marketplace pages) stays accurate
+ * without needing a live cross-table join at render time everywhere else.
+ * Best-effort: a sync failure shouldn't block viewing the partner. */
+export async function syncPartnerFromCrmIfLinked(partnerId: string): Promise<void> {
+  try {
+    const partner = await getPartnerById(partnerId);
+    if (!partner?.crmReferralCompanyId) return;
+
+    const [company, contact] = await Promise.all([
+      getReferralCompanyById(partner.crmReferralCompanyId),
+      partner.crmReferralContactId ? getReferralContactById(partner.crmReferralContactId) : Promise.resolve(null),
+    ]);
+    if (!company) return;
+
+    await updatePartner(partnerId, {
+      companyName: company.name,
+      address: company.address,
+      city: company.city,
+      state: company.state,
+      zip: company.zip,
+      website: company.website,
+      ...(contact ? { pocName: contact.name, email: contact.email, phone: contact.phone } : {}),
+    });
+  } catch (e) {
+    console.error("syncPartnerFromCrmIfLinked failed:", e);
   }
 }
 

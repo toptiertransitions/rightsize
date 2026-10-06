@@ -108,25 +108,39 @@ function OverviewTab({ partner }: { partner: MarketplacePartner }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // CRM is the source of truth for these once linked — see
+  // syncPartnerFromCrmIfLinked. Editable only in the CRM tab from here on,
+  // so a stray edit here can never fight with the next sync.
+  const crmManaged = Boolean(partner.crmReferralCompanyId);
+
   async function save() {
     setSaving(true);
     setMsg("");
-    const result = await updatePartnerOverviewAction(partner.id, form);
+    const payload = crmManaged
+      ? { deliveryMode: form.deliveryMode, logo: form.logo, shortBio: form.shortBio, aboutUs: form.aboutUs }
+      : form;
+    const result = await updatePartnerOverviewAction(partner.id, payload);
     setSaving(false);
     setMsg(result.ok ? "Saved." : result.error);
   }
 
   const inputCls = "h-10 px-3 rounded-xl border border-gray-700 bg-gray-900 text-sm text-white w-full focus:outline-none focus:ring-2 focus:ring-forest-500/30";
+  const disabledCls = "h-10 px-3 rounded-xl border border-gray-800 bg-gray-900/40 text-sm text-gray-500 w-full cursor-not-allowed";
   const labelCls = "block text-xs font-medium text-gray-400 mb-1.5";
 
   return (
     <div className="max-w-2xl space-y-4">
+      {crmManaged && (
+        <div className="bg-gray-800/60 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-400">
+          Company name, contact info, and address are managed in the <a href="/admin/crm" className="text-forest-400 hover:underline">CRM</a> for this linked partner — edit them there; they'll sync here automatically.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
-        <div><label className={labelCls}>Company Name</label><input className={inputCls} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
-        <div><label className={labelCls}>Point of Contact</label><input className={inputCls} value={form.pocName} onChange={(e) => setForm({ ...form, pocName: e.target.value })} /></div>
-        <div><label className={labelCls}>Email</label><input className={inputCls} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-        <div><label className={labelCls}>Phone</label><input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-        <div><label className={labelCls}>Website</label><input className={inputCls} value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></div>
+        <div><label className={labelCls}>Company Name</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
+        <div><label className={labelCls}>Point of Contact</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.pocName} onChange={(e) => setForm({ ...form, pocName: e.target.value })} /></div>
+        <div><label className={labelCls}>Email</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+        <div><label className={labelCls}>Phone</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+        <div><label className={labelCls}>Website</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></div>
         <div>
           <label className={labelCls}>Delivery Mode</label>
           <select className={inputCls} value={form.deliveryMode} onChange={(e) => setForm({ ...form, deliveryMode: e.target.value as MarketplaceDeliveryMode })}>
@@ -137,11 +151,11 @@ function OverviewTab({ partner }: { partner: MarketplacePartner }) {
         </div>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <div><label className={labelCls}>Address</label><input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-        <div><label className={labelCls}>City</label><input className={inputCls} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
+        <div><label className={labelCls}>Address</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+        <div><label className={labelCls}>City</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
         <div className="grid grid-cols-2 gap-2">
-          <div><label className={labelCls}>State</label><input className={inputCls} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
-          <div><label className={labelCls}>Zip</label><input className={inputCls} value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} /></div>
+          <div><label className={labelCls}>State</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
+          <div><label className={labelCls}>Zip</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} /></div>
         </div>
       </div>
       <div><label className={labelCls}>Logo URL</label><input className={inputCls} value={form.logo} onChange={(e) => setForm({ ...form, logo: e.target.value })} /></div>

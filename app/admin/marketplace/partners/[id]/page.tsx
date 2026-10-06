@@ -11,12 +11,19 @@ import {
 } from "@/lib/marketplace/data";
 import { getLocalVendorById, getAllPartnerReviews, getSystemRole } from "@/lib/airtable";
 import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissions";
+import { syncPartnerFromCrmIfLinked } from "../../actions";
 import { PartnerDetailClient } from "./PartnerDetailClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // CRM is the source of truth for a linked partner's business details —
+  // refresh from it before rendering so this page (and the Partners record
+  // itself, which public pages also read from) never shows stale data.
+  await syncPartnerFromCrmIfLinked(id);
+
   const partner = await getPartnerById(id);
   if (!partner) notFound();
 
