@@ -1,4 +1,12 @@
 export const runtime = "nodejs"; // @react-pdf/renderer requires Node.js
+// PDF rendering + multiple Airtable round-trips per item + a Resend send
+// with a PDF attachment can exceed Vercel's default function timeout for a
+// larger batch — matches the maxDuration other similarly heavy routes
+// (upload, files, analyze) already set. Without this, a slow batch times
+// out with a platform-level HTML error page instead of this route's own
+// JSON error response, which is confusing client-side (see
+// VendorFileModal.tsx's res.json() guard for the other half of this fix).
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";

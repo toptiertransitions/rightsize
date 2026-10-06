@@ -95,7 +95,17 @@ export function VendorFileModal({
           tenantId,
         }),
       });
-      const data = await res.json();
+      // A platform-level failure (e.g. a function timeout) comes back as an
+      // HTML error page, not JSON — res.json() would throw a confusing
+      // "Unexpected token '<'" instead of a real error message. Parse as
+      // text first so a non-JSON response still surfaces something useful.
+      const text = await res.text();
+      let data: { error?: string; items?: Item[] };
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(res.ok ? "Unexpected response from server" : `Request failed (${res.status}) — try again, or with fewer items`);
+      }
       if (!res.ok) throw new Error(data.error || "Failed to send");
       setSent(true);
       if (data.items) onSent(data.items);
