@@ -40,7 +40,7 @@ const PAST_OUTCOMES_CAP = 10;
 export interface ScoredMatch {
   partner: PartnerProfile;
   score: number; // 0-1
-  matchedLocation: "area" | "nearby";
+  matchedLocation: "area" | "nearby" | "virtual";
   whyThisMatch: string;
 }
 
@@ -67,13 +67,6 @@ export function getRequestLocation(
 ): ClientLocation {
   const zip = getRequestZipAnswer(category, answers) ?? fallback.zip;
   return { zip, state: fallback.state };
-}
-
-export type DeliveryPreference = "in_person" | "virtual" | "either";
-
-function getDeliveryPreference(answers: Record<string, string | string[]>): DeliveryPreference {
-  const value = answers["deliveryPreference"];
-  return value === "in_person" || value === "virtual" ? value : "either";
 }
 
 // Loose, case-insensitive label overlap between a client's chosen option
@@ -139,10 +132,16 @@ function buildWhyThisMatch(partner: PartnerProfile, zipMatch: boolean): string {
 }
 
 /**
- * Hard-filters a category's directory to partners in or near the client's
- * service area, then scores and ranks the rest. Returns the single best
- * match plus up to 2 alternates — or `best: null` if nothing passed the
- * hard filter (a real, expected outcome, not an error).
+ * Hard-filters a category's directory to partners who can actually reach
+ * this client — locally (zip/state) or virtually (no preference question
+ * to gate on; see questions.ts's comment on why delivery mode isn't asked
+ * of the client) — then scores and ranks the rest. Composes the final
+ * result as up to 2 local options plus one virtual-capable bonus option
+ * when one exists, rather than pure score order, so the client always
+ * sees a real local choice alongside a virtual one where available —
+ * never all-virtual, never missing a virtual option that does exist.
+ * Returns `best: null` if nothing passed the hard filter at all (a real,
+ * expected outcome, not an error).
  */
 export function scoreAndRankPartners(
   directory: PartnerProfile[],
@@ -151,32 +150,22 @@ export function scoreAndRankPartners(
   answers: Record<string, string | string[]> = {}
 ): ScoringResult {
   const inCategory = directory.filter((p) => p.category === category);
-  const deliveryPreference = getDeliveryPreference(answers);
 
   const scored: ScoredMatch[] = [];
   for (const partner of inCategory) {
-    // A partner who can't serve this client in the way they asked for
-    // doesn't belong in the results at all, regardless of location —
-    // checked before the location filter so an in-person-only partner
-    // never shows up for a client who explicitly wants virtual.
-    if (deliveryPreference === "virtual" && partner.deliveryMode === "In-person") continue;
-    if (deliveryPreference === "in_person" && partner.deliveryMode === "Virtual") continue;
-
     const zips = parseZipList(partner.zipCodesServed);
     const zipMatch = !!location.zip && zips.includes(location.zip);
     const stateMatch = !!location.state && partner.state.trim().toLowerCase() === location.state.trim().toLowerCase();
     const canServeVirtually = partner.deliveryMode === "Virtual" || partner.deliveryMode === "Both";
     const virtualCoverageMatch =
-      deliveryPreference !== "in_person" &&
-      canServeVirtually &&
-      (partner.servesNationwide || (partner.servesStatewide && stateMatch));
+      canServeVirtually && (partner.servesNationwide || (partner.servesStatewide && stateMatch));
+    const isLocalMatch = zipMatch || stateMatch;
 
     // Hard filter: not serving this client's zip or state at all, and no
     // virtual coverage that would reach them either.
-    if (!zipMatch && !stateMatch && !virtualCoverageMatch) continue;
+    if (!isLocalMatch && !virtualCoverageMatch) continue;
 
-    const locationMatched = zipMatch || virtualCoverageMatch;
-    const fitScore = zipMatch ? 1 : locationMatched ? 0.75 : 0.5;
+    const fitScore = zipMatch ? 1 : isLocalMatch ? 0.75 : 0.6;
     const seniorScore = partner.seniorSpecialty ? 1 : 0;
     const responsivenessScore = (partner.responsivenessScore ?? 3) / 5;
     const reviewsScore = partner.reviewCount > 0 ? partner.avgRating / 5 : 0.5; // no reviews yet — neutral, not penalized
@@ -196,19 +185,29 @@ export function scoreAndRankPartners(
     scored.push({
       partner,
       score,
-      matchedLocation: zipMatch ? "area" : "nearby",
+      matchedLocation: zipMatch ? "area" : isLocalMatch ? "nearby" : "virtual",
       whyThisMatch: buildWhyThisMatch(partner, zipMatch),
     });
   }
 
-  scored.sort(
-    (a, b) =>
-      b.score - a.score ||
-      (a.partner.featuredRank ?? 999) - (b.partner.featuredRank ?? 999) ||
-      a.partner.vendorName.localeCompare(b.partner.vendorName)
-  );
+  const byScore = (a: ScoredMatch, b: ScoredMatch) =>
+    b.score - a.score ||
+    (a.partner.featuredRank ?? 999) - (b.partner.featuredRank ?? 999) ||
+    a.partner.vendorName.localeCompare(b.partner.vendorName);
 
-  return { best: scored[0] ?? null, alternates: scored.slice(1, 3) };
+  const local = scored.filter((s) => s.matchedLocation !== "virtual").sort(byScore);
+  const virtual = scored.filter((s) => s.matchedLocation === "virtual").sort(byScore);
+
+  const picked: ScoredMatch[] = local.slice(0, 2);
+  if (virtual.length > 0) picked.push(virtual[0]);
+  if (picked.length < 3) {
+    for (const s of local.slice(picked.filter((p) => p.matchedLocation !== "virtual").length)) {
+      if (picked.length >= 3) break;
+      picked.push(s);
+    }
+  }
+
+  return { best: picked[0] ?? null, alternates: picked.slice(1, 3) };
 }
 
 export function introRequestCountRemaining(request: PartnerRequest | undefined): number {

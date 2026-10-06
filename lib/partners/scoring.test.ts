@@ -148,3 +148,42 @@ describe("introRequestCountRemaining", () => {
     expect(introRequestCountRemaining(full)).toBe(0);
   });
 });
+
+// In-person vs. virtual is never a client question — it's a hard filter
+// (can this partner reach the client at all, locally or virtually?) plus
+// a composition rule (surface a mix), not a preference to gate on.
+describe("scoreAndRankPartners — local + virtual composition", () => {
+  const directory: PartnerProfile[] = [
+    profile({ id: "local1", vendorName: "Local A", zipCodesServed: "60601", deliveryMode: "In-person", avgRating: 4, reviewCount: 3 }),
+    profile({ id: "local2", vendorName: "Local B", zipCodesServed: "60601", deliveryMode: "In-person", avgRating: 4.5, reviewCount: 5 }),
+    profile({ id: "local3", vendorName: "Local C", zipCodesServed: "60601", deliveryMode: "In-person", avgRating: 3, reviewCount: 2 }),
+    profile({ id: "virtual1", vendorName: "Virtual A", state: "CA", deliveryMode: "Virtual", servesNationwide: true, avgRating: 5, reviewCount: 10 }),
+  ];
+  const location = { zip: "60601", state: "IL" };
+
+  it("includes a virtual option as the 3rd pick even when local candidates alone would fill all 3 slots", () => {
+    const result = scoreAndRankPartners(directory, "Mover", location);
+    const ids = [result.best?.partner.id, ...result.alternates.map((a) => a.partner.id)];
+    expect(ids).toContain("virtual1");
+    expect(ids.filter((id) => id?.startsWith("local")).length).toBe(2);
+  });
+
+  it("marks a nationwide-virtual-only partner's matchedLocation as virtual", () => {
+    const result = scoreAndRankPartners(directory, "Mover", location);
+    const virtualMatch = [result.best, ...result.alternates].find((m) => m?.partner.id === "virtual1");
+    expect(virtualMatch?.matchedLocation).toBe("virtual");
+  });
+
+  it("never excludes a partner for stating an in-person-only delivery mode — there's no preference to filter on", () => {
+    const result = scoreAndRankPartners(directory, "Mover", location);
+    const ids = [result.best?.partner.id, ...result.alternates.map((a) => a.partner.id)];
+    expect(ids).toContain("local1");
+  });
+
+  it("backfills with more local results when no virtual option exists", () => {
+    const localOnly = directory.filter((p) => p.deliveryMode === "In-person");
+    const result = scoreAndRankPartners(localOnly, "Mover", location);
+    expect(result.best).not.toBeNull();
+    expect(result.alternates).toHaveLength(2);
+  });
+});

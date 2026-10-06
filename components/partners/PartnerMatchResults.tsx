@@ -19,6 +19,19 @@ interface Props {
   onDeselect: () => void;
 }
 
+// The pill, not a question: shows the client which of their 1-2 local
+// options plus a virtual option (see scoring.ts's composition rule) each
+// actually is, without ever asking them to pre-filter on it.
+function DeliveryPill({ match }: { match: ScoredMatch }) {
+  if (match.matchedLocation === "virtual") {
+    return <span className="inline-flex items-center text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">Virtual</span>;
+  }
+  if (match.partner.deliveryMode === "Both") {
+    return <span className="inline-flex items-center text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">Local + Virtual</span>;
+  }
+  return null;
+}
+
 function MatchCard({
   match,
   featured,
@@ -58,7 +71,10 @@ function MatchCard({
       <PartnerLogo logo={partner.logo} name={partner.vendorName} />
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         {featured && <p className="text-xs font-semibold text-forest-600 uppercase tracking-wide">Best match</p>}
-        <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
+          <DeliveryPill match={match} />
+        </div>
         {partner.reviewCount > 0 && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
         <p className="text-sm text-gray-600 leading-relaxed">{match.whyThisMatch}</p>
 

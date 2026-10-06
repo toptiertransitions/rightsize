@@ -47,21 +47,18 @@ export interface PartnerQuestion {
 
 // Prepended to every category's question list (see getPartnerQuestions) —
 // not duplicated into each PARTNER_QUESTIONS entry, so there's exactly one
-// place to change either one. deliveryPreference drives the hard filter in
-// scoring.ts; whoFor is informational only, shown to the partner on intro,
-// never scored.
+// place to change it. whoFor is informational only, shown to the partner
+// on intro, never scored.
+//
+// In-person vs. virtual is deliberately NOT a question here — some
+// categories (grief counseling, financial advisory, estate planning) have
+// partners who are virtual-only or virtual-first, while others never will
+// be, and asking the client to pre-filter on it would just throw away
+// good local options before they're ever seen. Instead it's surfaced as a
+// pill on the matched-partner cards themselves (see
+// components/partners/PartnerMatchResults.tsx) so the client sees a mix —
+// 1-2 local options plus a virtual one when available — and picks.
 const UNIVERSAL_QUESTIONS: PartnerQuestion[] = [
-  {
-    id: "deliveryPreference",
-    prompt: "Would you prefer in-person, virtual, or either?",
-    type: "single-select",
-    options: [
-      { value: "in_person", label: "In-person" },
-      { value: "virtual", label: "Virtual" },
-      { value: "either", label: "Either" },
-    ],
-    prefill: () => "either",
-  },
   {
     id: "whoFor",
     prompt: "Who are we helping?",
@@ -676,17 +673,17 @@ export function getVisibleQuestions(category: PartnerCategory, tenant: PrefillTe
   return getPartnerQuestions(category).filter((q) => !(q.skipIfPrefilled && prefill[q.id]));
 }
 
-// The two universal questions are prepended first in every flow (see
+// The universal question is prepended first in every flow (see
 // getPartnerQuestions), so a genuinely new request can never reach any
-// category-specific answer without having already answered these —
+// category-specific answer without having already answered it —
 // PartnerRequestFlow.tsx's step UI enforces that order and blocks
 // advancing past a non-optional, unanswered question. The ONLY way a
-// request can have real category answers but be missing these two is if
-// it was completed before this migration shipped. Excluding them here
-// (but not from the step UI, where they're still asked normally) means a
+// request can have real category answers but be missing this one is if
+// it was completed before this question existed. Excluding it here (but
+// not from the step UI, where it's still asked normally) means a
 // pre-existing "matched" request keeps showing its matches instead of
 // silently going incomplete the next time that client visits.
-const COMPLETENESS_GATE_EXCLUDED_IDS = new Set(["deliveryPreference", "whoFor"]);
+const COMPLETENESS_GATE_EXCLUDED_IDS = new Set(["whoFor"]);
 
 export function isPartnerRequestComplete(category: PartnerCategory, answers: Record<string, string | string[]>): boolean {
   const questions = getPartnerQuestions(category);
