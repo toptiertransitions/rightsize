@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -544,6 +544,30 @@ export async function sendPartnerIntroAdminNotification(params: {
     to: adminEmails,
     subject: `Partner Intro Requested — ${params.clientName} → ${params.partnerName}`,
     html,
+  });
+}
+
+/** Sends the same Partner Portal invite email the CRM tab's existing
+ * invite flow sends (app/api/partner/invite/route.ts), for the
+ * marketplace admin's own "Invite to Partner Portal" action — same
+ * portal, same email, just a second staff-initiated door into it. */
+export async function sendPartnerPortalInviteEmail(params: {
+  inviterName: string;
+  partnerName: string;
+  partnerEmail: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey || !params.partnerEmail) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const portalUrl = `${appUrl}/sign-up?redirect_url=%2Fapi%2Fpartner%2Factivate`;
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `${params.inviterName} <${process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com"}>`,
+    to: params.partnerEmail,
+    subject: `${params.inviterName} invited you to the TTT Partner Portal`,
+    html: buildPartnerInviteEmail({ inviterName: params.inviterName, partnerName: params.partnerName, portalUrl }),
   });
 }
 

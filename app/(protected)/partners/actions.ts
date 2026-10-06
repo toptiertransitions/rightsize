@@ -293,11 +293,15 @@ export async function requestPartnerIntroAction(
       // tagged so this referral is traceable back to the marketplace.
       // Mirrors the standalone MCP server's create_client_lead tool, ported
       // here since that tool runs in a separate process this app can't call.
+      // referralPartnerId is only set once this partner has actually been
+      // invited to the Referral Partner Portal (see invitePartnerToPortalAction) —
+      // that's what makes this project show up in their portal calendar.
       createClientContact({
         name: clientName,
         email: clientEmail || undefined,
         phone: tenant.clientPhone || undefined,
         source: "Marketplace",
+        referralPartnerId: marketplacePartner?.crmReferralContactId,
       })
         .then((contact) =>
           createOpportunity({

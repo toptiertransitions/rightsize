@@ -94,6 +94,12 @@ export interface MarketplacePartner {
    * all. When set, that company's existing ReferralContact.clerkUserId
    * portal already covers login; this model adds no login field of its own. */
   crmReferralCompanyId?: string;
+  /** The specific CRMReferralContacts person who was (or will be) invited
+   * to the Referral Partner Portal — distinct from crmReferralCompanyId,
+   * since a company can have multiple contacts but only one is the actual
+   * invited portal user. Set by the admin-only "Invite to Partner Portal"
+   * action (app/admin/marketplace/actions.ts); never self-service. */
+  crmReferralContactId?: string;
   /** Linked LocalVendors record id, if this company is ALSO a disposition-
    * side vendor (e.g. buys items from the Consignment Catalog). Same note
    * as above — login, if any, lives on that LocalVendor's clerkUserId. */

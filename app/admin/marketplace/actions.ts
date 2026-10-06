@@ -1,14 +1,16 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { getSystemRole, getReferralCompanies } from "@/lib/airtable";
+import { getSystemRole, getReferralCompanies, createReferralCompany, createReferralContact, findReferralContactByEmail } from "@/lib/airtable";
+import { sendPartnerPortalInviteEmail } from "@/lib/admin-notifications";
 import { hasCapability, canAccessMarketplaceAdmin, type MarketplaceRole } from "@/lib/marketplace/permissions";
 import {
   getAllCategories,
   getCategoryById,
   getAllListingsAdmin,
   getAllPartners,
+  getPartnerById,
   getListingsForPartnerAdmin,
   createPartner,
   updatePartner,
@@ -167,6 +169,72 @@ export async function movePartnerLifecycleAction(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Update failed" };
+  }
+}
+
+/** Staff-initiated only — there is no self-service path for a marketplace
+ * partner to join the Referral Partner Portal. This reuses the exact same
+ * portal the CRM tab's own invite flow sends people into: it ensures a
+ * CRMReferralCompanies + CRMReferralContacts record exists for this
+ * partner (creating one if needed, reusing an existing contact at this
+ * email if there is one), links them back onto the Partners record, and
+ * sends the identical invite email. The CRM tab's own flow is untouched —
+ * this is a second door into the same room, not a new room. */
+export async function invitePartnerToPortalAction(partnerId: string): Promise<ActionResult> {
+  const role = await requireMarketplaceRole();
+  if (!hasCapability(role, "sendInvites")) return { ok: false, error: "Not permitted" };
+
+  try {
+    const partner = await getPartnerById(partnerId);
+    if (!partner) return { ok: false, error: "Partner not found." };
+    if (!partner.email) return { ok: false, error: "This partner has no email on file — add one in Overview first." };
+
+    let referralCompanyId = partner.crmReferralCompanyId;
+    if (!referralCompanyId) {
+      const company = await createReferralCompany({
+        name: partner.companyName,
+        type: "Marketplace Partner",
+        address: partner.address,
+        city: partner.city,
+        state: partner.state,
+        zip: partner.zip,
+        website: partner.website,
+      });
+      referralCompanyId = company.id;
+    }
+
+    let referralContactId = partner.crmReferralContactId;
+    if (!referralContactId) {
+      const existing = await findReferralContactByEmail(partner.email).catch(() => null);
+      if (existing) {
+        referralContactId = existing.id;
+      } else {
+        const contact = await createReferralContact({
+          name: partner.pocName || partner.companyName,
+          email: partner.email,
+          phone: partner.phone,
+          referralCompanyId,
+          stage: "Active Referral",
+          notes: "Invited to the Referral Partner Portal from the marketplace admin.",
+        });
+        referralContactId = contact.id;
+      }
+    }
+
+    await updatePartner(partnerId, { crmReferralCompanyId: referralCompanyId, crmReferralContactId: referralContactId });
+
+    const user = await currentUser().catch(() => null);
+    const inviterName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "The Team";
+    await sendPartnerPortalInviteEmail({
+      inviterName,
+      partnerName: partner.pocName || partner.companyName,
+      partnerEmail: partner.email,
+    });
+
+    revalidatePath(`/admin/marketplace/partners/${partnerId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Invite failed" };
   }
 }
 

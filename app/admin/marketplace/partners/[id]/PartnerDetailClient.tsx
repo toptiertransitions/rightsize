@@ -15,6 +15,7 @@ import {
   updateListingAttributesAction,
   moveListingStatusAction,
   updateReferralTermsAction,
+  invitePartnerToPortalAction,
 } from "../../actions";
 import { FieldInput } from "../../FieldInput";
 
@@ -463,26 +464,56 @@ function ActivityTab({
 // ─── Portal Access ───────────────────────────────────────────────────────────
 
 function PortalAccessTab({ partner, legacyPortalLinked }: { partner: MarketplacePartner; legacyPortalLinked: boolean }) {
-  if (!partner.crmReferralCompanyId && !partner.localVendorId) {
-    return (
-      <p className="text-sm text-gray-500 max-w-2xl">
-        No portal access, and none needed — this partner doesn't require a login unless it's also a CRM referral partner or a Disposition Network vendor.
-      </p>
-    );
+  const [inviting, setInviting] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function invite() {
+    setInviting(true);
+    setMsg("");
+    const result = await invitePartnerToPortalAction(partner.id);
+    setInviting(false);
+    setMsg(result.ok ? "Invite sent." : result.error);
   }
+
   return (
     <div className="max-w-2xl space-y-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-200">Referral Partner Portal</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {partner.crmReferralContactId
+                ? "Invited — can log in to see referred projects' calendar and files."
+                : "Not invited yet. There's no self-service way to join — only staff can invite a partner here."}
+            </p>
+          </div>
+          {!partner.crmReferralContactId && (
+            <button
+              onClick={invite}
+              disabled={inviting || !partner.email}
+              title={!partner.email ? "Add an email in Overview first" : undefined}
+              className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 whitespace-nowrap"
+            >
+              {inviting ? "Sending…" : "Invite to Partner Portal"}
+            </button>
+          )}
+        </div>
+        {msg && <p className="text-xs text-gray-500 mt-2">{msg}</p>}
+      </div>
+
       {partner.crmReferralCompanyId && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-          <p className="text-sm text-gray-200">Linked CRM referral partner</p>
-          <p className="text-xs text-gray-500 mt-0.5">Portal login (if any) is managed by that company's CRM referral-contact records, not here.</p>
+          <p className="text-sm text-gray-200">Linked CRM referral company</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Projects referred to this partner (including from the marketplace) show up in their portal calendar through this link.
+          </p>
         </div>
       )}
       {partner.localVendorId && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
           <p className="text-sm text-gray-200">Linked Disposition Network vendor</p>
           <p className="text-xs text-gray-500 mt-0.5">
-            {legacyPortalLinked ? "This vendor has an active disposition-side portal login." : "No disposition-side portal login set up yet."}
+            {legacyPortalLinked ? "This vendor also has an active disposition-side portal login." : "No disposition-side portal login set up yet."}
           </p>
         </div>
       )}

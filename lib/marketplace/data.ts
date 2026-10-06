@@ -177,6 +177,7 @@ function mapPartner(rec: AirtableRec): MarketplacePartner {
     lifecycleStatus: (str(f["LifecycleStatus"]) || "Prospect") as MarketplacePartner["lifecycleStatus"],
     source: (str(f["Source"]) || "Manual") as MarketplacePartner["source"],
     crmReferralCompanyId: linkedId(f["CrmReferralCompanyId"]) || undefined,
+    crmReferralContactId: linkedId(f["CrmReferralContactId"]) || undefined,
     localVendorId: linkedId(f["LocalVendorId"]) || undefined,
     createdAt: str(f["CreatedAt"]),
     updatedAt: str(f["UpdatedAt"]),
@@ -246,6 +247,7 @@ export async function createPartner(data: CreatePartnerData): Promise<Marketplac
 }
 
 interface UpdatePartnerData extends Partial<Omit<CreatePartnerData, "crmReferralCompanyId" | "localVendorId">> {
+  crmReferralContactId?: string | null;
   logo?: string;
   shortBio?: string;
   aboutUs?: string;
@@ -289,6 +291,7 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
   if (data.lifecycleStatus !== undefined) fields["LifecycleStatus"] = data.lifecycleStatus;
   if (data.source !== undefined) fields["Source"] = data.source;
   if (data.crmReferralCompanyId !== undefined) fields["CrmReferralCompanyId"] = data.crmReferralCompanyId ? [data.crmReferralCompanyId] : [];
+  if (data.crmReferralContactId !== undefined) fields["CrmReferralContactId"] = data.crmReferralContactId ? [data.crmReferralContactId] : [];
   if (data.localVendorId !== undefined) fields["LocalVendorId"] = data.localVendorId ? [data.localVendorId] : [];
   if (data.approvedAt !== undefined) fields["ApprovedAt"] = data.approvedAt;
   if (data.approvedBy !== undefined) fields["ApprovedBy"] = data.approvedBy;
