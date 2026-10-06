@@ -173,6 +173,20 @@ function isValidUrl(url: string | null | undefined): url is string {
   return typeof url === "string" && (url.startsWith("https://") || url.startsWith("http://"));
 }
 
+// Shrink Cloudinary photo URLs before @react-pdf/renderer downloads and
+// decodes them — same pattern as lib/estate-pickup-pdf.tsx's
+// compressPhotoUrl. Without this, a vendor file with many items × several
+// full-resolution photos each decodes all of them into memory at once,
+// which is exactly what was OOM-killing this route in production (see
+// runtime error: "instance was killed because it ran out of available
+// memory"). c_limit (not c_fill) only caps the longest side and never
+// crops, since these render with objectFit: "contain" at up to 360pt —
+// 720px covers that at 2x for print-quality sharpness with room to spare.
+function compressPhotoUrl(url: string): string {
+  if (!url.includes("cloudinary.com")) return url;
+  return url.replace(/\/upload\//, "/upload/w_720,c_limit,q_auto:good,f_jpg/");
+}
+
 function bestDescription(item: Item): string {
   return (
     item.listingDescriptionEbay?.trim() ||
@@ -217,7 +231,7 @@ function PhotoGrid({ photos }: { photos: Photo[] }) {
     return (
       <View style={styles.singlePhotoWrap}>
         <View style={[styles.photoSlot, { width: size, height: size }]}>
-          <Image src={photos[0].url} style={[styles.photo, { width: size, height: size }]} />
+          <Image src={compressPhotoUrl(photos[0].url)} style={[styles.photo, { width: size, height: size }]} />
         </View>
       </View>
     );
@@ -243,7 +257,7 @@ function PhotoGrid({ photos }: { photos: Photo[] }) {
                 pi > 0 ? { marginLeft: PHOTO_GAP } : {},
               ]}
             >
-              <Image src={p.url} style={[styles.photo, { width: size, height: size }]} />
+              <Image src={compressPhotoUrl(p.url)} style={[styles.photo, { width: size, height: size }]} />
             </View>
           ))}
         </View>

@@ -1,5 +1,10 @@
 {
   "framework": "nextjs",
+  "functions": {
+    "app/api/vendor-file/route.ts": {
+      "memory": 3009
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/integration-health",
