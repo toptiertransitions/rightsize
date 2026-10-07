@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
-import { getInvoiceById, getTenantById, getInvoiceSettings } from "@/lib/airtable";
+import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
+import { getInvoiceById, getTenantById, getInvoiceSettings, getUserRoleForTenant, getSystemRole } from "@/lib/airtable";
 import { PaymentFlow } from "./PaymentFlow";
 
 interface Props {
@@ -20,6 +22,15 @@ export default async function PayPage({ params }: Props) {
     getTenantById(invoice.tenantId).catch(() => null),
     getInvoiceSettings().catch(() => null),
   ]);
+
+  // Signed-in users who can see this project's Invoices tab get an × back
+  // to it. Someone paying from the invoice email without an account (the
+  // page is public) doesn't see it, since Invoices would just ask them to sign in.
+  const { userId } = await auth();
+  const canReturnToInvoices = userId
+    ? !!(await getUserRoleForTenant(userId, invoice.tenantId).catch(() => null)) ||
+      !!(await getSystemRole(userId).catch(() => null))
+    : false;
 
   const isPaid = invoice.status === "Paid";
   const companyName = settings?.companyName || "Top Tier Transitions";
@@ -43,7 +54,18 @@ export default async function PayPage({ params }: Props) {
     <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
-        <div className="bg-[#2E6B4F] rounded-t-2xl px-8 py-6">
+        <div className="relative bg-[#2E6B4F] rounded-t-2xl px-8 py-6">
+          {canReturnToInvoices && (
+            <Link
+              href={`/invoices?tenantId=${encodeURIComponent(invoice.tenantId)}`}
+              aria-label="Close and go back to Invoices"
+              className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center text-[#F5F0E8]/80 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </Link>
+          )}
           {settings?.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img

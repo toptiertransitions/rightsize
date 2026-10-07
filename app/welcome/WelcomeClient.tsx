@@ -5,11 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { PartyPopper, Home, CalendarDays, Camera, Handshake } from "lucide-react";
 import { ProgressBar, BackLink, BottomCTA } from "@/components/onboarding/shared";
-import { Step3Timeline, step3Valid } from "@/app/get-started/steps/Step3Timeline";
-import { Step4Destination, step4Valid } from "@/app/get-started/steps/Step4Destination";
 import { OnboardingTour, type Slide } from "@/app/get-started/steps/OnboardingTour";
 import { emptyWizardData, type WizardData } from "@/app/get-started/wizardTypes";
-import { saveWelcomeName, saveWelcomeTimeline, saveWelcomeDestination, finishWelcome, getWelcomeContext } from "./actions";
+import { saveWelcomeName, finishWelcome, getWelcomeContext } from "./actions";
 
 // First-time TTT clients land here straight from sign-up (or from accepting
 // an invite while signed in). The page is public in middleware on purpose:
@@ -18,8 +16,10 @@ import { saveWelcomeName, saveWelcomeTimeline, saveWelcomeDestination, finishWel
 // through the sign-in page for a split second. We wait for Clerk on the
 // client instead, behind one steady "Setting up your account" screen.
 
-const TOTAL_STEPS = 3; // name, timeline, destination; step 4 is the tour
-const TOUR_STEP = 4;
+// TTT already knows the client's timeline and destination (those questions
+// stay in self-serve onboarding), so this is just their name, then the tour.
+const TOTAL_STEPS = 2; // name, then the tour
+const TOUR_STEP = 2;
 
 type Phase = "connecting" | "wizard" | "error";
 
@@ -148,11 +148,7 @@ export function WelcomeClient() {
     })();
   }, [isLoaded, isSignedIn, token, tenantId, router, enterWizard]);
 
-  const canContinue =
-    step === 1 ? data.firstName.trim().length > 0 && data.lastName.trim().length > 0
-    : step === 2 ? step3Valid(data)
-    : step === 3 ? step4Valid(data)
-    : false;
+  const canContinue = step === 1 && data.firstName.trim().length > 0 && data.lastName.trim().length > 0;
 
   async function handleContinue() {
     if (!tenantId) return;
@@ -161,17 +157,6 @@ export function WelcomeClient() {
     try {
       if (step === 1) {
         await saveWelcomeName(tenantId, { firstName: data.firstName.trim(), lastName: data.lastName.trim() });
-        setStep(2);
-      } else if (step === 2) {
-        await saveWelcomeTimeline(tenantId, { timelineType: data.timelineType!, timelineValue: data.timelineValue });
-        setStep(3);
-      } else if (step === 3) {
-        await saveWelcomeDestination(tenantId, {
-          destinationType: data.destinationType!,
-          destinationZip: data.destinationZip,
-          destinationCommunity: data.destinationCommunity,
-          destinationCommunityOther: data.destinationCommunityOther,
-        });
         setStep(TOUR_STEP);
       }
     } catch (e) {
@@ -236,7 +221,7 @@ export function WelcomeClient() {
           className="flex h-full w-full transition-transform duration-300 ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(-${(step - 1) * 100}%)` }}
         >
-          {[1, 2, 3, 4].map(n => (
+          {[1, 2].map(n => (
             <div key={n} className="w-full h-full shrink-0 overflow-y-auto px-6 pb-4">
               <div className="max-w-md mx-auto pt-2">
                 {n === 1 && (
@@ -256,9 +241,7 @@ export function WelcomeClient() {
                     </div>
                   </div>
                 )}
-                {n === 2 && <Step3Timeline data={data} update={update} />}
-                {n === 3 && <Step4Destination data={data} update={update} />}
-                {n === 4 && step === TOUR_STEP && (
+                {n === TOUR_STEP && step === TOUR_STEP && (
                   <OnboardingTour
                     firstName={data.firstName}
                     summary=""
