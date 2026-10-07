@@ -17,6 +17,7 @@ import { NativeFileLink } from "@/components/shared/NativeFileLink";
 import type { Item, ItemPhoto, Room, Tenant, ItemCondition, SizeClass, FragilityLevel, ItemUseType, PrimaryRoute, ItemStatus, LocalVendor, StaffMember } from "@/lib/types";
 import { VendorFileModal } from "./VendorFileModal";
 import { PhotoLightbox } from "./PhotoLightbox";
+import { MaxsoldExportModal } from "./MaxsoldExportModal";
 
 interface ItemGridProps {
   items: Item[];
@@ -1363,6 +1364,35 @@ function BoxIdBadge({ item, onSaved }: { item: Item; onSaved: (updated: Item) =>
   );
 }
 
+// ─── Bulk action button ───────────────────────────────────────────────────────
+// One consistent size/shape for every action in the table's bulk bar.
+
+function BulkActionButton({ onClick, disabled, icon, variant = "default", children }: {
+  onClick: () => void;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  variant?: "primary" | "default";
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium whitespace-nowrap shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+        variant === "primary"
+          ? "bg-forest-600 text-white hover:bg-forest-700"
+          : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300"
+      }`}
+    >
+      <svg className={`w-4 h-4 shrink-0 ${variant === "primary" ? "text-white" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {icon}
+      </svg>
+      {children}
+    </button>
+  );
+}
+
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
 export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, initialSearch = "" }: ItemGridProps) {
@@ -1380,6 +1410,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkApproveResult, setBulkApproveResult] = useState<{ approved: number; skipped: number; skippedByStatus: Record<string, number> } | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
+  const [maxsoldOpen, setMaxsoldOpen] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
@@ -2070,6 +2101,22 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         }}
       />
 
+      {/* MaxSold export */}
+      {maxsoldOpen && (
+        <MaxsoldExportModal
+          items={[
+            ...sorted.filter(i => selected.has(i.id)),
+            ...items.filter(i => selected.has(i.id) && !sorted.some(s => s.id === i.id)),
+          ]}
+          fileBase={
+            multiTenant
+              ? "catalog"
+              : tenantMap.get(tenantId ?? "") ?? allTenants?.find(t => t.id === tenantId)?.name ?? "catalog"
+          }
+          onClose={() => setMaxsoldOpen(false)}
+        />
+      )}
+
       {/* Bulk Assign Estate Sale Modal */}
       {estateSaleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -2630,113 +2677,75 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         <>
         {/* Bulk action bar */}
         {selected.size > 0 && (
-          <div className="mb-3 flex items-center gap-3 px-4 py-2.5 bg-forest-50 border border-forest-200 rounded-xl">
-            <span className="text-sm font-medium text-forest-800">{selected.size} item{selected.size !== 1 ? "s" : ""} selected</span>
-            <button
-              onClick={handleBulkApprove}
-              disabled={bulkLoading}
-              className="h-8 px-3 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors"
-            >
-              {bulkLoading ? "Approving…" : "Approve Route"}
-            </button>
-            {isTTTUser && (
+          <div className="mb-3 flex flex-col lg:flex-row lg:items-center gap-2.5 rounded-xl border border-forest-200 bg-forest-50/70 px-3 py-2.5">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="inline-flex items-center h-7 px-2.5 rounded-full bg-forest-600 text-white text-xs font-semibold tabular-nums">
+                {selected.size} selected
+              </span>
               <button
-                onClick={handleBulkList}
-                disabled={listLoading}
-                className="h-8 px-3 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                onClick={() => setSelected(new Set())}
+                className="h-7 px-2 rounded-md text-xs font-medium text-forest-700 hover:bg-forest-100 transition-colors"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                {listLoading ? "Listing…" : "List"}
+                Clear
               </button>
-            )}
-            {isTTTUser && (
-              <button
-                onClick={handleBulkAI}
-                disabled={bulkAILoading}
-                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                AI
-              </button>
-            )}
-            {canEdit && (
-              <button
-                onClick={() => { setRouteModalValue(""); setRouteModalOpen(true); }}
-                disabled={routeLoading}
-                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-                Route
-              </button>
-            )}
-            {localVendors && localVendors.length > 0 && (
-              <button
-                onClick={() => setVendorFileOpen(true)}
-                disabled={bulkLoading}
-                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Send Items to Vendor
-              </button>
-            )}
-            <button
-              onClick={handleMoversPDF}
-              disabled={pdfLoading}
-              className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              {pdfLoading ? "Generating…" : "Create Mover PDF"}
-            </button>
-            {isTTTUser && [...selected].some(id => items.find(i => i.id === id)?.primaryRoute === "ProFoundFinds Consignment") && (
-              <button
-                onClick={() => setShowLabelModal(true)}
-                disabled={labelLoading}
-                className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5l4.586 4.586a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-4-4a2 2 0 010-2.828L7 3z" />
-                </svg>
-                Print Labels
-              </button>
-            )}
-            {isTTTUser && (
-              <button
-                onClick={openEstateSaleModal}
-                disabled={bulkLoading}
-                className="h-8 px-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-sm font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-                Assign Estate Sale
-              </button>
-            )}
-            <button
-              onClick={handleExport}
-              disabled={exportLoading}
-              className="h-8 px-3 rounded-lg bg-white border border-forest-300 text-forest-700 text-sm font-medium hover:bg-forest-50 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              {exportLoading ? "Exporting…" : "Export"}
-            </button>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="h-8 px-3 rounded-lg border border-forest-300 text-forest-700 text-sm hover:bg-forest-100 transition-colors"
-            >
-              Clear
-            </button>
+            </div>
+            <div className="hidden lg:block w-px self-stretch bg-forest-200" />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <BulkActionButton variant="primary" onClick={handleBulkApprove} disabled={bulkLoading}
+                icon={<path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />}>
+                {bulkLoading ? "Approving…" : "Approve Route"}
+              </BulkActionButton>
+              {isTTTUser && (
+                <BulkActionButton onClick={handleBulkList} disabled={listLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />}>
+                  {listLoading ? "Listing…" : "List"}
+                </BulkActionButton>
+              )}
+              {isTTTUser && (
+                <BulkActionButton onClick={handleBulkAI} disabled={bulkAILoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />}>
+                  AI
+                </BulkActionButton>
+              )}
+              {canEdit && (
+                <BulkActionButton onClick={() => { setRouteModalValue(""); setRouteModalOpen(true); }} disabled={routeLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />}>
+                  Route
+                </BulkActionButton>
+              )}
+              {isTTTUser && (
+                <BulkActionButton onClick={openEstateSaleModal} disabled={bulkLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />}>
+                  Assign Estate Sale
+                </BulkActionButton>
+              )}
+              {localVendors && localVendors.length > 0 && (
+                <BulkActionButton onClick={() => setVendorFileOpen(true)} disabled={bulkLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}>
+                  Send Items to Vendor
+                </BulkActionButton>
+              )}
+              {isTTTUser && [...selected].some(id => items.find(i => i.id === id)?.primaryRoute === "ProFoundFinds Consignment") && (
+                <BulkActionButton onClick={() => setShowLabelModal(true)} disabled={labelLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5l4.586 4.586a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-4-4a2 2 0 010-2.828L7 3z" />}>
+                  Print Labels
+                </BulkActionButton>
+              )}
+              <BulkActionButton onClick={handleMoversPDF} disabled={pdfLoading}
+                icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}>
+                {pdfLoading ? "Generating…" : "Create Mover PDF"}
+              </BulkActionButton>
+              <BulkActionButton onClick={handleExport} disabled={exportLoading}
+                icon={<path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />}>
+                {exportLoading ? "Exporting…" : "Export"}
+              </BulkActionButton>
+              {isTTTUser && (
+                <BulkActionButton onClick={() => setMaxsoldOpen(true)}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}>
+                  MaxSold
+                </BulkActionButton>
+              )}
+            </div>
           </div>
         )}
 
