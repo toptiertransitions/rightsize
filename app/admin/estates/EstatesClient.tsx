@@ -209,7 +209,7 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
   return (
     <div className="mt-3 border-t border-gray-700 pt-4" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Pickup Announcement — Shopper Blast</p>
+        <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Pickup Announcement — CRM Blast</p>
         <button onClick={onClose} className="text-gray-500 hover:text-white text-xs transition-colors">✕ Close</button>
       </div>
 
@@ -735,7 +735,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
                       </svg>
-                      Shopper Blast
+                      CRM Blast
                     </button>
                     <button
                       onClick={e => handleDownloadCsv(estate.id, e)}
@@ -1042,7 +1042,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 <div>
                   <span className="text-xs text-gray-400 uppercase tracking-wide">Pickup Dates</span>
                   <p className="mt-1.5 text-sm text-gray-400 leading-relaxed">
-                    Online buyers pick up during the sale dates and hours above — that&apos;s the only pickup window. Email Details and Shopper Blast use them automatically.
+                    Online buyers pick up during the sale dates and hours above — that&apos;s the only pickup window. Email Details and CRM Blast use them automatically.
                   </p>
                 </div>
               ) : (
