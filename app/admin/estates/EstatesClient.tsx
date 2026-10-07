@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant, EstateSaleShopper, EstateSaleShopperSource, Item } from "@/lib/types";
 import { BlastComposer } from "./BlastComposer";
+import { withInPersonPickupWindow } from "@/lib/estate-pickup";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
 // Convert 24h "HH:mm" (from <input type="time">) to "H:MM AM/PM" for storage.
@@ -858,7 +859,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 })()}
                 {pickupBlastEstateId === estate.id && (
                   <PickupBlastPanel
-                    estate={estate}
+                    estate={withInPersonPickupWindow(estate)}
                     onClose={() => setPickupBlastEstateId(null)}
                   />
                 )}
@@ -1037,6 +1038,14 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 />
               </Field>
 
+              {form.saleType === "In-Person" ? (
+                <div>
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">Pickup Dates</span>
+                  <p className="mt-1.5 text-sm text-gray-400 leading-relaxed">
+                    Online buyers pick up during the sale dates and hours above — that&apos;s the only pickup window. Email Details and Shopper Blast use them automatically.
+                  </p>
+                </div>
+              ) : (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-gray-400 uppercase tracking-wide">Pickup Dates</span>
@@ -1094,6 +1103,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                   ))}
                 </div>
               </div>
+              )}
 
               <Field label="Pickup Notes">
                 <textarea

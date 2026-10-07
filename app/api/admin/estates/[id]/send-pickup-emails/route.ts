@@ -11,6 +11,7 @@ import {
   getStaffMembers,
 } from "@/lib/airtable";
 import { buildPickupDetailsEmail } from "@/lib/email";
+import { withInPersonPickupWindow } from "@/lib/estate-pickup";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -38,13 +39,15 @@ export async function POST(
     ? new Set(body.excludeEmails.map(e => e.toLowerCase().trim()))
     : null;
 
-  const [estate, buyers, items] = await Promise.all([
+  const [rawEstate, buyers, items] = await Promise.all([
     getEstateById(id).catch(() => null),
     getStorefrontBuyersByEstate(id).catch(() => []),
     getItemsForEstateSale(id).catch(() => []),
   ]);
 
-  if (!estate) return NextResponse.json({ error: "Estate not found" }, { status: 404 });
+  if (!rawEstate) return NextResponse.json({ error: "Estate not found" }, { status: 404 });
+  // In-person sales: pickup is during the sale dates/hours only.
+  const estate = withInPersonPickupWindow(rawEstate);
 
   // ── Test mode: send a preview with dummy items to the requesting admin ──────
   if (testMode) {
