@@ -196,49 +196,50 @@ async function getAccessToken(): Promise<string> {
 // same Cloudinary URL is transloaded again on a listing update.
 const _epsUrlCache = new Map<string, string>();
 
+const EBAY_MEDIA_API_BASE = "https://apim.ebay.com/commerce/media/v1_beta";
+
+// Media API createImageFromUrl: eBay fetches the source URL and returns an
+// i.ebayimg.com EPS URL. Replaces the Trading API's UploadSiteHostedPictures,
+// which eBay decommissioned (Sept 30 – Oct 26, 2026). Uses the same
+// sell.inventory OAuth scope already on our token. POSTs are rate-limited to
+// 50 per 5 seconds per user, so a 429 gets one short retry.
 async function transloadImageToEPS(sourceUrl: string, token: string): Promise<string | null> {
   const cached = _epsUrlCache.get(sourceUrl);
   if (cached) { console.log("[ebay] EPS cache hit:", sourceUrl); return cached; }
   try {
-    // eBay Commerce Media API has no URL-based image upload endpoint.
-    // Use the Trading API's UploadSiteHostedPictures with ExternalPictureURL —
-    // eBay fetches the source URL and returns an i.ebayimg.com EPS URL.
-    const xml = [
-      '<?xml version="1.0" encoding="utf-8"?>',
-      '<UploadSiteHostedPicturesRequest xmlns="urn:ebay:apis:eBLBaseComponents">',
-      `<ExternalPictureURL>${sourceUrl}</ExternalPictureURL>`,
-      '</UploadSiteHostedPicturesRequest>',
-    ].join("");
-
-    const res = await ebayFetch("https://api.ebay.com/ws/api.dll", {
+    const headers = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Accept": "application/json" };
+    const create = () => ebayFetch(`${EBAY_MEDIA_API_BASE}/image/create_image_from_url`, {
       method:  "POST",
-      headers: {
-        "X-EBAY-API-CALL-NAME":           "UploadSiteHostedPictures",
-        "X-EBAY-API-SITEID":              "0",
-        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
-        "X-EBAY-API-IAF-TOKEN":           token,
-        "Content-Type":                   "text/xml",
-      },
-      body: xml,
+      headers,
+      body:    JSON.stringify({ imageUrl: sourceUrl }),
     });
 
+    let res = await create();
+    if (res.status === 429) {
+      await new Promise(r => setTimeout(r, 5000));
+      res = await create();
+    }
+
     const body = await res.text();
-
-    if (!res.ok || body.includes("<Ack>Failure</Ack>")) {
-      const errMsg = body.match(/<LongMessage>([^<]+)<\/LongMessage>/)?.[1] ?? body.slice(0, 200);
-      console.warn("[ebay] UploadSiteHostedPictures failed", res.status, errMsg, sourceUrl);
+    if (!res.ok) {
+      console.warn("[ebay] createImageFromUrl failed", res.status, body.slice(0, 300), sourceUrl);
       return null;
     }
 
-    const match = body.match(/<FullURL>([^<]+)<\/FullURL>/);
-    if (!match) {
-      console.warn("[ebay] UploadSiteHostedPictures: no FullURL in response for", sourceUrl);
-      return null;
+    let epsUrl = (JSON.parse(body || "{}") as { imageUrl?: string }).imageUrl;
+    // The 201 body normally carries imageUrl; if it ever doesn't, the
+    // Location header points at getImage for the same record.
+    if (!epsUrl && res.location) {
+      const getRes = await ebayFetch(res.location, { method: "GET", headers });
+      if (getRes.ok) epsUrl = (await getRes.json() as { imageUrl?: string }).imageUrl;
     }
 
-    const epsUrl = match[1];
+    if (!epsUrl) {
+      console.warn("[ebay] createImageFromUrl: no imageUrl in response for", sourceUrl);
+      return null;
+    }
     if (!epsUrl.includes("ebayimg.com")) {
-      console.warn("[ebay] UploadSiteHostedPictures: URL is not EPS:", epsUrl);
+      console.warn("[ebay] createImageFromUrl: URL is not EPS:", epsUrl);
       return null;
     }
 
