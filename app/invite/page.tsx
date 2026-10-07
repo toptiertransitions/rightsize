@@ -3,9 +3,21 @@ import Link from "next/link";
 import { getTenantById, getLocalVendorById } from "@/lib/airtable";
 import { verifyInviteToken, isVendorInvite } from "@/lib/invites";
 import { AcceptInviteButton } from "./AcceptInviteButton";
+import { GetIosAppPrompt } from "./GetIosAppPrompt";
+import { IOS_APP_STORE_ID } from "@/lib/ios-app";
+import type { Metadata } from "next";
 
 interface PageProps {
   searchParams: Promise<{ token?: string }>;
+}
+
+// Safari's Smart App Banner: shows "Open" when the Rightsize app is installed
+// (passing this invite through to it) and "Get" when it isn't.
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const { token } = await searchParams;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
+  const argument = token ? `, app-argument=${appUrl}/invite?token=${encodeURIComponent(token)}` : "";
+  return { other: { "apple-itunes-app": `app-id=${IOS_APP_STORE_ID}${argument}` } };
 }
 
 export default async function InvitePage({ searchParams }: PageProps) {
@@ -141,6 +153,8 @@ export default async function InvitePage({ searchParams }: PageProps) {
             </p>
           </div>
         )}
+
+        {!userId && <GetIosAppPrompt />}
       </div>
     </div>
   );
