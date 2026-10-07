@@ -29,8 +29,11 @@ export function AcceptInviteButton({ token, tenantId, vendorId }: Props) {
       }
       if (vendorId || data.redirect === "/vendor") {
         router.push("/vendor");
+      } else if (data.needsOnboarding) {
+        // First Rightsize account on a TTT project: welcome onboarding
+        router.replace(`/welcome?tenantId=${encodeURIComponent(data.tenantId ?? tenantId ?? "")}`);
       } else {
-        router.push(`/rooms?tenantId=${tenantId}`);
+        router.replace("/home");
       }
     } catch {
       setError("Something went wrong. Please try again.");

@@ -38,6 +38,10 @@ export default async function InvitePage({ searchParams }: PageProps) {
   const { userId } = await auth();
   // Use a relative path so Clerk doesn't need the domain in its allowed-redirect-URL list
   const returnUrl = `/invite?token=${encodeURIComponent(token)}`;
+  // Project invites finish on /welcome, which waits for the new session on
+  // the client (no sign-in flash), accepts the invite, then runs first-time
+  // onboarding or goes straight Home. Vendor invites keep their own path.
+  const welcomeUrl = `/welcome?token=${encodeURIComponent(token)}`;
   const isInviter = userId === payload.invitedBy;
 
   // ── Vendor invite ──────────────────────────────────────────────────────────
@@ -140,14 +144,14 @@ export default async function InvitePage({ searchParams }: PageProps) {
         ) : (
           <div className="space-y-3">
             <Link
-              href={`/sign-up?redirect_url=${encodeURIComponent(returnUrl)}`}
+              href={`/sign-up?redirect_url=${encodeURIComponent(welcomeUrl)}`}
               className="flex items-center justify-center w-full h-11 px-5 bg-forest-600 text-white rounded-xl font-medium text-sm hover:bg-forest-700 transition-colors"
             >
               Create your account to accept
             </Link>
             <p className="text-center text-xs text-gray-400">
               Already have a Rightsize account?{" "}
-              <Link href={`/sign-in?redirect_url=${encodeURIComponent(returnUrl)}`} className="text-forest-700 font-medium hover:underline">
+              <Link href={`/sign-in?redirect_url=${encodeURIComponent(welcomeUrl)}`} className="text-forest-700 font-medium hover:underline">
                 Sign in instead
               </Link>
             </p>

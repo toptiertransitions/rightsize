@@ -471,7 +471,14 @@ export default async function PlanPage({ searchParams }: PageProps) {
         tenantName={tenant.name}
         canEdit={canEdit}
         projectFiles={projectFiles}
-        timeEntries={timeEntries}
+        timeEntries={
+          // Client users don't see travel time, travel mileage, or staff
+          // notes in the Shift Log; stripped here so it never reaches their
+          // browser. Staff, Team Leads, Managers, and Admins keep it all.
+          !sysRole && !isAdmin
+            ? timeEntries.map((e) => ({ ...e, travelMinutes: undefined, travelMiles: undefined, notes: undefined }))
+            : timeEntries
+        }
         isAdmin={isAdmin}
         estimatedHours={tenant.estimatedHours}
         estimatedServiceHours={tenant.estimatedServiceHours}

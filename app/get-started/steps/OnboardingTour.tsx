@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PartyPopper, Home, Camera, CalendarDays, Handshake } from "lucide-react";
 
-interface Slide {
+export interface Slide {
   icon: React.ReactNode;
   title: string;
   body: string;
@@ -52,8 +52,14 @@ function buildSlides(firstName: string, summary: string): Slide[] {
 
 // Large text, plain language, click-through (never auto-advancing) — this
 // flow serves self-service senior clients as much as anyone.
-export function OnboardingTour({ firstName, summary, onFinish }: { firstName: string; summary: string; onFinish: () => void }) {
-  const slides = useMemo(() => buildSlides(firstName, summary), [firstName, summary]);
+export function OnboardingTour({ firstName, summary, onFinish, slides: customSlides }: {
+  firstName: string;
+  summary: string;
+  onFinish: () => void;
+  /** Replaces the self-serve slides (used by the TTT client welcome flow). */
+  slides?: Slide[];
+}) {
+  const slides = useMemo(() => customSlides ?? buildSlides(firstName, summary), [customSlides, firstName, summary]);
   const [step, setStep] = useState(0);
   const isLast = step === slides.length - 1;
 

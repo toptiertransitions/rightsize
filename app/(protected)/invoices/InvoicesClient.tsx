@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Tenant, Invoice, InvoiceSettings, Service, Contract, TimeEntry } from "@/lib/types";
 import { InvoiceCreatorModal } from "./InvoiceCreatorModal";
+import { NativeFileLink } from "@/components/shared/NativeFileLink";
 
 interface Props {
   tenant: Tenant;
@@ -122,14 +123,25 @@ function InvoiceCard({
           {/* Right: amount + actions */}
           <div className="flex flex-col items-end gap-2 shrink-0">
             <p className="text-2xl font-bold text-gray-900">{fmt(invoice.amount)}</p>
-            <a
+            {(invoice.status === "Unpaid" || invoice.status === "PartiallyPaid") && (
+              // Same payment page the invoice email links to
+              <a
+                href={`/pay/${invoice.id}`}
+                className="text-sm font-semibold text-white bg-forest-600 hover:bg-forest-700 rounded-lg px-4 py-2 transition-colors"
+              >
+                Pay Now
+              </a>
+            )}
+            <NativeFileLink
               href={`/api/invoices/${invoice.id}/pdf`}
+              download={`${invoice.invoiceNumber || "Invoice"}.pdf`}
+              authenticated
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-medium text-forest-600 hover:text-forest-800 border border-forest-200 rounded-lg px-3 py-1.5 hover:bg-forest-50 transition-colors"
             >
               Download PDF
-            </a>
+            </NativeFileLink>
           </div>
         </div>
 
@@ -271,8 +283,10 @@ function AgreementCard({ contract }: { contract: Contract }) {
             <p className="text-xl font-bold text-gray-900">{fmt(contract.totalCost)}</p>
             <div className="flex items-center gap-2">
               {isSigned && (
-                <a
+                <NativeFileLink
                   href={`/api/contracts/${contract.id}/pdf`}
+                  download="Service-Agreement.pdf"
+                  authenticated
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs font-medium text-forest-600 hover:text-forest-800 border border-forest-200 rounded-lg px-3 py-1.5 hover:bg-forest-50 transition-colors flex items-center gap-1"
@@ -281,7 +295,7 @@ function AgreementCard({ contract }: { contract: Contract }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                   </svg>
                   Download PDF
-                </a>
+                </NativeFileLink>
               )}
               {isPending && (
                 <a

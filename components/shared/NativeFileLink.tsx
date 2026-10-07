@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { isNativeApp, openInBrowser } from "@/lib/native";
+import { isNativeApp, openInBrowser, downloadOrShareBlob } from "@/lib/native";
 
 interface NativeFileLinkProps {
   href: string;
@@ -12,6 +12,12 @@ interface NativeFileLinkProps {
   rel?: string;
   title?: string;
   onClick?: () => void;
+  /** For files served by our own API behind the login (invoice/contract
+   * PDFs). The in-app browser sheet has no Rightsize session, so it lands on
+   * a sign-in page; instead fetch inside the app (session cookies included)
+   * and hand the file to the native Share sheet (Save to Files, Print…).
+   * Pass the file name via `download`. Web behavior is unchanged. */
+  authenticated?: boolean;
 }
 
 /**
@@ -29,8 +35,9 @@ interface NativeFileLinkProps {
  * server-rendered HTML, then switches to the native button variant after
  * mount if actually running in the app — avoids a hydration mismatch.
  */
-export function NativeFileLink({ href, download, children, className, target, rel, title, onClick }: NativeFileLinkProps) {
+export function NativeFileLink({ href, download, children, className, target, rel, title, onClick, authenticated }: NativeFileLinkProps) {
   const [native, setNative] = useState(false);
+  const [busy, setBusy] = useState(false);
   useEffect(() => { setNative(isNativeApp()); }, []);
 
   if (!native) {
@@ -46,9 +53,24 @@ export function NativeFileLink({ href, download, children, className, target, re
       type="button"
       className={className}
       title={title}
+      disabled={busy}
       onClick={async () => {
         onClick?.();
-        await openInBrowser(href);
+        if (!authenticated) {
+          await openInBrowser(href);
+          return;
+        }
+        setBusy(true);
+        try {
+          const res = await fetch(href, { credentials: "include" });
+          if (!res.ok) throw new Error(String(res.status));
+          const fromHeader = res.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/)?.[1];
+          await downloadOrShareBlob(await res.blob(), download || fromHeader || "document.pdf");
+        } catch {
+          alert("Couldn't download this file. Please try again.");
+        } finally {
+          setBusy(false);
+        }
       }}
     >
       {children}

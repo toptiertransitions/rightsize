@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorById, updateLocalVendor, upsertUser, getStaffMembers } from "@/lib/airtable";
+import { getTenantById, createMembership, getUserRoleForTenant, getLocalVendorById, updateLocalVendor, upsertUser, getStaffMembers, getSystemRole, getMembershipsForUser } from "@/lib/airtable";
 import { verifyInviteToken, isVendorInvite } from "@/lib/invites";
 import { Resend } from "resend";
 import { buildNewUserAdminEmail } from "@/lib/email";
@@ -93,15 +93,37 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ success: true, vendorId: data.vendorId, redirect: "/vendor" });
   }
 
-  // Check if already a member
-  const existingRole = await getUserRoleForTenant(userId, data.tenantId);
-  if (existingRole) {
-    // Already a member — just redirect them
-    return NextResponse.json({ alreadyMember: true, tenantId: data.tenantId });
+  // The person who sent the invite can't accept it as themselves (the
+  // invite page shows them a "sign out first" notice; this enforces it for
+  // every path, including /welcome).
+  if (data.invitedBy === userId) {
+    return NextResponse.json({ error: "You sent this invite. Sign out and open the link as the client." }, { status: 400 });
   }
 
   const clerk = await clerkClient();
   const clerkUser = await clerk.users.getUser(userId).catch(() => null);
+
+  // First-time TTT clients (new to Rightsize, not staff) get the welcome
+  // onboarding; anyone else goes straight to Home. Counted before this
+  // membership is added; an already-member retry counts its own project.
+  const [inviteTenant, sysRole, memberships] = await Promise.all([
+    getTenantById(data.tenantId).catch(() => null),
+    getSystemRole(userId).catch(() => null),
+    getMembershipsForUser(userId).catch(() => []),
+  ]);
+  const otherProjects = memberships.filter((m) => m.tenantId !== data.tenantId).length;
+  const needsOnboarding =
+    inviteTenant?.isTTT === true &&
+    !sysRole &&
+    otherProjects === 0 &&
+    clerkUser?.publicMetadata?.tttOnboardingDone !== true;
+
+  // Check if already a member
+  const existingRole = await getUserRoleForTenant(userId, data.tenantId);
+  if (existingRole) {
+    // Already a member — just redirect them
+    return NextResponse.json({ alreadyMember: true, tenantId: data.tenantId, needsOnboarding });
+  }
   const primaryEmailId = clerkUser?.primaryEmailAddressId;
   const email = clerkUser?.emailAddresses?.find(e => e.id === primaryEmailId)?.emailAddress
     ?? clerkUser?.emailAddresses?.[0]?.emailAddress ?? "";
@@ -116,7 +138,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   // This fires after the membership exists, so it always has complete project context.
   notifyAdminsInviteAccepted(userId, data.tenantId, data.role).catch(() => {});
 
-  return NextResponse.json({ success: true, tenantId: data.tenantId });
+  return NextResponse.json({ success: true, tenantId: data.tenantId, needsOnboarding });
 }
 
 // ─── Admin notification on invite acceptance ──────────────────────────────────

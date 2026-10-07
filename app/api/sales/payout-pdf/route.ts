@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole } from "@/lib/airtable";
+import { getSystemRole, getUserRoleForTenant } from "@/lib/airtable";
 import { createProjectFile } from "@/lib/airtable";
 import { uploadFile } from "@/lib/cloudinary";
 import { renderPayoutPDF } from "@/lib/payout-pdf";
@@ -17,11 +17,19 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId).catch(() => null);
-  if (!sysRole || !["TTTManager", "TTTAdmin"].includes(sysRole)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const isPayoutManager = !!sysRole && ["TTTManager", "TTTAdmin"].includes(sysRole);
 
   const body = await req.json();
+
+  // Client users of the project may view/download their own payout PDF from
+  // the Sales page's Proof of Payment section (viewOnly), never send it.
+  if (!isPayoutManager) {
+    const tenantRole = body?.viewOnly === true && typeof body?.tenantId === "string"
+      ? await getUserRoleForTenant(userId, body.tenantId).catch(() => null)
+      : null;
+    if (!tenantRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    body.sendEmail = false;
+  }
   const {
     tenantId,
     clientName,
