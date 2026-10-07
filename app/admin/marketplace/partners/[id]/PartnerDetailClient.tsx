@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type {
   MarketplacePartner,
   MarketplaceCategory,
@@ -20,6 +20,7 @@ import {
   invitePartnerToPortalAction,
 } from "../../actions";
 import { FieldInput } from "../../FieldInput";
+import { IL_COUNTY_OPTIONS, isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
 
 interface LegacyReview { score: number; comment: string; date: string }
 
@@ -254,22 +255,58 @@ function ListingEditor({ listing, category }: { listing: MarketplaceListing; cat
 }
 
 // ─── Service Area ──────────────────────────────────────────────────────────
-// Simple structured editor for now (comma-separated zip entry + statewide/
-// nationwide toggles) rather than the full Leaflet county-picker the spec
-// envisions — that map component is a substantial lift on its own and isn't
-// needed to unblock the rest of Phase 3; flagged as a deliberate fast-follow.
+// Illinois county picker + additional ZIPs + statewide/nationwide toggles.
+// Counties expand to their ZIPs on save (updatePartnerServiceAreaAction), so
+// matching — which only reads serviceArea.zips — needs no changes. The
+// "additional ZIPs" box shows only the ZIPs not already covered by a picked
+// county, so removing a county cleanly removes its ZIPs on the next save.
+
+function parseZips(text: string): string[] {
+  return text.split(/[,\s]+/).map((z) => z.trim()).filter(Boolean);
+}
 
 function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
-  const [zipsText, setZipsText] = useState(partner.serviceArea.zips.join(", "));
+  const [counties, setCounties] = useState<string[]>(() => partner.serviceArea.counties.filter(isKnownCounty));
+  const [zipsText, setZipsText] = useState(() => {
+    const fromCounties = new Set(zipsForCounties(partner.serviceArea.counties));
+    return partner.serviceArea.zips.filter((z) => !fromCounties.has(z)).join(", ");
+  });
+  const [countyQuery, setCountyQuery] = useState("");
   const [statewide, setStatewide] = useState(partner.serviceArea.statewide);
   const [nationwide, setNationwide] = useState(partner.serviceArea.nationwide);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const [radiusZip, setRadiusZip] = useState("");
   const [radiusMiles, setRadiusMiles] = useState("");
   const [radiusLoading, setRadiusLoading] = useState(false);
   const [radiusMsg, setRadiusMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const countyZips = useMemo(() => zipsForCounties(counties), [counties]);
+  const extraZips = useMemo(() => {
+    const covered = new Set(countyZips);
+    return [...new Set(parseZips(zipsText))].filter((z) => !covered.has(z));
+  }, [zipsText, countyZips]);
+  const totalZips = countyZips.length + extraZips.length;
+
+  const countyMatches = useMemo(() => {
+    const q = countyQuery.trim().toLowerCase();
+    if (!q) return [];
+    return IL_COUNTY_OPTIONS.filter((c) => !counties.includes(c.key) && c.name.toLowerCase().startsWith(q))
+      .concat(IL_COUNTY_OPTIONS.filter((c) => !counties.includes(c.key) && !c.name.toLowerCase().startsWith(q) && c.name.toLowerCase().includes(q)))
+      .slice(0, 8);
+  }, [countyQuery, counties]);
+
+  function addCounty(key: string) {
+    setCounties((prev) => (prev.includes(key) ? prev : [...prev, key].sort()));
+    setCountyQuery("");
+    setMsg(null);
+  }
+
+  function removeCounty(key: string) {
+    setCounties((prev) => prev.filter((c) => c !== key));
+    setMsg(null);
+  }
 
   async function addZipsInRadius() {
     setRadiusLoading(true);
@@ -281,7 +318,7 @@ function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
       setRadiusMsg({ text: result.error, ok: false });
       return;
     }
-    const existing = new Set(zipsText.split(/[,\s]+/).map((z) => z.trim()).filter(Boolean));
+    const existing = new Set(parseZips(zipsText));
     const added = result.data!.zips.filter((z) => !existing.has(z));
     for (const z of added) existing.add(z);
     setZipsText([...existing].sort().join(", "));
@@ -290,19 +327,83 @@ function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
 
   async function save() {
     setSaving(true);
-    setMsg("");
-    const zips = zipsText.split(/[,\s]+/).map((z) => z.trim()).filter(Boolean);
-    const result = await updatePartnerServiceAreaAction(partner.id, { zips, counties: partner.serviceArea.counties, statewide, nationwide });
+    setMsg(null);
+    const result = await updatePartnerServiceAreaAction(partner.id, { zips: extraZips, counties, statewide, nationwide });
     setSaving(false);
-    setMsg(result.ok ? "Saved." : result.error);
+    setMsg(result.ok
+      ? { text: `Saved — matches clients in ${totalZips.toLocaleString()} ZIP code${totalZips === 1 ? "" : "s"}.`, ok: true }
+      : { text: result.error, ok: false });
   }
 
   return (
-    <div className="max-w-2xl space-y-4">
-      <p className="text-xs text-gray-500">
-        Full map-based county picker is a planned fast-follow — for now, zips are entered directly, with an
-        optional zip+radius shortcut to fill in a batch at once.
-      </p>
+    <div className="max-w-2xl space-y-5">
+      {/* Counties */}
+      <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4 space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor="county-search" className="text-sm font-medium text-gray-200">Illinois counties served</label>
+          {counties.length > 0 && (
+            <span className="text-xs text-gray-500">{counties.length} count{counties.length === 1 ? "y" : "ies"} · {countyZips.length.toLocaleString()} ZIPs</span>
+          )}
+        </div>
+        <div className="relative">
+          <input
+            id="county-search"
+            type="text"
+            value={countyQuery}
+            onChange={(e) => setCountyQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && countyMatches[0]) { e.preventDefault(); addCounty(countyMatches[0].key); }
+              if (e.key === "Escape") setCountyQuery("");
+            }}
+            placeholder="Type a county — e.g. Cook, DuPage, Lake"
+            autoComplete="off"
+            className="w-full px-3 py-2 rounded-xl border border-gray-700 bg-gray-900 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-forest-500/30"
+          />
+          {countyMatches.length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full rounded-xl border border-gray-700 bg-gray-900 shadow-xl overflow-hidden divide-y divide-gray-800">
+              {countyMatches.map((c) => (
+                <li key={c.key}>
+                  <button
+                    type="button"
+                    onClick={() => addCounty(c.key)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800"
+                  >
+                    <span>{c.name} County</span>
+                    <span className="text-xs text-gray-500">{c.zipCount} ZIPs</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {countyQuery.trim() && countyMatches.length === 0 && (
+            <p className="mt-1.5 text-xs text-gray-500">No Illinois county matches &ldquo;{countyQuery}&rdquo;{IL_COUNTY_OPTIONS.some((c) => c.name.toLowerCase().includes(countyQuery.trim().toLowerCase())) ? " that isn't already added" : ""}.</p>
+          )}
+        </div>
+        {counties.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {counties.map((key) => {
+              const opt = IL_COUNTY_OPTIONS.find((c) => c.key === key);
+              return (
+                <span key={key} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-forest-900/50 border border-forest-700 text-xs text-forest-200">
+                  {opt?.name ?? key}
+                  <button
+                    type="button"
+                    onClick={() => removeCounty(key)}
+                    aria-label={`Remove ${opt?.name ?? key}`}
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-forest-300 hover:bg-forest-800 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          Each county adds every ZIP code in it (2020 Census). ZIPs that cross a county line are included if at least 10% of the ZIP is in that county.
+        </p>
+      </div>
+
       <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-3 space-y-2">
         <label className="block text-xs font-medium text-gray-400">Add zips within a radius of a home zip</label>
         <div className="flex items-end gap-2">
@@ -340,11 +441,13 @@ function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
         {radiusMsg && <p className={`text-xs ${radiusMsg.ok ? "text-forest-400" : "text-red-400"}`}>{radiusMsg.text}</p>}
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1.5">Zip Codes Served (comma-separated)</label>
+        <label className="block text-xs font-medium text-gray-400 mb-1.5">
+          Additional ZIP codes {counties.length > 0 ? "outside the counties above " : ""}(comma-separated)
+        </label>
         <textarea
           value={zipsText}
-          onChange={(e) => setZipsText(e.target.value)}
-          rows={4}
+          onChange={(e) => { setZipsText(e.target.value); setMsg(null); }}
+          rows={3}
           className="w-full px-3 py-2 rounded-xl border border-gray-700 bg-gray-900 text-sm text-white focus:outline-none focus:ring-2 focus:ring-forest-500/30"
         />
       </div>
@@ -356,11 +459,15 @@ function ServiceAreaTab({ partner }: { partner: MarketplacePartner }) {
         <input type="checkbox" checked={nationwide} onChange={(e) => setNationwide(e.target.checked)} />
         Serves nationwide (only applies when Delivery Mode is Virtual or Both)
       </label>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button onClick={save} disabled={saving} className="h-9 px-4 rounded-xl bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50">
           {saving ? "Saving…" : "Save"}
         </button>
-        {msg && <span className="text-xs text-gray-500">{msg}</span>}
+        <span className="text-xs text-gray-400">
+          Matches clients in <strong className="text-gray-200">{totalZips.toLocaleString()}</strong> ZIP code{totalZips === 1 ? "" : "s"}
+          {counties.length > 0 && extraZips.length > 0 ? ` (${countyZips.length.toLocaleString()} from counties + ${extraZips.length} additional)` : ""}
+        </span>
+        {msg && <span className={`text-xs ${msg.ok ? "text-forest-400" : "text-red-400"}`}>{msg.text}</span>}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import type {
   MarketplaceFeeType,
   MarketplaceReferralPolicy,
 } from "@/lib/marketplace/types";
+import { isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
 
 // Every action here independently re-checks the caller's role — never rely
 // on the layout.tsx gate alone, since a server action is its own callable
@@ -84,8 +85,19 @@ export async function updatePartnerServiceAreaAction(
   serviceArea: { zips: string[]; counties: string[]; statewide: boolean; nationwide: boolean }
 ): Promise<ActionResult> {
   await requireMarketplaceRole();
+  // Selected counties expand to their ZIPs here, at save time — matching
+  // only reads serviceArea.zips, so the client Partners page picks them up
+  // with no other change. `counties` is kept so the editor can show (and
+  // later remove) what was picked.
+  const counties = [...new Set(serviceArea.counties)].filter(isKnownCounty).sort();
+  const manualZips = serviceArea.zips.map((z) => z.trim()).filter(Boolean);
+  const invalid = manualZips.filter((z) => !/^\d{5}$/.test(z));
+  if (invalid.length > 0) {
+    return { ok: false, error: `Not a 5-digit ZIP: ${invalid.slice(0, 5).join(", ")}${invalid.length > 5 ? "…" : ""}` };
+  }
+  const zips = [...new Set([...manualZips, ...zipsForCounties(counties)])].sort();
   try {
-    await updatePartner(partnerId, { serviceArea });
+    await updatePartner(partnerId, { serviceArea: { ...serviceArea, zips, counties } });
     revalidatePath(`/admin/marketplace/partners/${partnerId}`);
     return { ok: true };
   } catch (e) {
