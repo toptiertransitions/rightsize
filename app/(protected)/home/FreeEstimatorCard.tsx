@@ -170,72 +170,60 @@ export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, cur
   return (
     <>
       <div className="mb-2">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Project Estimate</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Your hours by service, used to track progress on your Plan.</p>
-          </div>
-          <Button variant="secondary" onClick={openModal} className="shrink-0">
-            {hasEstimate ? "Update Estimate" : "Set Up Estimate"}
-          </Button>
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Project Estimate</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            A personalized hours estimate for your move, based on your rooms and square footage — tracked on your Plan.
+          </p>
         </div>
 
-        {/* Show saved service breakdown if available */}
-        {initialServiceRows && initialServiceRows.length > 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <tbody>
-                {initialServiceRows.map((row, i) => (
-                  <tr key={row.serviceId} className={i % 2 === 1 ? "bg-gray-50/60" : ""}>
-                    <td className="px-4 py-2.5 text-gray-700">{row.serviceName}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-gray-800 whitespace-nowrap">{row.hours} hrs</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-forest-200 bg-forest-50">
-                  <td className="px-4 py-2.5 font-bold text-forest-700">Total</td>
-                  <td className="px-4 py-2.5 text-right font-bold text-forest-700 whitespace-nowrap">
-                    {(currentEstimatedHours ?? initialServiceRows.reduce((s, r) => s + r.hours, 0))} hrs
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        ) : hasEstimate ? (
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-sm text-gray-500">Saved estimate: <span className="font-semibold text-gray-900">{currentEstimatedHours} hrs total</span></p>
-              <p className="text-xs text-gray-400 mt-1">Open estimator to see the full service breakdown.</p>
-            </CardContent>
-          </Card>
+        {hasEstimate ? (
+          <>
+            {initialServiceRows && initialServiceRows.length > 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {initialServiceRows.map((row, i) => (
+                      <tr key={row.serviceId} className={i % 2 === 1 ? "bg-gray-50/60" : ""}>
+                        <td className="px-4 py-2.5 text-gray-700">{row.serviceName}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-gray-800 whitespace-nowrap">{row.hours} hrs</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-forest-200 bg-forest-50">
+                      <td className="px-4 py-2.5 font-bold text-forest-700">Total</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-forest-700 whitespace-nowrap">
+                        {(currentEstimatedHours ?? initialServiceRows.reduce((s, r) => s + r.hours, 0))} hrs
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-4">
+                  <p className="text-sm text-gray-500">Saved estimate: <span className="font-semibold text-gray-900">{currentEstimatedHours} hrs total</span></p>
+                </CardContent>
+              </Card>
+            )}
+            <p className="text-xs text-gray-400 mt-2">
+              Based on {initialRooms.length} room{initialRooms.length !== 1 ? "s" : ""} · {totalRoomsSqFt.toLocaleString()} SF
+            </p>
+            <Button variant="secondary" size="lg" onClick={openModal} className="w-full mt-3">
+              Edit Rooms &amp; Estimate
+            </Button>
+          </>
         ) : (
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-sm text-gray-500">No estimate yet. Click "Set Up Estimate" to enter your rooms and get a service-by-service breakdown.</p>
+          <Card className="border-dashed">
+            <CardContent className="py-8 text-center">
+              <p className="text-sm text-gray-500 mb-4 max-w-sm mx-auto">
+                Add your rooms and square footage to see how many hours your move will take.
+              </p>
+              <Button variant="primary" size="lg" onClick={openModal}>
+                Estimate My Project
+              </Button>
             </CardContent>
           </Card>
         )}
-
-        {/* Rooms & Square Footage — the input that drives the estimate above,
-            kept right beneath it rather than off on its own page so the
-            connection is obvious. */}
-        <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50/60 p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900">
-                {initialRooms.length} room{initialRooms.length !== 1 ? "s" : ""} · {totalRoomsSqFt.toLocaleString()} SF
-              </p>
-              <p className="text-xs text-gray-500">Rooms & square footage drive the estimate above — keep them current.</p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={openModal} className="shrink-0">
-            Edit Rooms
-          </Button>
-        </div>
       </div>
 
       {/* ── Modal ─────────────────────────────────────────────────────────────── */}
