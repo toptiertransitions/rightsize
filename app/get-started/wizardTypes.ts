@@ -31,6 +31,10 @@ export interface WizardData {
   bedrooms: number;
   bathrooms: number;
   spaces: SpaceOption[];
+
+  howHeard: string; // HOW_HEARD_OPTIONS key, "" until answered
+  howHeardDetail: string; // referrer's name, typed or picked
+  referralPartnerId: string; // marketplace listing id when picked from search
 }
 
 export const DEFAULT_SPACES: SpaceOption[] = [
@@ -68,5 +72,8 @@ export function emptyWizardData(firstName = "", lastName = "", currentZip = ""):
     bedrooms: 1,
     bathrooms: 1,
     spaces: DEFAULT_SPACES.map(s => ({ ...s })),
+    howHeard: "",
+    howHeardDetail: "",
+    referralPartnerId: "",
   };
 }

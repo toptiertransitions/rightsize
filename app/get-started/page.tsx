@@ -24,6 +24,8 @@ function tenantToWizardData(tenant: Tenant, firstName: string, lastName: string,
     homeDensity: tenant.homeDensity ?? null,
     bedrooms: tenant.bedrooms ?? 1,
     bathrooms: tenant.bathrooms ?? 1,
+    howHeard: tenant.howHeard ?? "",
+    howHeardDetail: tenant.howHeardDetail ?? "",
   };
 }
 

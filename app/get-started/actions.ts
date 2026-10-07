@@ -16,9 +16,12 @@ import {
 } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
 import {
-  step1Schema, step2Schema, step3Schema, step4Schema, step5Schema, step6Schema,
-  type Step1Input, type Step2Input, type Step3Input, type Step4Input, type Step5Input, type Step6Input,
+  step1Schema, step2Schema, step3Schema, step4Schema, step5Schema, step6Schema, step7Schema,
+  type Step1Input, type Step2Input, type Step3Input, type Step4Input, type Step5Input, type Step6Input, type Step7Input,
 } from "@/lib/onboarding/schema";
+import { getPartnerDirectory } from "@/lib/partners/queries";
+import { attachReferralPartner, toReferralOption } from "@/lib/partners/referral";
+import { HOW_HEARD_OPTIONS, type ReferralPartnerOption } from "@/lib/partners/referralShared";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 import type { RoomType, Tenant } from "@/lib/types";
@@ -189,8 +192,8 @@ function roomTypeForSpaceKey(key: string): RoomType {
   return map[key] ?? "Other";
 }
 
-// Step 6 saves the layout and creates rooms, advancing to step 7 (the
-// tour/completion screen). Onboarding itself isn't marked complete until
+// Step 6 saves the layout and creates rooms, advancing to step 7 ("How did
+// you hear about us?", then step 8, the tour/completion screen). Onboarding itself isn't marked complete until
 // the user actually finishes or skips the tour (see finishOnboardingTour) —
 // marking it complete here would flip tenant.onboardingComplete to true
 // while the tour is still mounting, and since this is a Server Action that
@@ -232,7 +235,56 @@ export async function completeOnboarding(tenantId: string, input: Step6Input): P
   return { tenantId: tenant.id };
 }
 
-// Called when the user finishes or skips the step-7 tour — the actual end
+// Marketplace listings offered in the step-7 referrer search — only the
+// categories that step asks about (Realtor, Senior Community).
+export async function getSignupReferralOptions(): Promise<ReferralPartnerOption[]> {
+  await requireOnboardingUser();
+  const categories = new Set(HOW_HEARD_OPTIONS.map(o => o.category).filter(Boolean));
+  const directory = await getPartnerDirectory();
+  return directory
+    .filter(p => categories.has(p.category))
+    .map(toReferralOption)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Step 7: "How did you hear about us?" A realtor or senior community
+// referral becomes that client's locked partner for the category (see
+// lib/partners/referral.ts). Attaching is best-effort — a failure there
+// never blocks finishing signup; the answer itself is still saved.
+export async function submitStep7(tenantId: string, input: Step7Input): Promise<void> {
+  const { userId, tenant } = await requireOwnedOnboardingTenant(tenantId);
+  const parsed = step7Schema.parse(input);
+  const option = HOW_HEARD_OPTIONS.find(o => o.key === parsed.howHeard);
+
+  let detail = parsed.howHeardDetail;
+  if (option?.category && (parsed.referralPartnerId || detail)) {
+    try {
+      const directory = await getPartnerDirectory();
+      const listed = parsed.referralPartnerId
+        ? directory.find(p => p.id === parsed.referralPartnerId && p.category === option.category)
+        : undefined;
+      if (listed) detail = listed.vendorName;
+      await attachReferralPartner({
+        tenantId: tenant.id,
+        attachment: { category: option.category, partnerId: listed?.id, name: detail },
+        directory,
+        selectedBy: userId,
+        source: "Signup",
+      });
+    } catch (e) {
+      console.error("Signup referral partner attach failed:", e);
+    }
+  }
+
+  await withRetry(() => updateTenant(tenant.id, {
+    howHeard: parsed.howHeard,
+    howHeardDetail: option?.category ? detail || null : null,
+    onboardingCurrentStep: 8,
+  }));
+  logOnboardingEvent("step_completed", { step: 7, tenantId: tenant.id, howHeard: parsed.howHeard });
+}
+
+// Called when the user finishes or skips the step-8 tour — the actual end
 // of onboarding. Marking onboardingComplete here (rather than in
 // completeOnboarding above) is what lets the tour render and stay mounted
 // long enough to read.

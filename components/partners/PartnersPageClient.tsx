@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
-import { selectPartnerAction, deselectPartnerAction } from "@/app/(protected)/partners/actions";
+import { selectPartnerAction, deselectPartnerAction, removeReferralPartnerAction } from "@/app/(protected)/partners/actions";
 import { SelectedPartnersTray } from "./SelectedPartnersTray";
 import { CategoryChipBar } from "./CategoryChipBar";
 import { CategorySection } from "./CategorySection";
@@ -18,10 +19,15 @@ interface Props {
   canEdit: boolean;
   isStaffPreview: boolean;
   clientLabel?: string;
+  lockedCategories: PartnerCategory[];
+  canRemoveReferral: boolean;
 }
 
-export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel }: Props) {
+export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral }: Props) {
+  const router = useRouter();
   const [selections, setSelections] = useState(initialSelections);
+  const [lockedCategories, setLockedCategories] = useState(initialLocked);
+  const [removingReferral, setRemovingReferral] = useState<PartnerCategory | null>(null);
   const [pendingCategory, setPendingCategory] = useState<PartnerCategory | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<PartnerCategory>(PARTNER_CATEGORIES[0]);
@@ -85,6 +91,26 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
     }
   }, [selections, tenantId]);
 
+  // TTTAdmin only. Clears the lock locally, then refreshes so the server
+  // recomputes this category's marketplace matches.
+  const handleRemoveReferral = useCallback(async (category: PartnerCategory) => {
+    setRemovingReferral(category);
+    const result = await removeReferralPartnerAction(tenantId, category);
+    setRemovingReferral(null);
+    if (!result.ok) {
+      setToast(result.error);
+      return;
+    }
+    setLockedCategories((l) => l.filter((c) => c !== category));
+    setSelections((s) => {
+      const next = { ...s };
+      delete next[category];
+      return next;
+    });
+    setToast(`Referral partner removed — the marketplace is open for ${category}.`);
+    router.refresh();
+  }, [tenantId, router]);
+
   const selectedPartners: Partial<Record<PartnerCategory, PartnerProfile>> = {};
   for (const cat of PARTNER_CATEGORIES) {
     const id = selections[cat];
@@ -113,6 +139,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         onChangeClick={scrollToCategory}
         filesEnabled
         tenantId={tenantId}
+        lockedCategories={lockedCategories}
       />
 
       <DocumentsSection tenantId={tenantId} canMatch={canEdit || isStaffPreview} selectedPartners={selectedPartners} />
@@ -146,6 +173,10 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
             onDeselect={() => handleDeselect(category)}
             onLearnMore={(partnerId) => setDetailPartnerId(partnerId)}
             sectionRef={(el) => { if (el) sectionRefs.current[category] = el; }}
+            locked={lockedCategories.includes(category)}
+            canRemoveReferral={canRemoveReferral}
+            removingReferral={removingReferral === category}
+            onRemoveReferral={() => handleRemoveReferral(category)}
           />
         ))}
       </div>

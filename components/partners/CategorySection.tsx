@@ -4,6 +4,7 @@ import type { PartnerCategory } from "@/lib/types";
 import type { MatchResult } from "@/lib/partners/types";
 import { PartnerCard } from "./PartnerCard";
 import { CategoryIcon } from "./categoryIcons";
+import { ReferralPartnerCard } from "./ReferralPartnerCard";
 
 interface Props {
   tenantId: string;
@@ -20,9 +21,15 @@ interface Props {
    * for the NonTTTClient view). Never passed by the TTT client path, which
    * keeps seeing the plain category value exactly as before. */
   label?: string;
+  /** Referral-locked category: shows only the referring partner, with no
+   * Select/Change controls. */
+  locked?: boolean;
+  canRemoveReferral?: boolean;
+  removingReferral?: boolean;
+  onRemoveReferral?: () => void;
 }
 
-export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label }: Props) {
+export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label, locked, canRemoveReferral, removingReferral, onRemoveReferral }: Props) {
   const slug = category.toLowerCase().replace(/\s+/g, "-");
 
   return (
@@ -34,7 +41,17 @@ export function CategorySection({ tenantId, category, matches, selectedPartnerId
         <h2 className="text-base sm:text-lg font-bold text-gray-900">{label ?? category}</h2>
       </div>
 
-      {matches.length === 0 ? (
+      {locked && matches[0] ? (
+        <ReferralPartnerCard
+          tenantId={tenantId}
+          partner={matches[0].partner}
+          categoryLabel={label ?? category}
+          canRemove={!!canRemoveReferral}
+          removing={!!removingReferral}
+          onRemove={() => onRemoveReferral?.()}
+          onLearnMore={() => onLearnMore(matches[0].partner.id)}
+        />
+      ) : matches.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 p-8 text-center">
           <p className="text-sm text-gray-400">We&rsquo;re curating partners for this category. Check back soon.</p>
         </div>

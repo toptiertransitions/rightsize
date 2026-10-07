@@ -266,6 +266,8 @@ function mapTenant(record: Airtable.Record<Airtable.FieldSet>): Tenant {
     bathrooms: f["Bathrooms"] != null ? toNum(f["Bathrooms"]) : undefined,
     onboardingCurrentStep: f["OnboardingCurrentStep"] != null ? toNum(f["OnboardingCurrentStep"]) : undefined,
     onboardingComplete: f["OnboardingComplete"] === true,
+    howHeard: toStr(f["HowHeard"]) || undefined,
+    howHeardDetail: toStr(f["HowHeardDetail"]) || undefined,
   };
 }
 
@@ -1378,7 +1380,7 @@ export async function updateMembershipRole(id: string, role: UserRole): Promise<
 // ─── Tenant mutations ─────────────────────────────────────────────────────────
 export async function updateTenant(
   id: string,
-  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null; quoteTargetStartDate?: string | null; quoteTargetMoveDate?: string | null; quoteDatesFlexible?: boolean; quoteDeadlineNotes?: string | null; quoteDisposalNotes?: string | null; quoteSpecialItems?: string | null; quoteVendorNotes?: string | null; currentZip?: string | null; serviceInterests?: import("./types").ServiceInterest[] | null; appOnlyIntent?: boolean; timelineType?: import("./types").TimelineType | null; timelineValue?: string | null; destinationType?: import("./types").DestinationType | null; destinationZip?: string | null; destinationCommunity?: string | null; destinationCommunityOther?: string | null; sqftRange?: import("./types").SqftRange | null; sqftExact?: number | null; homeDensity?: import("./types").HomeDensity | null; bedrooms?: number | null; bathrooms?: number | null; onboardingCurrentStep?: number; onboardingComplete?: boolean }
+  data: { name?: string; address?: string; addressUnitNumber?: string | null; city?: string; state?: string; zip?: string; destAddress?: string | null; destAddressUnitNumber?: string | null; destCity?: string | null; destState?: string | null; destZip?: string | null; seniorCommunityName?: string | null; estimatedHours?: number; estimatedServiceHours?: Array<{ serviceId: string; serviceName: string; hours: number }> | null; isArchived?: boolean; isLostDeal?: boolean; isTTT?: boolean; isConsignmentOnly?: boolean; isEstateSale?: boolean; originSqFt?: number; originHighSqFt?: number; originMedSqFt?: number; originLowSqFt?: number; destinationSqFt?: number; payoutMethod?: string | null; payoutUsername?: string | null; payoutCheckAddress?: string | null; clientEmail?: string | null; clientPhone?: string | null; secondaryClientEmail?: string | null; secondaryClientPhone?: string | null; consignmentExpense?: number | null; consignmentExpenseNote?: string | null; teamLeadClerkId?: string | null; unsoldStandardPreference?: string | null; unsoldSpecialSituations?: Array<{ itemId: string; itemName: string }> | null; priceDrop1Days?: number | null; priceDrop1Percent?: number | null; priceDrop2Days?: number | null; priceDrop2Percent?: number | null; quotePhotos?: Array<{ url: string; publicId: string }> | null; quoteAssessmentItemIds?: string[] | null; quoteTargetStartDate?: string | null; quoteTargetMoveDate?: string | null; quoteDatesFlexible?: boolean; quoteDeadlineNotes?: string | null; quoteDisposalNotes?: string | null; quoteSpecialItems?: string | null; quoteVendorNotes?: string | null; currentZip?: string | null; serviceInterests?: import("./types").ServiceInterest[] | null; appOnlyIntent?: boolean; timelineType?: import("./types").TimelineType | null; timelineValue?: string | null; destinationType?: import("./types").DestinationType | null; destinationZip?: string | null; destinationCommunity?: string | null; destinationCommunityOther?: string | null; sqftRange?: import("./types").SqftRange | null; sqftExact?: number | null; homeDensity?: import("./types").HomeDensity | null; bedrooms?: number | null; bathrooms?: number | null; onboardingCurrentStep?: number; onboardingComplete?: boolean; howHeard?: string | null; howHeardDetail?: string | null }
 ): Promise<Tenant> {
   const base = getBase();
   const fields: Airtable.FieldSet = {};
@@ -1457,6 +1459,8 @@ export async function updateTenant(
   if (data.bathrooms !== undefined) fields["Bathrooms"] = (data.bathrooms ?? null) as unknown as number;
   if (data.onboardingCurrentStep !== undefined) fields["OnboardingCurrentStep"] = data.onboardingCurrentStep;
   if (data.onboardingComplete !== undefined) fields["OnboardingComplete"] = data.onboardingComplete;
+  if (data.howHeard !== undefined) fields["HowHeard"] = data.howHeard ?? "";
+  if (data.howHeardDetail !== undefined) fields["HowHeardDetail"] = data.howHeardDetail ?? "";
   const record = await base(AIRTABLE_TABLES.TENANTS).update(id, fields);
   return mapTenant(record);
 }
@@ -2240,6 +2244,12 @@ function mapPartnerSelection(record: AirtableRecord): PartnerSelection {
     partnerId: toStr(f["PartnerId"]),
     selectedAt: toStr(f["SelectedAt"]),
     selectedBy: toStr(f["SelectedBy"]),
+    referralLocked: f["ReferralLocked"] === true,
+    referralSource: toStr(f["ReferralSource"]) || undefined,
+    referralName: toStr(f["ReferralName"]) || undefined,
+    referralContactName: toStr(f["ReferralContactName"]) || undefined,
+    referralPhone: toStr(f["ReferralPhone"]) || undefined,
+    referralEmail: toStr(f["ReferralEmail"]) || undefined,
   };
 }
 
@@ -2295,6 +2305,46 @@ export async function upsertPartnerSelection(data: {
   });
   if (!res.ok) throw new Error(await res.text());
   return mapPartnerSelection(await res.json());
+}
+
+// Writes (or overwrites) the one selection row for this (tenant, category)
+// as a referral-locked partner. Every referral field is written on both
+// paths so re-attaching a different referral never leaves stale details
+// behind from the previous one.
+export async function setReferralPartnerSelection(data: {
+  tenantId: string;
+  category: PartnerCategory;
+  partnerId: string;
+  selectedBy: string;
+  source: "TTT Invite" | "Signup";
+  name?: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+}): Promise<void> {
+  const formula = encodeURIComponent(`AND({TenantId} = "${data.tenantId}", {Category} = "${data.category}")`);
+  const findRes = await partnerSelectionFetch(`?filterByFormula=${formula}&maxRecords=1`);
+  if (!findRes.ok) throw new Error(await findRes.text());
+  const existing = (await findRes.json()).records?.[0] as AirtableRecord | undefined;
+
+  const fields = {
+    PartnerId: data.partnerId,
+    SelectedAt: new Date().toISOString().slice(0, 10),
+    SelectedBy: data.selectedBy,
+    ReferralLocked: true,
+    ReferralSource: data.source,
+    ReferralName: data.name ?? "",
+    ReferralContactName: data.contactName ?? "",
+    ReferralPhone: data.phone ?? "",
+    ReferralEmail: data.email ?? "",
+  };
+  const res = existing
+    ? await partnerSelectionFetch(`/${existing.id}`, { method: "PATCH", body: JSON.stringify({ fields }) })
+    : await partnerSelectionFetch("", {
+        method: "POST",
+        body: JSON.stringify({ fields: { TenantId: data.tenantId, Category: data.category, ...fields } }),
+      });
+  if (!res.ok) throw new Error(await res.text());
 }
 
 export async function deletePartnerSelection(tenantId: string, category: PartnerCategory): Promise<void> {

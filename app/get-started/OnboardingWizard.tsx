@@ -9,12 +9,14 @@ import { Step3Timeline, step3Valid } from "./steps/Step3Timeline";
 import { Step4Destination, step4Valid } from "./steps/Step4Destination";
 import { Step5Starting, step5Valid } from "./steps/Step5Starting";
 import { Step6Layout } from "./steps/Step6Layout";
+import { Step7Referral, step7Valid } from "./steps/Step7Referral";
 import { Step7Done } from "./steps/Step7Done";
 import type { WizardData } from "./wizardTypes";
-import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, finishOnboardingTour } from "./actions";
+import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, submitStep7, finishOnboardingTour } from "./actions";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 
-const TOTAL_STEPS = 6; // the progress bar tracks steps 1-6; step 7 is the completion screen
+const TOTAL_STEPS = 7; // the progress bar tracks steps 1-7; step 8 is the completion screen
+const DONE_STEP = 8;
 
 interface Props {
   initialStep: number;
@@ -24,7 +26,7 @@ interface Props {
 
 export function OnboardingWizard({ initialStep, initialTenantId, initialData }: Props) {
   const router = useRouter();
-  const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), 7));
+  const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), DONE_STEP));
   const [tenantId, setTenantId] = useState<string | null>(initialTenantId);
   const [data, setData] = useState<WizardData>(initialData);
   const [saving, setSaving] = useState(false);
@@ -53,6 +55,7 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
       case 4: return step4Valid(data);
       case 5: return step5Valid(data);
       case 6: return true;
+      case 7: return step7Valid(data);
       default: return false;
     }
   })();
@@ -94,6 +97,14 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
           spaces: data.spaces.map(s => ({ key: s.key, name: s.name, on: s.on })),
         });
         setStep(7);
+      } else if (step === 7) {
+        if (!tenantId) throw new Error("Missing project");
+        await submitStep7(tenantId, {
+          howHeard: data.howHeard,
+          howHeardDetail: data.howHeardDetail.trim(),
+          referralPartnerId: data.referralPartnerId,
+        });
+        setStep(DONE_STEP);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
@@ -123,7 +134,7 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
   // Enter key advances on desktop
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Enter" || saving || step === 7 || !canContinue) return;
+      if (e.key !== "Enter" || saving || step === DONE_STEP || !canContinue) return;
       const target = e.target as HTMLElement;
       if (target.tagName === "TEXTAREA") return;
       handleContinue();
@@ -150,7 +161,7 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
 
   return (
     <div className="h-[100dvh] bg-cream-50 flex flex-col overflow-hidden">
-      {step < 7 && (
+      {step < DONE_STEP && (
         <div className="w-full max-w-md mx-auto px-6 pt-[max(20px,env(safe-area-inset-top))] pb-3 shrink-0">
           <div className="flex items-center gap-3 mb-3">
             {step > 1 ? <BackLink onClick={goBack} /> : <div className="w-11 shrink-0" />}
@@ -165,9 +176,9 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
       <div className="flex-1 overflow-hidden relative">
         <div
           className="flex h-full w-full transition-transform duration-300 ease-out motion-reduce:transition-none"
-          style={{ transform: `translateX(-${(Math.min(step, 7) - 1) * 100}%)` }}
+          style={{ transform: `translateX(-${(Math.min(step, DONE_STEP) - 1) * 100}%)` }}
         >
-          {[1, 2, 3, 4, 5, 6, 7].map(n => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
             <div key={n} className="w-full h-full shrink-0 overflow-y-auto px-6 pb-4">
               <div className="max-w-md mx-auto pt-2">
                 {n === 1 && <Step1About data={data} update={update} />}
@@ -176,14 +187,15 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
                 {n === 4 && <Step4Destination data={data} update={update} />}
                 {n === 5 && <Step5Starting data={data} update={update} />}
                 {n === 6 && <Step6Layout data={data} update={update} />}
-                {n === 7 && <Step7Done data={data} firstName={data.firstName} onFinish={handleFinish} />}
+                {n === 7 && <Step7Referral data={data} update={update} />}
+                {n === 8 && <Step7Done data={data} firstName={data.firstName} onFinish={handleFinish} />}
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {step < 7 && (
+      {step < DONE_STEP && (
         <div className="w-full max-w-md mx-auto px-6 shrink-0">
           {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
           <BottomCTA onClick={handleContinue} disabled={!canContinue} loading={saving} />

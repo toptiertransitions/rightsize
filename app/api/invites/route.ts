@@ -5,6 +5,10 @@ import { createInviteToken, createVendorInviteToken } from "@/lib/invites";
 import type { InviteRole } from "@/lib/invites";
 import { buildClientWelcomeEmail } from "@/lib/email";
 import { Resend } from "resend";
+import { PARTNER_CATEGORIES } from "@/lib/types";
+import { getPartnerDirectory } from "@/lib/partners/queries";
+import { attachReferralPartner } from "@/lib/partners/referral";
+import type { ReferralAttachment } from "@/lib/partners/referralShared";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -12,7 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { tenantId?: string; role?: InviteRole; email?: string; vendorId?: string; type?: string };
+  let body: { tenantId?: string; role?: InviteRole; email?: string; vendorId?: string; type?: string; referral?: ReferralAttachment };
   try {
     body = await req.json();
   } catch {
@@ -83,6 +87,38 @@ export async function POST(req: NextRequest) {
     const userRole = await getUserRoleForTenant(userId, tenantId);
     if (!userRole || !["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"].includes(userRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  // ── Referral partner (client invites only) ─────────────────────────────────
+  // Attached before the invite goes out, so the client's Partners page
+  // already shows their referring partner the first time they open it.
+  if (isClientInvite && body.referral) {
+    const r = body.referral;
+    if (!(PARTNER_CATEGORIES as readonly string[]).includes(r.category) || r.category === "Move Manager") {
+      return NextResponse.json({ error: "Invalid referral partner category" }, { status: 400 });
+    }
+    try {
+      await attachReferralPartner({
+        tenantId,
+        attachment: {
+          category: r.category,
+          partnerId: typeof r.partnerId === "string" && r.partnerId ? r.partnerId : undefined,
+          name: String(r.name ?? ""),
+          contactName: typeof r.contactName === "string" ? r.contactName : undefined,
+          phone: typeof r.phone === "string" ? r.phone : undefined,
+          email: typeof r.email === "string" ? r.email : undefined,
+        },
+        directory: await getPartnerDirectory(),
+        selectedBy: userId,
+        source: "TTT Invite",
+      });
+    } catch (err) {
+      console.error("Attach referral partner failed:", err);
+      return NextResponse.json(
+        { error: err instanceof Error && !err.message.startsWith("{") ? err.message : "Couldn't attach the referral partner" },
+        { status: 500 }
+      );
     }
   }
 

@@ -90,6 +90,12 @@ export interface PartnerProfile {
    * when the fee is percent-based (no known dollar value to credit from
    * yet). See lib/marketplace/seniorCredit.ts. */
   seniorCreditAmount?: number;
+  /** Set when this partner is the project's referral-locked partner for
+   * its category (see lib/partners/referral.ts) — renders as a fixed
+   * "referred you" card with no Select/Change controls. */
+  isReferral?: boolean;
+  /** The individual at the referring company, when known. */
+  referralContactName?: string;
 }
 
 export interface MatchResult {

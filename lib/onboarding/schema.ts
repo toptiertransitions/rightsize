@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HOW_HEARD_KEYS } from "@/lib/partners/referralShared";
 
 export const step1Schema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(80),
@@ -61,3 +62,10 @@ export const step6Schema = z.object({
   spaces: z.array(spaceSchema).max(40),
 });
 export type Step6Input = z.infer<typeof step6Schema>;
+
+export const step7Schema = z.object({
+  howHeard: z.enum(HOW_HEARD_KEYS),
+  howHeardDetail: z.string().trim().max(200),
+  referralPartnerId: z.string().trim().max(100),
+});
+export type Step7Input = z.infer<typeof step7Schema>;

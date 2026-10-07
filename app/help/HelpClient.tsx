@@ -59,7 +59,7 @@ const STAFF_FAQS = [
   },
   {
     q: "How do I send a client their project portal access?",
-    a: "From the project's Home page, click \"Add Client User\". Enter their email and role (Owner or Collaborator) and they'll receive a branded welcome email with a one-click login link.",
+    a: "From the project's Home or Plan page, click \"Add Client User\". You'll first be asked whether to attach the Referral Partner — choose Yes to confirm the partner from the project's CRM opportunity (or search the marketplace for a different one), or No to skip. Then enter their email and they'll receive a branded welcome email with a one-click login link. An attached referral partner becomes the client's partner for that category on their Partners page.",
   },
   {
     q: "How do I mark a consignment payout as paid?",

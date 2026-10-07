@@ -11,8 +11,10 @@ import {
   getStaffMembers,
   getPartnerRequestsForTenant,
   setPartnerRequestStatus,
+  getPartnerSelectionsForTenant,
 } from "@/lib/airtable";
-import { getPartnerDirectory, getSelectionsMapForTenant } from "@/lib/partners/queries";
+import { getPartnerDirectory } from "@/lib/partners/queries";
+import { buildReferralPartner } from "@/lib/partners/referral";
 import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
 import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
@@ -111,10 +113,12 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     (!!sysRole && STAFF_EDIT_ROLES.includes(sysRole)) ||
     (!!tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole));
 
-  const [rawDirectory, selections] = await Promise.all([
+  const [rawDirectory, selectionRows] = await Promise.all([
     getPartnerDirectory(),
-    getSelectionsMapForTenant(tenantId),
+    getPartnerSelectionsForTenant(tenantId).catch(() => []),
   ]);
+  const selections: Partial<Record<PartnerCategory, string>> = {};
+  for (const s of selectionRows) selections[s.category] = s.partnerId;
 
   // Attach this project's community-completion stats onto CLONED partner
   // objects — getPartnerDirectory() is a 5-minute shared cache, so mutating
@@ -143,6 +147,22 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   const partnersById: Record<string, PartnerProfile> = {};
   for (const p of directory) partnersById[p.id] = p;
 
+  // Referral-locked categories: the partner who referred this client is
+  // their partner for that category, full stop — they replace the
+  // category's marketplace matches entirely (same approach as the Team Lead
+  // injection below). Keyed by the real partner id, so files already
+  // uploaded for that partner stay attached; the locked UI is driven by
+  // lockedCategories, never by the partner object itself.
+  const canRemoveReferral = sysRole === "TTTAdmin";
+  const referralPartners: Partial<Record<PartnerCategory, PartnerProfile>> = {};
+  for (const sel of selectionRows) {
+    if (!sel.referralLocked) continue;
+    const partner = buildReferralPartner(sel, directory);
+    referralPartners[sel.category] = partner;
+    partnersById[partner.id] = partner;
+  }
+  const lockedCategories = Object.keys(referralPartners) as PartnerCategory[];
+
   // NonTTTClient: entirely separate render path, computed and returned here
   // so the TTT branch below (including the Team Lead injection, which only
   // ever applies to isTTT===true projects anyway) is never reached for a
@@ -152,7 +172,11 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     // — needs this entry present whether or not it's actually been selected yet.
     partnersById[TTT_MOVE_MANAGER_PARTNER_ID] = buildTTTMoveManagerPartner();
 
-    const { active, greyed } = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
+    const ordered = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
+    // A referral-locked category is always shown, whether or not the client
+    // picked it as a service interest during signup.
+    const active = [...ordered.active, ...ordered.greyed.filter((c) => lockedCategories.includes(c))];
+    const greyed = ordered.greyed.filter((c) => !lockedCategories.includes(c));
     const partnerRequests = await getPartnerRequestsForTenant(tenantId).catch(() => []);
     const initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>> = {};
     const initialIntroRequests: Partial<Record<PartnerCategory, { partnerId: string; requestedAt: string }[]>> = {};
@@ -171,7 +195,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     const initialMatches: Partial<Record<PartnerCategory, ScoringResult>> = {};
     const statusBumps: Promise<unknown>[] = [];
     for (const category of active) {
-      if (category === "Move Manager") continue;
+      if (category === "Move Manager" || lockedCategories.includes(category)) continue;
       const request = partnerRequests.find((r) => r.category === category);
       if (!request || !isPartnerRequestComplete(category, request.answers)) continue;
 
@@ -215,6 +239,8 @@ export default async function PartnersPage({ searchParams }: PageProps) {
         initialRequestAnswers={initialRequestAnswers}
         initialIntroRequests={initialIntroRequests}
         initialMatches={initialMatches}
+        lockedCategories={lockedCategories}
+        canRemoveReferral={canRemoveReferral}
         prefillTenant={{
           currentZip: tenant.currentZip,
           destinationZip: tenant.destinationZip,
@@ -267,9 +293,15 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     }
   }
 
+  for (const category of lockedCategories) {
+    matchesByCategory[category] = [{ partner: referralPartners[category]!, rank: 1, matchedLocation: "area" }];
+  }
+
   return (
     <PartnersPageClient
       tenantId={tenantId}
+      lockedCategories={lockedCategories}
+      canRemoveReferral={canRemoveReferral}
       matchesByCategory={matchesByCategory}
       initialSelections={selections}
       partnersById={partnersById}

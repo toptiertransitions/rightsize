@@ -183,6 +183,11 @@ export interface Tenant {
   bathrooms?: number;
   onboardingCurrentStep?: number;
   onboardingComplete?: boolean;
+  /** Self-serve signup answer to "How did you hear about us?" — a
+   * HOW_HEARD_OPTIONS key (lib/partners/referral.ts). */
+  howHeard?: string;
+  /** Free-text follow-up for howHeard (e.g. the realtor's name). */
+  howHeardDetail?: string;
 }
 
 export type ServiceInterest =
@@ -787,6 +792,19 @@ export interface PartnerSelection {
   partnerId: string; // LocalVendor record id
   selectedAt: string;
   selectedBy: string; // Clerk user id
+  /** Set when this partner referred the client (attached on a TTT client
+   * invite or picked during self-serve signup). A locked selection can't be
+   * changed or removed by the client or staff — only a TTTAdmin can remove
+   * it, which reopens the marketplace for that category. */
+  referralLocked?: boolean;
+  /** "TTT Invite" | "Signup" — where the referral was recorded. */
+  referralSource?: string;
+  /** Display details for a referral partner that isn't a marketplace
+   * listing (partnerId starts with REFERRAL_UNLISTED_PREFIX). */
+  referralName?: string;
+  referralContactName?: string;
+  referralPhone?: string;
+  referralEmail?: string;
 }
 
 export type PartnerRequestStatus = "draft" | "matched" | "intro_requested";

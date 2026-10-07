@@ -2,7 +2,7 @@
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity } from "@/lib/airtable";
+import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, getPartnerSelectionsForTenant, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity } from "@/lib/airtable";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import { CATEGORY_TO_SERVICE_INTEREST, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { getPartnerQuestions, formatAnswersForEmail, migrateLegacyAnswerKeys } from "@/lib/partners/questions";
@@ -37,6 +37,16 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   throw lastErr;
 }
 
+const REFERRAL_LOCKED_ERROR = "This partner referred you to Top Tier, so they're set for this category. Contact your Top Tier team to make a change.";
+
+// A referral-locked category can't be changed through the normal select /
+// deselect / intro paths by anyone — only removeReferralPartnerAction
+// (TTTAdmin) reopens it.
+async function isReferralLocked(tenantId: string, category: PartnerCategory): Promise<boolean> {
+  const selections = await getPartnerSelectionsForTenant(tenantId);
+  return selections.some((s) => s.category === category && s.referralLocked);
+}
+
 async function assertCanEdit(tenantId: string): Promise<string | null> {
   const { userId } = await auth();
   if (!userId) return null;
@@ -62,6 +72,7 @@ export async function selectPartnerAction(
   if (!userId) return { ok: false, error: "You don't have permission to change partner selections for this project." };
 
   try {
+    if (await withRetry(() => isReferralLocked(tenantId, category))) return { ok: false, error: REFERRAL_LOCKED_ERROR };
     await withRetry(() => upsertPartnerSelection({ tenantId, category, partnerId, selectedBy: userId }));
     return { ok: true };
   } catch {
@@ -80,10 +91,34 @@ export async function deselectPartnerAction(
   if (!userId) return { ok: false, error: "You don't have permission to change partner selections for this project." };
 
   try {
+    if (await withRetry(() => isReferralLocked(tenantId, category))) return { ok: false, error: REFERRAL_LOCKED_ERROR };
     await withRetry(() => deletePartnerSelection(tenantId, category));
     return { ok: true };
   } catch {
     return { ok: false, error: "Couldn't remove your selection — please try again." };
+  }
+}
+
+// TTTAdmin-only: removes a referral-locked partner, reopening the
+// marketplace for that category.
+export async function removeReferralPartnerAction(
+  tenantId: string,
+  category: PartnerCategory
+): Promise<ActionResult> {
+  const input = z.object({ tenantId: tenantIdSchema, category: categorySchema }).safeParse({ tenantId, category });
+  if (!input.success) return { ok: false, error: "That request wasn't valid — please try again." };
+
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Not signed in." };
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (sysRole !== "TTTAdmin") return { ok: false, error: "Only TTT Admins can remove a referral partner." };
+
+  try {
+    if (!(await withRetry(() => isReferralLocked(tenantId, category)))) return { ok: true };
+    await withRetry(() => deletePartnerSelection(tenantId, category));
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Couldn't remove the referral partner — please try again." };
   }
 }
 
@@ -202,6 +237,8 @@ export async function requestPartnerIntroAction(
 
   const userId = await assertCanEdit(tenantId);
   if (!userId) return { ok: false, error: "You don't have permission to request an introduction for this project." };
+
+  if (await isReferralLocked(tenantId, category).catch(() => false)) return { ok: false, error: REFERRAL_LOCKED_ERROR };
 
   try {
     const [tenant, directory, requests, user] = await Promise.all([

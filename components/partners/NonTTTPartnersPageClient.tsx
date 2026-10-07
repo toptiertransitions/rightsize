@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
-import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction, selectPartnerAction, deselectPartnerAction } from "@/app/(protected)/partners/actions";
+import { activateServiceInterestAction, deactivateServiceInterestAction, requestPartnerIntroAction, selectPartnerAction, deselectPartnerAction, removeReferralPartnerAction } from "@/app/(protected)/partners/actions";
 import { nonTTTCategoryLabel, TTT_MOVE_MANAGER_PARTNER_ID } from "@/lib/partners/nonTTTCategories";
 import { isPartnerRequestComplete, getCrossCategoryAnswers, type PrefillTenant } from "@/lib/partners/questions";
 import type { ScoringResult } from "@/lib/partners/scoring";
@@ -13,6 +13,9 @@ import { GreyedCategoryCard } from "./GreyedCategoryCard";
 import { TTTMoveManagerCard } from "./TTTMoveManagerCard";
 import { PartnerRequestCard } from "./PartnerRequestCard";
 import { PartnerRequestFlow } from "./PartnerRequestFlow";
+import { ReferralPartnerCard } from "./ReferralPartnerCard";
+import { PartnerDetailModal } from "./PartnerDetailModal";
+import { CategoryIcon } from "./categoryIcons";
 
 interface Props {
   tenantId: string;
@@ -27,12 +30,14 @@ interface Props {
   initialIntroRequests: Partial<Record<PartnerCategory, { partnerId: string; requestedAt: string }[]>>;
   initialMatches: Partial<Record<PartnerCategory, ScoringResult>>;
   prefillTenant: PrefillTenant;
+  lockedCategories: PartnerCategory[];
+  canRemoveReferral: boolean;
 }
 
 export function NonTTTPartnersPageClient({
   tenantId, tenantName, initialActiveCategories, initialGreyedCategories,
   initialSelections, partnersById, canEdit, appOnlyIntent, initialRequestAnswers,
-  initialIntroRequests, initialMatches, prefillTenant,
+  initialIntroRequests, initialMatches, prefillTenant, lockedCategories: initialLocked, canRemoveReferral,
 }: Props) {
   const router = useRouter();
   const [activeCategories, setActiveCategories] = useState(initialActiveCategories);
@@ -45,6 +50,9 @@ export function NonTTTPartnersPageClient({
   const [introRequests, setIntroRequests] = useState(initialIntroRequests);
   const [pendingRequest, setPendingRequest] = useState<{ category: PartnerCategory; partnerId: string } | null>(null);
   const [pendingSelect, setPendingSelect] = useState<PartnerCategory | null>(null);
+  const [lockedCategories, setLockedCategories] = useState(initialLocked);
+  const [removingReferral, setRemovingReferral] = useState<PartnerCategory | null>(null);
+  const [detailPartnerId, setDetailPartnerId] = useState<string | null>(null);
 
   const sectionRefs = useRef<Partial<Record<PartnerCategory, HTMLElement>>>({});
 
@@ -136,6 +144,25 @@ export function NonTTTPartnersPageClient({
     }
   }, [selections, tenantId]);
 
+  // TTTAdmin only — reopens guided matching for this category.
+  const handleRemoveReferral = useCallback(async (category: PartnerCategory) => {
+    setRemovingReferral(category);
+    const result = await removeReferralPartnerAction(tenantId, category);
+    setRemovingReferral(null);
+    if (!result.ok) {
+      setToast(result.error);
+      return;
+    }
+    setLockedCategories((l) => l.filter((c) => c !== category));
+    setSelections((s) => {
+      const next = { ...s };
+      delete next[category];
+      return next;
+    });
+    setToast("Referral partner removed — matching is open for this category.");
+    router.refresh();
+  }, [tenantId, router]);
+
   const selectedPartners: Partial<Record<PartnerCategory, PartnerProfile>> = {};
   for (const cat of PARTNER_CATEGORIES) {
     const id = selections[cat];
@@ -161,6 +188,7 @@ export function NonTTTPartnersPageClient({
           onChangeClick={scrollToCategory}
           filesEnabled
           tenantId={tenantId}
+          lockedCategories={lockedCategories}
         />
       )}
 
@@ -174,7 +202,25 @@ export function NonTTTPartnersPageClient({
       <div className="mt-4 space-y-6">
         {activeCategories.map((category) => (
           <div key={category} className="motion-safe:animate-[fadeInScale_0.3s_ease-out]">
-            {category === "Move Manager" ? (
+            {lockedCategories.includes(category) && partnersById[selections[category] ?? ""] ? (
+              <section ref={(el) => { if (el) sectionRefs.current[category] = el; }} className="scroll-mt-32 sm:scroll-mt-28">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="w-8 h-8 rounded-lg bg-forest-50 text-forest-600 flex items-center justify-center flex-shrink-0">
+                    <CategoryIcon category={category} className="w-4 h-4" />
+                  </span>
+                  <h2 className="text-base sm:text-lg font-bold text-gray-900">{nonTTTCategoryLabel(category)}</h2>
+                </div>
+                <ReferralPartnerCard
+                  tenantId={tenantId}
+                  partner={partnersById[selections[category]!]}
+                  categoryLabel={nonTTTCategoryLabel(category)}
+                  canRemove={canRemoveReferral}
+                  removing={removingReferral === category}
+                  onRemove={() => handleRemoveReferral(category)}
+                  onLearnMore={() => setDetailPartnerId(selections[category]!)}
+                />
+              </section>
+            ) : category === "Move Manager" ? (
               <TTTMoveManagerCard
                 tenantName={tenantName}
                 selected={selections["Move Manager"] === TTT_MOVE_MANAGER_PARTNER_ID}
@@ -200,7 +246,7 @@ export function NonTTTPartnersPageClient({
                 onDeselect={() => handleDeselect(category)}
               />
             )}
-            {!selections[category] && (
+            {!selections[category] && !lockedCategories.includes(category) && (
               <button
                 type="button"
                 onClick={() => handleDeactivate(category)}
@@ -251,6 +297,10 @@ export function NonTTTPartnersPageClient({
             })
           }
         />
+      )}
+
+      {detailPartnerId && partnersById[detailPartnerId] && (
+        <PartnerDetailModal partner={partnersById[detailPartnerId]} onClose={() => setDetailPartnerId(null)} />
       )}
 
       {toast && (

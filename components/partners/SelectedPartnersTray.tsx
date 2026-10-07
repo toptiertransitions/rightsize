@@ -16,9 +16,12 @@ interface Props {
    * it off; omitted (default false) in the NonTTTClient flow. */
   filesEnabled?: boolean;
   tenantId?: string;
+  /** Referral-locked categories — labeled as the referral partner, with no
+   * "Change" link. */
+  lockedCategories?: readonly PartnerCategory[];
 }
 
-export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClick, onChangeClick, filesEnabled, tenantId }: Props) {
+export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClick, onChangeClick, filesEnabled, tenantId, lockedCategories = [] }: Props) {
   const filledCount = categories.filter((c) => selectedPartners[c]).length;
   const total = categories.length;
   const pct = Math.round((filledCount / total) * 100);
@@ -101,15 +104,26 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
                 </div>
               )}
 
-              <p className="text-xs text-gray-400 mt-auto">Selected</p>
+              {lockedCategories.includes(category) ? (
+                <p className="mt-auto inline-flex items-center gap-1 text-xs font-medium text-forest-700">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  Referral partner
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-400 mt-auto">Selected</p>
 
-              <button
-                type="button"
-                onClick={() => onChangeClick(category)}
-                className="self-start text-[11px] font-medium text-forest-600 hover:text-forest-800 hover:underline min-h-[28px] flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 rounded"
-              >
-                Change
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => onChangeClick(category)}
+                    className="self-start text-[11px] font-medium text-forest-600 hover:text-forest-800 hover:underline min-h-[28px] flex items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-500 rounded"
+                  >
+                    Change
+                  </button>
+                </>
+              )}
 
               {filesEnabled && tenantId && <PartnerFilesSection tenantId={tenantId} partnerId={partner.id} />}
             </div>
