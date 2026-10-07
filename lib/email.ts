@@ -5403,6 +5403,7 @@ export function buildNewPartnerAccountEmail(p: NewPartnerAccountEmailParams): st
 export function buildQuoteAlertEmail({
   clientName,
   clientEmail,
+  salesOwner,
   referralSource,
   projectName,
   opportunity,
@@ -5412,6 +5413,9 @@ export function buildQuoteAlertEmail({
 }: {
   clientName: string;
   clientEmail?: string;
+  /** Display name of the TTT staff member who owns this account/opportunity. */
+  salesOwner?: string;
+  /** May contain inline HTML (bolded company/referrer name). */
   referralSource?: string;
   projectName: string;
   opportunity?: {
@@ -5507,6 +5511,7 @@ export function buildQuoteAlertEmail({
   ].filter(Boolean).join("<br>");
 
   const oppRows = [
+    salesOwner ? detailRow("Sales Owner", `<strong>${salesOwner}</strong>`) : "",
     clientEmail
       ? detailRow("Email", `<a href="mailto:${clientEmail}" style="color:${GREEN};text-decoration:none;">${clientEmail}</a>`)
       : "",

@@ -1,6 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
-import { getStaffMembers, getReferralCompanyById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
+import { getStaffMembers, getReferralCompanyById, getReferralContactById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
 import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail } from "./email";
 import type { LocalVendor } from "./types";
@@ -361,10 +361,41 @@ export async function sendQuoteAlertNotification({
   const clientName = contact?.name || tenantName;
   const cityForSubject = opp?.city || "";
 
+  // Sales owner — same resolution as the CRM pipeline: the opportunity's
+  // owner, falling back to the client contact's owner.
+  const ownerClerkId = opp?.assignedToClerkId || contact?.assignedToClerkId;
+  const needsStaff = !!ownerClerkId || !!contact?.staffReferralId;
+  const staff = needsStaff ? await getStaffMembers().catch(() => []) : [];
+  const staffName = (id?: string) =>
+    id ? staff.find(s => s.clerkUserId === id || s.id === id)?.displayName : undefined;
+  const salesOwner = staffName(ownerClerkId);
+
+  // Referral source — name who actually referred them instead of the
+  // generic source category, when the CRM has that link.
+  let referralSource = contact?.source;
+  if (contact?.referralPartnerId) {
+    const refContact = await getReferralContactById(contact.referralPartnerId).catch(() => null);
+    const refCompany = refContact?.referralCompanyId
+      ? await getReferralCompanyById(refContact.referralCompanyId).catch(() => null)
+      : null;
+    const named = [
+      refCompany?.name ? `<strong>${refCompany.name}</strong>` : "",
+      refContact?.name ?? "",
+    ].filter(Boolean).join(" &mdash; ");
+    if (named) referralSource = named;
+  } else if (contact?.staffReferralId) {
+    const name = staffName(contact.staffReferralId);
+    if (name) referralSource = `Staff Referral &mdash; <strong>${name}</strong>`;
+  } else if (contact?.clientReferralId) {
+    const referrer = await getClientContactById(contact.clientReferralId).catch(() => null);
+    if (referrer?.name) referralSource = `Client Referral &mdash; <strong>${referrer.name}</strong>`;
+  }
+
   const html = buildQuoteAlertEmail({
     clientName,
     clientEmail: contact?.email,
-    referralSource: contact?.source,
+    salesOwner,
+    referralSource,
     projectName: tenantName,
     opportunity: opp
       ? {
