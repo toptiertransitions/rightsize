@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getItemById, updateItem } from "@/lib/airtable";
+import { checkStorefrontItem } from "@/lib/storefront-gate";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -19,7 +20,8 @@ export async function POST(
     if (!item) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
+    // Releasing a hold must work even after a Home Pickup sale closes.
+    if (!(await checkStorefrontItem(item, { requireLive: false })).ok) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     // Only revert if In Cart — never clobber Sold or Listed

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEstateWithItems, computeDutchPrice } from "@/lib/estate-utils";
+import { isHomePickupLive, stripHomePickupPrivateFields } from "@/lib/home-pickup";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,28 @@ export async function GET(
     }
     const { estate, items } = result;
     const now = Date.now();
+    // ?private=1 is for the order confirmation email only (server-side, API
+    // key required like every storefront call): it includes the Home Pickup
+    // street address and instructions, and still resolves after the sale
+    // closes so a confirmation can be re-sent.
+    const includePrivate = req.nextUrl.searchParams.get("private") === "1";
+    if (estate.saleType === "Home Pickup") {
+      if (!includePrivate && !isHomePickupLive(estate, now)) {
+        return NextResponse.json({ error: "Estate not found" }, { status: 404 });
+      }
+      const fixed = items.map((item) => ({
+        ...item,
+        currentPrice: item.valueMid,
+        startingPrice: item.valueMid,
+        nextDropAt: null,
+        atFloor: false,
+        estateSaleSlug: estate.slug,
+      }));
+      return NextResponse.json({
+        estate: includePrivate ? estate : stripHomePickupPrivateFields(estate),
+        items: fixed,
+      });
+    }
     const saleStartMs = estate.saleStartDate
       ? (() => {
           const [y, mo, d] = estate.saleStartDate.slice(0, 10).split("-").map(Number);

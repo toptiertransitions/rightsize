@@ -592,7 +592,9 @@ export async function getReservedStorefrontItems(): Promise<{ id: string; itemNa
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND(OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale"), {Status} = "In Cart")`,
+      // FB/Marketplace items only count when they're on a sale (Home Pickup):
+      // storefront holds expire after 15 minutes, staff FB holds must not.
+      filterByFormula: `AND(OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale", AND({PrimaryRoute} = "FB/Marketplace", {EstateSaleId} != "")), {Status} = "In Cart")`,
       fields: ["ItemName", "UpdatedAt", "OnlineListingSlug"],
     })
     .all();
@@ -620,7 +622,7 @@ export async function getItemByOnlineSlug(slug: string): Promise<Item | null> {
     const base = getBase();
     const records = await base(AIRTABLE_TABLES.ITEMS)
       .select({
-        filterByFormula: `AND({OnlineListingSlug} = "${slug}", OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale"))`,
+        filterByFormula: `AND({OnlineListingSlug} = "${slug}", OR({PrimaryRoute} = "ProFoundFinds Consignment", {PrimaryRoute} = "Estate Sale", {PrimaryRoute} = "FB/Marketplace"))`,
         maxRecords: 1,
       })
       .all();
@@ -6460,6 +6462,9 @@ function mapEstate(record: Airtable.Record<Airtable.FieldSet>): Estate {
     dropPercent: f["DropPercent"] != null ? toNum(f["DropPercent"]) : 10,
     floorPercent: f["FloorPercent"] != null ? toNum(f["FloorPercent"]) : 40,
     pickupAddress: toStr(f["PickupAddress"]),
+    pickupCity: toStr(f["PickupCity"]) || undefined,
+    pickupState: toStr(f["PickupState"]) || undefined,
+    pickupZip: toStr(f["PickupZip"]) || undefined,
     pickupWindowStart: toStr(f["PickupWindowStart"]),
     pickupWindowEnd: toStr(f["PickupWindowEnd"]),
     pickupWindowStartTime: toStr(f["PickupWindowStartTime"]) || undefined,
@@ -6523,15 +6528,26 @@ export async function getEstateWithItems(
 ): Promise<{ estate: Estate; items: Item[] } | null> {
   const estate = await getEstateBySlug(slug);
   if (!estate) return null;
+  const items = await selectItemsForEstate(estate);
+  return { estate, items };
+}
+
+// An item belongs to a sale when its EstateSaleId is exactly that sale's
+// record id AND its route matches the sale type: Estate Sale for online /
+// in-person sales, FB/Marketplace for Home Pickup sales. The route check
+// keeps a stray or stale id from pulling an item into the wrong kind of
+// sale. EstateSaleId is a single value, so an item can only ever be on one
+// sale.
+async function selectItemsForEstate(estate: Estate): Promise<Item[]> {
+  const route = estate.saleType === "Home Pickup" ? "FB/Marketplace" : "Estate Sale";
   const base = getBase();
   const records = await base(AIRTABLE_TABLES.ITEMS)
     .select({
-      filterByFormula: `AND({EstateSaleId} = "${estate.id}", {PrimaryRoute} = "Estate Sale", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
+      filterByFormula: `AND({EstateSaleId} = "${estate.id}", {PrimaryRoute} = "${route}", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
       sort: [{ field: "CreatedAt", direction: "desc" }],
     })
     .all();
-  const items = records.map(mapItem);
-  return { estate, items };
+  return records.map(mapItem);
 }
 
 export async function createEstate(
@@ -6554,6 +6570,9 @@ export async function createEstate(
       DropPercent: data.dropPercent,
       FloorPercent: data.floorPercent,
       PickupAddress: data.pickupAddress,
+      ...(data.saleType === "Home Pickup"
+        ? { PickupCity: data.pickupCity || "", PickupState: data.pickupState || "", PickupZip: data.pickupZip || "" }
+        : {}),
       PickupWindowStart: data.pickupWindowStart,
       PickupWindowEnd: data.pickupWindowEnd,
       PickupWindowStartTime: data.pickupWindowStartTime || "",
@@ -6598,6 +6617,9 @@ export async function updateEstate(
   if (data.dropPercent !== undefined) fields["DropPercent"] = data.dropPercent;
   if (data.floorPercent !== undefined) fields["FloorPercent"] = data.floorPercent;
   if (data.pickupAddress !== undefined) fields["PickupAddress"] = data.pickupAddress;
+  if (data.pickupCity !== undefined) fields["PickupCity"] = data.pickupCity;
+  if (data.pickupState !== undefined) fields["PickupState"] = data.pickupState;
+  if (data.pickupZip !== undefined) fields["PickupZip"] = data.pickupZip;
   if (data.pickupWindowStart !== undefined) fields["PickupWindowStart"] = data.pickupWindowStart;
   if (data.pickupWindowEnd !== undefined) fields["PickupWindowEnd"] = data.pickupWindowEnd;
   if (data.pickupWindowStartTime !== undefined) fields["PickupWindowStartTime"] = data.pickupWindowStartTime;
@@ -6641,14 +6663,9 @@ export async function getEstatesForStorefront(saleType?: string): Promise<Estate
 }
 
 export async function getItemsForEstateSale(estateId: string): Promise<Item[]> {
-  const base = getBase();
-  const records = await base(AIRTABLE_TABLES.ITEMS)
-    .select({
-      filterByFormula: `AND({EstateSaleId} = "${estateId}", {PrimaryRoute} = "Estate Sale", OR({Status} = "Listed", {Status} = "In Cart", {Status} = "Sold"))`,
-      sort: [{ field: "CreatedAt", direction: "desc" }],
-    })
-    .all();
-  return records.map(mapItem);
+  const estate = await getEstateById(estateId);
+  if (!estate) return [];
+  return selectItemsForEstate(estate);
 }
 
 // ─── Estate Sale Shoppers ─────────────────────────────────────────────────────

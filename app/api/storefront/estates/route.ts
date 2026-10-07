@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEstatesForStorefront, getItemsForEstateSale } from "@/lib/airtable";
 import { computeDutchPrice } from "@/lib/estate-utils";
+import { isHomePickupLive, stripHomePickupPrivateFields } from "@/lib/home-pickup";
 
 export const revalidate = 60;
 
@@ -16,11 +17,19 @@ export async function GET(req: NextRequest) {
   // ?type=Online or ?type=In-Person — omit for all
   const saleType = req.nextUrl.searchParams.get("type") ?? undefined;
   try {
-    const estates = await getEstatesForStorefront(saleType);
     const now = Date.now();
+    // Home Pickup sales are public only while live (published and before
+    // the pickup window ends); every other type keeps its existing rules.
+    const estates = (await getEstatesForStorefront(saleType)).filter(
+      (e) => e.saleType !== "Home Pickup" || isHomePickupLive(e, now)
+    );
 
     const result = await Promise.all(
       estates.map(async (estate) => {
+        if (estate.saleType === "Home Pickup") {
+          const items = await getItemsForEstateSale(estate.id);
+          return { ...stripHomePickupPrivateFields(estate), items: [], itemCount: items.length };
+        }
         if (estate.saleType === "Online") {
           const items = await getItemsForEstateSale(estate.id);
           const itemsWithPrice = items.map((item) => {

@@ -41,6 +41,7 @@ interface EstatesClientProps {
 }
 
 const STATUS_COLORS: Record<EstateStatus, string> = {
+  Draft:    "bg-gray-800 text-gray-300 border border-dashed border-gray-600",
   Upcoming: "bg-blue-900/40 text-blue-300 border border-blue-700",
   Active:   "bg-green-900/40 text-green-300 border border-green-700",
   Closed:   "bg-gray-800 text-gray-400 border border-gray-700",
@@ -61,6 +62,9 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   dropPercent: 10,
   floorPercent: 40,
   pickupAddress: "",
+  pickupCity: "",
+  pickupState: "IL",
+  pickupZip: "",
   pickupWindowStart: "",
   pickupWindowEnd: "",
   pickupWindowStartTime: "",
@@ -79,6 +83,106 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
   galleryJson: "",
   pickeryUrl: "",
 };
+
+function homePickupLabel(estate: Estate): string {
+  if (!estate.pickupWindowStart) return "date not set";
+  const [y, m, d] = estate.pickupWindowStart.slice(0, 10).split("-").map(Number);
+  const day = new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const window = [estate.pickupWindowStartTime, estate.pickupWindowEndTime].filter(Boolean).join(" to ");
+  return window ? `${day}, ${window}` : day;
+}
+
+// ─── Home Pickup: pickup-day detail ──────────────────────────────────────────
+
+interface PickupDayData {
+  items: { id: string; itemName: string; status: string; price: number; barcodeNumber?: string; photoUrl?: string }[];
+  orders: { name: string; email: string; phone?: string; items: string[]; total: number }[];
+}
+
+function HomePickupDayPanel({ estateId }: { estateId: string }) {
+  const [data, setData] = useState<PickupDayData | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/estates/${estateId}/pickup-day`)
+      .then(async r => { if (!r.ok) throw new Error((await r.json()).error || "Failed"); return r.json(); })
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load"); });
+    return () => { cancelled = true; };
+  }, [estateId]);
+
+  if (error) return <p className="mt-3 text-sm text-red-400">{error}</p>;
+  if (!data) return <p className="mt-3 text-sm text-gray-500">Loading…</p>;
+
+  const sold = data.items.filter(i => i.status === "Sold").length;
+  const inCart = data.items.filter(i => i.status === "In Cart").length;
+  const available = data.items.length - sold - inCart;
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <div className="mt-3 space-y-4 border-t border-gray-800 pt-4">
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {[["Sold", sold, "text-green-300"], ["Available", available, "text-white"], ["In a cart", inCart, "text-amber-300"]].map(([label, n, cls]) => (
+          <div key={label as string} className="rounded-lg bg-gray-800/70 py-2">
+            <p className={`text-lg font-semibold tabular-nums ${cls}`}>{n as number}</p>
+            <p className="text-[11px] uppercase tracking-wide text-gray-500">{label as string}</p>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Orders ({data.orders.length})</p>
+        {data.orders.length === 0 ? (
+          <p className="text-sm text-gray-500">No orders yet.</p>
+        ) : (
+          <div className="rounded-lg border border-gray-800 divide-y divide-gray-800">
+            {data.orders.map(o => (
+              <div key={o.email} className="px-3 py-2.5 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="font-medium text-white">{o.name || o.email}</p>
+                  <p className="text-gray-300 tabular-nums">{fmt(o.total)}</p>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {o.phone && <a href={`tel:${o.phone}`} className="hover:text-white">{o.phone}</a>}
+                  {o.phone && " · "}
+                  <a href={`mailto:${o.email}`} className="hover:text-white">{o.email}</a>
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{o.items.join(", ")}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Items ({data.items.length})</p>
+        {data.items.length === 0 ? (
+          <p className="text-sm text-gray-500">No items yet. Set an item&apos;s Route to FB/Marketplace, its status to Listed, and its Estate Sale ID to this sale&apos;s ID.</p>
+        ) : (
+          <div className="rounded-lg border border-gray-800 divide-y divide-gray-800">
+            {data.items.map(i => (
+              <div key={i.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                {i.photoUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={i.photoUrl} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
+                  : <div className="w-9 h-9 rounded bg-gray-800 flex-shrink-0" />}
+                <div className="min-w-0 flex-1">
+                  <p className="text-gray-200 truncate">{i.itemName}</p>
+                  {i.barcodeNumber && <p className="text-[11px] text-gray-500 font-mono">#{i.barcodeNumber}</p>}
+                </div>
+                <span className="text-gray-400 tabular-nums">{fmt(i.price)}</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full ${i.status === "Sold" ? "bg-green-900/40 text-green-300" : i.status === "In Cart" ? "bg-amber-900/40 text-amber-300" : "bg-gray-800 text-gray-300"}`}>
+                  {i.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -320,6 +424,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
   const [backfillResult, setBackfillResult] = useState<{ updated: number; errors: number } | null>(null);
   const [pickupDates, setPickupDates] = useState<Array<{ date: string; startTime: string; endTime: string }>>([{ date: "", startTime: "", endTime: "" }]);
   const [pickupBlastEstateId, setPickupBlastEstateId] = useState<string | null>(null);
+  const [pickupDayEstateId, setPickupDayEstateId] = useState<string | null>(null);
   const [pickupEmailPanelId, setPickupEmailPanelId] = useState<string | null>(null);
   const [pickupEmailNote, setPickupEmailNote] = useState("");
   const [pickupEmailExcludePrior, setPickupEmailExcludePrior] = useState(false);
@@ -383,7 +488,10 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
       dropPercent: estate.dropPercent,
       floorPercent: estate.floorPercent,
       pickupAddress: estate.pickupAddress,
-      pickupWindowStart: estate.pickupWindowStart,
+      pickupCity: estate.pickupCity ?? "",
+      pickupState: estate.pickupState ?? "IL",
+      pickupZip: estate.pickupZip ?? "",
+      pickupWindowStart: estate.saleType === "Home Pickup" ? toDateOnly(estate.pickupWindowStart) : estate.pickupWindowStart,
       pickupWindowEnd: estate.pickupWindowEnd,
       pickupWindowStartTime: estate.pickupWindowStartTime ?? "",
       pickupWindowEndTime: estate.pickupWindowEndTime ?? "",
@@ -415,14 +523,44 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
   async function handleSave() {
     if (!form.name.trim()) { setError("Name is required"); return; }
     if (!form.slug.trim()) { setError("Slug is required"); return; }
+    const isHomePickup = form.saleType === "Home Pickup";
+    if (isHomePickup) {
+      const missing = [
+        !form.pickupAddress.trim() && "street",
+        !form.pickupCity?.trim() && "city",
+        !form.pickupWindowStart && "pickup date",
+        !form.pickupWindowStartTime && "start time",
+        !form.pickupWindowEndTime && "end time",
+      ].filter(Boolean);
+      if (missing.length) { setError(`Home Pickup needs: ${missing.join(", ")}`); return; }
+      if (to24h(form.pickupWindowEndTime ?? "") <= to24h(form.pickupWindowStartTime ?? "")) {
+        setError("Pickup end time must be after the start time"); return;
+      }
+    }
     setSaving(true);
     setError("");
     try {
       const validPickupDates = pickupDates.filter(d => d.date);
-      const body = {
-        ...form,
-        pickupWindowsJson: validPickupDates.length > 0 ? JSON.stringify(validPickupDates) : "",
-      };
+      // Home Pickup: one address, one date, one window. The sale dates mirror
+      // the pickup window so everything keyed off sale dates (sale-ended
+      // checks, admin tools) lines up, and the town drives the public card.
+      const body = isHomePickup
+        ? {
+            ...form,
+            cityRegion: form.pickupCity?.trim() ?? "",
+            saleStartDate: form.pickupWindowStart,
+            saleEndDate: form.pickupWindowStart,
+            saleStartTime: form.pickupWindowStartTime,
+            saleEndTime: form.pickupWindowEndTime,
+            pickupWindowEnd: form.pickupWindowStart,
+            pickupWindowsJson: "",
+            shippingAvailable: false,
+            hideSoldItems: false,
+          }
+        : {
+            ...form,
+            pickupWindowsJson: validPickupDates.length > 0 ? JSON.stringify(validPickupDates) : "",
+          };
       if (creating) {
         const res = await fetch("/api/admin/estates", {
           method: "POST",
@@ -691,10 +829,13 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       )}
                       <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
                         <span>/{estate.slug}</span>
-                        {estate.saleType !== "In-Person" && (
+                        {estate.saleType === "Home Pickup" && (
+                          <span className="text-amber-300">Pickup {homePickupLabel(estate)}</span>
+                        )}
+                        {estate.saleType === "Online" && (
                           <span>Drop every {estate.dropIntervalHours}h · {estate.dropPercent}% · floor {estate.floorPercent}%</span>
                         )}
-                        {estate.status === "Active" && estate.saleType !== "In-Person" && (
+                        {estate.status === "Active" && estate.saleType === "Online" && (
                           <span className="text-amber-400">{nextDropLabel(estate)}</span>
                         )}
                       </div>
@@ -857,6 +998,17 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                     </div>
                   );
                 })()}
+                {estate.saleType === "Home Pickup" && (
+                  <div onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => setPickupDayEstateId(id => id === estate.id ? null : estate.id)}
+                      className={`mt-3 text-xs px-2.5 py-1 rounded border transition-colors ${pickupDayEstateId === estate.id ? "bg-amber-900/40 border-amber-600 text-amber-200" : "text-gray-400 border-gray-700 hover:text-amber-300 hover:border-amber-600"}`}
+                    >
+                      {pickupDayEstateId === estate.id ? "Hide pickup day" : "Pickup day: items & orders"}
+                    </button>
+                    {pickupDayEstateId === estate.id && <HomePickupDayPanel estateId={estate.id} />}
+                  </div>
+                )}
                 {pickupBlastEstateId === estate.id && (
                   <PickupBlastPanel
                     estate={withInPersonPickupWindow(estate)}
@@ -912,7 +1064,8 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 />
               </Field>
 
-              <Field label="City / Region">
+              {form.saleType !== "Home Pickup" && (<>
+<Field label="City / Region">
                 <input
                   className={inputCls}
                   value={form.cityRegion}
@@ -920,6 +1073,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                   placeholder="Lincoln Park, Chicago"
                 />
               </Field>
+              </>)}
 
               <Field label="Client Project">
                 <TenantCombobox
@@ -935,24 +1089,101 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                   value={form.status}
                   onChange={e => setForm(f => ({ ...f, status: e.target.value as EstateStatus }))}
                 >
-                  <option value="Upcoming">Upcoming</option>
-                  <option value="Active">Active</option>
+                  <option value="Draft">Draft (not public)</option>
+                  {form.saleType !== "Home Pickup" && <option value="Upcoming">Upcoming</option>}
+                  <option value="Active">{form.saleType === "Home Pickup" ? "Live" : "Active"}</option>
                   <option value="Closed">Closed</option>
                 </select>
+                {form.saleType === "Home Pickup" && (
+                  <p className="text-xs text-gray-500 mt-1">Live sales show on profoundfinds.com until the pickup window ends, then close automatically.</p>
+                )}
               </Field>
 
               <Field label="Sale Type">
                 <select
                   className={inputCls}
                   value={form.saleType}
-                  onChange={e => setForm(f => ({ ...f, saleType: e.target.value as EstateSaleType }))}
+                  onChange={e => {
+                    const saleType = e.target.value as EstateSaleType;
+                    // Upcoming isn't a Home Pickup status (it would be public)
+                    setForm(f => ({ ...f, saleType, status: saleType === "Home Pickup" && f.status === "Upcoming" ? "Draft" : f.status }));
+                  }}
                 >
                   <option value="Online">Online (Dutch Auction)</option>
                   <option value="In-Person">In-Person</option>
+                  <option value="Home Pickup">Home Pickup</option>
                 </select>
               </Field>
 
-              <Field label="Sale Start Date & Time (CST)">
+              {form.saleType === "Home Pickup" && (
+                <div className="rounded-xl border border-amber-800/60 bg-amber-950/20 p-4 space-y-4">
+                  <p className="text-xs text-amber-200/80 leading-relaxed">
+                    Items join this sale when their Route is <strong>FB/Marketplace</strong> and their Estate Sale ID is this sale&apos;s ID. Shoppers see the town before buying. The full address and instructions go out in the order confirmation email.
+                  </p>
+                  <Field label="Pickup Street Address *">
+                    <input
+                      className={inputCls}
+                      value={form.pickupAddress}
+                      onChange={e => setForm(f => ({ ...f, pickupAddress: e.target.value }))}
+                      placeholder="1234 N Maple Ave"
+                    />
+                  </Field>
+                  <div className="grid grid-cols-6 gap-2">
+                    <div className="col-span-3">
+                      <Field label="City *">
+                        <input className={inputCls} value={form.pickupCity ?? ""} onChange={e => setForm(f => ({ ...f, pickupCity: e.target.value }))} placeholder="Evanston" />
+                      </Field>
+                    </div>
+                    <div className="col-span-1">
+                      <Field label="State">
+                        <input className={inputCls} value={form.pickupState ?? ""} maxLength={2} onChange={e => setForm(f => ({ ...f, pickupState: e.target.value.toUpperCase() }))} placeholder="IL" />
+                      </Field>
+                    </div>
+                    <div className="col-span-2">
+                      <Field label="ZIP">
+                        <input className={inputCls} value={form.pickupZip ?? ""} inputMode="numeric" maxLength={5} onChange={e => setForm(f => ({ ...f, pickupZip: e.target.value.replace(/\D/g, "") }))} placeholder="60201" />
+                      </Field>
+                    </div>
+                  </div>
+                  <Field label="Pickup Date & Window (CST) *">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        className={`${inputCls} flex-1 min-w-[150px] appearance-none [&::-webkit-date-and-time-value]:text-left`}
+                        value={form.pickupWindowStart}
+                        onChange={e => setForm(f => ({ ...f, pickupWindowStart: e.target.value }))}
+                      />
+                      <input
+                        type="time"
+                        className={`${inputCls} w-28 appearance-none [&::-webkit-date-and-time-value]:text-left`}
+                        value={to24h(form.pickupWindowStartTime ?? "")}
+                        onChange={e => setForm(f => ({ ...f, pickupWindowStartTime: to12h(e.target.value) }))}
+                        aria-label="Pickup start time"
+                      />
+                      <span className="text-gray-500 text-sm">to</span>
+                      <input
+                        type="time"
+                        className={`${inputCls} w-28 appearance-none [&::-webkit-date-and-time-value]:text-left`}
+                        value={to24h(form.pickupWindowEndTime ?? "")}
+                        onChange={e => setForm(f => ({ ...f, pickupWindowEndTime: to12h(e.target.value) }))}
+                        aria-label="Pickup end time"
+                      />
+                    </div>
+                  </Field>
+                  <Field label="Pickup Instructions (optional)">
+                    <textarea
+                      className={inputCls}
+                      rows={3}
+                      value={form.pickupNotes}
+                      onChange={e => setForm(f => ({ ...f, pickupNotes: e.target.value }))}
+                      placeholder="Park in the driveway, use the side door, bring help for heavy pieces."
+                    />
+                  </Field>
+                </div>
+              )}
+
+              {form.saleType !== "Home Pickup" && (<>
+<Field label="Sale Start Date & Time (CST)">
                 <div className="flex gap-2">
                   <input
                     type="date"
@@ -984,6 +1215,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                   />
                 </div>
               </Field>
+              </>)}
 
               {form.saleType === "Online" && (
                 <div className="grid grid-cols-3 gap-3">
@@ -1029,7 +1261,8 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                 />
               </Field>
 
-              <Field label="Pickup Address">
+              {form.saleType !== "Home Pickup" && (<>
+<Field label="Pickup Address">
                 <input
                   className={inputCls}
                   value={form.pickupAddress}
@@ -1150,6 +1383,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                   Hide sold items from buyers on ProFound Finds
                 </label>
               </div>
+              </>)}
 
               <Field label="Terms">
                 <textarea
@@ -1195,7 +1429,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
               )}
 
               {/* Featured Image */}
-              <Field label="Featured Image">
+              <Field label={form.saleType === "Home Pickup" ? "Cover Image (optional)" : "Featured Image"}>
                 <div className="space-y-2">
                   {form.featuredImageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element

@@ -4466,7 +4466,7 @@ export function buildItemSoldEmail({
   catalogUrl: string;
   zelleMatch?: { payerName: string; amount: number; sentOn: string; memo?: string };
   markedSoldBy?: string;
-  markedSoldBySource?: "Manual" | "Square";
+  markedSoldBySource?: "Manual" | "Square" | "Online";
   isAdjustment?: boolean;
   changedFields?: Array<{ label: string; oldValue: string; newValue: string }>;
 }): string {
@@ -4489,6 +4489,8 @@ export function buildItemSoldEmail({
 
   const recordedByLabel = markedSoldBySource === "Square"
     ? "Square Integration"
+    : markedSoldBySource === "Online"
+    ? "ProFound Finds checkout"
     : (markedSoldBy || "Unknown");
 
   const rows = [
@@ -4504,6 +4506,8 @@ export function buildItemSoldEmail({
       isAdjustment ? "Updated By" : "Marked Sold By",
       markedSoldBySource === "Square"
         ? `<span style="background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.3px;">SQUARE</span> Square Integration`
+        : markedSoldBySource === "Online"
+        ? `<span style="background:#ecfdf5;color:#047857;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.3px;">ONLINE</span> ProFound Finds checkout`
         : recordedByLabel
     ),
   ].join("");

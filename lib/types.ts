@@ -478,8 +478,8 @@ export interface StorefrontBuyer {
 }
 
 // ─── Estate Sale ──────────────────────────────────────────────────────────────
-export type EstateStatus = "Upcoming" | "Active" | "Closed";
-export type EstateSaleType = "Online" | "In-Person";
+export type EstateStatus = "Draft" | "Upcoming" | "Active" | "Closed";
+export type EstateSaleType = "Online" | "In-Person" | "Home Pickup";
 export type EstateSaleShopperSource = "Online Estate Sale" | "Online Catalog" | "In-Person" | "Manual";
 
 export interface EstateSaleShopper {
@@ -517,6 +517,11 @@ export interface Estate {
   dropPercent: number;
   floorPercent: number;
   pickupAddress: string;
+  /** Home Pickup sales only — structured parts of the pickup address
+   * (pickupAddress holds the street). */
+  pickupCity?: string;
+  pickupState?: string;
+  pickupZip?: string;
   pickupWindowStart: string;
   pickupWindowEnd: string;
   pickupWindowStartTime?: string;  // e.g. "10:00 AM" — single-line text field in Airtable

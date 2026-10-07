@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getItemById, updateItem, createItem, createItemSaleEvent, getSaleEventByPaymentAndItem, logFailedSaleSync, getEstateById, createStorefrontBuyer, upsertShopperFromPurchase, updateShopperCategoryInterests } from "@/lib/airtable";
+import { checkStorefrontItem } from "@/lib/storefront-gate";
+import { sendOnlineItemSoldNotification } from "@/lib/item-sold-notification";
 
 function checkAuth(req: NextRequest): boolean {
   const key = req.headers.get("x-storefront-api-key");
@@ -26,7 +28,7 @@ async function attemptRecordSale(data: {
     console.log(`[storefront/sale] Duplicate suppressed — event already exists for PI ${data.stripePaymentIntentId} item ${data.itemId}`);
     // Still need to return estate info for cache busting
     const item = await getItemById(data.itemId).catch(() => null);
-    if (item?.primaryRoute === "Estate Sale" && item.estateSaleId) {
+    if ((item?.primaryRoute === "Estate Sale" || item?.primaryRoute === "FB/Marketplace") && item.estateSaleId) {
       const estate = await getEstateById(item.estateSaleId).catch(() => null);
       if (estate) return { estateSlug: estate.slug, estateSaleId: item.estateSaleId, estateName: estate.name, alreadyRecorded: true };
     }
@@ -36,7 +38,10 @@ async function attemptRecordSale(data: {
 
   const item = await getItemById(data.itemId);
   if (!item) throw new Error(`Item ${data.itemId} not found`);
-  if (item.primaryRoute !== "ProFoundFinds Consignment" && item.primaryRoute !== "Estate Sale") {
+  // FB/Marketplace items sell online only through a Home Pickup sale. A paid
+  // order is never refused because the pickup window closed mid-checkout.
+  const gate = await checkStorefrontItem(item, { requireLive: false });
+  if (!gate.ok) {
     throw new Error(`Item ${data.itemId} has unexpected primaryRoute: ${item.primaryRoute}`);
   }
 
@@ -70,10 +75,16 @@ async function attemptRecordSale(data: {
   const clearStaffSeller = item.primaryRoute === "ProFoundFinds Consignment"
     ? { staffSellerId: "", staffSellerName: "" }
     : {};
+  // Home Pickup (FB/Marketplace) items keep their staff seller and get the
+  // same 15% commission an FB sale marked Sold in Rightsize gets, unless one
+  // is already set. Logged time (StaffTimeMinutes) is left untouched.
+  const fbCommission = item.primaryRoute === "FB/Marketplace" && !item.staffCommissionPercent
+    ? { staffCommissionPercent: 15 }
+    : {};
 
   if (qtyPurchased >= itemTotalQty) {
     // Buying all available units — mark the original item sold (existing behavior)
-    await updateItem(data.itemId, { status: "Sold", quantity: qtyPurchased, ...saleFields, ...clearStaffSeller });
+    await updateItem(data.itemId, { status: "Sold", quantity: qtyPurchased, ...saleFields, ...clearStaffSeller, ...fbCommission });
   } else {
     // Partial purchase — create a sold copy for the units purchased, reduce original
     const soldCopy = await createItem({
@@ -97,7 +108,13 @@ async function attemptRecordSale(data: {
       status: "Sold",
       quantity: qtyPurchased,
     });
-    await updateItem(soldCopy.id, saleFields);
+    await updateItem(soldCopy.id, {
+      ...saleFields,
+      // The sold copy carries the seller credit for Home Pickup items
+      ...(item.primaryRoute === "FB/Marketplace"
+        ? { staffSellerId: item.staffSellerId, staffSellerName: item.staffSellerName, staffCommissionPercent: item.staffCommissionPercent || 15 }
+        : {}),
+    });
     // Reduce original item's available quantity
     await updateItem(data.itemId, {
       quantity: itemTotalQty - qtyPurchased,
@@ -120,11 +137,29 @@ async function attemptRecordSale(data: {
     payoutPaid: false,
   });
 
+  // Same "Item Sold" email (admins + staff seller) the manual Sold flow sends,
+  // for FB/Marketplace (Home Pickup) items. Runs after the response so a slow
+  // or failed email never holds up or fails the recorded sale. Scheduled only
+  // after the SaleEvent exists, so retries and duplicate webhook deliveries
+  // return early at the idempotency check and never send it twice.
+  if (item.primaryRoute === "FB/Marketplace") {
+    after(() =>
+      sendOnlineItemSoldNotification({
+        item: { ...item, staffCommissionPercent: item.staffCommissionPercent || 15 },
+        salePrice: data.salePrice,
+        buyerName: data.buyerName,
+        consignorPayout,
+        saleDate,
+      }).catch((e) => console.error("[storefront/sale] online item-sold email failed:", e))
+    );
+  }
+
+
   // Return estate info so the caller can bust the estate ISR cache and log buyer
   let estateSlug: string | undefined;
   let estateSaleId: string | undefined;
   let estateName: string | undefined;
-  if (item.primaryRoute === "Estate Sale" && item.estateSaleId) {
+  if ((item.primaryRoute === "Estate Sale" || item.primaryRoute === "FB/Marketplace") && item.estateSaleId) {
     const estate = await getEstateById(item.estateSaleId).catch(() => null);
     if (estate) {
       estateSlug = estate.slug;

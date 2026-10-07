@@ -810,9 +810,11 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 <p className="mt-1 text-xs text-gray-400">Auto-filled from client city. Shown to shoppers on profoundfinds.com.</p>
               </div>
             )}
-            {isTTT && form.primaryRoute === "Estate Sale" && (
+            {isTTT && (form.primaryRoute === "Estate Sale" || form.primaryRoute === "FB/Marketplace") && (
               <div>
-                <label className={labelClass}>Estate Sale ID</label>
+                <label className={labelClass}>
+                  {form.primaryRoute === "FB/Marketplace" ? <>Home Pickup Sale ID <span className="font-normal text-gray-400">(optional)</span></> : "Estate Sale ID"}
+                </label>
                 <input
                   type="text"
                   value={form.estateSaleId ?? ""}
@@ -820,7 +822,11 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   placeholder="Airtable record ID from /admin/estates"
                   className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent font-mono text-xs"
                 />
-                <p className="mt-1 text-xs text-gray-400">Copy from the estate card in /admin/estates. Used for Dutch auction pricing.</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  {form.primaryRoute === "FB/Marketplace"
+                    ? "Copy from the Home Pickup sale in /admin/estates. With status Listed, the item shows on that sale on profoundfinds.com."
+                    : "Copy from the estate card in /admin/estates. Used for Dutch auction pricing."}
+                </p>
               </div>
             )}
             <div>
@@ -1448,7 +1454,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
 
   // ── Bulk Assign to Estate Sale ────────────────────────────────────────────
   const [estateSaleModalOpen, setEstateSaleModalOpen] = useState(false);
-  const [estates, setEstates] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [estates, setEstates] = useState<{ id: string; name: string; status: string; saleType?: string }[]>([]);
   const [estatesLoading, setEstatesLoading] = useState(false);
   const [selectedEstateId, setSelectedEstateId] = useState("");
   const [estateSearch, setEstateSearch] = useState("");
@@ -1489,7 +1495,9 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           body: JSON.stringify({
             id,
             estateSaleId: selectedEstateId,
-            primaryRoute: "Estate Sale",
+            // Home Pickup sales hold FB/Marketplace items; every other sale
+            // type holds Estate Sale items.
+            primaryRoute: estates.find(e => e.id === selectedEstateId)?.saleType === "Home Pickup" ? "FB/Marketplace" : "Estate Sale",
             status: "Listed",
           }),
         }).then(r => r.ok ? r.json() : Promise.reject())
@@ -2157,7 +2165,10 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                           onClick={() => setSelectedEstateId(e.id)}
                           className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-forest-50 transition-colors ${selectedEstateId === e.id ? "bg-forest-50 font-semibold" : ""}`}
                         >
-                          <span className="text-gray-900">{e.name}</span>
+                          <span className="text-gray-900">
+                            {e.name}
+                            {e.saleType === "Home Pickup" && <span className="ml-1.5 text-[10px] font-medium text-amber-700">Home Pickup</span>}
+                          </span>
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
                             e.status === "Active"   ? "bg-green-100 text-green-700" :
                             e.status === "Upcoming" ? "bg-blue-100 text-blue-700" :
