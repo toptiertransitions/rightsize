@@ -1364,6 +1364,9 @@ function BoxIdBadge({ item, onSaved }: { item: Item; onSaved: (updated: Item) =>
   );
 }
 
+// Statuses Assign Estate Sale leaves alone (it would otherwise reset them to Listed).
+const ESTATE_ASSIGN_SKIP_STATUSES = new Set(["Sold", "In Cart", "Donated", "Discarded"]);
+
 // ─── Bulk action button ───────────────────────────────────────────────────────
 // One consistent size/shape for every action in the table's bulk bar.
 
@@ -1474,7 +1477,10 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     if (!selectedEstateId || selected.size === 0) return;
     setBulkEstateLoading(true);
     setBulkEstateMsg("");
-    const ids = [...selected];
+    // Assigning sets status to Listed, so never touch items that are already
+    // sold, in a shopper's cart, or done — that would silently un-sell them.
+    const ids = [...selected].filter(id => !ESTATE_ASSIGN_SKIP_STATUSES.has(items.find(i => i.id === id)?.status ?? ""));
+    const skippedCount = selected.size - ids.length;
     const results = await Promise.allSettled(
       ids.map(id =>
         fetch("/api/items", {
@@ -1499,7 +1505,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       }
     });
     setBulkEstateMsg(
-      `${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} assigned${failed > 0 ? ` · ${failed} failed` : ""}`
+      `${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} assigned${failed > 0 ? ` · ${failed} failed` : ""}${skippedCount > 0 ? ` · ${skippedCount} skipped (already sold, in a cart, donated, or discarded)` : ""}`
     );
     setBulkEstateLoading(false);
     if (succeeded.length > 0) setSelected(new Set());
@@ -1833,11 +1839,11 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     }
   };
 
+  // Only ever the items the user ticked — it lives in the bulk bar, so the
+  // selection is the contract (it used to swap in every "To Be Moved" item
+  // in the list whenever any existed, silently ignoring the selection).
   const handleMoversPDF = async () => {
-    const toBeMovedIds = items
-      .filter((i) => i.primaryRoute === "To Be Moved")
-      .map((i) => i.id);
-    const itemIds = toBeMovedIds.length > 0 ? toBeMovedIds : [...selected];
+    const itemIds = [...selected];
     if (itemIds.length === 0) return;
     setPdfLoading(true);
     try {
