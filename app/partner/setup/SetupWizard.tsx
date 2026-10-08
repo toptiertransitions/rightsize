@@ -68,8 +68,8 @@ function tourSlides(firstName: string): Slide[] {
     },
     {
       icon: <FileText className="w-9 h-9" />,
-      title: "Documents in One Place",
-      body: "Agreements and files we share with you live under Documents, ready whenever you need them.",
+      title: "Share Files with Clients",
+      body: "Send a quote, contract, or checklist straight to a client you're working with from Documents. It shows up on their Partners page in Rightsize.",
       nextLabel: "Go to my portal",
     },
   ];

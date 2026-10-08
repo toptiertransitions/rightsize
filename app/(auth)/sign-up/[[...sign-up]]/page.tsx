@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense } from "react";
-import { SignUp } from "@clerk/nextjs";
+import { Suspense, useEffect, useState } from "react";
+import { SignUp, useAuth, useClerk } from "@clerk/nextjs";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AccountSplash } from "@/components/auth/AccountSplash";
 import InAppBrowserWarning from "./InAppBrowserWarning";
 import { isNativeApp } from "@/lib/native";
 
@@ -29,6 +30,32 @@ function SignUpContent() {
   // (it's how the new account gets linked to the invitation).
   const invitedEmail = searchParams.get("email") ?? undefined;
 
+  // The moment the account exists, cover Clerk's card with the setup
+  // screen. Right after the email code is accepted, Clerk briefly routes
+  // back to /sign-up and re-renders the "Create your account" form before
+  // its redirect fires; that's the login-page flash people saw. Keyed on
+  // the new session existing (not just "signed in", which comes a beat
+  // later) and kept up until we leave this page. Finishes the hop
+  // ourselves if Clerk's own redirect is slow.
+  const { isLoaded, isSignedIn } = useAuth();
+  const clerk = useClerk();
+  const router = useRouter();
+  const [signUpComplete, setSignUpComplete] = useState(false);
+  useEffect(() => {
+    // Clerk records the new session on the client (lastActiveSessionId)
+    // the instant the code is accepted, ~1.5s before it counts as signed in
+    // and before the form re-renders, so key on that.
+    return clerk.addListener(({ client, session }) => {
+      if (session || client?.lastActiveSessionId || client?.signUp?.status === "complete") setSignUpComplete(true);
+    });
+  }, [clerk]);
+  const showSplash = signUpComplete || (isLoaded && !!isSignedIn);
+  useEffect(() => {
+    if (!showSplash) return;
+    const t = setTimeout(() => router.replace(redirectUrl), 2000);
+    return () => clearTimeout(t);
+  }, [showSplash, router, redirectUrl]);
+
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
       <div className="mb-8 text-center">
@@ -45,6 +72,7 @@ function SignUpContent() {
         </Link>
         <p className="text-sm text-gray-500">Free account · No credit card needed</p>
       </div>
+      {showSplash && <AccountSplash overlay />}
       <InAppBrowserWarning />
       <SignUp
         fallbackRedirectUrl={redirectUrl}

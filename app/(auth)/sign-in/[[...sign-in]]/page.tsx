@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense } from "react";
-import { SignIn } from "@clerk/nextjs";
+import { Suspense, useEffect, useState } from "react";
+import { SignIn, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AccountSplash, hasClerkSessionCookie } from "@/components/auth/AccountSplash";
 import { isNativeApp } from "@/lib/native";
 
 function SignInContent() {
@@ -21,8 +22,24 @@ function SignInContent() {
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get("redirect_url") || "/home";
 
+  // Someone who's already signed in can land here for a moment (e.g. a
+  // brand-new session that hadn't reached the server yet). Never show them
+  // the login form: show the setup screen and send them on through
+  // /continue, which waits until the server sees the session.
+  const { isLoaded, isSignedIn } = useAuth();
+  const router = useRouter();
+  const [cookieSession, setCookieSession] = useState(false);
+  useEffect(() => { setCookieSession(hasClerkSessionCookie()); }, []);
+  const signedIn = isLoaded ? !!isSignedIn : cookieSession;
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const t = setTimeout(() => router.replace(`/continue?to=${encodeURIComponent(redirectUrl)}`), 1200);
+    return () => clearTimeout(t);
+  }, [isLoaded, isSignedIn, router, redirectUrl]);
+
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
+      {signedIn && <AccountSplash overlay message="Signing you in…" />}
       <div className="mb-8 text-center">
         <Link href="/" className="inline-flex items-center gap-2.5 mb-4">
           <div className="w-10 h-10 bg-forest-600 rounded-xl flex items-center justify-center">
