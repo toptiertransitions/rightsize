@@ -182,8 +182,9 @@ export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefill
             <textarea
               value={typeof value === "string" ? value : ""}
               onChange={(e) => setValue(e.target.value)}
+              placeholder={question.placeholder}
               rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-forest-500 resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 text-base placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-forest-500 resize-none"
             />
           )}
 

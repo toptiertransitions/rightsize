@@ -28,6 +28,8 @@ export interface PartnerQuestion {
   type: PartnerQuestionType;
   options?: PartnerQuestionOption[];
   optional?: boolean;
+  /** Grey example text in a text answer box; disappears once they type. */
+  placeholder?: string;
   /** Best-guess answer from onboarding data, shown pre-selected so the user
    * can just confirm or change it rather than re-entering what we already
    * know. */
@@ -616,14 +618,25 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       matchQuestionKey: "careTypes",
     },
     {
-      id: "frequency",
-      prompt: "How often is care needed?",
+      id: "daysPerWeek",
+      prompt: "How many days per week are you looking for?",
       type: "single-select",
       options: [
-        { value: "few_hours_week", label: "A few hours a week" },
-        { value: "daily_visits", label: "Daily visits" },
-        { value: "live_in", label: "Live-in / 24-7 care" },
-        { value: "not_sure", label: "Not sure yet" },
+        { value: "daily", label: "Daily" },
+        { value: "3_4_days", label: "3-4 days a week" },
+        { value: "1_2_days", label: "1-2 days a week" },
+        { value: "occasionally", label: "Just occasionally" },
+      ],
+    },
+    {
+      id: "hoursPerVisit",
+      prompt: "How many hours per visit?",
+      type: "single-select",
+      options: [
+        { value: "live_in", label: "24/7 or live-in" },
+        { value: "4_plus", label: "4+ hours per visit" },
+        { value: "2_4", label: "2-4 hours per visit" },
+        { value: "under_2", label: "Under 2 hours per visit" },
       ],
     },
     {
@@ -640,11 +653,33 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
       prefill: prefillTimeline,
       skipIfPrefilled: true,
     },
+    // Non-medical companion care is mostly private pay: Original Medicare
+    // doesn't cover it. The other real sources are long-term care insurance,
+    // Medicaid home and community-based waivers (in Illinois, the Community
+    // Care Program through the Dept. on Aging), VA benefits (Aid & Attendance
+    // pension or the VA Homemaker/Home Health Aide program), and some
+    // Medicare Advantage plans' in-home support benefits.
+    {
+      id: "payment",
+      prompt: "How are you planning on paying?",
+      helper: "Choose all that apply.",
+      type: "chips-multi",
+      options: [
+        { value: "private_pay", label: "Paying directly (private pay)" },
+        { value: "ltc_insurance", label: "Long-term care insurance" },
+        { value: "medicaid", label: "Medicaid or a state program (like the Community Care Program)" },
+        { value: "va_benefits", label: "VA benefits (like Aid & Attendance)" },
+        { value: "medicare_advantage", label: "Medicare Advantage plan benefits" },
+        { value: "not_sure", label: "Not sure yet" },
+      ],
+      matchQuestionKey: "acceptedPayers",
+    },
     {
       id: "notes",
       prompt: "Anything else the caregiver should know?",
       type: "text",
       optional: true,
+      placeholder: "For example: other care already in place (like home health care), memory concerns, pets in the home, preferred language, or best times for visits.",
     },
   ],
 

@@ -70,7 +70,8 @@ describe("getVisibleQuestions — cross-category skip", () => {
   it("leaves category-specific questions untouched", () => {
     const withCross = getVisibleQuestions("Companion Care", EMPTY_TENANT, { whoFor: "parent", zip: "60601" });
     expect(withCross.some((q) => q.id === "careNeeds")).toBe(true);
-    expect(withCross.some((q) => q.id === "frequency")).toBe(true);
+    expect(withCross.some((q) => q.id === "daysPerWeek")).toBe(true);
+    expect(withCross.some((q) => q.id === "hoursPerVisit")).toBe(true);
   });
 
   it("does not affect Mover's fromZip/toZip, which use a different id than the shared 'zip'", () => {
