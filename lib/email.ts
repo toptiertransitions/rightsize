@@ -6387,10 +6387,10 @@ export function buildPartnerInviteEmail({
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:12px;">Partner Portal</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">You&rsquo;re a TTT Partner!</p>
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">You&rsquo;re a Top Tier Partner!</p>
           <p style="margin:0 0 24px;font-size:15px;color:#4B5563;line-height:1.6;">
             Hi ${partnerName},<br><br>
-            <strong>${inviterName}</strong> has set you up with access to the TTT Partner Portal.
+            <strong>${inviterName}</strong> has set you up with access to the Top Tier Partner Portal.
             You can log in to track referred clients, view project progress, see Google reviews, and check your referral points.
           </p>
           <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         subject: "Access your Top Tier Partner Portal",
         html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
           <h2 style="color:#2d4a3e;">Partner Portal Invitation</h2>
-          <p style="color:#444;">You've been invited to the TTT Partner Portal. Click below to create your account.</p>
+          <p style="color:#444;">You've been invited to the Top Tier Partner Portal. Click below to create your account.</p>
           <a href="${appUrl}/sign-up" style="display:inline-block;background:#2d4a3e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Create Account</a>
         </div>`,
       });
