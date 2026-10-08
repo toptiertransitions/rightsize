@@ -20,6 +20,8 @@ import {
   invitePartnerToPortalAction,
 } from "../../actions";
 import { FieldInput } from "../../FieldInput";
+import { MatchCriteriaEditor } from "../../MatchCriteriaEditor";
+import type { PartnerCategory } from "@/lib/types";
 import { IL_COUNTY_OPTIONS, isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
 
 interface LegacyReview { score: number; comment: string; date: string }
@@ -228,6 +230,11 @@ function ListingEditor({ listing, category }: { listing: MarketplaceListing; cat
           {listing.status}
         </span>
       </div>
+      <MatchCriteriaEditor
+        category={category.label as PartnerCategory}
+        attributes={attributes}
+        onChange={setAttributes}
+      />
       <div className="space-y-3">
         {category.fieldSchema.map((field) => (
           <div key={field.key}>

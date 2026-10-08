@@ -2,6 +2,7 @@ import type { PartnerProfile, PartnerCategory, ClientLocation } from "./types";
 import type { PartnerRequest } from "@/lib/types";
 import { parseZipList } from "./match";
 import { getPartnerQuestions } from "./questions";
+import { readMatchCriteria, NEUTRAL_OPTION_VALUES } from "./criteria";
 
 // Deterministic, no-LLM scoring for Phase 3 guided matching. Weights are
 // exactly as specified (fit 35 / seniorSpecialty 20 / responsiveness 15 /
@@ -15,19 +16,24 @@ import { getPartnerQuestions } from "./questions";
 // (service-area match strength, and completed-project volume respectively)
 // — documented here rather than hidden, since neither is a true semantic
 // "fit to this client's answers" or "outcome quality" measure yet.
+// The six original factors keep their relative proportions (35/20/15/10/
+// 10/5), scaled to share 75% so attributeOverlap can carry 25% and the
+// total stays 1.0. Scaling them uniformly means partners with no criteria
+// set rank among themselves exactly as before.
+const BASE_SCALE = 0.75 / 0.95;
 export const SCORING_WEIGHTS = {
-  fit: 0.35,
-  seniorSpecialty: 0.2,
-  responsiveness: 0.15,
-  reviews: 0.1,
-  pastOutcomes: 0.1,
-  adminOrder: 0.05,
-  // Phase 5 addition: how well the client's category-specific answers
-  // overlap with this listing's filled-in attributes (see
-  // attributeOverlapScore below). Small weight on purpose — most listings
-  // don't have attributes filled in yet, so this mostly contributes 0
-  // today and will matter more as admins complete profiles, not before.
-  attributeOverlap: 0.05,
+  fit: 0.35 * BASE_SCALE,
+  seniorSpecialty: 0.2 * BASE_SCALE,
+  responsiveness: 0.15 * BASE_SCALE,
+  reviews: 0.1 * BASE_SCALE,
+  pastOutcomes: 0.1 * BASE_SCALE,
+  adminOrder: 0.05 * BASE_SCALE,
+  // How well the client's category-specific answers fit what this listing
+  // says it serves (see attributeOverlapScore below). Raised from 0.05 once
+  // partners could set exact matching criteria (lib/partners/criteria.ts):
+  // it's now a real fit signal. A listing with nothing filled in scores 0
+  // here, as before, so rankings only shift as criteria get set.
+  attributeOverlap: 0.25,
 } as const;
 
 export const MAX_INTRO_REQUESTS_PER_CATEGORY = 2;
@@ -83,11 +89,29 @@ function attributeOverlapScore(
 ): number {
   if (!attributes) return 0;
   const questions = getPartnerQuestions(category).filter((q) => q.matchQuestionKey);
-  if (questions.length === 0) return 0;
 
   let totalScore = 0;
   let scoredQuestions = 0;
+  const criteria = readMatchCriteria(attributes);
+
+  // Exact criteria first: the partner picked from the very same options
+  // the client answered, so compare option values directly.
+  const exactIds = new Set<string>();
+  for (const q of getPartnerQuestions(category)) {
+    const partnerValues = criteria[q.id];
+    if (!partnerValues || partnerValues.length === 0) continue;
+    const raw = answers[q.id];
+    const clientValues = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter((v) => !NEUTRAL_OPTION_VALUES.has(v));
+    if (clientValues.length === 0) continue;
+    exactIds.add(q.id);
+    scoredQuestions++;
+    if (clientValues.some((v) => partnerValues.includes(v))) totalScore += 1;
+  }
+
+  // Legacy: loose label match against admin-entered category fields, for
+  // questions the partner hasn't set exact criteria on yet.
   for (const q of questions) {
+    if (exactIds.has(q.id)) continue;
     const attrValue = attributes[q.matchQuestionKey!];
     const attrLabels = Array.isArray(attrValue)
       ? attrValue.map((v) => String(v).toLowerCase())
@@ -112,8 +136,9 @@ function capitalize(s: string): string {
   return s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
-function buildWhyThisMatch(partner: PartnerProfile, zipMatch: boolean): string {
+function buildWhyThisMatch(partner: PartnerProfile, zipMatch: boolean, fitsAnswers = false): string {
   const reasons: string[] = [];
+  if (fitsAnswers) reasons.push("offers what you're looking for");
   if (zipMatch) reasons.push("serves your area");
   if (partner.seniorSpecialty) reasons.push("experienced with senior moves");
   if (partner.reviewCount > 0 && partner.avgRating >= 4.5) {
@@ -186,7 +211,7 @@ export function scoreAndRankPartners(
       partner,
       score,
       matchedLocation: zipMatch ? "area" : isLocalMatch ? "nearby" : "virtual",
-      whyThisMatch: buildWhyThisMatch(partner, zipMatch),
+      whyThisMatch: buildWhyThisMatch(partner, zipMatch, attributeScore === 1),
     });
   }
 

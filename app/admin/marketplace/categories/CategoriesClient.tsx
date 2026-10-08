@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { MarketplaceCategory, MarketplaceFieldDef, MarketplaceFieldType } from "@/lib/marketplace/types";
 import { FieldInput } from "../FieldInput";
+import { getPartnerCriteria } from "@/lib/partners/criteria";
+import type { PartnerCategory } from "@/lib/types";
 import {
   updateCategoryFieldSchemaAction,
   updateCategoryBasicInfoAction,
@@ -116,6 +118,8 @@ function CategoryEditor({ category, canEdit }: { category: MarketplaceCategory; 
           {saving ? "Saving…" : "Save Basic Info"}
         </button>
       </section>
+
+      <MatchingCriteriaPreview category={category} />
 
       {/* Field schema builder */}
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -277,6 +281,38 @@ function ReferralPolicyEditor({ category }: { category: MarketplaceCategory }) {
         </button>
         {msg && <span className="text-xs text-gray-500">{msg}</span>}
       </div>
+    </section>
+  );
+}
+
+// Read-only: the partner matching criteria are generated from the client
+// matching questions in code (lib/partners/questions.ts), so this shows
+// exactly what partners and clients are asked, side by side.
+function MatchingCriteriaPreview({ category }: { category: MarketplaceCategory }) {
+  const criteria = getPartnerCriteria(category.label as PartnerCategory);
+  return (
+    <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <h2 className="text-sm font-semibold text-white mb-1">Matching Criteria</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        Built automatically from the client matching questions. When a client question or option changes, partners and this page update with it.
+      </p>
+      {criteria.length === 0 ? (
+        <p className="text-sm text-gray-500">This category has no guided client questions, so there are no matching criteria.</p>
+      ) : (
+        <div className="space-y-4">
+          {criteria.map((c) => (
+            <div key={c.questionId}>
+              <p className="text-sm text-gray-200">{c.prompt}</p>
+              <p className="text-[11px] text-gray-500 mb-1.5">Clients see: {c.clientPrompt}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {c.options.map((o) => (
+                  <span key={o.value} className="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 border border-gray-700 text-gray-300">{o.label}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

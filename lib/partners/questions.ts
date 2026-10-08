@@ -45,6 +45,16 @@ export interface PartnerQuestion {
    * timeline, free-text notes) — those drive hard filtering or are purely
    * informational, not scored. */
   matchQuestionKey?: string;
+  /** How this question is asked of PARTNERS when they set their matching
+   * criteria (lib/partners/criteria.ts): every select question becomes a
+   * "which of these do you serve?" question with the same options, so
+   * adding or changing a client question updates the partner side too.
+   * Leave unset for a generic fallback wording. */
+  partnerPrompt?: string;
+  /** false = describes the client's situation, not something a partner
+   * serves or doesn't (e.g. "Do you already have a will?"), so it's never
+   * a partner criterion. */
+  partnerCriteria?: false;
 }
 
 // Prepended to every category's question list (see getPartnerQuestions) —
@@ -228,6 +238,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   Realtor: [
     {
       id: "intent",
+      partnerPrompt: "Do you work with sellers, buyers, or both?",
       prompt: "Are you selling your current home, buying a new one, or both?",
       type: "single-select",
       options: [
@@ -252,6 +263,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "propertyType",
+      partnerPrompt: "Which property types do you handle?",
       prompt: "What type of property is it?",
       type: "single-select",
       options: [
@@ -272,6 +284,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   Community: [
     {
       id: "careType",
+      partnerPrompt: "Which care levels does your community offer?",
       prompt: "What type of community are you looking for?",
       type: "single-select",
       options: [
@@ -336,6 +349,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "homeSize",
+      partnerPrompt: "Which move sizes do you take on?",
       prompt: "Roughly how much needs to move?",
       type: "single-select",
       options: [
@@ -349,6 +363,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "packingHelp",
+      partnerPrompt: "Which of these do you offer?",
       prompt: "Do you need packing help, or just the move itself?",
       type: "single-select",
       options: [
@@ -363,6 +378,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   Hauler: [
     {
       id: "items",
+      partnerPrompt: "What do you haul away?",
       prompt: "What needs to be hauled away?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -377,6 +393,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "volume",
+      partnerPrompt: "Which job sizes do you take on?",
       prompt: "Roughly how much volume?",
       type: "single-select",
       options: [
@@ -403,6 +420,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "specialItems",
+      partnerPrompt: "Which special items can you handle?",
       prompt: "Any items needing special handling?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -419,6 +437,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   Donation: [
     {
       id: "items",
+      partnerPrompt: "Which items do you accept?",
       prompt: "What are you hoping to donate?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -433,6 +452,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "volume",
+      partnerPrompt: "Which donation sizes do you take?",
       prompt: "Roughly how much?",
       type: "single-select",
       options: [
@@ -444,6 +464,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "pickupOrDropoff",
+      partnerPrompt: "Do you offer pickup, drop-off, or both?",
       prompt: "Do you need pickup, or can you drop off?",
       type: "single-select",
       options: [
@@ -472,6 +493,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   "Care Manager": [
     {
       id: "careNeeds",
+      partnerPrompt: "Which services do you provide?",
       prompt: "What would you like help with?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -509,6 +531,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   "Estate Attorney": [
     {
       id: "serviceType",
+      partnerPrompt: "Which practice areas do you handle?",
       prompt: "What kind of legal help do you need?",
       type: "single-select",
       options: [
@@ -536,6 +559,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "hasExistingDocuments",
+      partnerCriteria: false,
       prompt: "Do you already have a will or estate plan in place?",
       type: "single-select",
       options: [
@@ -557,6 +581,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   "Financial Advisory": [
     {
       id: "focusArea",
+      partnerPrompt: "Which areas do you focus on?",
       prompt: "What would you like help with?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -585,6 +610,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "hasAdvisor",
+      partnerCriteria: false,
       prompt: "Do you currently work with a financial advisor?",
       type: "single-select",
       options: [
@@ -604,6 +630,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   "Companion Care": [
     {
       id: "careNeeds",
+      partnerPrompt: "Which kinds of support do you provide?",
       prompt: "What kind of support are you looking for?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -619,6 +646,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "daysPerWeek",
+      partnerPrompt: "Which schedules do you take on?",
       prompt: "How many days per week are you looking for?",
       type: "single-select",
       options: [
@@ -630,6 +658,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "hoursPerVisit",
+      partnerPrompt: "Which visit lengths do you offer?",
       prompt: "How many hours per visit?",
       type: "single-select",
       options: [
@@ -661,6 +690,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     // Medicare Advantage plans' in-home support benefits.
     {
       id: "payment",
+      partnerPrompt: "Which payment sources do you accept?",
       prompt: "How are you planning on paying?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -694,6 +724,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   "Home Health Care": [
     {
       id: "careType",
+      partnerPrompt: "Which kinds of care do you provide?",
       prompt: "What kind of care is needed?",
       helper: "Choose all that apply.",
       type: "chips-multi",
@@ -710,6 +741,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
     },
     {
       id: "payer",
+      partnerPrompt: "Which payers do you accept?",
       prompt: "How will this be paid for?",
       type: "single-select",
       options: [
@@ -748,6 +780,7 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   "After Loss Support": [
     {
       id: "supportType",
+      partnerPrompt: "Which kinds of support do you provide?",
       prompt: "What kind of support are you looking for?",
       helper: "Choose all that apply.",
       type: "chips-multi",
