@@ -86,6 +86,9 @@ export interface PartnerAIStatusResult {
   statusAt: string;
   /** The full data summary the status was written from (reused by the War Room report). */
   context: string;
+  /** Extra timing, won/lost, and prior-quarter facts for the War Room report only
+   *  (not part of the AI Status prompt). */
+  brief: string;
 }
 
 export async function generatePartnerAIStatus(companyId: string, quarterId: string): Promise<PartnerAIStatusResult> {
@@ -305,6 +308,113 @@ export async function generatePartnerAIStatus(companyId: string, quarterId: stri
     .slice(-6)
     .map(([mo, v]) => `  ${mo}: ${v.meetings} meetings, ${v.emails} emails, ${v.other} other`)
     .join("\n");
+
+  // ── Step 8b: War Room brief (timing, won/lost deals, prior quarter) ──────────
+  // Only returned to the War Room report; the AI Status prompt below is unchanged.
+
+  const brief = await (async () => {
+    const day = (d: string) => d.slice(0, 10);
+    const inRange = (d: string, a: string, b: string) => !!d && day(d) >= a && day(d) <= b;
+    const money = (v: number) => (v > 0 ? `$${Math.round(v).toLocaleString()}` : "no value");
+    const lines: string[] = [];
+
+    // Calendar context
+    const today = new Date(todayStr + "T12:00:00Z");
+    const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+    const daysLeftInMonth = monthEnd.getUTCDate() - today.getUTCDate();
+    const monthIdx = quarterStart ? (today.getUTCMonth() - new Date(quarterStart + "T12:00:00Z").getUTCMonth() + 12) % 12 + 1 : null;
+    const daysLeftInQuarter = quarterEnd ? Math.max(0, Math.round((new Date(quarterEnd + "T12:00:00Z").getTime() - today.getTime()) / 86400000)) : null;
+    lines.push(`TODAY: ${today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}` +
+      (monthIdx ? ` | Month ${monthIdx} of 3 in ${quarterLabel || "this quarter"}` : "") +
+      ` | ${daysLeftInMonth} days left this month` +
+      (daysLeftInQuarter !== null ? ` | ${daysLeftInQuarter} days (~${Math.round(daysLeftInQuarter / 7)} weeks) left in the quarter` : ""));
+    lines.push(`Note: this month's activity counts cover only ${today.getUTCDate()} day(s) so far; judge them against that, not the full-month goal.`);
+
+    // Prior quarter range (calendar quarter before this one)
+    let prevStart = "", prevEnd = "", prevLabel = "";
+    if (quarterStart) {
+      const qs = new Date(quarterStart + "T12:00:00Z");
+      const ps = new Date(Date.UTC(qs.getUTCFullYear(), qs.getUTCMonth() - 3, 1));
+      const pe = new Date(Date.UTC(qs.getUTCFullYear(), qs.getUTCMonth(), 0));
+      prevStart = ps.toISOString().slice(0, 10);
+      prevEnd = pe.toISOString().slice(0, 10);
+      prevLabel = dateToQuarterLabel(prevStart);
+    }
+
+    // Won / lost / open deals, with dates and who referred them
+    const referrerOf = (o: Rec) => {
+      const cc = ccById.get(str(o.fields["ClientContactId"]));
+      const who = cc?.referralPartnerId ? contactNameById.get(cc.referralPartnerId) : null;
+      return { client: cc?.name ?? "Unknown client", who: who ?? "unknown contact" };
+    };
+    const won = opportunities.filter((o) => str(o.fields["Stage"]) === "Won")
+      .sort((a, b) => str(b.fields["WonAt"]).localeCompare(str(a.fields["WonAt"])));
+    const lost = opportunities.filter((o) => str(o.fields["Stage"]) === "Lost")
+      .sort((a, b) => str(b.fields["LostAt"]).localeCompare(str(a.fields["LostAt"])));
+    const open = opportunities.filter((o) => { const st = str(o.fields["Stage"]); return st && st !== "Won" && st !== "Lost"; });
+
+    const sumVal = (os: Rec[]) => os.reduce((t, o) => t + num(o.fields["EstimatedValue"]), 0);
+    const tally = (a: string, b: string) => {
+      const w = won.filter((o) => inRange(str(o.fields["WonAt"]), a, b));
+      const l = lost.filter((o) => inRange(str(o.fields["LostAt"]), a, b));
+      return `${w.length} won (${money(sumVal(w))}), ${l.length} lost`;
+    };
+    if (quarterStart && quarterEnd) lines.push(`DEALS CLOSED ${quarterLabel || "THIS QUARTER"} SO FAR: ${tally(quarterStart, quarterEnd)}`);
+    if (prevStart) lines.push(`DEALS CLOSED ${prevLabel}: ${tally(prevStart, prevEnd)}`);
+    const winRate = won.length + lost.length > 0 ? Math.round((won.length / (won.length + lost.length)) * 100) : null;
+    lines.push(`ALL-TIME: ${won.length} won (${money(sumVal(won))}), ${lost.length} lost${winRate !== null ? `, ${winRate}% win rate` : ""}, ${open.length} open (${money(sumVal(open))})`);
+
+    if (won.length > 0) {
+      lines.push("WON DEALS (newest first):");
+      for (const o of won.slice(0, 8)) {
+        const r = referrerOf(o);
+        lines.push(`  • ${r.client}: ${money(num(o.fields["EstimatedValue"]))}, won ${day(str(o.fields["WonAt"])) || "date unknown"}, referred by ${r.who}`);
+      }
+    }
+    if (lost.length > 0) {
+      lines.push("LOST DEALS (newest first):");
+      for (const o of lost.slice(0, 8)) {
+        const r = referrerOf(o);
+        const reason = str(o.fields["LostReason"]);
+        lines.push(`  • ${r.client}: ${money(num(o.fields["EstimatedValue"]))}, lost ${day(str(o.fields["LostAt"])) || "date unknown"}, referred by ${r.who}${reason ? `. Reason: ${reason.slice(0, 200)}` : ""}`);
+      }
+    }
+    if (open.length > 0) {
+      lines.push("OPEN DEALS:");
+      for (const o of open.slice(0, 8)) {
+        const r = referrerOf(o);
+        const close = str(o.fields["ExpectedCloseDate"]);
+        lines.push(`  • ${r.client}: ${str(o.fields["Stage"])}, ${money(num(o.fields["EstimatedValue"]))}${close ? `, expected close ${day(close)}` : ""}, referred by ${r.who}`);
+      }
+    }
+
+    // Prior quarter recap
+    if (prevStart) {
+      const prevRefs = clientContacts.filter((c) => inRange(str(c.fields["CreatedAt"]), prevStart, prevEnd));
+      const prevActs = activities.filter((a) => inRange(str(a.fields["ActivityDate"]), prevStart, prevEnd));
+      const meetings = prevActs.filter((a) => str(a.fields["Type"]) === "Meeting").length;
+      const checkins = prevActs.filter((a) => ["Call", "Text Message"].includes(str(a.fields["Type"]))).length;
+      const emails = prevActs.filter((a) => str(a.fields["Type"]) === "Email").length;
+
+      let prevGoals = "";
+      try {
+        const qRecs = await fetchAllRecs(AIRTABLE_TABLES.QUARTERS, `IS_SAME({StartDate}, "${prevStart}", "day")`);
+        const prevPlan = qRecs[0] ? allPlanRecs.find((r) => str(r.fields["QuarterId"]) === qRecs[0].id) : null;
+        if (prevPlan) {
+          const mg = num(prevPlan.fields["MonthlyInPersonMeetings"]);
+          const cg = num(prevPlan.fields["MonthlyCheckins"]);
+          if (mg || cg) prevGoals = ` (plan goal was ${mg * 3} meetings and ${cg * 3} check-ins for the quarter)`;
+        }
+      } catch { /* goals are optional */ }
+
+      lines.push(`${prevLabel} RECAP: ${prevRefs.length} referral${prevRefs.length === 1 ? "" : "s"}${prevRefs.length ? ` (${prevRefs.map((c) => str(c.fields["Name"])).slice(0, 6).join(", ")})` : ""}; ${meetings} meetings, ${checkins} calls/texts, ${emails} emails${prevGoals}`);
+
+      const prevSnap = priorStatuses.find((p) => inRange(p.statusAt, prevStart, prevEnd));
+      if (prevSnap) lines.push(`LAST AI STATUS FROM ${prevLabel} (${day(prevSnap.statusAt)}):\n${prevSnap.status.slice(0, 1500)}`);
+    }
+
+    return lines.join("\n");
+  })().catch((e) => { console.error("[partner-ai-status] brief failed:", e); return ""; });
 
   // ── Step 9: Build prompt sections ─────────────────────────────────────────────
 
@@ -558,5 +668,5 @@ Format: bullet points only, each starting with "•", 1-2 sentences. No headers,
     }
   }
 
-  return { status: newStatus, statusAt: newStatusAt, context: prompt.split("\n---\n")[0] };
+  return { status: newStatus, statusAt: newStatusAt, context: prompt.split("\n---\n")[0], brief };
 }

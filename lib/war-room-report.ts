@@ -143,6 +143,14 @@ export async function buildWarRoomJob(params: {
 
 // ─── Per-company analysis ─────────────────────────────────────────────────────
 
+// Level comes from the score, so the badge always matches the number
+function riskLevelFor(score: number): WarRoomResult["riskLevel"] {
+  if (score >= 9) return "Critical";
+  if (score >= 7) return "High";
+  if (score >= 5) return "Moderate";
+  return "Low";
+}
+
 const SYSTEM_PROMPT = `You are the head of referral-partner strategy for Top Tier Transitions (TTT), a premium senior move management company in the Chicago area. TTT plans and runs later-life moves end to end: downsizing and decluttering, floor-plan and space planning, packing, the move itself, unpacking and full setup of the new home, and clearing the old home through estate sales, donation, and consignment at TTT's own ProFound Finds store and online sales. TTT runs everything on its own platform, Rightsize, which gives families a live plan, catalog, and sales tracking, and gives referral partners a Partner Portal (see their referred clients' move schedules and progress, earn loyalty points and tiers, redeem rewards).
 
 Referral partners include senior living communities (marketing/sales directors, move-in coordinators, executive directors, resident services), realtors and brokers (especially senior-specialist agents listing a parent's home), elder-law and estate attorneys, financial advisors, geriatric care managers, home care and home health agencies, and hospitals and discharge planners. What actually drives senior living referrals: a smooth, fast move-in that hits the community's occupancy date, families who feel cared for during a hard transition, being the first call when a deposit is placed, visible presence (lunch-and-learns for staff, resident and family downsizing seminars, tour-day and open-house support), follow-through and fast response, and recognition for the referring person. Realtors care about getting the house listing-ready fast and a seller who isn't overwhelmed; attorneys and advisors care about trust, discretion, and clients being handled well.
@@ -152,10 +160,9 @@ You write for a busy sales rep. Be blunt, specific, and short. Use the real name
 const RESULT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["riskScore", "riskLevel", "trend", "statusBullets", "recommendation"],
+  required: ["riskScore", "trend", "statusBullets", "recommendation"],
   properties: {
     riskScore: { type: "integer", description: "1 = healthy and on pace, 10 = at serious risk of being lost (or never converting)" },
-    riskLevel: { type: "string", enum: ["Low", "Moderate", "High", "Critical"] },
     trend: { type: "string", enum: ["Improving", "Steady", "Declining"] },
     statusBullets: { type: "array", items: { type: "string" }, description: "2 or 3 bullets, each one sentence under 20 words" },
     recommendation: { type: "string", description: "The single best move to fix, jumpstart, or defend this relationship, in under 45 words" },
@@ -187,11 +194,13 @@ export async function analyzeWarRoomCompany(
   // 1. The same "Create Current AI Status" the War Room tab runs (and saves)
   let status = "";
   let context = "";
+  let brief = "";
   let freshStatus = false;
   try {
     const r = await generatePartnerAIStatus(job.companyId, quarter.id);
     status = r.status;
     context = r.context;
+    brief = r.brief;
     freshStatus = true;
   } catch (e) {
     console.error(`[war-room] AI status failed for ${job.companyName}:`, e);
@@ -214,14 +223,18 @@ export async function analyzeWarRoomCompany(
 
   const userPrompt = `${facts}
 
+${brief ? `TIMING, WON/LOST DEALS, AND LAST QUARTER:\n${brief}\n` : ""}
 FULL CURRENT AI STATUS (just generated from the CRM, read it closely):
 ${status || "(no AI status available)"}
 
 ${context ? `UNDERLYING CRM DATA:\n${context.slice(0, 12000)}` : ""}
 
 Score this relationship and write the War Room entry.
-- riskScore 1-10. For an Active Referral Partner, it's the risk that referrals stall or the partner drifts to a competitor; for Not Yet Referring, it's the risk they don't send a first referral this quarter. Weigh: referral pace vs the quarter goal given how much of the quarter has passed, meetings and check-ins vs the monthly plan goals, how recently anyone touched the account, how long contacts have sat in one stage, the trend against prior quarters, competitor presence, portal and loyalty engagement, and won business. riskLevel: 1-3 Low, 4-5 Moderate, 6-7 High, 8-10 Critical.
-- statusBullets: 2 or 3 bullets, each under 20 words, on where things really stand: numbers against goals, momentum, the one fact that matters most. No filler, no restating the company name.
+- riskScore 1-10. For an Active Referral Partner, it's the risk that referrals stall or the partner drifts to a competitor; for Not Yet Referring, it's the risk they don't send a first referral this quarter.
+  Read timing first. Early in a quarter (first month especially), zero referrals so far is normal and is NOT a risk factor by itself, and a partial month's activity counts are partial. Lean on last quarter's results, won/lost history, and momentum instead. Late in a quarter, pace against the goal matters much more.
+  Weigh: last quarter vs the quarter before, recent won and lost deals (and why they were lost), referral pace given the timing, meetings and check-ins vs plan goals, how recently anyone touched the account, contacts stuck in one stage, competitor presence, portal and loyalty engagement.
+  Calibrate conservatively. Most working relationships should land 2-4. Score 5-6 only with a concrete warning sign (no contact in 30+ days, referrals down from last quarter, a recent lost deal, a contact stuck 60+ days). 7-8 means clearly slipping (no referrals in two quarters, a competitor gaining, a key contact gone). 9-10 means the relationship is broken or effectively lost. If you're between two scores, pick the lower one.
+- statusBullets: 2 or 3 bullets, each under 20 words, on where things really stand. Cover won/lost deals when there are any (names, dollars, dates) and how this quarter is tracking against last quarter when that comparison says something. No filler, no restating the company name.
 - recommendation: the single highest-leverage next move for ${job.repName}. Name the specific contact to call, what to do or offer, and by when (this week, a date, or before a named event). Draw on what works with this partner type and on what the data shows about these specific people (interests, past wins, reviews, portal or points activity, sibling locations). Make it something a rep can do tomorrow, not general advice. Keep it under 45 words: one move, not a list.`;
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -236,14 +249,15 @@ Score this relationship and write the War Room entry.
   if (msg.stop_reason === "refusal") throw new Error("The model declined to analyze this partner");
   const text = msg.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
   const parsed = JSON.parse(text) as {
-    riskScore: number; riskLevel: WarRoomResult["riskLevel"]; trend: WarRoomResult["trend"];
+    riskScore: number; trend: WarRoomResult["trend"];
     statusBullets: string[]; recommendation: string;
   };
 
+  const riskScore = Math.max(1, Math.min(10, Math.round(parsed.riskScore)));
   return {
     ...job,
-    riskScore: Math.max(1, Math.min(10, Math.round(parsed.riskScore))),
-    riskLevel: parsed.riskLevel,
+    riskScore,
+    riskLevel: riskLevelFor(riskScore),
     trend: parsed.trend,
     bullets: (parsed.statusBullets ?? []).slice(0, 3),
     recommendation: parsed.recommendation,
