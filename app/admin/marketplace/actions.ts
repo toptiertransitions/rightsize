@@ -30,6 +30,7 @@ import type {
   MarketplaceReferralPolicy,
 } from "@/lib/marketplace/types";
 import { isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
+import { ensurePartnerCrmLink } from "@/lib/marketplace/crmLink";
 
 // Every action here independently re-checks the caller's role — never rely
 // on the layout.tsx gate alone, since a server action is its own callable
@@ -228,39 +229,12 @@ export async function invitePartnerToPortalAction(partnerId: string): Promise<Ac
     if (!partner) return { ok: false, error: "Partner not found." };
     if (!partner.email) return { ok: false, error: "This partner has no email on file — add one in Overview first." };
 
-    let referralCompanyId = partner.crmReferralCompanyId;
-    if (!referralCompanyId) {
-      const company = await createReferralCompany({
-        name: partner.companyName,
-        type: "Marketplace Partner",
-        address: partner.address,
-        city: partner.city,
-        state: partner.state,
-        zip: partner.zip,
-        website: partner.website,
-      });
-      referralCompanyId = company.id;
-    }
-
-    let referralContactId = partner.crmReferralContactId;
-    if (!referralContactId) {
-      const existing = await findReferralContactByEmail(partner.email).catch(() => null);
-      if (existing) {
-        referralContactId = existing.id;
-      } else {
-        const contact = await createReferralContact({
-          name: partner.pocName || partner.companyName,
-          email: partner.email,
-          phone: partner.phone,
-          referralCompanyId,
-          stage: "Active Referral",
-          notes: "Invited to the Referral Partner Portal from the marketplace admin.",
-        });
-        referralContactId = contact.id;
-      }
-    }
-
-    await updatePartner(partnerId, { crmReferralCompanyId: referralCompanyId, crmReferralContactId: referralContactId });
+    const [listings, categories] = await Promise.all([getListingsForPartnerAdmin(partnerId), getAllCategories()]);
+    const primary = listings.find((l) => l.isPrimary) ?? listings[0];
+    await ensurePartnerCrmLink(partner, {
+      primaryCategoryLabel: categories.find((c) => c.id === primary?.categoryId)?.label,
+      contactNote: "Invited to the Referral Partner Portal from the marketplace admin.",
+    });
 
     const user = await currentUser().catch(() => null);
     const inviterName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "The Team";

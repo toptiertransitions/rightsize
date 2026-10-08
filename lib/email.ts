@@ -6560,3 +6560,76 @@ export function buildPartnerIntroRequestNotificationEmail({
 </body>
 </html>`;
 }
+
+export function buildMarketplacePartnerInviteEmail({
+  inviterName,
+  partnerName,
+  companyName,
+  categoryLabels,
+  signUpUrl,
+}: {
+  inviterName: string;
+  partnerName: string;
+  companyName: string;
+  categoryLabels: string[];
+  signUpUrl: string;
+}): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const cats = categoryLabels.map(esc);
+  const catText = cats.length <= 1 ? cats[0] ?? "partner" : `${cats.slice(0, -1).join(", ")} and ${cats[cats.length - 1]}`;
+  const step = (n: number, title: string, body: string) => `
+    <tr><td style="padding:0 0 14px;">
+      <table cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:top;padding-right:12px;">
+          <div style="width:26px;height:26px;border-radius:13px;background:#e8f0eb;color:#2d4a3e;font-size:13px;font-weight:700;text-align:center;line-height:26px;">${n}</div>
+        </td>
+        <td style="vertical-align:top;">
+          <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${title}</p>
+          <p style="margin:2px 0 0;font-size:13px;color:#6B7280;line-height:1.5;">${body}</p>
+        </td>
+      </tr></table>
+    </td></tr>`;
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f0;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2d4a3e;padding:28px 32px;">
+          <p style="margin:0;color:#C9A96E;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;">Top Tier Transitions &middot; Rightsize</p>
+          <p style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Partner Network Invitation</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Join our trusted partner network</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#4B5563;line-height:1.6;">
+            Hi ${esc(partnerName)},<br><br>
+            <strong>${esc(inviterName)}</strong> invited ${esc(companyName)} to join the Top Tier Transitions partner network as a <strong>${catText}</strong> partner.
+            Families planning a move use Rightsize to find vetted help, and we&rsquo;d like to match them with you.
+          </p>
+          <table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;">
+            ${step(1, "Create your account", "About a minute. Use this email address so we can connect your account to your invitation.")}
+            ${step(2, "Tell us about your business", "Who you serve, where you work, and what you offer, so we only send you families who are a good fit.")}
+            ${step(3, "Get matched and earn rewards", "See the families we connect you with, and earn points when you refer clients to Top Tier.")}
+          </table>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr><td style="background:#2d4a3e;border-radius:10px;">
+              <a href="${signUpUrl}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
+                Get Started &rarr;
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Or copy this link into Safari or Chrome:</p>
+          <p style="margin:0;font-size:12px;color:#6B7280;word-break:break-all;">${signUpUrl}</p>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid #F3F4F6;">
+          <p style="margin:0;font-size:12px;color:#9CA3AF;">
+            Questions? Just reply to this email.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

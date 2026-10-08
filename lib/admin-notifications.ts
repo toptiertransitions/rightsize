@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getReferralContactById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail } from "./email";
+import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -600,6 +600,41 @@ export async function sendPartnerPortalInviteEmail(params: {
     subject: `${params.inviterName} invited you to the TTT Partner Portal`,
     html: buildPartnerInviteEmail({ inviterName: params.inviterName, partnerName: params.partnerName, portalUrl }),
   });
+}
+
+/** Marketplace partner invite from /admin/partners. The sign-up link
+ * carries their email (prefilled on the form) and lands on
+ * /api/partner/activate, which links the new account to their CRM contact
+ * by that email and sends them on to set up their listing. */
+export async function sendMarketplacePartnerInviteEmail(params: {
+  inviterName: string;
+  inviterEmail?: string;
+  partnerName: string;
+  partnerEmail: string;
+  companyName: string;
+  categoryLabels: string[];
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) throw new Error("Email isn't configured");
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const signUpUrl = `${appUrl}/sign-up?redirect_url=%2Fapi%2Fpartner%2Factivate&email=${encodeURIComponent(params.partnerEmail)}`;
+
+  const resend = new Resend(resendKey);
+  const { error } = await resend.emails.send({
+    from: `${params.inviterName} <${process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com"}>`,
+    to: params.partnerEmail,
+    ...(params.inviterEmail && params.inviterEmail.toLowerCase() !== params.partnerEmail.toLowerCase() ? { cc: [params.inviterEmail], replyTo: params.inviterEmail } : {}),
+    subject: `${params.inviterName} invited ${params.companyName} to the Top Tier partner network`,
+    html: buildMarketplacePartnerInviteEmail({
+      inviterName: params.inviterName,
+      partnerName: params.partnerName,
+      companyName: params.companyName,
+      categoryLabels: params.categoryLabels,
+      signUpUrl,
+    }),
+  });
+  if (error) throw new Error(`Invite email failed: ${error.message}`);
 }
 
 /** Fires once per (tenant, category) the first time a guided-match search

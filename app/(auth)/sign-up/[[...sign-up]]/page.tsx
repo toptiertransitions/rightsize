@@ -25,6 +25,9 @@ function SignUpContent() {
   // opening the (protected) destination, so nobody flashes through /sign-in.
   const destination = searchParams.get("redirect_url") || "/get-started";
   const redirectUrl = `/continue?to=${encodeURIComponent(destination)}`;
+  // Partner invites carry the invited address so it's already filled in
+  // (it's how the new account gets linked to the invitation).
+  const invitedEmail = searchParams.get("email") ?? undefined;
 
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
@@ -45,6 +48,7 @@ function SignUpContent() {
       <InAppBrowserWarning />
       <SignUp
         fallbackRedirectUrl={redirectUrl}
+        initialValues={invitedEmail ? { emailAddress: invitedEmail } : undefined}
         appearance={{
           elements: {
             rootBox: "w-full max-w-md",
