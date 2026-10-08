@@ -190,14 +190,17 @@ interface ModalProps {
   canManageTTTHelpers: boolean;
   tenantOptions?: TenantOption[];
   originParkingNotes?: string;
+  defaultEntryType?: PlanEntryType;
 }
 
-function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions, originParkingNotes }: ModalProps) {
+function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions, originParkingNotes, defaultEntryType = "focus" }: ModalProps) {
   const focusActivityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
-  const [entryType, setEntryType] = useState<PlanEntryType>(entry?.entryType ?? "focus");
+  const [entryType, setEntryType] = useState<PlanEntryType>(entry?.entryType ?? defaultEntryType);
   const activityOptions = entryType === "keydate" ? KEY_DATE_ACTIVITIES : focusActivityOptions;
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));
-  const [activity, setActivity] = useState<PlanActivity>(entry?.activity ?? (services?.[0] ?? "Coordinating"));
+  const [activity, setActivity] = useState<PlanActivity>(
+    entry?.activity ?? (defaultEntryType === "keydate" ? (KEY_DATE_ACTIVITIES[0] as PlanActivity) : (services?.[0] ?? "Coordinating"))
+  );
   // In all-projects mode (tenantId=""), track which project is selected
   const [selectedTenantId, setSelectedTenantId] = useState(entry?.tenantId ?? "");
   const [dynamicRooms, setDynamicRooms] = useState<Room[]>(rooms);
@@ -508,14 +511,20 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
     }
   };
 
-  const inputCls = "w-full h-11 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white";
+  // 16px text on phones: iOS zooms the whole app in when you focus a field
+  // smaller than that, and the zoom sticks, so the page stops fitting the
+  // screen. Desktop keeps the compact 14px size.
+  const inputCls = "w-full h-11 px-3 rounded-xl border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white";
   // Native <input type="date"/"time"> controls don't reliably fill their
   // container on mobile Safari/Chrome the way a <select>/<textarea> does —
   // their built-in theming can keep an intrinsic content width regardless
   // of `w-full`. `appearance-none` drops that native theming so the box
   // model behaves like every other field; `block` + `min-w-0` guard against
   // the default inline-block sizing and grid-item intrinsic-width quirks.
-  const dateTimeInputCls = `${inputCls} appearance-none block min-w-0 max-w-full [&::-webkit-date-and-time-value]:text-left`;
+  // iOS also pins the date/time text to the top of the box once native
+  // styling is off; a line-height equal to the inner height (44px minus
+  // borders) centers it vertically.
+  const dateTimeInputCls = `${inputCls} appearance-none block min-w-0 max-w-full py-0 leading-[42px] [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:leading-[42px] [&::-webkit-datetime-edit]:leading-[42px] [&::-webkit-datetime-edit]:p-0`;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
@@ -668,7 +677,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
               placeholder="Any additional context..."
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none" />
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-forest-400 resize-none" />
           </div>
 
           {/* Address */}
@@ -767,7 +776,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                             onChange={e => setHelpers(prev => prev.map(x =>
                               x.email === h.email ? { ...x, status: e.target.value as PlanHelper["status"] } : x
                             ))}
-                            className="text-xs border border-indigo-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                            className="text-base sm:text-xs border border-indigo-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
                           >
                             <option value="pending">Pending</option>
                             <option value="accepted">Accepted</option>
@@ -832,7 +841,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                 onChange={e => setHelperInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addHelper(); } }}
                 placeholder="email@example.com"
-                className="flex-1 h-10 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+                className="flex-1 h-10 px-3 rounded-xl border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
               />
               <button
                 type="button"
@@ -859,7 +868,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
                           onChange={e => setHelpers(prev => prev.map(x =>
                             x.email === h.email ? { ...x, status: e.target.value as PlanHelper["status"] } : x
                           ))}
-                          className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
+                          className="text-base sm:text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-forest-400"
                         >
                           <option value="pending">Pending</option>
                           <option value="accepted">Accepted</option>
@@ -1121,10 +1130,12 @@ interface PlanClientProps {
   currentTenantId?: string;        // which project is selected ("" = All)
   services?: string[];             // dynamic service names from Airtable
   isTTT?: boolean;
+  /** No TTT system role (a client user, not staff). */
+  isClientUser?: boolean;
   originParkingNotes?: string;
 }
 
-export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT, originParkingNotes, isProjectTeamLead }: PlanClientProps) {
+export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, projectFiles, timeEntries, isAdmin, estimatedHours, estimatedServiceHours, tenantOptions, currentTenantId, services, signedContracts, isManager, isStaff, isTTT, isClientUser, originParkingNotes, isProjectTeamLead }: PlanClientProps) {
   const router = useRouter();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [showWeekends, setShowWeekends] = useState(false);
@@ -1827,6 +1838,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           canManageTTTHelpers={!!(isManager || isAdmin)}
           tenantOptions={tenantOptions}
           originParkingNotes={originParkingNotes}
+          defaultEntryType={isClientUser && isTTT !== true ? "keydate" : "focus"}
         />
       )}
 

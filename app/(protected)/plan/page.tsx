@@ -489,6 +489,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
         isManager={isManagerOrAdmin}
         isStaff={isTTTStaff}
         isTTT={tenant.isTTT === true}
+        isClientUser={!sysRole && !isAdmin}
         originParkingNotes={originParkingNotes}
         isProjectTeamLead={isProjectTeamLead}
       />

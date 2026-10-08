@@ -21,7 +21,10 @@ function SignUpContent() {
   // to always resolve it ourselves and pass it explicitly, since an
   // explicit prop always wins over the env var.
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get("redirect_url") || "/get-started";
+  // Routed through /continue, which waits for the new session before
+  // opening the (protected) destination, so nobody flashes through /sign-in.
+  const destination = searchParams.get("redirect_url") || "/get-started";
+  const redirectUrl = `/continue?to=${encodeURIComponent(destination)}`;
 
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">

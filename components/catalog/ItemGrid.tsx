@@ -1174,9 +1174,9 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
             </div>
           </section>
 
-          {/* Staff Notes */}
+          {/* Cataloging Notes (stored as staffTips) */}
           <section className="space-y-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Staff Notes</h3>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cataloging Notes</h3>
             <textarea rows={3} value={form.staffTips ?? ""} onChange={e => set("staffTips", e.target.value)}
               placeholder="Internal notes for TTT staff…" className={textareaClass} />
           </section>
