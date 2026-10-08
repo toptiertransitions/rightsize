@@ -309,6 +309,20 @@ export async function generatePartnerAIStatus(companyId: string, quarterId: stri
     .map(([mo, v]) => `  ${mo}: ${v.meetings} meetings, ${v.emails} emails, ${v.other} other`)
     .join("\n");
 
+  // ── Step 8a: Single sales-side champion ───────────────────────────────────────
+  // When the only Active Referral contact is in a sales role (DOS, community
+  // relations, admissions, etc.), the next steps should go deep with that
+  // person rather than push multithreading to EDs and other non-sales staff.
+
+  const SALES_TITLE = /\b(sales|marketing|DOS|community relations|community liaison|community outreach|business development|move[- ]in|admissions|outreach|leasing|realtor|agent|broker)\b/i;
+  const activeReferrers = contacts.filter((c) => str(c.fields["Stage"]) === "Active Referral");
+  const salesChampion = activeReferrers.length === 1 && SALES_TITLE.test(str(activeReferrers[0].fields["Title"]))
+    ? { name: str(activeReferrers[0].fields["Name"]), title: str(activeReferrers[0].fields["Title"]) }
+    : null;
+  const championFocus = salesChampion
+    ? `RECOMMENDATION FOCUS: ${salesChampion.name} (${salesChampion.title}) is the only Active Referral contact here, and they're in a sales role. Center next steps on deepening that relationship and making ${salesChampion.name} look great: fast, flawless service on their referrals, help hitting their move-in and occupancy goals, recognition, rewards, and personal touches. Multithreading to the Executive Director or other non-sales staff is a nice-to-have, never the headline recommendation.`
+    : "";
+
   // ── Step 8b: War Room brief (timing, won/lost deals, prior quarter) ──────────
   // Only returned to the War Room report; the AI Status prompt below is unchanged.
 
@@ -413,6 +427,7 @@ export async function generatePartnerAIStatus(companyId: string, quarterId: stri
       if (prevSnap) lines.push(`LAST AI STATUS FROM ${prevLabel} (${day(prevSnap.statusAt)}):\n${prevSnap.status.slice(0, 1500)}`);
     }
 
+    if (championFocus) lines.push(championFocus);
     return lines.join("\n");
   })().catch((e) => { console.error("[partner-ai-status] brief failed:", e); return ""; });
 
@@ -612,7 +627,7 @@ Write 7-10 concise, specific bullet points for the TTT supporting team. Referenc
 • Google review highlights — name the client and the referring contact when possible
 • Key contact insight — what do we know about their interests/personality that could unlock more referrals?
 ${siblingNetworkSection ? "• Parent company network — if sibling branches have Active Referrals or strong pipelines, recommend leveraging that parent-level relationship to accelerate this branch; if siblings are underperforming, suggest a unified network approach." : ""}
-• Top recommended next action — specific, not generic
+• Top recommended next action — specific, not generic${championFocus ? `\n\n${championFocus}` : ""}
 
 Format: bullet points only, each starting with "•", 1-2 sentences. No headers, no preamble.`;
 
