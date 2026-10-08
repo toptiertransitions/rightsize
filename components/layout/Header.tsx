@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform } from "@/lib/native";
@@ -45,9 +45,13 @@ interface HeaderProps {
   // actual native-iOS-platform check before the icon nav ever renders —
   // this prop alone is not enough, since it says nothing about web vs. app.
   showIOSNav?: boolean;
+  // Server-computed: NonTTTClient users only (lib/tips-access.ts). Adds a
+  // "Tips" text-nav link on web; in the iOS app it lives in the avatar menu
+  // so the 5-icon bottom bar is unchanged.
+  showTips?: boolean;
 }
 
-export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav }: HeaderProps) {
+export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav, showTips }: HeaderProps) {
   // Capacitor's bridge isn't available during SSR/first paint, so this
   // starts false (matching the server-rendered text nav) and flips after
   // mount if we're actually in the native iOS shell — same pattern as
@@ -182,6 +186,8 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     // (Sales gets it via salesOnlyLinks above). Never shown to clients —
     // the page itself redirects them to /home even if they reach the URL.
     ...(isStaff ? [{ href: "/inbox", base: "/inbox", label: "Inbox" }] : []),
+    // Tips: NonTTTClient only (server-computed showTips)
+    ...(showTips ? [{ href: "/tips", base: "/tips", label: "Tips" }] : []),
   ];
 
   // iOS compact nav only ever shows a subset of IOS_NAV_ORDER for a given
@@ -270,6 +276,9 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
             >
               <UserButton.MenuItems>
                 <UserButton.Action label="manageAccount" />
+                {useIOSNav && showTips && (
+                  <UserButton.Link label="Tips" href="/tips" labelIcon={<Lightbulb className="w-4 h-4" />} />
+                )}
                 <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
                 {isIOSNative && (
                   <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />

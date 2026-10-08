@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { PushNotificationBootstrap } from "@/components/shared/PushNotificationBootstrap";
 import { getSystemRole, getMembershipsForUser, getTenantById } from "@/lib/airtable";
+import { isNonTTTClient } from "@/lib/tips-access";
 
 export default async function ProtectedLayout({
   children,
@@ -28,6 +29,7 @@ export default async function ProtectedLayout({
   // For non-staff users, build a tenantId→isTTT map server-side so the Header
   // can show/hide the Invoices link without a client-side fetch (avoids timing bugs).
   let tttTenantIds: string[] | undefined;
+  let showTips = false; // "Tips" tab: NonTTTClient users only (see lib/tips-access.ts)
   if (!isStaff) {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
     if (memberships.length > 0) {
@@ -37,13 +39,14 @@ export default async function ProtectedLayout({
       tttTenantIds = tenants
         .filter(t => t && t.isTTT === true)
         .map(t => t!.id);
+      showTips = isNonTTTClient(sysRole, tenants);
     }
   }
 
   return (
     <div className="min-h-screen bg-cream-50">
       <PushNotificationBootstrap />
-      <Header isManager={isManager} isStaff={isStaff} isAdmin={isAdmin} isSales={isSales} tttTenantIds={tttTenantIds} showIOSNav={showIOSNav} />
+      <Header isManager={isManager} isStaff={isStaff} isAdmin={isAdmin} isSales={isSales} tttTenantIds={tttTenantIds} showIOSNav={showIOSNav} showTips={showTips} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
