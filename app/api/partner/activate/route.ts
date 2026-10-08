@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { findReferralContactByEmail, setReferralContactClerkUserId } from "@/lib/airtable";
 import { sendNewPartnerAccountNotification } from "@/lib/admin-notifications";
+import { findMarketplacePartnerForContact, needsSetup } from "@/lib/marketplace/partnerAccount";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
 
@@ -41,6 +42,12 @@ export async function GET() {
       referralCompanyId: contact.referralCompanyId || undefined,
       currentStage: contact.stage,
     }).catch(() => {});
+  }
+
+  // Invited marketplace partners go straight into profile setup
+  if (contact && (!contact.clerkUserId || contact.clerkUserId === userId)) {
+    const partner = await findMarketplacePartnerForContact(contact).catch(() => null);
+    if (partner && needsSetup(partner)) return NextResponse.redirect(`${APP_URL}/partner/setup`);
   }
 
   return NextResponse.redirect(`${APP_URL}/partner/home`);

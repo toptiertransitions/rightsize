@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { House, Calendar, Gift, FileText } from "lucide-react";
+import { House, Calendar, Gift, FileText, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPlatform } from "@/lib/native";
 import { PartnerNavLinks } from "./PartnerNavLinks";
@@ -24,8 +24,14 @@ const PARTNER_IOS_NAV_ITEMS = [
   { href: "/partner/documents", label: "Documents", Icon: FileText, isActive: (p: string) => p.startsWith("/partner/documents") },
 ];
 
-export function PartnerHeader({ contactName }: { contactName: string }) {
+// Marketplace partners only (see app/partner/layout.tsx)
+const LISTING_NAV_ITEM = { href: "/partner/listing", label: "My Listing", Icon: Store, isActive: (p: string) => p.startsWith("/partner/listing") };
+
+export function PartnerHeader({ contactName, hasListing = false }: { contactName: string; hasListing?: boolean }) {
   const pathname = usePathname();
+  const iosItems = hasListing
+    ? [PARTNER_IOS_NAV_ITEMS[0], LISTING_NAV_ITEM, ...PARTNER_IOS_NAV_ITEMS.slice(1)]
+    : PARTNER_IOS_NAV_ITEMS;
 
   // Capacitor's bridge isn't available during SSR/first paint, so this
   // starts false (matching the server-rendered text nav) and flips after
@@ -69,7 +75,7 @@ export function PartnerHeader({ contactName }: { contactName: string }) {
             {/* Nav — hidden entirely in the iOS native compact nav (below) */}
             {!isIOSNative && (
               <nav className="hidden md:flex items-center gap-1">
-                <PartnerNavLinks />
+                <PartnerNavLinks hasListing={hasListing} />
               </nav>
             )}
 
@@ -85,7 +91,7 @@ export function PartnerHeader({ contactName }: { contactName: string }) {
           {/* Mobile nav (web/browser only) */}
           {!isIOSNative && (
             <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
-              <PartnerNavLinks mobile />
+              <PartnerNavLinks mobile hasListing={hasListing} />
             </div>
           )}
         </div>
@@ -94,10 +100,10 @@ export function PartnerHeader({ contactName }: { contactName: string }) {
       {/* iOS native app nav — replaces the text nav above for Partner Portal users */}
       {isIOSNative && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 bg-white border-t border-cream-200"
+          className={cn("fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200", iosItems.length === 5 ? "grid-cols-5" : "grid-cols-4")}
           style={{ paddingBottom: "var(--sab)" }}
         >
-          {PARTNER_IOS_NAV_ITEMS.map(({ href, label, Icon, isActive }) => {
+          {iosItems.map(({ href, label, Icon, isActive }) => {
             const active = isActive(pathname);
             return (
               <Link

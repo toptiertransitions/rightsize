@@ -10,12 +10,15 @@ const NAV_ITEMS = [
   { href: "/partner/documents", label: "Documents", isActive: (p: string) => p.startsWith("/partner/documents") },
 ];
 
-export function PartnerNavLinks({ mobile = false }: { mobile?: boolean }) {
+const LISTING_ITEM = { href: "/partner/listing", label: "My Listing", isActive: (p: string) => p.startsWith("/partner/listing") };
+
+export function PartnerNavLinks({ mobile = false, hasListing = false }: { mobile?: boolean; hasListing?: boolean }) {
   const pathname = usePathname();
+  const items = hasListing ? [NAV_ITEMS[0], LISTING_ITEM, ...NAV_ITEMS.slice(1)] : NAV_ITEMS;
 
   return (
     <>
-      {NAV_ITEMS.map((item) => (
+      {items.map((item) => (
         <Link
           key={item.href}
           href={item.href}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getPartnerContact, getPartnerProjectsByStage } from "@/lib/partner";
 import { PartnerLoyaltyStatus } from "@/components/partner/PartnerLoyaltyStatus";
+import { findMarketplacePartnerForContact, needsSetup } from "@/lib/marketplace/partnerAccount";
 import {
   getTenantById,
   getPartnerPointsByCompany,
@@ -40,6 +41,10 @@ export default async function PartnerHomePage() {
 
   const contact = await getPartnerContact(userId);
   if (!contact) redirect("/home");
+
+  // Invited marketplace partners finish setup before anything else
+  const marketplacePartner = await findMarketplacePartnerForContact(contact).catch(() => null);
+  if (marketplacePartner && needsSetup(marketplacePartner)) redirect("/partner/setup");
 
   const companyId = contact.referralCompanyId || null;
 
