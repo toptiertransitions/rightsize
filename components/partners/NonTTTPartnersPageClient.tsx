@@ -244,6 +244,7 @@ export function NonTTTPartnersPageClient({
                 pendingSelect={pendingSelect === category}
                 onSelect={(partnerId) => handleSelect(category, partnerId)}
                 onDeselect={() => handleDeselect(category)}
+                onLearnMore={(partnerId) => setDetailPartnerId(partnerId)}
               />
             )}
             {!selections[category] && !lockedCategories.includes(category) && (

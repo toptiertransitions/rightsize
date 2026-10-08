@@ -21,6 +21,7 @@ interface Props {
   pendingSelect: boolean;
   onSelect: (partnerId: string) => void;
   onDeselect: () => void;
+  onLearnMore?: (partnerId: string) => void;
 }
 
 // NonTTTClient-only: replaces the static "3 random partners" CategorySection
@@ -30,7 +31,7 @@ interface Props {
 // holding message.
 export function PartnerRequestCard({
   category, answers, onOpenFlow, sectionRef, canEdit, matchResult, requestedPartnerIds, pendingPartnerId, onRequestIntro,
-  selectedPartnerId, pendingSelect, onSelect, onDeselect,
+  selectedPartnerId, pendingSelect, onSelect, onDeselect, onLearnMore,
 }: Props) {
   const label = nonTTTCategoryLabel(category);
   const started = Object.keys(answers).length > 0;
@@ -57,6 +58,7 @@ export function PartnerRequestCard({
             pendingSelect={pendingSelect}
             onSelect={onSelect}
             onDeselect={onDeselect}
+            onLearnMore={onLearnMore}
           />
           {canEdit && (
             <button

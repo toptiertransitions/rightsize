@@ -17,6 +17,7 @@ interface Props {
   pendingSelect: boolean;
   onSelect: (partnerId: string) => void;
   onDeselect: () => void;
+  onLearnMore?: (partnerId: string) => void;
 }
 
 // The pill, not a question: shows the client which of their 1-2 local
@@ -44,6 +45,7 @@ function MatchCard({
   selectPending,
   onSelect,
   onDeselect,
+  onLearnMore,
 }: {
   match: ScoredMatch;
   featured: boolean;
@@ -56,6 +58,7 @@ function MatchCard({
   selectPending: boolean;
   onSelect: (partnerId: string) => void;
   onDeselect: () => void;
+  onLearnMore?: (partnerId: string) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -77,6 +80,16 @@ function MatchCard({
         </div>
         {partner.reviewCount > 0 && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
         <p className="text-sm text-gray-600 leading-relaxed">{match.whyThisMatch}</p>
+
+        {onLearnMore && (
+          <button
+            type="button"
+            onClick={() => onLearnMore(partner.id)}
+            className="self-start text-xs font-medium text-gray-500 hover:text-forest-700 underline underline-offset-2 min-h-[28px] flex items-center"
+          >
+            Learn more
+          </button>
+        )}
 
         {!!partner.communityCompletionCount && partner.communityName && (
           <p className="text-xs font-medium text-forest-700">
@@ -170,7 +183,7 @@ function MatchCard({
   );
 }
 
-export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pendingPartnerId, onRequestIntro, selectedPartnerId, pendingSelect, onSelect, onDeselect }: Props) {
+export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pendingPartnerId, onRequestIntro, selectedPartnerId, pendingSelect, onSelect, onDeselect, onLearnMore }: Props) {
   const remaining = Math.max(0, MAX_INTRO_REQUESTS_PER_CATEGORY - requestedPartnerIds.length);
   const atCap = remaining <= 0;
 
@@ -199,6 +212,7 @@ export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pend
         selectPending={pendingSelect}
         onSelect={onSelect}
         onDeselect={onDeselect}
+        onLearnMore={onLearnMore}
       />
       {result.alternates.map((m) => (
         <MatchCard
@@ -214,6 +228,7 @@ export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pend
           selectPending={pendingSelect}
           onSelect={onSelect}
           onDeselect={onDeselect}
+          onLearnMore={onLearnMore}
         />
       ))}
       {atCap && (

@@ -69,7 +69,7 @@ export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemov
             They referred you to Top Tier, so they&rsquo;re your {categoryLabel.toLowerCase()} partner.
           </p>
 
-          {onLearnMore && partner.aboutUs && (
+          {onLearnMore && (
             <button
               type="button"
               onClick={onLearnMore}
