@@ -29,7 +29,7 @@ export function MoverQuoteComparison() {
       <h4 id="mover-quotes-title" className="mt-1 text-lg font-bold text-gray-900">{MOVER_QUOTES_COPY.title}</h4>
       <p className="mt-1 text-sm text-gray-600">{MOVER_QUOTES_COPY.subtitle}</p>
 
-      <div className="mt-4 -mx-4 px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0 md:grid md:grid-cols-3 md:overflow-visible">
+      <div className="mt-4 -mx-4 px-4 scroll-px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0 md:grid md:grid-cols-3 md:overflow-visible">
         {MOVER_QUOTES.map((q) => (
           <div key={q.name} className="snap-start shrink-0 w-[78%] sm:w-[45%] md:w-auto rounded-2xl bg-white border border-cream-200 shadow-sm p-5">
             <p className="text-base font-bold text-gray-900">{q.name}</p>

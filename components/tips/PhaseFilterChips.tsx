@@ -10,7 +10,7 @@ export function PhaseFilterChips({ chips, value, onChange }: { chips: { id: Phas
     <div
       role="group"
       aria-label="Filter tips by phase"
-      className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto snap-x snap-mandatory pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="-mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0 flex gap-2 overflow-x-auto snap-x snap-mandatory pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {chips.map((c) => {
         const active = value === c.id;

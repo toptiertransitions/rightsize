@@ -1,4 +1,5 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
+import { Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getMembershipsForUser, getTenants, getTenantById, getItemsForTenant, getRoomsForTenant, getTimeEntries, getTimeEntriesForTenants, getSystemRole, getStaffMembers, getLocalVendorByClerkId, getContractsForTenant, getServices, getInvoicesForTenant, getPlanEntriesForTodayByEmail, getSignedTenantIds, getPartnerSelectionsForTenant } from "@/lib/airtable";
@@ -354,7 +355,7 @@ export default async function DashboardPage({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+        <div className={`grid grid-cols-2 gap-4 mb-8 ${isNonTTTClient ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           <Link href={`/catalog?tenantId=${tenant.id}`} className="block h-full">
             <Card hover className="h-full">
               <CardContent className="py-5 h-full flex flex-col">
@@ -400,7 +401,8 @@ export default async function DashboardPage({
               </Card>
             </Link>
           )}
-          <Link href={`/plan?tenantId=${tenant.id}`} className="col-span-2 sm:col-span-1 block h-full">
+          {/* Self-serve clients get a 4th card (Tips), so Plan takes one cell instead of the full row */}
+          <Link href={`/plan?tenantId=${tenant.id}`} className={`${isNonTTTClient ? "" : "col-span-2 sm:col-span-1 "}block h-full`}>
             <Card hover className="h-full">
               <CardContent className="py-5 h-full flex flex-col">
                 <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
@@ -414,6 +416,20 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
           </Link>
+          {isNonTTTClient && (
+            <Link href="/tips" className="block h-full">
+              <Card hover className="h-full">
+                <CardContent className="py-5 h-full flex flex-col">
+                  <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
+                    <Lightbulb className="w-4 h-4 text-forest-600" />
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900">Tips and Advice</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Guidance for every step</p>
+                  <p className="text-xs text-forest-600 mt-auto pt-2 font-medium">View tips →</p>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
         </div>
 
         {/* Free Estimator — for Non-TTT owners/collaborators */}
