@@ -618,7 +618,9 @@ export async function sendMarketplacePartnerInviteEmail(params: {
   if (!resendKey) throw new Error("Email isn't configured");
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
-  const signUpUrl = `${appUrl}/sign-up?redirect_url=%2Fapi%2Fpartner%2Factivate&email=${encodeURIComponent(params.partnerEmail)}`;
+  // Under /invite so it opens straight in the Rightsize app when installed
+  // (Universal Links); app/invite/partner leads on to the prefilled sign-up.
+  const signUpUrl = `${appUrl}/invite/partner?email=${encodeURIComponent(params.partnerEmail)}`;
 
   const resend = new Resend(resendKey);
   const { error } = await resend.emails.send({
