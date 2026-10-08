@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       await resend.emails.send({
         from: `Top Tier Transitions <${from}>`,
         to: partnerEmail,
-        subject: "Access your TTT Partner Portal",
+        subject: "Access your Top Tier Partner Portal",
         html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
           <h2 style="color:#2d4a3e;">Partner Portal Invitation</h2>
           <p style="color:#444;">You've been invited to the TTT Partner Portal. Click below to create your account.</p>
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     await resend.emails.send({
       from: `Top Tier Transitions <${from}>`,
       to: partnerEmail,
-      subject: "Access your TTT Partner Portal",
+      subject: "Access your Top Tier Partner Portal",
       html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
         <h2 style="color:#2d4a3e;margin-bottom:8px;">Partner Portal Access</h2>
         <p style="color:#444;margin-bottom:24px;">

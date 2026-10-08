@@ -597,7 +597,7 @@ export async function sendPartnerPortalInviteEmail(params: {
   await resend.emails.send({
     from: `${params.inviterName} <${process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com"}>`,
     to: params.partnerEmail,
-    subject: `${params.inviterName} invited you to the TTT Partner Portal`,
+    subject: `${params.inviterName} invited you to the Top Tier Partner Portal`,
     html: buildPartnerInviteEmail({ inviterName: params.inviterName, partnerName: params.partnerName, portalUrl }),
   });
 }

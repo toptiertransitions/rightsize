@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
     to: email,
     ...(ccEmail ? { cc: [ccEmail] } : {}),
-    subject: `${inviterName} invited you to the TTT Partner Portal`,
+    subject: `${inviterName} invited you to the Top Tier Partner Portal`,
     html: buildPartnerInviteEmail({ inviterName, partnerName: name || email, portalUrl }),
   });
 
