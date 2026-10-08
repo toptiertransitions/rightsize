@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { House, Building2, Building, MoreHorizontal, Search } from "lucide-react";
+import { House, Building2, Building, MoreHorizontal, Search, Check } from "lucide-react";
 import { Tile } from "@/components/onboarding/shared";
+import { cn } from "@/lib/utils";
 import type { WizardData } from "../wizardTypes";
 import type { DestinationType } from "@/lib/types";
 
@@ -16,6 +17,15 @@ const OPTIONS: { key: DestinationType; label: string; icon: React.ReactNode }[] 
 interface Props {
   data: WizardData;
   update: (patch: Partial<WizardData>) => void;
+}
+
+// Clears the community-referral answer (and the step-7 answer it filled in)
+// whenever the picked community changes.
+function resetReferral(data: WizardData): Partial<WizardData> {
+  if (data.communityReferred === null) return {};
+  return data.communityReferred
+    ? { communityReferred: null, howHeard: "", howHeardDetail: "", referralPartnerId: "" }
+    : { communityReferred: null };
 }
 
 export function Step4Destination({ data, update }: Props) {
@@ -55,14 +65,14 @@ export function Step4Destination({ data, update }: Props) {
             icon={opt.icon}
             multi={false}
             selected={data.destinationType === opt.key}
-            onClick={() => update({ destinationType: opt.key, destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "", destinationZip: "" })}
+            onClick={() => update({ ...resetReferral(data), destinationType: opt.key, destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "", destinationZip: "" })}
           />
         ))}
       </div>
 
       <button
         type="button"
-        onClick={() => update({ destinationType: "not_sure", destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "", destinationZip: "" })}
+        onClick={() => update({ ...resetReferral(data), destinationType: "not_sure", destinationCommunity: "", destinationCommunityName: "", destinationCommunityOther: "", destinationZip: "" })}
         className={`text-sm italic mb-5 min-h-[32px] ${data.destinationType === "not_sure" ? "text-forest-700 font-medium" : "text-gray-400 hover:text-gray-600"}`}
       >
         I don&rsquo;t know yet
@@ -76,18 +86,21 @@ export function Step4Destination({ data, update }: Props) {
             <input
               type="text"
               value={query}
-              onChange={e => { setQuery(e.target.value); update({ destinationCommunity: "", destinationCommunityName: e.target.value }); }}
+              onChange={e => { setQuery(e.target.value); update({ ...resetReferral(data), destinationCommunity: "", destinationCommunityName: e.target.value }); }}
               placeholder="Start typing a community name…"
               className="w-full h-12 pl-9 pr-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-forest-400 bg-white"
             />
           </div>
+          {data.destinationCommunity ? (
+            <CommunityReferralQuestion data={data} update={update} />
+          ) : (
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
             {searching && <p className="px-4 py-3 text-sm text-gray-400">Searching…</p>}
             {!searching && query.trim().length > 0 && results.map(r => (
               <button
                 key={r.id}
                 type="button"
-                onClick={() => { update({ destinationCommunity: r.id, destinationCommunityName: r.name }); setQuery(r.name); setResults([]); }}
+                onClick={() => { update({ ...resetReferral(data), destinationCommunity: r.id, destinationCommunityName: r.name }); setQuery(r.name); setResults([]); }}
                 className="w-full text-left px-4 py-3 min-h-[48px] hover:bg-gray-50 transition-colors"
               >
                 <span className="block text-sm font-medium text-gray-800">{r.name}</span>
@@ -96,12 +109,13 @@ export function Step4Destination({ data, update }: Props) {
             ))}
             <button
               type="button"
-              onClick={() => { setNotListed(true); update({ destinationCommunity: "", destinationCommunityName: "" }); }}
+              onClick={() => { setNotListed(true); update({ ...resetReferral(data), destinationCommunity: "", destinationCommunityName: "" }); }}
               className="w-full text-left px-4 py-3 min-h-[48px] text-sm text-forest-600 hover:bg-gray-50 transition-colors font-medium"
             >
               Not listed? Add it
             </button>
           </div>
+          )}
         </div>
       )}
 
@@ -132,6 +146,55 @@ export function Step4Destination({ data, update }: Props) {
   );
 }
 
+function CommunityReferralQuestion({ data, update }: Props) {
+  const name = data.destinationCommunityName;
+
+  // The marketplace listing is looked up when the answer is saved (after
+  // step 6), so a later change of community can't leave a stale match.
+  function answerYes() {
+    update({ communityReferred: true, howHeard: "senior_community", howHeardDetail: name, referralPartnerId: "" });
+  }
+
+  function answerNo() {
+    update({ ...resetReferral(data), communityReferred: false });
+  }
+
+  const choice = (label: string, selected: boolean, onClick: () => void) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onClick}
+      className={cn(
+        "h-12 rounded-xl border text-[15px] font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-1.5",
+        selected
+          ? "border-forest-600 bg-forest-600 text-white shadow-sm"
+          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+      )}
+    >
+      {selected && <Check className="w-4 h-4" strokeWidth={3} />}
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="rounded-2xl border border-forest-200 bg-forest-50/40 p-4 motion-safe:animate-[fadeInScale_0.25s_ease-out]">
+      <p className="text-[15px] font-semibold text-gray-900 leading-snug">
+        Did you hear about Rightsize and Top Tier Transitions from {name}?
+      </p>
+      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+        {data.communityReferred
+          ? `Great. We'll add ${name} to your Partners page, so their contact info is always one tap away.`
+          : "Just so we know who to thank."}
+      </p>
+      <div className="grid grid-cols-2 gap-2 mt-3" role="radiogroup" aria-label={`Heard about us from ${name}?`}>
+        {choice("Yes", data.communityReferred === true, answerYes)}
+        {choice("No", data.communityReferred === false, answerNo)}
+      </div>
+    </div>
+  );
+}
+
 function DestZipField({ data, update }: Props) {
   return (
     <div>
@@ -154,7 +217,8 @@ function DestZipField({ data, update }: Props) {
 export function step4Valid(data: WizardData): boolean {
   if (!data.destinationType) return false;
   if (data.destinationType === "senior_community") {
-    return !!data.destinationCommunity || data.destinationCommunityOther.trim().length > 0;
+    if (data.destinationCommunity) return data.communityReferred !== null;
+    return data.destinationCommunityOther.trim().length > 0;
   }
   return true;
 }

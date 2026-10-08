@@ -12,7 +12,7 @@ import { Step6Layout } from "./steps/Step6Layout";
 import { Step7Referral, step7Valid } from "./steps/Step7Referral";
 import { Step7Done } from "./steps/Step7Done";
 import type { WizardData } from "./wizardTypes";
-import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, submitStep7, finishOnboardingTour } from "./actions";
+import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, submitStep7, finishOnboardingTour, resolveCommunityReferralPartner } from "./actions";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 
 const TOTAL_STEPS = 7; // the progress bar tracks steps 1-7; step 8 is the completion screen
@@ -96,7 +96,20 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
           bathrooms: data.bathrooms,
           spaces: data.spaces.map(s => ({ key: s.key, name: s.name, on: s.on })),
         });
-        setStep(7);
+        if (data.communityReferred) {
+          // Already answered on step 4 ("heard about us from [community]"),
+          // so save that as the step-7 answer and skip the question.
+          const name = data.destinationCommunityName.trim();
+          const partnerId = await resolveCommunityReferralPartner(data.destinationCommunity, name).catch(() => "");
+          await submitStep7(tenantId, {
+            howHeard: "senior_community",
+            howHeardDetail: name,
+            referralPartnerId: partnerId,
+          });
+          setStep(DONE_STEP);
+        } else {
+          setStep(7);
+        }
       } else if (step === 7) {
         if (!tenantId) throw new Error("Missing project");
         await submitStep7(tenantId, {

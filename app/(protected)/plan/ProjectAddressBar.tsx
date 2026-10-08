@@ -111,8 +111,11 @@ function TeamLeadBlock({ name, photo, phone, isTTT }: { name?: string; photo?: s
   );
 }
 
+// 16px text on phones: iOS zooms the whole page in when you focus an input
+// smaller than that, and the zoom sticks, leaving the Plan page too wide to
+// scroll properly. Desktop keeps the compact 14px size.
 const inputCls =
-  "h-8 px-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 min-w-0 w-full";
+  "h-10 sm:h-8 px-2.5 rounded-lg border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 min-w-0 w-full";
 
 export function ProjectAddressBar({
   tenantId,
@@ -245,7 +248,7 @@ export function ProjectAddressBar({
             <div className="min-w-0">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Origin</p>
               <div className="flex flex-col gap-1.5">
-                <input type="text" placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} autoFocus />
+                <input type="text" placeholder="Street address" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="Unit # (optional)" value={addressUnitNumber} onChange={e => setAddressUnitNumber(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="State" value={state} onChange={e => setState(e.target.value)} className={inputCls} />

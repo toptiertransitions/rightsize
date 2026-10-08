@@ -20,6 +20,7 @@ import {
   type Step1Input, type Step2Input, type Step3Input, type Step4Input, type Step5Input, type Step6Input, type Step7Input,
 } from "@/lib/onboarding/schema";
 import { getPartnerDirectory } from "@/lib/partners/queries";
+import { getAllPartners } from "@/lib/marketplace/data";
 import { attachReferralPartner, toReferralOption } from "@/lib/partners/referral";
 import { HOW_HEARD_OPTIONS, type ReferralPartnerOption } from "@/lib/partners/referralShared";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
@@ -245,6 +246,24 @@ export async function getSignupReferralOptions(): Promise<ReferralPartnerOption[
     .filter(p => categories.has(p.category))
     .map(toReferralOption)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Step 4 "Did you hear about us from [community]?": finds the marketplace
+// Community listing for the destination community the user picked (a
+// LocalVendors record), by its legacy link first, then by exact name.
+// Returns "" when there's no listing; the name alone is then attached as an
+// unlisted partner, same as typing a name on step 7.
+export async function resolveCommunityReferralPartner(localVendorId: string, name: string): Promise<string> {
+  await requireOnboardingUser();
+  const directory = await getPartnerDirectory();
+  const communities = directory.filter(p => p.category === "Community");
+  if (localVendorId) {
+    const partners = await getAllPartners().catch(() => []);
+    const linked = partners.find(p => p.localVendorId === localVendorId);
+    if (linked && communities.some(c => c.id === linked.id)) return linked.id;
+  }
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return communities.find(c => norm(c.vendorName) === norm(name))?.id ?? "";
 }
 
 // Step 7: "How did you hear about us?" A realtor or senior community

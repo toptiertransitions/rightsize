@@ -23,6 +23,9 @@ export interface WizardData {
   destinationCommunity: string; // LocalVendors record id (VendorType = "Future Home/Community")
   destinationCommunityName: string; // display only
   destinationCommunityOther: string;
+  // "Did you hear about us from [community]?" asked right after picking a
+  // listed community. Yes fills the step-7 answer and skips that step.
+  communityReferred: boolean | null;
 
   sqftRange: SqftRange | null;
   sqftExact: number | null;
@@ -66,6 +69,7 @@ export function emptyWizardData(firstName = "", lastName = "", currentZip = ""):
     destinationCommunity: "",
     destinationCommunityName: "",
     destinationCommunityOther: "",
+    communityReferred: null,
     sqftRange: null,
     sqftExact: null,
     homeDensity: null,
