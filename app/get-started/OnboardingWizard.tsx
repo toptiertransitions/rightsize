@@ -22,9 +22,12 @@ interface Props {
   initialStep: number;
   initialTenantId: string | null;
   initialData: WizardData;
+  /** Community the user came from (join link or code), if any */
+  initialBrandName?: string | null;
 }
 
-export function OnboardingWizard({ initialStep, initialTenantId, initialData }: Props) {
+export function OnboardingWizard({ initialStep, initialTenantId, initialData, initialBrandName = null }: Props) {
+  const [brandName, setBrandName] = useState<string | null>(initialBrandName);
   const router = useRouter();
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), DONE_STEP));
   const [tenantId, setTenantId] = useState<string | null>(initialTenantId);
@@ -194,7 +197,7 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData }: 
           {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
             <div key={n} className="w-full h-full shrink-0 overflow-y-auto px-6 pb-4">
               <div className="max-w-md mx-auto pt-2">
-                {n === 1 && <Step1About data={data} update={update} />}
+                {n === 1 && <Step1About data={data} update={update} brandName={brandName} onBrandApplied={(name) => { setBrandName(name); router.refresh(); }} />}
                 {n === 2 && <Step2Interests data={data} update={update} onAppOnlyAdvance={handleAppOnlyAdvance} />}
                 {n === 3 && <Step3Timeline data={data} update={update} />}
                 {n === 4 && <Step4Destination data={data} update={update} />}

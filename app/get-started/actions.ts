@@ -26,6 +26,9 @@ import { HOW_HEARD_OPTIONS, type ReferralPartnerOption } from "@/lib/partners/re
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 import type { RoomType, Tenant } from "@/lib/types";
+import { getBrandByCode, getBrandBySlug } from "@/lib/brands/data";
+import { attachBrandToUser, claimJoinBrand } from "@/lib/brands/attach";
+import { checkCodeRateLimit } from "@/lib/brands/ratelimit";
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let lastErr: unknown;
@@ -66,6 +69,34 @@ async function requireOwnedOnboardingTenant(tenantId: string): Promise<{ userId:
   return { userId, tenant };
 }
 
+// Community branding: once the project exists, give it the community the
+// user came from (a /join link cookie, or a code / link already on their
+// account). Best-effort; never blocks onboarding.
+async function applyKnownBrand(userId: string, meta: Record<string, unknown>): Promise<void> {
+  try {
+    if (await claimJoinBrand(userId)) return;
+    const slug = typeof meta.brandSlug === "string" ? meta.brandSlug : "";
+    if (!slug) return;
+    const brand = await getBrandBySlug(slug);
+    if (brand?.status === "Active") await attachBrandToUser(userId, brand);
+  } catch (e) {
+    console.error("[onboarding] brand attach failed:", e);
+  }
+}
+
+/** "Who sent you? Enter your community code" on step 1. Rate-limited. */
+export async function applyCommunityCode(code: string): Promise<{ ok: true; displayName: string } | { ok: false; error: string }> {
+  const userId = await requireOnboardingUser();
+  const clean = String(code ?? "").slice(0, 40);
+  if (!(await checkCodeRateLimit(userId).catch(() => true))) {
+    return { ok: false, error: "Too many tries. Please wait a bit and try again." };
+  }
+  const brand = await getBrandByCode(clean).catch(() => null);
+  if (!brand || brand.status !== "Active") return { ok: false, error: "We couldn't find that code. Check it and try again." };
+  await attachBrandToUser(userId, brand);
+  return { ok: true, displayName: brand.displayName };
+}
+
 export async function submitStep1(input: Step1Input): Promise<{ tenantId: string }> {
   const userId = await requireOnboardingUser();
   const parsed = step1Schema.parse(input);
@@ -87,6 +118,7 @@ export async function submitStep1(input: Step1Input): Promise<{ tenantId: string
     if (t && t.isTTT !== true && t.onboardingComplete !== true) {
       await withRetry(() => updateTenant(t.id, { currentZip: parsed.currentZip, onboardingCurrentStep: 2 }));
       await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: false } });
+      await applyKnownBrand(userId, clerkUser.publicMetadata);
       logOnboardingEvent("step_completed", { step: 1, tenantId: t.id, resumed: true });
       return { tenantId: t.id };
     }
@@ -107,6 +139,7 @@ export async function submitStep1(input: Step1Input): Promise<{ tenantId: string
   }));
   await withRetry(() => createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" }));
   await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: false } });
+  await applyKnownBrand(userId, clerkUser.publicMetadata);
 
   // Sent directly here rather than relying solely on the Clerk user.created
   // webhook — that webhook fires before this project/tenant exists, so it

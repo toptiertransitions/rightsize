@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AccountSplash } from "@/components/auth/AccountSplash";
 import InAppBrowserWarning from "./InAppBrowserWarning";
 import { isNativeApp } from "@/lib/native";
+import { BrandAuthHeader } from "@/components/brands/BrandAuthHeader";
 
 function SignUpContent() {
   // Google OAuth doesn't work inside the Capacitor app's embedded webview
@@ -59,6 +60,7 @@ function SignUpContent() {
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
       <div className="mb-8 text-center">
+        <BrandAuthHeader slug={searchParams.get("brand")}>
         <Link href="/" className="inline-flex items-center gap-2.5 mb-2">
           <div className="w-10 h-10 bg-forest-600 rounded-xl flex items-center justify-center">
             <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -70,6 +72,7 @@ function SignUpContent() {
             <div className="text-[11px] text-gray-400">by Top Tier</div>
           </div>
         </Link>
+        </BrandAuthHeader>
         <p className="text-sm text-gray-500">Free account · No credit card needed</p>
       </div>
       {showSplash && <AccountSplash overlay />}

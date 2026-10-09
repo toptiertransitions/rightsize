@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AccountSplash, hasClerkSessionCookie } from "@/components/auth/AccountSplash";
 import { isNativeApp } from "@/lib/native";
+import { BrandAuthHeader } from "@/components/brands/BrandAuthHeader";
 
 function SignInContent() {
   // Google OAuth doesn't work inside the Capacitor app's embedded webview
@@ -41,6 +42,7 @@ function SignInContent() {
     <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center px-4 py-12">
       {signedIn && <AccountSplash overlay message="Signing you in…" />}
       <div className="mb-8 text-center">
+        <BrandAuthHeader slug={searchParams.get("brand")}>
         <Link href="/" className="inline-flex items-center gap-2.5 mb-4">
           <div className="w-10 h-10 bg-forest-600 rounded-xl flex items-center justify-center">
             <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -52,6 +54,7 @@ function SignInContent() {
             <div className="text-[11px] text-gray-400">by Top Tier</div>
           </div>
         </Link>
+        </BrandAuthHeader>
       </div>
       <SignIn
         fallbackRedirectUrl={redirectUrl}
