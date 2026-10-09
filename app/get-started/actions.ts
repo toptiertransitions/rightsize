@@ -12,6 +12,7 @@ import {
   createMembership,
   updateTenant,
   upsertUser,
+  getPartnerSelectionsForTenant,
   createRoom,
 } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
@@ -26,7 +27,7 @@ import { HOW_HEARD_OPTIONS, type ReferralPartnerOption } from "@/lib/partners/re
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
 import type { RoomType, Tenant } from "@/lib/types";
-import { getBrandByCode, getBrandBySlug } from "@/lib/brands/data";
+import { getAllBrands, getBrandByCode, getBrandBySlug } from "@/lib/brands/data";
 import { attachBrandToUser, claimJoinBrand } from "@/lib/brands/attach";
 import { checkCodeRateLimit } from "@/lib/brands/ratelimit";
 
@@ -336,6 +337,24 @@ export async function submitStep7(tenantId: string, input: Step7Input): Promise<
   logOnboardingEvent("step_completed", { step: 7, tenantId: tenant.id, howHeard: parsed.howHeard });
 }
 
+// Community branding from the referral answer: when the senior community or
+// realtor they said referred them (step 4 or step 7) has an Active community
+// brand, the project switches to it as the tour ends, so Home opens branded.
+// Only when the project has no brand yet (a join link or community code
+// already chose one), and best-effort: never blocks finishing onboarding.
+async function applyReferrerBrand(userId: string, tenant: Tenant): Promise<void> {
+  try {
+    if (tenant.communityBrandId) return;
+    const selections = await getPartnerSelectionsForTenant(tenant.id);
+    const referrerIds = new Set(selections.filter((s) => s.referralLocked && s.partnerId).map((s) => s.partnerId));
+    if (referrerIds.size === 0) return;
+    const brand = (await getAllBrands()).find((b) => b.status === "Active" && referrerIds.has(b.marketplacePartnerId));
+    if (brand) await attachBrandToUser(userId, brand);
+  } catch (e) {
+    console.error("[onboarding] referrer brand failed:", e);
+  }
+}
+
 // Called when the user finishes or skips the step-8 tour — the actual end
 // of onboarding. Marking onboardingComplete here (rather than in
 // completeOnboarding above) is what lets the tour render and stay mounted
@@ -347,6 +366,8 @@ export async function finishOnboardingTour(tenantId: string): Promise<{ tenantId
 
   const clerk = await clerkClient();
   await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: true } });
+
+  await applyReferrerBrand(userId, tenant);
 
   logOnboardingEvent("onboarding_completed", { tenantId: tenant.id });
   revalidateTag("tenants");
