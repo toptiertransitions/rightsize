@@ -1,4 +1,7 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
+import { resolveBrand } from "@/lib/brands/resolve";
+import { getBrandContactViews } from "@/lib/brands/data";
+import { BrandContactsCard } from "@/components/brands/BrandContactsCard";
 import { Lightbulb } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -26,7 +29,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ tenantId?: string; all?: string }>;
 }) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) redirect("/sign-in");
 
   const { tenantId: tenantIdParam, all: showAll } = await searchParams;
@@ -281,6 +284,11 @@ export default async function DashboardPage({
     const canEdit = EDIT_ROLES.includes(membership.role);
     const isOwner = OWNER_ROLES.includes(membership.role);
     const isNonTTTClient = !isStaff && tenant.isTTT !== true;
+    // Community (white-label) brand: this project's, or an admin's preview
+    const brandSlug = (sessionClaims?.public_metadata as { brandSlug?: string } | undefined)?.brandSlug ?? null;
+    const resolvedBrand = await resolveBrand({ sysRole: systemRole, tenants: [tenant], brandSlug });
+    const brand = resolvedBrand?.brand ?? null;
+    const brandContacts = brand ? await getBrandContactViews(brand) : [];
     const totalSqFt = rooms.reduce((s, r) => s + r.squareFeet, 0);
     const partnerCount = partnerSelections.length;
     const itemsByStatus = items.reduce((acc, item) => {
@@ -354,19 +362,31 @@ export default async function DashboardPage({
           </div>
         </div>
 
+        {brand && brandContacts.length > 0 && (
+          <div className="mb-8">
+            <BrandContactsCard
+              displayName={brand.displayName}
+              contacts={brandContacts}
+              welcomeMessage={brand.welcomeMessage}
+              welcomeSenderName={brand.welcomeSenderName}
+              welcomeSenderTitle={brand.welcomeSenderTitle}
+            />
+          </div>
+        )}
+
         {/* Stats */}
         <div className={`grid grid-cols-2 gap-4 mb-8 ${isNonTTTClient ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           <Link href={`/catalog?tenantId=${tenant.id}`} className="block h-full">
             <Card hover className="h-full">
               <CardContent className="py-5 h-full flex flex-col">
-                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center mb-2">
-                  <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className={`w-8 h-8 ${brand ? "bg-accent-50" : "bg-indigo-50"} rounded-lg flex items-center justify-center mb-2`}>
+                  <svg className={`w-4 h-4 ${brand ? "text-accent-600" : "text-indigo-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l1.5-3h15L21 7M3 7h18M3 7v12a1 1 0 001 1h16a1 1 0 001-1V7M9 11h6" />
                   </svg>
                 </div>
                 <p className="text-3xl font-bold text-gray-900">{items.length}</p>
                 <p className="text-sm text-gray-500 mt-0.5">Items cataloged</p>
-                <p className="text-xs text-forest-600 mt-auto pt-2 font-medium">View catalog →</p>
+                <p className={`text-xs ${brand ? "text-accent-600" : "text-forest-600"} mt-auto pt-2 font-medium`}>View catalog →</p>
               </CardContent>
             </Card>
           </Link>
@@ -374,14 +394,14 @@ export default async function DashboardPage({
             <Link href={`/partners?tenantId=${tenant.id}`} className="block h-full">
               <Card hover className="h-full">
                 <CardContent className="py-5 h-full flex flex-col">
-                  <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
-                    <svg className="w-4 h-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className={`w-8 h-8 ${brand ? "bg-accent-50" : "bg-forest-50"} rounded-lg flex items-center justify-center mb-2`}>
+                    <svg className={`w-4 h-4 ${brand ? "text-accent-600" : "text-forest-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </div>
                   <p className="text-3xl font-bold text-gray-900">{partnerCount}</p>
                   <p className="text-sm text-gray-500 mt-0.5">Partners on Your Team</p>
-                  <p className="text-xs text-forest-600 mt-auto pt-2 font-medium">View partners →</p>
+                  <p className={`text-xs ${brand ? "text-accent-600" : "text-forest-600"} mt-auto pt-2 font-medium`}>View partners →</p>
                 </CardContent>
               </Card>
             </Link>
@@ -389,14 +409,14 @@ export default async function DashboardPage({
             <Link href={`/rooms?tenantId=${tenant.id}`} className="block h-full">
               <Card hover className="h-full">
                 <CardContent className="py-5 h-full flex flex-col">
-                  <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center mb-2">
-                    <svg className="w-4 h-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className={`w-8 h-8 ${brand ? "bg-accent-50" : "bg-sky-50"} rounded-lg flex items-center justify-center mb-2`}>
+                    <svg className={`w-4 h-4 ${brand ? "text-accent-600" : "text-sky-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                   </div>
                   <p className="text-3xl font-bold text-gray-900">{rooms.length}</p>
                   <p className="text-sm text-gray-500 mt-0.5">Rooms · {totalSqFt.toLocaleString()} SF</p>
-                  <p className="text-xs text-forest-600 mt-auto pt-2 font-medium">View rooms →</p>
+                  <p className={`text-xs ${brand ? "text-accent-600" : "text-forest-600"} mt-auto pt-2 font-medium`}>View rooms →</p>
                 </CardContent>
               </Card>
             </Link>
@@ -405,14 +425,14 @@ export default async function DashboardPage({
           <Link href={`/plan?tenantId=${tenant.id}`} className={`${isNonTTTClient ? "" : "col-span-2 sm:col-span-1 "}block h-full`}>
             <Card hover className="h-full">
               <CardContent className="py-5 h-full flex flex-col">
-                <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
-                  <svg className="w-4 h-4 text-forest-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className={`w-8 h-8 ${brand ? "bg-accent-50" : "bg-forest-50"} rounded-lg flex items-center justify-center mb-2`}>
+                  <svg className={`w-4 h-4 ${brand ? "text-accent-600" : "text-forest-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <p className="text-sm font-semibold text-gray-900">Project Plan</p>
                 <p className="text-xs text-gray-500 mt-0.5">View timeline and plans</p>
-                <p className="text-xs text-forest-600 mt-auto pt-2 font-medium">View plan →</p>
+                <p className={`text-xs ${brand ? "text-accent-600" : "text-forest-600"} mt-auto pt-2 font-medium`}>View plan →</p>
               </CardContent>
             </Card>
           </Link>
@@ -420,12 +440,12 @@ export default async function DashboardPage({
             <Link href="/tips" className="block h-full">
               <Card hover className="h-full">
                 <CardContent className="py-5 h-full flex flex-col">
-                  <div className="w-8 h-8 bg-forest-50 rounded-lg flex items-center justify-center mb-2">
-                    <Lightbulb className="w-4 h-4 text-forest-600" />
+                  <div className={`w-8 h-8 ${brand ? "bg-accent-50" : "bg-forest-50"} rounded-lg flex items-center justify-center mb-2`}>
+                    <Lightbulb className={`w-4 h-4 ${brand ? "text-accent-600" : "text-forest-600"}`} />
                   </div>
                   <p className="text-sm font-semibold text-gray-900">Tips and Advice</p>
                   <p className="text-xs text-gray-500 mt-0.5">Guidance for every step</p>
-                  <p className="text-xs text-forest-600 mt-auto pt-2 font-medium">View tips →</p>
+                  <p className={`text-xs ${brand ? "text-accent-600" : "text-forest-600"} mt-auto pt-2 font-medium`}>View tips →</p>
                 </CardContent>
               </Card>
             </Link>

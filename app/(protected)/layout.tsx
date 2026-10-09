@@ -66,6 +66,11 @@ export default async function ProtectedLayout({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+      {brand && (
+        <p className="text-center text-[11px] text-gray-400 px-4 pb-8 -mt-2">
+          {brand.topTierVisibility === "Minimal" ? "Powered by Rightsize" : "Move management by Top Tier Transitions · Powered by Rightsize"}
+        </p>
+      )}
     </div>
   );
 }
