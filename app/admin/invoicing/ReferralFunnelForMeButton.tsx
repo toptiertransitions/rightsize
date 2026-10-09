@@ -54,7 +54,7 @@ export function ReferralFunnelForMeButton() {
       {status === "confirm" && (
         <div className="mt-3 max-w-xl rounded-lg border border-gray-200 bg-white p-4">
           <p className="text-sm text-gray-700">
-            This reads the CRM for every High priority company in the Referral Funnel (Identified, Met, or no contacts yet) and every Medium a rep added to the Not Yet Referring Pipeline, plus those that moved up into War Room stages in the last 30 days,
+            This reads the CRM for every High priority company in the Referral Funnel (Identified, Met, or no contacts yet) and every Medium a rep added to the Not Yet Referring Pipeline, plus every High and Medium that moved into War Room stages (Agreed to Refer +) in the last 30 days,
             and emails you trends, planning gaps, and an AI next best action for each. Saved AI Statuses aren&apos;t changed. It takes about 10-15 minutes.
           </p>
           <div className="mt-3 flex gap-2">
