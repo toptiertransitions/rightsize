@@ -49,9 +49,12 @@ interface HeaderProps {
   // "Tips" text-nav link on web; in the iOS app it lives in the avatar menu
   // so the 5-icon bottom bar is unchanged.
   showTips?: boolean;
+  // Community (white-label) brand for this user, if any (lib/brands). Its
+  // logo replaces the Top Tier logo; colors come in through CSS variables.
+  brand?: { logoUrl: string; displayName: string; primaryColor: string };
 }
 
-export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav, showTips }: HeaderProps) {
+export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav, showTips, brand }: HeaderProps) {
   // Capacitor's bridge isn't available during SSR/first paint, so this
   // starts false (matching the server-rendered text nav) and flips after
   // mount if we're actually in the native iOS shell — same pattern as
@@ -61,6 +64,16 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     setIsIOSNative(getPlatform() === "ios");
   }, []);
   const useIOSNav = !!showIOSNav && isIOSNative;
+
+  // Native app: tint the status bar with the brand's primary color (or the
+  // Top Tier green). Best effort; some platforms ignore runtime colors.
+  const statusBarColor = brand?.primaryColor ?? "#2d4a3e";
+  useEffect(() => {
+    if (!isIOSNative) return;
+    import("@capacitor/status-bar")
+      .then(({ StatusBar }) => StatusBar.setBackgroundColor({ color: statusBarColor }))
+      .catch(() => {});
+  }, [isIOSNative, statusBarColor]);
 
   // Pending shift-invite count for the badge on the iOS nav's Plan icon.
   // Safe to call unconditionally whenever the iOS nav shows — showIOSNav
@@ -223,6 +236,11 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
+          {brand ? (
+            <Link href="/home" className="flex items-center min-w-0" aria-label={`${brand.displayName} home`}>
+              <BrandLogo logoUrl={brand.logoUrl} name={brand.displayName} />
+            </Link>
+          ) : (
           <Link href="/home" className="flex items-center gap-2.5">
             <Image
               src="/ttt-icon.png"
@@ -237,6 +255,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
               <div className="text-[10px] text-gray-400 leading-none">by Top Tier</div>
             </div>
           </Link>
+          )}
 
           {/* Nav — hidden entirely in the iOS native compact nav (below) */}
           {!useIOSNav && (
@@ -328,7 +347,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
               href={link.href}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-1.5 transition-colors",
-                isActive ? "text-forest-700" : "text-gray-500"
+                isActive ? "text-accent-700" : "text-gray-500"
               )}
             >
               <span className="relative">
@@ -346,5 +365,18 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
       </nav>
     )}
     </>
+  );
+}
+
+// Scales to the header height without distortion; falls back to the
+// community's name if there's no logo or it fails to load.
+function BrandLogo({ logoUrl, name }: { logoUrl: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!logoUrl || failed) {
+    return <span className="font-bold text-forest-700 text-base truncate max-w-[200px]">{name}</span>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt={name} onError={() => setFailed(true)} className="h-11 w-auto max-w-[180px] object-contain" />
   );
 }

@@ -8,18 +8,34 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // CSS variables (defaults in app/globals.css = the original Top Tier
+        // greens) so a community brand can recolor the app (lib/brands).
         forest: {
-          DEFAULT: "#2E6B4F",
-          50: "#f0f7f4",
-          100: "#daeee5",
-          200: "#b7ddcc",
-          300: "#8cc5ae",
-          400: "#5fa78a",
-          500: "#3e8b6e",
-          600: "#2E6B4F",
-          700: "#255840",
-          800: "#204834",
-          900: "#1c3c2c",
+          DEFAULT: "rgb(var(--forest-600) / <alpha-value>)",
+          50: "rgb(var(--forest-50) / <alpha-value>)",
+          100: "rgb(var(--forest-100) / <alpha-value>)",
+          200: "rgb(var(--forest-200) / <alpha-value>)",
+          300: "rgb(var(--forest-300) / <alpha-value>)",
+          400: "rgb(var(--forest-400) / <alpha-value>)",
+          500: "rgb(var(--forest-500) / <alpha-value>)",
+          600: "rgb(var(--forest-600) / <alpha-value>)",
+          700: "rgb(var(--forest-700) / <alpha-value>)",
+          800: "rgb(var(--forest-800) / <alpha-value>)",
+          900: "rgb(var(--forest-900) / <alpha-value>)",
+        },
+        // Accent color for a brand's secondary color; defaults to forest.
+        accent: {
+          DEFAULT: "rgb(var(--accent-600) / <alpha-value>)",
+          50: "rgb(var(--accent-50) / <alpha-value>)",
+          100: "rgb(var(--accent-100) / <alpha-value>)",
+          200: "rgb(var(--accent-200) / <alpha-value>)",
+          300: "rgb(var(--accent-300) / <alpha-value>)",
+          400: "rgb(var(--accent-400) / <alpha-value>)",
+          500: "rgb(var(--accent-500) / <alpha-value>)",
+          600: "rgb(var(--accent-600) / <alpha-value>)",
+          700: "rgb(var(--accent-700) / <alpha-value>)",
+          800: "rgb(var(--accent-800) / <alpha-value>)",
+          900: "rgb(var(--accent-900) / <alpha-value>)",
         },
         cream: {
           DEFAULT: "#F5F0E8",

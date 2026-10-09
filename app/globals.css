@@ -4,6 +4,28 @@
 
 /* Safe area inset variables — resolve to 0 on web, hardware-aware values on native iOS/Android */
 :root {
+  /* Brand palettes (tailwind forest-* / accent-*). These are the Top Tier
+     greens; a community brand overrides them (lib/brands/shared.ts). */
+  --forest-50: 240 247 244;
+  --forest-100: 218 238 229;
+  --forest-200: 183 221 204;
+  --forest-300: 140 197 174;
+  --forest-400: 95 167 138;
+  --forest-500: 62 139 110;
+  --forest-600: 46 107 79;
+  --forest-700: 37 88 64;
+  --forest-800: 32 72 52;
+  --forest-900: 28 60 44;
+  --accent-50: 240 247 244;
+  --accent-100: 218 238 229;
+  --accent-200: 183 221 204;
+  --accent-300: 140 197 174;
+  --accent-400: 95 167 138;
+  --accent-500: 62 139 110;
+  --accent-600: 46 107 79;
+  --accent-700: 37 88 64;
+  --accent-800: 32 72 52;
+  --accent-900: 28 60 44;
   --sat: env(safe-area-inset-top, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);

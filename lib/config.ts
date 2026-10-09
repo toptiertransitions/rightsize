@@ -105,6 +105,8 @@ export const AIRTABLE_TABLES = {
   REP_QUARTERLY_GOALS: process.env.AIRTABLE_REP_QUARTERLY_GOALS_TABLE || "RepQuarterlyGoals",
   QUARTERLY_COMPANY_PLANS: process.env.AIRTABLE_QUARTERLY_COMPANY_PLANS_TABLE || "QuarterlyCompanyPlans",
   WAR_ROOM_SPOTLIGHT: process.env.AIRTABLE_WAR_ROOM_SPOTLIGHT_TABLE || "WarRoomSpotlight",
+  COMMUNITY_BRANDS: process.env.AIRTABLE_COMMUNITY_BRANDS_TABLE || "CommunityBrands",
+  COMMUNITY_BRAND_AUDIT: process.env.AIRTABLE_COMMUNITY_BRAND_AUDIT_TABLE || "CommunityBrandAudit",
   DEVICE_PUSH_TOKENS: process.env.AIRTABLE_DEVICE_PUSH_TOKENS_TABLE || "DevicePushTokens",
   PUSH_NOTIFICATION_LOG: process.env.AIRTABLE_PUSH_NOTIFICATION_LOG_TABLE || "PushNotificationLog",
   // ─── Marketplace rebuild (Partners/Listings model — see lib/marketplace/) ───

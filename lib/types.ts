@@ -188,6 +188,9 @@ export interface Tenant {
   howHeard?: string;
   /** Free-text follow-up for howHeard (e.g. the realtor's name). */
   howHeardDetail?: string;
+  /** CommunityBrands record id: white-label branding for this project's
+   * client and invited family (lib/brands). Unset = Top Tier default. */
+  communityBrandId?: string;
 }
 
 export type ServiceInterest =
