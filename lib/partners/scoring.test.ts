@@ -187,3 +187,58 @@ describe("scoreAndRankPartners — local + virtual composition", () => {
     expect(result.alternates).toHaveLength(2);
   });
 });
+
+describe("scoreAndRankPartners — client's virtual preference", () => {
+  const cat = "Care Manager" as const;
+  const local = (id: string) => profile({ id, vendorName: id, category: cat, zipCodesServed: "60540", deliveryMode: "In-person" });
+  const virtualOnly = (id: string, state = "IL") => profile({ id, vendorName: id, category: cat, state, deliveryMode: "Virtual" });
+
+  it("shows a virtual-only partner in the client's state even without statewide/nationwide", () => {
+    const r = scoreAndRankPartners([virtualOnly("v1")], cat, { zip: "60540", state: "IL" }, {});
+    expect(r.best?.partner.id).toBe("v1");
+    expect(r.best?.matchedLocation).toBe("virtual");
+  });
+
+  it("doesn't reach clients in another state unless nationwide", () => {
+    const r = scoreAndRankPartners([virtualOnly("v1", "WI")], cat, { zip: "60540", state: "IL" }, {});
+    expect(r.best).toBeNull();
+  });
+
+  it("hides virtual partners when the client prefers in person and someone local covers their zip", () => {
+    const r = scoreAndRankPartners([local("l1"), virtualOnly("v1")], cat, { zip: "60540", state: "IL" }, { virtualOk: "in_person" });
+    const ids = [r.best, ...r.alternates].map((m) => m?.partner.id);
+    expect(ids).toEqual(["l1"]);
+  });
+
+  it("still shows virtual partners to an in-person client when no one local covers their zip", () => {
+    const r = scoreAndRankPartners([virtualOnly("v1")], cat, { zip: "60540", state: "IL" }, { virtualOk: "in_person" });
+    expect(r.best?.partner.id).toBe("v1");
+  });
+
+  it("fills open slots with more virtual partners when the client said virtual works", () => {
+    const r = scoreAndRankPartners([local("l1"), virtualOnly("v1"), virtualOnly("v2")], cat, { zip: "60540", state: "IL" }, { virtualOk: "yes" });
+    expect([r.best, ...r.alternates].map((m) => m?.partner.id).sort()).toEqual(["l1", "v1", "v2"]);
+  });
+
+  it("keeps one virtual bonus option when the client didn't answer", () => {
+    const r = scoreAndRankPartners([local("l1"), virtualOnly("v1"), virtualOnly("v2")], cat, { zip: "60540", state: "IL" }, {});
+    const ids = [r.best, ...r.alternates].map((m) => m?.partner.id);
+    expect(ids.filter((id) => id?.startsWith("v"))).toHaveLength(1);
+  });
+});
+
+describe("scoreAndRankPartners — Mover packing", () => {
+  const mover = (id: string, packingServices: boolean) =>
+    profile({ id, vendorName: id, zipCodesServed: "60540", attributes: { packingServices } });
+
+  it("ranks movers who pack above those who don't when the client wants packing", () => {
+    const r = scoreAndRankPartners([mover("noPack", false), mover("pack", true)], "Mover", { zip: "60540", state: "IL" }, { packingHelp: "packing_and_move" });
+    expect(r.best?.partner.id).toBe("pack");
+  });
+
+  it("ignores packing when the client only needs the move", () => {
+    const a = scoreAndRankPartners([mover("pack", true)], "Mover", { zip: "60540", state: "IL" }, { packingHelp: "move_only" });
+    const b = scoreAndRankPartners([mover("noPack", false)], "Mover", { zip: "60540", state: "IL" }, { packingHelp: "move_only" });
+    expect(a.best?.score).toBeCloseTo(b.best?.score ?? 0);
+  });
+});

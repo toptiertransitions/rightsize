@@ -98,7 +98,11 @@ export async function updatePartnerServiceAreaAction(
   }
   const zips = [...new Set([...manualZips, ...zipsForCounties(counties)])].sort();
   try {
-    await updatePartner(partnerId, { serviceArea: { ...serviceArea, zips, counties } });
+    // Keep a partner's own "zip + radius" choice (set in their portal); its
+    // zips are already in the list the admin just saved
+    const existing = await getPartnerById(partnerId).catch(() => null);
+    const radius = existing?.serviceArea.radius;
+    await updatePartner(partnerId, { serviceArea: { ...serviceArea, zips, counties, ...(radius ? { radius } : {}) } });
     revalidatePath(`/admin/marketplace/partners/${partnerId}`);
     return { ok: true };
   } catch (e) {

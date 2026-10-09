@@ -8,7 +8,7 @@ import type { PartnerCategory } from "@/lib/types";
 import type { MarketplaceFieldDef, MarketplaceLifecycleStatus, MarketplaceListingStatus } from "@/lib/marketplace/types";
 import {
   BusinessFields, AboutFields, AreaFields, CriterionPicker, DetailsFields,
-  businessValid, areaValid, parseZipText, editableFields,
+  businessValid, areaValid, parseZipText, editableFields, areaSaveInput,
   type BusinessData, type AboutData, type AreaData,
 } from "../setup/SetupFields";
 import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, requestCategoryChangeAction } from "../setup/actions";
@@ -59,9 +59,9 @@ export function ListingClient({ status, business: b0, about: a0, area: ar0, list
         <Card
           title="Where you work"
           valid={areaValid(area)}
-          onSave={() => saveServiceAreaAction({ deliveryMode: area.deliveryMode, counties: area.counties, extraZips: parseZipText(area.extraZipsText), statewide: area.statewide })}
+          onSave={() => saveServiceAreaAction(areaSaveInput(area))}
         >
-          <AreaFields data={area} onChange={setArea} />
+          <AreaFields data={area} onChange={setArea} defaultZip={business.zip} />
         </Card>
 
         {listings.map((l) => <CategoryCards key={l.id} listing={l} />)}

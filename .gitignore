@@ -50,3 +50,6 @@ TESTING_PLAN.md
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local check builds (NEXT_DIST_DIR)
+/.next-build/

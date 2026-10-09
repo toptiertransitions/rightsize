@@ -4,10 +4,11 @@
 // screen) and the My Listing page (as editable cards). Mobile first:
 // 16px inputs (no iOS zoom), 48px tap targets.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ImagePlus, MapPin, Monitor, Shuffle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IL_COUNTY_OPTIONS } from "@/lib/marketplace/counties";
+import { previewRadiusAction } from "./actions";
 import type { MarketplaceDeliveryMode, MarketplaceFieldDef } from "@/lib/marketplace/types";
 import type { PartnerCriterion } from "@/lib/partners/criteria";
 
@@ -158,9 +159,25 @@ export function AboutFields({ data, onChange }: { data: AboutData; onChange: (d:
 
 export interface AreaData {
   deliveryMode: MarketplaceDeliveryMode;
+  /** Counties (plus "all of Illinois"), or a zip + radius */
+  areaMode: "counties" | "radius";
   counties: string[];
   extraZipsText: string;
   statewide: boolean;
+  radiusZip: string;
+  radiusMiles: number;
+}
+
+const RADIUS_MIN = 5;
+const RADIUS_MAX = 100;
+
+/** The payload saveServiceAreaAction expects, from the form state. */
+export function areaSaveInput(d: AreaData) {
+  const radius = d.areaMode === "radius" ? { zip: d.radiusZip.trim(), miles: d.radiusMiles } : null;
+  // The radius view has no extra-zips box, so nothing hidden rides along
+  return radius
+    ? { deliveryMode: d.deliveryMode, counties: [], extraZips: [], statewide: false, radius }
+    : { deliveryMode: d.deliveryMode, counties: d.counties, extraZips: parseZipText(d.extraZipsText), statewide: d.statewide, radius: null };
 }
 
 export function parseZipText(text: string): string[] {
@@ -169,16 +186,17 @@ export function parseZipText(text: string): string[] {
 
 export function areaValid(d: AreaData): boolean {
   if (d.deliveryMode === "Virtual") return true;
+  if (d.areaMode === "radius") return /^\d{5}$/.test(d.radiusZip.trim());
   return d.statewide || d.counties.length > 0 || parseZipText(d.extraZipsText).length > 0;
 }
 
 const MODES: { key: MarketplaceDeliveryMode; label: string; desc: string; icon: React.ReactNode }[] = [
   { key: "In-person", label: "In person", desc: "We visit clients or their homes", icon: <MapPin className="w-5 h-5" /> },
-  { key: "Virtual", label: "Virtual", desc: "Phone or video, anywhere", icon: <Monitor className="w-5 h-5" /> },
-  { key: "Both", label: "Both", desc: "In person locally, virtual beyond", icon: <Shuffle className="w-5 h-5" /> },
+  { key: "Virtual", label: "Virtual", desc: "Phone or video, across your state", icon: <Monitor className="w-5 h-5" /> },
+  { key: "Both", label: "Both", desc: "In person locally, virtual across your state", icon: <Shuffle className="w-5 h-5" /> },
 ];
 
-export function AreaFields({ data, onChange }: { data: AreaData; onChange: (d: AreaData) => void }) {
+export function AreaFields({ data, onChange, defaultZip = "" }: { data: AreaData; onChange: (d: AreaData) => void; defaultZip?: string }) {
   const set = (patch: Partial<AreaData>) => onChange({ ...data, ...patch });
   const [query, setQuery] = useState("");
   const [showZips, setShowZips] = useState(data.extraZipsText.trim().length > 0);
@@ -223,7 +241,35 @@ export function AreaFields({ data, onChange }: { data: AreaData; onChange: (d: A
         </div>
       </div>
 
+      {data.deliveryMode === "Virtual" && (
+        <p className="text-sm text-gray-600 bg-forest-50 rounded-xl px-4 py-3">
+          We&apos;ll match you with families in your state who are open to help by phone or video.
+        </p>
+      )}
+
       {data.deliveryMode !== "Virtual" && (
+        <div role="radiogroup" aria-label="How to describe your area" className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-gray-100">
+          {([["counties", "Counties"], ["radius", "Zip + radius"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={data.areaMode === key}
+              onClick={() => set(key === "radius" && !data.radiusZip.trim() ? { areaMode: key, radiusZip: defaultZip } : { areaMode: key })}
+              className={cn(
+                "h-11 rounded-xl text-sm font-semibold transition-all",
+                data.areaMode === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {data.deliveryMode !== "Virtual" && data.areaMode === "radius" && <RadiusPicker data={data} set={set} />}
+
+      {data.deliveryMode !== "Virtual" && data.areaMode === "counties" && (
         <div>
           <p className={labelCls}>Which Illinois counties do you serve?</p>
           {data.counties.length > 0 && (
@@ -278,6 +324,82 @@ export function AreaFields({ data, onChange }: { data: AreaData; onChange: (d: A
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Zip + radius ────────────────────────────────────────────────────────────
+
+function RadiusPicker({ data, set }: { data: AreaData; set: (p: Partial<AreaData>) => void }) {
+  const [preview, setPreview] = useState<{ place: string | null; zipCount: number } | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const zip = data.radiusZip.trim();
+  const miles = data.radiusMiles;
+
+  // Town name and coverage for the current zip + miles, debounced
+  useEffect(() => {
+    if (!/^\d{5}$/.test(zip)) { setPreview(null); return; }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      previewRadiusAction(zip, miles)
+        .then((p) => { if (!cancelled) { setPreview(p); setPreviewFailed(false); } })
+        .catch(() => { if (!cancelled) setPreviewFailed(true); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [zip, miles]);
+
+  const pct = ((miles - RADIUS_MIN) / (RADIUS_MAX - RADIUS_MIN)) * 100;
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-5">
+      <div>
+        <label htmlFor="p-radius-zip" className={labelCls}>Center zip code</label>
+        <input
+          id="p-radius-zip"
+          className={cn(inputCls, "tabular-nums")}
+          inputMode="numeric"
+          autoComplete="postal-code"
+          maxLength={5}
+          value={data.radiusZip}
+          onChange={(e) => set({ radiusZip: e.target.value.replace(/\D/g, "").slice(0, 5) })}
+          placeholder="60540"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between mb-2">
+          <label htmlFor="p-radius-miles" className="text-xs font-medium text-gray-500">How far will you travel?</label>
+          <span className="text-2xl font-bold text-gray-900 tabular-nums">{miles}<span className="text-sm font-medium text-gray-500"> miles</span></span>
+        </div>
+        <input
+          id="p-radius-miles"
+          type="range"
+          min={RADIUS_MIN}
+          max={RADIUS_MAX}
+          step={5}
+          value={miles}
+          onChange={(e) => set({ radiusMiles: Number(e.target.value) })}
+          className="w-full h-2 rounded-full appearance-none cursor-pointer accent-forest-600"
+          style={{ background: `linear-gradient(to right, rgb(var(--forest-600)) ${pct}%, #e5e7eb ${pct}%)` }}
+        />
+        <div className="flex justify-between text-[11px] text-gray-400 mt-1.5 tabular-nums">
+          <span>{RADIUS_MIN} mi</span>
+          <span>{RADIUS_MAX} mi</span>
+        </div>
+      </div>
+
+      {!previewFailed && <div className="flex items-center gap-2.5 rounded-xl bg-forest-50 px-3 py-2.5 text-sm text-forest-800 min-h-[44px]">
+        <MapPin className="w-4 h-4 flex-shrink-0" />
+        {!/^\d{5}$/.test(zip) ? (
+          <span className="text-gray-500">Enter a 5-digit zip code.</span>
+        ) : !preview ? (
+          <span className="text-gray-500">Checking&hellip;</span>
+        ) : preview.place ? (
+          <span>Within {miles} miles of <strong>{preview.place}</strong> &middot; about {preview.zipCount} zip codes</span>
+        ) : (
+          <span className="text-red-600">We couldn&apos;t find zip code {zip}.</span>
+        )}
+      </div>}
     </div>
   );
 }

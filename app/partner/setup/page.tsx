@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
-import { isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
+import { areaFormFor } from "@/lib/marketplace/serviceRadius";
 import { SetupWizard } from "./SetupWizard";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +17,6 @@ export default async function PartnerSetupPage() {
   const user = await currentUser().catch(() => null);
   const firstName = user?.firstName || (contact.name || partner.pocName).split(" ")[0] || "";
 
-  const counties = partner.serviceArea.counties.filter(isKnownCounty);
-  const fromCounties = new Set(zipsForCounties(counties));
 
   return (
     <SetupWizard
@@ -33,12 +31,7 @@ export default async function PartnerSetupPage() {
         zip: partner.zip,
       }}
       about={{ logo: partner.logo, shortBio: partner.shortBio, aboutUs: partner.aboutUs }}
-      area={{
-        deliveryMode: partner.deliveryMode,
-        counties,
-        extraZipsText: partner.serviceArea.zips.filter((z) => !fromCounties.has(z)).join(", "),
-        statewide: partner.serviceArea.statewide,
-      }}
+      area={areaFormFor(partner)}
       listings={listings.map((l) => ({ id: l.id, label: l.category.label, fieldSchema: l.category.fieldSchema, attributes: l.attributes }))}
     />
   );

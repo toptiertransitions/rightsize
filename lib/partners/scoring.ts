@@ -1,7 +1,7 @@
 import type { PartnerProfile, PartnerCategory, ClientLocation } from "./types";
 import type { PartnerRequest } from "@/lib/types";
 import { parseZipList } from "./match";
-import { getPartnerQuestions } from "./questions";
+import { getPartnerQuestions, VIRTUAL_OK_QUESTION_ID } from "./questions";
 import { readMatchCriteria, NEUTRAL_OPTION_VALUES } from "./criteria";
 
 // Deterministic, no-LLM scoring for Phase 3 guided matching. Weights are
@@ -98,6 +98,8 @@ function attributeOverlapScore(
   // the client answered, so compare option values directly.
   const exactIds = new Set<string>();
   for (const q of getPartnerQuestions(category)) {
+    // Not a partner criterion (any old saved picks are ignored)
+    if (q.partnerCriteria === false) continue;
     const partnerValues = criteria[q.id];
     if (!partnerValues || partnerValues.length === 0) continue;
     const raw = answers[q.id];
@@ -113,6 +115,17 @@ function attributeOverlapScore(
   for (const q of questions) {
     if (exactIds.has(q.id)) continue;
     const attrValue = attributes[q.matchQuestionKey!];
+
+    // Yes/no field (e.g. Movers' Packing Services): only answers that need
+    // a Yes are scored, and they match when the partner said Yes
+    if (q.requiresAttributeTrue && typeof attrValue === "boolean") {
+      const raw = answers[q.id];
+      const vals = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      if (!vals.some((v) => q.requiresAttributeTrue!.includes(v))) continue;
+      scoredQuestions++;
+      if (attrValue) totalScore += 1;
+      continue;
+    }
     const attrLabels = Array.isArray(attrValue)
       ? attrValue.map((v) => String(v).toLowerCase())
       : attrValue != null
@@ -176,15 +189,34 @@ export function scoreAndRankPartners(
 ): ScoringResult {
   const inCategory = directory.filter((p) => p.category === category);
 
+  // The client's answer to "Would help by phone or video work for you?"
+  // (only asked in some categories): yes / prefer in person / unanswered.
+  const virtualAnswer = answers[VIRTUAL_OK_QUESTION_ID];
+  const wantsVirtual = virtualAnswer === "yes";
+  const prefersInPerson = virtualAnswer === "in_person";
+  // Someone who can come to them: an in-person (or Both) partner covering their zip
+  const inPersonInZip = !!location.zip && inCategory.some((p) =>
+    p.deliveryMode !== "Virtual" && parseZipList(p.zipCodesServed).includes(location.zip!));
+  // Virtual partners are shown when the client is open to it, when nobody
+  // can serve their zip in person, or (no answer) as the one bonus option
+  const virtualAllowed = !prefersInPerson || !inPersonInZip;
+
   const scored: ScoredMatch[] = [];
   for (const partner of inCategory) {
     const zips = parseZipList(partner.zipCodesServed);
     const zipMatch = !!location.zip && zips.includes(location.zip);
     const stateMatch = !!location.state && partner.state.trim().toLowerCase() === location.state.trim().toLowerCase();
     const canServeVirtually = partner.deliveryMode === "Virtual" || partner.deliveryMode === "Both";
+    // A virtual partner reaches clients in their own state (where they're
+    // licensed and set up to work), or anywhere if they're nationwide.
+    // Virtual-only partners have no service area to pick, so their state
+    // is what makes them reachable.
     const virtualCoverageMatch =
-      canServeVirtually && (partner.servesNationwide || (partner.servesStatewide && stateMatch));
-    const isLocalMatch = zipMatch || stateMatch;
+      canServeVirtually && (partner.servesNationwide || stateMatch);
+    // Virtual-only partners never count as local, whatever state they're in
+    const isLocalMatch = partner.deliveryMode !== "Virtual" && (zipMatch || stateMatch);
+
+    if (!isLocalMatch && !virtualAllowed) continue;
 
     // Hard filter: not serving this client's zip or state at all, and no
     // virtual coverage that would reach them either.
@@ -227,6 +259,14 @@ export function scoreAndRankPartners(
   if (virtual.length > 0) picked.push(virtual[0]);
   if (picked.length < 3) {
     for (const s of local.slice(picked.filter((p) => p.matchedLocation !== "virtual").length)) {
+      if (picked.length >= 3) break;
+      picked.push(s);
+    }
+  }
+  // Still room, and virtual help works for them (or there's no one local):
+  // fill with more virtual partners
+  if (picked.length < 3 && (wantsVirtual || local.length === 0)) {
+    for (const s of virtual.slice(1)) {
       if (picked.length >= 3) break;
       picked.push(s);
     }

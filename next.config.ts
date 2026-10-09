@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Local check builds and previews set NEXT_DIST_DIR (e.g. ".next-build")
+  // so they never overwrite the files a running `next dev` is using.
+  // Unset everywhere else, including Vercel, so it stays ".next".
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: [
     "@react-pdf/renderer",
     "@react-pdf/layout",

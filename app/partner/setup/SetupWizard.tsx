@@ -10,7 +10,7 @@ import type { PartnerCategory } from "@/lib/types";
 import type { MarketplaceFieldDef } from "@/lib/marketplace/types";
 import {
   BusinessFields, AboutFields, AreaFields, CriterionPicker, DetailsFields,
-  businessValid, areaValid, parseZipText, editableFields,
+  businessValid, areaValid, parseZipText, editableFields, areaSaveInput,
   type BusinessData, type AboutData, type AreaData,
 } from "./SetupFields";
 import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, submitSetupAction } from "./actions";
@@ -126,12 +126,7 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
         result = await saveAboutAction(about);
         break;
       case "area":
-        result = await saveServiceAreaAction({
-          deliveryMode: area.deliveryMode,
-          counties: area.counties,
-          extraZips: parseZipText(area.extraZipsText),
-          statewide: area.statewide,
-        });
+        result = await saveServiceAreaAction(areaSaveInput(area));
         break;
       case "criterion":
         result = await saveListingAction(step.listingId, {
@@ -216,7 +211,7 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
               <div className="mt-5">
                 {step.kind === "business" && <BusinessFields data={business} onChange={setBusiness} />}
                 {step.kind === "about" && <AboutFields data={about} onChange={setAbout} />}
-                {step.kind === "area" && <AreaFields data={area} onChange={setArea} />}
+                {step.kind === "area" && <AreaFields data={area} onChange={setArea} defaultZip={business.zip} />}
                 {step.kind === "criterion" && (
                   <CriterionPicker
                     criterion={step.criterion}
@@ -317,6 +312,8 @@ function Review({ business, about, area, listings, criteria, onEdit }: {
 }) {
   const areaText = area.deliveryMode === "Virtual"
     ? "Virtual"
+    : area.areaMode === "radius"
+    ? `Within ${area.radiusMiles} miles of ${area.radiusZip}${area.deliveryMode === "Both" ? " and virtual" : ""}`
     : [area.statewide ? "All of Illinois" : `${area.counties.length} ${area.counties.length === 1 ? "county" : "counties"}`, parseZipText(area.extraZipsText).length ? `+ ${parseZipText(area.extraZipsText).length} zip codes` : "", area.deliveryMode === "Both" ? "and virtual" : ""].filter(Boolean).join(" ");
 
   return (

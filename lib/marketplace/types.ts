@@ -62,6 +62,9 @@ export interface MarketplaceServiceArea {
   counties: string[];
   statewide: boolean;
   nationwide: boolean;
+  /** Set when the partner chose "Zip + radius": every zip within `miles` of
+   * `zip` is expanded into `zips` at save time (matching only reads zips). */
+  radius?: { zip: string; miles: number };
 }
 
 export interface MarketplacePartner {

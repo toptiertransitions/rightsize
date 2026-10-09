@@ -55,6 +55,10 @@ export interface PartnerQuestion {
    * serves or doesn't (e.g. "Do you already have a will?"), so it's never
    * a partner criterion. */
   partnerCriteria?: false;
+  /** For a yes/no category field (matchQuestionKey points at a boolean):
+   * the client answers that need the partner to have it set to Yes. Any
+   * other answer doesn't score this question. */
+  requiresAttributeTrue?: string[];
 }
 
 // Prepended to every category's question list (see getPartnerQuestions) —
@@ -372,6 +376,10 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
         { value: "not_sure", label: "Not sure yet" },
       ],
       matchQuestionKey: "packingServices",
+      // Movers answer this with the "Packing Services" yes/no on their
+      // details screen, so there's no separate partner criteria screen
+      partnerCriteria: false,
+      requiresAttributeTrue: ["packing_and_move"],
     },
   ],
 
@@ -817,10 +825,37 @@ export const PARTNER_QUESTIONS: Partial<Record<PartnerCategory, PartnerQuestion[
   ],
 };
 
+// Asked in categories where partners can genuinely help by phone or video
+// (the ones marked "Allows virtual" in Marketplace > Categories that have a
+// question flow). Optional, so requests answered before it existed stay
+// complete. Scoring (lib/partners/scoring.ts) uses it to decide how much to
+// show virtual partners; it's never a partner criterion.
+export const VIRTUAL_OK_QUESTION_ID = "virtualOk";
+const VIRTUAL_CATEGORIES = new Set<PartnerCategory>([
+  "Care Manager", "Estate Attorney", "Financial Advisory", "Home Health Care", "After Loss Support",
+] as PartnerCategory[]);
+const VIRTUAL_OK_QUESTION: PartnerQuestion = {
+  id: VIRTUAL_OK_QUESTION_ID,
+  prompt: "Would help by phone or video work for you?",
+  helper: "Some partners can help remotely. We'll still show local options when there are some.",
+  type: "single-select",
+  options: [
+    { value: "yes", label: "Yes, that works" },
+    { value: "in_person", label: "I'd prefer in person" },
+    { value: "not_sure", label: "Either is fine" },
+  ],
+  optional: true,
+  partnerCriteria: false,
+};
+
 export function getPartnerQuestions(category: PartnerCategory): PartnerQuestion[] {
   const categoryQuestions = PARTNER_QUESTIONS[category];
   if (!categoryQuestions) return []; // Move Manager — no flow, see comment above PARTNER_QUESTIONS
-  return [...UNIVERSAL_QUESTIONS, ...categoryQuestions];
+  if (!VIRTUAL_CATEGORIES.has(category)) return [...UNIVERSAL_QUESTIONS, ...categoryQuestions];
+  // Right after the zip question, where location is already on their mind
+  const zipIdx = categoryQuestions.findIndex((q) => q.type === "zip");
+  const at = zipIdx >= 0 ? zipIdx + 1 : categoryQuestions.length;
+  return [...UNIVERSAL_QUESTIONS, ...categoryQuestions.slice(0, at), VIRTUAL_OK_QUESTION, ...categoryQuestions.slice(at)];
 }
 
 export function getPrefillAnswers(

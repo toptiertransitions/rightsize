@@ -8,6 +8,7 @@ import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
 import { updatePartner, updateListing } from "@/lib/marketplace/data";
 import { computeListingCompleteness } from "@/lib/marketplace/completeness";
 import { zipsForCounties, isKnownCounty } from "@/lib/marketplace/counties";
+import { zipsInRadius, placeForZip, RADIUS_MIN_MILES, RADIUS_MAX_MILES, RADIUS_DEFAULT_MILES } from "@/lib/marketplace/serviceRadius";
 import { getPartnerCriteria, MATCH_CRITERIA_ATTR, readMatchCriteria } from "@/lib/partners/criteria";
 import { getAdminEmails } from "@/lib/admin-notifications";
 import { updateReferralCompany, updateReferralContact } from "@/lib/airtable";
@@ -78,20 +79,40 @@ const areaSchema = z.object({
   counties: z.array(z.string()).max(102),
   extraZips: z.array(z.string().regex(/^\d{5}$/)).max(500),
   statewide: z.boolean(),
+  /** "Zip + radius" instead of counties */
+  radius: z.object({
+    zip: z.string().regex(/^\d{5}$/, "Enter a 5-digit zip code"),
+    miles: z.number().int().min(RADIUS_MIN_MILES).max(RADIUS_MAX_MILES),
+  }).nullable().optional(),
 });
 
 export async function saveServiceAreaAction(input: z.input<typeof areaSchema>): Promise<Result> {
   return run(async () => {
     const { partner } = await requireAccount();
     const d = areaSchema.parse(input);
-    const counties = d.counties.filter(isKnownCounty);
-    const zips = [...new Set([...zipsForCounties(counties), ...d.extraZips])];
+    const radius = d.radius ?? null;
+    // Radius and counties are alternatives: a radius replaces counties and
+    // "all of Illinois"; extra zips can go with either
+    const counties = radius ? [] : d.counties.filter(isKnownCounty);
+    const radiusZips = radius ? zipsInRadius(radius.zip, radius.miles) : [];
+    if (radius && radiusZips.length === 0) throw new Error(`We couldn't find zip code ${radius.zip}.`);
+    const zips = [...new Set([...zipsForCounties(counties), ...radiusZips, ...d.extraZips])];
     await updatePartner(partner.id, {
       deliveryMode: d.deliveryMode,
       // Nationwide stays an admin call
-      serviceArea: { zips, counties, statewide: d.statewide, nationwide: partner.serviceArea.nationwide },
+      serviceArea: {
+        zips, counties, statewide: radius ? false : d.statewide, nationwide: partner.serviceArea.nationwide,
+        ...(radius ? { radius } : {}),
+      },
     });
   });
+}
+
+/** Live preview for the radius picker: the zip's town and how many zips it covers. */
+export async function previewRadiusAction(zip: string, miles: number): Promise<{ place: string | null; zipCount: number }> {
+  await requireAccount();
+  const m = Math.min(RADIUS_MAX_MILES, Math.max(RADIUS_MIN_MILES, Math.round(Number(miles) || RADIUS_DEFAULT_MILES)));
+  return { place: placeForZip(String(zip).trim()), zipCount: zipsInRadius(String(zip).trim(), m).length };
 }
 
 /** Saves one listing's matching criteria and/or category details. Only
