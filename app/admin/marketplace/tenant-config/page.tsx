@@ -6,6 +6,9 @@ import { getTenants, getMembershipsForTenant } from "@/lib/airtable";
 import { getAllBrands } from "@/lib/brands/data";
 import { TenantConfigTabs } from "./TenantConfigTabs";
 import { EnableBrandForm } from "./EnableBrandForm";
+import { ViewAsSwitcher } from "./ViewAsSwitcher";
+import { cookies } from "next/headers";
+import { PREVIEW_COOKIE, verifyValue } from "@/lib/brands/cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +29,11 @@ export default async function TenantConfigPage() {
     projectsByBrand.set(t.communityBrandId!, (projectsByBrand.get(t.communityBrandId!) ?? 0) + 1);
   });
 
+  const previewId = verifyValue((await cookies()).get(PREVIEW_COOKIE)?.value) ?? "";
+  const brandOptions = brands
+    .map((b) => ({ id: b.id, name: [b.displayName, b.subtitle].filter(Boolean).join(" "), status: b.status }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const partnerName = new Map(partners.map((p) => [p.id, p.companyName]));
   const withBrand = new Set(brands.map((b) => b.marketplacePartnerId));
   const available = partners
@@ -39,6 +47,7 @@ export default async function TenantConfigPage() {
       <MarketplaceNav />
       <main className="max-w-7xl mx-auto px-6 pb-12">
         <TenantConfigTabs active="tenants" />
+        <ViewAsSwitcher brands={brandOptions} current={previewId} />
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl font-bold text-white">Tenants</h1>

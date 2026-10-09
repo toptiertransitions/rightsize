@@ -1,9 +1,9 @@
 "use server";
 
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
-import { getSystemRole, getReferralCompanies } from "@/lib/airtable";
+import { getSystemRole, getReferralCompanies, getTenantById, updateTenant } from "@/lib/airtable";
 import { canAccessMarketplaceAdmin } from "@/lib/marketplace/permissions";
 import { getPartnerById, updatePartner } from "@/lib/marketplace/data";
 import { slugify } from "@/lib/utils";
@@ -217,6 +217,35 @@ export async function linkCrmCompanyAction(brandId: string, companyId: string): 
     await writeAudit([{ actorClerkId: userId, actorName, entityType: "brand", entityId: brandId, field: "crmCompany", oldValue: "", newValue: companyId }]);
     revalidate(brandId);
     return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Tenant Config > Projects: set (or clear, brandId "") the brand on one or
+ * more projects. Every change is audited per project. */
+export async function assignProjectsBrandAction(tenantIds: string[], brandId: string): Promise<Result<number>> {
+  try {
+    const { userId, actorName } = await requireAdmin();
+    const ids = Array.from(new Set(tenantIds)).filter((id) => /^rec[A-Za-z0-9]{14}$/.test(id));
+    if (ids.length === 0) throw new Error("Pick at least one project");
+    if (ids.length > 200) throw new Error("Too many projects at once");
+    if (brandId && !(await getBrandById(brandId))) throw new Error("Brand not found");
+
+    const tenants = await Promise.all(ids.map((id) => getTenantById(id).catch(() => null)));
+    const audit: AuditEntry[] = [];
+    let changed = 0;
+    for (const t of tenants) {
+      if (!t || (t.communityBrandId ?? "") === brandId) continue;
+      await updateTenant(t.id, { communityBrandId: brandId || null });
+      audit.push({ actorClerkId: userId, actorName, entityType: "project", entityId: t.id, field: "communityBrandId", oldValue: t.communityBrandId ?? "", newValue: brandId });
+      changed++;
+    }
+    await writeAudit(audit);
+    revalidateTag("tenants");
+    revalidatePath("/admin/marketplace/tenant-config/projects");
+    revalidate();
+    return { ok: true, data: changed };
   } catch (e) {
     return fail(e);
   }
