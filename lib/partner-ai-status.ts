@@ -81,6 +81,8 @@ export function dateToQuarterLabel(dateStr: string): string {
 }
 
 
+interface AIStatusEntry { status: string; statusAt: string }
+
 export interface PartnerAIStatusResult {
   status: string;
   statusAt: string;
@@ -91,7 +93,10 @@ export interface PartnerAIStatusResult {
   brief: string;
 }
 
-export async function generatePartnerAIStatus(companyId: string, quarterId: string): Promise<PartnerAIStatusResult> {
+/** Everything the AI Status is written from, gathered read-only (nothing is
+ * saved). Used by generatePartnerAIStatus below and by reports that want
+ * the same CRM picture without touching a company's saved AI Status. */
+export async function buildPartnerAIContext(companyId: string, quarterId: string): Promise<{ prompt: string; context: string; brief: string; currentPlanRecord: Rec | null }> {
   // ── Step 1: Parallel fetch — company, contacts, plan records, quarter, points, loyalty tier ──
 
   const [companyRecs, contacts, allPlanRecs, quarterRec, partnerPoints, loyaltyRecord] = await Promise.all([
@@ -218,7 +223,6 @@ export async function generatePartnerAIStatus(companyId: string, quarterId: stri
 
   // ── Step 6: Extract prior AI statuses ─────────────────────────────────────────
 
-  interface AIStatusEntry { status: string; statusAt: string }
   const priorStatuses: AIStatusEntry[] = [];
   for (const r of allPlanRecs) {
     const curStatus = str(r.fields["AIStatus"]) || null;
@@ -630,6 +634,12 @@ ${siblingNetworkSection ? "• Parent company network — if sibling branches ha
 • Top recommended next action — specific, not generic${championFocus ? `\n\n${championFocus}` : ""}
 
 Format: bullet points only, each starting with "•", 1-2 sentences. No headers, no preamble.`;
+
+  return { prompt, context: prompt.split("\n---\n")[0], brief, currentPlanRecord };
+}
+
+export async function generatePartnerAIStatus(companyId: string, quarterId: string): Promise<PartnerAIStatusResult> {
+  const { prompt, brief, currentPlanRecord } = await buildPartnerAIContext(companyId, quarterId);
 
   // ── Step 11: Call Claude ───────────────────────────────────────────────────────
 
