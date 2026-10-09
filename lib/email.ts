@@ -6651,6 +6651,18 @@ export function buildMarketplacePartnerInviteEmail({
               </a>
             </td></tr>
           </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;border-radius:10px;margin:0 0 24px;">
+            <tr><td style="padding:18px 20px;">
+              <p style="margin:0 0 4px;font-size:14px;color:#111827;font-weight:600;">On iPhone? Get the Rightsize app first</p>
+              <p style="margin:0 0 14px;font-size:13px;color:#4B5563;line-height:1.5;">
+                <strong>1.</strong> Download the free Rightsize app.<br>
+                <strong>2.</strong> Come back to this email and tap <strong>Get Started</strong>. It opens your invitation right in the app.
+              </p>
+              <a href="${IOS_APP_STORE_URL}" style="display:inline-block;padding:10px 18px;background-color:#111827;border-radius:8px;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;">
+                Download on the App Store
+              </a>
+            </td></tr>
+          </table>
           <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Or copy this link into Safari or Chrome:</p>
           <p style="margin:0;font-size:12px;color:#6B7280;word-break:break-all;">${signUpUrl}</p>
         </td></tr>

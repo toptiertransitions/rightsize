@@ -123,6 +123,20 @@ export default async function HomePage() {
           <div className="text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-3">
             I&rsquo;m a referral partner
           </div>
+          {/* Invited marketplace partners who installed the app first land
+              here; the invited email is what connects them to the invite. */}
+          <Link
+            href={`/sign-up?redirect_url=${encodeURIComponent("/api/partner/activate")}`}
+            className="flex items-center gap-3 w-full rounded-2xl bg-white border border-forest-200 p-4 mb-3 hover:border-forest-400 hover:shadow-sm active:scale-[0.99] transition-all"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-[13.5px] text-gray-900 leading-tight">Invited to our partner network?</div>
+              <div className="text-[11px] text-gray-500 mt-0.5">Create your account with the email your invitation was sent to.</div>
+            </div>
+            <svg className="w-5 h-5 text-forest-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
           <div className="grid grid-cols-2 gap-3">
             {PARTNER_TYPES.map((p) => (
               <Link

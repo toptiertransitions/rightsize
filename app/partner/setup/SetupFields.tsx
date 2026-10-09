@@ -323,8 +323,17 @@ export function CriterionPicker({ criterion, selected, onChange }: { criterion: 
 
 // ─── Category details (the admin-defined field schema) ───────────────────────
 
-export function editableFields(schema: MarketplaceFieldDef[]): MarketplaceFieldDef[] {
-  return schema.filter((f) => f.type !== "file");
+// Category fields partners don't fill in themselves (setup and My Listing).
+// Admins still see and edit them on the marketplace admin pages, and any
+// saved values are kept.
+const PARTNER_HIDDEN_FIELDS: Record<string, string[]> = {
+  // Visit length is already asked on the "Which visit lengths do you offer?" screen
+  "Companion Care": ["rateRange", "minimumHours", "agencyOrIndependent"],
+};
+
+export function editableFields(schema: MarketplaceFieldDef[], categoryLabel?: string): MarketplaceFieldDef[] {
+  const hidden = new Set(categoryLabel ? PARTNER_HIDDEN_FIELDS[categoryLabel] ?? [] : []);
+  return schema.filter((f) => f.type !== "file" && !hidden.has(f.key));
 }
 
 export function DetailsFields({ schema, values, onChange }: { schema: MarketplaceFieldDef[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {

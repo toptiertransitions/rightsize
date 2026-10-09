@@ -12,6 +12,7 @@ import {
   getCompanyOpportunitiesInfo,
 } from "./airtable";
 import type { ReferralContact } from "./types";
+import { sendNewPartnerAccountNotification } from "./admin-notifications";
 
 export async function isPartner(clerkUserId: string): Promise<boolean> {
   const contact = await findReferralContactByClerkUserId(clerkUserId).catch(() => null);
@@ -56,6 +57,17 @@ export async function resolveAndLinkPartner(clerkUserId: string): Promise<Referr
   // app/api/partner/activate/route.ts).
   if (!contact.clerkUserId) {
     await setReferralContactClerkUserId(contact.id, clerkUserId).catch(() => {});
+    // Same "new partner account" notice /api/partner/activate sends: an
+    // invited partner who signed up from the app's generic screen (not the
+    // invite link) is connected here instead, and the team should still hear.
+    await sendNewPartnerAccountNotification({
+      contactName: contact.name,
+      contactTitle: contact.title || undefined,
+      contactEmail: email,
+      contactPhone: contact.phone || undefined,
+      referralCompanyId: contact.referralCompanyId || undefined,
+      currentStage: contact.stage,
+    }).catch(() => {});
   }
   await clerk.users.updateUserMetadata(clerkUserId, { publicMetadata: { userType: "partner" } }).catch(() => {});
   return contact;

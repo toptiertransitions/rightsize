@@ -1,9 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { IOS_APP_STORE_ID } from "@/lib/ios-app";
-import { GetIosAppPrompt } from "../GetIosAppPrompt";
+import { PartnerInviteActions } from "./PartnerInviteActions";
 
 // Landing page for the marketplace partner invite email's "Get Started"
 // button. It lives under /invite so Universal Links open it straight in the
@@ -35,6 +36,7 @@ export default async function PartnerInvitePage({ searchParams }: PageProps) {
   const emailParam = email ? `&email=${encodeURIComponent(email)}` : "";
   const signUpHref = `/sign-up?redirect_url=${encodeURIComponent(ACTIVATE)}${emailParam}`;
   const signInHref = `/sign-in?redirect_url=${encodeURIComponent(ACTIVATE)}`;
+  const likelyIos = /iPhone|iPad|iPod|Macintosh/.test((await headers()).get("user-agent") ?? "");
 
   return (
     <div className="min-h-[100dvh] bg-cream-50 flex items-center justify-center px-4 py-10">
@@ -55,28 +57,8 @@ export default async function PartnerInvitePage({ searchParams }: PageProps) {
             Continue to setup
           </a>
         ) : (
-          <div className="space-y-3">
-            <Link
-              href={signUpHref}
-              className="flex items-center justify-center w-full h-12 px-5 bg-forest-600 text-white rounded-xl font-semibold text-base hover:bg-forest-700 transition-colors"
-            >
-              Create your account
-            </Link>
-            <p className="text-center text-sm text-gray-400">
-              Already have a Rightsize account?{" "}
-              <Link href={signInHref} className="text-forest-700 font-medium hover:underline">
-                Sign in
-              </Link>
-            </p>
-            {email && (
-              <p className="text-center text-xs text-gray-400">
-                Use <span className="font-medium text-gray-600">{email}</span> so we can connect your account to this invitation.
-              </p>
-            )}
-          </div>
+          <PartnerInviteActions signUpHref={signUpHref} signInHref={signInHref} email={email} likelyIos={likelyIos} />
         )}
-
-        {!userId && <GetIosAppPrompt />}
       </div>
     </div>
   );

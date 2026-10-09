@@ -95,7 +95,7 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
     for (const l of listings) {
       const defs = getPartnerCriteria(l.label as PartnerCategory);
       defs.forEach((c, i) => s.push({ kind: "criterion", listingId: l.id, label: l.label, criterion: c, index: i, count: defs.length }));
-      const f = editableFields(l.fieldSchema);
+      const f = editableFields(l.fieldSchema, l.label);
       if (f.length > 0) s.push({ kind: "details", listingId: l.id, label: l.label, fields: f });
     }
     s.push({ kind: "review" }, { kind: "tour" });

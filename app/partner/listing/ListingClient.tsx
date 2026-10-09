@@ -76,7 +76,7 @@ function CategoryCards({ listing }: { listing: ListingData }) {
   const defs = getPartnerCriteria(listing.label as PartnerCategory);
   const [criteria, setCriteria] = useState<MatchCriteria>(() => readMatchCriteria(listing.attributes));
   const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...listing.attributes }));
-  const fields = editableFields(listing.fieldSchema);
+  const fields = editableFields(listing.fieldSchema, listing.label);
 
   return (
     <>
