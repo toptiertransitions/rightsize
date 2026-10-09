@@ -32,8 +32,11 @@ export function CRMSettingsClient({ gmailConnected, gmailEmail, calendarConnecte
     setSyncResult(null);
     try {
       const res = await fetch("/api/crm/gmail/sync-all", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
+      // A server timeout comes back as a plain-text page, not JSON
+      const data = await res.json().catch(() => null);
+      if (!data) {
+        setSyncResult({ ok: false, msg: `Sync didn't finish (server ${res.status}). Emails found so far were saved; try again.` });
+      } else if (res.ok) {
         setSyncResult({
           ok: true,
           msg: `Sync complete — ${data.imported} email${data.imported !== 1 ? "s" : ""} imported across ${data.contactsSearched} contact${data.contactsSearched !== 1 ? "s" : ""}.`,

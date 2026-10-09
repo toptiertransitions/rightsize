@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// Syncing every connected inbox can take a couple of minutes; give it the
+// full window instead of relying on the platform default.
+export const maxDuration = 300;
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getAllGmailTokens } from "@/lib/airtable";
 import { runGmailSyncAll } from "@/lib/gmail";

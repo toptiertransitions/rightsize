@@ -166,10 +166,37 @@ export async function searchGmailMessages(
   return data.messages || [];
 }
 
+// Small helpers so one sync can work through contacts in parallel without
+// tripping Airtable's per-base rate limit (5 req/s): a rate-limited write or
+// read waits and retries instead of dropping that contact or message.
+async function withAirtableRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (i >= attempts - 1 || !/429|RATE_LIMIT|rate limit/i.test(msg)) throw e;
+      await new Promise((r) => setTimeout(r, 600 * 2 ** i));
+    }
+  }
+}
+
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+// Contacts searched at once within one Gmail account. Gmail's per-user quota
+// is far above this; the old one-at-a-time loop took ~1.5-2 min per account.
+const CONTACT_CONCURRENCY = 6;
+
 // Sync one Gmail account against all CRM contacts. Returns counts for that account.
-// globalImportedIds is a cross-contact, cross-run dedup set — any message ID already
-// in this set (imported for any other contact) is skipped to prevent the same email
-// being logged as multiple activities when it was sent to a distribution list.
 async function runGmailSyncForUser(
   clerkUserId: string,
   allContacts: Array<{ id: string; email: string; name: string }>,
@@ -180,7 +207,7 @@ async function runGmailSyncForUser(
   let totalImported = 0;
   let contactsSearched = 0;
 
-  for (const contact of allContacts) {
+  await mapWithConcurrency(allContacts, CONTACT_CONCURRENCY, async (contact) => {
     const email = contact.email.toLowerCase().trim();
 
     let messages;
@@ -188,25 +215,37 @@ async function runGmailSyncForUser(
       messages = await searchGmailMessages(accessToken, `from:${email} OR to:${email}`, 20);
     } catch (err) {
       console.error("[gmail/sync-all] Search failed for", email, "userId:", clerkUserId, err);
-      continue;
+      return;
     }
-    if (!messages.length) continue;
+    if (!messages.length) return;
 
     contactsSearched++;
 
-    // Per-contact dedup: skip messages already imported for this specific contact
-    const existing = await getActivitiesForContact(contact.id);
-    const contactImportedIds = new Set(
-      existing.filter((a) => a.gmailMessageId).map((a) => a.gmailMessageId!)
-    );
+    // Global dedup first: skip messages already imported for any contact.
+    // Only when something new is left do we load this contact's activities
+    // for the per-contact check (most contacts have nothing new, so this
+    // saves an Airtable read per contact on every sync).
+    const candidates = messages.filter((m) => !globalImportedIds.has(m.id));
+    if (candidates.length === 0) return;
 
-    for (const msg of messages) {
-      // Global dedup: skip if this message was already imported for any contact
-      if (globalImportedIds.has(msg.id)) continue;
-      if (contactImportedIds.has(msg.id)) continue;
+    let contactImportedIds: Set<string>;
+    try {
+      const existing = await withAirtableRetry(() => getActivitiesForContact(contact.id));
+      contactImportedIds = new Set(existing.filter((a) => a.gmailMessageId).map((a) => a.gmailMessageId!));
+    } catch (err) {
+      console.error("[gmail/sync-all] Activity lookup failed for", email, "userId:", clerkUserId, err);
+      return;
+    }
+
+    for (const msg of candidates) {
+      if (globalImportedIds.has(msg.id) || contactImportedIds.has(msg.id)) continue;
+      // Claim it before any await so a parallel contact that matches the same
+      // message (e.g. an email between two CRM contacts) doesn't import it too
+      globalImportedIds.add(msg.id);
+      contactImportedIds.add(msg.id);
       try {
         const detail = await getGmailMessage(accessToken, msg.id);
-        await createActivity({
+        await withAirtableRetry(() => createActivity({
           clientContactId: contact.id,
           type: "Email",
           note: `Subject: ${detail.subject}\nFrom: ${detail.from}\n\n${detail.snippet}`,
@@ -215,22 +254,25 @@ async function runGmailSyncForUser(
           gmailThreadId: detail.threadId,
           activityDate: gmailHeaderToLocalDate(detail.date),
           createdByClerkId: clerkUserId,
-        });
+        }));
         totalImported++;
-        // Add to both sets so subsequent contacts in this run also skip it
-        globalImportedIds.add(msg.id);
-        contactImportedIds.add(msg.id);
       } catch (err) {
+        // Release the claim so the next sync tries this message again
+        globalImportedIds.delete(msg.id);
+        contactImportedIds.delete(msg.id);
         console.error("[gmail/sync-all] Failed to import message", msg.id, err);
       }
     }
-  }
+  });
 
   return { imported: totalImported, contactsSearched };
 }
 
 // Sync ALL connected Gmail accounts against all CRM contacts.
 // Each connected user's inbox is searched independently so no emails are missed.
+// Accounts run side by side (they were one after another, which took 5+
+// minutes with 4 accounts and hit the server time limit, so the button
+// showed "Sync failed: network error").
 export async function runGmailSyncAll(
   clerkUserIds: string | string[],
 ): Promise<{ imported: number; contactsSearched: number; accountsSynced: number }> {
@@ -251,7 +293,7 @@ export async function runGmailSyncAll(
   let totalContactsSearched = 0;
   let accountsSynced = 0;
 
-  for (const userId of ids) {
+  await Promise.all(ids.map(async (userId) => {
     try {
       const result = await runGmailSyncForUser(userId, allContacts, globalImportedIds);
       totalImported += result.imported;
@@ -261,7 +303,7 @@ export async function runGmailSyncAll(
     } catch (err) {
       console.error(`[gmail/sync-all] Failed for userId=${userId}:`, err);
     }
-  }
+  }));
 
   console.log(`[gmail/sync-all] total imported=${totalImported} accounts=${accountsSynced}/${ids.length}`);
   return { imported: totalImported, contactsSearched: totalContactsSearched, accountsSynced };

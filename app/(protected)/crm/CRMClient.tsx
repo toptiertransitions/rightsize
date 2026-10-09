@@ -5444,8 +5444,11 @@ function ActivityLogTab({
     setSyncResult(null);
     try {
       const res = await fetch("/api/crm/gmail/sync-all", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
+      // A server timeout comes back as a plain-text page, not JSON
+      const data = await res.json().catch(() => null);
+      if (!data) {
+        setSyncResult(`Sync didn't finish (server ${res.status}). Emails found so far were saved; try again.`);
+      } else if (!res.ok) {
         setSyncResult(`Error: ${data.error || "Sync failed"}`);
       } else {
         setSyncResult(`Imported ${data.imported} new email${data.imported !== 1 ? "s" : ""} across ${data.contactsSearched} contact${data.contactsSearched !== 1 ? "s" : ""}`);
@@ -5900,9 +5903,12 @@ function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { g
     setSyncResult(null);
     try {
       const res = await fetch("/api/crm/gmail/sync-all", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
+      // A server timeout comes back as a plain-text page, not JSON
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
         setSyncResult(`Sync complete — ${data.imported} emails imported from ${data.contactsSearched} contacts.`);
+      } else if (!data) {
+        setSyncResult(`Sync didn't finish (server ${res.status}). Emails found so far were saved; try again.`);
       } else {
         setSyncResult(`Sync failed: ${data.error || "Unknown error"}`);
       }
