@@ -479,13 +479,45 @@ export function buildInvoiceEmail({
 </html>`;
 }
 
+// ─── Community brand (white-label) email pieces ───────────────────────────────
+// Optional on the client welcome and family invite emails. Without a brand the
+// emails are the standard Top Tier templates, unchanged.
+export interface EmailBrand {
+  displayName: string;
+  subtitle: string;
+  logoUrl: string;
+  primaryColor: string;
+  /** TopTierVisibility "Minimal": keep Top Tier out of the copy */
+  minimal: boolean;
+}
+
+function escHtml(v: string): string {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+export function brandEmailHeader(b: EmailBrand, radius: string): string {
+  const name = escHtml(b.displayName);
+  const sub = b.subtitle ? `<p style="margin:6px 0 0;color:#6B7280;font-size:13px;">${escHtml(b.subtitle)}</p>` : "";
+  const mark = /^https:\/\//.test(b.logoUrl)
+    ? `<img src="${escHtml(b.logoUrl)}" alt="${name}" height="56" style="height:56px;max-width:240px;display:inline-block;border:0;" />`
+    : `<p style="margin:0;color:${b.primaryColor};font-size:22px;font-weight:bold;">${name}</p>`;
+  return `<td style="background-color:#ffffff;padding:24px 32px;border-radius:${radius};border-top:6px solid ${b.primaryColor};border-bottom:1px solid #F3F4F6;text-align:center;">${mark}${sub}</td>`;
+}
+
+export function brandEmailFooterLine(b: EmailBrand): string {
+  return b.minimal ? `${escHtml(b.displayName)} &middot; Powered by Rightsize` : `${escHtml(b.displayName)} with Top Tier Transitions &middot; Powered by Rightsize`;
+}
+
 export function buildClientWelcomeEmail({
   projectName,
   inviteUrl,
+  brand,
 }: {
   projectName: string;
   inviteUrl: string;
+  brand?: EmailBrand | null;
 }): string {
+  const btn = brand?.primaryColor ?? "#2E6B4F";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -498,16 +530,16 @@ export function buildClientWelcomeEmail({
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
         <tr>
-          <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+          ${brand ? brandEmailHeader(brand, "12px 12px 0 0") : `<td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
             <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Rightsize</p>
             <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">by Top Tier Transitions</p>
-          </td>
+          </td>`}
         </tr>
         <tr>
           <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
             <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Your project is ready.</p>
             <p style="margin:0 0 24px;font-size:15px;color:#4B5563;line-height:1.6;">
-              The Top Tier Transitions team has set up your <strong>${projectName}</strong> project.
+              ${brand ? (brand.minimal ? `${escHtml(brand.displayName)} has set up your` : `${escHtml(brand.displayName)} and Top Tier Transitions have set up your`) : "The Top Tier Transitions team has set up your"} <strong>${projectName}</strong> project.
               Here&rsquo;s what you&rsquo;ll find inside:
             </p>
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
@@ -538,7 +570,7 @@ export function buildClientWelcomeEmail({
             </table>
             <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
               <tr>
-                <td style="background-color:#2E6B4F;border-radius:10px;">
+                <td style="background-color:${btn};border-radius:10px;">
                   <a href="${inviteUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
                     Access Your Project &rarr;
                   </a>
@@ -566,7 +598,7 @@ export function buildClientWelcomeEmail({
         <tr>
           <td style="padding:20px 0;text-align:center;">
             <p style="margin:0;font-size:12px;color:#9CA3AF;">
-              This invite expires in 7 days. &mdash; Top Tier Transitions &middot; Rightsize Client Portal
+              This invite expires in 7 days. &mdash; ${brand ? brandEmailFooterLine(brand) : "Top Tier Transitions &middot; Rightsize Client Portal"}
             </p>
           </td>
         </tr>

@@ -3,7 +3,8 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getUserRoleForTenant, getTenantById, getLocalVendorById, getSystemRole } from "@/lib/airtable";
 import { createInviteToken, createVendorInviteToken } from "@/lib/invites";
 import type { InviteRole } from "@/lib/invites";
-import { buildClientWelcomeEmail } from "@/lib/email";
+import { buildClientWelcomeEmail, brandEmailHeader, brandEmailFooterLine, type EmailBrand } from "@/lib/email";
+import { getBrandById } from "@/lib/brands/data";
 import { Resend } from "resend";
 import { PARTNER_CATEGORIES } from "@/lib/types";
 import { getPartnerDirectory } from "@/lib/partners/queries";
@@ -138,16 +139,24 @@ export async function POST(req: NextRequest) {
       : "Someone";
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? "hello@rightsize.app";
 
+    // Community-branded project: the email carries the community's name,
+    // logo and color. Any lookup problem falls back to the Top Tier email.
+    const brandRec = tenant?.communityBrandId ? await getBrandById(tenant.communityBrandId).catch(() => null) : null;
+    const brand: EmailBrand | null = brandRec?.status === "Active"
+      ? { displayName: brandRec.displayName, subtitle: brandRec.subtitle, logoUrl: brandRec.logoUrl, primaryColor: brandRec.primaryColor, minimal: brandRec.topTierVisibility === "Minimal" }
+      : null;
+    const senderName = brand ? brand.displayName.replace(/[<>"]/g, "") : "Top Tier Transitions";
+
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { error: sendError } = await resend.emails.send({
-      from: `Top Tier Transitions <${fromEmail}>`,
+      from: `${senderName} <${fromEmail}>`,
       to: email,
       subject: isClientInvite
         ? `Your ${projectName} project is ready on Rightsize`
         : `${inviterName} invited you to ${projectName} on Rightsize`,
       html: isClientInvite
-        ? buildClientWelcomeEmail({ projectName, inviteUrl })
-        : buildInviteEmail({ inviterName, projectName, role, inviteUrl }),
+        ? buildClientWelcomeEmail({ projectName, inviteUrl, brand })
+        : buildInviteEmail({ inviterName, projectName, role, inviteUrl, brand }),
     });
 
     if (sendError) {
@@ -215,12 +224,15 @@ function buildInviteEmail({
   projectName,
   role,
   inviteUrl,
+  brand,
 }: {
   inviterName: string;
   projectName: string;
   role: string;
   inviteUrl: string;
+  brand?: EmailBrand | null;
 }): string {
+  const btn = brand?.primaryColor ?? "#2E6B4F";
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -230,10 +242,10 @@ function buildInviteEmail({
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
 
         <!-- Header -->
-        <tr><td style="background:#2E6B4F;padding:28px 32px;">
+        <tr>${brand ? brandEmailHeader(brand, "0") : `<td style="background:#2E6B4F;padding:28px 32px;">
           <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Rightsize</p>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:12px;">by Top Tier Transitions</p>
-        </td></tr>
+        </td>`}</tr>
 
         <!-- Body -->
         <tr><td style="padding:32px;">
@@ -244,7 +256,7 @@ function buildInviteEmail({
           </p>
 
           <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-            <tr><td style="background:#2E6B4F;border-radius:10px;">
+            <tr><td style="background:${btn};border-radius:10px;">
               <a href="${inviteUrl}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
                 Accept Invitation &rarr;
               </a>
@@ -258,7 +270,7 @@ function buildInviteEmail({
         <!-- Footer -->
         <tr><td style="padding:16px 32px;border-top:1px solid #F3F4F6;">
           <p style="margin:0;font-size:12px;color:#9CA3AF;">
-            This invite expires in 7 days. If you weren&rsquo;t expecting this, you can safely ignore it.
+            This invite expires in 7 days. If you weren&rsquo;t expecting this, you can safely ignore it.${brand ? `<br />${brandEmailFooterLine(brand)}` : ""}
           </p>
         </td></tr>
 
