@@ -191,4 +191,9 @@ export interface MarketplaceIntroductionEvent {
   statusUpdatedAt?: string;
   billedAt?: string;
   disclosureAcknowledgedAt?: string;
+  /** When the lead became visible to the partner (portal Leads page +
+   * email). Set by an admin's "Release to partner", or at creation for
+   * listings that notify the partner directly. Unset = held for TTT admins. */
+  releasedAt?: string;
+  releasedBy?: string;
 }

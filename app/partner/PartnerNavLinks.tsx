@@ -11,10 +11,11 @@ const NAV_ITEMS = [
 ];
 
 const LISTING_ITEM = { href: "/partner/listing", label: "My Listing", isActive: (p: string) => p.startsWith("/partner/listing") };
+const LEADS_ITEM = { href: "/partner/leads", label: "Leads", isActive: (p: string) => p.startsWith("/partner/leads") };
 
 export function PartnerNavLinks({ mobile = false, hasListing = false }: { mobile?: boolean; hasListing?: boolean }) {
   const pathname = usePathname();
-  const items = hasListing ? [NAV_ITEMS[0], LISTING_ITEM, ...NAV_ITEMS.slice(1)] : NAV_ITEMS;
+  const items = hasListing ? [NAV_ITEMS[0], LEADS_ITEM, LISTING_ITEM, ...NAV_ITEMS.slice(1)] : NAV_ITEMS;
 
   return (
     <>

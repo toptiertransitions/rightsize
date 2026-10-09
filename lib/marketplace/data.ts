@@ -618,6 +618,8 @@ function mapIntroductionEvent(rec: AirtableRec): MarketplaceIntroductionEvent {
     statusUpdatedAt: str(f["StatusUpdatedAt"]) || undefined,
     billedAt: str(f["BilledAt"]) || undefined,
     disclosureAcknowledgedAt: str(f["DisclosureAcknowledgedAt"]) || undefined,
+    releasedAt: str(f["ReleasedAt"]) || undefined,
+    releasedBy: str(f["ReleasedBy"]) || undefined,
   };
 }
 
@@ -632,6 +634,8 @@ interface CreateIntroductionEventData {
   referralTermsSnapshot: { feeType: MarketplaceFeeType; feeValue: number; creditToSeniorPercent: number };
   channel: MarketplaceIntroductionChannel;
   disclosureAcknowledgedAt?: string;
+  /** Set when the listing notifies the partner directly (no admin hold) */
+  releasedAt?: string;
 }
 
 function generateTrackingToken(): string {
@@ -655,6 +659,7 @@ export async function createIntroductionEvent(data: CreateIntroductionEventData)
     Status: "Requested",
     RequestedAt: now,
     ...(data.disclosureAcknowledgedAt ? { DisclosureAcknowledgedAt: data.disclosureAcknowledgedAt } : {}),
+    ...(data.releasedAt ? { ReleasedAt: data.releasedAt, ReleasedBy: "Automatic (partner notifications on)" } : {}),
   };
   const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_INTRODUCTION_EVENTS, "", {
     method: "POST",
@@ -679,6 +684,28 @@ export async function getIntroductionEventByToken(token: string): Promise<Market
 export async function getIntroductionEventsForPartner(partnerId: string): Promise<MarketplaceIntroductionEvent[]> {
   const records = await fetchAllRecords(AIRTABLE_TABLES.MARKETPLACE_INTRODUCTION_EVENTS);
   return records.map(mapIntroductionEvent).filter((e) => e.partnerId === partnerId);
+}
+
+export async function getAllIntroductionEvents(): Promise<MarketplaceIntroductionEvent[]> {
+  const records = await fetchAllRecords(AIRTABLE_TABLES.MARKETPLACE_INTRODUCTION_EVENTS);
+  return records.map(mapIntroductionEvent).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+}
+
+export async function getIntroductionEventById(id: string): Promise<MarketplaceIntroductionEvent | null> {
+  if (!/^rec[A-Za-z0-9]{14}$/.test(id)) return null;
+  const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_INTRODUCTION_EVENTS, `/${id}`);
+  if (!res.ok) return null;
+  return mapIntroductionEvent(await res.json());
+}
+
+/** Admin "Release to partner": makes a held lead visible to the partner. */
+export async function releaseIntroductionEvent(id: string, releasedBy: string): Promise<void> {
+  const now = new Date().toISOString();
+  const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_INTRODUCTION_EVENTS, "", {
+    method: "PATCH",
+    body: JSON.stringify({ records: [{ id, fields: { ReleasedAt: now, ReleasedBy: releasedBy, Status: "Delivered", DeliveredAt: now, StatusUpdatedAt: now } }] }),
+  });
+  if (!res.ok) throw new Error(`releaseIntroductionEvent failed: ${await res.text()}`);
 }
 
 export async function updateIntroductionEventStatus(

@@ -725,6 +725,10 @@ export async function sendPartnerIntroNotificationToAdmins(params: {
   clientPhone?: string;
   answers: Array<{ label: string; value: string }>;
   trackingToken: string;
+  /** Links the email to the admin Leads page (with Release to partner)
+   * instead of the partner's tracked link, so an admin opening it never
+   * marks the lead "Viewed" on the partner's behalf. */
+  eventId?: string;
 }): Promise<void> {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
@@ -734,13 +738,13 @@ export async function sendPartnerIntroNotificationToAdmins(params: {
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
   const html = buildPartnerIntroRequestNotificationEmail({
-    vendorName: `${params.vendorName} (routed to TTT admins — partner notifications are off for this listing)`,
+    vendorName: `${params.vendorName} (held for TTT admins: use Release to partner in Admin > Marketplace > Leads to send it on)`,
     clientName: params.clientName,
     category: params.category,
     clientEmail: params.clientEmail,
     clientPhone: params.clientPhone,
     answers: params.answers,
-    trackedLinkUrl: `${appUrl}/partner-lead/${params.trackingToken}`,
+    trackedLinkUrl: params.eventId ? `${appUrl}/admin/marketplace/leads?lead=${params.eventId}` : `${appUrl}/partner-lead/${params.trackingToken}`,
   });
 
   const resend = new Resend(resendKey);

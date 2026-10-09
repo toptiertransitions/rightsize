@@ -309,6 +309,9 @@ export async function requestPartnerIntroAction(
         referralTermsSnapshot: { feeType: listing.feeType, feeValue: listing.feeValue, creditToSeniorPercent: listing.creditToSeniorPercent },
         channel: marketplacePartner?.email ? "Both" : "Email",
         disclosureAcknowledgedAt: disclosureAcknowledged ? new Date().toISOString() : undefined,
+        // Partner-notified listings show the lead in the partner's portal
+        // right away; every other method holds it for an admin to release.
+        releasedAt: listing.introNotificationMethod === "PartnerEmail" ? new Date().toISOString() : undefined,
       }).catch((e) => { console.error("createIntroductionEvent failed:", e); return null; });
 
       // Where this introduction's notification actually goes is per-
@@ -361,6 +364,7 @@ export async function requestPartnerIntroAction(
             clientPhone: tenant.clientPhone,
             answers: formattedAnswers,
             trackingToken: introEvent.trackingToken,
+            eventId: introEvent.id,
           }).catch((e) => console.error("Partner intro admin-routed notification failed:", e));
         }
       }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { House, Calendar, Gift, FileText, Store } from "lucide-react";
+import { House, Calendar, Gift, FileText, Store, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPlatform } from "@/lib/native";
 import { PartnerNavLinks } from "./PartnerNavLinks";
@@ -25,12 +25,22 @@ const PARTNER_IOS_NAV_ITEMS = [
 ];
 
 // Marketplace partners only (see app/partner/layout.tsx)
-const LISTING_NAV_ITEM = { href: "/partner/listing", label: "My Listing", Icon: Store, isActive: (p: string) => p.startsWith("/partner/listing") };
+const LISTING_NAV_ITEM = { href: "/partner/listing", label: "Listing", Icon: Store, isActive: (p: string) => p.startsWith("/partner/listing") };
+const LEADS_NAV_ITEM = { href: "/partner/leads", label: "Leads", Icon: Inbox, isActive: (p: string) => p.startsWith("/partner/leads") };
 
 export function PartnerHeader({ contactName, hasListing = false }: { contactName: string; hasListing?: boolean }) {
   const pathname = usePathname();
+  // Marketplace partners get Leads and Listing too (6 items), with shorter
+  // labels so all six fit on a phone; other partners keep the original 4.
   const iosItems = hasListing
-    ? [PARTNER_IOS_NAV_ITEMS[0], LISTING_NAV_ITEM, ...PARTNER_IOS_NAV_ITEMS.slice(1)]
+    ? [
+        PARTNER_IOS_NAV_ITEMS[0],
+        LEADS_NAV_ITEM,
+        LISTING_NAV_ITEM,
+        { ...PARTNER_IOS_NAV_ITEMS[1], label: "Plans" },
+        PARTNER_IOS_NAV_ITEMS[2],
+        { ...PARTNER_IOS_NAV_ITEMS[3], label: "Docs" },
+      ]
     : PARTNER_IOS_NAV_ITEMS;
 
   // Capacitor's bridge isn't available during SSR/first paint, so this
@@ -100,7 +110,7 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
       {/* iOS native app nav — replaces the text nav above for Partner Portal users */}
       {isIOSNative && (
         <nav
-          className={cn("fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200", iosItems.length === 5 ? "grid-cols-5" : "grid-cols-4")}
+          className={cn("fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200", iosItems.length === 6 ? "grid-cols-6" : "grid-cols-4")}
           style={{ paddingBottom: "var(--sab)" }}
         >
           {iosItems.map(({ href, label, Icon, isActive }) => {

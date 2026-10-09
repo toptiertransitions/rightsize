@@ -663,14 +663,14 @@ function ActivityTab({
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Introduction Events</h3>
         {introEvents.length === 0 ? (
-          <p className="text-sm text-gray-500">None yet — the tracked-link introduction flow ships in Phase 5.</p>
+          <p className="text-sm text-gray-500">None yet.</p>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800/60">
             {introEvents.map((e) => (
-              <div key={e.id} className="px-4 py-3 flex items-center justify-between">
+              <a key={e.id} href={`/admin/marketplace/leads?lead=${e.id}`} className="px-4 py-3 flex items-center justify-between hover:bg-gray-800/40">
                 <span className="text-sm text-gray-200">{e.clientName || "(no name)"}</span>
-                <span className="text-xs text-gray-500">{e.status} · {new Date(e.requestedAt).toLocaleDateString()}</span>
-              </div>
+                <span className="text-xs text-gray-500">{e.releasedAt ? e.status : "Held for release"} · {new Date(e.requestedAt).toLocaleDateString()}</span>
+              </a>
             ))}
           </div>
         )}
