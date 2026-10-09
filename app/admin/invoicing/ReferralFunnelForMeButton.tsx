@@ -12,7 +12,7 @@ export function ReferralFunnelForMeButton() {
       const res = await fetch("/api/reports/referral-funnel", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to start");
-      setMessage(`Running on ${data.companies} Medium/High companies (${data.moves} stage changes in the last 30 days). It'll land in ${data.email} in about 10-15 minutes.`);
+      setMessage(`Running on ${data.companies} companies (all Highs + Mediums on the pipeline) (${data.moves} stage changes in the last 30 days). It'll land in ${data.email} in about 10-15 minutes.`);
       setStatus("success");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Failed to start");
@@ -46,7 +46,7 @@ export function ReferralFunnelForMeButton() {
           {status === "loading" ? "Starting…" : status === "success" ? "Referral Funnel report started" : status === "error" ? "Failed, try again" : "Referral Funnel for Me"}
         </button>
         {status === "idle" && (
-          <p className="text-xs text-gray-500">Funnel trends, planning gaps, and a next best action for every Medium/High funnel company, by sales rep.</p>
+          <p className="text-xs text-gray-500">Funnel trends, planning gaps, and a next best action for every High and every Medium on the Not Yet Referring Pipeline, by sales rep.</p>
         )}
         {(status === "success" || status === "error") && <p className="text-xs text-gray-500">{message}</p>}
       </div>
@@ -54,7 +54,7 @@ export function ReferralFunnelForMeButton() {
       {status === "confirm" && (
         <div className="mt-3 max-w-xl rounded-lg border border-gray-200 bg-white p-4">
           <p className="text-sm text-gray-700">
-            This reads the CRM for every Medium and High priority company in the Referral Funnel (Identified, Met, or no contacts yet), plus any that moved stages in the last 30 days,
+            This reads the CRM for every High priority company in the Referral Funnel (Identified, Met, or no contacts yet) and every Medium a rep added to the Not Yet Referring Pipeline, plus those that moved up into War Room stages in the last 30 days,
             and emails you trends, planning gaps, and an AI next best action for each. Saved AI Statuses aren&apos;t changed. It takes about 10-15 minutes.
           </p>
           <div className="mt-3 flex gap-2">

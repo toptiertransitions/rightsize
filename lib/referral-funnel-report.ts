@@ -5,12 +5,15 @@
 // It explicitly calls out:
 //  - trends: stage moves in the last 30 days (forward, backward, and
 //    graduations into War Room stages), new contacts, accounts going cold
-//  - Medium/High priority companies with no quarterly plan
-//  - Medium/High priority companies with no next step (or an overdue one),
-//    flagged hardest when they also had a stage change in the last 30 days
-// and gives every Medium/High company (plus any Medium/High company that
-// moved stages in the last 30 days) short AI status bullets and one next
-// best action. Low priority funnel companies are listed without AI.
+//  - High priority companies with no quarterly plan
+//  - in-scope companies with no next step (or an overdue one), flagged
+//    hardest when they also had a stage change in the last 30 days
+// "In scope" = every High priority company, plus the Medium companies a
+// rep has added to this quarter's Not Yet Referring Pipeline (Mediums the
+// reps haven't picked are left out on purpose). Each in-scope company
+// (and any in-scope company that moved up into War Room stages in the last
+// 30 days) gets short AI status bullets and one next best action. Everything
+// else in the funnel is listed at the bottom without AI.
 //
 // Read-only: unlike War Room for Me it never re-saves a company's AI Status
 // (it reads the same CRM picture through buildPartnerAIContext).
@@ -100,7 +103,8 @@ const STAGE_RANK: Record<string, number> = {
 };
 // Same split as the CRM tabs: these stages live on the War Room tab
 const WAR_ROOM_STAGES = ["Shared Leads", "Agreed to Refer", "Active Referral", "Inactive Referral"];
-const isMH = (p: string) => p === "High" || p === "Medium";
+/** All Highs, and only the Mediums a rep picked for the quarter's pipeline */
+const inScope = (j: { priority: string; onPipeline: boolean }) => j.priority === "High" || (j.priority === "Medium" && j.onPipeline);
 // Test rep hidden on the CRM Referral Funnel tab too
 const EXCLUDE_REPS = ["MattTest Sales"];
 const DAY = 86400000;
@@ -197,9 +201,9 @@ export async function buildFunnelJob(params: {
   const all = realCompanies.map(jobFor);
   const funnel = all.filter((j) => !WAR_ROOM_STAGES.includes(j.bestStage));
   // M/H companies that just moved up out of the funnel are called out too
-  const graduatedMH = all.filter((j) => WAR_ROOM_STAGES.includes(j.bestStage) && isMH(j.priority) && j.moves.length > 0);
-  const mhFunnel = funnel.filter((j) => isMH(j.priority));
-  const low = funnel.filter((j) => !isMH(j.priority));
+  const graduatedMH = all.filter((j) => WAR_ROOM_STAGES.includes(j.bestStage) && inScope(j) && j.moves.length > 0);
+  const mhFunnel = funnel.filter(inScope);
+  const low = funnel.filter((j) => !inScope(j));
 
   const t = today();
   const hasPlan = (j: FunnelCompanyJob) => j.onPipeline || j.planMeetings.length > 0;
@@ -348,7 +352,7 @@ async function writeTrendBullets(state: FunnelJobState): Promise<string[]> {
 - Stage moves: ${tr.movesForward} forward, ${tr.movesBackward} backward, ${tr.graduated} moved up into War Room stages (Agreed to Refer or beyond)
 - Transitions: ${tr.transitions.map((x) => `${x.label} x${x.count}`).join("; ") || "none"}
 - New contacts added at funnel companies: ${tr.newContacts30}
-- Medium/High funnel companies: ${tr.mhFunnel}; touched in last 30 days: ${tr.touched30}; no activity in 60+ days: ${tr.cold60}
+- In-scope funnel companies (all Highs + Mediums on the pipeline): ${tr.mhFunnel}; touched in last 30 days: ${tr.touched30}; no activity in 60+ days: ${tr.cold60}
 - By rep: ${tr.byRep.map((r) => `${r.repName}: ${r.mh} M/H, ${r.moves} moves, ${r.noPlan} with no plan, ${r.noNextStep} with no next step`).join("; ")}
 
 Per company:
@@ -440,7 +444,7 @@ function flagPills(j: FunnelCompanyJob): string {
   const f = flagsFor(j);
   return [
     f.moved ? pill("Moved", "#dbeafe", "#1d4ed8") : "",
-    f.noPlan && (j.priority === "High" || j.priority === "Medium") ? pill("No plan", "#fee2e2", "#b91c1c") : "",
+    f.noPlan && j.priority === "High" ? pill("No plan", "#fee2e2", "#b91c1c") : "",
     f.noNextStep ? pill("No next step", "#fee2e2", "#b91c1c") : f.overdue ? pill("Next step overdue", "#ffedd5", "#c2410c") : "",
   ].join("");
 }
@@ -509,7 +513,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
   const results = state.results;
   const funnelResults = results.filter((r) => !WAR_ROOM_STAGES.includes(r.bestStage));
   const graduated = results.filter((r) => WAR_ROOM_STAGES.includes(r.bestStage));
-  const isMHr = (j: FunnelCompanyJob) => isMH(j.priority);
+  const isMHr = (j: FunnelCompanyJob) => inScope(j);
 
   const movedNoNext = funnelResults.filter((r) => { const f = flagsFor(r); return f.moved && (f.noNextStep || f.overdue); });
   const noPlan = funnelResults.filter((r) => isMHr(r) && flagsFor(r).noPlan);
@@ -523,7 +527,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
         <table width="100%" cellpadding="0" cellspacing="0"><tr>
           <td style="border-left:4px solid #2d4a3e;padding-left:12px;">
             <span style="font-size:18px;font-weight:700;color:#1f2937;">${esc(repName)}</span>
-            <span style="margin-left:10px;font-size:12px;font-weight:600;color:#2d4a3e;">${mine.length} Medium/High${rt ? ` &middot; ${rt.moves} stage move${rt.moves === 1 ? "" : "s"} &middot; ${rt.noPlan} no plan &middot; ${rt.noNextStep} no next step` : ""}</span>
+            <span style="margin-left:10px;font-size:12px;font-weight:600;color:#2d4a3e;">${mine.length} in scope${rt ? ` &middot; ${rt.moves} stage move${rt.moves === 1 ? "" : "s"} &middot; ${rt.noPlan} no plan &middot; ${rt.noNextStep} no next step` : ""}</span>
           </td>
         </tr></table>
       </td></tr>
@@ -535,7 +539,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
   const graduatedSection = graduated.length === 0 ? "" : `
     <tr><td style="padding:36px 0 4px;">
       <p style="margin:0;font-size:16px;font-weight:700;color:#16a34a;border-top:2px solid #e5e7eb;padding-top:20px;">Moved up into the War Room</p>
-      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Medium/High companies that reached Agreed to Refer or beyond in the last 30 days. Keep the momentum.</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">In-scope companies that reached Agreed to Refer or beyond in the last 30 days. Keep the momentum.</p>
     </td></tr>
     ${group("Graduated", "#16a34a", graduated.sort(byUrgency), true)}`;
 
@@ -543,13 +547,13 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
   for (const j of state.low) lowByRep.set(j.repName, [...(lowByRep.get(j.repName) ?? []), j]);
   const lowSection = state.low.length === 0 ? "" : `
     <tr><td style="padding:36px 0 4px;">
-      <p style="margin:0;font-size:16px;font-weight:700;color:#6b7280;border-top:2px solid #e5e7eb;padding-top:20px;">Low or Unset Priority Funnel</p>
-      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Listed for completeness, no AI read. Companies that moved stages are listed first.</p>
+      <p style="margin:0;font-size:16px;font-weight:700;color:#6b7280;border-top:2px solid #e5e7eb;padding-top:20px;">Rest of the Funnel</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Mediums not on the pipeline, Low, and unset priority. Listed for completeness, no AI read. Companies that moved stages are listed first.</p>
     </td></tr>
     ${Array.from(lowByRep).sort(([a], [b]) => a.localeCompare(b)).map(([repName, items]) => `<tr><td style="padding:12px 0 0;">
       <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">${esc(repName)} &middot; ${items.length}</p>
       <p style="margin:0;font-size:12px;color:#374151;line-height:1.7;">${items.sort((a, b) => b.moves.length - a.moves.length || a.companyName.localeCompare(b.companyName)).map((j) =>
-        `${esc(j.companyName)} <span style="color:#9ca3af;">(${esc(j.bestStage)}${j.nextStepDate ? `, next ${fmtDate(j.nextStepDate)}` : ", no next step"})</span>${j.moves.length ? pill("Moved", "#dbeafe", "#1d4ed8") : ""}`).join("<br/>")}</p>
+        `${esc(j.companyName)} <span style="color:#9ca3af;">(${esc(j.priority || "Unset")}, ${esc(j.bestStage)}${j.nextStepDate ? `, next ${fmtDate(j.nextStepDate)}` : ", no next step"})</span>${j.moves.length ? pill("Moved", "#dbeafe", "#1d4ed8") : ""}`).join("<br/>")}</p>
     </td></tr>`).join("")}`;
 
   const movesTable = state.allMoves.length === 0 ? "" : `
@@ -590,7 +594,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
         </tr>
         <tr><td style="padding:0;border-bottom:1px solid #e5e7eb;">
           <table width="100%" cellpadding="0" cellspacing="0"><tr>
-            ${stat("Med/High funnel", String(tr.mhFunnel), "#2d4a3e")}
+            ${stat("In scope", String(tr.mhFunnel), "#2d4a3e")}
             ${stat("Stage moves", `${tr.movesForward}&#9650; ${tr.movesBackward}&#9660;`, "#1d4ed8")}
             ${stat("No plan", String(noPlan.length), "#b91c1c")}
             ${stat("No next step", String(funnelResults.filter((r) => { const f = flagsFor(r); return isMHr(r) && (f.noNextStep || f.overdue); }).length), "#c2410c", true)}
@@ -601,7 +605,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
           <ul style="margin:0;padding-left:18px;font-size:13px;color:#374151;line-height:1.6;">
             <li>${tr.movesForward} forward and ${tr.movesBackward} backward stage moves; ${tr.graduated} moved up into War Room stages.</li>
             ${tr.transitions.length ? `<li>Most common: ${tr.transitions.slice(0, 4).map((x) => `${esc(x.label)} (${x.count})`).join(", ")}.</li>` : ""}
-            <li>${tr.touched30} of ${tr.mhFunnel} Medium/High funnel companies were touched in the last 30 days; ${tr.cold60} have had no activity in 60+ days.</li>
+            <li>${tr.touched30} of ${tr.mhFunnel} in-scope companies (all Highs + Mediums on the pipeline) were touched in the last 30 days; ${tr.cold60} have had no activity in 60+ days.</li>
             <li>${tr.newContacts30} new contact${tr.newContacts30 === 1 ? "" : "s"} added at funnel companies.</li>
             ${(state.trendBullets ?? []).map((b) => `<li>${inline(b)}</li>`).join("")}
           </ul>
@@ -609,8 +613,8 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
         <tr><td style="padding:0 28px;">
           <table width="100%" cellpadding="0" cellspacing="0">
             ${callout("Moved stages but no next step", "#b91c1c", "Recent progress with nothing scheduled to build on it. Fix these first.", movedNoNext)}
-            ${callout("Medium/High with no quarterly plan", "#b91c1c", "Not picked for this quarter's pipeline and no key meetings written.", noPlan)}
-            ${callout("Medium/High with no next step", "#c2410c", "No next step on file, or the one on file is past due.", noNext)}
+            ${callout("High priority with no quarterly plan", "#b91c1c", "Not on this quarter's Not Yet Referring Pipeline and no key meetings written.", noPlan)}
+            ${callout("No next step", "#c2410c", "No next step on file, or the one on file is past due.", noNext)}
             ${movesTable}
           </table>
         </td></tr>
