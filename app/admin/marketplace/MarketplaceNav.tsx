@@ -8,6 +8,7 @@ const TABS = [
   { href: "/admin/marketplace/partners", label: "Partners" },
   { href: "/admin/marketplace/categories", label: "Categories" },
   { href: "/admin/marketplace/pipeline", label: "Pipeline" },
+  { href: "/admin/marketplace/tenant-config", label: "Tenant Config" },
 ];
 
 export function MarketplaceNav() {

@@ -3,8 +3,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isTTTAdmin } from "@/lib/config";
-import { updateReferralContact } from "@/lib/airtable";
+import { getSystemRole, updateReferralContact } from "@/lib/airtable";
+import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissions";
 import { slugify } from "@/lib/utils";
 import {
   getAllCategories,
@@ -29,13 +29,14 @@ const inviteSchema = z.object({
 
 export type InviteMarketplacePartnerInput = z.input<typeof inviteSchema>;
 
-/** TTT Admin invites a business to the marketplace from /admin/partners:
+/** Admin/Manager invites a business from Marketplace > Partners:
  * creates (or reuses, by email) the marketplace Partner, a Draft listing per
  * chosen category, and the CRM company + contact the portal logs in
  * through, then emails them a sign-up link. */
 export async function inviteMarketplacePartnerAction(input: InviteMarketplacePartnerInput): Promise<Result> {
   const { userId } = await auth();
-  if (!userId || !isTTTAdmin(userId)) return { ok: false, error: "Only TTT Admins can invite partners." };
+  const role = userId ? await getSystemRole(userId).catch(() => null) : null;
+  if (!userId || !role || !hasCapability(role as MarketplaceRole, "sendInvites")) return { ok: false, error: "You don't have permission to invite partners." };
 
   const parsed = inviteSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
@@ -86,7 +87,6 @@ export async function inviteMarketplacePartnerAction(input: InviteMarketplacePar
       categoryLabels: chosen.map((c) => c.label),
     });
 
-    revalidatePath("/admin/partners");
     revalidatePath("/admin/marketplace/partners");
     return { ok: true, reused };
   } catch (e) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { inviteMarketplacePartnerAction } from "./actions";
+import { inviteMarketplacePartnerAction } from "./invite-actions";
 
 interface CategoryOption { id: string; label: string }
 

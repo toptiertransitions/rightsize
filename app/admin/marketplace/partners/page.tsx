@@ -3,6 +3,7 @@ import { MarketplaceNav } from "../MarketplaceNav";
 import { getAllCategories, getAllPartners, getAllListingsAdmin } from "@/lib/marketplace/data";
 import { computeListingCompleteness } from "@/lib/marketplace/completeness";
 import { PartnersListClient } from "./PartnersListClient";
+import { InviteMarketplacePartnerButton } from "./InviteMarketplacePartnerButton";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,11 @@ export default async function MarketplacePartnersPage() {
       <AdminHeader active="marketplace" />
       <MarketplaceNav />
       <main className="max-w-7xl mx-auto px-6 pb-12">
+        <div className="mb-6 flex justify-end">
+          <InviteMarketplacePartnerButton
+            categories={[...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label)).map((c) => ({ id: c.id, label: c.label }))}
+          />
+        </div>
         <PartnersListClient rows={rows} categories={categories.map((c) => ({ id: c.id, label: c.label }))} />
       </main>
     </div>
