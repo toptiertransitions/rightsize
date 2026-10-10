@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import Link from "next/link";
 import { getAllCategories, getAllListingsAdmin } from "@/lib/marketplace/data";
 
@@ -49,7 +50,7 @@ export default async function MarketplacePage() {
               href={`/marketplace/${category.slug}`}
               className="rounded-2xl border border-gray-100 p-5 hover:border-forest-200 hover:shadow-sm transition-all"
             >
-              <h2 className="text-sm font-semibold text-gray-900 mb-1">{category.label}</h2>
+              <h2 className="text-sm font-semibold text-gray-900 mb-1">{partnerCategoryLabel(category.label)}</h2>
               <p className="text-xs text-gray-500 line-clamp-2 mb-2">{category.description}</p>
               <p className="text-[11px] text-gray-400">{liveCount} partner{liveCount !== 1 ? "s" : ""}</p>
             </Link>
@@ -62,7 +63,7 @@ export default async function MarketplacePage() {
             <div className="flex flex-wrap gap-2">
               {comingSoon.map(({ category }) => (
                 <span key={category.id} className="text-sm px-3 py-1.5 rounded-full bg-gray-50 text-gray-400 border border-gray-100">
-                  {category.label}
+                  {partnerCategoryLabel(category.label)}
                 </span>
               ))}
             </div>

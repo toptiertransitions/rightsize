@@ -4,6 +4,13 @@ import { useEffect } from "react";
 import { isNativeApp } from "@/lib/native";
 
 const LAUNCH_URL_KEY = "rz_handled_launch_url";
+// Set once the first launch has been checked for a link; the inline script
+// in app/layout.tsx only hides the first page of a session while it's unset.
+const LAUNCH_CHECKED_KEY = "rz_launch_checked";
+
+function reveal() {
+  document.documentElement.classList.remove("rz-launching");
+}
 
 // Mounted once at the root, native-only. When iOS opens the app from a
 // Universal Link (e.g. "Access Your Project" in the client invite email),
@@ -15,17 +22,20 @@ export function DeepLinkBootstrap() {
     if (!isNativeApp()) return;
     let removeListener: (() => void) | undefined;
 
-    const open = (rawUrl: string) => {
+    // true when it navigates away (the start page stays hidden until then)
+    const open = (rawUrl: string): boolean => {
       try {
         const url = new URL(rawUrl);
-        if (url.host !== window.location.host) return;
+        if (url.host !== window.location.host) return false;
         const target = url.pathname + url.search + url.hash;
         if (target !== window.location.pathname + window.location.search + window.location.hash) {
           window.location.assign(target);
+          return true;
         }
       } catch {
         // Malformed URL — ignore
       }
+      return false;
     };
 
     (async () => {
@@ -36,7 +46,8 @@ export function DeepLinkBootstrap() {
       // process, and this component remounts on every full page load (e.g.
       // Clerk's sign-up redirects) — only act on it once, or the user would
       // be bounced back to the invite page mid-signup.
-      const launch = await App.getLaunchUrl();
+      const launch = await App.getLaunchUrl().catch(() => null);
+      let navigating = false;
       if (launch?.url) {
         let handled = false;
         try {
@@ -45,9 +56,11 @@ export function DeepLinkBootstrap() {
         } catch {
           // Storage unavailable — fall through and open once
         }
-        if (!handled) open(launch.url);
+        if (!handled) navigating = open(launch.url);
       }
-    })();
+      try { sessionStorage.setItem(LAUNCH_CHECKED_KEY, "1"); } catch { /* ignore */ }
+      if (!navigating) reveal();
+    })().catch(reveal);
 
     return () => removeListener?.();
   }, []);

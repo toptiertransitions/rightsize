@@ -8,6 +8,7 @@ import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
 import { updatePartner, updateListing } from "@/lib/marketplace/data";
 import { computeListingCompleteness } from "@/lib/marketplace/completeness";
 import { zipsForCounties, isKnownCounty } from "@/lib/marketplace/counties";
+import { applyMirrors } from "@/lib/marketplace/partnerScreens";
 import { zipsInRadius, placeForZip, RADIUS_MIN_MILES, RADIUS_MAX_MILES, RADIUS_DEFAULT_MILES } from "@/lib/marketplace/serviceRadius";
 import { getPartnerCriteria, MATCH_CRITERIA_ATTR, readMatchCriteria } from "@/lib/partners/criteria";
 import { getAdminEmails } from "@/lib/admin-notifications";
@@ -146,9 +147,16 @@ export async function saveListingAction(
       }
     }
 
+    // Hidden details that repeat a criteria screen are filled from it (so
+    // required fields for going Live are never missing), plus derived ones
+    const label = listing.category.label;
+    const criteriaDefs = getPartnerCriteria(label as PartnerCategory);
+    const finalAttributes = applyMirrors(label, attributes, readMatchCriteria(attributes), (qid, v) =>
+      criteriaDefs.find((c) => c.questionId === qid)?.options.find((o) => o.value === v)?.label);
+
     await updateListing(listing.id, {
-      attributes,
-      completenessPercent: computeListingCompleteness(attributes, listing.category),
+      attributes: finalAttributes,
+      completenessPercent: computeListingCompleteness(finalAttributes, listing.category),
     });
   });
 }

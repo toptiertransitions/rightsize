@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { realtorDisplayName } from "@/lib/marketplace/partnerScreens";
 import { notFound } from "next/navigation";
 import { getAllCategories, getAllPartners, getAllListingsAdmin } from "@/lib/marketplace/data";
 import { getPartnerDirectoryFromNewModel } from "@/lib/marketplace/legacyAdapter";
@@ -66,7 +67,7 @@ export default async function PartnerProfilePage({ params }: { params: Promise<{
       attributes={listing.attributes}
       partner={{
         slug: partner.slug,
-        companyName: partner.companyName,
+        companyName: cat.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
         logo: partner.logo,
         aboutUs: partner.aboutUs,
         shortBio: partner.shortBio,

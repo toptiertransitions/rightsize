@@ -11,6 +11,7 @@ import {
   businessValid, areaValid, parseZipText, editableFields, areaSaveInput,
   type BusinessData, type AboutData, type AreaData,
 } from "../setup/SetupFields";
+import { inPersonOnly, partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, requestCategoryChangeAction } from "../setup/actions";
 
 interface ListingData {
@@ -51,7 +52,7 @@ export function ListingClient({ status, business: b0, about: a0, area: ar0, list
 
       <div className="mt-6 space-y-5">
         <Card title="Business" valid={businessValid(business)} onSave={() => saveBusinessAction(business)} onSaved={() => router.refresh()}>
-          <BusinessFields data={business} onChange={setBusiness} />
+          <BusinessFields data={business} onChange={setBusiness} realtor={listings.length > 0 && listings.every((l) => l.label === "Realtor")} />
         </Card>
         <Card title="About" onSave={() => saveAboutAction(about)}>
           <AboutFields data={about} onChange={setAbout} />
@@ -61,12 +62,12 @@ export function ListingClient({ status, business: b0, about: a0, area: ar0, list
           valid={areaValid(area)}
           onSave={() => saveServiceAreaAction(areaSaveInput(area))}
         >
-          <AreaFields data={area} onChange={setArea} defaultZip={business.zip} />
+          <AreaFields data={area} onChange={setArea} defaultZip={business.zip} inPersonOnly={inPersonOnly(listings.map((l) => l.label))} />
         </Card>
 
         {listings.map((l) => <CategoryCards key={l.id} listing={l} />)}
 
-        <CategoryChangeRequest current={listings.map((l) => l.label)} />
+        <CategoryChangeRequest current={listings.map((l) => partnerCategoryLabel(l.label))} />
       </div>
     </div>
   );
@@ -82,7 +83,7 @@ function CategoryCards({ listing }: { listing: ListingData }) {
     <>
       {defs.length > 0 && (
         <Card
-          title={`${listing.label}: who you serve`}
+          title={`${partnerCategoryLabel(listing.label)}: who you serve`}
           subtitle="Matching updates as soon as you save."
           valid={defs.every((c) => currentCriteriaValues(c, criteria).length > 0)}
           onSave={() => saveListingAction(listing.id, { criteria: Object.fromEntries(defs.map((c) => [c.questionId, currentCriteriaValues(c, criteria)])) })}
@@ -104,7 +105,7 @@ function CategoryCards({ listing }: { listing: ListingData }) {
       )}
       {fields.length > 0 && (
         <Card
-          title={`${listing.label}: details`}
+          title={`${partnerCategoryLabel(listing.label)}: details`}
           onSave={() => saveListingAction(listing.id, { fields: Object.fromEntries(fields.map((f) => [f.key, values[f.key]])) })}
         >
           <DetailsFields schema={fields} values={values} onChange={setValues} />

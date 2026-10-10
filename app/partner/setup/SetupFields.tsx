@@ -9,6 +9,7 @@ import { Check, ImagePlus, MapPin, Monitor, Shuffle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IL_COUNTY_OPTIONS } from "@/lib/marketplace/counties";
 import { previewRadiusAction } from "./actions";
+import { isHiddenForPartner, type FieldScreen } from "@/lib/marketplace/partnerScreens";
 import type { MarketplaceDeliveryMode, MarketplaceFieldDef } from "@/lib/marketplace/types";
 import type { PartnerCriterion } from "@/lib/partners/criteria";
 
@@ -32,16 +33,17 @@ export function businessValid(d: BusinessData): boolean {
   return d.companyName.trim().length > 0 && d.pocName.trim().length > 0;
 }
 
-export function BusinessFields({ data, onChange }: { data: BusinessData; onChange: (d: BusinessData) => void }) {
+export function BusinessFields({ data, onChange, realtor = false }: { data: BusinessData; onChange: (d: BusinessData) => void; realtor?: boolean }) {
   const set = (patch: Partial<BusinessData>) => onChange({ ...data, ...patch });
+  // Realtors list as "Brokerage | Town | Name or team"
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="p-company" className={labelCls}>Company name</label>
+        <label htmlFor="p-company" className={labelCls}>{realtor ? "Brokerage name" : "Company name"}</label>
         <input id="p-company" className={inputCls} value={data.companyName} onChange={(e) => set({ companyName: e.target.value })} />
       </div>
       <div>
-        <label htmlFor="p-name" className={labelCls}>Your name</label>
+        <label htmlFor="p-name" className={labelCls}>{realtor ? "Name / team name" : "Your name"}</label>
         <input id="p-name" className={inputCls} value={data.pocName} onChange={(e) => set({ pocName: e.target.value })} autoComplete="name" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -196,7 +198,7 @@ const MODES: { key: MarketplaceDeliveryMode; label: string; desc: string; icon: 
   { key: "Both", label: "Both", desc: "In person locally, virtual across your state", icon: <Shuffle className="w-5 h-5" /> },
 ];
 
-export function AreaFields({ data, onChange, defaultZip = "" }: { data: AreaData; onChange: (d: AreaData) => void; defaultZip?: string }) {
+export function AreaFields({ data, onChange, defaultZip = "", inPersonOnly = false }: { data: AreaData; onChange: (d: AreaData) => void; defaultZip?: string; inPersonOnly?: boolean }) {
   const set = (patch: Partial<AreaData>) => onChange({ ...data, ...patch });
   const [query, setQuery] = useState("");
   const [showZips, setShowZips] = useState(data.extraZipsText.trim().length > 0);
@@ -214,7 +216,7 @@ export function AreaFields({ data, onChange, defaultZip = "" }: { data: AreaData
 
   return (
     <div className="space-y-6">
-      <div>
+      {!inPersonOnly && <div>
         <p className={labelCls}>How do you work with clients?</p>
         <div className="grid gap-2">
           {MODES.map((m) => {
@@ -239,7 +241,7 @@ export function AreaFields({ data, onChange, defaultZip = "" }: { data: AreaData
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {data.deliveryMode === "Virtual" && (
         <p className="text-sm text-gray-600 bg-forest-50 rounded-xl px-4 py-3">
@@ -445,17 +447,58 @@ export function CriterionPicker({ criterion, selected, onChange }: { criterion: 
 
 // ─── Category details (the admin-defined field schema) ───────────────────────
 
-// Category fields partners don't fill in themselves (setup and My Listing).
-// Admins still see and edit them on the marketplace admin pages, and any
-// saved values are kept.
-const PARTNER_HIDDEN_FIELDS: Record<string, string[]> = {
-  // Visit length is already asked on the "Which visit lengths do you offer?" screen
-  "Companion Care": ["rateRange", "minimumHours", "agencyOrIndependent"],
-};
-
+// Fields partners don't fill in themselves are listed in
+// lib/marketplace/partnerScreens.ts (admins still see and edit them).
 export function editableFields(schema: MarketplaceFieldDef[], categoryLabel?: string): MarketplaceFieldDef[] {
-  const hidden = new Set(categoryLabel ? PARTNER_HIDDEN_FIELDS[categoryLabel] ?? [] : []);
-  return schema.filter((f) => f.type !== "file" && !hidden.has(f.key));
+  return schema.filter((f) => f.type !== "file" && !(categoryLabel && isHiddenForPartner(categoryLabel, f.key)));
+}
+
+/** A details field shown as its own full screen (lib/marketplace/partnerScreens.ts) */
+export function FieldScreenInput({ field, screen, value, onChange }: {
+  field: MarketplaceFieldDef;
+  screen: FieldScreen;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const options = field.options ?? [];
+  if (field.type === "multiselect") {
+    const selected = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <CriterionPicker
+        criterion={{ questionId: field.key, prompt: screen.title, clientPrompt: "", options: options.map((o) => ({ value: o, label: o })) }}
+        selected={selected}
+        onChange={onChange}
+      />
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2" role="radiogroup" aria-label={screen.title}>
+      {options.map((o) => {
+        const on = value === o;
+        return (
+          <button
+            key={o}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o)}
+            className={cn(
+              "flex items-center gap-3 min-h-[56px] px-4 rounded-2xl border text-left transition-all active:scale-[0.99]",
+              on ? "border-forest-500 bg-forest-50 ring-1 ring-forest-500" : "border-gray-200 bg-white"
+            )}
+          >
+            <span className="flex-1 text-[15px] font-medium text-gray-900">{o}</span>
+            {on && <Check className="w-5 h-5 text-forest-600" strokeWidth={3} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function fieldScreenAnswered(field: MarketplaceFieldDef, screen: FieldScreen, value: unknown): boolean {
+  if (screen.optional) return true;
+  return field.type === "multiselect" ? Array.isArray(value) && value.length > 0 : typeof value === "string" && value.length > 0;
 }
 
 export function DetailsFields({ schema, values, onChange }: { schema: MarketplaceFieldDef[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {

@@ -45,6 +45,7 @@ export const NON_TTT_CATEGORY_LABELS: Partial<Record<PartnerCategory, string>> =
   Community: "Senior Community",
   Donation: "Donation Organization",
   Hauler: "Junk Hauling",
+  "Care Manager": "Care Management / Concierge",
 };
 
 export function nonTTTCategoryLabel(category: PartnerCategory): string {

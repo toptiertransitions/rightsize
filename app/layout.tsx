@@ -50,10 +50,23 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider afterSignOutUrl="/sign-in">
-      <html lang="en">
+      {/* The launch script below may add a class before hydration */}
+      <html lang="en" suppressHydrationWarning>
         <head>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet" />
+          {/* iOS app, first launch of a session: an email link (Universal
+              Link) opens the app on its start page before DeepLinkBootstrap
+              can move to the linked page, which flashed the sign-in screen.
+              Keep the page hidden (plain background) until that check runs;
+              DeepLinkBootstrap reveals it, with a 2.5s failsafe. Native only. */}
+          <style dangerouslySetInnerHTML={{ __html: "html.rz-launching{background:#2d4a3e}html.rz-launching body{visibility:hidden}" }} />
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                "try{var C=window.Capacitor;if(C&&((C.isNativePlatform&&C.isNativePlatform())||(C.getPlatform&&C.getPlatform()!=='web'))&&!sessionStorage.getItem('rz_launch_checked')){var d=document.documentElement;d.classList.add('rz-launching');setTimeout(function(){d.classList.remove('rz-launching')},2500)}}catch(e){}",
+            }}
+          />
         </head>
         <body>
           <DeepLinkBootstrap />

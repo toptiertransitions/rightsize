@@ -11,6 +11,7 @@
 // visible partners in thin categories and change live behavior, which is
 // outside this adapter's job).
 import { getAllPartnerReviews, getAllVendorsWithLocalVendorLink, getTenants, getAllLocalVendors } from "@/lib/airtable";
+import { realtorDisplayName } from "./partnerScreens";
 import { computeBayesianRating } from "@/lib/partners/match";
 import type { PartnerProfile, PartnerCategory } from "@/lib/partners/types";
 import { getAllPartners, getAllListingsAdmin, getAllCategories } from "./data";
@@ -92,7 +93,8 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
 
     return {
       id: partner.id,
-      vendorName: partner.companyName,
+      // Realtors list as "Brokerage | Town | Name or team"
+      vendorName: category.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
       category: category.label as PartnerCategory,
       logo: partner.logo || undefined,
       website: partner.website || undefined,

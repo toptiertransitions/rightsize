@@ -1,6 +1,7 @@
 "use server";
 
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getSystemRole, updateReferralContact } from "@/lib/airtable";
@@ -84,7 +85,7 @@ export async function inviteMarketplacePartnerAction(input: InviteMarketplacePar
       partnerName: contactName,
       partnerEmail: email,
       companyName: partner.companyName,
-      categoryLabels: chosen.map((c) => c.label),
+      categoryLabels: chosen.map((c) => partnerCategoryLabel(c.label)),
     });
 
     revalidatePath("/admin/marketplace/partners");

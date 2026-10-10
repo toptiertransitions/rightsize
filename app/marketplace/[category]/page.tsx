@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { partnerCategoryLabel, realtorDisplayName } from "@/lib/marketplace/partnerScreens";
 import { getAllCategories, getAllPartners, getAllListingsAdmin } from "@/lib/marketplace/data";
 import { getPartnerDirectoryFromNewModel } from "@/lib/marketplace/legacyAdapter";
 import { CategoryListClient, type PublicListingRow } from "./CategoryListClient";
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ category:
   const category = await loadCategory(slug);
   if (!category) return {};
   return {
-    title: `${category.label} | Top Tier Transitions Marketplace`,
+    title: `${partnerCategoryLabel(category.label)} | Top Tier Transitions Marketplace`,
     description: category.description || `Vetted ${category.label} partners, matched to your move.`,
     alternates: { canonical: `/marketplace/${slug}` },
   };
@@ -44,7 +45,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6 text-center">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">{category.label} — Coming Soon</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{partnerCategoryLabel(category.label)} — Coming Soon</h1>
           <p className="text-gray-500 max-w-md">We're still building out our vetted network in this category. Check back soon.</p>
         </div>
       </div>
@@ -61,7 +62,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
       if (!partner) return null;
       return {
         slug: partner.slug,
-        companyName: partner.companyName,
+        companyName: category.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
         logo: partner.logo,
         shortBio: partner.shortBio,
         aboutUs: partner.aboutUs,
@@ -86,7 +87,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
   return (
     <CategoryListClient
       category={{
-        label: category.label,
+        label: partnerCategoryLabel(category.label),
         slug: category.slug,
         description: category.description,
         allowsVirtual: category.allowsVirtual,

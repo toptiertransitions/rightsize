@@ -9,11 +9,14 @@ import { getPartnerCriteria, readMatchCriteria, currentCriteriaValues, type Matc
 import type { PartnerCategory } from "@/lib/types";
 import type { MarketplaceFieldDef } from "@/lib/marketplace/types";
 import {
-  BusinessFields, AboutFields, AreaFields, CriterionPicker, DetailsFields,
-  businessValid, areaValid, parseZipText, editableFields, areaSaveInput,
+  BusinessFields, AboutFields, AreaFields, CriterionPicker, DetailsFields, FieldScreenInput,
+  businessValid, areaValid, parseZipText, areaSaveInput, fieldScreenAnswered,
   type BusinessData, type AboutData, type AreaData,
 } from "./SetupFields";
 import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, submitSetupAction } from "./actions";
+import {
+  fieldScreensFor, setupDetailsFields, skipsAreaStep, inPersonOnly, partnerCategoryLabel, type FieldScreen,
+} from "@/lib/marketplace/partnerScreens";
 
 export interface SetupListing {
   id: string;
@@ -36,6 +39,7 @@ type Step =
   | { kind: "about" }
   | { kind: "area" }
   | { kind: "criterion"; listingId: string; label: string; criterion: PartnerCriterion; index: number; count: number }
+  | { kind: "field"; listingId: string; label: string; field: MarketplaceFieldDef; screen: FieldScreen }
   | { kind: "details"; listingId: string; label: string; fields: MarketplaceFieldDef[] }
   | { kind: "review" }
   | { kind: "tour" };
@@ -79,7 +83,11 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
   const router = useRouter();
   const [business, setBusiness] = useState(b0);
   const [about, setAbout] = useState(a0);
-  const [area, setArea] = useState(ar0);
+  const labels = listings.map((l) => l.label);
+  const noAreaStep = skipsAreaStep(labels);
+  const alwaysInPerson = inPersonOnly(labels);
+  const isRealtor = labels.length > 0 && labels.every((l) => l === "Realtor");
+  const [area, setArea] = useState<AreaData>(() => (alwaysInPerson ? { ...ar0, deliveryMode: "In-person" } : ar0));
   const [criteria, setCriteria] = useState<Record<string, MatchCriteria>>(() =>
     Object.fromEntries(listings.map((l) => [l.id, readMatchCriteria(l.attributes)]))
   );
@@ -91,16 +99,38 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
   const [error, setError] = useState("");
 
   const steps = useMemo<Step[]>(() => {
-    const s: Step[] = [{ kind: "welcome" }, { kind: "business" }, { kind: "about" }, { kind: "area" }];
+    const s: Step[] = [{ kind: "welcome" }, { kind: "business" }, { kind: "about" }];
+    if (!noAreaStep) s.push({ kind: "area" });
     for (const l of listings) {
       const defs = getPartnerCriteria(l.label as PartnerCategory);
-      defs.forEach((c, i) => s.push({ kind: "criterion", listingId: l.id, label: l.label, criterion: c, index: i, count: defs.length }));
-      const f = editableFields(l.fieldSchema, l.label);
+      // Details fields with their own screen, right after the criteria
+      // question they follow (or after all criteria), when they apply
+      const screens = fieldScreensFor(l.label).filter((sc) => {
+        if (!sc.showIf) return true;
+        return (criteria[l.id]?.[sc.showIf.questionId] ?? []).includes(sc.showIf.value);
+      });
+      const fieldStep = (sc: FieldScreen): Step | null => {
+        const field = l.fieldSchema.find((f) => f.key === sc.key);
+        return field ? { kind: "field", listingId: l.id, label: l.label, field, screen: sc } : null;
+      };
+      const placed = new Set<string>();
+      defs.forEach((c, i) => {
+        s.push({ kind: "criterion", listingId: l.id, label: l.label, criterion: c, index: i, count: defs.length });
+        for (const sc of screens.filter((x) => x.after === c.questionId)) {
+          const st = fieldStep(sc);
+          if (st) { s.push(st); placed.add(sc.key); }
+        }
+      });
+      for (const sc of screens.filter((x) => !placed.has(x.key))) {
+        const st = fieldStep(sc);
+        if (st) s.push(st);
+      }
+      const f = setupDetailsFields(l.fieldSchema, l.label);
       if (f.length > 0) s.push({ kind: "details", listingId: l.id, label: l.label, fields: f });
     }
     s.push({ kind: "review" }, { kind: "tour" });
     return s;
-  }, [listings]);
+  }, [listings, criteria, noAreaStep]);
 
   const step = steps[index];
   const progressTotal = steps.length - 2; // welcome and tour aren't counted
@@ -112,6 +142,7 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
       case "business": return businessValid(business);
       case "area": return areaValid(area);
       case "criterion": return selectedFor(step.listingId, step.criterion).length > 0;
+      case "field": return fieldScreenAnswered(step.field, step.screen, fields[step.listingId]?.[step.field.key]);
       default: return true;
     }
   })();
@@ -121,6 +152,14 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
     switch (step.kind) {
       case "business":
         result = await saveBusinessAction(business);
+        // Senior communities skip "Where do you work?": families come to
+        // them, so match within 25 miles of the community's own zip
+        if (result.ok && noAreaStep) {
+          result = await saveServiceAreaAction({
+            deliveryMode: "In-person", counties: [], extraZips: [], statewide: false,
+            radius: { zip: business.zip.trim(), miles: 25 },
+          });
+        }
         break;
       case "about":
         result = await saveAboutAction(about);
@@ -132,6 +171,9 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
         result = await saveListingAction(step.listingId, {
           criteria: { [step.criterion.questionId]: selectedFor(step.listingId, step.criterion) },
         });
+        break;
+      case "field":
+        result = await saveListingAction(step.listingId, { fields: { [step.field.key]: fields[step.listingId]?.[step.field.key] ?? null } });
         break;
       case "details": {
         const vals = fields[step.listingId] ?? {};
@@ -195,7 +237,7 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
             <div className="flex-1"><ProgressBar step={index} total={progressTotal} /></div>
           </div>
           <p className="text-[11px] font-semibold text-forest-600 uppercase tracking-wide">
-            {step.kind === "criterion" || step.kind === "details" ? step.label : "Your partner profile"}
+            {step.kind === "criterion" || step.kind === "details" || step.kind === "field" ? partnerCategoryLabel(step.label) : "Your partner profile"}
           </p>
         </div>
       )}
@@ -203,20 +245,28 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
       <div className="flex-1 overflow-y-auto px-6 pb-4">
         <div className={step.kind === "welcome" ? "max-w-md mx-auto pt-[max(48px,env(safe-area-inset-top))]" : "max-w-md mx-auto pt-1"}>
           {step.kind === "welcome" ? (
-            <Welcome firstName={firstName} company={business.companyName} labels={listings.map((l) => l.label)} />
+            <Welcome firstName={firstName} company={business.companyName} labels={listings.map((l) => partnerCategoryLabel(l.label))} />
           ) : (
             <>
               <h2 className="text-xl font-bold text-gray-900 leading-snug">{title}</h2>
               {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
               <div className="mt-5">
-                {step.kind === "business" && <BusinessFields data={business} onChange={setBusiness} />}
+                {step.kind === "business" && <BusinessFields data={business} onChange={setBusiness} realtor={isRealtor} />}
                 {step.kind === "about" && <AboutFields data={about} onChange={setAbout} />}
-                {step.kind === "area" && <AreaFields data={area} onChange={setArea} defaultZip={business.zip} />}
+                {step.kind === "area" && <AreaFields data={area} onChange={setArea} defaultZip={business.zip} inPersonOnly={alwaysInPerson} />}
                 {step.kind === "criterion" && (
                   <CriterionPicker
                     criterion={step.criterion}
                     selected={selectedFor(step.listingId, step.criterion)}
                     onChange={(v) => setCriteria((c) => ({ ...c, [step.listingId]: { ...(c[step.listingId] ?? {}), [step.criterion.questionId]: v } }))}
+                  />
+                )}
+                {step.kind === "field" && (
+                  <FieldScreenInput
+                    field={step.field}
+                    screen={step.screen}
+                    value={fields[step.listingId]?.[step.field.key]}
+                    onChange={(v) => setFields((f) => ({ ...f, [step.listingId]: { ...(f[step.listingId] ?? {}), [step.field.key]: v } }))}
                   />
                 )}
                 {step.kind === "details" && (
@@ -227,7 +277,7 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
                   />
                 )}
                 {step.kind === "review" && (
-                  <Review business={business} about={about} area={area} listings={listings} criteria={criteria} onEdit={jumpTo} />
+                  <Review business={business} about={about} area={noAreaStep ? null : area} listings={listings} criteria={criteria} onEdit={jumpTo} />
                 )}
               </div>
             </>
@@ -262,7 +312,8 @@ function headingFor(step: Step, company: string, listings: SetupListing[]): { ti
       title: step.criterion.prompt,
       subtitle: `Pick all that apply. Families are asked: "${step.criterion.clientPrompt}"${step.count > 1 ? ` · ${step.index + 1} of ${step.count}` : ""}`,
     };
-    case "details": return { title: `A few ${step.label} details`, subtitle: "Helps families compare and helps us match well." };
+    case "field": return { title: step.screen.title, subtitle: step.screen.subtitle };
+    case "details": return { title: `A few ${partnerCategoryLabel(step.label)} details`, subtitle: "Helps families compare and helps us match well." };
     case "review": return { title: "Look good?", subtitle: listings.length > 1 ? "Here's your profile across your categories." : "Here's your profile." };
     default: return { title: "" };
   }
@@ -305,12 +356,12 @@ function Welcome({ firstName, company, labels }: { firstName: string; company: s
 function Review({ business, about, area, listings, criteria, onEdit }: {
   business: BusinessData;
   about: AboutData;
-  area: AreaData;
+  area: AreaData | null;
   listings: SetupListing[];
   criteria: Record<string, MatchCriteria>;
   onEdit: (kind: Step["kind"], listingId?: string) => void;
 }) {
-  const areaText = area.deliveryMode === "Virtual"
+  const areaText = !area ? "" : area.deliveryMode === "Virtual"
     ? "Virtual"
     : area.areaMode === "radius"
     ? `Within ${area.radiusMiles} miles of ${area.radiusZip}${area.deliveryMode === "Both" ? " and virtual" : ""}`
@@ -325,13 +376,15 @@ function Review({ business, about, area, listings, criteria, onEdit }: {
       <ReviewCard title="About" onEdit={() => onEdit("about")}>
         <p>{about.shortBio || <span className="italic text-gray-400">No description yet</span>}</p>
       </ReviewCard>
-      <ReviewCard title="Where you work" onEdit={() => onEdit("area")}>
-        <p>{areaText}</p>
-      </ReviewCard>
+      {area && (
+        <ReviewCard title="Where you work" onEdit={() => onEdit("area")}>
+          <p>{areaText}</p>
+        </ReviewCard>
+      )}
       {listings.map((l) => {
         const defs = getPartnerCriteria(l.label as PartnerCategory);
         return (
-          <ReviewCard key={l.id} title={l.label} onEdit={() => onEdit("criterion", l.id)}>
+          <ReviewCard key={l.id} title={partnerCategoryLabel(l.label)} onEdit={() => onEdit("criterion", l.id)}>
             {defs.map((c) => {
               const picked = currentCriteriaValues(c, criteria[l.id] ?? {});
               return (
