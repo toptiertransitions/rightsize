@@ -803,6 +803,7 @@ export async function updateItem(
     weightPounds: "WeightPounds",
     weightOunces: "WeightOunces",
     estateSaleId: "EstateSaleId",
+    inPersonOnly: "InPersonOnly",
     // Pay tracking
     commissionPaidAt: "CommissionPaidAt",
     // Approval tracking (auto-set; safe to write via updateItem)
@@ -1329,6 +1330,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     stripePaymentIntentId: toStr(f["StripePaymentIntentId"]) || undefined,
     onlineListingSlug: toStr(f["OnlineListingSlug"]) || undefined,
     storefrontActive: f["StorefrontActive"] === true ? true : undefined,
+    inPersonOnly: f["InPersonOnly"] === true ? true : undefined,
     pickupLocation: toStr(f["PickupLocation"]) || undefined,
     brand: toStr(f["Brand"]) || undefined,
     boxId: toStr(f["BoxId"]) || undefined,

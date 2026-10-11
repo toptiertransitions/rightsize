@@ -32,6 +32,10 @@ export async function POST(
         { status: 409 }
       );
     }
+    // Showcased online but only sold in person: never goes in a cart
+    if (item.inPersonOnly) {
+      return NextResponse.json({ error: "This item is only sold in person, not available online" }, { status: 409 });
+    }
     await updateItem(id, { status: "In Cart" });
     const reservedUntil = new Date(Date.now() + RESERVATION_TTL_SECONDS * 1000).toISOString();
     return NextResponse.json({ reservedUntil });

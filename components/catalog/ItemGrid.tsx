@@ -241,6 +241,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
     brand: item.brand ?? "",
     boxId: item.boxId ?? "",
     estateSaleId: item.estateSaleId ?? "",
+    inPersonOnly: item.inPersonOnly ?? false,
     roomId: item.roomId ?? "",
     assignedVendorId: item.assignedVendorId ?? "",
     quantity: item.quantity ?? 1,
@@ -827,6 +828,20 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                     ? "Copy from the Home Pickup sale in /admin/estates. With status Listed, the item shows on that sale on profoundfinds.com."
                     : "Copy from the estate card in /admin/estates. Used for Dutch auction pricing."}
                 </p>
+                {form.primaryRoute === "Estate Sale" && (
+                  <label className="mt-3 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!form.inPersonOnly}
+                      onChange={e => set("inPersonOnly", e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-forest-600"
+                    />
+                    <span className="text-sm text-gray-800">
+                      <span className="font-medium">In-person only</span>
+                      <span className="block text-xs text-gray-500 mt-0.5">Shows on profoundfinds.com with &ldquo;No Presale, Only Sold In Person&rdquo; instead of a price and Add to Cart. For bulk lots and things that can&apos;t sell online.</span>
+                    </span>
+                  </label>
+                )}
               </div>
             )}
             <div>

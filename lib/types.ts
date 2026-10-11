@@ -425,6 +425,9 @@ export interface Item {
   weightOunces?: number;
   // Estate Sale
   estateSaleId?: string;
+  /** Shown on profoundfinds.com but never sold online (bulk lots, things
+   * that can't ship): no Add to Cart, shows "No Presale, Only Sold In Person" */
+  inPersonOnly?: boolean;
   // Pay tracking
   commissionPaidAt?: string;  // ISO date — set when commission is marked as paid
   // Bulk price drop tracking
