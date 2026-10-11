@@ -7,6 +7,9 @@ import { getSystemRole } from "@/lib/airtable";
 import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissions";
 import { partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import { CategoryPublicToggle } from "./CategoryPublicToggle";
+import { PartnerReviewClient, type ReviewRow } from "./PartnerReviewClient";
+import { MARKETPLACE_LIFECYCLE_STATUSES } from "@/lib/marketplace/types";
+import { isTTTAdmin } from "@/lib/config";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +36,21 @@ export default async function MarketplaceDashboardPage() {
 
   const fillRate = computeProfileFillRate(partners.map((p) => ({ logo: p.logo, aboutUs: p.aboutUs })));
 
-  const needingReview = partners.filter((p) => p.lifecycleStatus === "Submitted");
+  const categoryLabel = new Map(categories.map((c) => [c.id, partnerCategoryLabel(c.label)]));
+  const reviewRows: ReviewRow[] = partners
+    .map((p) => ({
+      id: p.id,
+      companyName: p.companyName,
+      pocName: p.pocName,
+      email: p.email,
+      categories: listings.filter((l) => l.partnerId === p.id).map((l) => categoryLabel.get(l.categoryId) ?? "").filter(Boolean),
+      status: p.lifecycleStatus,
+      updatedAt: p.updatedAt,
+      reviewedAt: p.reviewedAt,
+      reviewedBy: p.reviewedBy,
+    }))
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  const canReview = role === "TTTAdmin" || (!!userId && isTTTAdmin(userId));
   const stalePartners = partners.filter((p) => p.lifecycleStatus === "Live" && daysAgo(p.updatedAt) > STALE_DAYS);
 
   const listingsByCategory = categories.map((c) => ({
@@ -56,8 +73,8 @@ export default async function MarketplaceDashboardPage() {
         {/* Lifecycle counts */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Partners by Lifecycle Stage</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            {(["Prospect", "Invited", "Submitted", "Live", "Paused", "Archived"] as const).map((stage) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {MARKETPLACE_LIFECYCLE_STATUSES.map((stage) => (
               <div key={stage} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <p className="text-2xl font-bold text-white">{byLifecycle[stage] ?? 0}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{stage}</p>
@@ -114,21 +131,10 @@ export default async function MarketplaceDashboardPage() {
           </div>
         </section>
 
-        {/* Needing review */}
+        {/* Partner review: Submitted by default, filter any statuses */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Partners Needing Review ({needingReview.length})</h2>
-          {needingReview.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing in Submitted status.</p>
-          ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800/60">
-              {needingReview.map((p) => (
-                <Link key={p.id} href={`/admin/marketplace/partners/${p.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-800/40 transition-colors">
-                  <span className="text-sm text-gray-200">{p.companyName}</span>
-                  <span className="text-xs text-gray-500">Submitted</span>
-                </Link>
-              ))}
-            </div>
-          )}
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Partner Review</h2>
+          <PartnerReviewClient rows={reviewRows} canReview={canReview} />
         </section>
 
         {/* Stale profiles */}

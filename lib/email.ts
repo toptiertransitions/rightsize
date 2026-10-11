@@ -6744,3 +6744,54 @@ export function buildNonClientSignupSummaryEmail({
 </body>
 </html>`;
 }
+
+// ─── Marketplace partner review (changes requested / not approved) ────────────
+
+/** Sent from the marketplace dashboard when a partner's profile needs changes
+ * or isn't approved. The body is the admin-reviewed (AI-drafted) text. */
+export function buildPartnerReviewEmail({
+  kind,
+  companyName,
+  body,
+  ctaUrl,
+}: {
+  kind: "changes" | "reject";
+  companyName: string;
+  body: string;
+  ctaUrl?: string;
+}): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const paragraphs = body.trim().split(/\n\s*\n/).map((p) =>
+    `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.65;">${esc(p.trim()).replace(/\n/g, "<br>")}</p>`).join("");
+  const eyebrow = kind === "changes" ? "A few updates needed" : "Partner network application";
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f0;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2d4a3e;padding:28px 32px;">
+          <p style="margin:0;color:#C9A96E;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;">Top Tier Transitions &middot; Partner Network</p>
+          <p style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:700;">${esc(eyebrow)}</p>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">${esc(companyName)}</p>
+        </td></tr>
+        <tr><td style="padding:32px 32px 16px;">
+          ${paragraphs}
+          ${ctaUrl ? `
+          <table cellpadding="0" cellspacing="0" style="margin:8px 0 8px;">
+            <tr><td style="background:#2d4a3e;border-radius:10px;">
+              <a href="${ctaUrl}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Update my profile &rarr;</a>
+            </td></tr>
+          </table>
+          <p style="margin:8px 0 0;font-size:13px;color:#6B7280;">When you're done, tap <strong>Resubmit for review</strong> in My Listing.</p>` : ""}
+        </td></tr>
+        <tr><td style="padding:16px 32px 24px;border-top:1px solid #F3F4F6;">
+          <p style="margin:0;font-size:12px;color:#9CA3AF;">Questions? Just reply to this email.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

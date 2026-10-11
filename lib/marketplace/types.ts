@@ -58,7 +58,13 @@ export interface MarketplaceCategory {
 
 export type MarketplaceDeliveryMode = "In-person" | "Virtual" | "Both";
 export type MarketplacePriceTier = "$" | "$$" | "$$$" | "Contact for pricing";
-export type MarketplaceLifecycleStatus = "Prospect" | "Invited" | "Submitted" | "Live" | "Paused" | "Archived";
+export type MarketplaceLifecycleStatus =
+  | "Prospect" | "Invited" | "Submitted" | "Waiting on Partner" | "Rejected" | "Live" | "Paused" | "Archived";
+
+/** Every lifecycle status, in pipeline order */
+export const MARKETPLACE_LIFECYCLE_STATUSES: MarketplaceLifecycleStatus[] = [
+  "Prospect", "Invited", "Submitted", "Waiting on Partner", "Rejected", "Live", "Paused", "Archived",
+];
 export type MarketplacePartnerSource = "Manual" | "CRM" | "Self-signup" | "Import";
 
 export interface MarketplaceServiceArea {
@@ -115,6 +121,10 @@ export interface MarketplacePartner {
   updatedAt: string;
   approvedAt?: string;
   approvedBy?: string;
+  /** Latest review email sent from the dashboard (changes requested or rejected) */
+  reviewFeedback?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 
 export type MarketplaceListingStatus = "Draft" | "Submitted" | "Live" | "Paused";

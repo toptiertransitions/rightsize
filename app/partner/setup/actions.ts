@@ -169,7 +169,9 @@ export async function submitSetupAction(): Promise<Result> {
     for (const l of listings) {
       if (l.status === "Draft") await updateListing(l.id, { status: "Submitted" });
     }
-    if (partner.lifecycleStatus === "Invited" || partner.lifecycleStatus === "Prospect") {
+    // Also the "Resubmit for review" button after we asked for changes
+    const resubmitted = partner.lifecycleStatus === "Waiting on Partner";
+    if (partner.lifecycleStatus === "Invited" || partner.lifecycleStatus === "Prospect" || resubmitted) {
       await updatePartner(partner.id, { lifecycleStatus: "Submitted" });
     }
 
@@ -183,9 +185,9 @@ export async function submitSetupAction(): Promise<Result> {
       await new Resend(resendKey).emails.send({
         from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
         to: admins,
-        subject: `Partner profile ready for review: ${partner.companyName}`,
+        subject: `${resubmitted ? "Partner resubmitted after changes" : "Partner profile ready for review"}: ${partner.companyName}`,
         html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;">
-          <p style="font-size:16px;font-weight:700;color:#111827;">${esc(partner.companyName)} finished their partner setup</p>
+          <p style="font-size:16px;font-weight:700;color:#111827;">${esc(partner.companyName)} ${resubmitted ? "made the requested changes and resubmitted" : "finished their partner setup"}</p>
           <p style="font-size:14px;color:#4B5563;line-height:1.6;">${esc(contact.name || partner.pocName)} completed their profile and matching criteria for <strong>${cats}</strong>. Review it and move the listings to Live when it looks good.</p>
           <p><a href="${link}" style="display:inline-block;background:#2d4a3e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">Review partner</a></p>
         </div>`,

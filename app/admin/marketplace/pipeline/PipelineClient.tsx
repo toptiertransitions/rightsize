@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { MarketplacePartner, MarketplaceLifecycleStatus } from "@/lib/marketplace/types";
 import { movePartnerLifecycleAction, importProspectsFromCrmAction } from "../actions";
 
-const COLUMNS: MarketplaceLifecycleStatus[] = ["Prospect", "Invited", "Submitted", "Live", "Paused"];
+const COLUMNS: MarketplaceLifecycleStatus[] = ["Prospect", "Invited", "Submitted", "Waiting on Partner", "Rejected", "Live", "Paused"];
 
 interface Card {
   partner: MarketplacePartner;
@@ -55,7 +55,7 @@ export function PipelineClient({ cards: initialCards, categories }: { cards: Car
       </div>
       {importMsg && <p className="text-xs text-gray-500 mb-4">{importMsg}</p>}
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-flow-col auto-cols-[minmax(180px,1fr)] gap-3 overflow-x-auto pb-2">
         {COLUMNS.map((col) => {
           const colCards = cards.filter((c) => c.partner.lifecycleStatus === col);
           return (

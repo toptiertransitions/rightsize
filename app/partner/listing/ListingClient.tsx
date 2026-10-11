@@ -12,7 +12,7 @@ import {
   type BusinessData, type AboutData, type AreaData,
 } from "../setup/SetupFields";
 import { inPersonOnly, partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
-import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, requestCategoryChangeAction } from "../setup/actions";
+import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, requestCategoryChangeAction, submitSetupAction } from "../setup/actions";
 
 interface ListingData {
   id: string;
@@ -28,10 +28,14 @@ const STATUS_COPY: Partial<Record<MarketplaceLifecycleStatus, { text: string; cl
   Submitted: { text: "Under review. We'll let you know when your listing is live.", cls: "bg-amber-50 border-amber-200 text-amber-800" },
   Live: { text: "Live on Rightsize. Families in your area can be matched with you.", cls: "bg-forest-50 border-forest-200 text-forest-800" },
   Paused: { text: "Paused. You won't be matched with new families right now.", cls: "bg-gray-50 border-gray-200 text-gray-700" },
+  "Waiting on Partner": { text: "We asked for a few updates. Make the changes below, then resubmit for review.", cls: "bg-sky-50 border-sky-200 text-sky-900" },
+  Rejected: { text: "Your profile wasn't approved for the partner network. Questions? Reply to our email.", cls: "bg-gray-50 border-gray-200 text-gray-700" },
 };
 
-export function ListingClient({ status, business: b0, about: a0, area: ar0, listings }: {
+export function ListingClient({ status, reviewFeedback, business: b0, about: a0, area: ar0, listings }: {
   status: MarketplaceLifecycleStatus;
+  /** Our latest review note, shown while changes are requested */
+  reviewFeedback?: string;
   business: BusinessData;
   about: AboutData;
   area: AreaData;
@@ -42,13 +46,44 @@ export function ListingClient({ status, business: b0, about: a0, area: ar0, list
   const [about, setAbout] = useState(a0);
   const [area, setArea] = useState(ar0);
   const banner = STATUS_COPY[status];
+  const [resubmitting, setResubmitting] = useState(false);
+  const [resubmitError, setResubmitError] = useState("");
+
+  async function resubmit() {
+    setResubmitting(true);
+    setResubmitError("");
+    const res = await submitSetupAction();
+    setResubmitting(false);
+    if (!res.ok) setResubmitError(res.error);
+    else router.refresh();
+  }
 
   return (
     <div className="max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-900">My Listing</h1>
       <p className="text-sm text-gray-500 mt-1">What families see, and who we match you with. Changes save to your listing right away.</p>
 
-      {banner && <div className={cn("mt-5 rounded-xl border px-4 py-3 text-sm", banner.cls)}>{banner.text}</div>}
+      {banner && (
+        <div className={cn("mt-5 rounded-xl border px-4 py-3 text-sm", banner.cls)}>
+          <p>{banner.text}</p>
+          {status === "Waiting on Partner" && (
+            <>
+              {reviewFeedback && (
+                <div className="mt-3 rounded-lg bg-white/70 border border-sky-100 px-3 py-2 text-gray-700 whitespace-pre-line">{reviewFeedback}</div>
+              )}
+              <button
+                type="button"
+                onClick={resubmit}
+                disabled={resubmitting}
+                className="mt-3 inline-flex items-center justify-center h-10 px-4 rounded-xl bg-forest-600 hover:bg-forest-700 text-white font-semibold disabled:opacity-60"
+              >
+                {resubmitting ? "Resubmitting…" : "Resubmit for review"}
+              </button>
+              {resubmitError && <p className="mt-2 text-red-600">{resubmitError}</p>}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 space-y-5">
         <Card title="Business" valid={businessValid(business)} onSave={() => saveBusinessAction(business)} onSaved={() => router.refresh()}>

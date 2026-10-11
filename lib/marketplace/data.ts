@@ -186,6 +186,9 @@ function mapPartner(rec: AirtableRec): MarketplacePartner {
     updatedAt: str(f["UpdatedAt"]),
     approvedAt: str(f["ApprovedAt"]) || undefined,
     approvedBy: str(f["ApprovedBy"]) || undefined,
+    reviewFeedback: str(f["ReviewFeedback"]) || undefined,
+    reviewedAt: str(f["ReviewedAt"]) || undefined,
+    reviewedBy: str(f["ReviewedBy"]) || undefined,
   };
 }
 
@@ -266,6 +269,9 @@ interface UpdatePartnerData extends Partial<Omit<CreatePartnerData, "crmReferral
   localVendorId?: string | null;
   approvedAt?: string;
   approvedBy?: string;
+  reviewFeedback?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 
 export async function updatePartner(id: string, data: UpdatePartnerData): Promise<void> {
@@ -298,10 +304,15 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
   if (data.localVendorId !== undefined) fields["LocalVendorId"] = data.localVendorId ? [data.localVendorId] : [];
   if (data.approvedAt !== undefined) fields["ApprovedAt"] = data.approvedAt;
   if (data.approvedBy !== undefined) fields["ApprovedBy"] = data.approvedBy;
+  if (data.reviewFeedback !== undefined) fields["ReviewFeedback"] = data.reviewFeedback;
+  if (data.reviewedAt !== undefined) fields["ReviewedAt"] = data.reviewedAt;
+  if (data.reviewedBy !== undefined) fields["ReviewedBy"] = data.reviewedBy;
 
   const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_PARTNERS, "", {
     method: "PATCH",
-    body: JSON.stringify({ records: [{ id, fields }] }),
+    // typecast: lets a new LifecycleStatus option ("Waiting on Partner",
+    // "Rejected") be created on first use
+    body: JSON.stringify({ records: [{ id, fields }], typecast: true }),
   });
   if (!res.ok) throw new Error(`updatePartner failed: ${await res.text()}`);
 }

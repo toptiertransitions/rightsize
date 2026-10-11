@@ -19,6 +19,7 @@ export default async function PartnerListingPage() {
   return (
     <ListingClient
       status={partner.lifecycleStatus}
+      reviewFeedback={partner.reviewFeedback}
       business={{
         companyName: partner.companyName,
         pocName: partner.pocName || contact.name,
