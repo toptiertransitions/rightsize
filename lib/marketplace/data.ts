@@ -86,6 +86,7 @@ function mapCategory(rec: AirtableRec): MarketplaceCategory {
     completenessRules: parseJson(f["CompletenessRulesJson"], { requiredFieldKeys: [] }),
     referralPolicy,
     allowsVirtual: bool(f["AllowsVirtual"]),
+    publicVisible: bool(f["PublicVisible"]),
     referralFeeConfirmedBy: str(f["ReferralFeeConfirmedBy"]) || undefined,
     referralFeeConfirmedAt: str(f["ReferralFeeConfirmedAt"]) || undefined,
   };
@@ -118,6 +119,7 @@ interface UpdateCategoryData {
   completenessRules?: { requiredFieldKeys: string[] };
   referralPolicy?: Partial<MarketplaceReferralPolicy>;
   allowsVirtual?: boolean;
+  publicVisible?: boolean;
   referralFeeConfirmedBy?: string;
   referralFeeConfirmedAt?: string;
 }
@@ -137,6 +139,7 @@ export async function updateCategory(id: string, data: UpdateCategoryData): Prom
   if (data.referralPolicy?.disclosureText !== undefined) fields["DisclosureText"] = data.referralPolicy.disclosureText;
   if (data.referralPolicy?.creditToSeniorAllowed !== undefined) fields["CreditToSeniorAllowed"] = data.referralPolicy.creditToSeniorAllowed;
   if (data.allowsVirtual !== undefined) fields["AllowsVirtual"] = data.allowsVirtual;
+  if (data.publicVisible !== undefined) fields["PublicVisible"] = data.publicVisible;
   if (data.referralFeeConfirmedBy !== undefined) fields["ReferralFeeConfirmedBy"] = data.referralFeeConfirmedBy;
   if (data.referralFeeConfirmedAt !== undefined) fields["ReferralFeeConfirmedAt"] = data.referralFeeConfirmedAt;
 

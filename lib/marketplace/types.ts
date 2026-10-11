@@ -48,6 +48,10 @@ export interface MarketplaceCategory {
   completenessRules: { requiredFieldKeys: string[] };
   referralPolicy: MarketplaceReferralPolicy;
   allowsVirtual: boolean;
+  /** Shown to clients (Rightsize Partners page and the public marketplace).
+   * Set by admins with the toggle on the marketplace dashboard; matching
+   * decides who's actually shown within a visible category. */
+  publicVisible: boolean;
   referralFeeConfirmedBy?: string;
   referralFeeConfirmedAt?: string;
 }

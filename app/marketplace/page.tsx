@@ -16,12 +16,13 @@ export default async function MarketplacePage() {
 
   const visible = categories
     .map((c) => ({ category: c, liveCount: listings.filter((l) => l.categoryId === c.id && l.status === "Live").length }))
-    .filter((c) => c.liveCount >= c.category.minLiveListings)
+    // Public on/off is set per category on the admin marketplace dashboard
+    .filter((c) => c.category.publicVisible)
     .sort((a, b) => a.category.sortOrder - b.category.sortOrder);
 
   const comingSoon = categories
     .map((c) => ({ category: c, liveCount: listings.filter((l) => l.categoryId === c.id && l.status === "Live").length }))
-    .filter((c) => c.liveCount < c.category.minLiveListings)
+    .filter((c) => !c.category.publicVisible)
     .sort((a, b) => a.category.sortOrder - b.category.sortOrder);
 
   return (

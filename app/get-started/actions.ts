@@ -13,6 +13,8 @@ import {
   updateTenant,
   upsertUser,
   getPartnerSelectionsForTenant,
+  getRoomsForTenant,
+  getLocalVendorById,
   createRoom,
 } from "@/lib/airtable";
 import { slugify } from "@/lib/utils";
@@ -25,7 +27,10 @@ import { getAllPartners } from "@/lib/marketplace/data";
 import { attachReferralPartner, toReferralOption } from "@/lib/partners/referral";
 import { HOW_HEARD_OPTIONS, type ReferralPartnerOption } from "@/lib/partners/referralShared";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
-import { sendNewUserAdminNotification } from "@/lib/admin-notifications";
+import { sendNewUserAdminNotification, sendNonClientSignupSummary } from "@/lib/admin-notifications";
+import { buildSignupSummarySections } from "@/lib/onboarding/summary";
+import { placeForZip } from "@/lib/marketplace/serviceRadius";
+import { after } from "next/server";
 import type { RoomType, Tenant } from "@/lib/types";
 import { getAllBrands, getBrandByCode, getBrandBySlug } from "@/lib/brands/data";
 import { attachBrandToUser, claimJoinBrand } from "@/lib/brands/attach";
@@ -335,6 +340,42 @@ export async function submitStep7(tenantId: string, input: Step7Input): Promise<
     onboardingCurrentStep: 8,
   }));
   logOnboardingEvent("step_completed", { step: 7, tenantId: tenant.id, howHeard: parsed.howHeard });
+
+  // The signup questions are done: tell TTT Admins who just joined and
+  // everything they answered. Once per project (going back to this step and
+  // saving again doesn't resend), after the response so it never slows them.
+  if ((tenant.onboardingCurrentStep ?? 0) < 8) {
+    after(() => sendSignupSummary(userId, tenant.id).catch((e) => console.error("[onboarding] signup summary email failed:", e)));
+  }
+}
+
+async function sendSignupSummary(userId: string, tenantId: string): Promise<void> {
+  const [tenant, user] = await Promise.all([
+    getTenantById(tenantId),
+    clerkClient().then((c) => c.users.getUser(userId)),
+  ]);
+  if (!tenant) return;
+  const [rooms, community, brands] = await Promise.all([
+    getRoomsForTenant(tenantId).catch(() => []),
+    tenant.destinationCommunity ? getLocalVendorById(tenant.destinationCommunity).catch(() => null) : Promise.resolve(null),
+    tenant.communityBrandId ? getAllBrands().catch(() => []) : Promise.resolve([]),
+  ]);
+  const email = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? "";
+  const phone = user.phoneNumbers.find((p) => p.id === user.primaryPhoneNumberId)?.phoneNumber ?? tenant.clientPhone ?? undefined;
+  const place = tenant.currentZip ? placeForZip(tenant.currentZip) : null;
+  await sendNonClientSignupSummary({
+    name: [user.firstName, user.lastName].filter(Boolean).join(" "),
+    email,
+    phone: phone || undefined,
+    location: tenant.currentZip ? `${place ?? "Zip"} ${tenant.currentZip}`.replace("Zip Zip", "Zip") : "Location not given",
+    signedUpAt: new Date(user.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago", dateStyle: "medium", timeStyle: "short" }) + " CT",
+    sections: buildSignupSummarySections(tenant, {
+      rooms,
+      destinationCommunityName: community?.vendorName,
+      brandName: brands.find((b) => b.id === tenant.communityBrandId)?.displayName,
+    }),
+    tenantId,
+  });
 }
 
 // Community branding from the referral answer: when the senior community or

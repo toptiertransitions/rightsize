@@ -104,8 +104,8 @@ function CategoryEditor({ category, canEdit }: { category: MarketplaceCategory; 
             <input className="h-9 px-3 rounded-lg border border-gray-700 bg-gray-950 text-sm text-white w-full" value={basic.label} onChange={(e) => setBasic({ ...basic, label: e.target.value })} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Min. Live Listings to Show Publicly</label>
-            <input type="number" className="h-9 px-3 rounded-lg border border-gray-700 bg-gray-950 text-sm text-white w-full" value={basic.minLiveListings} onChange={(e) => setBasic({ ...basic, minLiveListings: Number(e.target.value) })} />
+            <p className="block text-xs font-medium text-gray-400 mb-1.5">Shown to clients</p>
+            <p className="text-sm text-gray-300 h-9 flex items-center">{category.publicVisible ? "Public" : "Hidden"} <span className="text-gray-500 ml-1">(switch on the Dashboard)</span></p>
           </div>
         </div>
         <label className="block text-xs font-medium text-gray-400 mb-1.5">Description</label>

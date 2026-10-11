@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getReferralContactById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail } from "./email";
+import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -964,4 +964,33 @@ export async function sendDocumentAbuseAlert(params: {
   } catch (e) {
     console.error("[sendDocumentAbuseAlert] failed:", e);
   }
+}
+
+/** "Internal Alert - New Non Client User Summary" to TTT Admins only, once a
+ * self-serve client has answered the signup questions. Best-effort. */
+export async function sendNonClientSignupSummary(params: {
+  name: string;
+  email: string;
+  phone?: string;
+  location: string;
+  signedUpAt: string;
+  sections: Array<{ title: string; rows: NonClientSummaryRow[] }>;
+  tenantId: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+  const adminEmails = await getAdminEmails().catch(() => [] as string[]);
+  if (adminEmails.length === 0) return;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildNonClientSignupSummaryEmail({
+    ...params,
+    projectUrl: `${appUrl}/admin/impersonate?tenantId=${encodeURIComponent(params.tenantId)}`,
+  });
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    subject: `Internal Alert - New Non Client User Summary: ${params.name || params.email}`,
+    html,
+  });
 }

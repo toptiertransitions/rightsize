@@ -1,7 +1,12 @@
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { MarketplaceNav } from "./MarketplaceNav";
 import { getAllCategories, getAllPartners, getAllListingsAdmin } from "@/lib/marketplace/data";
-import { computeProfileFillRate, listingsByCategoryBelowThreshold } from "@/lib/marketplace/completeness";
+import { computeProfileFillRate } from "@/lib/marketplace/completeness";
+import { auth } from "@clerk/nextjs/server";
+import { getSystemRole } from "@/lib/airtable";
+import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissions";
+import { partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
+import { CategoryPublicToggle } from "./CategoryPublicToggle";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -14,17 +19,19 @@ function daysAgo(iso: string): number {
 }
 
 export default async function MarketplaceDashboardPage() {
-  const [categories, partners, listings] = await Promise.all([
+  const { userId } = await auth();
+  const [categories, partners, listings, role] = await Promise.all([
     getAllCategories(),
     getAllPartners(),
     getAllListingsAdmin(),
+    userId ? getSystemRole(userId).catch(() => null) : Promise.resolve(null),
   ]);
+  const canToggle = hasCapability(role as MarketplaceRole, "editCategories");
 
   const byLifecycle: Record<string, number> = {};
   for (const p of partners) byLifecycle[p.lifecycleStatus] = (byLifecycle[p.lifecycleStatus] ?? 0) + 1;
 
   const fillRate = computeProfileFillRate(partners.map((p) => ({ logo: p.logo, aboutUs: p.aboutUs })));
-  const belowThreshold = listingsByCategoryBelowThreshold(listings, categories);
 
   const needingReview = partners.filter((p) => p.lifecycleStatus === "Submitted");
   const stalePartners = partners.filter((p) => p.lifecycleStatus === "Live" && daysAgo(p.updatedAt) > STALE_DAYS);
@@ -76,7 +83,11 @@ export default async function MarketplaceDashboardPage() {
 
         {/* Live vs threshold per category */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Live Listings vs. Threshold, by Category</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Categories: Live Listings and Public Status</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Public turns a category on for clients (their Rightsize Partners page and the public marketplace). Within a public category, matching (zip codes, services, and the rest) decides which partners a client sees.
+            {!canToggle && " Only TTT Admins can change this."}
+          </p>
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -84,33 +95,23 @@ export default async function MarketplaceDashboardPage() {
                   <th className="px-4 py-2.5">Category</th>
                   <th className="px-4 py-2.5">Live</th>
                   <th className="px-4 py-2.5">Total Listings</th>
-                  <th className="px-4 py-2.5">Threshold</th>
-                  <th className="px-4 py-2.5">Public Status</th>
+                  <th className="px-4 py-2.5">Public</th>
                 </tr>
               </thead>
               <tbody>
-                {listingsByCategory.map(({ category, live, total }) => {
-                  const belowMin = live < category.minLiveListings;
-                  return (
-                    <tr key={category.id} className="border-b border-gray-800/60 last:border-0">
-                      <td className="px-4 py-2.5 text-gray-200">{category.label}</td>
-                      <td className="px-4 py-2.5 text-gray-300 tabular-nums">{live}</td>
-                      <td className="px-4 py-2.5 text-gray-400 tabular-nums">{total}</td>
-                      <td className="px-4 py-2.5 text-gray-400 tabular-nums">{category.minLiveListings}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${belowMin ? "bg-amber-900/40 text-amber-300" : "bg-green-900/40 text-green-300"}`}>
-                          {belowMin ? "Coming soon" : "Visible"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {listingsByCategory.map(({ category, live, total }) => (
+                  <tr key={category.id} className="border-b border-gray-800/60 last:border-0">
+                    <td className="px-4 py-2.5 text-gray-200">{partnerCategoryLabel(category.label)}</td>
+                    <td className="px-4 py-2.5 text-gray-300 tabular-nums">{live}</td>
+                    <td className="px-4 py-2.5 text-gray-400 tabular-nums">{total}</td>
+                    <td className="px-4 py-2.5">
+                      <CategoryPublicToggle categoryId={category.id} label={partnerCategoryLabel(category.label)} initial={category.publicVisible} canEdit={canToggle} />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-          {belowThreshold.length > 0 && (
-            <p className="text-xs text-gray-500 mt-2">{belowThreshold.length} of {categories.length} categories are below their visibility threshold and show as "Coming soon" publicly.</p>
-          )}
         </section>
 
         {/* Needing review */}

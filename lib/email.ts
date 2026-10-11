@@ -6677,3 +6677,70 @@ export function buildMarketplacePartnerInviteEmail({
 </body>
 </html>`;
 }
+
+// ─── Internal: new self-serve (non-TTT) client summary ────────────────────────
+
+export interface NonClientSummaryRow { label: string; value: string }
+
+/** "Internal Alert - New Non Client User Summary": everything a new self-serve
+ * client told us during signup, sent to TTT Admins once the questions are done. */
+export function buildNonClientSignupSummaryEmail({
+  name,
+  email,
+  phone,
+  location,
+  signedUpAt,
+  sections,
+  projectUrl,
+}: {
+  name: string;
+  email: string;
+  phone?: string;
+  location: string;
+  signedUpAt: string;
+  sections: Array<{ title: string; rows: NonClientSummaryRow[] }>;
+  projectUrl: string;
+}): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const row = (r: NonClientSummaryRow) => `
+    <tr>
+      <td style="padding:8px 12px 8px 0;font-size:13px;color:#6B7280;vertical-align:top;width:42%;border-bottom:1px solid #F3F4F6;">${esc(r.label)}</td>
+      <td style="padding:8px 0;font-size:13px;color:#111827;vertical-align:top;border-bottom:1px solid #F3F4F6;">${esc(r.value || "—")}</td>
+    </tr>`;
+  const section = (s: { title: string; rows: NonClientSummaryRow[] }) => s.rows.length === 0 ? "" : `
+    <p style="margin:24px 0 6px;font-size:11px;font-weight:700;color:#2d4a3e;text-transform:uppercase;letter-spacing:0.08em;">${esc(s.title)}</p>
+    <table width="100%" cellpadding="0" cellspacing="0">${s.rows.map(row).join("")}</table>`;
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;padding:32px 12px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2d4a3e;padding:26px 28px;">
+          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Internal Alert &middot; Top Tier Transitions</p>
+          <p style="margin:6px 0 0;font-size:21px;font-weight:700;color:#ffffff;">New Non Client User Summary</p>
+          <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">A self-serve client just finished signing up on Rightsize.</p>
+        </td></tr>
+        <tr><td style="padding:24px 28px 28px;">
+          <p style="margin:0;font-size:20px;font-weight:700;color:#111827;">${esc(name || "New client")}</p>
+          <p style="margin:4px 0 0;font-size:14px;color:#4B5563;">
+            <a href="mailto:${esc(email)}" style="color:#2d4a3e;">${esc(email)}</a>${phone ? ` &middot; ${esc(phone)}` : ""}
+          </p>
+          <p style="margin:2px 0 0;font-size:13px;color:#6B7280;">${esc(location)} &middot; Signed up ${esc(signedUpAt)}</p>
+          ${sections.map(section).join("")}
+          <table cellpadding="0" cellspacing="0" style="margin:26px 0 0;">
+            <tr><td style="background:#2d4a3e;border-radius:8px;">
+              <a href="${projectUrl}" style="display:inline-block;padding:12px 22px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Open their project &rarr;</a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:14px 28px;background:#f9fafb;border-top:1px solid #F3F4F6;">
+          <p style="margin:0;font-size:11px;color:#9CA3AF;">Rightsize &middot; Top Tier Transitions &middot; Internal use only. Sent to TTT Admins.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

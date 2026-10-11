@@ -17,6 +17,7 @@ import { getPartnerDirectory } from "@/lib/partners/queries";
 import { buildReferralPartner } from "@/lib/partners/referral";
 import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
+import { getAllCategories } from "@/lib/marketplace/data";
 import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { sendZeroMatchAdminNotification } from "@/lib/admin-notifications";
 import { isPartnerRequestComplete, migrateLegacyAnswerKeys } from "@/lib/partners/questions";
@@ -173,10 +174,19 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     partnersById[TTT_MOVE_MANAGER_PARTNER_ID] = buildTTTMoveManagerPartner();
 
     const ordered = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
+    // Categories an admin has switched off (Public toggle on the marketplace
+    // dashboard) aren't shown. Move Manager is Top Tier's own service and a
+    // referral-locked category is the client's own partner, so both stay.
+    const hiddenCategories = new Set(
+      (await getAllCategories().catch(() => []))
+        .filter((c) => !c.publicVisible)
+        .map((c) => c.label as PartnerCategory)
+    );
+    const isShown = (c: PartnerCategory) => c === "Move Manager" || lockedCategories.includes(c) || !hiddenCategories.has(c);
     // A referral-locked category is always shown, whether or not the client
     // picked it as a service interest during signup.
-    const active = [...ordered.active, ...ordered.greyed.filter((c) => lockedCategories.includes(c))];
-    const greyed = ordered.greyed.filter((c) => !lockedCategories.includes(c));
+    const active = [...ordered.active, ...ordered.greyed.filter((c) => lockedCategories.includes(c))].filter(isShown);
+    const greyed = ordered.greyed.filter((c) => !lockedCategories.includes(c)).filter(isShown);
     const partnerRequests = await getPartnerRequestsForTenant(tenantId).catch(() => []);
     const initialRequestAnswers: Partial<Record<PartnerCategory, Record<string, string | string[]>>> = {};
     const initialIntroRequests: Partial<Record<PartnerCategory, { partnerId: string; requestedAt: string }[]>> = {};

@@ -421,6 +421,23 @@ export async function updateCategoryBasicInfoAction(
   }
 }
 
+/** Dashboard on/off switch: whether clients see this category at all
+ * (Rightsize Partners page for self-serve clients and the public
+ * marketplace). Within a visible category, matching decides who shows. */
+export async function setCategoryPublicAction(categoryId: string, publicVisible: boolean): Promise<ActionResult> {
+  const role = await requireMarketplaceRole();
+  if (!hasCapability(role, "editCategories")) return { ok: false, error: "Not permitted — TTTAdmin only." };
+  try {
+    await updateCategory(categoryId, { publicVisible });
+    revalidatePath("/admin/marketplace");
+    revalidatePath("/marketplace", "layout");
+    revalidatePath("/partners");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Update failed" };
+  }
+}
+
 export async function updateCategoryReferralPolicyAction(
   categoryId: string,
   policy: Partial<MarketplaceReferralPolicy>,

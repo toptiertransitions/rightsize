@@ -41,7 +41,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
   ]);
   const liveListings = allListings.filter((l) => l.categoryId === category.id && l.status === "Live");
 
-  if (liveListings.length < category.minLiveListings) {
+  // Public on/off is set per category on the admin marketplace dashboard
+  if (!category.publicVisible) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-6 text-center">
         <div>

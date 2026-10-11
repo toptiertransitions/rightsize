@@ -21,9 +21,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
 
   const partnerById = new Map(partners.map((p) => [p.id, p]));
-  const visibleCategories = categories.filter(
-    (c) => listings.filter((l) => l.categoryId === c.id && l.status === "Live").length >= c.minLiveListings
-  );
+  const visibleCategories = categories.filter((c) => c.publicVisible);
 
   const entries: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/marketplace`, changeFrequency: "weekly", priority: 0.8 },
