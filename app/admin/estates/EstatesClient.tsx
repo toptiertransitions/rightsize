@@ -220,30 +220,29 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
   const [sentResult, setSentResult] = useState<{ sent: number; total: number } | null>(null);
   const [err, setErr] = useState("");
 
+  // A promo for the whole shopper list, so it never reads like an order
+  // email and never includes the street address (buyers get pickup details
+  // from Email Details; in-person sale addresses go out the morning of).
   function buildBrief(): string {
-    const lines: string[] = [`Write a pickup announcement email for the "${estate.name}" estate sale.`];
-    if (estate.pickupWindowsJson) {
-      try {
-        const dates = (JSON.parse(estate.pickupWindowsJson) as { date: string; startTime: string; endTime: string }[]).filter(d => d.date);
-        if (dates.length > 0) {
-          lines.push(`Pickup windows: ${dates.map(d => [
-            new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
-            d.startTime ? `from ${d.startTime}` : "",
-            d.endTime ? `to ${d.endTime}` : "",
-          ].filter(Boolean).join(" ")).join("; ")}`);
-        }
-      } catch { /* ignore bad json */ }
-    } else if (estate.pickupWindowStart) {
-      const parts = [estate.pickupWindowStart];
-      if (estate.pickupWindowStartTime) parts.push(`at ${estate.pickupWindowStartTime}`);
-      if (estate.pickupWindowEnd && estate.pickupWindowEnd !== estate.pickupWindowStart) {
-        parts.push(`through ${estate.pickupWindowEnd}`);
-        if (estate.pickupWindowEndTime) parts.push(`at ${estate.pickupWindowEndTime}`);
-      }
-      lines.push(`Pickup window: ${parts.join(" ")}`);
+    const fmtDate = (d: string) =>
+      new Date(d.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    const kind = estate.saleType === "In-Person" ? "in-person estate sale" : estate.saleType === "Home Pickup" ? "home pickup sale" : "online estate sale";
+    const lines: string[] = [
+      `Write a sale announcement email inviting our shopper list to the "${estate.name}" ${kind}.`,
+      "This goes to everyone on our list, most of whom haven't bought anything yet: invite them to come shop. Do not say \"your pickup\", \"your order\" or \"your purchase\", and do not imply they bought something.",
+      "Do not include a street address. Mention the town only.",
+    ];
+    if (estate.saleStartDate) {
+      const start = `${fmtDate(estate.saleStartDate)}${estate.saleStartTime ? ` at ${estate.saleStartTime}` : ""}`;
+      const end = estate.saleEndDate ? `${fmtDate(estate.saleEndDate)}${estate.saleEndTime ? ` at ${estate.saleEndTime}` : ""}` : "";
+      lines.push(`Sale dates: ${end ? `${start} through ${end}` : start}`);
     }
-    if (estate.pickupAddress) lines.push(`Pickup address: ${estate.pickupAddress}`);
-    if (estate.pickupNotes) lines.push(`Pickup notes: ${estate.pickupNotes}`);
+    if (estate.cityRegion) lines.push(`Town / area: ${estate.cityRegion}`);
+    if (estate.saleType !== "In-Person" && estate.dropPercent) {
+      lines.push(`Prices drop ${estate.dropPercent}% every ${estate.dropIntervalHours} hours until sold, so mention that waiting is a gamble.`);
+    }
+    if (estate.description) lines.push(`About the sale: ${estate.description.slice(0, 800)}`);
+    lines.push("End with an invitation to browse the sale on profoundfinds.com (the email shows a button to the sale page).");
     if (note.trim()) lines.push(`Additional info from organizer: ${note.trim()}`);
     return lines.join("\n");
   }
@@ -288,7 +287,8 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
   }
 
   async function handleSend() {
-    if (!confirm("Send this pickup announcement to all eligible shoppers?")) return;
+    if (addressLeak) { setErr("Remove the street address before sending. It's only shared with buyers."); return; }
+    if (!confirm("Send this sale announcement to all eligible shoppers?")) return;
     setSending(true); setErr("");
     try {
       const res = await fetch("/api/admin/estate-blast", {
@@ -303,34 +303,26 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
   }
 
   const hasDraft = !!(subject && body);
-
-  // Parse pickup dates for the summary display
-  let pickupDateRows: { date: string; startTime: string; endTime: string }[] = [];
-  if (estate.pickupWindowsJson) {
-    try { pickupDateRows = (JSON.parse(estate.pickupWindowsJson) as typeof pickupDateRows).filter(d => d.date); } catch { /* ignore */ }
-  }
+  // The street address stays private (buyers get it from Email Details)
+  const street = (estate.pickupAddress || "").trim().toLowerCase();
+  const addressLeak = street.length > 4 && `${subject}\n${body}`.toLowerCase().includes(street.split(",")[0]);
 
   return (
     <div className="mt-3 border-t border-gray-700 pt-4" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Pickup Announcement — CRM Blast</p>
+        <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Sale Announcement — CRM Blast</p>
         <button onClick={onClose} className="text-gray-500 hover:text-white text-xs transition-colors">✕ Close</button>
       </div>
 
-      {/* Pickup details summary */}
-      {(estate.pickupAddress || pickupDateRows.length > 0 || estate.pickupWindowStart || estate.pickupNotes) && (
-        <div className="mb-3 px-3 py-2 bg-gray-800 rounded-lg text-xs text-gray-400 space-y-0.5">
-          {estate.pickupAddress && <p><span className="text-gray-300">Address:</span> {estate.pickupAddress}</p>}
-          {pickupDateRows.length > 0
-            ? pickupDateRows.map((d, i) => (
-                <p key={i}><span className="text-gray-300">Pickup:</span> {d.date}{d.startTime ? ` · ${d.startTime}` : ""}{d.endTime ? ` – ${d.endTime}` : ""}</p>
-              ))
-            : estate.pickupWindowStart && (
-                <p><span className="text-gray-300">Pickup:</span> {estate.pickupWindowStart}{estate.pickupWindowStartTime ? ` · ${estate.pickupWindowStartTime}` : ""}</p>
-              )}
-          {estate.pickupNotes && <p><span className="text-gray-300">Notes:</span> {estate.pickupNotes}</p>}
-        </div>
-      )}
+      {/* What the announcement covers (no street address: buyers get that from Email Details) */}
+      <div className="mb-3 px-3 py-2 bg-gray-800 rounded-lg text-xs text-gray-400 space-y-0.5">
+        <p><span className="text-gray-300">Goes to:</span> every eligible shopper on the CRM list, to invite them to the sale</p>
+        {estate.saleStartDate && (
+          <p><span className="text-gray-300">Sale:</span> {estate.saleStartDate.slice(0, 10)}{estate.saleStartTime ? ` · ${estate.saleStartTime}` : ""}{estate.saleEndDate ? ` → ${estate.saleEndDate.slice(0, 10)}${estate.saleEndTime ? ` · ${estate.saleEndTime}` : ""}` : ""}</p>
+        )}
+        {estate.cityRegion && <p><span className="text-gray-300">Town:</span> {estate.cityRegion}</p>}
+        <p className="text-gray-500">The street address is left out. Buyers get pickup details from Email Details.</p>
+      </div>
 
       {/* Custom note */}
       <div className="mb-3">
@@ -340,7 +332,7 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
         <textarea
           value={note}
           onChange={e => setNote(e.target.value)}
-          placeholder="e.g. Early access for VIP buyers from 9–10am, bring your own boxes, items not picked up by deadline will be donated..."
+          placeholder="e.g. Highlights: mid-century furniture and a full workshop, early access for VIPs from 9–10am, bring your own boxes..."
           rows={2}
           className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
         />
@@ -374,6 +366,11 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-amber-500 resize-y"
             />
           </div>
+          {addressLeak && (
+            <p className="text-xs text-amber-300 bg-amber-900/30 border border-amber-800 rounded-lg px-3 py-2">
+              This draft includes the street address. Take it out before sending; it&apos;s only shared with buyers.
+            </p>
+          )}
           <div className="flex items-center gap-3 flex-wrap pt-1">
             <button
               onClick={handleTest}
@@ -870,7 +867,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); setPickupBlastEstateId(id => id === estate.id ? null : estate.id); }}
-                      title="Send pickup announcement to all shoppers"
+                      title="Send a sale announcement to all shoppers"
                       className={`text-xs px-2 py-1 rounded border flex items-center gap-1 transition-colors ${pickupBlastEstateId === estate.id ? "bg-amber-800/60 border-amber-600 text-amber-300" : "text-gray-500 hover:text-amber-400 border-gray-700 hover:border-amber-600"}`}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
