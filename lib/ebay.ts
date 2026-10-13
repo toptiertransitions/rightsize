@@ -3,6 +3,7 @@ import { URL } from "node:url";
 import type { Item } from "@/lib/types";
 import { EBAY_CATEGORY_MAP } from "@/lib/ebay-categories";
 import { categoryToGroup } from "@/lib/categories";
+import { prepareEbayListing } from "@/lib/ebay-prep";
 
 const EBAY_API_BASE = "https://api.ebay.com";
 const EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token";
@@ -269,7 +270,12 @@ async function resolveEpsImageUrls(item: Item, token: string): Promise<string[]>
 }
 
 // ── Payload builders ──────────────────────────────────────────────────────────
-function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
+function buildInventoryItem(
+  item: Item,
+  epsImageUrls?: string[],
+  /** From prepareEbayListing: allowed condition and filled item specifics */
+  overrides?: { condition?: string; aspects?: Record<string, string[]> }
+): object {
   let imageUrls: string[];
   if (epsImageUrls !== undefined) {
     imageUrls = epsImageUrls;
@@ -361,6 +367,9 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
     aspects["Item Width"]  = [String(item.depthInches  ?? 1)];
     aspects["Item Height"] = [String(item.heightInches ?? 1)];
   }
+
+  if (overrides?.aspects) Object.assign(aspects, overrides.aspects);
+  if (overrides?.condition) condition = overrides.condition;
 
   const qty = Math.max(item.quantity ?? 1, 1);
 
@@ -461,10 +470,51 @@ export function friendlyEbayError(message: string, item: Item): string {
   return message;
 }
 
+// ── AI gap-filling before an eBay call ────────────────────────────────────────
+
+async function ebayGetJson(url: string): Promise<unknown | null> {
+  const appToken = await getAppToken();
+  if (!appToken) return null;
+  const res = await ebayFetch(url, { method: "GET", headers: { "Authorization": `Bearer ${appToken}`, "Accept-Language": "en-US" } });
+  if (!res.ok) return null;
+  return res.json().catch(() => null);
+}
+
+/** Checks the category's required item specifics and allowed conditions and
+ * fills gaps (description, specifics) with AI. Never blocks a listing: on any
+ * failure it returns the item unchanged. */
+async function prepareInventoryItem(item: Item, categoryId: string, epsImageUrls: string[]) {
+  const draft = buildInventoryItem(item) as { condition: string; product: { aspects?: Record<string, string[]> } };
+  let prepared = item;
+  let generatedDescription: string | undefined;
+  let overrides: { condition?: string; aspects?: Record<string, string[]> } | undefined;
+  try {
+    const prep = await prepareEbayListing({
+      item, categoryId, condition: draft.condition, aspects: draft.product.aspects ?? {}, getJson: ebayGetJson,
+    });
+    if (prep.notes.length) console.log(`[ebay-prep] ${item.barcodeNumber ?? item.id}: ${prep.notes.join("; ")}`);
+    generatedDescription = prep.generatedDescription;
+    if (generatedDescription) prepared = { ...item, listingDescriptionEbay: generatedDescription };
+    overrides = { condition: prep.condition, aspects: prep.aspects };
+  } catch (e) {
+    console.error("[ebay-prep] skipped:", e);
+  }
+  return {
+    body: buildInventoryItem(prepared, epsImageUrls.length ? epsImageUrls : undefined, overrides),
+    generatedDescription,
+  };
+}
+
+/** eBay sometimes answers "System error. Please try again later." (5xx);
+ * those succeed on a retry. */
+function isTransientEbayError(status: number, text: string): boolean {
+  return status >= 500 || /system error|try again later/i.test(text);
+}
+
 // ── Publish new listing ───────────────────────────────────────────────────────
 export async function publishEbayListing(
   item: Item
-): Promise<{ listingId: string; offerId: string }> {
+): Promise<{ listingId: string; offerId: string; generatedDescription?: string }> {
   if (!item.valueMid || item.valueMid <= 0) {
     throw new Error("Set a target price before publishing to eBay.");
   }
@@ -500,13 +550,14 @@ export async function publishEbayListing(
     "Accept-Language":  "en-US",
   };
 
-  // 1. Create / overwrite inventory item
+  // 1. Create / overwrite inventory item (after AI fills any gaps)
+  const prepared = await prepareInventoryItem(item, categoryId, epsImageUrls);
   const invRes = await ebayFetch(
     `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     {
       method:  "PUT",
       headers: jsonHeaders,
-      body:    JSON.stringify(buildInventoryItem(item, epsImageUrls.length ? epsImageUrls : undefined)),
+      body:    JSON.stringify(prepared.body),
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -549,25 +600,28 @@ export async function publishEbayListing(
     }
   }
 
-  // 3. Publish offer → gets listing ID
-  const pubRes = await ebayFetch(
-    `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
-    {
-      method:  "POST",
-      headers: jsonHeaders,
+  // 3. Publish offer → gets listing ID (retrying eBay's temporary errors)
+  let pubRes = await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`, { method: "POST", headers: jsonHeaders });
+  for (let attempt = 1; attempt <= 2 && !pubRes.ok; attempt++) {
+    const text = await pubRes.text();
+    if (!isTransientEbayError(pubRes.status, text)) {
+      throw new Error(`eBay publish error (${pubRes.status}): ${text}`);
     }
-  );
+    console.log(`[ebay] publish temporary error, retry ${attempt}`);
+    await new Promise((r) => setTimeout(r, 2500 * attempt));
+    pubRes = await ebayFetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`, { method: "POST", headers: jsonHeaders });
+  }
   if (!pubRes.ok) {
     const text = await pubRes.text();
     throw new Error(`eBay publish error (${pubRes.status}): ${text}`);
   }
   const { listingId } = await pubRes.json() as { listingId: string };
 
-  return { listingId, offerId };
+  return { listingId, offerId, generatedDescription: prepared.generatedDescription };
 }
 
 // ── Update existing listing ───────────────────────────────────────────────────
-export async function updateEbayListing(item: Item): Promise<void> {
+export async function updateEbayListing(item: Item): Promise<{ generatedDescription?: string }> {
   if (!item.ebayOfferId) {
     throw new Error("No eBay offer ID on record — cannot update.");
   }
@@ -605,12 +659,13 @@ export async function updateEbayListing(item: Item): Promise<void> {
     ?? "29223";
 
   // Update inventory item (title, description, condition, photos, dimensions)
+  const prepared = await prepareInventoryItem(item, categoryId, epsImageUrls);
   const invRes = await ebayFetch(
     `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     {
       method:  "PUT",
       headers: jsonHeaders,
-      body:    JSON.stringify(buildInventoryItem(item, epsImageUrls.length ? epsImageUrls : undefined)),
+      body:    JSON.stringify(prepared.body),
     }
   );
   if (!invRes.ok && invRes.status !== 204) {
@@ -631,6 +686,7 @@ export async function updateEbayListing(item: Item): Promise<void> {
     const text = await offerRes.text();
     throw new Error(`eBay offer update error (${offerRes.status}): ${text}`);
   }
+  return { generatedDescription: prepared.generatedDescription };
 }
 
 // ── Health check (used by daily cron) ────────────────────────────────────────

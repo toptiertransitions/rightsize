@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// Image transfer + AI gap-filling + eBay calls can take a little while
+export const maxDuration = 120;
 import { auth } from "@clerk/nextjs/server";
 import { isTTTAdmin } from "@/lib/config";
 import { getItemById, updateItem } from "@/lib/airtable";
@@ -61,10 +64,12 @@ export async function POST(req: NextRequest) {
   await updateItem(itemId, { ebayListingStatus: "Pending" }).catch(() => {});
 
   try {
-    const { listingId, offerId } = await publishEbayListing(item);
+    const { listingId, offerId, generatedDescription } = await publishEbayListing(item);
     const today = ctDateStr(new Date().toISOString());
 
     const updated = await updateItem(itemId, {
+      // Keep the AI-written description on the item so staff can see/edit it
+      ...(generatedDescription ? { listingDescriptionEbay: generatedDescription } : {}),
       ebayListingId:     listingId,
       ebayOfferId:       offerId,
       ebayListingStatus: "Active",
@@ -97,10 +102,11 @@ export async function PATCH(req: NextRequest) {
   if (!item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
 
   try {
-    await updateEbayListing(item);
+    const { generatedDescription } = await updateEbayListing(item);
     const today = ctDateStr(new Date().toISOString());
 
     const updated = await updateItem(itemId, {
+      ...(generatedDescription ? { listingDescriptionEbay: generatedDescription } : {}),
       ebayLastSyncedAt: today,
       ebaySyncError:    "",
     });
