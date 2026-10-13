@@ -21,9 +21,11 @@ interface Props {
   clientLabel?: string;
   lockedCategories: PartnerCategory[];
   canRemoveReferral: boolean;
+  /** Categories locked to the client's destination senior community. */
+  destinationCategories?: PartnerCategory[];
 }
 
-export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral }: Props) {
+export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [] }: Props) {
   const router = useRouter();
   const [selections, setSelections] = useState(initialSelections);
   const [lockedCategories, setLockedCategories] = useState(initialLocked);
@@ -140,6 +142,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         filesEnabled
         tenantId={tenantId}
         lockedCategories={lockedCategories}
+        destinationCategories={destinationCategories}
       />
 
       <DocumentsSection tenantId={tenantId} canMatch={canEdit || isStaffPreview} selectedPartners={selectedPartners} />
@@ -173,7 +176,8 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
             onDeselect={() => handleDeselect(category)}
             onLearnMore={(partnerId) => setDetailPartnerId(partnerId)}
             sectionRef={(el) => { if (el) sectionRefs.current[category] = el; }}
-            locked={lockedCategories.includes(category)}
+            locked={lockedCategories.includes(category) || destinationCategories.includes(category)}
+            lockReason={destinationCategories.includes(category) ? "destination" : "referral"}
             canRemoveReferral={canRemoveReferral}
             removingReferral={removingReferral === category}
             onRemoveReferral={() => handleRemoveReferral(category)}

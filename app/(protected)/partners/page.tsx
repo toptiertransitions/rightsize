@@ -12,11 +12,13 @@ import {
   getPartnerRequestsForTenant,
   setPartnerRequestStatus,
   getPartnerSelectionsForTenant,
+  upsertPartnerSelection,
 } from "@/lib/airtable";
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { buildReferralPartner } from "@/lib/partners/referral";
 import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
+import { findDestinationCommunityPartner } from "@/lib/partners/destinationCommunity";
 import { getAllCategories } from "@/lib/marketplace/data";
 import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { sendZeroMatchAdminNotification } from "@/lib/admin-notifications";
@@ -307,11 +309,30 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     matchesByCategory[category] = [{ partner: referralPartners[category]!, rank: 1, matchedLocation: "area" }];
   }
 
+  // TTT client moving into a senior community we know (Plan page or CRM
+  // opportunity): that community is their Community partner, not an open
+  // marketplace. It replaces the category's listings and is saved as the
+  // selection. A referral-locked Community partner is left as is.
+  const destinationCategories: PartnerCategory[] = [];
+  if (tenant.isTTT === true && !lockedCategories.includes("Community")) {
+    const destPartner = findDestinationCommunityPartner(tenant, tenantCommunity, directory);
+    if (destPartner) {
+      matchesByCategory["Community"] = [{ partner: destPartner, rank: 1, matchedLocation: "area" }];
+      destinationCategories.push("Community");
+      if (selections["Community"] !== destPartner.id) {
+        selections["Community"] = destPartner.id;
+        await upsertPartnerSelection({ tenantId, category: "Community", partnerId: destPartner.id, selectedBy: userId })
+          .catch((e) => console.error("[partners] destination community selection failed:", e));
+      }
+    }
+  }
+
   return (
     <PartnersPageClient
       tenantId={tenantId}
       lockedCategories={lockedCategories}
       canRemoveReferral={canRemoveReferral}
+      destinationCategories={destinationCategories}
       matchesByCategory={matchesByCategory}
       initialSelections={selections}
       partnersById={partnersById}

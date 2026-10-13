@@ -15,12 +15,15 @@ interface Props {
   removing: boolean;
   onRemove: () => void;
   onLearnMore?: () => void;
+  /** Why this partner is locked in: they referred the client, or it's the
+   * senior community the client is moving into. */
+  reason?: "referral" | "destination";
 }
 
 // The one partner shown for a referral-locked category — the partner who
 // referred this client. No Select/Change controls; only a TTTAdmin sees the
 // remove action, which reopens the marketplace for this category.
-export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemove, removing, onRemove, onLearnMore }: Props) {
+export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemove, removing, onRemove, onLearnMore, reason = "referral" }: Props) {
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -66,7 +69,9 @@ export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemov
           )}
 
           <p className="text-xs text-gray-500 leading-relaxed">
-            They referred you to Top Tier, so they&rsquo;re your {categoryLabel.toLowerCase()} partner.
+            {reason === "destination"
+              ? <>You&rsquo;re moving here, so they&rsquo;re your {categoryLabel.toLowerCase()} partner.</>
+              : <>They referred you to Top Tier, so they&rsquo;re your {categoryLabel.toLowerCase()} partner.</>}
           </p>
 
           {onLearnMore && (
@@ -83,7 +88,7 @@ export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemov
         </div>
       </div>
 
-      {canRemove && (
+      {canRemove && reason === "referral" && (
         <div className="mt-4 pt-3 border-t border-forest-100">
           {confirming ? (
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">

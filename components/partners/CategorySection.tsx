@@ -27,9 +27,11 @@ interface Props {
   canRemoveReferral?: boolean;
   removingReferral?: boolean;
   onRemoveReferral?: () => void;
+  /** Set with `locked` when the lock is the client's destination community. */
+  lockReason?: "referral" | "destination";
 }
 
-export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label, locked, canRemoveReferral, removingReferral, onRemoveReferral }: Props) {
+export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label, locked, canRemoveReferral, removingReferral, onRemoveReferral, lockReason }: Props) {
   const slug = category.toLowerCase().replace(/\s+/g, "-");
 
   return (
@@ -50,6 +52,7 @@ export function CategorySection({ tenantId, category, matches, selectedPartnerId
           removing={!!removingReferral}
           onRemove={() => onRemoveReferral?.()}
           onLearnMore={() => onLearnMore(matches[0].partner.id)}
+          reason={lockReason}
         />
       ) : matches.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 p-8 text-center">

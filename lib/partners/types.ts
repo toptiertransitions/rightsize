@@ -7,6 +7,9 @@ export { PARTNER_CATEGORIES } from "@/lib/types";
 // raw LocalVendor directory record with derived rating and project-count data.
 export interface PartnerProfile {
   id: string;
+  /** The partner's LocalVendors record, when it has one (communities link to
+   * the same record a project's destinationCommunity points at). */
+  localVendorId?: string;
   vendorName: string;
   category: PartnerCategory;
   logo?: string;

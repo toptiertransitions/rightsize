@@ -93,6 +93,7 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
 
     return {
       id: partner.id,
+      localVendorId: legacyId || undefined,
       // Realtors list as "Brokerage | Town | Name or team"
       vendorName: category.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
       category: category.label as PartnerCategory,
