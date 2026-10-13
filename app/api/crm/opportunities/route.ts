@@ -158,7 +158,29 @@ export async function PATCH(req: NextRequest) {
           if ("seniorCommunityName" in data) patch.seniorCommunityName = opportunity.seniorCommunityName ?? null;
         }
         await updateTenant(opportunity.tenantId, patch);
-      } catch { /* non-fatal */ }
+      } catch (e) { console.error("[opportunities] address sync to project failed:", e); }
+    }
+
+    // First project link (e.g. "Create Project" from the opportunity): copy the opportunity's
+    // origin, destination and community onto the project, filling only fields the project
+    // doesn't already have so nothing entered on the project is overwritten.
+    if (isFirstProjectLink && opportunity.tenantId) {
+      try {
+        const tenant = await getTenantById(opportunity.tenantId);
+        if (tenant) {
+          const fields = [
+            "address", "addressUnitNumber", "city", "state", "zip",
+            "destAddress", "destAddressUnitNumber", "destCity", "destState", "destZip",
+            "seniorCommunityName",
+          ] as const;
+          const patch: Record<string, unknown> = {};
+          for (const f of fields) {
+            const fromOpp = (opportunity[f] ?? "").trim();
+            if (fromOpp && !(tenant[f] ?? "").trim()) patch[f] = fromOpp;
+          }
+          if (Object.keys(patch).length > 0) await updateTenant(opportunity.tenantId, patch);
+        }
+      } catch (e) { console.error("[opportunities] first-link sync to project failed:", e); }
     }
 
     // When an opportunity transitions to Lost, auto-mark the linked project as a Lost Deal
