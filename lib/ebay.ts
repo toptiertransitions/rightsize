@@ -309,12 +309,11 @@ function buildInventoryItem(item: Item, epsImageUrls?: string[]): object {
     pkg.weight = { value: Math.round(weightLbs * 100) / 100, unit: "POUND" };
   }
   if (hasDimensions) {
-    pkg.dimensions = {
-      length: item.heightInches ?? 1,
-      width:  item.widthInches  ?? 1,
-      height: item.depthInches  ?? 1,
-      unit:   "INCH",
-    };
+    // Carriers measure the longest side as the length (girth is 2x the other
+    // two), so send the sides longest-first. Sending height as the length
+    // made big pieces look far over the carrier's size limit.
+    const [length, width, height] = packageSides(item);
+    pkg.dimensions = { length, width, height, unit: "INCH" };
   }
 
   // Required item specifics per Rightsize category → eBay Antiques/Art tree.
@@ -413,11 +412,53 @@ function buildOffer(item: Item, sku: string, categoryId: string): object {
     listingDuration:      "GTC",
     merchantLocationKey:  process.env.EBAY_MERCHANT_LOCATION_KEY ?? "TTT_CHICAGO",
     listingPolicies: {
-      fulfillmentPolicyId: process.env.EBAY_FULFILLMENT_POLICY_ID!,
+      fulfillmentPolicyId: fulfillmentPolicyFor(item),
       paymentPolicyId:     process.env.EBAY_PAYMENT_POLICY_ID!,
       returnPolicyId:      process.env.EBAY_RETURN_POLICY_ID!,
     },
   };
+}
+
+// ── Package size ──────────────────────────────────────────────────────────────
+
+/** Item dimensions as package sides, longest first (inches) */
+export function packageSides(item: Pick<Item, "widthInches" | "heightInches" | "depthInches">): [number, number, number] {
+  const sides = [item.widthInches ?? 0, item.heightInches ?? 0, item.depthInches ?? 0].map((n) => (n > 0 ? n : 1));
+  sides.sort((a, b) => b - a);
+  return [sides[0], sides[1], sides[2]];
+}
+
+/** Length + girth (longest side + 2x each other side), the carriers' size measure */
+export function lengthPlusGirth(item: Pick<Item, "widthInches" | "heightInches" | "depthInches">): number {
+  const [l, w, h] = packageSides(item);
+  return Math.round((l + 2 * w + 2 * h) * 10) / 10;
+}
+
+// The standard shipping policy's carrier service tops out at 130 in. length
+// + girth. When an oversize policy is set up in eBay (EBAY_OVERSIZE_
+// FULFILLMENT_POLICY_ID), bigger items use it automatically.
+const STANDARD_MAX_LENGTH_PLUS_GIRTH = 130;
+
+function fulfillmentPolicyFor(item: Item): string {
+  const oversize = process.env.EBAY_OVERSIZE_FULFILLMENT_POLICY_ID;
+  const hasDims = (item.widthInches ?? 0) > 0 || (item.heightInches ?? 0) > 0 || (item.depthInches ?? 0) > 0;
+  if (oversize && hasDims && lengthPlusGirth(item) > STANDARD_MAX_LENGTH_PLUS_GIRTH) return oversize;
+  return process.env.EBAY_FULFILLMENT_POLICY_ID!;
+}
+
+/** Turns eBay's package-size rejection into a message staff can act on. */
+export function friendlyEbayError(message: string, item: Item): string {
+  const size = message.match(/girth[^]*?exceeds the limit of ([\d.]+) ?in/i);
+  if (size) {
+    const service = message.match(/"value":"([^"]*(?:UPS|USPS|FedEx)[^"]*)"/i)?.[1];
+    return `Too big for standard shipping: ${lengthPlusGirth(item)} in. length + girth, and ${service ? `${service} allows` : "the shipping service allows"} up to ${size[1]} in. ` +
+      `This item needs an oversize shipping policy (or local pickup) on eBay. Check the dimensions too: ${packageSides(item).join(" × ")} in.`;
+  }
+  const weight = message.match(/weight[^]*?exceeds the limit of ([\d.]+) ?(lb|pound)/i);
+  if (weight) {
+    return `Too heavy for standard shipping: the shipping service allows up to ${weight[1]} lb. This item needs an oversize shipping policy (or local pickup) on eBay.`;
+  }
+  return message;
 }
 
 // ── Publish new listing ───────────────────────────────────────────────────────

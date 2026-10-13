@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { isTTTAdmin } from "@/lib/config";
 import { getItemById, updateItem } from "@/lib/airtable";
 import { getAdminEmails } from "@/lib/admin-notifications";
-import { publishEbayListing, updateEbayListing } from "@/lib/ebay";
+import { friendlyEbayError, publishEbayListing, updateEbayListing } from "@/lib/ebay";
 import { buildEbayListingEmail } from "@/lib/email";
 import { Resend } from "resend";
 import { ctDateStr } from "@/lib/date-ct";
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ item: updated });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = friendlyEbayError(err instanceof Error ? err.message : String(err), item);
     await updateItem(itemId, { ebayListingStatus: "Error", ebaySyncError: msg }).catch(() => {});
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ item: updated });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = friendlyEbayError(err instanceof Error ? err.message : String(err), item);
     await updateItem(itemId, { ebayListingStatus: "Error", ebaySyncError: msg }).catch(() => {});
     return NextResponse.json({ error: msg }, { status: 500 });
   }
