@@ -1,5 +1,6 @@
 // Home Pickup sales: one-off sales of FB/Marketplace-route items picked up
-// from a single home address in a single window. Client-safe helpers shared
+// from a single home address, on one or more days, each with its own window
+// (pickupWindowsJson; the single-window fields hold the first and last day). Client-safe helpers shared
 // by the storefront API, the auto-close cron, and admin.
 import type { Estate, Item } from "./types";
 
@@ -33,17 +34,37 @@ export function chicagoToUtcMs(date: string, minutes: number): number {
   return guess + (guess - asChicago);
 }
 
-/** When the pickup window closes. Falls back to end of the pickup day when
- * no end time is set; null when there's no pickup date at all. */
-export function homePickupEndsAtMs(estate: Pick<Estate, "pickupWindowStart" | "pickupWindowEndTime">): number | null {
-  if (!estate.pickupWindowStart) return null;
-  const end = parseTimeMinutes(estate.pickupWindowEndTime) ?? 24 * 60 - 1;
-  return chicagoToUtcMs(estate.pickupWindowStart, end);
+export interface PickupWindow { date: string; startTime: string; endTime: string }
+
+type WindowFields = Pick<Estate, "pickupWindowStart" | "pickupWindowEnd" | "pickupWindowStartTime" | "pickupWindowEndTime"> & { pickupWindowsJson?: string };
+
+/** Every pickup day with its window, in date order. Uses the multi-day list
+ * when present, else the single-window fields. */
+export function homePickupWindows(estate: WindowFields): PickupWindow[] {
+  if (estate.pickupWindowsJson) {
+    try {
+      const parsed = JSON.parse(estate.pickupWindowsJson) as PickupWindow[];
+      const days = (Array.isArray(parsed) ? parsed : []).filter((w) => w && w.date);
+      if (days.length > 0) return [...days].sort((a, b) => a.date.localeCompare(b.date));
+    } catch { /* fall through to the single window */ }
+  }
+  if (!estate.pickupWindowStart) return [];
+  return [{ date: estate.pickupWindowStart.slice(0, 10), startTime: estate.pickupWindowStartTime ?? "", endTime: estate.pickupWindowEndTime ?? "" }];
+}
+
+/** When the last pickup window closes. Falls back to end of that day when no
+ * end time is set; null when there's no pickup date at all. */
+export function homePickupEndsAtMs(estate: WindowFields): number | null {
+  const days = homePickupWindows(estate);
+  const last = days[days.length - 1];
+  if (!last) return null;
+  const end = parseTimeMinutes(last.endTime) ?? 24 * 60 - 1;
+  return chicagoToUtcMs(last.date, end);
 }
 
 /** Live = published (Active) and the pickup window hasn't ended. */
 export function isHomePickupLive(
-  estate: Pick<Estate, "saleType" | "status" | "pickupWindowStart" | "pickupWindowEndTime">,
+  estate: Pick<Estate, "saleType" | "status"> & WindowFields,
   now = Date.now()
 ): boolean {
   if (estate.saleType !== "Home Pickup" || estate.status !== "Active") return false;

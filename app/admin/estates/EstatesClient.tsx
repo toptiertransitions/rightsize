@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Estate, EstateStatus, EstateSaleType, Tenant, EstateSaleShopper, EstateSaleShopperSource, Item } from "@/lib/types";
 import { BlastComposer } from "./BlastComposer";
 import { withInPersonPickupWindow } from "@/lib/estate-pickup";
+import { homePickupWindows } from "@/lib/home-pickup";
 import { computeDutchPrice } from "@/lib/estate-utils";
 
 // Convert 24h "HH:mm" (from <input type="time">) to "H:MM AM/PM" for storage.
@@ -85,11 +86,14 @@ const EMPTY_FORM: Omit<Estate, "id" | "airtableId" | "createdAt"> = {
 };
 
 function homePickupLabel(estate: Estate): string {
-  if (!estate.pickupWindowStart) return "date not set";
-  const [y, m, d] = estate.pickupWindowStart.slice(0, 10).split("-").map(Number);
-  const day = new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const window = [estate.pickupWindowStartTime, estate.pickupWindowEndTime].filter(Boolean).join(" to ");
-  return window ? `${day}, ${window}` : day;
+  const days = homePickupWindows(estate);
+  if (days.length === 0) return "date not set";
+  return days.map((w) => {
+    const [y, m, d] = w.date.slice(0, 10).split("-").map(Number);
+    const day = new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const window = [w.startTime, w.endTime].filter(Boolean).join(" to ");
+    return window ? `${day}, ${window}` : day;
+  }).join(" · ");
 }
 
 // ─── Home Pickup: pickup-day detail ──────────────────────────────────────────
@@ -522,35 +526,44 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
     if (!form.slug.trim()) { setError("Slug is required"); return; }
     const isHomePickup = form.saleType === "Home Pickup";
     if (isHomePickup) {
+      const days = pickupDates.filter(d => d.date || d.startTime || d.endTime);
       const missing = [
         !form.pickupAddress.trim() && "street",
         !form.pickupCity?.trim() && "city",
-        !form.pickupWindowStart && "pickup date",
-        !form.pickupWindowStartTime && "start time",
-        !form.pickupWindowEndTime && "end time",
+        days.length === 0 && "a pickup day",
       ].filter(Boolean);
       if (missing.length) { setError(`Home Pickup needs: ${missing.join(", ")}`); return; }
-      if (to24h(form.pickupWindowEndTime ?? "") <= to24h(form.pickupWindowStartTime ?? "")) {
-        setError("Pickup end time must be after the start time"); return;
+      for (const d of days) {
+        if (!d.date || !d.startTime || !d.endTime) { setError("Each pickup day needs a date, start time and end time"); return; }
+        if (to24h(d.endTime) <= to24h(d.startTime)) { setError(`Pickup end time must be after the start time (${d.date})`); return; }
       }
+      if (new Set(days.map(d => d.date)).size !== days.length) { setError("Each pickup day can only be listed once"); return; }
     }
     setSaving(true);
     setError("");
     try {
       const validPickupDates = pickupDates.filter(d => d.date);
-      // Home Pickup: one address, one date, one window. The sale dates mirror
-      // the pickup window so everything keyed off sale dates (sale-ended
-      // checks, admin tools) lines up, and the town drives the public card.
+      // Home Pickup: one address, one or more days each with its own window
+      // (pickupWindowsJson). The single-window fields and the sale dates span
+      // first day start to last day end, so everything keyed off them
+      // (sale-ended checks, auto-close, admin tools) lines up, and the town
+      // drives the public card.
+      const hpDays = [...validPickupDates].sort((a, b) => a.date.localeCompare(b.date));
+      const firstDay = hpDays[0];
+      const lastDay = hpDays[hpDays.length - 1];
       const body = isHomePickup
         ? {
             ...form,
             cityRegion: form.pickupCity?.trim() ?? "",
-            saleStartDate: form.pickupWindowStart,
-            saleEndDate: form.pickupWindowStart,
-            saleStartTime: form.pickupWindowStartTime,
-            saleEndTime: form.pickupWindowEndTime,
-            pickupWindowEnd: form.pickupWindowStart,
-            pickupWindowsJson: "",
+            saleStartDate: firstDay.date,
+            saleEndDate: lastDay.date,
+            saleStartTime: firstDay.startTime,
+            saleEndTime: lastDay.endTime,
+            pickupWindowStart: firstDay.date,
+            pickupWindowStartTime: firstDay.startTime,
+            pickupWindowEnd: lastDay.date,
+            pickupWindowEndTime: lastDay.endTime,
+            pickupWindowsJson: JSON.stringify(hpDays),
             shippingAvailable: false,
             hideSoldItems: false,
           }
@@ -1142,31 +1155,67 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
                       </Field>
                     </div>
                   </div>
-                  <Field label="Pickup Date & Window (CST) *">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        type="date"
-                        className={`${inputCls} flex-1 min-w-[150px] appearance-none [&::-webkit-date-and-time-value]:text-left`}
-                        value={form.pickupWindowStart}
-                        onChange={e => setForm(f => ({ ...f, pickupWindowStart: e.target.value }))}
-                      />
-                      <input
-                        type="time"
-                        className={`${inputCls} w-28 appearance-none [&::-webkit-date-and-time-value]:text-left`}
-                        value={to24h(form.pickupWindowStartTime ?? "")}
-                        onChange={e => setForm(f => ({ ...f, pickupWindowStartTime: to12h(e.target.value) }))}
-                        aria-label="Pickup start time"
-                      />
-                      <span className="text-gray-500 text-sm">to</span>
-                      <input
-                        type="time"
-                        className={`${inputCls} w-28 appearance-none [&::-webkit-date-and-time-value]:text-left`}
-                        value={to24h(form.pickupWindowEndTime ?? "")}
-                        onChange={e => setForm(f => ({ ...f, pickupWindowEndTime: to12h(e.target.value) }))}
-                        aria-label="Pickup end time"
-                      />
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="block text-xs font-medium text-gray-400">Pickup Days & Windows (CST) *</span>
+                      {pickupDates.length < 7 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const prev = pickupDates[pickupDates.length - 1];
+                            setPickupDates(d => [...d, { date: "", startTime: prev?.startTime || "", endTime: prev?.endTime || "" }]);
+                          }}
+                          className="text-xs text-amber-300 hover:text-amber-200"
+                        >
+                          + Add another day
+                        </button>
+                      )}
                     </div>
-                  </Field>
+                    <div className="space-y-2">
+                      {pickupDates.map((pd, i) => (
+                        <div key={i} className="rounded-lg border border-gray-700/70 bg-gray-900/40 p-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 w-12 shrink-0">Day {i + 1}</span>
+                            <input
+                              type="date"
+                              className={`${inputCls} flex-1 min-w-0 appearance-none [&::-webkit-date-and-time-value]:text-left`}
+                              value={pd.date}
+                              onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
+                              aria-label={`Pickup day ${i + 1} date`}
+                            />
+                            {pickupDates.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setPickupDates(d => d.filter((_, j) => j !== i))}
+                                className="text-gray-500 hover:text-red-400 text-sm px-1 shrink-0"
+                                aria-label={`Remove pickup day ${i + 1}`}
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pl-14">
+                            <input
+                              type="time"
+                              className={`${inputCls} min-w-0 appearance-none [&::-webkit-date-and-time-value]:text-left`}
+                              value={to24h(pd.startTime)}
+                              onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, startTime: to12h(e.target.value) } : x))}
+                              aria-label={`Pickup day ${i + 1} start time`}
+                            />
+                            <span className="text-gray-500 text-sm">to</span>
+                            <input
+                              type="time"
+                              className={`${inputCls} min-w-0 appearance-none [&::-webkit-date-and-time-value]:text-left`}
+                              value={to24h(pd.endTime)}
+                              onChange={e => setPickupDates(d => d.map((x, j) => j === i ? { ...x, endTime: to12h(e.target.value) } : x))}
+                              aria-label={`Pickup day ${i + 1} end time`}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Each day can have its own hours. The sale stays open online until the last day&apos;s window ends.</p>
+                  </div>
                   <Field label="Pickup Instructions (optional)">
                     <textarea
                       className={inputCls}
