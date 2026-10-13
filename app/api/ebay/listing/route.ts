@@ -9,6 +9,9 @@ import { Resend } from "resend";
 import { ctDateStr } from "@/lib/date-ct";
 import type { Item } from "@/lib/types";
 
+// Used when an item has no weight entered and is listed on eBay
+const DEFAULT_EBAY_WEIGHT_LBS = 50;
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function fireListingEmail(item: Item, listingId: string) {
@@ -43,8 +46,16 @@ export async function POST(req: NextRequest) {
   const { itemId } = await req.json() as { itemId: string };
   if (!itemId) return NextResponse.json({ error: "itemId required" }, { status: 400 });
 
-  const item = await getItemById(itemId).catch(() => null);
+  let item = await getItemById(itemId).catch(() => null);
   if (!item) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+
+  // eBay's calculated shipping needs a weight. When none is entered, List It
+  // (and bulk List Online) fills in a 50 lb default and saves it on the item
+  // in Rightsize, so it's visible and can be corrected later.
+  const hasWeight = (item.weightPounds ?? 0) > 0 || (item.weightOunces ?? 0) > 0;
+  if (!hasWeight) {
+    item = await updateItem(itemId, { weightPounds: DEFAULT_EBAY_WEIGHT_LBS, weightOunces: 0 }).catch(() => ({ ...item!, weightPounds: DEFAULT_EBAY_WEIGHT_LBS, weightOunces: 0 }));
+  }
 
   // Mark pending immediately so the UI can show a spinner
   await updateItem(itemId, { ebayListingStatus: "Pending" }).catch(() => {});
