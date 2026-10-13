@@ -308,7 +308,11 @@ function SortIcon({ col, sortCol, sortDir }: { col: SortCol; sortCol: SortCol; s
 }
 
 // ─── Bulk action bar ──────────────────────────────────────────────────────────
-function BulkBar({ count, onClear, onBulkStatus, onBulkShare, onBulkStaffSeller, onBulkStaffCommission, onBulkStaffTime, onBulkSoldDate, staffMembers }: {
+function BulkBar({ count, onClear, onBulkStatus, onBulkShare, onBulkStaffSeller, onBulkStaffCommission, onBulkStaffTime, onBulkSoldDate, staffMembers, onBulkListOnline, listableCount, listing }: {
+  /** Lists every selected item online (eBay), like each row's List It */
+  onBulkListOnline: () => void;
+  listableCount: number;
+  listing: boolean;
   count: number; onClear: () => void;
   onBulkStatus: (s: ItemStatus) => void;
   onBulkShare: (pct: number) => void;
@@ -329,6 +333,16 @@ function BulkBar({ count, onClear, onBulkStatus, onBulkShare, onBulkStaffSeller,
   return (
     <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-forest-900/40 border border-forest-700/50 rounded-xl">
       <span className="text-sm font-semibold text-forest-300">{count} selected</span>
+      {sep}
+
+      <button
+        onClick={onBulkListOnline}
+        disabled={listing || listableCount === 0}
+        title={listableCount === 0 ? "None of the selected items can be listed (already on eBay, sold or discarded)" : undefined}
+        className="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        {listing ? "Listing…" : `List Online (${listableCount})`}
+      </button>
       {sep}
 
       {/* Status */}
@@ -443,6 +457,48 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
 
   function updateItemInList(updated: Item) {
     setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+  }
+
+  // ── Bulk "List Online": the row's List It, one selected item at a time ──
+  const [bulkList, setBulkList] = useState<{
+    running: boolean; done: number; total: number; current: string;
+    listed: number; skipped: number; failed: { name: string; error: string }[];
+  } | null>(null);
+
+  const isListable = (i: Item) => !i.ebayListingId && i.status !== "Sold" && i.status !== "Discarded";
+
+  async function bulkListOnline(ids: string[]) {
+    const chosen = items.filter((i) => ids.includes(i.id));
+    const toList = chosen.filter(isListable);
+    const skipped = chosen.length - toList.length;
+    if (toList.length === 0) return;
+    if (!window.confirm(`List ${toList.length} item${toList.length === 1 ? "" : "s"} online on eBay?${skipped ? ` ${skipped} already listed, sold or discarded will be skipped.` : ""} Keep this page open until it finishes.`)) return;
+
+    const failed: { name: string; error: string }[] = [];
+    let listed = 0;
+    setBulkList({ running: true, done: 0, total: toList.length, current: "", listed: 0, skipped, failed: [] });
+    for (let n = 0; n < toList.length; n++) {
+      const item = toList[n];
+      setBulkList((b) => b && { ...b, done: n, current: item.itemName });
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ebayListingStatus: "Pending" } : i)));
+      try {
+        const res = await fetch("/api/ebay/listing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId: item.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Listing failed (${res.status})`);
+        updateItemInList(data.item as Item);
+        listed++;
+      } catch (e) {
+        const error = e instanceof Error ? e.message : "Listing failed";
+        failed.push({ name: item.itemName, error });
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ebayListingStatus: "Error", ebaySyncError: error } : i)));
+      }
+      setBulkList((b) => b && { ...b, done: n + 1, listed, failed: [...failed] });
+    }
+    setBulkList((b) => b && { ...b, running: false, current: "" });
   }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tttFilter, setTttFilter] = useState<"all" | "ttt" | "client">("all");
@@ -616,7 +672,45 @@ export function FBInventoryClient({ items: initialItems, tenantInfoMap, staffMem
           onBulkStaffCommission={(pct) => bulkPatch(selectedIds, () => ({ staffCommissionPercent: pct }))}
           onBulkStaffTime={(min) => bulkPatch(selectedIds, () => ({ staffTimeMinutes: min }))}
           onBulkSoldDate={(date) => bulkPatch(selectedIds, () => ({ saleDate: date }))}
+          onBulkListOnline={() => bulkListOnline(selectedIds)}
+          listableCount={items.filter((i) => selectedIds.includes(i.id) && isListable(i)).length}
+          listing={!!bulkList?.running}
         />
+      )}
+
+      {/* Bulk List Online progress / results */}
+      {bulkList && (
+        <div className="mb-4 p-3 rounded-xl border border-indigo-800 bg-indigo-950/40 text-sm">
+          {bulkList.running ? (
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-indigo-200">Listing {Math.min(bulkList.done + 1, bulkList.total)} of {bulkList.total}{bulkList.current ? `: ${bulkList.current}` : ""}…</span>
+                <span className="text-xs text-indigo-300/70">Keep this page open</span>
+              </div>
+              <div className="mt-2 h-1.5 rounded-full bg-indigo-950 overflow-hidden">
+                <div className="h-full bg-indigo-500 transition-all" style={{ width: `${(bulkList.done / bulkList.total) * 100}%` }} />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-indigo-100">
+                  Listed {bulkList.listed} of {bulkList.total} online
+                  {bulkList.failed.length > 0 && <span className="text-red-300"> · {bulkList.failed.length} failed</span>}
+                  {bulkList.skipped > 0 && <span className="text-gray-400"> · {bulkList.skipped} skipped (already listed, sold or discarded)</span>}
+                </span>
+                <button onClick={() => setBulkList(null)} className="text-xs text-gray-400 hover:text-white">Dismiss</button>
+              </div>
+              {bulkList.failed.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {bulkList.failed.map((f, i) => (
+                    <li key={i} className="text-xs text-red-300"><span className="font-semibold">{f.name}:</span> {f.error}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {sorted.length === 0 ? (
