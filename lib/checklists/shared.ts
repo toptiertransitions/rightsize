@@ -52,7 +52,14 @@ export interface ChecklistSummary {
 
 /** Today's date in Chicago (where Top Tier works), as YYYY-MM-DD. */
 export function todayYmd(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  return ymdInChicago(new Date().toISOString());
+}
+
+/** The Chicago calendar date (YYYY-MM-DD) of a timestamp. */
+export function ymdInChicago(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
 
 function addDays(ymd: string, days: number): string {

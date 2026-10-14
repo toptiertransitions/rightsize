@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Check, ChevronDown, Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dueRuleLabel, formatYmd, todayYmd, type ResidentChecklistRow } from "@/lib/checklists/shared";
+import { dueRuleLabel, formatYmd, todayYmd, ymdInChicago, type ResidentChecklistRow } from "@/lib/checklists/shared";
 
 export function StatusPill({ row }: { row: ResidentChecklistRow }) {
   if (row.status === "done") {
@@ -96,7 +96,7 @@ export function ChecklistRowList({
                 <p className={cn("text-xs mt-0.5", shown.status === "pastDue" ? "text-red-600" : "text-gray-500")}>
                   {dueText(row)}
                   {done && row.state?.doneByName && row.status === "done" && (
-                    <> · Done by {row.state.doneByName}{row.state.doneByRole ? ` (${row.state.doneByRole})` : ""}{row.state.doneAt ? ` on ${formatYmd(row.state.doneAt.slice(0, 10))}` : ""}</>
+                    <> · Done by {row.state.doneByName}{row.state.doneByRole ? ` (${row.state.doneByRole})` : ""}{row.state.doneAt ? ` on ${formatYmd(ymdInChicago(row.state.doneAt))}` : ""}</>
                   )}
                 </p>
                 {row.item.details && (
