@@ -22,7 +22,8 @@ import { randomBytes } from "crypto";
 import { clerkClient } from "@clerk/nextjs/server";
 import { getMembershipsForUser, getSystemRole, findReferralContactByClerkUserId } from "@/lib/airtable";
 import { sendPartnerTeamInviteEmail, sendPartnerTeamJoinedEmail } from "@/lib/admin-notifications";
-import { getPartnerById } from "./data";
+import { getPartnerById, updatePartner } from "./data";
+import { leadRecipientIds, type LeadRouting } from "./leadRouting";
 import {
   createPartnerUser,
   getPartnerUserById,
@@ -155,7 +156,7 @@ export async function adoptLegacyLogin(
     status: "Active",
     acceptedAt: now,
     lastActiveAt: now,
-    notifyLeads: true,
+    notifyLeads: partner.leadRouting !== "selected",
     source: "Existing login",
   });
 }
@@ -228,7 +229,8 @@ export async function inviteTeamMember(input: {
     : await createPartnerUser({
         partnerId: partner.id,
         email,
-        notifyLeads: true,
+        // When the company picks who gets leads, newcomers start without
+        notifyLeads: partner.leadRouting !== "selected",
         source: input.actor.isAdmin ? "Admin invite" : "Team invite",
         ...inviteFields,
       });
@@ -375,8 +377,35 @@ export async function setNotifyLeads(userId: string, notify: boolean, actor: Act
   const loaded = await loadForChange(userId, actor);
   if ("error" in loaded) return fail(loaded.error!);
   const { target, me } = loaded;
-  if (me && me.role !== "Primary" && me.id !== target.id) return fail("You can only change your own notifications.");
+  if (me && me.role !== "Primary") return fail("Only the account owner can change who gets leads.");
   return ok(await updatePartnerUser(target.id, { notifyLeads: notify }));
+}
+
+/**
+ * Who gets new-lead alerts for a company: everyone, or the chosen people,
+ * and whether the business email gets a copy. Owner or TTT admin only.
+ */
+export async function setLeadRouting(
+  partnerId: string,
+  input: { routing: LeadRouting; userIds: string[]; includeBusinessEmail: boolean },
+  actor: Actor
+): Promise<TeamResult<undefined>> {
+  if (!actor.isAdmin) {
+    const me = await viewerRow(partnerId, actor);
+    if (!me || me.role !== "Primary") return fail("Only the account owner can change who gets leads.");
+  }
+  const partner = await getPartnerById(partnerId);
+  if (!partner) return fail("That company wasn't found.");
+  const active = (await getPartnerUsersForPartner(partnerId)).filter((r) => r.status === "Active");
+  if (input.routing === "selected") {
+    const chosen = new Set(input.userIds);
+    if (![...chosen].some((id) => active.some((r) => r.id === id))) return fail("Pick at least one person to get leads.");
+    await Promise.all(active
+      .filter((r) => r.notifyLeads !== chosen.has(r.id))
+      .map((r) => updatePartnerUser(r.id, { notifyLeads: chosen.has(r.id) })));
+  }
+  await updatePartner(partnerId, { leadRouting: input.routing, leadSkipBusinessEmail: !input.includeBusinessEmail });
+  return ok(undefined);
 }
 
 // ─── Accepting ───────────────────────────────────────────────────────────────
@@ -439,11 +468,15 @@ export async function acceptInvite(token: string, clerkUserId: string): Promise<
   return { ok: true, partner, needsSetup: partner.lifecycleStatus === "Invited" };
 }
 
-/** People who should hear about a new lead: Active users who want lead alerts. */
-export async function leadRecipients(partnerId: string): Promise<{ emails: string[]; clerkUserIds: string[] }> {
-  const rows = (await getPartnerUsersForPartner(partnerId).catch(() => [])).filter((r) => r.status === "Active" && r.notifyLeads);
+/** Teammates who should hear about a new lead, per the company's routing. */
+export async function leadRecipients(partner: Pick<MarketplacePartner, "id" | "leadRouting">): Promise<{ emails: string[]; clerkUserIds: string[]; allClerkUserIds: string[] }> {
+  const rows = await getPartnerUsersForPartner(partner.id).catch(() => [] as PartnerUser[]);
+  const { ids } = leadRecipientIds(partner.leadRouting, rows);
+  const chosen = rows.filter((r) => ids.includes(r.id));
   return {
-    emails: [...new Set(rows.map((r) => r.email).filter(Boolean))],
-    clerkUserIds: [...new Set(rows.map((r) => r.clerkUserId).filter((v): v is string => !!v))],
+    emails: [...new Set(chosen.map((r) => r.email).filter(Boolean))],
+    clerkUserIds: [...new Set(chosen.map((r) => r.clerkUserId).filter((v): v is string => !!v))],
+    // Every login that's on (or was on) this team, chosen or not
+    allClerkUserIds: [...new Set(rows.map((r) => r.clerkUserId).filter((v): v is string => !!v))],
   };
 }

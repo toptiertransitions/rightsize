@@ -18,7 +18,7 @@ export default async function MarketplaceUsersPage({ searchParams }: { searchPar
   const [partners, users] = await Promise.all([getAllPartners(), getAllPartnerUsers()]);
   const companies = partners
     .filter((p) => p.lifecycleStatus !== "Archived")
-    .map((p) => ({ id: p.id, name: p.companyName, lifecycle: p.lifecycleStatus, pocName: p.pocName, email: p.email }))
+    .map((p) => ({ id: p.id, name: p.companyName, lifecycle: p.lifecycleStatus, pocName: p.pocName, email: p.email, leadRouting: p.leadRouting, leadSkipBusinessEmail: p.leadSkipBusinessEmail }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const partnerName = Object.fromEntries(partners.map((p) => [p.id, p.companyName]));
 

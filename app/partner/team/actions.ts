@@ -11,6 +11,7 @@ import {
   removeTeamMember,
   resendInvite,
   revokeInvite,
+  setLeadRouting,
   setNotifyLeads,
   type Actor,
 } from "@/lib/marketplace/team";
@@ -87,4 +88,16 @@ export async function setLeadAlertsAction(userId: string, on: boolean): Promise<
 
 export async function leaveTeamAction(): Promise<Result> {
   return run(({ actor, partnerId }) => leaveTeam(actor, partnerId));
+}
+
+const routingSchema = z.object({
+  routing: z.enum(["all", "selected"]),
+  userIds: z.array(z.string().regex(/^rec[A-Za-z0-9]{14}$/)).max(200),
+  includeBusinessEmail: z.boolean(),
+});
+
+export async function setLeadRoutingAction(input: z.input<typeof routingSchema>): Promise<Result> {
+  const parsed = routingSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That setting wasn't valid." };
+  return run(({ actor, partnerId }) => setLeadRouting(partnerId, parsed.data, actor));
 }

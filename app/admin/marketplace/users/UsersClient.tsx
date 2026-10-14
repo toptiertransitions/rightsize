@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Crown, MoreHorizontal, Search, UserPlus, X, Bell, BellOff, Mail, AlertTriangle, ChevronDown } from "lucide-react";
 import type { PartnerUserView, PartnerUserStatus } from "@/lib/marketplace/types";
 import { initials, inviteExpiresIn, relativeDay } from "@/components/partner-team/teamUi";
+import { LeadRoutingEditor } from "@/components/partner-team/LeadRoutingEditor";
+import { leadRecipientIds, type LeadRouting } from "@/lib/marketplace/leadRouting";
 import { cn } from "@/lib/utils";
 import {
   adminCopyInviteLinkAction,
@@ -15,10 +17,10 @@ import {
   adminResendInviteAction,
   adminRestoreUserAction,
   adminRevokeInviteAction,
-  adminSetLeadAlertsAction,
+  adminSetLeadRoutingAction,
 } from "./actions";
 
-interface Company { id: string; name: string; lifecycle: string; pocName: string; email: string }
+interface Company { id: string; name: string; lifecycle: string; pocName: string; email: string; leadRouting: LeadRouting; leadSkipBusinessEmail: boolean }
 
 interface Props {
   users: PartnerUserView[];
@@ -49,6 +51,7 @@ export function UsersClient({ users, companies, partnerName, canManage, initialP
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showNoOwner, setShowNoOwner] = useState(false);
+  const [routingFor, setRoutingFor] = useState<string | null>(null);
   const [, start] = useTransition();
 
   useEffect(() => {
@@ -73,6 +76,14 @@ export function UsersClient({ users, companies, partnerName, canManage, initialP
   const ownerless = useMemo(() => {
     const owned = new Set(users.filter((u) => u.role === "Primary" && (u.status === "Active" || u.status === "Invited")).map((u) => u.partnerId));
     return companies.filter((c) => !owned.has(c.id) && c.lifecycle !== "Prospect");
+  }, [users, companies]);
+
+  const getsLeads = useMemo(() => {
+    const byCompany = new Map<string, PartnerUserView[]>();
+    for (const u of users) byCompany.set(u.partnerId, [...(byCompany.get(u.partnerId) ?? []), u]);
+    const ids = new Set<string>();
+    for (const c of companies) for (const id of leadRecipientIds(c.leadRouting, byCompany.get(c.id) ?? []).ids) ids.add(id);
+    return ids;
   }, [users, companies]);
 
   const companiesWithTeams = useMemo(() => new Set(users.filter((u) => u.status === "Active").map((u) => u.partnerId)).size, [users]);
@@ -197,7 +208,12 @@ export function UsersClient({ users, companies, partnerName, canManage, initialP
             <Link href={`/admin/marketplace/partners/${selectedCompany.id}`} className="text-white font-semibold hover:underline">{selectedCompany.name}</Link>
             <span className="ml-2 text-xs text-gray-500">{selectedCompany.lifecycle}</span>
           </div>
-          <button type="button" onClick={() => setPartnerId("")} className="text-xs text-gray-400 hover:text-white inline-flex items-center gap-1"><X className="w-3.5 h-3.5" /> Clear</button>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setRoutingFor(selectedCompany.id)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 hover:text-emerald-200 border border-emerald-900 bg-emerald-950/40 rounded-lg px-3 py-1.5">
+              <Bell className="w-3.5 h-3.5" /> Who gets leads: {selectedCompany.leadRouting === "all" ? "Everyone" : "Selected people"}
+            </button>
+            <button type="button" onClick={() => setPartnerId("")} className="text-xs text-gray-400 hover:text-white inline-flex items-center gap-1"><X className="w-3.5 h-3.5" /> Clear</button>
+          </div>
         </div>
       )}
 
@@ -236,7 +252,7 @@ export function UsersClient({ users, companies, partnerName, canManage, initialP
                       menu.push({ label: "Cancel invitation", danger: true, onClick: () => setConfirm({ title: "Cancel invitation?", body: `${name}'s invitation link to ${company} will stop working.`, cta: "Cancel invitation", danger: true, run: () => adminRevokeInviteAction(u.id), done: "Invitation cancelled." }) });
                     } else if (u.status === "Active") {
                       if (u.role !== "Primary") menu.push({ label: "Make account owner", onClick: () => setConfirm({ title: `Make ${name} the account owner?`, body: `The current owner of ${company} stays on the team as a member.`, cta: "Make owner", run: () => adminMakePrimaryAction(u.id), done: `${name} now owns ${company}.` }) });
-                      menu.push({ label: u.notifyLeads ? "Turn lead alerts off" : "Turn lead alerts on", onClick: () => act(u.id, () => adminSetLeadAlertsAction(u.id, !u.notifyLeads), u.notifyLeads ? "Lead alerts off." : "Lead alerts on.") });
+                      menu.push({ label: "Who gets leads…", onClick: () => setRoutingFor(u.partnerId) });
                       menu.push({ label: "Remove from company", danger: true, onClick: () => setConfirm({ title: `Remove ${name} from ${company}?`, body: u.role === "Primary" ? "They're the account owner. You can only remove them if no one else is on the team; otherwise make someone else the owner first." : "They lose access to this partner account right away. You can restore them later from the Removed tab.", cta: "Remove", danger: true, run: () => adminRemoveUserAction(u.id), done: `${name} was removed.` }) });
                     } else {
                       menu.push({ label: u.clerkUserId ? "Restore access" : "Invite again", onClick: () => act(u.id, () => adminRestoreUserAction(u.id), u.clerkUserId ? `${name} has access again.` : `Invitation sent to ${u.email}.`) });
@@ -268,7 +284,9 @@ export function UsersClient({ users, companies, partnerName, canManage, initialP
                       <td className="px-4 py-3 whitespace-nowrap"><StatusBadge u={u} /></td>
                       <td className="px-4 py-3">
                         {u.status === "Active" ? (
-                          u.notifyLeads ? <Bell className="w-4 h-4 text-emerald-400" aria-label="On" /> : <BellOff className="w-4 h-4 text-gray-600" aria-label="Off" />
+                          <button type="button" onClick={() => setRoutingFor(u.partnerId)} title="Who gets leads" className="p-1 -m-1 rounded hover:bg-gray-800">
+                            {getsLeads.has(u.id) ? <Bell className="w-4 h-4 text-emerald-400" aria-label="Gets leads" /> : <BellOff className="w-4 h-4 text-gray-600" aria-label="Doesn't get leads" />}
+                          </button>
                         ) : <span className="text-gray-700">—</span>}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
@@ -293,6 +311,32 @@ export function UsersClient({ users, companies, partnerName, canManage, initialP
       {!canManage && (
         <p className="mt-3 text-xs text-gray-500">Only TTT admins can invite, remove or change partner users.</p>
       )}
+
+      {routingFor && (() => {
+        const c = companies.find((x) => x.id === routingFor);
+        if (!c) return null;
+        return (
+          <Modal onClose={() => setRoutingFor(null)} label="Who gets leads" wide>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Lead alerts</p>
+                <p className="text-white font-semibold">{c.name}</p>
+              </div>
+              <button type="button" onClick={() => setRoutingFor(null)} aria-label="Close" className="w-8 h-8 -mr-2 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-800"><X className="w-4 h-4" /></button>
+            </div>
+            <LeadRoutingEditor
+              theme="dark"
+              members={users.filter((u) => u.partnerId === c.id)}
+              routing={c.leadRouting}
+              includeBusinessEmail={!c.leadSkipBusinessEmail}
+              businessEmail={c.email || undefined}
+              canEdit={canManage}
+              onSave={(input) => adminSetLeadRoutingAction({ partnerId: c.id, ...input })}
+              onSaved={() => { setRoutingFor(null); setToast({ text: `Lead alerts updated for ${c.name}.` }); router.refresh(); }}
+            />
+          </Modal>
+        );
+      })()}
 
       {invite && (
         <InviteDialog
@@ -424,7 +468,7 @@ function RowMenu({ items, disabled }: { items: { label: string; onClick: () => v
   );
 }
 
-function Modal({ children, onClose, label }: { children: React.ReactNode; onClose: () => void; label: string }) {
+function Modal({ children, onClose, label, wide }: { children: React.ReactNode; onClose: () => void; label: string; wide?: boolean }) {
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", esc);
@@ -432,7 +476,7 @@ function Modal({ children, onClose, label }: { children: React.ReactNode; onClos
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label={label} className="w-full max-w-md rounded-2xl border border-gray-800 bg-gray-900 shadow-2xl p-6">
+      <div role="dialog" aria-modal="true" aria-label={label} className={cn("w-full rounded-2xl border border-gray-800 bg-gray-900 shadow-2xl p-6 max-h-[90dvh] overflow-y-auto", wide ? "max-w-xl" : "max-w-md")}>
         {children}
       </div>
     </div>

@@ -187,6 +187,8 @@ function mapPartner(rec: AirtableRec): MarketplacePartner {
     approvedAt: str(f["ApprovedAt"]) || undefined,
     approvedBy: str(f["ApprovedBy"]) || undefined,
     reviewFeedback: str(f["ReviewFeedback"]) || undefined,
+    leadRouting: str(f["LeadRouting"]) === "Selected people" ? "selected" : "all",
+    leadSkipBusinessEmail: bool(f["LeadSkipBusinessEmail"]),
     reviewedAt: str(f["ReviewedAt"]) || undefined,
     reviewedBy: str(f["ReviewedBy"]) || undefined,
   };
@@ -272,6 +274,8 @@ interface UpdatePartnerData extends Partial<Omit<CreatePartnerData, "crmReferral
   reviewFeedback?: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  leadRouting?: "all" | "selected";
+  leadSkipBusinessEmail?: boolean;
 }
 
 export async function updatePartner(id: string, data: UpdatePartnerData): Promise<void> {
@@ -307,6 +311,8 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
   if (data.reviewFeedback !== undefined) fields["ReviewFeedback"] = data.reviewFeedback;
   if (data.reviewedAt !== undefined) fields["ReviewedAt"] = data.reviewedAt;
   if (data.reviewedBy !== undefined) fields["ReviewedBy"] = data.reviewedBy;
+  if (data.leadRouting !== undefined) fields["LeadRouting"] = data.leadRouting === "selected" ? "Selected people" : "All team";
+  if (data.leadSkipBusinessEmail !== undefined) fields["LeadSkipBusinessEmail"] = data.leadSkipBusinessEmail;
 
   const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_PARTNERS, "", {
     method: "PATCH",

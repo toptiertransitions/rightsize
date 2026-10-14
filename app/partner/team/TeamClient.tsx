@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Crown, MoreHorizontal, UserPlus, Mail, Bell, BellOff, X, LogOut } from "lucide-react";
+import { Crown, MoreHorizontal, UserPlus, Mail, Bell, X, LogOut } from "lucide-react";
 import type { PartnerUserView } from "@/lib/marketplace/types";
 import { avatarColor, initials, inviteExpiresIn, relativeDay, sortTeam } from "@/components/partner-team/teamUi";
+import { LeadRoutingEditor } from "@/components/partner-team/LeadRoutingEditor";
+import { leadRecipientIds, type LeadRouting } from "@/lib/marketplace/leadRouting";
 import { cn } from "@/lib/utils";
 import {
   inviteTeammateAction,
@@ -13,7 +15,7 @@ import {
   removeTeammateAction,
   resendTeamInviteAction,
   revokeTeamInviteAction,
-  setLeadAlertsAction,
+  setLeadRoutingAction,
 } from "./actions";
 
 interface Props {
@@ -22,11 +24,14 @@ interface Props {
   meClerkId?: string;
   isOwner: boolean;
   members: PartnerUserView[];
+  leadRouting: LeadRouting;
+  includeBusinessEmail: boolean;
+  businessEmail?: string;
 }
 
 type Confirm = { title: string; body: string; cta: string; danger?: boolean; run: () => Promise<{ ok: boolean; error?: string }>; done: string };
 
-export function TeamClient({ companyName, meId, meClerkId, isOwner, members }: Props) {
+export function TeamClient({ companyName, meId, meClerkId, isOwner, members, leadRouting, includeBusinessEmail, businessEmail }: Props) {
   const router = useRouter();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -44,6 +49,7 @@ export function TeamClient({ companyName, meId, meClerkId, isOwner, members }: P
   const joined = members.filter((m) => m.status === "Active").length;
   const pending = members.length - joined;
   const me = members.find((m) => m.id === meId);
+  const getsLeads = useMemo(() => new Set(leadRecipientIds(leadRouting, members).ids), [leadRouting, members]);
 
   function act(id: string, fn: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     setBusyId(id);
@@ -93,15 +99,28 @@ export function TeamClient({ companyName, meId, meClerkId, isOwner, members }: P
             isMe={m.id === meId}
             invitedByMe={!!meClerkId && m.invitedByClerkId === meClerkId}
             isOwner={isOwner}
+            getsLeads={getsLeads.has(m.id)}
             busy={busyId === m.id}
             onResend={() => act(m.id, () => resendTeamInviteAction(m.id), `Invitation resent to ${m.email}.`)}
             onRevoke={() => setConfirm({ title: "Cancel invitation?", body: `${m.name || m.email} won't be able to use their invitation link.`, cta: "Cancel invitation", danger: true, run: () => revokeTeamInviteAction(m.id), done: "Invitation cancelled." })}
             onRemove={() => setConfirm({ title: `Remove ${m.name || m.email}?`, body: `They'll lose access to ${companyName}'s partner account right away. Top Tier can add them back later.`, cta: "Remove", danger: true, run: () => removeTeammateAction(m.id), done: `${m.name || m.email} was removed.` })}
             onMakeOwner={() => setConfirm({ title: `Make ${m.name || m.email} the account owner?`, body: "They'll be able to manage the team. You'll stay on the team as a member.", cta: "Make owner", run: () => makeOwnerAction(m.id), done: `${m.name || m.email} is now the account owner.` })}
-            onToggleAlerts={(on) => act(m.id, () => setLeadAlertsAction(m.id, on), on ? "Lead alerts on." : "Lead alerts off.")}
           />
         ))}
       </ul>
+
+      <div className="mt-6">
+        <LeadRoutingEditor
+          theme="light"
+          members={members}
+          routing={leadRouting}
+          includeBusinessEmail={includeBusinessEmail}
+          businessEmail={businessEmail}
+          canEdit={isOwner}
+          onSave={setLeadRoutingAction}
+          onSaved={() => { setToast({ text: "Lead alerts updated." }); router.refresh(); }}
+        />
+      </div>
 
       <div className="mt-6 rounded-2xl bg-cream-100/60 border border-cream-200 px-5 py-4 text-sm text-gray-600 leading-relaxed">
         <p className="font-semibold text-gray-800 mb-1">How access works</p>
@@ -109,7 +128,7 @@ export function TeamClient({ companyName, meId, meClerkId, isOwner, members }: P
           <li>Everyone on the team sees your leads and can update your listing.</li>
           <li>The <strong>account owner</strong> can remove teammates and hand over ownership.</li>
           <li>Anyone on the team can invite a teammate. Invitations expire after 14 days.</li>
-          <li>People with <strong>lead alerts</strong> on get an email and phone notification for every new lead.</li>
+          <li>The account owner chooses who gets <strong>new lead alerts</strong>: everyone, or specific people.</li>
         </ul>
       </div>
 
@@ -160,17 +179,17 @@ export function TeamClient({ companyName, meId, meClerkId, isOwner, members }: P
   );
 }
 
-function MemberRow({ m, isMe, invitedByMe, isOwner, busy, onResend, onRevoke, onRemove, onMakeOwner, onToggleAlerts }: {
+function MemberRow({ m, isMe, invitedByMe, isOwner, getsLeads, busy, onResend, onRevoke, onRemove, onMakeOwner }: {
   m: PartnerUserView;
   isMe: boolean;
   invitedByMe: boolean;
   isOwner: boolean;
+  getsLeads: boolean;
   busy: boolean;
   onResend: () => void;
   onRevoke: () => void;
   onRemove: () => void;
   onMakeOwner: () => void;
-  onToggleAlerts: (on: boolean) => void;
 }) {
   const pending = m.status === "Invited";
   const canManageInvite = pending && (isOwner || invitedByMe);
@@ -182,7 +201,6 @@ function MemberRow({ m, isMe, invitedByMe, isOwner, busy, onResend, onRevoke, on
     if (m.role !== "Primary") menu.push({ label: "Make account owner", onClick: onMakeOwner });
     menu.push({ label: "Remove from team", onClick: onRemove, danger: true });
   }
-  const canToggleAlerts = !pending && (isMe || isOwner);
 
   return (
     <li className={cn("flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4", busy && "opacity-60")}>
@@ -194,6 +212,7 @@ function MemberRow({ m, isMe, invitedByMe, isOwner, busy, onResend, onRevoke, on
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold text-gray-900 text-sm truncate max-w-full">{m.name || m.email}</span>
           {isMe && <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">You</span>}
+          {getsLeads && <Bell className="sm:hidden w-3.5 h-3.5 text-forest-600" aria-label="Gets leads" />}
           {m.role === "Primary" && !pending && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
               <Crown className="w-3 h-3" /> Owner
@@ -216,31 +235,14 @@ function MemberRow({ m, isMe, invitedByMe, isOwner, busy, onResend, onRevoke, on
         </p>
       </div>
 
-      {canToggleAlerts && (
-        <button
-          type="button"
-          onClick={() => onToggleAlerts(!m.notifyLeads)}
-          disabled={busy}
-          title={m.notifyLeads ? "Lead alerts on" : "Lead alerts off"}
-          aria-label={m.notifyLeads ? "Turn lead alerts off" : "Turn lead alerts on"}
-          className={cn(
-            "hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium border transition-colors",
-            m.notifyLeads ? "border-forest-200 bg-forest-50 text-forest-700" : "border-gray-200 text-gray-400 hover:text-gray-600"
-          )}
-        >
-          {m.notifyLeads ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
-          Lead alerts
-        </button>
+      {getsLeads && (
+        <span className="hidden sm:inline-flex items-center gap-1 h-7 px-2 rounded-lg text-[11px] font-medium bg-forest-50 text-forest-700 border border-forest-100" title="Gets new lead alerts">
+          <Bell className="w-3 h-3" /> Gets leads
+        </span>
       )}
 
-      {menu.length > 0 || canToggleAlerts ? (
-        <RowMenu
-          items={[
-            ...(canToggleAlerts ? [{ label: m.notifyLeads ? "Turn lead alerts off" : "Turn lead alerts on", onClick: () => onToggleAlerts(!m.notifyLeads), mobileOnly: true }] : []),
-            ...menu,
-          ]}
-          disabled={busy}
-        />
+      {menu.length > 0 ? (
+        <RowMenu items={menu} disabled={busy} />
       ) : <div className="w-9" />}
     </li>
   );

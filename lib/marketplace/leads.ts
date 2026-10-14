@@ -21,13 +21,14 @@ import type { MarketplaceIntroductionEvent, MarketplaceIntroductionStatus, Marke
 import { leadRecipients } from "./team";
 
 /**
- * Sends a released lead to the partner company: an email to the business
- * address and to every team member with lead alerts on, and a push to their
- * phones (plus the company's CRM contact, for accounts that predate teams).
+ * Sends a released lead to the partner company, following its lead routing
+ * (everyone, or chosen teammates; business email on or off): an email to
+ * each, and a push to their phones (plus the company's CRM contact, for
+ * accounts that predate teams).
  * Resolves to which channels went out.
  */
 export async function sendLeadToPartnerTeam(params: {
-  partner: Pick<MarketplacePartner, "id" | "companyName" | "email" | "crmReferralContactId">;
+  partner: Pick<MarketplacePartner, "id" | "companyName" | "email" | "crmReferralContactId" | "leadRouting" | "leadSkipBusinessEmail">;
   clientName: string;
   category: string;
   clientEmail?: string;
@@ -36,8 +37,11 @@ export async function sendLeadToPartnerTeam(params: {
   trackingToken: string;
 }): Promise<{ emailed: boolean; pushed: boolean }> {
   const { partner } = params;
-  const team = await leadRecipients(partner.id);
-  const emails = [...new Set([partner.email?.toLowerCase(), ...team.emails].filter((e): e is string => !!e))];
+  const team = await leadRecipients(partner);
+  const business = partner.leadSkipBusinessEmail ? undefined : partner.email?.toLowerCase();
+  let emails = [...new Set([business, ...team.emails].filter((e): e is string => !!e))];
+  // Never let a lead go nowhere
+  if (emails.length === 0 && partner.email) emails = [partner.email.toLowerCase()];
 
   const sent = await Promise.allSettled(emails.map((vendorEmail) =>
     sendPartnerIntroPartnerNotification({
@@ -56,7 +60,10 @@ export async function sendLeadToPartnerTeam(params: {
   let pushed = false;
   try {
     const contact = partner.crmReferralContactId ? await getReferralContactById(partner.crmReferralContactId).catch(() => null) : null;
-    const clerkIds = [...new Set([...team.clerkUserIds, ...(contact?.clerkUserId ? [contact.clerkUserId] : [])])];
+    // The old single login only gets pushes if it isn't on the team yet;
+    // once it is, the company's routing decides
+    const legacy = contact?.clerkUserId && !team.allClerkUserIds.includes(contact.clerkUserId) ? [contact.clerkUserId] : [];
+    const clerkIds = [...new Set([...team.clerkUserIds, ...legacy])];
     if (clerkIds.length > 0) {
       await sendPushToClerkUsers(
         clerkIds,

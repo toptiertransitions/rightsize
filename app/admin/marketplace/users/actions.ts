@@ -13,6 +13,7 @@ import {
   resendInvite,
   restoreTeamMember,
   revokeInvite,
+  setLeadRouting,
   setNotifyLeads,
   type Actor,
 } from "@/lib/marketplace/team";
@@ -92,4 +93,22 @@ export async function adminSetLeadAlertsAction(userId: string, on: boolean): Pro
 export async function adminCopyInviteLinkAction(userId: string): Promise<Result<string>> {
   if (!id.safeParse(userId).success) return { ok: false, error: "Not found." };
   return run((actor) => getInviteLinkForAdmin(userId, actor));
+}
+
+const routingSchema = z.object({
+  partnerId: id,
+  routing: z.enum(["all", "selected"]),
+  userIds: z.array(id).max(200),
+  includeBusinessEmail: z.boolean(),
+});
+
+export async function adminSetLeadRoutingAction(input: z.input<typeof routingSchema>): Promise<Result> {
+  const parsed = routingSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That setting wasn't valid." };
+  const { partnerId, ...rest } = parsed.data;
+  return run(async (actor) => {
+    const r = await setLeadRouting(partnerId, rest, actor);
+    if (r.ok) revalidatePath(`/admin/marketplace/partners/${partnerId}`);
+    return r.ok ? { ok: true, data: undefined } : r;
+  });
 }

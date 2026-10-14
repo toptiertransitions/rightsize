@@ -25,6 +25,9 @@ export default async function PartnerTeamPage() {
       meClerkId={account.membership.clerkUserId}
       isOwner={account.membership.role === "Primary"}
       members={members}
+      leadRouting={account.partner.leadRouting}
+      includeBusinessEmail={!account.partner.leadSkipBusinessEmail}
+      businessEmail={account.partner.email || undefined}
     />
   );
 }

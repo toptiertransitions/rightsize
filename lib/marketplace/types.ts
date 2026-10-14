@@ -121,6 +121,10 @@ export interface MarketplacePartner {
   updatedAt: string;
   approvedAt?: string;
   approvedBy?: string;
+  /** Who on the team gets new-lead alerts (see ./leadRouting.ts) */
+  leadRouting: "all" | "selected";
+  /** Don't send lead emails to the business Email address */
+  leadSkipBusinessEmail: boolean;
   /** Latest review email sent from the dashboard (changes requested or rejected) */
   reviewFeedback?: string;
   reviewedAt?: string;
