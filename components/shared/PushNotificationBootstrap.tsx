@@ -6,6 +6,8 @@ import { useUser, useAuth } from "@clerk/nextjs";
 import { getPlatform, isNativeApp } from "@/lib/native";
 
 const DEVICE_TOKEN_STORAGE_KEY = "rz_push_device_token";
+// Last token sent to /api/push/register in this page session
+let lastRegisteredToken: string | null = null;
 
 interface ForegroundNotification {
   title: string;
@@ -83,9 +85,11 @@ export function PushNotificationBootstrap() {
       }
       if (status !== "granted") return;
 
-      await PushNotifications.register();
-
+      // Listen before registering: Android hands back the token almost
+      // immediately (and can repeat it), so register each token once.
       const regListener = await PushNotifications.addListener("registration", (token) => {
+        if (lastRegisteredToken === token.value) return;
+        lastRegisteredToken = token.value;
         try { localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token.value); } catch {}
         fetch("/api/push/register", {
           method: "POST",
@@ -115,6 +119,8 @@ export function PushNotificationBootstrap() {
           url: data?.url,
         });
       });
+
+      await PushNotifications.register();
 
       cleanup = () => {
         regListener.remove();

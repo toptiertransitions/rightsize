@@ -207,7 +207,13 @@ export async function sendPushToClerkUsers(
     return;
   }
   try {
-    const devices = await getDeviceTokensForUsers(clerkUserIds);
+    // One send per physical device, even if a token was saved twice
+    const seenTokens = new Set<string>();
+    const devices = (await getDeviceTokensForUsers(clerkUserIds)).filter((d) => {
+      if (seenTokens.has(d.token)) return false;
+      seenTokens.add(d.token);
+      return true;
+    });
     // Each token is sent once, through its own platform's service
     const iosDevices = apns ? devices.filter((d) => d.platform === "iOS") : [];
     const androidDevices = fcm ? devices.filter((d) => d.platform === "Android") : [];
