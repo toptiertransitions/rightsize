@@ -9,6 +9,7 @@ import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
 import { getBrandsForPartner, getResidentsOverview } from "@/lib/checklists/service";
 import { ResidentsChecklistBoard } from "@/components/community-checklist/ResidentsChecklistBoard";
 import { ChecklistEditor } from "@/components/community-checklist/ChecklistEditor";
+import { ChecklistGetStarted } from "@/components/community-checklist/ChecklistGetStarted";
 import {
   partnerRemoveChecklistItemAction,
   partnerReorderChecklistAction,
@@ -44,34 +45,49 @@ export default async function PartnerPlansPage({
           <h1 className="text-2xl font-semibold text-[#2d4a3e]">Resident Plans</h1>
           <p className="text-sm text-gray-500 mt-1">Where each resident moving into {brands.map((b) => b.displayName).join(" and ")} stands on your checklist.</p>
         </div>
-        <ResidentsChecklistBoard
-          residents={residents.map(({ tenantId, name, brandId, moveDate, rows, summary }) => ({ tenantId, name, brandId, moveDate, rows, summary }))}
-          accent={brands[0].primaryColor}
-          hasChecklist={hasChecklist}
-          onToggle={setResidentChecklistItemAction}
-        />
-        {isOwner ? (
-          <details className="group" open={!hasChecklist}>
-            <summary className="cursor-pointer list-none inline-flex items-center gap-2 text-sm font-semibold text-[#2d4a3e] hover:underline">
-              <span className="group-open:hidden">Edit checklist tasks</span>
-              <span className="hidden group-open:inline">Hide checklist editor</span>
-            </summary>
-            <div className="mt-4 space-y-4">
-              {brands.map((b) => (
-                <ChecklistEditor
-                  key={b.id}
-                  theme="light"
-                  communityName={b.displayName}
-                  initialItems={itemsByBrand[b.id] ?? []}
-                  onSave={partnerSaveChecklistItemAction.bind(null, b.id)}
-                  onRemove={partnerRemoveChecklistItemAction.bind(null, b.id)}
-                  onReorder={partnerReorderChecklistAction.bind(null, b.id)}
-                />
-              ))}
-            </div>
-          </details>
+        {!hasChecklist ? (
+          brands.map((b) => (
+            <ChecklistGetStarted
+              key={b.id}
+              communityName={b.displayName}
+              isOwner={isOwner}
+              onSave={partnerSaveChecklistItemAction.bind(null, b.id)}
+              onRemove={partnerRemoveChecklistItemAction.bind(null, b.id)}
+              onReorder={partnerReorderChecklistAction.bind(null, b.id)}
+            />
+          ))
         ) : (
-          <p className="text-xs text-gray-500">Your account owner manages the checklist tasks.</p>
+          <>
+            <ResidentsChecklistBoard
+              residents={residents.map(({ tenantId, name, brandId, moveDate, rows, summary }) => ({ tenantId, name, brandId, moveDate, rows, summary }))}
+              accent={brands[0].primaryColor}
+              hasChecklist
+              onToggle={setResidentChecklistItemAction}
+            />
+            {isOwner ? (
+              <details className="group">
+                <summary className="cursor-pointer list-none inline-flex items-center gap-2 text-sm font-semibold text-[#2d4a3e] hover:underline">
+                  <span className="group-open:hidden">Edit checklist tasks</span>
+                  <span className="hidden group-open:inline">Hide checklist editor</span>
+                </summary>
+                <div className="mt-4 space-y-4">
+                  {brands.map((b) => (
+                    <ChecklistEditor
+                      key={b.id}
+                      theme="light"
+                      communityName={b.displayName}
+                      initialItems={itemsByBrand[b.id] ?? []}
+                      onSave={partnerSaveChecklistItemAction.bind(null, b.id)}
+                      onRemove={partnerRemoveChecklistItemAction.bind(null, b.id)}
+                      onReorder={partnerReorderChecklistAction.bind(null, b.id)}
+                    />
+                  ))}
+                </div>
+              </details>
+            ) : (
+              <p className="text-xs text-gray-500">Your account owner manages the checklist tasks.</p>
+            )}
+          </>
         )}
       </section>
     );

@@ -34,6 +34,7 @@ export function ChecklistEditor({
   onSave,
   onRemove,
   onReorder,
+  onDone,
 }: {
   theme: "light" | "dark";
   communityName: string;
@@ -41,6 +42,8 @@ export function ChecklistEditor({
   onSave: (input: { id?: string; title: string; details: string; dueType: ChecklistDueType; dueDays?: number; dueDate?: string }) => Promise<Result>;
   onRemove: (itemId: string) => Promise<Result>;
   onReorder: (ids: string[]) => Promise<Result>;
+  /** Shows a "Done" button once there's at least one task */
+  onDone?: () => void;
 }) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState<ItemDraft | null>(null);
@@ -214,6 +217,11 @@ export function ChecklistEditor({
       {error && <p className="text-sm text-red-500 mt-3" role="alert">{error}</p>}
       {items.length > 0 && (
         <p className={cn("text-xs mt-4", t.muted)}>Removing a task hides it for everyone; what residents already finished is kept.</p>
+      )}
+      {onDone && items.length > 0 && !draft && (
+        <button type="button" onClick={onDone} className={cn("mt-4 h-10 px-5 rounded-lg text-white text-sm font-semibold", t.primary)}>
+          Done, show my residents
+        </button>
       )}
     </section>
   );
