@@ -10,6 +10,9 @@ export interface PartnerProfile {
   /** The partner's LocalVendors record, when it has one (communities link to
    * the same record a project's destinationCommunity points at). */
   localVendorId?: string;
+  /** Communities (display names) that tagged this partner as preferred, for
+   * the client viewing the page. Set per request, never on the shared cache. */
+  preferredBy?: string[];
   vendorName: string;
   category: PartnerCategory;
   logo?: string;

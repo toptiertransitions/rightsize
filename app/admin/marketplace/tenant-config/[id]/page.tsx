@@ -3,7 +3,11 @@ import Link from "next/link";
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { MarketplaceNav } from "../../MarketplaceNav";
 import { getBrandById, getPickableContacts, getAuditForEntity } from "@/lib/brands/data";
-import { getPartnerById } from "@/lib/marketplace/data";
+import { getPartnerById, getAllPartners, getAllCategories, getAllListingsAdmin } from "@/lib/marketplace/data";
+import { auth } from "@clerk/nextjs/server";
+import { getSystemRole } from "@/lib/airtable";
+import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissions";
+import { PreferredPartnersEditor } from "./PreferredPartnersEditor";
 import { BrandEditor } from "./BrandEditor";
 import { getChecklistItems } from "@/lib/checklists/data";
 import { ChecklistEditor } from "@/components/community-checklist/ChecklistEditor";
@@ -16,12 +20,28 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
   const brand = await getBrandById(id);
   if (!brand) notFound();
 
-  const [partner, pickable, audit, checklistItems] = await Promise.all([
+  const { userId } = await auth();
+  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role] = await Promise.all([
     getPartnerById(brand.marketplacePartnerId).catch(() => null),
     getPickableContacts(brand),
     getAuditForEntity(brand.id, 15).catch(() => []),
     getChecklistItems([brand.id]).catch(() => []),
+    getAllPartners().catch(() => []),
+    getAllCategories().catch(() => []),
+    getAllListingsAdmin().catch(() => []),
+    userId ? getSystemRole(userId).catch(() => null) : Promise.resolve(null),
   ]);
+  const categoryLabel = new Map(categories.map((c) => [c.id, c.label]));
+  const pickablePartners = allPartners
+    .filter((p) => p.id !== brand.marketplacePartnerId && p.lifecycleStatus !== "Archived")
+    .map((p) => ({
+      id: p.id,
+      name: p.companyName,
+      categories: [...new Set(listings.filter((l) => l.partnerId === p.id).map((l) => categoryLabel.get(l.categoryId) ?? "").filter(Boolean))],
+      lifecycle: p.lifecycleStatus,
+      city: p.city,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
 
   return (
@@ -38,6 +58,15 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
           joinBaseUrl={`${appUrl}/join/`}
           audit={audit.map((a) => ({ timestamp: a.timestamp, actorName: a.actorName, field: a.field, newValue: a.newValue }))}
         />
+        <div id="preferred-partners" className="mt-10 max-w-3xl scroll-mt-24">
+          <PreferredPartnersEditor
+            brandId={brand.id}
+            communityName={brand.displayName || partner?.companyName || "this community"}
+            initialIds={brand.preferredPartnerIds}
+            partners={pickablePartners}
+            canEdit={!!role && hasCapability(role as MarketplaceRole, "managePreferredPartners")}
+          />
+        </div>
         <div id="checklist" className="mt-10 max-w-3xl scroll-mt-24">
           <ChecklistEditor
             theme="dark"

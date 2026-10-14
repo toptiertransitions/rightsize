@@ -39,7 +39,15 @@ export function isInServiceArea(partner: PartnerProfile, location: ClientLocatio
 // Sorts a group of already-filtered candidates: manual FeaturedRank override
 // first (ascending — lower rank shows first), then by Bayesian rating desc,
 // then by projects completed desc, then name as a stable final tiebreak.
-function rankCandidates(partners: PartnerProfile[]): PartnerProfile[] {
+// A client's community's preferred partners go ahead of everyone else in the
+// same group, keeping their own order among themselves.
+function rankCandidates(partners: PartnerProfile[], preferredIds?: ReadonlySet<string>): PartnerProfile[] {
+  const ranked = rankByScore(partners);
+  if (!preferredIds?.size) return ranked;
+  return [...ranked.filter((p) => preferredIds.has(p.id)), ...ranked.filter((p) => !preferredIds.has(p.id))];
+}
+
+function rankByScore(partners: PartnerProfile[]): PartnerProfile[] {
   const featured = partners
     .filter((p) => p.featuredRank !== undefined && p.featuredRank !== null)
     .sort((a, b) => (a.featuredRank! - b.featuredRank!) || a.vendorName.localeCompare(b.vendorName));
@@ -63,7 +71,9 @@ export function matchPartnersForCategory(
   allPartners: PartnerProfile[],
   category: PartnerCategory,
   location: ClientLocation,
-  topN = 3
+  topN = 3,
+  /** The client's community's preferred partners: first among those who serve the area */
+  preferredIds?: ReadonlySet<string>
 ): MatchResult[] {
   const inCategory = allPartners.filter((p) => p.category === category);
   const inArea: PartnerProfile[] = [];
@@ -72,8 +82,8 @@ export function matchPartnersForCategory(
     (isInServiceArea(p, location) ? inArea : outArea).push(p);
   }
 
-  const rankedInArea = rankCandidates(inArea);
-  const rankedOutArea = rankCandidates(outArea);
+  const rankedInArea = rankCandidates(inArea, preferredIds);
+  const rankedOutArea = rankCandidates(outArea, preferredIds);
 
   const results: MatchResult[] = rankedInArea.slice(0, topN).map((partner, i) => ({
     partner,

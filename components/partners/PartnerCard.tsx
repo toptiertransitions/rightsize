@@ -5,6 +5,7 @@ import { communityCompletionLabel } from "@/lib/partners/copy";
 import { PartnerLogo } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
 import { PartnerFilesSection } from "./PartnerFilesSection";
+import { PreferredBadge } from "./PreferredBadge";
 
 function cleanDomain(url: string): string {
   try {
@@ -81,6 +82,8 @@ export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, is
             <span className="text-[11px] text-amber-600 font-medium">Serves nearby</span>
           )}
         </div>
+
+        <PreferredBadge communities={partner.preferredBy} />
 
         <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />
 

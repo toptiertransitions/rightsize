@@ -60,6 +60,7 @@ function mapBrand(r: Rec): CommunityBrand {
     welcomeSenderTitle: str(f["WelcomeSenderTitle"]),
     topTierVisibility: (str(f["TopTierVisibility"]) || "Partner visible") as TopTierVisibility,
     contacts: parseContacts(str(f["ContactsJson"])),
+    preferredPartnerIds: str(f["PreferredPartnerIds"]).split(",").map((s) => s.trim()).filter((s) => /^rec[A-Za-z0-9]{14}$/.test(s)),
     slugLockedAt: str(f["SlugLockedAt"]) || undefined,
     createdAt: str(f["CreatedAt"]) || undefined,
     updatedAt: str(f["UpdatedAt"]) || undefined,
@@ -141,6 +142,18 @@ export async function updateBrand(id: string, d: BrandWrite): Promise<CommunityB
   });
   const data = await res.json();
   if (!res.ok) throw new Error(`updateBrand failed: ${JSON.stringify(data)}`);
+  revalidateTag(BRANDS_CACHE_TAG);
+  return mapBrand(data.records[0]);
+}
+
+/** Replace a community's preferred partner list. */
+export async function setBrandPreferredPartners(id: string, partnerIds: string[]): Promise<CommunityBrand> {
+  const res = await at(AIRTABLE_TABLES.COMMUNITY_BRANDS, "", {
+    method: "PATCH",
+    body: JSON.stringify({ records: [{ id, fields: { PreferredPartnerIds: [...new Set(partnerIds)].join(","), UpdatedAt: new Date().toISOString() } }] }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`setBrandPreferredPartners failed: ${JSON.stringify(data)}`);
   revalidateTag(BRANDS_CACHE_TAG);
   return mapBrand(data.records[0]);
 }

@@ -35,6 +35,9 @@ export interface CommunityBrand {
   welcomeSenderTitle: string;
   topTierVisibility: TopTierVisibility;
   contacts: BrandContactRef[];
+  /** Marketplace partners TTT Admins tagged as this community's preferred
+   * partners; boosted to the top of matching for its clients. */
+  preferredPartnerIds: string[];
   slugLockedAt?: string;
   createdAt?: string;
   updatedAt?: string;

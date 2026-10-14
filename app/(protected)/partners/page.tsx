@@ -19,6 +19,7 @@ import { buildReferralPartner } from "@/lib/partners/referral";
 import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompletionKey } from "@/lib/partners/communityCompletions";
 import { matchPartnersForCategory } from "@/lib/partners/match";
 import { findDestinationCommunityPartner } from "@/lib/partners/destinationCommunity";
+import { getTenantCommunityBrands, preferredMap } from "@/lib/partners/preferred";
 import { getAllCategories } from "@/lib/marketplace/data";
 import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { sendZeroMatchAdminNotification } from "@/lib/admin-notifications";
@@ -137,6 +138,15 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     });
   }
 
+  // Preferred partners of the client's community (Tenant Config): labeled on
+  // cloned profiles (the directory is a shared cache) and ranked first
+  const communityBrands = await getTenantCommunityBrands(tenant, tenantCommunity, directory).catch(() => []);
+  const preferred = preferredMap(communityBrands);
+  if (preferred.size > 0) {
+    directory = directory.map((p) => (preferred.has(p.id) ? { ...p, preferredBy: preferred.get(p.id) } : p));
+  }
+  const preferredIds: ReadonlySet<string> = new Set(preferred.keys());
+
   const location = { zip: tenant.zip, state: tenant.state };
   const matchesByCategory = {} as Record<PartnerCategory, MatchResult[]>;
   for (const category of PARTNER_CATEGORIES) {
@@ -144,7 +154,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     // living community, not a curated top pick — never capped at 3 like the
     // other service categories.
     const topN = category === "Community" ? Infinity : 3;
-    matchesByCategory[category] = matchPartnersForCategory(directory, category, location, topN);
+    matchesByCategory[category] = matchPartnersForCategory(directory, category, location, topN, preferredIds);
   }
 
   const partnersById: Record<string, PartnerProfile> = {};
@@ -212,7 +222,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
       if (!request || !isPartnerRequestComplete(category, request.answers)) continue;
 
       const location = getRequestLocation(category, request.answers, { zip: tenant.currentZip, state: tenant.state });
-      const result = scoreAndRankPartners(directory, category, location, request.answers);
+      const result = scoreAndRankPartners(directory, category, location, request.answers, preferredIds);
       initialMatches[category] = result;
 
       if (request.status === "draft") {

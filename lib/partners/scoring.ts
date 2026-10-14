@@ -185,7 +185,9 @@ export function scoreAndRankPartners(
   directory: PartnerProfile[],
   category: PartnerCategory,
   location: ClientLocation,
-  answers: Record<string, string | string[]> = {}
+  answers: Record<string, string | string[]> = {},
+  /** The client's community's preferred partners: shown first when they qualify */
+  preferredIds?: ReadonlySet<string>
 ): ScoringResult {
   const inCategory = directory.filter((p) => p.category === category);
 
@@ -269,6 +271,18 @@ export function scoreAndRankPartners(
     for (const s of virtual.slice(1)) {
       if (picked.length >= 3) break;
       picked.push(s);
+    }
+  }
+
+  // Preferred partners who passed every filter above lead the list (best
+  // scores first), then the usual picks fill the remaining spots
+  if (preferredIds?.size) {
+    const preferred = scored.filter((s) => preferredIds.has(s.partner.id)).sort(byScore).slice(0, 3);
+    if (preferred.length > 0) {
+      const rest = picked.filter((s) => !preferredIds.has(s.partner.id));
+      const extra = [...local, ...virtual].filter((s) => !preferredIds.has(s.partner.id) && !rest.includes(s));
+      const final = [...preferred, ...rest, ...extra].slice(0, 3);
+      return { best: final[0] ?? null, alternates: final.slice(1, 3) };
     }
   }
 

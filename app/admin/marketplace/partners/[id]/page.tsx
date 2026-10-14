@@ -15,6 +15,7 @@ import { syncPartnerFromCrmIfLinked } from "../../actions";
 import { PartnerDetailClient } from "./PartnerDetailClient";
 import Link from "next/link";
 import { getPartnerUsersForPartner } from "@/lib/marketplace/partnerUsersData";
+import { getAllBrands } from "@/lib/brands/data";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     getIntroductionEventsForPartner(id),
     getPartnerUsersForPartner(id).catch(() => []),
   ]);
+  const preferredBy = (await getAllBrands().catch(() => [])).filter((b) => b.preferredPartnerIds.includes(id));
   const team = teamRows.filter((u) => u.status === "Active");
   const pendingInvites = teamRows.filter((u) => u.status === "Invited").length;
   const owner = teamRows.find((u) => u.role === "Primary" && (u.status === "Active" || u.status === "Invited"));
@@ -78,6 +80,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </div>
           <span className="text-sm font-medium text-emerald-400">Manage team &rarr;</span>
         </Link>
+        {preferredBy.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-900/50 bg-amber-950/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-amber-300/80">Preferred partner for</p>
+            <p className="text-sm text-gray-200 mt-0.5">
+              {preferredBy.map((b, i) => (
+                <span key={b.id}>
+                  {i > 0 && ", "}
+                  <Link href={`/admin/marketplace/tenant-config/${b.id}#preferred-partners`} className="text-white hover:underline">{b.displayName}</Link>
+                </span>
+              ))}
+            </p>
+          </div>
+        )}
         <PartnerDetailClient
           partner={partner}
           categories={categories}

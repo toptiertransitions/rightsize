@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PreferredBadge } from "./PreferredBadge";
 import type { ScoredMatch, ScoringResult } from "@/lib/partners/scoring";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { communityCompletionLabel } from "@/lib/partners/copy";
@@ -78,6 +79,7 @@ function MatchCard({
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
           <DeliveryPill match={match} />
         </div>
+        <PreferredBadge communities={partner.preferredBy} />
         {partner.reviewCount > 0 && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
         <p className="text-sm text-gray-600 leading-relaxed">{match.whyThisMatch}</p>
 
