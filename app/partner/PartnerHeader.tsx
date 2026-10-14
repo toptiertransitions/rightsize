@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { House, Calendar, Gift, FileText, Store, Inbox, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getPlatform } from "@/lib/native";
+import { isNativeApp } from "@/lib/native";
 import { PartnerNavLinks } from "./PartnerNavLinks";
 
 // iOS native app only — the four items and their icons the compact bottom
@@ -54,11 +54,11 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
 
   // Capacitor's bridge isn't available during SSR/first paint, so this
   // starts false (matching the server-rendered text nav) and flips after
-  // mount if we're actually in the native iOS shell — same pattern as the
+  // mount if we're in the native app (iOS or Android) — same pattern as the
   // NonTTTClient iOS nav in components/layout/Header.tsx.
-  const [isIOSNative, setIsIOSNative] = useState(false);
+  const [isNativeShell, setIsNativeShell] = useState(false);
   useEffect(() => {
-    setIsIOSNative(getPlatform() === "ios");
+    setIsNativeShell(isNativeApp());
   }, []);
 
   // The fixed bottom nav sits outside normal document flow, so <main>
@@ -66,9 +66,9 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
   // reuses the same body.ios-bottom-nav rule in globals.css the
   // NonTTTClient nav already relies on.
   useEffect(() => {
-    document.body.classList.toggle("ios-bottom-nav", isIOSNative);
+    document.body.classList.toggle("ios-bottom-nav", isNativeShell);
     return () => { document.body.classList.remove("ios-bottom-nav"); };
-  }, [isIOSNative]);
+  }, [isNativeShell]);
 
   return (
     <>
@@ -92,7 +92,7 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
             </Link>
 
             {/* Nav — hidden entirely in the iOS native compact nav (below) */}
-            {!isIOSNative && (
+            {!isNativeShell && (
               <nav className="hidden md:flex items-center gap-1">
                 <PartnerNavLinks hasListing={hasListing} hasCrm={hasCrm} isCommunity={isCommunity} />
               </nav>
@@ -103,7 +103,7 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
               <span className="hidden sm:block text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
                 {contactName}
               </span>
-              {isIOSNative && teamInHeader && (
+              {isNativeShell && teamInHeader && (
                 <Link
                   href="/partner/team"
                   aria-label="Team"
@@ -120,7 +120,7 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
           </div>
 
           {/* Mobile nav (web/browser only) */}
-          {!isIOSNative && (
+          {!isNativeShell && (
             <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
               <PartnerNavLinks mobile hasListing={hasListing} hasCrm={hasCrm} isCommunity={isCommunity} />
             </div>
@@ -129,7 +129,7 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
       </header>
 
       {/* iOS native app nav — replaces the text nav above for Partner Portal users */}
-      {isIOSNative && (
+      {isNativeShell && (
         <nav
           className={cn("fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200", gridCols)}
           style={{ paddingBottom: "var(--sab)" }}

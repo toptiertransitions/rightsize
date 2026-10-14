@@ -8,7 +8,7 @@ import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
-import { getPlatform } from "@/lib/native";
+import { getPlatform, isNativeApp } from "@/lib/native";
 
 const SWITCHER_PAGES = ["/catalog", "/vendors", "/sales", "/invoices", "/quoting", "/plan", "/partners"];
 const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
@@ -60,10 +60,14 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
   // mount if we're actually in the native iOS shell — same pattern as
   // every other native-only branch in this codebase (see lib/native.ts).
   const [isIOSNative, setIsIOSNative] = useState(false);
+  // Native app on any platform (iOS or Android): gets the compact app nav.
+  // iOS-only extras (status bar tint, Notifications menu) stay on isIOSNative.
+  const [isNativeShell, setIsNativeShell] = useState(false);
   useEffect(() => {
     setIsIOSNative(getPlatform() === "ios");
+    setIsNativeShell(isNativeApp());
   }, []);
-  const useIOSNav = !!showIOSNav && isIOSNative;
+  const useIOSNav = !!showIOSNav && isNativeShell;
 
   // Native app: tint the status bar with the brand's primary color (or the
   // Top Tier green). Best effort; some platforms ignore runtime colors.
