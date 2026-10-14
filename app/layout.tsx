@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import { getInvoiceSettings } from "@/lib/airtable";
 import { DeepLinkBootstrap } from "@/components/shared/DeepLinkBootstrap";
 import { BackButtonBootstrap } from "@/components/shared/BackButtonBootstrap";
+import { AndroidSystemBarsBootstrap } from "@/components/shared/AndroidSystemBarsBootstrap";
 import "./globals.css";
 
 // Prevent static pre-rendering; Clerk requires runtime auth context
@@ -65,13 +66,18 @@ export default function RootLayout({
           <script
             dangerouslySetInnerHTML={{
               __html:
-                "try{var C=window.Capacitor;if(C&&((C.isNativePlatform&&C.isNativePlatform())||(C.getPlatform&&C.getPlatform()!=='web'))&&!sessionStorage.getItem('rz_launch_checked')){var d=document.documentElement;d.classList.add('rz-launching');setTimeout(function(){d.classList.remove('rz-launching')},2500)}}catch(e){}",
+                "try{var C=window.Capacitor;if(C&&((C.isNativePlatform&&C.isNativePlatform())||(C.getPlatform&&C.getPlatform()!=='web'))&&!sessionStorage.getItem('rz_launch_checked')){var d=document.documentElement;d.classList.add('rz-launching');setTimeout(function(){d.classList.remove('rz-launching')},2500)}}catch(e){}" +
+                // Android app only: drop viewport-fit=cover so Capacitor keeps
+                // pages inside the status and gesture bars on every WebView
+                // version (as the iOS app does), instead of drawing under them
+                "try{var A=window.Capacitor;if(A&&A.getPlatform&&A.getPlatform()==='android'){var m=document.querySelector('meta[name=viewport]');if(m)m.setAttribute('content',m.getAttribute('content').replace(/,?\\s*viewport-fit=cover/,''))}}catch(e){}",
             }}
           />
         </head>
         <body>
           <DeepLinkBootstrap />
           <BackButtonBootstrap />
+          <AndroidSystemBarsBootstrap />
           {children}
         </body>
       </html>
