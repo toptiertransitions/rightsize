@@ -12,6 +12,7 @@ export function NotificationSettingsClient() {
   const [error, setError] = useState("");
 
   const [android, setAndroid] = useState(false);
+  const [testState, setTestState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   useEffect(() => { setNative(isNativeApp()); setAndroid(getPlatform() === "android"); }, []);
 
   const optedOut = user?.unsafeMetadata?.pushOptOut === true;
@@ -37,6 +38,18 @@ export function NotificationSettingsClient() {
       setError("Couldn't save that change. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Sends one notification to this user's own devices, through the same
+  // path as every real notification (app/api/push/test)
+  async function sendTest() {
+    setTestState("sending");
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      setTestState(res.ok ? "sent" : "failed");
+    } catch {
+      setTestState("failed");
     }
   }
 
@@ -88,6 +101,20 @@ export function NotificationSettingsClient() {
               </button>
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+            {!optedOut && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={sendTest}
+                  disabled={testState === "sending"}
+                  className="h-10 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {testState === "sending" ? "Sending…" : "Send me a test notification"}
+                </button>
+                {testState === "sent" && <p className="text-xs text-gray-500 mt-2">Sent. It should arrive within a few seconds. If it doesn&rsquo;t, check that notifications are allowed for Rightsize in your phone&rsquo;s Settings.</p>}
+                {testState === "failed" && <p className="text-xs text-red-600 mt-2">Couldn&rsquo;t send a test right now. Please try again.</p>}
+              </div>
+            )}
             {android ? (
               <p className="text-xs text-gray-400 mt-4 leading-relaxed">
                 If you previously declined the system permission prompt, turning this on here won&rsquo;t be enough.
