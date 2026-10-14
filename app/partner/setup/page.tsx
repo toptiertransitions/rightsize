@@ -13,9 +13,9 @@ export default async function PartnerSetupPage() {
   const account = await getPartnerAccount(userId);
   if (!account) redirect("/partner/home");
 
-  const { partner, contact, listings } = account;
+  const { partner, contact, listings, membership } = account;
   const user = await currentUser().catch(() => null);
-  const firstName = user?.firstName || (contact.name || partner.pocName).split(" ")[0] || "";
+  const firstName = user?.firstName || ((contact?.name || membership.name) || partner.pocName).split(" ")[0] || "";
 
 
   return (
@@ -23,8 +23,8 @@ export default async function PartnerSetupPage() {
       firstName={firstName}
       business={{
         companyName: partner.companyName,
-        pocName: partner.pocName || contact.name,
-        phone: partner.phone || contact.phone,
+        pocName: partner.pocName || (contact?.name || membership.name),
+        phone: partner.phone || (contact?.phone || membership.phone || ""),
         website: partner.website,
         city: partner.city,
         state: partner.state || "IL",

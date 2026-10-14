@@ -1,5 +1,6 @@
 "use server";
 
+import { sendLeadToPartnerTeam } from "@/lib/marketplace/leads";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, getPartnerSelectionsForTenant, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity } from "@/lib/airtable";
@@ -323,16 +324,27 @@ export async function requestPartnerIntroAction(
       if (introEvent) {
         const method = listing.introNotificationMethod;
         if (method === "PartnerEmail") {
-          sendPartnerIntroPartnerNotification({
-            vendorName: partner.vendorName,
-            vendorEmail: marketplacePartner?.email,
-            clientName,
-            category: categoryLabel,
-            clientEmail: clientEmail || undefined,
-            clientPhone: tenant.clientPhone,
-            answers: formattedAnswers,
-            trackingToken: introEvent.trackingToken,
-          }).catch((e) => console.error("Partner intro partner notification failed:", e));
+          // The whole team with lead alerts on, not just the business email
+          (marketplacePartner
+            ? sendLeadToPartnerTeam({
+                partner: marketplacePartner,
+                clientName,
+                category: categoryLabel,
+                clientEmail: clientEmail || undefined,
+                clientPhone: tenant.clientPhone,
+                answers: formattedAnswers,
+                trackingToken: introEvent.trackingToken,
+              })
+            : sendPartnerIntroPartnerNotification({
+                vendorName: partner.vendorName,
+                clientName,
+                category: categoryLabel,
+                clientEmail: clientEmail || undefined,
+                clientPhone: tenant.clientPhone,
+                answers: formattedAnswers,
+                trackingToken: introEvent.trackingToken,
+              })
+          ).catch((e) => console.error("Partner intro partner notification failed:", e));
 
           sendPartnerIntroClientConfirmation({
             clientEmail: clientEmail || undefined,

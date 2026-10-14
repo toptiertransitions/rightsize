@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { House, Calendar, Gift, FileText, Store, Inbox } from "lucide-react";
+import { House, Calendar, Gift, FileText, Store, Inbox, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPlatform } from "@/lib/native";
 import { PartnerNavLinks } from "./PartnerNavLinks";
@@ -27,12 +27,15 @@ const PARTNER_IOS_NAV_ITEMS = [
 // Marketplace partners only (see app/partner/layout.tsx)
 const LISTING_NAV_ITEM = { href: "/partner/listing", label: "Listing", Icon: Store, isActive: (p: string) => p.startsWith("/partner/listing") };
 const LEADS_NAV_ITEM = { href: "/partner/leads", label: "Leads", Icon: Inbox, isActive: (p: string) => p.startsWith("/partner/leads") };
+const TEAM_NAV_ITEM = { href: "/partner/team", label: "Team", Icon: Users, isActive: (p: string) => p.startsWith("/partner/team") };
 
-export function PartnerHeader({ contactName, hasListing = false }: { contactName: string; hasListing?: boolean }) {
+export function PartnerHeader({ contactName, hasListing = false, hasCrm = true }: { contactName: string; hasListing?: boolean; hasCrm?: boolean }) {
   const pathname = usePathname();
   // Marketplace partners get Leads and Listing too (6 items), with shorter
   // labels so all six fit on a phone; other partners keep the original 4.
-  const iosItems = hasListing
+  // Team members without CRM access get just Leads, Listing and Team. When
+  // all six are showing, Team moves to a header button.
+  const iosItems = hasListing && hasCrm
     ? [
         PARTNER_IOS_NAV_ITEMS[0],
         LEADS_NAV_ITEM,
@@ -41,7 +44,11 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
         PARTNER_IOS_NAV_ITEMS[2],
         { ...PARTNER_IOS_NAV_ITEMS[3], label: "Docs" },
       ]
-    : PARTNER_IOS_NAV_ITEMS;
+    : hasListing
+      ? [LEADS_NAV_ITEM, LISTING_NAV_ITEM, TEAM_NAV_ITEM]
+      : PARTNER_IOS_NAV_ITEMS;
+  const teamInHeader = hasListing && hasCrm;
+  const gridCols = iosItems.length === 6 ? "grid-cols-6" : iosItems.length === 3 ? "grid-cols-3" : "grid-cols-4";
 
   // Capacitor's bridge isn't available during SSR/first paint, so this
   // starts false (matching the server-rendered text nav) and flips after
@@ -67,7 +74,7 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link href="/partner/home" className="flex items-center gap-2.5 shrink-0">
+            <Link href={hasCrm ? "/partner/home" : "/partner/leads"} className="flex items-center gap-2.5 shrink-0">
               <Image
                 src="/ttt-icon.png"
                 alt="Top Tier Transitions"
@@ -85,7 +92,7 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
             {/* Nav — hidden entirely in the iOS native compact nav (below) */}
             {!isIOSNative && (
               <nav className="hidden md:flex items-center gap-1">
-                <PartnerNavLinks hasListing={hasListing} />
+                <PartnerNavLinks hasListing={hasListing} hasCrm={hasCrm} />
               </nav>
             )}
 
@@ -94,6 +101,18 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
               <span className="hidden sm:block text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
                 {contactName}
               </span>
+              {isIOSNative && teamInHeader && (
+                <Link
+                  href="/partner/team"
+                  aria-label="Team"
+                  className={cn(
+                    "w-9 h-9 rounded-full flex items-center justify-center border transition-colors",
+                    pathname.startsWith("/partner/team") ? "bg-forest-50 border-forest-200 text-forest-700" : "border-gray-200 text-gray-500"
+                  )}
+                >
+                  <Users className="w-[18px] h-[18px]" />
+                </Link>
+              )}
               <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
             </div>
           </div>
@@ -101,7 +120,7 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
           {/* Mobile nav (web/browser only) */}
           {!isIOSNative && (
             <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
-              <PartnerNavLinks mobile hasListing={hasListing} />
+              <PartnerNavLinks mobile hasListing={hasListing} hasCrm={hasCrm} />
             </div>
           )}
         </div>
@@ -110,7 +129,7 @@ export function PartnerHeader({ contactName, hasListing = false }: { contactName
       {/* iOS native app nav — replaces the text nav above for Partner Portal users */}
       {isIOSNative && (
         <nav
-          className={cn("fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200", iosItems.length === 6 ? "grid-cols-6" : "grid-cols-4")}
+          className={cn("fixed inset-x-0 bottom-0 z-50 grid bg-white border-t border-cream-200", gridCols)}
           style={{ paddingBottom: "var(--sab)" }}
         >
           {iosItems.map(({ href, label, Icon, isActive }) => {

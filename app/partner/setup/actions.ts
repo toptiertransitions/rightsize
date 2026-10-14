@@ -165,7 +165,7 @@ export async function saveListingAction(
  * Submitted, the partner Invited -> Submitted, and admins get an email. */
 export async function submitSetupAction(): Promise<Result> {
   return run(async () => {
-    const { partner, listings, contact } = await requireAccount();
+    const { partner, listings, contact, membership } = await requireAccount();
     for (const l of listings) {
       if (l.status === "Draft") await updateListing(l.id, { status: "Submitted" });
     }
@@ -188,7 +188,7 @@ export async function submitSetupAction(): Promise<Result> {
         subject: `${resubmitted ? "Partner resubmitted after changes" : "Partner profile ready for review"}: ${partner.companyName}`,
         html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;">
           <p style="font-size:16px;font-weight:700;color:#111827;">${esc(partner.companyName)} ${resubmitted ? "made the requested changes and resubmitted" : "finished their partner setup"}</p>
-          <p style="font-size:14px;color:#4B5563;line-height:1.6;">${esc(contact.name || partner.pocName)} completed their profile and matching criteria for <strong>${cats}</strong>. Review it and move the listings to Live when it looks good.</p>
+          <p style="font-size:14px;color:#4B5563;line-height:1.6;">${esc((contact?.name || membership.name) || partner.pocName)} completed their profile and matching criteria for <strong>${cats}</strong>. Review it and move the listings to Live when it looks good.</p>
           <p><a href="${link}" style="display:inline-block;background:#2d4a3e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">Review partner</a></p>
         </div>`,
       }).catch((e) => console.error("[partner setup] admin email failed:", e));
@@ -203,7 +203,7 @@ export async function submitSetupAction(): Promise<Result> {
  * emails TTT Admins the request. */
 export async function requestCategoryChangeAction(message: string): Promise<Result> {
   return run(async () => {
-    const { partner, contact, listings } = await requireAccount();
+    const { partner, contact, listings, membership } = await requireAccount();
     const text = message.trim().slice(0, 2000);
     if (!text) throw new Error("Tell us what you'd like to change.");
     const resendKey = process.env.RESEND_API_KEY;
@@ -214,13 +214,13 @@ export async function requestCategoryChangeAction(message: string): Promise<Resu
     const { error } = await new Resend(resendKey).emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
       to: admins,
-      ...(contact.email ? { replyTo: contact.email } : {}),
+      ...((contact?.email || membership.email) ? { replyTo: (contact?.email || membership.email) } : {}),
       subject: `Category change request: ${partner.companyName}`,
       html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;">
         <p style="font-size:16px;font-weight:700;color:#111827;">${esc(partner.companyName)} asked to change their categories</p>
         <p style="font-size:13px;color:#6B7280;">Current: ${esc(listings.map((l) => l.category.label).join(", ") || "none")}</p>
         <p style="font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap;background:#F9FAFB;border-radius:8px;padding:12px;">${esc(text)}</p>
-        <p style="font-size:13px;color:#6B7280;">From ${esc(contact.name || partner.pocName)}${contact.email ? ` (${esc(contact.email)})` : ""}. Reply to this email to respond.</p>
+        <p style="font-size:13px;color:#6B7280;">From ${esc((contact?.name || membership.name) || partner.pocName)}${(contact?.email || membership.email) ? ` (${esc((contact?.email || membership.email))})` : ""}. Reply to this email to respond.</p>
         <p><a href="${appUrl}/admin/marketplace/partners/${partner.id}" style="display:inline-block;background:#2d4a3e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">Open partner</a></p>
       </div>`,
     });

@@ -16,6 +16,7 @@ import {
   updatePartner,
 } from "@/lib/marketplace/data";
 import { ensurePartnerCrmLink } from "@/lib/marketplace/crmLink";
+import { createPartnerUser, getPartnerUsersForPartner } from "@/lib/marketplace/partnerUsersData";
 import { sendMarketplacePartnerInviteEmail } from "@/lib/admin-notifications";
 
 type Result = { ok: true; reused: boolean } | { ok: false; error: string };
@@ -77,6 +78,27 @@ export async function inviteMarketplacePartnerAction(input: InviteMarketplacePar
       await updatePartner(partner.id, { lifecycleStatus: "Invited" });
     }
     await updateReferralContact(referralContactId, { portalInviteSent: true }).catch(() => {});
+
+    // Record them as the company's account owner (pending until they sign
+    // up; the portal links the row on their first visit). Skipped when the
+    // company already has an owner.
+    const team = await getPartnerUsersForPartner(partner.id).catch(() => []);
+    const hasOwner = team.some((u) => u.role === "Primary" && (u.status === "Active" || u.status === "Invited"));
+    if (!hasOwner && !team.some((u) => u.email === email)) {
+      await createPartnerUser({
+        partnerId: partner.id,
+        email,
+        name: contactName,
+        phone: phone || undefined,
+        role: "Primary",
+        status: "Invited",
+        invitedAt: new Date().toISOString(),
+        lastInviteSentAt: new Date().toISOString(),
+        invitedByClerkId: userId,
+        notifyLeads: true,
+        source: "Admin invite",
+      }).catch((e) => console.error("[invite partner] owner row failed:", e));
+    }
 
     const user = await currentUser().catch(() => null);
     await sendMarketplacePartnerInviteEmail({

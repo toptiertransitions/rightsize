@@ -17,7 +17,59 @@ import { sendPushToClerkUsers } from "@/lib/push-send";
 import { formatAnswersForEmail, migrateLegacyAnswerKeys } from "@/lib/partners/questions";
 import type { PartnerCategory } from "@/lib/types";
 import { getAllCategories, getAllListingsAdmin, getAllPartners, getIntroductionEventById, releaseIntroductionEvent } from "./data";
-import type { MarketplaceIntroductionEvent, MarketplaceIntroductionStatus } from "./types";
+import type { MarketplaceIntroductionEvent, MarketplaceIntroductionStatus, MarketplacePartner } from "./types";
+import { leadRecipients } from "./team";
+
+/**
+ * Sends a released lead to the partner company: an email to the business
+ * address and to every team member with lead alerts on, and a push to their
+ * phones (plus the company's CRM contact, for accounts that predate teams).
+ * Resolves to which channels went out.
+ */
+export async function sendLeadToPartnerTeam(params: {
+  partner: Pick<MarketplacePartner, "id" | "companyName" | "email" | "crmReferralContactId">;
+  clientName: string;
+  category: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  answers: Array<{ label: string; value: string }>;
+  trackingToken: string;
+}): Promise<{ emailed: boolean; pushed: boolean }> {
+  const { partner } = params;
+  const team = await leadRecipients(partner.id);
+  const emails = [...new Set([partner.email?.toLowerCase(), ...team.emails].filter((e): e is string => !!e))];
+
+  const sent = await Promise.allSettled(emails.map((vendorEmail) =>
+    sendPartnerIntroPartnerNotification({
+      vendorName: partner.companyName,
+      vendorEmail,
+      clientName: params.clientName,
+      category: params.category,
+      clientEmail: params.clientEmail,
+      clientPhone: params.clientPhone,
+      answers: params.answers,
+      trackingToken: params.trackingToken,
+    })
+  ));
+  sent.forEach((r) => { if (r.status === "rejected") console.error("[leads] partner email failed:", r.reason); });
+
+  let pushed = false;
+  try {
+    const contact = partner.crmReferralContactId ? await getReferralContactById(partner.crmReferralContactId).catch(() => null) : null;
+    const clerkIds = [...new Set([...team.clerkUserIds, ...(contact?.clerkUserId ? [contact.clerkUserId] : [])])];
+    if (clerkIds.length > 0) {
+      await sendPushToClerkUsers(
+        clerkIds,
+        { title: "New client introduction", body: `${params.clientName || "A family"} is looking for ${params.category || "your services"}.`, url: "/partner/leads" },
+        { type: "Other" }
+      );
+      pushed = true;
+    }
+  } catch (e) {
+    console.error("[leads] partner push failed:", e);
+  }
+  return { emailed: sent.some((r) => r.status === "fulfilled"), pushed };
+}
 
 /** Statuses a partner can set from their Leads page. */
 export const PARTNER_LEAD_STATUSES = ["Contacted", "Engaged", "Declined"] as const;
@@ -80,9 +132,8 @@ export async function releaseLead(eventId: string, actorName: string): Promise<{
 
   const answers = formatLeadAnswers(category, event.categoryAnswersSnapshot);
   const results = await Promise.allSettled([
-    sendPartnerIntroPartnerNotification({
-      vendorName: partner.companyName,
-      vendorEmail: partner.email || undefined,
+    sendLeadToPartnerTeam({
+      partner,
       clientName: event.clientName,
       category,
       clientEmail: event.clientEmail || undefined,
@@ -90,16 +141,6 @@ export async function releaseLead(eventId: string, actorName: string): Promise<{
       answers,
       trackingToken: event.trackingToken,
     }),
-    (async () => {
-      const contact = partner.crmReferralContactId ? await getReferralContactById(partner.crmReferralContactId) : null;
-      if (!contact?.clerkUserId) return false;
-      await sendPushToClerkUsers(
-        [contact.clerkUserId],
-        { title: "New client introduction", body: `${event.clientName || "A family"} is looking for ${category || "your services"}.`, url: "/partner/leads" },
-        { type: "Other" }
-      );
-      return true;
-    })(),
     sendPartnerIntroClientConfirmation({
       clientEmail: event.clientEmail || undefined,
       clientName: event.clientName,
@@ -108,8 +149,6 @@ export async function releaseLead(eventId: string, actorName: string): Promise<{
     }),
   ]);
   results.forEach((r) => { if (r.status === "rejected") console.error("[leads] release side effect failed:", r.reason); });
-  return {
-    emailed: !!partner.email && results[0].status === "fulfilled",
-    pushed: results[1].status === "fulfilled" && results[1].value === true,
-  };
+  const team = results[0].status === "fulfilled" ? results[0].value : { emailed: false, pushed: false };
+  return team;
 }

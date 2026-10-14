@@ -14,7 +14,7 @@ export default async function PartnerListingPage() {
   if (!account) redirect("/partner/home");
   if (needsSetup(account.partner)) redirect("/partner/setup");
 
-  const { partner, contact, listings } = account;
+  const { partner, contact, listings, membership } = account;
 
   return (
     <ListingClient
@@ -22,8 +22,8 @@ export default async function PartnerListingPage() {
       reviewFeedback={partner.reviewFeedback}
       business={{
         companyName: partner.companyName,
-        pocName: partner.pocName || contact.name,
-        phone: partner.phone || contact.phone,
+        pocName: partner.pocName || (contact?.name || membership.name),
+        phone: partner.phone || (contact?.phone || membership.phone || ""),
         website: partner.website,
         city: partner.city,
         state: partner.state,

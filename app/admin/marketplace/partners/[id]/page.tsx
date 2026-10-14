@@ -13,6 +13,8 @@ import { getLocalVendorById, getAllPartnerReviews, getSystemRole } from "@/lib/a
 import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissions";
 import { syncPartnerFromCrmIfLinked } from "../../actions";
 import { PartnerDetailClient } from "./PartnerDetailClient";
+import Link from "next/link";
+import { getPartnerUsersForPartner } from "@/lib/marketplace/partnerUsersData";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +34,15 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   const canEditReferralTerms = hasCapability(role ?? "public", "editReferralTerms");
   const canViewReferralAuditLog = hasCapability(role ?? "public", "viewReferralAuditLog");
 
-  const [categories, listings, introEvents] = await Promise.all([
+  const [categories, listings, introEvents, teamRows] = await Promise.all([
     getAllCategories(),
     getListingsForPartnerAdmin(id),
     getIntroductionEventsForPartner(id),
+    getPartnerUsersForPartner(id).catch(() => []),
   ]);
+  const team = teamRows.filter((u) => u.status === "Active");
+  const pendingInvites = teamRows.filter((u) => u.status === "Invited").length;
+  const owner = teamRows.find((u) => u.role === "Primary" && (u.status === "Active" || u.status === "Invited"));
 
   const auditLogs = (
     await Promise.all(listings.map((l) => getAuditLogForListing(l.id)))
@@ -59,6 +65,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
       <AdminHeader active="marketplace" />
       <MarketplaceNav />
       <main className="max-w-7xl mx-auto px-6 pb-12">
+        <Link
+          href={`/admin/marketplace/users?partner=${partner.id}`}
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-900 px-4 py-3 hover:border-gray-700"
+        >
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Account users</p>
+            <p className="text-sm text-gray-200 mt-0.5">
+              {owner ? <>Owner: <span className="text-white font-medium">{owner.name || owner.email}</span>{owner.status === "Invited" ? " (invited)" : ""}</> : <span className="text-red-300">No account owner yet</span>}
+              <span className="text-gray-500"> · {team.length} {team.length === 1 ? "user" : "users"}{pendingInvites ? ` · ${pendingInvites} pending` : ""}</span>
+            </p>
+          </div>
+          <span className="text-sm font-medium text-emerald-400">Manage team &rarr;</span>
+        </Link>
         <PartnerDetailClient
           partner={partner}
           categories={categories}

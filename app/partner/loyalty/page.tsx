@@ -71,7 +71,7 @@ export default async function PartnerLoyaltyPage() {
   if (!userId) redirect("/sign-in");
 
   const contact = await getPartnerContact(userId);
-  if (!contact) redirect("/home");
+  if (!contact) redirect("/partner/home");
 
   const companyId = contact.referralCompanyId || null;
 

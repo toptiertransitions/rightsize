@@ -6795,3 +6795,101 @@ export function buildPartnerReviewEmail({
 </body>
 </html>`;
 }
+
+// ─── Partner company team ────────────────────────────────────────────────────
+
+function partnerTeamShell(heading: string, body: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f0;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#2d4a3e;padding:28px 32px;">
+          <p style="margin:0;color:#C9A96E;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;">Top Tier Transitions &middot; Rightsize</p>
+          <p style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:700;">${heading}</p>
+        </td></tr>
+        <tr><td style="padding:32px;">${body}</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export function buildPartnerTeamInviteEmail({
+  inviteeName,
+  inviterName,
+  companyName,
+  role,
+  acceptUrl,
+  expiresDays,
+}: {
+  inviteeName: string;
+  inviterName: string;
+  companyName: string;
+  role: "Primary" | "Member";
+  acceptUrl: string;
+  expiresDays: number;
+}): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const roleLine = role === "Primary"
+    ? `as the <strong>account owner</strong>. You&rsquo;ll manage the listing and who else on your team has access.`
+    : `so you can see new client leads, keep your listing up to date, and work alongside your team.`;
+  return partnerTeamShell("You&rsquo;re invited to a partner account", `
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Join ${esc(companyName)} on Rightsize</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#4B5563;line-height:1.6;">
+            Hi ${esc(inviteeName)},<br><br>
+            <strong>${esc(inviterName)}</strong> added you to <strong>${esc(companyName)}</strong>&rsquo;s partner account with Top Tier Transitions, ${roleLine}
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr><td style="background:#2d4a3e;border-radius:10px;">
+              <a href="${acceptUrl}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">
+                Get Started &rarr;
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 20px;font-size:13px;color:#6B7280;line-height:1.5;">
+            Sign in or create your account with this email address. The invitation expires in ${expiresDays} days.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;border-radius:10px;margin:0 0 24px;">
+            <tr><td style="padding:18px 20px;">
+              <p style="margin:0 0 4px;font-size:14px;color:#111827;font-weight:600;">On iPhone? Get the Rightsize app first</p>
+              <p style="margin:0 0 14px;font-size:13px;color:#4B5563;line-height:1.5;">
+                <strong>1.</strong> Download the free Rightsize app.<br>
+                <strong>2.</strong> Come back to this email and tap <strong>Get Started</strong>. It opens your invitation right in the app.
+              </p>
+              <a href="${IOS_APP_STORE_URL}" style="display:inline-block;padding:10px 18px;background-color:#111827;border-radius:8px;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;">
+                Download on the App Store
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 4px;font-size:13px;color:#9CA3AF;">Or copy this link into Safari or Chrome:</p>
+          <p style="margin:0;font-size:12px;color:#6B7280;word-break:break-all;">${acceptUrl}</p>`);
+}
+
+export function buildPartnerTeamJoinedEmail({
+  memberName,
+  memberEmail,
+  companyName,
+  teamUrl,
+}: {
+  memberName: string;
+  memberEmail: string;
+  companyName: string;
+  teamUrl: string;
+}): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return partnerTeamShell("A teammate joined", `
+          <p style="margin:0 0 16px;font-size:15px;color:#4B5563;line-height:1.6;">
+            <strong>${esc(memberName)}</strong> (${esc(memberEmail)}) accepted their invitation and now has access to ${esc(companyName)}&rsquo;s partner account.
+          </p>
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="background:#2d4a3e;border-radius:10px;">
+              <a href="${teamUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">
+                View your team
+              </a>
+            </td></tr>
+          </table>`);
+}

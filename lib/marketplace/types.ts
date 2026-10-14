@@ -214,3 +214,44 @@ export interface MarketplaceIntroductionEvent {
   releasedAt?: string;
   releasedBy?: string;
 }
+
+// ─── Partner users (company accounts) ──────────────────────────────────────────
+// Who can sign in to a marketplace partner company's portal. Independent of
+// the CRM: a partner user needs no CRMReferralContacts record. Every company
+// has at most one Active Primary (the account owner) plus any number of
+// Members.
+
+export type PartnerUserRole = "Primary" | "Member";
+/** Invited: invite sent, not yet accepted. Revoked: invite cancelled before
+ * it was accepted. Removed: had access, taken away. */
+export type PartnerUserStatus = "Invited" | "Active" | "Removed" | "Revoked";
+
+export interface PartnerUser {
+  id: string;
+  partnerId: string;
+  email: string;
+  clerkUserId?: string;
+  name: string;
+  title?: string;
+  phone?: string;
+  role: PartnerUserRole;
+  status: PartnerUserStatus;
+  inviteToken?: string;
+  inviteExpiresAt?: string;
+  invitedAt?: string;
+  invitedByName?: string;
+  invitedByClerkId?: string;
+  lastInviteSentAt?: string;
+  acceptedAt?: string;
+  removedAt?: string;
+  removedByName?: string;
+  lastActiveAt?: string;
+  /** Gets new-lead emails and push notifications */
+  notifyLeads: boolean;
+  /** How the row came to be: "Admin invite", "Team invite", "Existing login", "Backfill" */
+  source?: string;
+  createdAt: string;
+}
+
+/** What the browser is allowed to see: never the invite token. */
+export type PartnerUserView = Omit<PartnerUser, "inviteToken"> & { inviteExpired: boolean };

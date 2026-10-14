@@ -12,10 +12,18 @@ const NAV_ITEMS = [
 
 const LISTING_ITEM = { href: "/partner/listing", label: "My Listing", isActive: (p: string) => p.startsWith("/partner/listing") };
 const LEADS_ITEM = { href: "/partner/leads", label: "Leads", isActive: (p: string) => p.startsWith("/partner/leads") };
+const TEAM_ITEM = { href: "/partner/team", label: "Team", isActive: (p: string) => p.startsWith("/partner/team") };
 
-export function PartnerNavLinks({ mobile = false, hasListing = false }: { mobile?: boolean; hasListing?: boolean }) {
+/** hasCrm: CRM referral partner (Home, Plans, Rewards, Documents).
+ * hasListing: on a marketplace company's team (Leads, Listing, Team). */
+export function PartnerNavLinks({ mobile = false, hasListing = false, hasCrm = true }: { mobile?: boolean; hasListing?: boolean; hasCrm?: boolean }) {
   const pathname = usePathname();
-  const items = hasListing ? [NAV_ITEMS[0], LEADS_ITEM, LISTING_ITEM, ...NAV_ITEMS.slice(1)] : NAV_ITEMS;
+  const items = [
+    ...(hasCrm ? [NAV_ITEMS[0]] : []),
+    ...(hasListing ? [LEADS_ITEM, LISTING_ITEM] : []),
+    ...(hasCrm ? NAV_ITEMS.slice(1) : []),
+    ...(hasListing ? [TEAM_ITEM] : []),
+  ];
 
   return (
     <>

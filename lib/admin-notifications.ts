@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getReferralContactById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail } from "./email";
+import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail, buildPartnerTeamInviteEmail, buildPartnerTeamJoinedEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -992,5 +992,50 @@ export async function sendNonClientSignupSummary(params: {
     to: adminEmails,
     subject: `Internal Alert - New Non Client User Summary: ${params.name || params.email}`,
     html,
+  });
+}
+
+/** A partner company invited someone to its account (from the portal Team
+ * page or Admin > Marketplace > Users). Throws so the caller can report it. */
+export async function sendPartnerTeamInviteEmail(params: {
+  to: string;
+  inviteeName: string;
+  inviterName: string;
+  inviterEmail?: string;
+  companyName: string;
+  role: "Primary" | "Member";
+  acceptUrl: string;
+  expiresDays: number;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) throw new Error("Email isn't configured");
+  const resend = new Resend(resendKey);
+  const replyTo = params.inviterEmail && params.inviterEmail.toLowerCase() !== params.to.toLowerCase() ? params.inviterEmail : undefined;
+  const { error } = await resend.emails.send({
+    from: `${params.inviterName} via Rightsize <${process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com"}>`,
+    to: params.to,
+    ...(replyTo ? { replyTo } : {}),
+    subject: `${params.inviterName} invited you to ${params.companyName} on Rightsize`,
+    html: buildPartnerTeamInviteEmail(params),
+  });
+  if (error) throw new Error(`Invite email failed: ${error.message}`);
+}
+
+/** Lets the account owner (and the inviter) know someone joined. */
+export async function sendPartnerTeamJoinedEmail(params: {
+  to: string[];
+  memberName: string;
+  memberEmail: string;
+  companyName: string;
+}): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey || params.to.length === 0) return;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Rightsize <${process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com"}>`,
+    to: params.to,
+    subject: `${params.memberName} joined ${params.companyName} on Rightsize`,
+    html: buildPartnerTeamJoinedEmail({ ...params, teamUrl: `${appUrl}/partner/team` }),
   });
 }

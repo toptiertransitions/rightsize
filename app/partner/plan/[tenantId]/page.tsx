@@ -22,7 +22,7 @@ export default async function PartnerPlanPage({
   if (!userId) redirect("/sign-in");
 
   const contact = await getPartnerContact(userId);
-  if (!contact) redirect("/home");
+  if (!contact) redirect("/partner/home");
 
   const { tenantId } = await params;
   const hasAccess = await partnerHasAccessToTenant(contact, tenantId);

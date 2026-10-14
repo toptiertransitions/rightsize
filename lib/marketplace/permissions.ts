@@ -18,7 +18,8 @@ export type MarketplaceCapability =
   | "sendInvites"
   | "runPipeline"
   | "viewReviewsAndProjects"
-  | "portalEditOwnRecord";
+  | "portalEditOwnRecord"
+  | "managePartnerUsers";
 
 const TTT_ADMIN_CAPS: MarketplaceCapability[] = [
   "viewPartners",
@@ -32,6 +33,7 @@ const TTT_ADMIN_CAPS: MarketplaceCapability[] = [
   "sendInvites",
   "runPipeline",
   "viewReviewsAndProjects",
+  "managePartnerUsers",
 ];
 
 // TTTManager: everything except category/field-schema editing, referral

@@ -111,6 +111,7 @@ export const AIRTABLE_TABLES = {
   PUSH_NOTIFICATION_LOG: process.env.AIRTABLE_PUSH_NOTIFICATION_LOG_TABLE || "PushNotificationLog",
   // ─── Marketplace rebuild (Partners/Listings model — see lib/marketplace/) ───
   MARKETPLACE_PARTNERS: process.env.AIRTABLE_MARKETPLACE_PARTNERS_TABLE || "Partners",
+  MARKETPLACE_PARTNER_USERS: process.env.AIRTABLE_PARTNER_USERS_TABLE || "PartnerUsers",
   MARKETPLACE_CATEGORIES: process.env.AIRTABLE_MARKETPLACE_CATEGORIES_TABLE || "MarketplaceCategories",
   MARKETPLACE_LISTINGS: process.env.AIRTABLE_MARKETPLACE_LISTINGS_TABLE || "MarketplaceListings",
   MARKETPLACE_REFERRAL_TERMS_AUDIT_LOG: process.env.AIRTABLE_MARKETPLACE_REFERRAL_TERMS_AUDIT_LOG_TABLE || "MarketplaceReferralTermsAuditLog",

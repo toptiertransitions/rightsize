@@ -11,7 +11,7 @@ export default async function PartnerDocumentsPage() {
   if (!userId) redirect("/sign-in");
 
   const contact = await getPartnerContact(userId);
-  if (!contact) redirect("/home");
+  if (!contact) redirect("/partner/home");
 
   const projectsByStage = await getPartnerProjectsByStage(contact).catch(() => [] as { tenantId: string | null; stage: string }[]);
   const crmTenantIds = projectsByStage

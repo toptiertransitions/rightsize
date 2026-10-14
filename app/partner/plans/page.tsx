@@ -15,7 +15,7 @@ export default async function PartnerPlansPage({
   if (!userId) redirect("/sign-in");
 
   const contact = await getPartnerContact(userId);
-  if (!contact) redirect("/home");
+  if (!contact) redirect("/partner/home");
 
   const { t } = await searchParams;
 
