@@ -42,8 +42,91 @@ function signProviderToken(): string {
   });
 }
 
-function isPushConfigured(): boolean {
+function isApnsConfigured(): boolean {
   return !!(process.env.APNS_TEAM_ID && process.env.APNS_KEY_ID && process.env.APNS_PRIVATE_KEY && process.env.APNS_BUNDLE_ID);
+}
+
+// ─── FCM (Android) ─────────────────────────────────────────────────────────────
+// Firebase Cloud Messaging HTTP v1, authed with the Firebase service account
+// in FIREBASE_SERVICE_ACCOUNT_JSON (the downloaded key file's JSON, raw or
+// base64). Signs a short-lived JWT and trades it for a Google access token,
+// reused across sends within an invocation until shortly before it expires.
+interface FcmCredentials { projectId: string; clientEmail: string; privateKey: string }
+
+function fcmCredentials(): FcmCredentials | null {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (!raw) return null;
+  try {
+    const text = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
+    const j = JSON.parse(text) as { project_id?: string; client_email?: string; private_key?: string };
+    if (!j.project_id || !j.client_email || !j.private_key) return null;
+    return { projectId: j.project_id, clientEmail: j.client_email, privateKey: j.private_key.replace(/\\n/g, "\n") };
+  } catch {
+    return null;
+  }
+}
+
+let fcmTokenCache: { token: string; expiresAt: number } | null = null;
+
+async function fcmAccessToken(creds: FcmCredentials): Promise<string> {
+  if (fcmTokenCache && fcmTokenCache.expiresAt > Date.now() + 60_000) return fcmTokenCache.token;
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = jwt.sign(
+    { iss: creds.clientEmail, scope: "https://www.googleapis.com/auth/firebase.messaging", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 },
+    creds.privateKey,
+    { algorithm: "RS256" }
+  );
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+  });
+  const data = (await res.json()) as { access_token?: string; expires_in?: number; error?: string };
+  if (!res.ok || !data.access_token) throw new Error(`FCM auth failed: ${data.error ?? res.status}`);
+  fcmTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000 };
+  return data.access_token;
+}
+
+/** Android notification channels (created by the app; see PushNotificationBootstrap). */
+type AndroidChannel = "urgent" | "general" | "fyi";
+
+function channelFor(type: PushLogType): AndroidChannel {
+  return type === "Urgent" ? "urgent" : "general";
+}
+
+async function sendOneFcm(deviceToken: string, accessToken: string, projectId: string, payload: PushPayload, channel: AndroidChannel): Promise<"ok" | "bad-token" | "error"> {
+  try {
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          token: deviceToken,
+          notification: { title: payload.title, body: payload.body },
+          data: payload.url ? { url: payload.url } : {},
+          android: {
+            // Delivery priority (doze): everything time-sensitive is HIGH;
+            // only FYI waits for the next maintenance window.
+            priority: channel === "fyi" ? "NORMAL" : "HIGH",
+            notification: {
+              channel_id: channel,
+              sound: channel === "fyi" ? undefined : "default",
+              notification_priority: channel === "urgent" ? "PRIORITY_HIGH" : channel === "fyi" ? "PRIORITY_LOW" : "PRIORITY_DEFAULT",
+            },
+          },
+        },
+      }),
+    });
+    if (res.ok) return "ok";
+    const raw = await res.text();
+    // A dead or malformed token: FCM says UNREGISTERED (404) or rejects the token itself (400)
+    if (res.status === 404 || /UNREGISTERED|registration token/i.test(raw)) return "bad-token";
+    console.error(`[push-send] FCM ${res.status} for token ${deviceToken.slice(0, 8)}…: ${raw.slice(0, 300)}`);
+    return "error";
+  } catch (e) {
+    console.error("[push-send] FCM request failed:", e);
+    return "error";
+  }
 }
 
 interface PushPayload {
@@ -114,29 +197,48 @@ export async function sendPushToClerkUsers(
   payload: PushPayload,
   log: { type: PushLogType; shiftId?: string }
 ): Promise<void> {
-  if (!isPushConfigured()) {
-    console.log("[push-send] APNs not configured — skipping push (set APNS_TEAM_ID / APNS_KEY_ID / APNS_PRIVATE_KEY / APNS_BUNDLE_ID)");
+  const apns = isApnsConfigured();
+  const fcm = fcmCredentials();
+  if (!apns && !fcm) {
+    console.log("[push-send] Neither APNs nor FCM is configured — skipping push");
     for (const clerkUserId of clerkUserIds) {
-      await logPushAttempt({ clerkUserId, shiftId: log.shiftId, type: log.type, result: "Failed", detail: "APNs not configured" });
+      await logPushAttempt({ clerkUserId, shiftId: log.shiftId, type: log.type, result: "Failed", detail: "Push not configured" });
     }
     return;
   }
   try {
     const devices = await getDeviceTokensForUsers(clerkUserIds);
-    const iosDevices = devices.filter((d) => d.platform === "iOS");
+    // Each token is sent once, through its own platform's service
+    const iosDevices = apns ? devices.filter((d) => d.platform === "iOS") : [];
+    const androidDevices = fcm ? devices.filter((d) => d.platform === "Android") : [];
+    const sendable = [...iosDevices, ...androidDevices];
 
-    const devicedUserIds = new Set(iosDevices.map((d) => d.clerkUserId));
+    const devicedUserIds = new Set(sendable.map((d) => d.clerkUserId));
     for (const clerkUserId of clerkUserIds) {
       if (!devicedUserIds.has(clerkUserId)) {
         await logPushAttempt({ clerkUserId, shiftId: log.shiftId, type: log.type, result: "SkippedNoDevice" });
       }
     }
-    if (iosDevices.length === 0) return;
+    if (sendable.length === 0) return;
 
-    const jwtToken = signProviderToken();
-    const results = await Promise.all(
-      iosDevices.map(async (d) => ({ device: d, result: await sendOne(d.token, jwtToken, payload) }))
-    );
+    const results: Array<{ device: (typeof devices)[number]; result: "ok" | "bad-token" | "error" }> = [];
+    if (iosDevices.length > 0) {
+      const jwtToken = signProviderToken();
+      results.push(...await Promise.all(
+        iosDevices.map(async (d) => ({ device: d, result: await sendOne(d.token, jwtToken, payload) }))
+      ));
+    }
+    if (androidDevices.length > 0 && fcm) {
+      const accessToken = await fcmAccessToken(fcm).catch((e) => { console.error("[push-send]", e); return null; });
+      const channel = channelFor(log.type);
+      results.push(...await Promise.all(
+        androidDevices.map(async (d) => ({
+          device: d,
+          result: accessToken ? await sendOneFcm(d.token, accessToken, fcm.projectId, payload, channel) : ("error" as const),
+        }))
+      ));
+    }
+
     await Promise.all(
       results.filter((r) => r.result === "bad-token").map((r) => unregisterDeviceToken(r.device.token))
     );

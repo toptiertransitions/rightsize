@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
-import { isNativeApp } from "@/lib/native";
+import { getPlatform, isNativeApp } from "@/lib/native";
 
 export function NotificationSettingsClient() {
   const { user, isLoaded } = useUser();
@@ -11,7 +11,8 @@ export function NotificationSettingsClient() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => { setNative(isNativeApp()); }, []);
+  const [android, setAndroid] = useState(false);
+  useEffect(() => { setNative(isNativeApp()); setAndroid(getPlatform() === "android"); }, []);
 
   const optedOut = user?.unsafeMetadata?.pushOptOut === true;
 
@@ -57,7 +58,7 @@ export function NotificationSettingsClient() {
 
         {!native ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <p className="text-sm text-gray-600">Push notifications are only available in the Rightsize iOS app.</p>
+            <p className="text-sm text-gray-600">Push notifications are only available in the Rightsize iPhone and Android apps.</p>
           </div>
         ) : !isLoaded ? (
           <div className="py-8 text-center text-sm text-gray-400">Loading…</div>
@@ -87,10 +88,17 @@ export function NotificationSettingsClient() {
               </button>
             </div>
             {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
-            <p className="text-xs text-gray-400 mt-4 leading-relaxed">
-              If you previously declined the system permission prompt, turning this on here won&rsquo;t be enough — iOS only asks once.
-              You&rsquo;ll also need to enable it in your iPhone&rsquo;s Settings app under Rightsize → Notifications.
-            </p>
+            {android ? (
+              <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+                If you previously declined the system permission prompt, turning this on here won&rsquo;t be enough.
+                You&rsquo;ll also need to enable it in your phone&rsquo;s Settings app under Apps → Rightsize → Notifications, where you can also choose how Urgent, Shifts and messages, and FYI alerts behave.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+                If you previously declined the system permission prompt, turning this on here won&rsquo;t be enough — iOS only asks once.
+                You&rsquo;ll also need to enable it in your iPhone&rsquo;s Settings app under Rightsize → Notifications.
+              </p>
+            )}
           </div>
         )}
       </div>

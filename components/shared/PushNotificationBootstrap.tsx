@@ -56,14 +56,25 @@ export function PushNotificationBootstrap() {
   }, [isSignedIn]);
 
   useEffect(() => {
-    // iOS only for now: on Android, registering before Firebase is set up
-    // crashes the app, and tokens below are labeled "iOS" (APNs).
-    if (!isNativeApp() || getPlatform() !== "ios" || pushOptedOut) return;
+    // iOS (APNs) and Android (Firebase). Android builds must include
+    // android/app/google-services.json, or registering crashes the app.
+    const platform = getPlatform();
+    if (!isNativeApp() || (platform !== "ios" && platform !== "android") || pushOptedOut) return;
 
     let cleanup: (() => void) | undefined;
 
     (async () => {
       const { PushNotifications } = await import("@capacitor/push-notifications");
+
+      // Android shows each notification through a channel the user can tune
+      // in system settings; the server picks one per message (lib/push-send.ts).
+      if (platform === "android") {
+        await Promise.all([
+          PushNotifications.createChannel({ id: "urgent", name: "Urgent", description: "Urgent project messages", importance: 4, sound: "default", vibration: true, visibility: 1 }),
+          PushNotifications.createChannel({ id: "general", name: "Shifts and messages", description: "Shift invites and reminders, direct messages, new leads", importance: 3, sound: "default", vibration: true, visibility: 1 }),
+          PushNotifications.createChannel({ id: "fyi", name: "FYI", description: "Low-priority updates", importance: 2, vibration: false, visibility: 1 }),
+        ]).catch((e) => console.error("[push] channel setup failed:", e));
+      }
 
       const perm = await PushNotifications.checkPermissions();
       let status = perm.receive;
@@ -79,7 +90,7 @@ export function PushNotificationBootstrap() {
         fetch("/api/push/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: token.value, platform: "iOS", environment: "production" }),
+          body: JSON.stringify({ token: token.value, platform: platform === "android" ? "Android" : "iOS", environment: "production" }),
         }).catch((e) => console.error("[push] register failed:", e));
       });
 

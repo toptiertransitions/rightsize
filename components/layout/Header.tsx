@@ -303,7 +303,7 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
                   <UserButton.Link label="Tips" href="/tips" labelIcon={<Lightbulb className="w-4 h-4" />} />
                 )}
                 <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
-                {isIOSNative && (
+                {isNativeShell && (
                   <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />
                 )}
                 <UserButton.Action label="signOut" />
