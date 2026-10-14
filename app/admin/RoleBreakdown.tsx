@@ -4,21 +4,21 @@ const CLIENT_ROLES = [
     label: "Owner",
     color: "border-amber-600",
     badge: "bg-amber-900/50 text-amber-300",
-    desc: "TTT-managed project owner with full visibility. Receives a formal contract, TTT-issued invoices, and has TTT field staff assigned to their project. Can set payout preference and unsold item preferences (standard + per-item special situations) on the Sales page. Can permanently delete their own account from Home (archives the project, deletes their Clerk account, signs them out) — same self-service flow as Non-TTT owners, replacing the old staff-reviewed Request Deletion for this role.",
+    desc: "TTT-managed project owner with full visibility. Receives a formal contract, TTT-issued invoices, and has TTT field staff assigned to their project. Can set payout preference and unsold item preferences (standard + per-item special situations) on the Sales page. Can permanently delete their own account from Home (archives the project, deletes their Clerk account, signs them out) — same self-service flow as Non-TTT owners, replacing the old staff-reviewed Request Deletion for this role. Gets a short welcome tour on first sign-in, a Pay Now button on unpaid invoices, contracts and invoice PDFs that open in the app, and tap-to-call for their Team Lead. When moving into a senior community, that community is locked in as their Community partner on the Partners page, and if the community has set up a resident checklist it appears at the bottom of /plan to check off.",
   },
   {
     key: "Collaborator",
     label: "Collaborator",
     color: "border-sky-700",
     badge: "bg-sky-900/50 text-sky-300",
-    desc: "Family member or trusted contact on a TTT-managed project with edit access to items and rooms.",
+    desc: "Family member or trusted contact on a TTT-managed project with edit access to items and rooms. Can check off tasks on the community's resident checklist at the bottom of /plan (when the project's senior community has one).",
   },
   {
     key: "Viewer",
     label: "Viewer",
     color: "border-gray-600",
     badge: "bg-gray-700 text-gray-400",
-    desc: "Read-only access to view project status, catalog, and invoices on a TTT-managed project.",
+    desc: "Read-only access to view project status, catalog, and invoices on a TTT-managed project. Sees the community's resident checklist on /plan but can't check tasks off.",
   },
 ] as const;
 
@@ -28,7 +28,7 @@ const NON_TTT_CLIENT_ROLES = [
     label: "Non-TTT Owner",
     color: "border-orange-700",
     badge: "bg-orange-900/50 text-orange-300",
-    desc: "Self-serve signup — account and project are created together through an onboarding wizard at /get-started (name & zip, service interests, moving timeline, destination incl. senior-community search, current home size & density, bedroom/bathroom layout, and 'How did you hear about us?'), which auto-creates the project and its Rooms. Naming a referring Realtor or Senior Community at signup locks that partner as theirs for the category on the Partners page. Catalogs and routes items to FB/Marketplace, eBay, or Other Consignment Store (100% client earnings — no TTT take rate). AI route recommendations never suggest ProFoundFinds. Enters destination square footage on /rooms to generate service hour estimates on /plan. 'Get Professional Support' CTA on /plan and /sales replaces hours log and payout section — emails info@toptiertransitions.com with project context. Google Reviews section is hidden on /plan (not relevant to a self-managed project). Can permanently delete their own account from Home (archives the project, deletes their Clerk account, signs them out). No TTT staff, formal contract, or TTT-issued invoices.",
+    desc: "Self-serve signup — account and project are created together through an onboarding wizard at /get-started (name & zip, service interests, moving timeline, destination incl. senior-community search, current home size & density, bedroom/bathroom layout, and 'How did you hear about us?'), which auto-creates the project and its Rooms. Naming a referring Realtor or Senior Community at signup locks that partner as theirs for the category on the Partners page. Catalogs and routes items to FB/Marketplace, eBay, or Other Consignment Store (100% client earnings — no TTT take rate). AI route recommendations never suggest ProFoundFinds. Enters destination square footage on /rooms to generate service hour estimates on /plan. 'Get Professional Support' CTA on /plan and /sales replaces hours log and payout section — emails info@toptiertransitions.com with project context. Google Reviews section is hidden on /plan (not relevant to a self-managed project). Can permanently delete their own account from Home (archives the project, deletes their Clerk account, signs them out). No TTT staff, formal contract, or TTT-issued invoices. Has a Tips tab (searchable moving FAQ with phase filters, mover quote comparison, rehoming guide, timeline, pitfalls). Signing up through a community's join link (/join/[slug]) or entering its community code applies that community's branding to the app (logo, colors, community contacts on Home, branded emails); naming a referring community or realtor that has an Active brand switches the project to that brand when the welcome tour ends. If that community has a resident checklist, it appears at the bottom of /plan.",
   },
 ] as const;
 
@@ -45,14 +45,14 @@ const STAFF_ROLES = [
     label: "TTT Team Lead",
     color: "border-teal-700",
     badge: "bg-teal-900/50 text-teal-300",
-    desc: "All TTT Staff capabilities, plus: on projects where they are assigned as Team Lead — sees the full team schedule (not just their own shifts), views the complete Hours breakdown and Shift Log with team member names, uses the Project Checklist (mark items complete/incomplete), and submits a Request to Modify Schedule (sends a branded email to all Managers and Admins). On the Home page: time tracker shows all entries for their team lead projects. In the Catalog: full ability to reassign items to a different client project. On the client's Partners page, being assigned Team Lead automatically surfaces them — name, Clerk profile photo, and phone — as \"Top Tier Transitions,\" the sole Move Manager result, on any TTT-managed project (never on a Non-TTT project).",
+    desc: "All TTT Staff capabilities, plus: on projects where they are assigned as Team Lead — sees the full team schedule (not just their own shifts), views the complete Hours breakdown and Shift Log with team member names, uses the Project Checklist (mark items complete/incomplete), can view and check off a client's community resident checklist on /plan, and submits a Request to Modify Schedule (sends a branded email to all Managers and Admins). On the Home page: time tracker shows all entries for their team lead projects. In the Catalog: full ability to reassign items to a different client project. On the client's Partners page, being assigned Team Lead automatically surfaces them — name, Clerk profile photo, and phone — as \"Top Tier Transitions,\" the sole Move Manager result, on any TTT-managed project (never on a Non-TTT project).",
   },
   {
     key: "TTTManager",
     label: "TTT Manager",
     color: "border-purple-700",
     badge: "bg-purple-900/50 text-purple-300",
-    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, manage storage locations on /staff, add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off), and access the Content Repository (view, download, like, comment, upload, edit, and manage categories). Receives an email notification with a direct link to the project Plan page when any shift helper declines a calendar invitation. Time-off notification emails include a warning if the absent staff member is scheduled on a Daily Focus Shift during their time off. Expenses are reimbursable by default.",
+    desc: "Operations leads with full project, quoting, invoicing, expense, subcontractor, and time-tracking access. Can create new client projects from /home, reassign items between projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), configure payout settings, manage payment handles, generate and re-print client payout PDFs, post and comment on internal project notes on /plan, add and delete Google Reviews on project plan pages, use Vendor Outreach (AI-mapped sequential routing to vendors), access the Ops console, manage storage locations on /staff, add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off), and access the Content Repository (view, download, like, comment, upload, edit, and manage categories). Has the Marketplace admin (/admin/marketplace): invite partners by category, review submitted partners (approve, request changes or reject with an AI-drafted email, archive), release held leads to partners, and manage Tenant Config (community branding, join link and QR code, assigning projects to a community, and each community's resident checklist); can view but not change partner company users. Runs Estates (/admin/estates), including Home Pickup sales with multiple pickup days and per-day windows, and the per-sale Sale Announcement email to the shopper list. Can view and check off a client's community resident checklist on /plan. Receives an email notification with a direct link to the project Plan page when any shift helper declines a calendar invitation. Time-off notification emails include a warning if the absent staff member is scheduled on a Daily Focus Shift during their time off. Expenses are reimbursable by default.",
   },
   {
     key: "TTTSales",
@@ -66,7 +66,7 @@ const STAFF_ROLES = [
     label: "TTT Admin",
     color: "border-red-700",
     badge: "bg-red-900/50 text-red-300",
-    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, post and comment on internal project notes on /plan, add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off), edit staff first/last name, display name, and phone number from /admin/users (name syncs to Clerk + Airtable; phone syncs to Airtable only, full user list now paginates rather than capping at 100 — no one silently falls off the list), and access the Content Repository (view, download, like, comment, upload, edit, and manage categories). Curates the client-facing Partners marketplace from /admin/local-vendors — sets each vendor's category, uploads a logo (file upload, not a pasted URL), sets a featured rank, and manually adjusts its completed-projects count. The only role that can remove a client's referral partner from the Partners page, which reopens the marketplace for that category. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Receives an email notification with a direct link to the project Plan page when any shift helper declines a calendar invitation. Expenses are non-reimbursable by default. On CRM Plan: can create quarters, edit date ranges, set rep quarterly referral goals (click-to-edit in leaderboard), add pipeline companies to any rep's Not Yet Referring list, and open any rep's individual view.",
+    desc: "Full platform access including admin console, all settings, Venmo/Zelle handle configuration, item reassignment across projects, use Donate & Leave at ProFound (creates $0/Donated clone + moves original to PF + Square sync), generate and re-print client payout PDFs, manage Open House Dates for the ProFound Finds storefront, post and comment on internal project notes on /plan, add time off on behalf of any staff member (Ops → Staff Availability → Add Staff Time Off), edit staff first/last name, display name, and phone number from /admin/users (name syncs to Clerk + Airtable; phone syncs to Airtable only, full user list now paginates rather than capping at 100 — no one silently falls off the list), and access the Content Repository (view, download, like, comment, upload, edit, and manage categories). Curates the client-facing Partners marketplace from /admin/local-vendors — sets each vendor's category, uploads a logo (file upload, not a pasted URL), sets a featured rank, and manually adjusts its completed-projects count. The only role that can remove a client's referral partner from the Partners page, which reopens the marketplace for that category. Can edit items directly from the All Active Projects catalog view without selecting a specific project. Receives an email notification with a direct link to the project Plan page when any shift helper declines a calendar invitation. Expenses are non-reimbursable by default. On CRM Plan: can create quarters, edit date ranges, set rep quarterly referral goals (click-to-edit in leaderboard), add pipeline companies to any rep's Not Yet Referring list, and open any rep's individual view. Marketplace admin extras: turns each partner category Public on or off (drives the self-serve Partners page, public marketplace and sitemap), and manages partner company users in Marketplace > Users (invite, resend or cancel invites, remove and restore people, make someone the account owner, and choose who gets each company's lead alerts). Lists items to eBay from /admin/fb one at a time or with bulk List Online (AI fills missing descriptions and required item specifics, closest allowed condition, 50 lb default weight when blank, Large Items policy for oversize items). Sends the War Room for Me and Referral Funnel for Me report emails from /admin/invoicing, and receives the Internal Alert - New Non Client User Summary email when a self-serve client finishes the signup questions.",
   },
 ] as const;
 
@@ -109,6 +109,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Name a referring Realtor or Senior Community at signup (\"How did you hear about us?\" step) — becomes their referral partner", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "Referral partner locked in its category — shown in Your Partners and as the only option in Vetted Partner Matching; can't be changed, removed, or bypassed with intro requests", permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: "view-only", TTTStaff: "view-only", TTTTeamLead: "view-only", TTTManager: "view-only", TTTSales: false, TTTAdmin: true } },
   { label: "Remove a referral partner (reopens the marketplace for that category)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Community partner locked to the senior community the client is moving into (destination community from /plan or the CRM opportunity) — other community listings hidden", permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: "view-only", TTTTeamLead: "view-only", TTTManager: "view-only", TTTSales: false, TTTAdmin: "view-only" } },
+  { label: "Self-serve Partners page shows only categories switched to Public on the Marketplace dashboard", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { group: "Plan & Calendar" },
   { label: "View Daily Focus shifts",                         permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTTeamLead: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Add & edit Daily Focus shifts",                   permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTTeamLead: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
@@ -120,6 +122,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Request to Modify Schedule (sends email to Managers/Admins) — on lead project only", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: true, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { label: "Project Checklist — view & mark items complete/incomplete (Team Lead: lead project only)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Project Checklist — add, edit, delete & reorder tasks", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Community resident checklist at the bottom of /plan — shown only when the project's senior community has set one up", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Community resident checklist — check tasks off (records who and when)", permissions: { Owner: true, Collaborator: true, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Send client weekly email (key dates, team lead, progress, pending review alert)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Internal Notes board — post notes & threaded comments (TTT staff only, never visible to clients)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: true, TTTAdmin: true } },
   { label: "View Google Reviews on /plan (star rating + review text) — hidden on Non-TTT projects",  permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false,  TTTStaff: true,  TTTTeamLead: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
@@ -140,6 +144,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Filter Catalog by Staff Seller",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Completed Date auto-stamp (status → Sold/Donated/Discarded)", permissions: { Owner: true, Collaborator: true, Viewer: false, NonTTTOwner: true, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Completed Date column & sort in Catalog table view", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Catalog bulk actions: MaxSold export, Mover PDF from the selected items, Assign Estate Sale (skips sold)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "\"In-person only\" checkbox on Estate Sale items (showcase-only on profoundfinds.com, can't be reserved online)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Search catalog by Estate Sale ID", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Assign BoxID to catalog items (inline badge on photo)",  permissions: { Owner: true,  Collaborator: true,  Viewer: false, NonTTTOwner: true,  TTTStaff: true,  TTTTeamLead: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Search catalog by BoxID",          permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: true,  TTTStaff: true,  TTTTeamLead: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
@@ -151,6 +157,11 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Edit project address from /home",  permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Toggle card/table view for all projects", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Create new project from /home",           permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { group: "Client Experience" },
+  { label: "Welcome tour on first sign-in; invite links open in the iPhone app", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "Pay Now button on unpaid invoices; contract and invoice PDFs open in the app", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
+  { label: "Tips tab (moving FAQ with search and phase filters)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
+  { label: "Community branding (join link /join/[slug] or community code): community logo, colors, contacts on Home, branded emails", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: false } },
   { group: "Service Model" },
   { label: "TTT field staff assigned to project",           permissions: { Owner: true,  Collaborator: true,  Viewer: true,  NonTTTOwner: false, TTTStaff: true,  TTTTeamLead: true,  TTTManager: true,  TTTSales: false, TTTAdmin: true  } },
   { label: "Formal TTT contract & signed quote",            permissions: { Owner: "view-only", Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true,  TTTSales: true,  TTTAdmin: true  } },
@@ -208,6 +219,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Manage opportunities",        permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
   { label: "Log CRM activities (Call, Email, Meeting, Note, Task, Text Message)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Convert lead to project",     permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true,  TTTAdmin: true  } },
+  { label: "Create Project from an opportunity copies its origin, destination address and senior community onto the new project (fills blanks only)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Opportunity Origin & Destination Address auto-syncs to linked project (Destination flows to /plan address bar & shift/key-date modals)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "Invite referral contact to Partner Portal (sends sign-up email)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
   { label: "Send Partner Rewards Email to self (portal summary for a spotlight contact)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: true, TTTAdmin: true } },
@@ -221,7 +233,8 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "CRM Plan — Quarter's Plan: key meetings, key resources, monthly goals per company", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "CRM Plan — Compare Activity AI (AI assessment of plan items vs logged activities)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
   { label: "CRM Plan — Activity vs Goals tracker (per-month meeting and checkin counts vs monthly goals, color-coded)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
-  { label: "Gmail sync — sync email to CRM contact activity log (from Settings)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
+  { label: "Gmail sync — sync email to CRM contact activity log (from Settings; Sync All runs accounts in parallel)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: true, TTTAdmin: true } },
+  { label: "War Room for Me and Referral Funnel for Me report emails (AI, rep by rep; sent from /admin/invoicing)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { group: "Sales & Payouts" },
   { label: "View sales page (consignment & marketplace)", permissions: { Owner: true, Collaborator: true, Viewer: true, NonTTTOwner: true, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Set client payout preference (Zelle/Venmo/Check/Other)", permissions: { Owner: true, Collaborator: "view-only", Viewer: "view-only", NonTTTOwner: false, TTTStaff: true, TTTTeamLead: true, TTTManager: true, TTTSales: false, TTTAdmin: true } },
@@ -246,6 +259,20 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "Admin Pay console — Expenses tab",                   permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Bulk mark pay items as paid",                        permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { label: "Admin Pay — Audit tab (flags 'forgot-to-log' gaps per staff member)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { group: "Partner Marketplace Admin (/admin/marketplace)" },
+  { label: "Dashboard, Partners, Leads, Categories, Pipeline and Tenant Config tabs", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Turn a partner category Public on or off (self-serve Partners page, public marketplace, sitemap)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Invite a business to the marketplace by category", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Partner review: approve, request changes or reject (AI-drafted email with test send), archive; statuses Waiting on Partner and Rejected", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Leads: release a held client introduction to the partner (emails and notifies whoever the company chose for lead alerts)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Users: view every partner company's users", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: "view-only", TTTSales: false, TTTAdmin: true } },
+  { label: "Users: invite, resend or cancel invites, remove, restore, make account owner, choose who gets lead alerts", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Tenant Config: community branding, contacts, join link / QR / community code, publish, assign projects to a community", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Tenant Config: build and edit a community's resident checklist (tasks, due rules relative to move date, order)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { group: "Estates & Online Selling" },
+  { label: "Estates (/admin/estates): Home Pickup sales with multiple pickup days, each with its own time window", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "Estates: Sale Announcement email to the shopper list (AI draft; blocked if it contains the street address)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
+  { label: "eBay List It and bulk List Online from /admin/fb (AI fills missing description and required item specifics, closest allowed condition, 50 lb default weight, Large Items policy for oversize)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { group: "Ops / Supply Tracking" },
   { label: "Storage Locations on /staff Supply tab — add/edit/delete storage units with monthly cost", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: true, TTTSales: false, TTTAdmin: true } },
   { group: "Admin Console" },
@@ -260,6 +287,7 @@ const FEATURE_ROWS: FeatureRow[] = [
   { label: "View PF/FB/eBay inventory tables", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Manage Open House Dates for ProFound Finds storefront (add/edit/delete event dates shown publicly)", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
   { label: "Edit staff first/last name, display name, and phone from /admin/users — name syncs to Clerk and Airtable; phone syncs to Airtable only", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
+  { label: "Receives the Internal Alert - New Non Client User Summary email when a self-serve client finishes the signup questions", permissions: { Owner: false, Collaborator: false, Viewer: false, NonTTTOwner: false, TTTStaff: false, TTTTeamLead: false, TTTManager: false, TTTSales: false, TTTAdmin: true } },
 ];
 
 function CheckCell({ value }: { value: Check | undefined }) {
@@ -340,41 +368,51 @@ export function RoleBreakdown() {
       </div>
 
       {/* Partner role card */}
-      <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E] mb-2">Partner Role (Referral Portal)</p>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E] mb-2">Partner Roles (Partner Portal)</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-        <div className="bg-gray-900 border border-[#C9A96E]/30 rounded-xl p-4">
-          <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mb-2 bg-[#C9A96E]/10 text-[#C9A96E]">
-            Partner
-          </span>
-          <p className="text-xs text-gray-400 leading-relaxed">
-            Referral contacts from the CRM who are invited to the Partner Portal at <strong className="text-gray-300">/partner/home</strong>.
-            Partners authenticate via standard Clerk sign-in. Their Clerk account is linked to a CRMReferralContacts record by email.
-            Access is read-only and scoped to projects they referred (via CRMClientContacts &rarr; CRMOpportunities &rarr; Tenants).
-            Partners can view project schedules and floorplans, track referral points, and see Google reviews from their referred projects.
-            They cannot access any TTT internal tooling, time entries, payroll, invoices, or catalog edit features.
-          </p>
+        <div className="space-y-3">
+          <div className="bg-gray-900 border border-[#C9A96E]/30 rounded-xl p-4">
+            <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mb-2 bg-[#C9A96E]/10 text-[#C9A96E]">
+              Referral Partner (CRM)
+            </span>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Referral contacts from the CRM who are invited to the Partner Portal at <strong className="text-gray-300">/partner/home</strong>.
+              Their Clerk account is linked to a CRMReferralContacts record. Access is read-only and scoped to projects they referred
+              (via CRMClientContacts &rarr; CRMOpportunities &rarr; Tenants): Home, Project Plans, Rewards and Documents.
+              They cannot access any TTT internal tooling, time entries, payroll, invoices, or catalog edit features.
+            </p>
+          </div>
+          <div className="bg-gray-900 border border-[#C9A96E]/30 rounded-xl p-4">
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-[#C9A96E]/10 text-[#C9A96E]">Account Owner (Primary)</span>
+              <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-[#C9A96E]/5 text-[#C9A96E]/80">Account User (Member)</span>
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              People on a marketplace partner company&rsquo;s team, stored in the PartnerUsers table and independent of the CRM (a teammate needs no CRM contact).
+              Each company has one Account Owner and any number of Account Users. Everyone on the team gets Leads, My Listing and Team; senior communities also get
+              <strong className="text-gray-300"> Resident Plans</strong>. A person who also has a CRM contact sees the referral-partner pages too.
+              A company&rsquo;s original CRM-contact login becomes its Account Owner automatically. A person belongs to one company at a time, and removal by an admin or owner is final until restored.
+            </p>
+          </div>
         </div>
         <div className="bg-gray-900 border border-[#C9A96E]/20 rounded-xl p-4">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mb-2">Partner Portal Features</p>
           <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
-            <li><span className="text-[#C9A96E]">&#10003;</span> Points dashboard — earned / redeemed / available</li>
-            <li><span className="text-[#C9A96E]">&#10003;</span> Current &amp; previous referred projects list</li>
-            <li><span className="text-[#C9A96E]">&#10003;</span> Read-only project plan: schedule + key dates + floorplans</li>
-            <li><span className="text-[#C9A96E]">&#10003;</span> Google Reviews (view only — for sharing with their network)</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Referral partners: points dashboard, referred projects, read-only plan (schedule, key dates, floorplans), Google Reviews</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Partner setup and My Listing: business details, service area (incl. zip + radius, virtual), matching criteria; resubmit after requested changes</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Leads: released client introductions, marked Contacted / Working together / Not a fit</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Team: anyone on the team invites teammates (14-day email invitation); the Account Owner removes members, hands over ownership, and chooses who gets lead alerts (everyone, or selected people, plus the business email on or off)</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Resident Plans (senior communities): each resident&rsquo;s checklist progress, filtered by resident and Done / Open / Past due; any team member checks tasks off; only the Account Owner builds and edits the checklist</li>
             <li><span className="text-gray-600">&#10005;</span> Cannot see time entries, payroll, or invoice amounts</li>
-            <li><span className="text-gray-600">&#10005;</span> Cannot edit any project data</li>
+            <li><span className="text-gray-600">&#10005;</span> Cannot edit any project data (beyond checking off community checklist tasks)</li>
           </ul>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Admin Controls (TTTSales/TTTManager/TTTAdmin)</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Admin Controls</p>
           <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
             <li><span className="text-[#C9A96E]">&#10003;</span> Invite button on CRM Referral Partners tab (sends portal invite email) — TTTSales, TTTManager, TTTAdmin</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Invite a business to the marketplace from Marketplace &gt; Partners (records its contact as the pending Account Owner) — TTTManager, TTTAdmin</li>
+            <li><span className="text-[#C9A96E]">&#10003;</span> Marketplace &gt; Users: every partner user across companies; invite, resend, copy invite link, cancel, remove, restore, make owner, lead alerts — TTTAdmin (TTTManager view-only)</li>
             <li><span className="text-[#C9A96E]">&#10003;</span> Award / redeem points via <code className="text-gray-500">/api/partner/points/award</code> and <code className="text-gray-500">/redeem</code></li>
             <li><span className="text-[#C9A96E]">&#10003;</span> Points auto-awarded when invoice is first marked Paid (via PartnerPointAwarded checkbox on Invoices)</li>
-          </ul>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A96E]/60 mt-3 mb-2">Airtable Setup Required</p>
-          <ul className="text-xs text-gray-400 space-y-1.5 leading-relaxed">
-            <li>CRMReferralContacts &rarr; add <code className="text-gray-500">ClerkUserId</code> (Text) field</li>
-            <li>New <code className="text-gray-500">PartnerPoints</code> table (ReferralContactId, TenantId, TenantName, OpportunityId, EarnedAt, RedeemedAt, RedeemedBy, RedemptionNote, CreatedAt)</li>
-            <li>Invoices &rarr; add <code className="text-gray-500">PartnerPointAwarded</code> (Checkbox) field</li>
           </ul>
         </div>
       </div>
