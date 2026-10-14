@@ -15,13 +15,17 @@ const LEADS_ITEM = { href: "/partner/leads", label: "Leads", isActive: (p: strin
 const TEAM_ITEM = { href: "/partner/team", label: "Team", isActive: (p: string) => p.startsWith("/partner/team") };
 
 /** hasCrm: CRM referral partner (Home, Plans, Rewards, Documents).
- * hasListing: on a marketplace company's team (Leads, Listing, Team). */
-export function PartnerNavLinks({ mobile = false, hasListing = false, hasCrm = true }: { mobile?: boolean; hasListing?: boolean; hasCrm?: boolean }) {
+ * hasListing: on a marketplace company's team (Leads, Listing, Team).
+ * isCommunity: a senior community; Plans becomes "Resident Plans" and is
+ * shown even without CRM access. */
+export function PartnerNavLinks({ mobile = false, hasListing = false, hasCrm = true, isCommunity = false }: { mobile?: boolean; hasListing?: boolean; hasCrm?: boolean; isCommunity?: boolean }) {
   const pathname = usePathname();
+  const plans = isCommunity ? { ...NAV_ITEMS[1], label: "Resident Plans" } : NAV_ITEMS[1];
   const items = [
     ...(hasCrm ? [NAV_ITEMS[0]] : []),
     ...(hasListing ? [LEADS_ITEM, LISTING_ITEM] : []),
-    ...(hasCrm ? NAV_ITEMS.slice(1) : []),
+    ...(hasCrm || isCommunity ? [plans] : []),
+    ...(hasCrm ? NAV_ITEMS.slice(2) : []),
     ...(hasListing ? [TEAM_ITEM] : []),
   ];
 

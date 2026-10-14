@@ -42,6 +42,9 @@ interface PageProps {
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTManager", "TTTAdmin"];
 
+import { getResidentChecklist } from "@/lib/checklists/service";
+import { ResidentChecklistCard } from "@/components/community-checklist/ResidentChecklistCard";
+import { setCommunityChecklistItemAction } from "./community-checklist-actions";
 export default async function PlanPage({ searchParams }: PageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
@@ -405,6 +408,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   const isTTTStaffOrAbove = sysRole !== null;
 
+  // Community checklist: the resident (any client user on the project) and
+  // Top Tier leads, managers and admins. Not shift staff or sales.
+  const seesCommunityChecklist = !!role || isTeamLead || isManagerOrAdmin || isAdmin;
+  const canToggleCommunityChecklist = role === "Owner" || role === "Collaborator" || isTeamLead || isManagerOrAdmin || isAdmin;
+  const communityChecklist = seesCommunityChecklist ? await getResidentChecklist(tenantId).catch(() => null) : null;
+
   // Derive parking notes and primary contact from the active CRM opportunity
   const activeOpp = opportunities.find(o => o.stage !== "Won" && o.stage !== "Lost") ?? opportunities[0];
   const originParkingNotes = activeOpp?.originParkingNotes || undefined;
@@ -544,6 +553,20 @@ export default async function PlanPage({ searchParams }: PageProps) {
         <GoogleReviewsSection
           tenantId={tenantId}
           canEdit={isManagerOrAdmin}
+        />
+      )}
+
+      {/* Community checklist — tasks the resident's senior community set */}
+      {communityChecklist && (
+        <ResidentChecklistCard
+          communityName={communityChecklist.brand.displayName}
+          logoUrl={communityChecklist.brand.logoUrl || undefined}
+          accent={communityChecklist.brand.primaryColor}
+          moveDate={communityChecklist.moveDate}
+          rows={communityChecklist.rows}
+          summary={communityChecklist.summary}
+          canToggle={canToggleCommunityChecklist}
+          onToggle={setCommunityChecklistItemAction.bind(null, tenantId)}
         />
       )}
     </div>

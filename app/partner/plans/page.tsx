@@ -5,6 +5,16 @@ import { getTenantById, getPlanEntriesForTenant, getProjectFiles, getPartnerTena
 import type { PlanEntry, ProjectFile } from "@/lib/types";
 import { ProjectSelector } from "./ProjectSelector";
 import { PartnerCalendar } from "./PartnerCalendar";
+import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
+import { getBrandsForPartner, getResidentsOverview } from "@/lib/checklists/service";
+import { ResidentsChecklistBoard } from "@/components/community-checklist/ResidentsChecklistBoard";
+import { ChecklistEditor } from "@/components/community-checklist/ChecklistEditor";
+import {
+  partnerRemoveChecklistItemAction,
+  partnerReorderChecklistAction,
+  partnerSaveChecklistItemAction,
+  setResidentChecklistItemAction,
+} from "./residents-actions";
 
 export default async function PartnerPlansPage({
   searchParams,
@@ -14,8 +24,61 @@ export default async function PartnerPlansPage({
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const contact = await getPartnerContact(userId);
-  if (!contact) redirect("/partner/home");
+  const [contact, account] = await Promise.all([
+    getPartnerContact(userId),
+    getPartnerAccount(userId).catch(() => null),
+  ]);
+
+  // Senior communities see their residents' checklist progress here
+  const brands = account ? await getBrandsForPartner(account.partner.id).catch(() => []) : [];
+  const isCommunity = brands.length > 0;
+  if (!contact && !isCommunity) redirect("/partner/home");
+
+  const residentsSection = isCommunity ? await (async () => {
+    const { residents, itemsByBrand } = await getResidentsOverview(brands);
+    const isOwner = account!.membership.role === "Primary";
+    const hasChecklist = brands.some((b) => (itemsByBrand[b.id] ?? []).length > 0);
+    return (
+      <section className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#2d4a3e]">Resident Plans</h1>
+          <p className="text-sm text-gray-500 mt-1">Where each resident moving into {brands.map((b) => b.displayName).join(" and ")} stands on your checklist.</p>
+        </div>
+        <ResidentsChecklistBoard
+          residents={residents.map(({ tenantId, name, brandId, moveDate, rows, summary }) => ({ tenantId, name, brandId, moveDate, rows, summary }))}
+          accent={brands[0].primaryColor}
+          hasChecklist={hasChecklist}
+          onToggle={setResidentChecklistItemAction}
+        />
+        {isOwner ? (
+          <details className="group" open={!hasChecklist}>
+            <summary className="cursor-pointer list-none inline-flex items-center gap-2 text-sm font-semibold text-[#2d4a3e] hover:underline">
+              <span className="group-open:hidden">Edit checklist tasks</span>
+              <span className="hidden group-open:inline">Hide checklist editor</span>
+            </summary>
+            <div className="mt-4 space-y-4">
+              {brands.map((b) => (
+                <ChecklistEditor
+                  key={b.id}
+                  theme="light"
+                  communityName={b.displayName}
+                  initialItems={itemsByBrand[b.id] ?? []}
+                  onSave={partnerSaveChecklistItemAction.bind(null, b.id)}
+                  onRemove={partnerRemoveChecklistItemAction.bind(null, b.id)}
+                  onReorder={partnerReorderChecklistAction.bind(null, b.id)}
+                />
+              ))}
+            </div>
+          </details>
+        ) : (
+          <p className="text-xs text-gray-500">Your account owner manages the checklist tasks.</p>
+        )}
+      </section>
+    );
+  })() : null;
+
+  if (!contact) return <div className="space-y-8">{residentsSection}</div>;
+  const noun = isCommunity ? "Resident" : "Project";
 
   const { t } = await searchParams;
 
@@ -41,6 +104,7 @@ export default async function PartnerPlansPage({
     .map((ten) => ({ tenantId: ten!.id, name: ten!.name }));
 
   if (activeProjects.length === 0) {
+    if (residentsSection) return <div className="space-y-8">{residentsSection}</div>;
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-[#2d4a3e]">Project Plans</h1>
@@ -71,19 +135,22 @@ export default async function PartnerPlansPage({
 
   return (
     <div className="space-y-8">
+      {residentsSection}
+      {residentsSection && <hr className="border-cream-200" />}
+
       {/* Header with project selector */}
       <div className="flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-[#2d4a3e]">
-            {selectedProject ? selectedProject.name : "Project Plans"}
-          </h1>
+          <h2 className="text-2xl font-semibold text-[#2d4a3e]">
+            {selectedProject ? selectedProject.name : isCommunity ? "Resident Calendar" : "Project Plans"}
+          </h2>
           {isAllMode && (
-            <p className="text-sm text-gray-500 mt-1">Showing all {activeProjects.length} active referred project{activeProjects.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-gray-500 mt-1">Showing all {activeProjects.length} active {isCommunity ? "resident" : "referred project"}{activeProjects.length !== 1 ? "s" : ""}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 hidden sm:block">Filter by project:</span>
-          <ProjectSelector projects={activeProjects} selectedId={selectedId} />
+          <span className="text-sm text-gray-500 hidden sm:block">Filter by {noun.toLowerCase()}:</span>
+          <ProjectSelector projects={activeProjects} selectedId={selectedId} noun={noun} />
         </div>
       </div>
 

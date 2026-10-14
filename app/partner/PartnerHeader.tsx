@@ -29,7 +29,7 @@ const LISTING_NAV_ITEM = { href: "/partner/listing", label: "Listing", Icon: Sto
 const LEADS_NAV_ITEM = { href: "/partner/leads", label: "Leads", Icon: Inbox, isActive: (p: string) => p.startsWith("/partner/leads") };
 const TEAM_NAV_ITEM = { href: "/partner/team", label: "Team", Icon: Users, isActive: (p: string) => p.startsWith("/partner/team") };
 
-export function PartnerHeader({ contactName, hasListing = false, hasCrm = true }: { contactName: string; hasListing?: boolean; hasCrm?: boolean }) {
+export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, isCommunity = false }: { contactName: string; hasListing?: boolean; hasCrm?: boolean; isCommunity?: boolean }) {
   const pathname = usePathname();
   // Marketplace partners get Leads and Listing too (6 items), with shorter
   // labels so all six fit on a phone; other partners keep the original 4.
@@ -40,12 +40,14 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true }
         PARTNER_IOS_NAV_ITEMS[0],
         LEADS_NAV_ITEM,
         LISTING_NAV_ITEM,
-        { ...PARTNER_IOS_NAV_ITEMS[1], label: "Plans" },
+        { ...PARTNER_IOS_NAV_ITEMS[1], label: isCommunity ? "Residents" : "Plans" },
         PARTNER_IOS_NAV_ITEMS[2],
         { ...PARTNER_IOS_NAV_ITEMS[3], label: "Docs" },
       ]
     : hasListing
-      ? [LEADS_NAV_ITEM, LISTING_NAV_ITEM, TEAM_NAV_ITEM]
+      ? isCommunity
+        ? [LEADS_NAV_ITEM, LISTING_NAV_ITEM, { ...PARTNER_IOS_NAV_ITEMS[1], label: "Residents" }, TEAM_NAV_ITEM]
+        : [LEADS_NAV_ITEM, LISTING_NAV_ITEM, TEAM_NAV_ITEM]
       : PARTNER_IOS_NAV_ITEMS;
   const teamInHeader = hasListing && hasCrm;
   const gridCols = iosItems.length === 6 ? "grid-cols-6" : iosItems.length === 3 ? "grid-cols-3" : "grid-cols-4";
@@ -92,7 +94,7 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true }
             {/* Nav — hidden entirely in the iOS native compact nav (below) */}
             {!isIOSNative && (
               <nav className="hidden md:flex items-center gap-1">
-                <PartnerNavLinks hasListing={hasListing} hasCrm={hasCrm} />
+                <PartnerNavLinks hasListing={hasListing} hasCrm={hasCrm} isCommunity={isCommunity} />
               </nav>
             )}
 
@@ -120,7 +122,7 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true }
           {/* Mobile nav (web/browser only) */}
           {!isIOSNative && (
             <div className="flex md:hidden pb-3 gap-1 overflow-x-auto">
-              <PartnerNavLinks mobile hasListing={hasListing} hasCrm={hasCrm} />
+              <PartnerNavLinks mobile hasListing={hasListing} hasCrm={hasCrm} isCommunity={isCommunity} />
             </div>
           )}
         </div>

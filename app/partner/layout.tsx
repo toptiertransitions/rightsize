@@ -4,6 +4,7 @@ import { SignOutButton } from "@clerk/nextjs";
 import { getPartnerContact } from "@/lib/partner";
 import { PartnerHeader } from "./PartnerHeader";
 import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
+import { getBrandsForPartner } from "@/lib/checklists/service";
 
 export const metadata = { title: "Partner Portal — Top Tier Transitions" };
 
@@ -40,12 +41,16 @@ export default async function PartnerLayout({ children }: { children: React.Reac
     );
   }
 
+  // Senior communities get "Resident Plans" (their residents' checklists)
+  const isCommunity = account ? (await getBrandsForPartner(account.partner.id).catch(() => [])).length > 0 : false;
+
   return (
     <div className="min-h-screen bg-cream-50">
       <PartnerHeader
         contactName={contact?.name || account?.membership.name || account?.partner.companyName || ""}
         hasListing={!!account}
         hasCrm={!!contact}
+        isCommunity={isCommunity}
       />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
