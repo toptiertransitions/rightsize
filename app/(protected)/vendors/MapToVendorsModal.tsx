@@ -1,4 +1,6 @@
 "use client";
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { VendorAssignment } from "@/lib/vendorMapping";
@@ -35,6 +37,7 @@ export function MapToVendorsModal({
   sentByClerkId, sentByName, sentByEmail,
   onClose,
 }: Props) {
+  useBackClose(onClose);
   const router = useRouter();
   const vendorMap = new Map(vendors.map(v => [v.id, v]));
   const itemMap = new Map(items.map(i => [i.id, i]));

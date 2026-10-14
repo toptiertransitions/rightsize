@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Crown, MoreHorizontal, UserPlus, Mail, Bell, X, LogOut } from "lucide-react";
@@ -300,6 +302,7 @@ function RowMenu({ items, disabled }: { items: { label: string; onClick: () => v
 }
 
 function Modal({ children, onClose, label }: { children: React.ReactNode; onClose: () => void; label: string }) {
+  useBackClose(onClose);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", esc);

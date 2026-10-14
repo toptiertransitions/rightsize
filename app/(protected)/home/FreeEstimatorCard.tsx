@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useCallback } from "react";
 import type { Room, Service, RoomType, DensityLevel } from "@/lib/types";
 import { ROOM_TYPES } from "@/lib/types";
@@ -62,6 +64,7 @@ interface Props {
 
 export function FreeEstimatorCard({ tenantId, rooms: initialRooms, services, currentEstimatedHours, savedDestinationSqFt, estimatedServiceHours: initialServiceRows }: Props) {
   const [open, setOpen] = useState(false);
+  useBackClose(open && (() => setOpen(false)));
   const totalRoomsSqFt = initialRooms.reduce((s, r) => s + r.squareFeet, 0);
 
   // ── Modal state ──────────────────────────────────────────────────────────────

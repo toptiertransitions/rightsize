@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { KEY_DATE_ACTIVITIES } from "@/lib/types";
 import type { PlanEntry } from "@/lib/types";
@@ -24,6 +26,7 @@ interface Props {
 }
 
 export function PartnerKeyDateModal({ projects, defaultTenantId, defaultDate, entry, onClose, onSaved, onDeleted }: Props) {
+  useBackClose(onClose);
   const isEdit = !!entry;
   const [tenantId, setTenantId] = useState(entry?.tenantId ?? defaultTenantId ?? projects[0]?.tenantId ?? "");
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));

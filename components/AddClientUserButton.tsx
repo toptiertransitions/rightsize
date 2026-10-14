@@ -1,5 +1,6 @@
 "use client";
 
+import { useBackClose } from "@/lib/back-button";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import { getInviteReferralContextAction, type InviteReferralContext } from "@/app/(protected)/partners/referralActions";
@@ -61,6 +62,7 @@ export function AddClientUserButton({ tenantId, projectName }: Props) {
     setEmail("");
     setResult(null);
   };
+  useBackClose(open && handleClose);
 
   // "Invite another" keeps the referral that was just attached — it's
   // already saved on the project — and goes straight to the email field.

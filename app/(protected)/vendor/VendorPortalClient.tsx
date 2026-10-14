@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -150,6 +152,7 @@ interface DetailModalProps {
 }
 
 function ItemDetailModal({ item, city, initialAction, isLoading, isCollector, onClose, onDecision }: DetailModalProps) {
+  useBackClose(onClose);
   const [action, setAction] = useState<"approve" | "reject" | null>(initialAction);
   const [rejectNotes, setRejectNotes] = useState("");
   const [customPrice, setCustomPrice] = useState("");

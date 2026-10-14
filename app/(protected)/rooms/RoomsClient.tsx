@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -80,6 +82,7 @@ interface AddRoomModalProps {
 }
 
 function AddRoomModal({ tenantId, onClose, onSaved }: AddRoomModalProps) {
+  useBackClose(onClose);
   const [name, setName] = useState("");
   const [roomType, setRoomType] = useState<RoomType>("Living Room");
   const [squareFeet, setSquareFeet] = useState("200");
@@ -136,6 +139,7 @@ interface EditRoomModalProps {
 }
 
 function EditRoomModal({ room, tenantId, onClose, onSaved }: EditRoomModalProps) {
+  useBackClose(onClose);
   const [name, setName] = useState(room.name);
   const [roomType, setRoomType] = useState<RoomType>(room.roomType);
   const [squareFeet, setSquareFeet] = useState(String(room.squareFeet));

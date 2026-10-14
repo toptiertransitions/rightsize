@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import type { TimeEntry, PlanEntry, Contract } from "@/lib/types";
 import { TIME_FOCUS_AREAS } from "@/lib/types";
@@ -98,6 +100,7 @@ interface EditModalProps {
 }
 
 function EditEntryModal({ entry, focusAreas, onClose, onSaved }: EditModalProps) {
+  useBackClose(onClose);
   const [date, setDate] = useState(entry.date);
   const [focusArea, setFocusArea] = useState(entry.focusArea);
   const [startTime, setStartTime] = useState(entry.startTime);

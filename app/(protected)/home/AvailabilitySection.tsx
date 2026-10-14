@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useEffect } from "react";
 import type { WeeklySchedule, TimeOffEntry, DaySchedule } from "@/lib/types";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
@@ -291,6 +293,7 @@ function TimeOffTab({
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 function AvailabilityModal({ onClose }: { onClose: () => void }) {
+  useBackClose(onClose);
   const [tab, setTab] = useState<"schedule" | "timeoff">("schedule");
   const [schedule, setSchedule] = useState<WeeklySchedule>(DEFAULT_WEEKLY_SCHEDULE);
   const [timeOff, setTimeOff] = useState<TimeOffEntry[]>([]);

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { prepareImageForUpload } from "@/lib/image-utils";
 import Image from "next/image";
@@ -216,6 +218,7 @@ interface EditModalProps {
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
 export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, onClose, onSaved, onItemUpdated, onDeleted }: EditModalProps) {
+  useBackClose(onClose);
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
     category: item.category,
@@ -1265,6 +1268,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
 // ─── Label Modal ─────────────────────────────────────────────────────────────
 
 function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () => void; onPrint: (w: number, h: number) => void }) {
+  useBackClose(onClose);
   const [width, setWidth] = useState("2");
   const [height, setHeight] = useState("1");
   const [printing, setPrinting] = useState(false);
@@ -1433,6 +1437,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkApproveResult, setBulkApproveResult] = useState<{ approved: number; skipped: number; skippedByStatus: Record<string, number> } | null>(null);
+  useBackClose(!!bulkApproveResult && (() => setBulkApproveResult(null)));
   const [exportLoading, setExportLoading] = useState(false);
   const [maxsoldOpen, setMaxsoldOpen] = useState(false);
   const [vendorFileOpen, setVendorFileOpen] = useState(false);
@@ -1440,11 +1445,13 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelLoading, setLabelLoading] = useState(false);
   const [downloadItem, setDownloadItem] = useState<Item | null>(null);
+  useBackClose(!!downloadItem && (() => setDownloadItem(null)));
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadModalLoading, setDownloadModalLoading] = useState(false);
 
   // ── Send to ProFound Finds ────────────────────────────────────────────────
   const [sendToPFItem, setSendToPFItem] = useState<Item | null>(null);
+  useBackClose(!!sendToPFItem && (() => setSendToPFItem(null)));
   const [sendToPFLoading, setSendToPFLoading] = useState(false);
   const [sendToPFError, setSendToPFError] = useState<string | null>(null);
 
@@ -1452,6 +1459,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [bulkAILoading, setBulkAILoading] = useState(false);
   const [bulkAIProgress, setBulkAIProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [bulkAIResult, setBulkAIResult] = useState<{ updated: number; skipped: number; errors: string[] } | null>(null);
+  useBackClose(!!bulkAIResult && (() => setBulkAIResult(null)));
 
   // ── Bulk List ─────────────────────────────────────────────────────────────
   const [listLoading, setListLoading] = useState(false);
@@ -1461,14 +1469,17 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     errors: Array<{ id: string; name: string; reason: string }>;
     squareErrors: Array<{ id: string; name: string; error: string }>;
   } | null>(null);
+  useBackClose(!!listResultModal && (() => setListResultModal(null)));
 
   // ── Bulk Route ────────────────────────────────────────────────────────────
   const [routeModalOpen, setRouteModalOpen] = useState(false);
+  useBackClose(routeModalOpen && (() => setRouteModalOpen(false)));
   const [routeModalValue, setRouteModalValue] = useState("");
   const [routeLoading, setRouteLoading] = useState(false);
 
   // ── Bulk Assign to Estate Sale ────────────────────────────────────────────
   const [estateSaleModalOpen, setEstateSaleModalOpen] = useState(false);
+  useBackClose(estateSaleModalOpen && (() => setEstateSaleModalOpen(false)));
   const [estates, setEstates] = useState<{ id: string; name: string; status: string; saleType?: string }[]>([]);
   const [estatesLoading, setEstatesLoading] = useState(false);
   const [selectedEstateId, setSelectedEstateId] = useState("");

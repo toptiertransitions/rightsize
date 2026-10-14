@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { unstable_cache } from "next/cache";
 import { getInvoiceSettings } from "@/lib/airtable";
 import { DeepLinkBootstrap } from "@/components/shared/DeepLinkBootstrap";
+import { BackButtonBootstrap } from "@/components/shared/BackButtonBootstrap";
 import "./globals.css";
 
 // Prevent static pre-rendering; Clerk requires runtime auth context
@@ -70,6 +71,7 @@ export default function RootLayout({
         </head>
         <body>
           <DeepLinkBootstrap />
+          <BackButtonBootstrap />
           {children}
         </body>
       </html>

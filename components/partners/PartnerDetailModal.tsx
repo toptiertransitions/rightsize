@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useEffect } from "react";
 import type { PartnerProfile } from "@/lib/partners/types";
 import { PartnerLogo } from "./PartnerLogo";
@@ -15,6 +17,7 @@ function cleanDomain(url: string): string {
 }
 
 export function PartnerDetailModal({ partner, onClose }: { partner: PartnerProfile; onClose: () => void }) {
+  useBackClose(onClose);
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();

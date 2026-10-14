@@ -1,10 +1,13 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function WeeklyEmailButton({ tenantId }: { tenantId: string }) {
   const [open, setOpen] = useState(false);
+  useBackClose(open && (() => setOpen(false)));
   const [type, setType] = useState<"client" | "staff" | null>(null);
   const [staffNotes, setStaffNotes] = useState("");
   const [sending, setSending] = useState(false);

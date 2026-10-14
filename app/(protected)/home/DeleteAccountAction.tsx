@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { useClerk } from "@clerk/nextjs";
 
@@ -18,9 +20,11 @@ interface DeleteAccountActionProps {
 export function DeleteAccountAction({ tenantId, tenantName, canDeleteAccount, variant = "inline" }: DeleteAccountActionProps) {
   const { signOut } = useClerk();
   const [showDeleteRequest, setShowDeleteRequest] = useState(false);
+  useBackClose(showDeleteRequest && (() => setShowDeleteRequest(false)));
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteRequestSent, setDeleteRequestSent] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  useBackClose(showDeleteAccount && (() => setShowDeleteAccount(false)));
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState("");
   const [loading, setLoading] = useState(false);

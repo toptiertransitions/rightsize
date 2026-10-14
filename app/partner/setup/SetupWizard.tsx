@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Inbox, SlidersHorizontal, Gift, FileText } from "lucide-react";
@@ -133,6 +135,8 @@ export function SetupWizard({ firstName, business: b0, about: a0, area: ar0, lis
   }, [listings, criteria, noAreaStep]);
 
   const step = steps[index];
+  // Android back steps back through the wizard instead of leaving it
+  useBackClose(index > 0 && (() => setIndex((i) => Math.max(0, i - 1))));
   const progressTotal = steps.length - 2; // welcome and tour aren't counted
 
   const selectedFor = (listingId: string, c: PartnerCriterion) => currentCriteriaValues(c, criteria[listingId] ?? {});

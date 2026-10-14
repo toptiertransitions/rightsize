@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { openInBrowser } from "@/lib/native";
@@ -13,6 +15,7 @@ interface PhotoLightboxProps {
 }
 
 export function PhotoLightbox({ photos, initialIndex, itemName, onClose }: PhotoLightboxProps) {
+  useBackClose(onClose);
   const [idx, setIdx] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
 

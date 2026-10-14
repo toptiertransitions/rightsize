@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useRef, useCallback } from "react";
 import {
   DndContext,
@@ -40,6 +42,7 @@ interface TaskModalProps {
 }
 
 function TaskModal({ tenantId, task, maxSortOrder, onSaved, onClose }: TaskModalProps) {
+  useBackClose(onClose);
   const [title, setTitle] = useState(task?.title ?? "");
   const [dueDate, setDueDate] = useState(task?.dueDate ?? "");
   const [notes, setNotes] = useState(task?.notes ?? "");

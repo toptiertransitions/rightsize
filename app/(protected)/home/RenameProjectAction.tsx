@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +22,7 @@ interface RenameProjectActionProps {
 export function RenameProjectAction({ tenantId, tenantName, tenantAddress, tenantCity, tenantState, tenantZip, variant = "inline" }: RenameProjectActionProps) {
   const router = useRouter();
   const [showRename, setShowRename] = useState(false);
+  useBackClose(showRename && (() => setShowRename(false)));
   const [newName, setNewName] = useState(tenantName);
   const [address, setAddress] = useState(tenantAddress ?? "");
   const [city, setCity] = useState(tenantCity ?? "");

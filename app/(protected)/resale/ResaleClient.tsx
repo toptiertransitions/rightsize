@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -122,6 +124,7 @@ function LabelModal({ count, onClose, onPrint }: {
   onClose: () => void;
   onPrint: (w: number, h: number) => void;
 }) {
+  useBackClose(onClose);
   const [width, setWidth] = useState("2");
   const [height, setHeight] = useState("1");
   const [printing, setPrinting] = useState(false);

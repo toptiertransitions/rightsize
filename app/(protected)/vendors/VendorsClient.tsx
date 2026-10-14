@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { VENDOR_TYPES } from "@/lib/types";
@@ -52,6 +54,7 @@ interface ModalProps {
 }
 
 function VendorModal({ tenantId, vendor, prefill, onClose, onSaved }: ModalProps) {
+  useBackClose(onClose);
   const isEdit = !!vendor;
   const [vendorType, setVendorType] = useState<VendorType>(vendor?.vendorType ?? prefill?.vendorType ?? "Mover");
   const [vendorName, setVendorName] = useState(vendor?.vendorName ?? prefill?.vendorName ?? "");

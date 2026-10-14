@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useMemo, useState, useRef } from "react";
 import JSZip from "jszip";
 import type { Item } from "@/lib/types";
@@ -37,6 +39,7 @@ export function MaxsoldExportModal({ items, fileBase, onClose }: Props) {
   const [numbering, setNumbering] = useState<LotNumbering>("sequential");
   const [startAt, setStartAt] = useState("1");
   const [phase, setPhase] = useState<Phase>("setup");
+  useBackClose(phase !== "building" && onClose);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [failed, setFailed] = useState<string[]>([]);
   const [zipBlob, setZipBlob] = useState<Blob | null>(null);

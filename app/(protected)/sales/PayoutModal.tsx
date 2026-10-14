@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { viewOrShareBlob } from "@/lib/native";
 import type { Item, ItemSaleEvent, LocalVendor, ProjectFile } from "@/lib/types";
@@ -290,6 +292,7 @@ export function PayoutModal({
   expenseDeduction = 0,
   expenseNote = "",
 }: PayoutModalProps) {
+  useBackClose(onClose);
   const unpaidItems = buildUnpaidLineItems(items, pfSaleEvents, localVendors);
   const paidItems = buildPaidLineItems(items, pfSaleEvents);
   const lineItems = reprint ? paidItems : unpaidItems;

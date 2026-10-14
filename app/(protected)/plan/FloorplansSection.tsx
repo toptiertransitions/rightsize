@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useRef } from "react";
 import { prepareImageForUpload } from "@/lib/image-utils";
 import { safeJson } from "@/lib/utils";
@@ -81,6 +83,7 @@ interface UploadModalProps {
 }
 
 function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
+  useBackClose(onClose);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [tag, setTag] = useState<FileTag>("Daily Recap");
   const [roomLabel, setRoomLabel] = useState("");
@@ -206,6 +209,7 @@ interface EditFileModalProps {
 }
 
 function EditFileModal({ file, onClose, onSaved, onDeleted }: EditFileModalProps) {
+  useBackClose(onClose);
   const [fileName, setFileName] = useState(file.fileName);
   const [fileTag, setFileTag] = useState<FileTag>(file.fileTag);
   const [roomLabel, setRoomLabel] = useState(file.roomLabel ?? "");

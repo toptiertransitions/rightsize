@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PLAN_ACTIVITIES, KEY_DATE_ACTIVITIES } from "@/lib/types";
@@ -194,6 +196,7 @@ interface ModalProps {
 }
 
 function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions, originParkingNotes, defaultEntryType = "focus" }: ModalProps) {
+  useBackClose(onClose);
   const focusActivityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
   const [entryType, setEntryType] = useState<PlanEntryType>(entry?.entryType ?? defaultEntryType);
   const activityOptions = entryType === "keydate" ? KEY_DATE_ACTIVITIES : focusActivityOptions;
@@ -1145,6 +1148,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
   const [editEntry, setEditEntry] = useState<PlanEntry | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  useBackClose(showProjectPicker && (() => setShowProjectPicker(false)));
   const [projectSearch, setProjectSearch] = useState("");
   const [showScheduleModModal, setShowScheduleModModal] = useState(false);
 

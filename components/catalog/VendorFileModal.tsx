@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useUser } from "@clerk/nextjs";
@@ -24,6 +26,7 @@ export function VendorFileModal({
   tenantId,
   onSent,
 }: VendorFileModalProps) {
+  useBackClose(onClose);
   const { user } = useUser();
   const [vendorId, setVendorId] = useState("");
   const [vendorQuery, setVendorQuery] = useState("");

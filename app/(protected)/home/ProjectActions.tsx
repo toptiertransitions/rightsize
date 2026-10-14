@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { DeleteAccountAction } from "./DeleteAccountAction";
@@ -7,6 +9,7 @@ import { RenameProjectAction } from "./RenameProjectAction";
 
 // ─── Invite Modal ──────────────────────────────────────────────────────────────
 function InviteModal({ tenantId, title, onClose }: { tenantId: string; title: string; onClose: () => void }) {
+  useBackClose(onClose);
   const [role, setRole] = useState<"Collaborator" | "Viewer">("Collaborator");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);

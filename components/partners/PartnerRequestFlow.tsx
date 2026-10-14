@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useEffect, useMemo, useState } from "react";
 import type { PartnerCategory } from "@/lib/types";
 import { getVisibleQuestions, getPrefillAnswers, type PrefillTenant } from "@/lib/partners/questions";
@@ -18,6 +20,7 @@ interface Props {
 }
 
 export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefillTenant, crossCategoryAnswers, onClose, onSaved }: Props) {
+  useBackClose(onClose);
   const questions = useMemo(() => getVisibleQuestions(category, prefillTenant, crossCategoryAnswers), [category, prefillTenant, crossCategoryAnswers]);
   const prefill = useMemo(() => getPrefillAnswers(category, prefillTenant, crossCategoryAnswers), [category, prefillTenant, crossCategoryAnswers]);
 

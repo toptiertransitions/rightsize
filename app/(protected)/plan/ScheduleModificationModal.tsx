@@ -1,5 +1,7 @@
 "use client";
 
+
+import { useBackClose } from "@/lib/back-button";
 import { useState } from "react";
 
 interface Props {
@@ -9,6 +11,7 @@ interface Props {
 }
 
 export function ScheduleModificationModal({ tenantId, projectName, onClose }: Props) {
+  useBackClose(onClose);
   const [request, setRequest] = useState("");
   const [reason, setReason] = useState("");
   const [priority, setPriority] = useState<"Normal" | "Urgent">("Normal");
