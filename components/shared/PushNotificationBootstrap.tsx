@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, useAuth } from "@clerk/nextjs";
-import { isNativeApp } from "@/lib/native";
+import { getPlatform, isNativeApp } from "@/lib/native";
 
 const DEVICE_TOKEN_STORAGE_KEY = "rz_push_device_token";
 
@@ -56,7 +56,9 @@ export function PushNotificationBootstrap() {
   }, [isSignedIn]);
 
   useEffect(() => {
-    if (!isNativeApp() || pushOptedOut) return;
+    // iOS only for now: on Android, registering before Firebase is set up
+    // crashes the app, and tokens below are labeled "iOS" (APNs).
+    if (!isNativeApp() || getPlatform() !== "ios" || pushOptedOut) return;
 
     let cleanup: (() => void) | undefined;
 
