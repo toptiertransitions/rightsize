@@ -33,7 +33,7 @@ export default async function DeleteAccountPage({ searchParams }: { searchParams
           <>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Delete your Rightsize account</h1>
             <p className="text-gray-600 leading-relaxed mb-5">
-              This permanently deletes your Rightsize by Top Tier Transitions account.
+              This permanently deletes your own Rightsize by Top Tier Transitions account. Projects and partner companies you belong to are not deleted.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-4 mb-6 text-sm">
@@ -43,14 +43,13 @@ export default async function DeleteAccountPage({ searchParams }: { searchParams
                   <li>Your sign-in and profile</li>
                   <li>Your access to every project and partner account</li>
                   <li>Your notification settings and device tokens</li>
-                  <li>Projects you own are closed (archived)</li>
                 </ul>
               </div>
               <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
                 <p className="font-semibold text-gray-900 mb-1.5">Kept</p>
                 <ul className="list-disc pl-4 space-y-1 text-gray-600">
+                  <li>Your projects and your company&rsquo;s partner account, for the rest of your family or team</li>
                   <li>Completed sales, invoices and payout records, as required for tax and accounting</li>
-                  <li>Project records that belong to someone else&rsquo;s account</li>
                 </ul>
               </div>
             </div>

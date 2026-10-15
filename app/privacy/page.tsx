@@ -87,7 +87,7 @@ export default function PrivacyPolicyPage() {
         </Section>
 
         <Section title="Your choices">
-          <p>You can delete your account at any time from the app (your profile menu &gt; Delete account) or at <a href="/delete-account" className="text-forest-700 font-medium hover:underline">app.toptiertransitions.com/delete-account</a>, which also explains how to ask us by email if you can&rsquo;t sign in. Deleting your account removes your sign-in, your access to projects, and your device tokens. We keep completed sales, invoices and payout records as required for tax and accounting, and project records that belong to another account holder.</p>
+          <p>You can delete your account at any time from the app (your profile menu &gt; Delete account) or at <a href="/delete-account" className="text-forest-700 font-medium hover:underline">app.toptiertransitions.com/delete-account</a>, which also explains how to ask us by email if you can&rsquo;t sign in. Deleting your account removes your own sign-in, your access to projects and partner accounts, and your device tokens. Projects and partner company accounts you belong to are not deleted, and we keep completed sales, invoices and payout records as required for tax and accounting.</p>
           <p>You can request a copy of your account&rsquo;s data by contacting us at the address below.</p>
           <p>You can disable push notifications at any time in your device&rsquo;s Settings app.</p>
         </Section>

@@ -1,12 +1,11 @@
 // Self-service account deletion for every non-staff account (Google Play
 // and App Store require an in-app path for apps with sign-in). Server-only.
 //
-// Removes: the person's access to every project (memberships; projects they
-// own are archived, as the original Owner flow did), their partner-team
-// seats, the link between their sign-in and a CRM referral contact, their
-// device push tokens, their Users record, and finally the sign-in itself.
-// Kept: business records (projects, sales, invoices, payouts) needed for
-// accounting, and anything that belongs to someone else's account.
+// Deletes only the person's own account: their access to projects
+// (memberships), their partner-team seats, the link between their sign-in
+// and a CRM referral contact, their device push tokens, their Users record,
+// and finally the sign-in itself. Projects and partner companies are never
+// archived or deleted here; they stay in place for everyone else on them.
 import "server-only";
 import { clerkClient } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
@@ -20,7 +19,6 @@ import {
   getUserByClerkId,
   setReferralContactClerkUserId,
   unregisterDeviceToken,
-  updateTenant,
 } from "@/lib/airtable";
 import { getPartnerUsersByClerkId, updatePartnerUser } from "@/lib/marketplace/partnerUsersData";
 
@@ -37,14 +35,12 @@ export async function deleteOwnAccount(clerkUserId: string): Promise<DeletionRes
     return { ok: false, reason: "staff", message: "Staff accounts are managed by your Top Tier administrator." };
   }
   try {
-    // Projects: owners' projects are archived (the original Owner flow);
-    // everyone loses access to everything they were a member of
+    // Projects: remove only this person's access; the project itself stays
     const memberships = await getMembershipsForUser(clerkUserId).catch(() => []);
-    await Promise.all(memberships.filter((m) => m.role === "Owner").map((m) => updateTenant(m.tenantId, { isArchived: true }).catch(() => {})));
     await Promise.all(memberships.map((m) => deleteMembership(m.id)));
     if (memberships.length) revalidateTag("tenants");
 
-    // Partner team seats
+    // Partner team seats (the partner company and its listing stay)
     const seats = await getPartnerUsersByClerkId(clerkUserId).catch(() => []);
     const now = new Date().toISOString();
     await Promise.all(seats.filter((r) => r.status === "Active" || r.status === "Invited").map((r) =>
