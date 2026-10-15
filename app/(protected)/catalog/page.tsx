@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { ItemGrid } from "@/components/catalog/ItemGrid";
 import { CatalogHeader } from "./CatalogHeader";
+import { NoProjectsState } from "@/components/shared/NoProjectsState";
 import type { Tenant } from "@/lib/types";
 
 interface PageProps {
@@ -148,7 +149,10 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   // ── All-items mode ───────────────────────────────────────────────────────────
   const memberships = await getMembershipsForUser(userId).catch(() => []);
-  if (memberships.length === 0) redirect("/home");
+  if (memberships.length === 0) {
+    const sysRole = await getSystemRole(userId).catch(() => null);
+    return <NoProjectsState title="Item Catalog" noun="items" isStaff={["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")} />;
+  }
 
   // Single-project users always go to their project catalog (shows Add Item button)
   if (memberships.length === 1) redirect(`/catalog?tenantId=${memberships[0].tenantId}`);

@@ -17,6 +17,7 @@ import {
   getEstatesForTenant,
 } from "@/lib/airtable";
 import { SalesClient } from "./SalesClient";
+import { NoProjectsState } from "@/components/shared/NoProjectsState";
 import type { PrimaryRoute, Estate } from "@/lib/types";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
@@ -43,7 +44,10 @@ export default async function SalesPage({ searchParams }: PageProps) {
   if (!tenantId) {
     const memberships = await getMembershipsForUser(userId).catch(() => []);
     if (memberships.length === 1) redirect(`/sales?tenantId=${memberships[0].tenantId}`);
-    if (memberships.length === 0) redirect("/home");
+    if (memberships.length === 0) {
+      const sysRole = await getSystemRole(userId).catch(() => null);
+      return <NoProjectsState title="Item Sales" noun="sales" isStaff={["TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")} />;
+    }
     redirect("/home");
   }
 
