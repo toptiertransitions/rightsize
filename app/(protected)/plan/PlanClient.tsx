@@ -250,7 +250,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
     fetch("/api/plan/calendar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
+      body: JSON.stringify({ planEntryId: entry.id, action: "sync", source: "manual" }),
     })
       .then(r => r.json())
       .then(d => { if (d.entry?.helpers?.length) setHelpers(d.entry.helpers); })
@@ -356,7 +356,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
       const res = await fetch("/api/plan/calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
+        body: JSON.stringify({ planEntryId: entry.id, action: "sync", source: "manual" }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "Sync failed");
@@ -1201,7 +1201,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
         fetch("/api/plan/calendar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ planEntryId: entry.id, action: "sync" }),
+          body: JSON.stringify({ planEntryId: entry.id, action: "sync", source: "poll" }),
         })
           .then(r => r.json())
           .then(d => {
@@ -1215,7 +1215,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           .catch(() => {
             setFailedSyncIds(prev => new Set(prev).add(entry.id));
           });
-      }, i * 400);
+      }, i * 1500);
     });
   }, []);
 

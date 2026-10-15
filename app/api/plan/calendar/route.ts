@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     endTime?: string;
     notes?: string;
     address?: string;
+    source?: "poll" | "manual";
   };
   try {
     body = await req.json();
@@ -32,6 +33,13 @@ export async function POST(req: NextRequest) {
   const { planEntryId, action } = body;
   if (!planEntryId || !action) {
     return NextResponse.json({ error: "Missing planEntryId or action" }, { status: 400 });
+  }
+
+  // Plan pages loaded before the RSVP-polling fix poll every shift ever sent, in
+  // bursts that exhaust Airtable's rate limit. Current clients tag their syncs;
+  // untagged syncs are ignored without touching Airtable until the page reloads.
+  if (action === "sync" && !body.source) {
+    return NextResponse.json({ skipped: true });
   }
 
   const entry = await getPlanEntryById(planEntryId);
