@@ -31,6 +31,7 @@ import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { GoogleReviewsSection } from "./GoogleReviewsSection";
 import { ClientContactBar } from "./ClientContactBar";
 import { ProjectAddressBar } from "./ProjectAddressBar";
+import { getPartnerDirectory } from "@/lib/partners/queries";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
 import { WeeklyEmailButton } from "./WeeklyEmailButton";
 import { DailyRecapSection } from "./DailyRecapSection";
@@ -358,6 +359,12 @@ export default async function PlanPage({ searchParams }: PageProps) {
 
   if (!tenant) redirect("/home");
   const resolvedRole = role ?? sysRole;
+
+  // Suggestions for the destination community name — it must match the
+  // community's marketplace listing for the Partners page to lock it in.
+  const communityNames = tenant.isTTT === true
+    ? [...new Set((await getPartnerDirectory().catch(() => [])).filter((p) => p.category === "Community").map((p) => p.vendorName))].sort()
+    : [];
   if (!resolvedRole) redirect("/home");
 
   const isManagerOrAdmin = sysRole === "TTTManager" || sysRole === "TTTAdmin";
@@ -438,6 +445,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
             initialDestState={tenant.destState}
             initialDestZip={tenant.destZip}
             initialSeniorCommunityName={tenant.seniorCommunityName}
+            communityNames={communityNames}
             canEditTeamLead={isManagerOrAdmin}
             canEditAddresses={isManagerOrAdmin || role === "Owner" || role === "Collaborator"}
             initialTeamLeadClerkId={tenant.teamLeadClerkId}

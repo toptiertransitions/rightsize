@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { POSITIVE_REVIEW_TAGS, NEGATIVE_REVIEW_TAGS, MAX_REVIEW_COMMENT_LENGTH } from "@/lib/partners/reviewTags";
-import type { PartnerReviewSummary } from "@/lib/partners/reviews";
+import { summarizeReviewsByPartner } from "@/lib/partners/reviews";
 import { updateReviewAction, deleteReviewAction } from "./actions";
 
 export interface AdminReviewRow {
@@ -26,7 +26,7 @@ export interface AdminReviewRow {
 
 interface Props {
   rows: AdminReviewRow[];
-  partners: { id: string; name: string; summary: PartnerReviewSummary }[];
+  partners: { id: string; name: string }[];
   canEdit: boolean;
   initialPartner: string;
 }
@@ -59,6 +59,9 @@ export function ReviewsClient({ rows: initialRows, partners, canEdit, initialPar
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Recomputed from local rows so counts follow edits, hides and deletes
+  const summaries = useMemo(() => summarizeReviewsByPartner(rows, (id) => id), [rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -93,7 +96,7 @@ export function ReviewsClient({ rows: initialRows, partners, canEdit, initialPar
         <select value={partnerFilter} onChange={(e) => setPartnerFilter(e.target.value)} className={`${select} max-w-[260px]`} aria-label="Partner">
           <option value="">All partners</option>
           {partners.map((p) => (
-            <option key={p.id} value={p.id}>{p.name} ({p.summary?.count ?? 0})</option>
+            <option key={p.id} value={p.id}>{p.name} ({summaries.get(p.id)?.count ?? 0})</option>
           ))}
         </select>
         <select value={scoreFilter} onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)} className={select} aria-label="Score">

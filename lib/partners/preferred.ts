@@ -28,7 +28,7 @@ async function communitySelectionPartnerId(tenantId: string): Promise<string | n
 
 /** Every community this project is tied to. */
 export async function getTenantCommunityBrands(
-  tenant: Pick<Tenant, "id" | "communityBrandId" | "destinationCommunity">,
+  tenant: Pick<Tenant, "id" | "communityBrandId" | "destinationCommunity" | "destState">,
   community: { communityName: string } | null,
   directory: PartnerProfile[]
 ): Promise<CommunityBrand[]> {

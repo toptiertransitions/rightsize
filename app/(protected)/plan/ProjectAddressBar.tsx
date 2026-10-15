@@ -24,6 +24,9 @@ interface Props {
   initialDestState?: string;
   initialDestZip?: string;
   initialSeniorCommunityName?: string;
+  /** Marketplace community names, suggested while typing so the name matches
+   * the community's partner listing (which drives the Partners page). */
+  communityNames?: string[];
   // Team Lead
   canEditTeamLead?: boolean;
   canEditAddresses?: boolean;
@@ -130,6 +133,7 @@ export function ProjectAddressBar({
   initialDestState,
   initialDestZip,
   initialSeniorCommunityName,
+  communityNames = [],
   canEditTeamLead,
   canEditAddresses,
   initialTeamLeadClerkId,
@@ -266,7 +270,12 @@ export function ProjectAddressBar({
                   onChange={e => setSeniorCommunityName(e.target.value)}
                   className={inputCls + " font-medium"}
                   title="Senior community name — set automatically from CRM opportunity"
+                  list="plan-community-names"
+                  autoComplete="off"
                 />
+                <datalist id="plan-community-names">
+                  {communityNames.map((n) => <option key={n} value={n} />)}
+                </datalist>
                 <input type="text" placeholder="Street address" value={destAddress} onChange={e => setDestAddress(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="Unit # (optional)" value={destAddressUnitNumber} onChange={e => setDestAddressUnitNumber(e.target.value)} className={inputCls} />
                 <input type="text" placeholder="City" value={destCity} onChange={e => setDestCity(e.target.value)} className={inputCls} />

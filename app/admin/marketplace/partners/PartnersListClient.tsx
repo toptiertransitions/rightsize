@@ -46,6 +46,7 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
   // Optimistic Display score toggles, keyed by partner id
   const [displayOverrides, setDisplayOverrides] = useState<Record<string, boolean>>({});
   const [togglingScore, setTogglingScore] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState("");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [deliveryModeFilter, setDeliveryModeFilter] = useState<"" | MarketplaceDeliveryMode>("");
@@ -86,12 +87,13 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
 
   async function toggleDisplayScore(partnerId: string, next: boolean) {
     setTogglingScore(partnerId);
+    setToggleError("");
     setDisplayOverrides((o) => ({ ...o, [partnerId]: next }));
     const result = await setDisplayReviewScoreAction(partnerId, next);
     setTogglingScore(null);
     if (!result.ok) {
       setDisplayOverrides((o) => ({ ...o, [partnerId]: !next }));
-      setBulkMsg(result.error);
+      setToggleError(`Couldn't change Display score: ${result.error}`);
     }
   }
 
@@ -154,6 +156,8 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
           {bulkMsg && <span className="text-xs text-gray-500">{bulkMsg}</span>}
         </div>
       )}
+
+      {toggleError && <p className="text-sm text-red-400 mb-3" role="alert">{toggleError}</p>}
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">

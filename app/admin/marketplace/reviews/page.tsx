@@ -4,7 +4,7 @@ import { MarketplaceNav } from "../MarketplaceNav";
 import { getAllPartnerReviews, getTenants, getSystemRole } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { getAllPartners } from "@/lib/marketplace/data";
-import { partnerIdResolver, summarizeReviewsByPartner } from "@/lib/partners/reviews";
+import { partnerIdResolver } from "@/lib/partners/reviews";
 import { ReviewsClient, type AdminReviewRow } from "./ReviewsClient";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,6 @@ export default async function MarketplaceReviewsPage({ searchParams }: { searchP
   const resolve = partnerIdResolver(partners);
   const partnerById = new Map(partners.map((p) => [p.id, p]));
   const tenantName = new Map(tenants.map((t) => [t.id, t.name]));
-  const summaries = summarizeReviewsByPartner(reviews, resolve);
 
   const rows: AdminReviewRow[] = reviews
     .filter((r) => r.score)
@@ -54,7 +53,7 @@ export default async function MarketplaceReviewsPage({ searchParams }: { searchP
     .sort((a, b) => (b.updatedAt || b.date).localeCompare(a.updatedAt || a.date));
 
   const partnerOptions = [...new Set(rows.map((r) => r.partnerId).filter(Boolean))]
-    .map((id) => ({ id, name: partnerById.get(id)?.companyName ?? id, summary: summaries.get(id)! }))
+    .map((id) => ({ id, name: partnerById.get(id)?.companyName ?? id }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
