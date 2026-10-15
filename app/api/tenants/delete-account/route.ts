@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { revalidateTag } from "next/cache";
-import { getTenantById, getUserRoleForTenant, getMembershipsForUser, deleteMembership, updateTenant } from "@/lib/airtable";
+import { auth } from "@clerk/nextjs/server";
+import { getTenantById, getUserRoleForTenant } from "@/lib/airtable";
+import { deleteOwnAccount } from "@/lib/account-deletion";
 
-// Self-service account deletion for client users — both TTT-managed and
-// self-serve non-TTT projects. Archives the project (so TTT admins can
-// still review it) but permanently deletes the Clerk account — unlike
-// /api/tenants/delete-request, which only notifies staff and leaves both
-// untouched.
+// Home > Danger Zone > Delete Account (project Owners). Deletes only the
+// person's own account, the same way as /delete-account; the project stays
+// in place for the rest of the family and Top Tier.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,28 +18,12 @@ export async function POST(req: NextRequest) {
     getTenantById(tenantId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
   ]);
-
   if (!tenant) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (role !== "Owner") {
     return NextResponse.json({ error: "Only the project owner can delete their account" }, { status: 403 });
   }
 
-  try {
-    // 1. Archive the project — preserves the data for TTT review, doesn't erase it
-    await updateTenant(tenantId, { isArchived: true });
-    revalidateTag("tenants");
-
-    // 2. Remove all Airtable project memberships for this user
-    const memberships = await getMembershipsForUser(userId).catch(() => []);
-    await Promise.all(memberships.map(m => deleteMembership(m.id)));
-
-    // 3. Delete the Clerk account itself — must be last (point of no return)
-    const clerk = await clerkClient();
-    await clerk.users.deleteUser(userId);
-
-    return NextResponse.json({ success: true });
-  } catch (e) {
-    console.error("[delete-account] error:", e);
-    return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
-  }
+  const result = await deleteOwnAccount(userId);
+  if (!result.ok) return NextResponse.json({ error: result.message }, { status: result.reason === "staff" ? 403 : 500 });
+  return NextResponse.json({ success: true });
 }
