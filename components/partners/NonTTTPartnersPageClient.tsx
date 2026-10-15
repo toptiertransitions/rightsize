@@ -8,7 +8,7 @@ import { activateServiceInterestAction, deactivateServiceInterestAction, request
 import { nonTTTCategoryLabel, TTT_MOVE_MANAGER_PARTNER_ID } from "@/lib/partners/nonTTTCategories";
 import { isPartnerRequestComplete, getCrossCategoryAnswers, type PrefillTenant } from "@/lib/partners/questions";
 import type { ScoringResult } from "@/lib/partners/scoring";
-import { SelectedPartnersTray } from "./SelectedPartnersTray";
+import { SelectedPartnersTray, type TrayReviewConfig } from "./SelectedPartnersTray";
 import { GreyedCategoryCard } from "./GreyedCategoryCard";
 import { TTTMoveManagerCard } from "./TTTMoveManagerCard";
 import { PartnerRequestCard } from "./PartnerRequestCard";
@@ -32,12 +32,13 @@ interface Props {
   prefillTenant: PrefillTenant;
   lockedCategories: PartnerCategory[];
   canRemoveReferral: boolean;
+  reviews?: TrayReviewConfig;
 }
 
 export function NonTTTPartnersPageClient({
   tenantId, tenantName, initialActiveCategories, initialGreyedCategories,
   initialSelections, partnersById, canEdit, appOnlyIntent, initialRequestAnswers,
-  initialIntroRequests, initialMatches, prefillTenant, lockedCategories: initialLocked, canRemoveReferral,
+  initialIntroRequests, initialMatches, prefillTenant, lockedCategories: initialLocked, canRemoveReferral, reviews,
 }: Props) {
   const router = useRouter();
   const [activeCategories, setActiveCategories] = useState(initialActiveCategories);
@@ -189,6 +190,7 @@ export function NonTTTPartnersPageClient({
           filesEnabled
           tenantId={tenantId}
           lockedCategories={lockedCategories}
+          reviews={reviews}
         />
       )}
 

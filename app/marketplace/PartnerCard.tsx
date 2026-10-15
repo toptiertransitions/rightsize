@@ -11,6 +11,7 @@ export interface PartnerCardData {
   cardAttributes: string[]; // 2-3 showOnCard field labels/values, already formatted
   avgRating: number;
   reviewCount: number;
+  ratingHidden?: boolean;
   deliveryMode: MarketplaceDeliveryMode;
   hasReferralDisclosure: boolean;
 }
@@ -48,7 +49,7 @@ export function PartnerCard({ partner, categoryHref }: { partner: PartnerCardDat
             ))}
           </div>
         )}
-        <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />
+        <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} hidden={partner.ratingHidden} />
         {partner.hasReferralDisclosure && (
           <p className="text-[10px] text-gray-400 mt-1.5">Top Tier Transitions may receive a referral fee from this partner.</p>
         )}

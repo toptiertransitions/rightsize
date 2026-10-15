@@ -117,6 +117,13 @@ describe("scoreAndRankPartners", () => {
     const result = scoreAndRankPartners(partners, "Mover", { zip: "60601" });
     expect(result.best?.whyThisMatch.length).toBeGreaterThan(0);
   });
+
+  it("never mentions a rating whose display is turned off", () => {
+    const shown = scoreAndRankPartners([profile({ id: "a", zipCodesServed: "60601", avgRating: 4.8, reviewCount: 12 })], "Mover", { zip: "60601" });
+    const hidden = scoreAndRankPartners([profile({ id: "a", zipCodesServed: "60601", avgRating: 4.8, reviewCount: 12, ratingHidden: true })], "Mover", { zip: "60601" });
+    expect(shown.best?.whyThisMatch).toContain("★");
+    expect(hidden.best?.whyThisMatch).not.toContain("★");
+  });
 });
 
 describe("getRequestLocation", () => {

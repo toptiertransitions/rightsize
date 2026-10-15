@@ -32,7 +32,10 @@ function Star({ fill }: { fill: "full" | "half" | "empty" }) {
   );
 }
 
-export function RatingStars({ rating, reviewCount }: { rating: number; reviewCount: number }) {
+// `hidden`: the partner's "Display score" admin toggle is off. A partner with
+// no reviews still gets "New Partner" (there's no score to hide); one with
+// reviews shows nothing.
+export function RatingStars({ rating, reviewCount, hidden }: { rating: number; reviewCount: number; hidden?: boolean }) {
   if (reviewCount === 0) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-forest-700 bg-forest-50 px-2 py-0.5 rounded-full">
@@ -40,6 +43,8 @@ export function RatingStars({ rating, reviewCount }: { rating: number; reviewCou
       </span>
     );
   }
+
+  if (hidden) return null;
 
   const stars = Array.from({ length: 5 }, (_, i) => {
     const threshold = i + 1;

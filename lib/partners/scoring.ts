@@ -154,7 +154,10 @@ function buildWhyThisMatch(partner: PartnerProfile, zipMatch: boolean, fitsAnswe
   if (fitsAnswers) reasons.push("offers what you're looking for");
   if (zipMatch) reasons.push("serves your area");
   if (partner.seniorSpecialty) reasons.push("experienced with senior moves");
-  if (partner.reviewCount > 0 && partner.avgRating >= 4.5) {
+  // A score an admin hasn't set to display never appears in this text either
+  if (partner.ratingHidden) {
+    // no rating reason
+  } else if (partner.reviewCount > 0 && partner.avgRating >= 4.5) {
     reasons.push(`highly rated (${partner.avgRating}★ from ${partner.reviewCount} review${partner.reviewCount === 1 ? "" : "s"})`);
   } else if (partner.reviewCount > 0) {
     reasons.push(`rated ${partner.avgRating}★`);

@@ -8,6 +8,7 @@ const TABS = [
   { href: "/admin/marketplace/partners", label: "Partners" },
   { href: "/admin/marketplace/users", label: "Users" },
   { href: "/admin/marketplace/leads", label: "Leads" },
+  { href: "/admin/marketplace/reviews", label: "Reviews" },
   { href: "/admin/marketplace/categories", label: "Categories" },
   { href: "/admin/marketplace/pipeline", label: "Pipeline" },
   { href: "/admin/marketplace/tenant-config", label: "Tenant Config" },

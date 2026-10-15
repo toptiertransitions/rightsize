@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MarketplacePartner, MarketplaceListingStatus, MarketplaceDeliveryMode } from "@/lib/marketplace/types";
+import type { PartnerReviewSummary } from "@/lib/partners/reviews";
 import { bulkUpdatePartnerLifecycleAction } from "../actions";
+import { setDisplayReviewScoreAction } from "../reviews/actions";
 
 interface Row {
   partner: MarketplacePartner;
@@ -11,21 +13,27 @@ interface Row {
   listingStatus: MarketplaceListingStatus;
   completeness: number;
   hasReferralFee: boolean;
+  reviews: PartnerReviewSummary;
 }
 
 interface Props {
   rows: Row[];
   categories: { id: string; label: string }[];
+  /** TTTAdmin only — everyone else sees the Display score state read-only. */
+  canToggleScore: boolean;
 }
 
 function toCsv(rows: Row[]): string {
-  const header = ["Company", "Categories", "Lifecycle", "Listing Status", "Completeness %", "City", "State", "Email", "Phone"];
+  const header = ["Company", "Categories", "Lifecycle", "Listing Status", "Completeness %", "Avg Rating", "Reviews", "Display Score", "City", "State", "Email", "Phone"];
   const lines = rows.map((r) => [
     r.partner.companyName,
     r.categoryLabels.join("; "),
     r.partner.lifecycleStatus,
     r.listingStatus,
     String(r.completeness),
+    r.reviews.count ? r.reviews.avg.toFixed(1) : "",
+    String(r.reviews.count),
+    r.partner.displayReviewScore ? "Yes" : "No",
     r.partner.city,
     r.partner.state,
     r.partner.email,
@@ -34,7 +42,10 @@ function toCsv(rows: Row[]): string {
   return [header.join(","), ...lines].join("\n");
 }
 
-export function PartnersListClient({ rows, categories }: Props) {
+export function PartnersListClient({ rows, categories, canToggleScore }: Props) {
+  // Optimistic Display score toggles, keyed by partner id
+  const [displayOverrides, setDisplayOverrides] = useState<Record<string, boolean>>({});
+  const [togglingScore, setTogglingScore] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [deliveryModeFilter, setDeliveryModeFilter] = useState<"" | MarketplaceDeliveryMode>("");
@@ -71,6 +82,17 @@ export function PartnersListClient({ rows, categories }: Props) {
     if (!result.ok) { setBulkMsg(result.error); return; }
     setBulkMsg(`Updated ${selected.size} partner(s).`);
     setSelected(new Set());
+  }
+
+  async function toggleDisplayScore(partnerId: string, next: boolean) {
+    setTogglingScore(partnerId);
+    setDisplayOverrides((o) => ({ ...o, [partnerId]: next }));
+    const result = await setDisplayReviewScoreAction(partnerId, next);
+    setTogglingScore(null);
+    if (!result.ok) {
+      setDisplayOverrides((o) => ({ ...o, [partnerId]: !next }));
+      setBulkMsg(result.error);
+    }
   }
 
   function exportCsv() {
@@ -133,7 +155,7 @@ export function PartnersListClient({ rows, categories }: Props) {
         </div>
       )}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800 text-left text-xs text-gray-500 uppercase tracking-wide">
@@ -143,6 +165,8 @@ export function PartnersListClient({ rows, categories }: Props) {
               <th className="px-4 py-2.5">Lifecycle</th>
               <th className="px-4 py-2.5">Listing Status</th>
               <th className="px-4 py-2.5">Completeness</th>
+              <th className="px-4 py-2.5">Rating</th>
+              <th className="px-4 py-2.5" title="Show this partner's review score to clients and on the public marketplace">Display score</th>
               <th className="px-4 py-2.5">Location</th>
             </tr>
           </thead>
@@ -165,11 +189,37 @@ export function PartnersListClient({ rows, categories }: Props) {
                     {r.completeness}%
                   </span>
                 </td>
+                <td className="px-4 py-2.5 whitespace-nowrap">
+                  {r.reviews.count + r.reviews.hiddenCount > 0 ? (
+                    <Link href={`/admin/marketplace/reviews?partner=${r.partner.id}`} className="text-gray-200 hover:text-forest-400">
+                      {r.reviews.count > 0 ? <><span className="text-amber-400">★</span> {r.reviews.avg.toFixed(1)} <span className="text-gray-500">· {r.reviews.count}</span></> : <span className="text-gray-500">0 published</span>}
+                      {r.reviews.hiddenCount > 0 && <span className="text-gray-600"> (+{r.reviews.hiddenCount} hidden)</span>}
+                    </Link>
+                  ) : <span className="text-gray-600">—</span>}
+                </td>
+                <td className="px-4 py-2.5">
+                  {(() => {
+                    const on = displayOverrides[r.partner.id] ?? r.partner.displayReviewScore;
+                    return (
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={on}
+                        aria-label={`Display review score for ${r.partner.companyName}`}
+                        disabled={!canToggleScore || togglingScore === r.partner.id}
+                        onClick={() => toggleDisplayScore(r.partner.id, !on)}
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed ${on ? "bg-forest-600" : "bg-gray-700"} ${!canToggleScore ? "opacity-50" : ""}`}
+                      >
+                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+                      </button>
+                    );
+                  })()}
+                </td>
                 <td className="px-4 py-2.5 text-gray-400">{[r.partner.city, r.partner.state].filter(Boolean).join(", ") || "—"}</td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No partners match these filters.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">No partners match these filters.</td></tr>
             )}
           </tbody>
         </table>

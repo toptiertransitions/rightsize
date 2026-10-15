@@ -26,6 +26,9 @@ export interface PartnerProfile {
   /** Raw unweighted average, for reference/debugging. */
   rawAvgRating: number;
   reviewCount: number;
+  /** True when a TTTAdmin hasn't turned on "Display score" for this partner
+   * (Partners tab). The rating still feeds ranking; it just isn't shown. */
+  ratingHidden?: boolean;
   /** Dynamic count (via linked Vendor engagements on completed projects) + manual adjustment. */
   projectsCompleted: number;
   /** Paragraph shown in the "Learn More" detail popup, editable in /admin/local-vendors. */

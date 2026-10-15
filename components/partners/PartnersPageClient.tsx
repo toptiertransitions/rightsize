@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import type { MatchResult, PartnerProfile } from "@/lib/partners/types";
 import { selectPartnerAction, deselectPartnerAction, removeReferralPartnerAction } from "@/app/(protected)/partners/actions";
-import { SelectedPartnersTray } from "./SelectedPartnersTray";
+import { SelectedPartnersTray, type TrayReviewConfig } from "./SelectedPartnersTray";
 import { CategoryChipBar } from "./CategoryChipBar";
 import { CategorySection } from "./CategorySection";
 import { PartnerDetailModal } from "./PartnerDetailModal";
@@ -23,9 +23,10 @@ interface Props {
   canRemoveReferral: boolean;
   /** Categories locked to the client's destination senior community. */
   destinationCategories?: PartnerCategory[];
+  reviews?: TrayReviewConfig;
 }
 
-export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [] }: Props) {
+export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews }: Props) {
   const router = useRouter();
   const [selections, setSelections] = useState(initialSelections);
   const [lockedCategories, setLockedCategories] = useState(initialLocked);
@@ -143,6 +144,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         tenantId={tenantId}
         lockedCategories={lockedCategories}
         destinationCategories={destinationCategories}
+        reviews={reviews}
       />
 
       <DocumentsSection tenantId={tenantId} canMatch={canEdit || isStaffPreview} selectedPartners={selectedPartners} />

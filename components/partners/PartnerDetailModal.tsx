@@ -40,7 +40,7 @@ export function PartnerDetailModal({ partner, onClose }: { partner: PartnerProfi
             <PartnerLogo logo={partner.logo} name={partner.vendorName} size="mobile" />
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-gray-900 leading-snug truncate">{partner.vendorName}</h2>
-              {!partner.isTeamLead && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
+              {!partner.isTeamLead && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} hidden={partner.ratingHidden} />}
             </div>
           </div>
           <button

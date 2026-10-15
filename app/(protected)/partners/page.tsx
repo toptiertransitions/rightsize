@@ -13,6 +13,7 @@ import {
   setPartnerRequestStatus,
   getPartnerSelectionsForTenant,
   upsertPartnerSelection,
+  getPartnerReviewsForTenant,
 } from "@/lib/airtable";
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { buildReferralPartner } from "@/lib/partners/referral";
@@ -31,6 +32,8 @@ import { PartnersPageClient } from "@/components/partners/PartnersPageClient";
 import { NonTTTPartnersPageClient } from "@/components/partners/NonTTTPartnersPageClient";
 import { StaffProjectPicker } from "@/components/partners/StaffProjectPicker";
 import { Card, CardContent } from "@/components/ui/Card";
+import type { TrayReviewConfig } from "@/components/partners/SelectedPartnersTray";
+import { isReviewableCategory } from "@/lib/partners/reviews";
 
 export const metadata = { robots: "noindex, nofollow" };
 
@@ -160,6 +163,19 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   const partnersById: Record<string, PartnerProfile> = {};
   for (const p of directory) partnersById[p.id] = p;
 
+  // Partner reviews: the project's Owner/Collaborator clients can rate any
+  // real marketplace partner on their team (never the synthetic Top Tier
+  // entries, unlisted referral partners, or senior communities).
+  let reviews: TrayReviewConfig | undefined;
+  if (tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole)) {
+    const mine = (await getPartnerReviewsForTenant(tenantId).catch(() => [])).filter((r) => r.reviewerUserId === userId);
+    reviews = {
+      reviewablePartnerIds: [...new Set(directory.filter((p) => isReviewableCategory(p.category)).map((p) => p.id))],
+      myReviews: Object.fromEntries(mine.map((r) => [r.partnerId, { id: r.id, score: r.score, tags: r.tags, comment: r.comment }])),
+      promptForReviews: tenant.isArchived === true,
+    };
+  }
+
   // Referral-locked categories: the partner who referred this client is
   // their partner for that category, full stop — they replace the
   // category's marketplace matches entirely (same approach as the Team Lead
@@ -263,6 +279,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
         initialMatches={initialMatches}
         lockedCategories={lockedCategories}
         canRemoveReferral={canRemoveReferral}
+        reviews={reviews}
         prefillTenant={{
           currentZip: tenant.currentZip,
           destinationZip: tenant.destinationZip,
@@ -349,6 +366,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
       canEdit={canEdit}
       isStaffPreview={isStaff}
       clientLabel={tenant.name}
+      reviews={reviews}
     />
   );
 }

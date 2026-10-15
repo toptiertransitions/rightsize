@@ -844,14 +844,32 @@ export interface PartnerRequest {
   createdBy: string; // Clerk user id
 }
 
+export type PartnerReviewStatus = "Published" | "Hidden";
+
 export interface PartnerReview {
   id: string;
   airtableId: string;
-  partnerId: string; // LocalVendor record id
+  /** Marketplace Partner record id for reviews left in the app. Older rows
+   * entered by hand in Airtable hold the legacy LocalVendor id instead —
+   * the directory counts both (see lib/marketplace/legacyAdapter.ts). */
+  partnerId: string;
   tenantId: string;
   score: 1 | 2 | 3 | 4 | 5;
   comment: string;
   date: string;
+  /** Adjective pills picked after the stars (see lib/partners/reviewTags.ts). */
+  tags: string[];
+  category?: PartnerCategory;
+  /** Clerk user id — one review per (tenant, partner, reviewer). Empty on
+   * hand-entered legacy rows. */
+  reviewerUserId: string;
+  reviewerName: string;
+  /** Hidden reviews are kept for admins but left out of the average. Empty
+   * (legacy rows) counts as Published. */
+  status: PartnerReviewStatus;
+  updatedAt?: string;
+  /** Name of the TTTAdmin who last edited it, if an admin did. */
+  editedBy?: string;
 }
 
 // One row per (tenantId, category, partnerId) — which partner(s) completed

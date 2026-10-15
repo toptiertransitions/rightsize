@@ -76,8 +76,11 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
         serviceArea: partner.serviceArea,
         featuredRank: partner.featuredRank,
         responsivenessScore: partner.responsivenessScore,
-        avgRating: rating?.avgRating ?? 0,
+        // A hidden score (admin "Display score" toggle off) is zeroed, not
+        // just un-rendered, so it can't steer the public "Rating" sort either.
+        avgRating: rating && !rating.ratingHidden ? rating.avgRating : 0,
         reviewCount: rating?.reviewCount ?? 0,
+        ratingHidden: rating?.ratingHidden ?? false,
         projectsCompleted: rating?.projectsCompleted ?? 0,
         attributes: listing.attributes,
         hasReferralDisclosure: listing.feeType !== "none" || category.referralPolicy.requiresDisclosure,

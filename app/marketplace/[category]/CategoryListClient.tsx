@@ -22,6 +22,7 @@ export interface PublicListingRow {
   responsivenessScore: number | undefined;
   avgRating: number;
   reviewCount: number;
+  ratingHidden: boolean;
   projectsCompleted: number;
   attributes: Record<string, unknown>;
   hasReferralDisclosure: boolean;
@@ -104,6 +105,7 @@ export function CategoryListClient({ category, rows }: { category: CategoryInfo;
       cardAttributes: category.cardFields.map((f) => formatAttr(f, r.attributes[f.key])).filter((v): v is string => v !== null).slice(0, 3),
       avgRating: r.avgRating,
       reviewCount: r.reviewCount,
+      ratingHidden: r.ratingHidden,
       deliveryMode: r.deliveryMode,
       hasReferralDisclosure: r.hasReferralDisclosure,
     };

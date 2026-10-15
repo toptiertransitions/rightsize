@@ -85,7 +85,7 @@ export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, is
 
         <PreferredBadge communities={partner.preferredBy} />
 
-        <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />
+        <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} hidden={partner.ratingHidden} />
 
         {partner.projectsCompleted > 0 && (
           <p className="text-xs text-gray-500">

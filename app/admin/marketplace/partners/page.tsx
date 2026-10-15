@@ -1,6 +1,10 @@
 import { AdminHeader } from "@/app/admin/components/AdminHeader";
 import { MarketplaceNav } from "../MarketplaceNav";
+import { auth } from "@clerk/nextjs/server";
+import { getAllPartnerReviews, getSystemRole } from "@/lib/airtable";
+import { isTTTAdmin } from "@/lib/config";
 import { getAllCategories, getAllPartners, getAllListingsAdmin } from "@/lib/marketplace/data";
+import { partnerIdResolver, summarizeReviewsByPartner } from "@/lib/partners/reviews";
 import { computeListingCompleteness } from "@/lib/marketplace/completeness";
 import { PartnersListClient } from "./PartnersListClient";
 import { InviteMarketplacePartnerButton } from "./InviteMarketplacePartnerButton";
@@ -8,11 +12,16 @@ import { InviteMarketplacePartnerButton } from "./InviteMarketplacePartnerButton
 export const dynamic = "force-dynamic";
 
 export default async function MarketplacePartnersPage() {
-  const [categories, partners, listings] = await Promise.all([
+  const { userId } = await auth();
+  const [categories, partners, listings, reviews, role] = await Promise.all([
     getAllCategories(),
     getAllPartners(),
     getAllListingsAdmin(),
+    getAllPartnerReviews().catch(() => []),
+    userId ? getSystemRole(userId).catch(() => null) : null,
   ]);
+  const canToggleScore = role === "TTTAdmin" || (!!userId && isTTTAdmin(userId));
+  const reviewSummaries = summarizeReviewsByPartner(reviews, partnerIdResolver(partners));
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const rows = partners.map((partner) => {
@@ -28,6 +37,7 @@ export default async function MarketplacePartnersPage() {
       listingStatus: primaryListing?.status ?? "Draft",
       completeness,
       hasReferralFee: partnerListings.some((l) => l.feeType !== "none"),
+      reviews: reviewSummaries.get(partner.id) ?? { avg: 0, count: 0, hiddenCount: 0 },
     };
   });
 
@@ -41,7 +51,7 @@ export default async function MarketplacePartnersPage() {
             categories={[...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label)).map((c) => ({ id: c.id, label: c.label }))}
           />
         </div>
-        <PartnersListClient rows={rows} categories={categories.map((c) => ({ id: c.id, label: c.label }))} />
+        <PartnersListClient rows={rows} canToggleScore={canToggleScore} categories={categories.map((c) => ({ id: c.id, label: c.label }))} />
       </main>
     </div>
   );

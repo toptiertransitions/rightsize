@@ -45,7 +45,7 @@ export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemov
             )}
           </div>
 
-          {partner.reviewCount > 0 && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
+          {partner.reviewCount > 0 && !partner.ratingHidden && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
 
           {(partner.phone || partner.email) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1">

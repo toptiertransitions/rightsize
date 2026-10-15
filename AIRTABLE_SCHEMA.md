@@ -141,3 +141,24 @@ Office/Study, Garage, Basement, Attic, Bathroom, Closet, Storage Room, Sunroom, 
 5. Get your **Base ID** from the URL: `https://airtable.com/appXXXXXXXXXXXXXX/...`
 6. Get each **Table ID** from the URL when viewing each table: `.../tblXXXXXXXXXXXXXX/...`
 7. Fill in `.env.local` with all values
+
+## PartnerReviews
+
+Client ratings of their selected partners, left from the "Your Partners" tray on `/partners` and managed in `/admin/marketplace/reviews`. One row per (TenantId, PartnerId, ReviewerUserId).
+
+| Field | Type | Notes |
+|---|---|---|
+| PartnerId | Single line text | Marketplace Partner record id (older hand-entered rows: legacy LocalVendor id) |
+| TenantId | Single line text | |
+| Score | Number (integer) | 1-5 |
+| Comment | Long text | Optional |
+| Date | Date | Created date |
+| Tags | Long text | Comma-separated adjective pills (lib/partners/reviewTags.ts) |
+| Category | Single line text | Partner category at time of review |
+| ReviewerUserId | Single line text | Clerk user id |
+| ReviewerName | Single line text | |
+| Status | Single select | Published, Hidden (empty counts as Published) |
+| UpdatedAt | Date/time (ISO) | |
+| EditedBy | Single line text | TTTAdmin who last edited |
+
+**Partners** table: `DisplayReviewScore` (Checkbox) — off by default; the review score is hidden everywhere until a TTTAdmin turns it on in Admin > Marketplace > Partners.

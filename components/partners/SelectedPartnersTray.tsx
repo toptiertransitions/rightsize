@@ -1,10 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import type { PartnerCategory } from "@/lib/types";
 import type { PartnerProfile } from "@/lib/partners/types";
 import { PartnerLogo } from "./PartnerLogo";
 import { EmptySlot } from "./EmptySlot";
 import { PartnerFilesSection } from "./PartnerFilesSection";
+import { ReviewSheet, TrayReviewRow } from "./ReviewSheet";
+import type { MyPartnerReview } from "@/app/(protected)/partners/review-actions";
+
+export interface TrayReviewConfig {
+  /** Selected partners this client may review (see lib/partners/reviews.ts). */
+  reviewablePartnerIds: string[];
+  /** This user's own reviews, by partner id. */
+  myReviews: Record<string, MyPartnerReview>;
+  /** Project is wrapped up (archived) — show the "How did your team do?" nudge. */
+  promptForReviews: boolean;
+}
 
 interface Props {
   categories: readonly PartnerCategory[];
@@ -21,9 +33,19 @@ interface Props {
   lockedCategories?: readonly PartnerCategory[];
   /** Categories locked to the client's destination community. */
   destinationCategories?: readonly PartnerCategory[];
+  /** Set only for the project's Owner/Collaborator clients. */
+  reviews?: TrayReviewConfig;
 }
 
-export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClick, onChangeClick, filesEnabled, tenantId, lockedCategories = [], destinationCategories = [] }: Props) {
+export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClick, onChangeClick, filesEnabled, tenantId, lockedCategories = [], destinationCategories = [], reviews }: Props) {
+  const [myReviews, setMyReviews] = useState(reviews?.myReviews ?? {});
+  const [reviewing, setReviewing] = useState<{ partner: PartnerProfile; score?: number } | null>(null);
+  const reviewable = new Set(reviews?.reviewablePartnerIds ?? []);
+  const unreviewedCount = categories.filter((c) => {
+    const p = selectedPartners[c];
+    return p && reviewable.has(p.id) && !myReviews[p.id];
+  }).length;
+
   const filledCount = categories.filter((c) => selectedPartners[c]).length;
   const total = categories.length;
   const pct = Math.round((filledCount / total) * 100);
@@ -51,6 +73,17 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
             </svg>
           </span>
           <p className="text-sm font-semibold text-forest-800">Your team is set.</p>
+        </div>
+      )}
+
+      {reviews?.promptForReviews && unreviewedCount > 0 && tenantId && (
+        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex items-center gap-3">
+          <svg className="w-6 h-6 text-amber-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M10 1.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L10 14.9l-5.2 2.8 1-5.9L1.5 7.7l5.9-.8L10 1.5z" />
+          </svg>
+          <p className="text-sm text-gray-700">
+            <span className="font-semibold text-gray-900">How did your team do?</span> Rate your partners below — it helps other families choose.
+          </p>
         </div>
       )}
 
@@ -134,11 +167,29 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
                 </>
               )}
 
+              {tenantId && reviewable.has(partner.id) && (
+                <TrayReviewRow review={myReviews[partner.id]} onOpen={(score) => setReviewing({ partner, score })} />
+              )}
+
               {filesEnabled && tenantId && <PartnerFilesSection tenantId={tenantId} partnerId={partner.id} />}
             </div>
           );
         })}
       </div>
+
+      {reviewing && tenantId && (
+        <ReviewSheet
+          tenantId={tenantId}
+          partner={reviewing.partner}
+          existing={myReviews[reviewing.partner.id]}
+          initialScore={reviewing.score}
+          onClose={() => setReviewing(null)}
+          onSaved={(review) => {
+            setMyReviews((m) => ({ ...m, [reviewing.partner.id]: review }));
+            setReviewing(null);
+          }}
+        />
+      )}
     </div>
   );
 }

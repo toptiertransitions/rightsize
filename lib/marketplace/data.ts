@@ -177,6 +177,7 @@ function mapPartner(rec: AirtableRec): MarketplacePartner {
     responsivenessScore: f["ResponsivenessScore"] != null ? num(f["ResponsivenessScore"]) : undefined,
     featuredRank: f["FeaturedRank"] != null ? num(f["FeaturedRank"]) : undefined,
     projectsCompletedAdjustment: num(f["ProjectsCompletedAdjustment"]),
+    displayReviewScore: bool(f["DisplayReviewScore"]),
     lifecycleStatus: (str(f["LifecycleStatus"]) || "Prospect") as MarketplacePartner["lifecycleStatus"],
     source: (str(f["Source"]) || "Manual") as MarketplacePartner["source"],
     crmReferralCompanyId: linkedId(f["CrmReferralCompanyId"]) || undefined,
@@ -276,6 +277,7 @@ interface UpdatePartnerData extends Partial<Omit<CreatePartnerData, "crmReferral
   reviewedBy?: string;
   leadRouting?: "all" | "selected";
   leadSkipBusinessEmail?: boolean;
+  displayReviewScore?: boolean;
 }
 
 export async function updatePartner(id: string, data: UpdatePartnerData): Promise<void> {
@@ -313,6 +315,7 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
   if (data.reviewedBy !== undefined) fields["ReviewedBy"] = data.reviewedBy;
   if (data.leadRouting !== undefined) fields["LeadRouting"] = data.leadRouting === "selected" ? "Selected people" : "All team";
   if (data.leadSkipBusinessEmail !== undefined) fields["LeadSkipBusinessEmail"] = data.leadSkipBusinessEmail;
+  if (data.displayReviewScore !== undefined) fields["DisplayReviewScore"] = data.displayReviewScore;
 
   const res = await marketplaceFetch(AIRTABLE_TABLES.MARKETPLACE_PARTNERS, "", {
     method: "PATCH",

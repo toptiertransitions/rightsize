@@ -100,6 +100,9 @@ export interface MarketplacePartner {
   responsivenessScore?: number;
   featuredRank?: number;
   projectsCompletedAdjustment: number;
+  /** Admin toggle (Partners tab). Off by default: the review average is
+   * hidden everywhere it would display until a TTTAdmin turns it on. */
+  displayReviewScore: boolean;
   lifecycleStatus: MarketplaceLifecycleStatus;
   source: MarketplacePartnerSource;
   /** Linked CRMReferralCompanies record id, if this company is ALSO a CRM

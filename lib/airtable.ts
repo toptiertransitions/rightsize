@@ -2555,7 +2555,88 @@ function mapPartnerReview(record: AirtableRecord): PartnerReview {
     score: (typeof f["Score"] === "number" ? f["Score"] : 0) as PartnerReview["score"],
     comment: toStr(f["Comment"]),
     date: toStr(f["Date"]),
+    tags: toStr(f["Tags"]).split(",").map((t) => t.trim()).filter(Boolean),
+    category: (toStr(f["Category"]) || undefined) as PartnerReview["category"],
+    reviewerUserId: toStr(f["ReviewerUserId"]),
+    reviewerName: toStr(f["ReviewerName"]),
+    status: toStr(f["Status"]) === "Hidden" ? "Hidden" : "Published",
+    updatedAt: toStr(f["UpdatedAt"]) || undefined,
+    editedBy: toStr(f["EditedBy"]) || undefined,
   };
+}
+
+export interface PartnerReviewInput {
+  score: PartnerReview["score"];
+  tags: string[];
+  comment: string;
+}
+
+function partnerReviewInputFields(data: Partial<PartnerReviewInput>): Record<string, unknown> {
+  const fields: Record<string, unknown> = { UpdatedAt: new Date().toISOString() };
+  if (data.score !== undefined) fields["Score"] = data.score;
+  if (data.tags !== undefined) fields["Tags"] = data.tags.join(", ");
+  if (data.comment !== undefined) fields["Comment"] = data.comment;
+  return fields;
+}
+
+export async function getPartnerReviewsForTenant(tenantId: string): Promise<PartnerReview[]> {
+  const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
+  const res = await partnerReviewFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return (data.records as AirtableRecord[]).map(mapPartnerReview);
+}
+
+// Client-side write: one review per (tenant, partner, reviewer) — updates
+// the reviewer's existing row if there is one, otherwise creates it. Never
+// touches Status, so a review an admin hid stays hidden after a client edit.
+export async function upsertPartnerReview(
+  key: { tenantId: string; partnerId: string; reviewerUserId: string; reviewerName: string; category: PartnerCategory },
+  data: PartnerReviewInput,
+  initialStatus: PartnerReview["status"] = "Published"
+): Promise<PartnerReview> {
+  const existing = (await getPartnerReviewsForTenant(key.tenantId)).find(
+    (r) => r.partnerId === key.partnerId && r.reviewerUserId === key.reviewerUserId
+  );
+  const fields = partnerReviewInputFields(data);
+  const res = existing
+    ? await partnerReviewFetch(`/${existing.id}`, { method: "PATCH", body: JSON.stringify({ fields }) })
+    : await partnerReviewFetch("", {
+        method: "POST",
+        body: JSON.stringify({
+          fields: {
+            ...fields,
+            PartnerId: key.partnerId,
+            TenantId: key.tenantId,
+            ReviewerUserId: key.reviewerUserId,
+            ReviewerName: key.reviewerName,
+            Category: key.category,
+            Status: initialStatus,
+            Date: new Date().toISOString().slice(0, 10),
+          },
+          typecast: true,
+        }),
+      });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerReview(await res.json());
+}
+
+// Admin edit (/admin/marketplace/reviews) — may also change Status.
+export async function updatePartnerReview(
+  id: string,
+  data: Partial<PartnerReviewInput> & { status?: PartnerReview["status"]; editedBy: string }
+): Promise<PartnerReview> {
+  const fields = partnerReviewInputFields(data);
+  fields["EditedBy"] = data.editedBy;
+  if (data.status !== undefined) fields["Status"] = data.status;
+  const res = await partnerReviewFetch(`/${id}`, { method: "PATCH", body: JSON.stringify({ fields, typecast: true }) });
+  if (!res.ok) throw new Error(await res.text());
+  return mapPartnerReview(await res.json());
+}
+
+export async function deletePartnerReview(id: string): Promise<void> {
+  const res = await partnerReviewFetch(`/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
 }
 
 // Small table — fetched in full (paginated) and grouped in memory by the

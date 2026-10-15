@@ -33,6 +33,7 @@ interface Props {
   partner: Partner;
   avgRating: number;
   reviewCount: number;
+  ratingHidden: boolean;
   projectsCompleted: number;
   recentProjectMonths: string[];
 }
@@ -54,6 +55,7 @@ export function ProfileClient({
   partner,
   avgRating,
   reviewCount,
+  ratingHidden,
   projectsCompleted,
   recentProjectMonths,
 }: Props) {
@@ -86,7 +88,7 @@ export function ProfileClient({
           <div className="flex-1">
             <h1 className="text-xl font-bold text-gray-900">{partner.companyName}</h1>
             <p className="text-sm text-gray-500">{[partner.city, partner.state].filter(Boolean).join(", ")}</p>
-            <div className="mt-1.5"><RatingStars rating={avgRating} reviewCount={reviewCount} /></div>
+            <div className="mt-1.5"><RatingStars rating={avgRating} reviewCount={reviewCount} hidden={ratingHidden} /></div>
           </div>
         </div>
 

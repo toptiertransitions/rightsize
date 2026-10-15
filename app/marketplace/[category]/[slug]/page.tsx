@@ -50,7 +50,7 @@ export default async function PartnerProfilePage({ params }: { params: Promise<{
     address: partner.city || partner.state ? { "@type": "PostalAddress", addressLocality: partner.city, addressRegion: partner.state } : undefined,
     url: partner.website || undefined,
     image: partner.logo || undefined,
-    aggregateRating: rating && rating.reviewCount > 0
+    aggregateRating: rating && rating.reviewCount > 0 && !rating.ratingHidden
       ? { "@type": "AggregateRating", ratingValue: rating.avgRating, reviewCount: rating.reviewCount }
       : undefined,
   };
@@ -82,6 +82,7 @@ export default async function PartnerProfilePage({ params }: { params: Promise<{
       }}
       avgRating={rating?.avgRating ?? 0}
       reviewCount={rating?.reviewCount ?? 0}
+      ratingHidden={rating?.ratingHidden ?? false}
       projectsCompleted={rating?.projectsCompleted ?? 0}
       recentProjectMonths={rating?.recentProjectMonths ?? []}
       />

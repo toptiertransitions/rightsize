@@ -24,7 +24,7 @@ import { MatchCriteriaEditor } from "../../MatchCriteriaEditor";
 import type { PartnerCategory } from "@/lib/types";
 import { IL_COUNTY_OPTIONS, isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
 
-interface LegacyReview { score: number; comment: string; date: string }
+interface ReviewSummaryRow { score: number; comment: string; date: string; tags: string[]; reviewerName: string; status: string }
 
 interface Props {
   partner: MarketplacePartner;
@@ -33,7 +33,7 @@ interface Props {
   auditLogs: MarketplaceReferralTermsAuditEntry[];
   introEvents: MarketplaceIntroductionEvent[];
   legacyPortalLinked: boolean;
-  legacyReviews: LegacyReview[];
+  reviews: ReviewSummaryRow[];
   canEditReferralTerms: boolean;
   canViewReferralAuditLog: boolean;
 }
@@ -41,7 +41,7 @@ interface Props {
 type Tab = "overview" | "listings" | "service-area" | "referral-terms" | "reviews" | "activity" | "portal";
 
 export function PartnerDetailClient(props: Props) {
-  const { partner, categories, listings, auditLogs, introEvents, legacyPortalLinked, legacyReviews, canEditReferralTerms, canViewReferralAuditLog } = props;
+  const { partner, categories, listings, auditLogs, introEvents, legacyPortalLinked, reviews, canEditReferralTerms, canViewReferralAuditLog } = props;
   const [tab, setTab] = useState<Tab>("overview");
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
@@ -83,7 +83,7 @@ export function PartnerDetailClient(props: Props) {
       {tab === "referral-terms" && canEditReferralTerms && (
         <ReferralTermsTab listings={listings} categoryById={categoryById} />
       )}
-      {tab === "reviews" && <ReviewsTab legacyReviews={legacyReviews} hasLegacyLink={Boolean(partner.localVendorId)} />}
+      {tab === "reviews" && <ReviewsTab reviews={reviews} partnerId={partner.id} displayed={partner.displayReviewScore} />}
       {tab === "activity" && (
         <ActivityTab auditLogs={auditLogs} introEvents={introEvents} partner={partner} canViewReferralAuditLog={canViewReferralAuditLog} />
       )}
@@ -617,22 +617,25 @@ function ReferralTermsEditor({ listing, category }: { listing: MarketplaceListin
 
 // ─── Reviews and Projects ────────────────────────────────────────────────────
 
-function ReviewsTab({ legacyReviews, hasLegacyLink }: { legacyReviews: LegacyReview[]; hasLegacyLink: boolean }) {
-  if (!hasLegacyLink) {
-    return <p className="text-sm text-gray-500">No reviews yet — review collection isn't built into the new marketplace model yet (Phase 5).</p>;
-  }
-  if (legacyReviews.length === 0) {
-    return <p className="text-sm text-gray-500">No reviews on file for this partner's linked Disposition Network record.</p>;
-  }
+function ReviewsTab({ reviews, partnerId, displayed }: { reviews: ReviewSummaryRow[]; partnerId: string; displayed: boolean }) {
+  const published = reviews.filter((r) => r.status !== "Hidden");
+  const avg = published.length ? published.reduce((s, r) => s + r.score, 0) / published.length : 0;
   return (
     <div className="max-w-2xl space-y-2">
-      <p className="text-xs text-gray-500 mb-3">Read-only — from this partner's linked Disposition Network record. Reviews are entered directly in Airtable; there's no submission flow in either model yet.</p>
-      {legacyReviews.map((r, i) => (
-        <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <p className="text-sm text-gray-300">
+          {published.length ? <><span className="text-amber-400">★</span> {avg.toFixed(1)} from {published.length} published review{published.length === 1 ? "" : "s"}</> : "No published reviews yet."}
+          <span className="text-gray-500"> · score {displayed ? "displayed to clients" : "not displayed"} (Partners tab toggle)</span>
+        </p>
+        <a href={`/admin/marketplace/reviews?partner=${partnerId}`} className="text-sm text-forest-400 hover:underline">Edit in Reviews &rarr;</a>
+      </div>
+      {reviews.map((r, i) => (
+        <div key={i} className={`bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 ${r.status === "Hidden" ? "opacity-60" : ""}`}>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-200">{"★".repeat(r.score)}{"☆".repeat(5 - r.score)}</span>
-            <span className="text-xs text-gray-500">{r.date}</span>
+            <span className="text-sm text-gray-200">{"★".repeat(r.score)}{"☆".repeat(5 - r.score)}{r.status === "Hidden" && <span className="ml-2 text-xs text-gray-500">Hidden</span>}</span>
+            <span className="text-xs text-gray-500">{[r.reviewerName, r.date].filter(Boolean).join(" · ")}</span>
           </div>
+          {r.tags.length > 0 && <p className="text-xs text-gray-400 mt-1">{r.tags.join(" · ")}</p>}
           {r.comment && <p className="text-sm text-gray-400 mt-1">{r.comment}</p>}
         </div>
       ))}

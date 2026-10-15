@@ -50,17 +50,15 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     await Promise.all(listings.map((l) => getAuditLogForListing(l.id)))
   ).flat();
 
-  // Legacy, read-only: reviews and the disposition-side portal login both
-  // live on the old LocalVendor record this partner was backfilled from (if
-  // any) — the new model doesn't have its own review-submission flow yet
-  // (see Phase 0 finding: PartnerReviews has no write path anywhere today).
+  // The disposition-side portal login lives on the old LocalVendor record
+  // this partner was backfilled from (if any). Reviews are keyed by this
+  // partner's id (left in the app) or that legacy id (older Airtable rows).
   let legacyVendor = null;
-  let legacyReviews: Awaited<ReturnType<typeof getAllPartnerReviews>> = [];
   if (partner.localVendorId) {
     legacyVendor = await getLocalVendorById(partner.localVendorId).catch(() => null);
-    const allReviews = await getAllPartnerReviews().catch(() => []);
-    legacyReviews = allReviews.filter((r) => r.partnerId === partner.localVendorId);
   }
+  const reviews = (await getAllPartnerReviews().catch(() => []))
+    .filter((r) => r.score && (r.partnerId === partner.id || (!!partner.localVendorId && r.partnerId === partner.localVendorId)));
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -100,7 +98,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           auditLogs={auditLogs}
           introEvents={introEvents}
           legacyPortalLinked={Boolean(legacyVendor?.clerkUserId)}
-          legacyReviews={legacyReviews.map((r) => ({ score: r.score, comment: r.comment, date: r.date }))}
+          reviews={reviews.map((r) => ({ score: r.score, comment: r.comment, date: r.date, tags: r.tags, reviewerName: r.reviewerName, status: r.status }))}
           canEditReferralTerms={canEditReferralTerms}
           canViewReferralAuditLog={canViewReferralAuditLog}
         />

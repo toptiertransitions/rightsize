@@ -80,7 +80,7 @@ function MatchCard({
           <DeliveryPill match={match} />
         </div>
         <PreferredBadge communities={partner.preferredBy} />
-        {partner.reviewCount > 0 && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
+        {partner.reviewCount > 0 && !partner.ratingHidden && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
         <p className="text-sm text-gray-600 leading-relaxed">{match.whyThisMatch}</p>
 
         {onLearnMore && (

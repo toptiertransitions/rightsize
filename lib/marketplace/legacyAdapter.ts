@@ -47,23 +47,24 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
       Boolean(r.partner && r.category)
     );
 
-  // Reviews and completed-project links are keyed by the OLD LocalVendor
-  // record id — never rewritten during Phase 2 by design (see Phase 0/2
-  // notes) — so they're resolved here via each new Partner's optional
-  // localVendorId, not its own id. A partner with no localVendorId (a
-  // fresh marketplace signup, not backfilled from the old model) simply
-  // has no legacy reviews/projects, which is correct.
-  const reviewsByLegacyId = new Map<string, number[]>();
-  for (const r of reviews) {
-    if (!r.score) continue;
-    if (!reviewsByLegacyId.has(r.partnerId)) reviewsByLegacyId.set(r.partnerId, []);
-    reviewsByLegacyId.get(r.partnerId)!.push(r.score);
+  // Reviews left in the app are keyed by the marketplace Partner id; older
+  // hand-entered rows are keyed by the OLD LocalVendor record id (never
+  // rewritten during Phase 2), resolved via each Partner's optional
+  // localVendorId. A partner's average counts both. Hidden reviews (admin,
+  // /admin/marketplace/reviews) are left out entirely.
+  const published = reviews.filter((r) => r.score && r.status !== "Hidden");
+  const scoresByReviewKey = new Map<string, number[]>();
+  for (const r of published) {
+    if (!scoresByReviewKey.has(r.partnerId)) scoresByReviewKey.set(r.partnerId, []);
+    scoresByReviewKey.get(r.partnerId)!.push(r.score);
   }
-  const allScores = reviews.filter((r) => r.score).map((r) => r.score);
-  const priorMean = allScores.length > 0
-    ? Math.round((allScores.reduce((s, n) => s + n, 0) / allScores.length) * 10) / 10
+  const priorMean = published.length > 0
+    ? Math.round((published.reduce((s, r) => s + r.score, 0) / published.length) * 10) / 10
     : DEFAULT_PRIOR_MEAN;
 
+  // Completed-project links are still keyed by the legacy LocalVendor id,
+  // so a partner with no localVendorId (a fresh marketplace signup) has
+  // none, which is correct.
   const archivedAtByTenantId = new Map(tenants.map((t) => [t.id, t.archivedAt]));
   const completedTenantIds = new Set(tenants.filter((t) => t.isArchived && !t.isLostDeal).map((t) => t.id));
   const completedTenantsByLegacyId = new Map<string, Set<string>>();
@@ -75,7 +76,10 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
 
   return liveRows.map(({ listing, partner, category }): PartnerProfile => {
     const legacyId = partner.localVendorId;
-    const scores = legacyId ? reviewsByLegacyId.get(legacyId) ?? [] : [];
+    const scores = [
+      ...(scoresByReviewKey.get(partner.id) ?? []),
+      ...(legacyId ? scoresByReviewKey.get(legacyId) ?? [] : []),
+    ];
     const rawAvgRating = scores.length > 0 ? Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) / 10 : 0;
     const avgRating = computeBayesianRating(rawAvgRating, scores.length, priorMean, BAYESIAN_CONFIDENCE);
 
@@ -106,6 +110,7 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
       avgRating,
       rawAvgRating,
       reviewCount: scores.length,
+      ratingHidden: !partner.displayReviewScore,
       projectsCompleted,
       aboutUs: partner.aboutUs || undefined,
       recentProjectMonths,
