@@ -31,6 +31,10 @@ function SignInContent() {
   const router = useRouter();
   const [cookieSession, setCookieSession] = useState(false);
   useEffect(() => { setCookieSession(hasClerkSessionCookie()); }, []);
+  // App store reviewers can't receive the new-device email code; the native
+  // app has no address bar, so give them a quiet way into /review-access.
+  const [inNativeApp, setInNativeApp] = useState(false);
+  useEffect(() => { setInNativeApp(isNativeApp()); }, []);
   const signedIn = isLoaded ? !!isSignedIn : cookieSession;
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -73,6 +77,11 @@ function SignInContent() {
           },
         }}
       />
+      {inNativeApp && (
+        <Link href="/review-access" className="mt-8 text-xs text-gray-400 hover:text-gray-600">
+          App review access
+        </Link>
+      )}
     </div>
   );
 }
