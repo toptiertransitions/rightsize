@@ -1,6 +1,7 @@
 "use server";
 
 import { sendLeadToPartnerTeam } from "@/lib/marketplace/leads";
+import { isDemoTenant } from "@/lib/demo";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, getPartnerSelectionsForTenant, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity } from "@/lib/airtable";
@@ -199,7 +200,7 @@ export async function savePartnerRequestAnswersAction(
     // too (not just the move), which is effectively Full Move Management —
     // but they haven't selected that service interest. Best-effort, never
     // blocks the save the user is waiting on.
-    if (category === "Mover" && parsedAnswers.data.packingHelp === "packing_and_move") {
+    if (category === "Mover" && parsedAnswers.data.packingHelp === "packing_and_move" && !isDemoTenant(tenantId)) {
       getTenantById(tenantId)
         .then(async (tenant) => {
           if (!tenant || (tenant.serviceInterests ?? []).includes("full_service")) return;
@@ -263,6 +264,10 @@ export async function requestPartnerIntroAction(
     }
 
     await withRetry(() => addPartnerIntroRequest(tenantId, category, partnerId, MAX_INTRO_REQUESTS_PER_CATEGORY));
+
+    // Demo/review accounts: show the request as made, but never notify a
+    // partner, email anyone, or create a CRM lead.
+    if (isDemoTenant(tenantId)) return { ok: true };
 
     const clientEmail = user?.emailAddresses?.[0]?.emailAddress || tenant.clientEmail;
     const clientName = user?.firstName || tenant.name;
