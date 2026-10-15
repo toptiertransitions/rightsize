@@ -1190,7 +1190,11 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
   useEffect(() => { liveEntriesRef.current = liveEntries; }, [liveEntries]);
 
   const runRsvpSync = useCallback(() => {
-    const toSync = liveEntriesRef.current.filter(e => e.googleEventId);
+    // Only upcoming shifts — RSVPs on past ones no longer matter — and only
+    // while the tab is visible, to stay under Airtable's rate limit.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    const today = new Date().toLocaleDateString("en-CA");
+    const toSync = liveEntriesRef.current.filter(e => e.googleEventId && e.date >= today);
     if (!toSync.length) return;
     toSync.forEach((entry, i) => {
       setTimeout(() => {

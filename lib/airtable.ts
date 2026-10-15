@@ -5080,7 +5080,8 @@ const GCAL_SYSTEM_KEY = "__gcal__";
 export async function getCalendarToken(): Promise<{ id: string; refreshToken: string; email: string } | null> {
   const formula = encodeURIComponent(`{ClerkUserId} = "${GCAL_SYSTEM_KEY}"`);
   const res = await crmFetch(AIRTABLE_TABLES.GMAIL_TOKENS, `?filterByFormula=${formula}&maxRecords=1`);
-  if (!res.ok) return null;
+  // Throw on a failed read (e.g. a 429) so callers can tell it apart from "never connected"
+  if (!res.ok) throw new Error(`getCalendarToken failed: ${res.status}`);
   const data = await res.json();
   if (!data.records?.length) return null;
   const f = (data.records[0] as AirtableRecord).fields;

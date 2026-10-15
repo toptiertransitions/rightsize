@@ -5,14 +5,22 @@ import { getCalendarToken } from "./airtable";
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 // Prefer the token stored in Airtable (set via /api/admin/calendar-auth OAuth flow)
 // over the env-var refresh token so it can be re-issued without a redeploy.
+// The env token is only used when nothing is stored — a failed Airtable read
+// (rate limit) throws instead of silently falling back to a stale token.
+// Cached per server instance for a few minutes; a reconnect is picked up after that.
+const TOKEN_TTL_MS = 5 * 60 * 1000;
+let cachedToken: { value: string | undefined; at: number } | null = null;
+
 async function getAuth() {
   const auth = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
   );
-  const stored = await getCalendarToken().catch(() => null);
-  const refreshToken = stored?.refreshToken || process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
-  auth.setCredentials({ refresh_token: refreshToken });
+  if (!cachedToken || Date.now() - cachedToken.at > TOKEN_TTL_MS) {
+    const stored = await getCalendarToken();
+    cachedToken = { value: stored?.refreshToken || process.env.GOOGLE_CALENDAR_REFRESH_TOKEN, at: Date.now() };
+  }
+  auth.setCredentials({ refresh_token: cachedToken.value });
   return auth;
 }
 
