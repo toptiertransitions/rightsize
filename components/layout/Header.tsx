@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt, Lightbulb } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt, Lightbulb, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform, isNativeApp } from "@/lib/native";
@@ -305,6 +305,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
                 <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
                 {isNativeShell && (
                   <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />
+                )}
+                {/* Staff accounts are removed by an administrator, not self-deleted */}
+                {!isStaff && (
+                  <UserButton.Link label="Delete account" href="/delete-account" labelIcon={<Trash2 className="w-4 h-4" />} />
                 )}
                 <UserButton.Action label="signOut" />
               </UserButton.MenuItems>

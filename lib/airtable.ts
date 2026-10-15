@@ -288,6 +288,12 @@ export async function getUserByClerkId(clerkUserId: string): Promise<User | null
   return user;
 }
 
+/** Removes a person's Users record (account deletion). */
+export async function deleteUserRecord(airtableId: string): Promise<void> {
+  const base = getBase();
+  await base(AIRTABLE_TABLES.USERS).destroy(airtableId);
+}
+
 export async function createUser(data: {
   clerkUserId: string;
   email: string;

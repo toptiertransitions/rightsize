@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
 
       <main className="max-w-3xl mx-auto px-6 pb-24 pt-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-1">Privacy Policy</h1>
-        <p className="text-sm text-gray-400 mb-10">Effective date: September 18, 2026</p>
+        <p className="text-sm text-gray-400 mb-10">Effective date: October 14, 2026</p>
 
         <Section title="Who this applies to">
           <p>
@@ -49,7 +49,7 @@ export default function PrivacyPolicyPage() {
           <p><span className="font-medium text-gray-900">Project and business data.</span> Information you or TTT staff enter about a move or downsizing project — inventory items, room assignments, pricing, schedules, messages, and related notes.</p>
           <p><span className="font-medium text-gray-900">Photos and files.</span> Photos of items, floorplans, and documents you or TTT staff upload, stored with our image and file hosting provider, Cloudinary.</p>
           <p><span className="font-medium text-gray-900">Messages.</span> Messages sent through the app&rsquo;s Communication Hub between staff, clients, and partners on a shared project.</p>
-          <p><span className="font-medium text-gray-900">Device and push notification data.</span> If you enable notifications in the mobile app, we store a device push token (issued by Apple, associated with your account) so we can deliver message and project alerts to your device. We do not collect device location, contacts, or other device data through this mechanism.</p>
+          <p><span className="font-medium text-gray-900">Device and push notification data.</span> If you enable notifications in the Rightsize iPhone or Android app, we store a device push token (issued by Apple or by Google Firebase, associated with your account) so we can deliver message and project alerts to your device. We do not collect device location, contacts, or other device data through this mechanism.</p>
           <p><span className="font-medium text-gray-900">What we do not currently collect.</span> The Rightsize mobile app does not access or collect your device&rsquo;s GPS location. If a location-based feature is added in the future, this policy will be updated first and you will be asked for permission on your device before any location data is collected.</p>
         </Section>
 
@@ -61,6 +61,7 @@ export default function PrivacyPolicyPage() {
 
         <Section title="Who can see your information">
           <p>Access is scoped by role. TTT staff assigned to a project can see that project&rsquo;s data. Clients see only their own project. Referral partners see only the projects their company referred. No one outside your project&rsquo;s assigned staff, your own account, and (where applicable) the referring partner can see your information.</p>
+          <p>When you ask to be introduced to a partner through the Partners page, we share your name, email, phone number and your answers with that partner so they can contact you.</p>
         </Section>
 
         <Section title="Service providers">
@@ -72,6 +73,7 @@ export default function PrivacyPolicyPage() {
             <li><span className="font-medium text-gray-900">Resend</span> — transactional email delivery</li>
             <li><span className="font-medium text-gray-900">Vercel</span> — application hosting</li>
             <li><span className="font-medium text-gray-900">Apple</span> — push notification delivery, mobile app distribution</li>
+            <li><span className="font-medium text-gray-900">Google</span> (Firebase Cloud Messaging and Google Play) — push notification delivery, Android app distribution</li>
             <li><span className="font-medium text-gray-900">Anthropic / OpenAI</span> — AI-assisted item cataloging</li>
           </ul>
         </Section>
@@ -85,7 +87,8 @@ export default function PrivacyPolicyPage() {
         </Section>
 
         <Section title="Your choices">
-          <p>You can request a copy of your account&rsquo;s data, or request that it be deleted, by contacting us at the address below. Deletion requests are subject to reasonable record-keeping requirements (for example, completed transaction records).</p>
+          <p>You can delete your account at any time from the app (your profile menu &gt; Delete account) or at <a href="/delete-account" className="text-forest-700 font-medium hover:underline">app.toptiertransitions.com/delete-account</a>, which also explains how to ask us by email if you can&rsquo;t sign in. Deleting your account removes your sign-in, your access to projects, and your device tokens. We keep completed sales, invoices and payout records as required for tax and accounting, and project records that belong to another account holder.</p>
+          <p>You can request a copy of your account&rsquo;s data by contacting us at the address below.</p>
           <p>You can disable push notifications at any time in your device&rsquo;s Settings app.</p>
         </Section>
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { House, Calendar, Gift, FileText, Store, Inbox, Users } from "lucide-react";
+import { House, Calendar, Gift, FileText, Store, Inbox, Users, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isNativeApp } from "@/lib/native";
 import { PartnerNavLinks } from "./PartnerNavLinks";
@@ -115,7 +115,13 @@ export function PartnerHeader({ contactName, hasListing = false, hasCrm = true, 
                   <Users className="w-[18px] h-[18px]" />
                 </Link>
               )}
-              <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
+              <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }}>
+                <UserButton.MenuItems>
+                  <UserButton.Action label="manageAccount" />
+                  <UserButton.Link label="Delete account" href="/delete-account" labelIcon={<Trash2 className="w-4 h-4" />} />
+                  <UserButton.Action label="signOut" />
+                </UserButton.MenuItems>
+              </UserButton>
             </div>
           </div>
 
