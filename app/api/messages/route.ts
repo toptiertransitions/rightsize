@@ -11,12 +11,12 @@ import {
   TEAM_CHANNEL,
   channelParticipant,
   isDmTenant,
-  otherDmParticipant,
 } from "@/lib/airtable-messages";
 import { canAccessTenantChannel } from "@/lib/thread-access";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import { buildUrgentMessageEmail } from "@/lib/email";
-import { sendPushToClerkUsers } from "@/lib/push-send";
+import { notifyNewMessage } from "@/lib/message-notify";
+import { plainMentions, mentionedIds } from "@/lib/mentions";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -69,19 +69,23 @@ export async function GET(req: NextRequest) {
     } catch { /* non-fatal — fall back to initials */ }
   }
   const resolveName = (clerkId: string) => nameByClerkId.get(clerkId) ?? clerkNameByClerkId.get(clerkId) ?? "Unknown";
+  const mentionsIn = (body: string) => mentionedIds(body).map(id => ({ id, name: resolveName(id) }));
 
   const enriched: Array<ProjectMessage & {
     authorName: string;
     authorPhotoUrl?: string;
-    comments: Array<MessageComment & { authorName: string; authorPhotoUrl?: string }>;
+    mentions: { id: string; name: string }[];
+    comments: Array<MessageComment & { authorName: string; authorPhotoUrl?: string; mentions: { id: string; name: string }[] }>;
   }> = messages.map(m => ({
     ...m,
     authorName: resolveName(m.authorClerkId),
     authorPhotoUrl: photoByClerkId.get(m.authorClerkId) || undefined,
+    mentions: mentionsIn(m.body),
     comments: (commentsByMessage.get(m.id) ?? []).map(c => ({
       ...c,
       authorName: resolveName(c.authorClerkId),
       authorPhotoUrl: photoByClerkId.get(c.authorClerkId) || undefined,
+      mentions: mentionsIn(c.body),
     })),
   }));
   return NextResponse.json({ messages: enriched });
@@ -200,42 +204,43 @@ export async function POST(req: NextRequest) {
   const clerk = await clerkClient();
   const authorUser = await clerk.users.getUser(userId).catch(() => null);
   const authorDisplayName = [authorUser?.firstName, authorUser?.lastName].filter(Boolean).join(" ") || "A staff member";
-  const message: ProjectMessage & { authorName: string; authorPhotoUrl?: string; comments: MessageComment[] } = {
+  const mentionIds = mentionedIds(created.body);
+  const roster = mentionIds.length ? await getStaffMembers().catch(() => []) : [];
+  const message: ProjectMessage & { authorName: string; authorPhotoUrl?: string; mentions: { id: string; name: string }[]; comments: MessageComment[] } = {
     ...created,
     authorName: authorDisplayName,
     authorPhotoUrl: authorUser?.imageUrl || undefined,
+    mentions: mentionIds.map(id => ({ id, name: roster.find(s => s.clerkUserId === id)?.displayName ?? "someone" })),
     comments: [],
   };
 
-  // Urgent messages email the relevant party for this channel — same
-  // recipient logic already used for time-off notifications where it
-  // applies (team channel), minus suspended/deleted staff. Personal DMs
-  // aren't part of the escalation system at all — a casual Slack-style
-  // line between two people has no "Ops" to notify.
-  if (urgency === "Urgent" && !isDmTenant(tenantId)) {
-    // Runs via after() so this reliably completes on serverless — a bare
-    // unawaited promise here gets silently killed mid-flight as soon as
-    // the response below is sent (same fix applied to the content-library
-    // and time-off notification routes for the same underlying bug).
-    after(async () => {
+  // One after() for everything that happens once the message is saved —
+  // runs reliably on serverless, unlike a bare unawaited promise (same fix
+  // as the content-library and time-off notification routes).
+  //   Urgent (projects/announcements): email the Team Lead + HQ, as before.
+  //   Pushes: lib/message-notify.ts decides who (DM, mentions, per-project
+  //   settings, presence, quiet hours) — see the comment at its top.
+  after(async () => {
+    const tenant = tenantId === BROADCAST_TENANT_ID || isDmTenant(tenantId) ? null : await getTenantById(tenantId).catch(() => null);
+    const bodyPreview = text?.trim() || `[Attachment: ${attachment?.fileName}]`;
+    let urgentRecipientIds: string[] = [];
+
+    if (urgency === "Urgent" && !isDmTenant(tenantId)) {
       try {
-        const tenant = tenantId === BROADCAST_TENANT_ID ? null : await getTenantById(tenantId).catch(() => null);
         const allStaff = await getStaffMembers();
         const recipients = urgentRecipients({ channel, posterId: userId, tenant, allStaff });
-
         const excludedIds = await getSuspendedOrDeletedClerkUserIds(recipients.map(s => s.clerkUserId));
         const liveRecipients = recipients.filter(s => !excludedIds.has(s.clerkUserId));
+        urgentRecipientIds = liveRecipients.map(s => s.clerkUserId);
         const recipientEmails = Array.from(new Set(liveRecipients.filter(s => s.email).map(s => s.email)));
-
-        const projectName = tenant?.name ?? "Company-wide";
-        const label = channelLabel(channel, projectName);
-        const bodyPreview = text?.trim() || `[Attachment: ${attachment?.fileName}]`;
+        const label = channelLabel(channel, tenant?.name ?? "Company-wide");
+        const nameOf = (id: string) => allStaff.find(s => s.clerkUserId === id)?.displayName ?? "someone";
 
         if (recipientEmails.length > 0) {
           const html = buildUrgentMessageEmail({
             authorName: authorDisplayName,
             projectName: label,
-            body: bodyPreview,
+            body: plainMentions(bodyPreview, nameOf),
             planUrl: tenant ? `${APP_URL}/inbox?c=p:${tenantId}` : `${APP_URL}/inbox?c=announcements`,
           });
           await resend.emails.send({
@@ -245,39 +250,22 @@ export async function POST(req: NextRequest) {
             html,
           });
         }
-
-        await sendPushToClerkUsers(
-          liveRecipients.map(s => s.clerkUserId),
-          { title: `Urgent — ${label}`, body: `${authorDisplayName}: ${bodyPreview}`, url: tenant ? `/inbox?c=p:${tenantId}` : "/inbox?c=announcements" },
-          { type: "Urgent" }
-        );
       } catch (e) {
-        console.error("[messages] urgent notification failed:", e);
+        console.error("[messages] urgent email failed:", e);
       }
-    });
-  }
-
-  // DMs skip the email escalation system entirely (see comment above — no
-  // "Ops" to notify for a 1:1 line), but a push is exactly the low-noise,
-  // instant-ping notification a DM calls for, so every DM gets one
-  // regardless of urgency.
-  if (isDmTenant(tenantId)) {
-    const recipientId = otherDmParticipant(tenantId, userId);
-    if (recipientId) {
-      after(async () => {
-        try {
-          await sendPushToClerkUsers([recipientId], {
-            title: authorDisplayName,
-            body: text?.trim() || `[Attachment: ${attachment?.fileName}]`,
-            // Opens this exact conversation (the sender is the "other" person for the recipient)
-            url: `/inbox?c=dm:${userId}`,
-          }, { type: "DM" });
-        } catch (e) {
-          console.error("[messages] DM push failed:", e);
-        }
-      });
     }
-  }
+
+    await notifyNewMessage({
+      tenantId,
+      tenant,
+      authorId: userId,
+      authorName: authorDisplayName,
+      body: text?.trim() ?? "",
+      attachmentName: attachment?.fileName,
+      urgent: urgency === "Urgent" && !isDmTenant(tenantId),
+      urgentRecipientIds,
+    });
+  });
 
   return NextResponse.json({ message });
 }

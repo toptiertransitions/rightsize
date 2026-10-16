@@ -1751,7 +1751,7 @@ function pushLogFetch(path: string, options?: RequestInit) {
   });
 }
 
-export type PushLogType = "ShiftInvite" | "ShiftReminder" | "ShiftDeclined" | "ShiftChanged" | "ShiftCancelled" | "Urgent" | "DM" | "Other";
+export type PushLogType = "ShiftInvite" | "ShiftReminder" | "ShiftDeclined" | "ShiftChanged" | "ShiftCancelled" | "Urgent" | "DM" | "Message" | "Mention" | "ThreadReply" | "Announcement" | "Other";
 export type PushLogResult = "Sent" | "Failed" | "SkippedNoDevice" | "SkippedOptedOut";
 
 // Best-effort audit trail for "I never got the reminder" debugging — never

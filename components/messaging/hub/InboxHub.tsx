@@ -8,15 +8,16 @@ import { BROADCAST_TENANT_ID, dmTenantId } from "@/lib/airtable-messages";
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/project-status";
 import type { HubData, HubPerson, HubProject, HubDm } from "@/lib/messaging-hub";
 import { ConversationView, type ConversationInfo } from "./ConversationView";
-import { MembersSheet, NewMessageSheet, leadsLabel } from "./Sheets";
+import { MembersSheet, NewMessageSheet, NotificationSettingsSheet, leadsLabel } from "./Sheets";
 import { Avatar, ProjectGlyph, AnnouncementGlyph, UnreadBadge, formatListTime, useIsCompact, useVisualViewport } from "./shared";
 
 const LIST_POLL_MS = 60000;
 const STATUS_FILTERS: ProjectStatus[] = ["active", "consignment", "not-signed", "archived"];
-type Filter = "all" | "unread" | "dms" | "projects";
+type Filter = "all" | "unread" | "mentions" | "dms" | "projects";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "unread", label: "Unread" },
+  { key: "mentions", label: "Mentions" },
   { key: "dms", label: "DMs" },
   { key: "projects", label: "Projects" },
 ];
@@ -80,9 +81,20 @@ function resolveConversation(key: string, data: HubData | null, me: Me): Resolve
 
 // ─── List rows ───────────────────────────────────────────────────────────────
 
-function Row({ selected, unread, onClick, icon, title, titleExtra, time, preview, muted }: {
+function BellOffIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-label="Notifications off">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9M3 3l18 18" />
+    </svg>
+  );
+}
+
+function Row({ selected, unread, onClick, icon, title, titleExtra, time, preview, muted, mentions = 0, silenced }: {
   selected: boolean;
   unread: number;
+  mentions?: number;
+  /** Notifications set to Nothing: greyed, with a bell-off icon. */
+  silenced?: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   title: string;
@@ -91,7 +103,7 @@ function Row({ selected, unread, onClick, icon, title, titleExtra, time, preview
   preview: string;
   muted?: boolean;
 }) {
-  const bold = unread > 0;
+  const bold = unread > 0 && !silenced;
   return (
     <button
       type="button"
@@ -102,13 +114,17 @@ function Row({ selected, unread, onClick, icon, title, titleExtra, time, preview
       {icon}
       <span className="flex-1 min-w-0">
         <span className="flex items-baseline gap-2">
-          <span className={`truncate text-[15px] ${bold ? "font-bold text-gray-900" : "font-semibold text-gray-800"}`}>{title}</span>
+          <span className={`truncate text-[15px] ${bold ? "font-bold text-gray-900" : silenced ? "font-semibold text-gray-500" : "font-semibold text-gray-800"}`}>{title}</span>
+          {silenced && <BellOffIcon />}
           {titleExtra && <span className="truncate text-xs text-forest-700 font-medium flex-shrink min-w-0">{titleExtra}</span>}
           <span className={`ml-auto flex-shrink-0 text-xs ${bold ? "text-forest-700 font-semibold" : "text-gray-400"}`}>{time}</span>
         </span>
         <span className="flex items-center gap-2 mt-0.5">
           <span className={`truncate text-sm flex-1 ${bold ? "text-gray-800" : muted ? "text-gray-400" : "text-gray-500"}`}>{preview}</span>
-          <UnreadBadge count={unread} />
+          {mentions > 0 && (
+            <span className="h-5 min-w-[20px] px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-bold flex items-center justify-center" aria-label={`${mentions} mention${mentions === 1 ? "" : "s"}`}>@</span>
+          )}
+          {silenced ? (unread > 0 && <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-gray-200 text-gray-600 text-[11px] font-bold flex items-center justify-center">{unread > 99 ? "99+" : unread}</span>) : <UnreadBadge count={unread} />}
         </span>
       </span>
     </button>
@@ -137,7 +153,8 @@ function projectPreview(p: HubProject): string {
   return `${p.lastIsMine ? "You" : (p.lastAuthorName ?? "").split(" ")[0]}: ${p.lastPreview ?? ""}`;
 }
 
-function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCompose, onRetry }: {
+function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCompose, onSettings, onRetry }: {
+  onSettings: () => void;
   data: HubData | null;
   loading: boolean;
   error: string;
@@ -158,6 +175,7 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
   const dms = useMemo(() => (data?.dms ?? []).filter((d) => {
     const p = personById.get(d.otherUserId);
     if (filter === "unread" && d.unread === 0) return false;
+    if (filter === "mentions") return false;
     if (!query) return true;
     return (p?.name ?? "").toLowerCase().includes(query) || (p?.leads ?? []).some((l) => l.name.toLowerCase().includes(query));
   }), [data, personById, filter, query]);
@@ -176,15 +194,16 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
   }, [data]);
 
   const projects = useMemo(() => (data?.projects ?? []).filter((p) => {
-    if (!query && p.status !== status) return false;
+    if (!query && filter !== "mentions" && p.status !== status) return false;
     if (filter === "unread" && p.unread === 0) return false;
+    if (filter === "mentions" && p.mentionsUnread === 0) return false;
     if (query && !p.name.toLowerCase().includes(query) && !(p.teamLeadName ?? "").toLowerCase().includes(query)) return false;
     return true;
   }), [data, status, filter, query]);
 
   const ann = data?.announcements;
   const showAnn = !!ann && (filter === "all" || (filter === "unread" && ann.unread > 0)) && (!query || "announcements".includes(query));
-  const showDms = filter !== "projects";
+  const showDms = filter !== "projects" && filter !== "mentions";
   const showProjects = filter !== "dms";
 
   return (
@@ -192,6 +211,10 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
       <div className="shrink-0 px-3 pt-1 lg:pt-4">
         <div className="flex items-center justify-between px-1 mb-3">
           <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
+          <span className="flex-1" />
+          <button type="button" onClick={onSettings} aria-label="Notification settings" className="w-11 h-11 mr-1 rounded-full text-gray-500 hover:bg-gray-100 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+          </button>
           <button type="button" onClick={onCompose} aria-label="New message" className="w-11 h-11 rounded-full bg-forest-600 text-white flex items-center justify-center shadow-sm hover:bg-forest-700">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
           </button>
@@ -301,7 +324,7 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
                   title="Projects"
                   open={openProjects}
                   onToggle={() => setOpenProjects((v) => !v)}
-                  right={!query && (
+                  right={!query && filter !== "mentions" && (
                     <select
                       value={status}
                       onChange={(e) => setStatus(e.target.value as ProjectStatus)}
@@ -315,7 +338,7 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
                 {openProjects && (
                   projects.length === 0 ? (
                     <p className="px-3 py-3 text-sm text-gray-500">
-                      {query ? "No projects match." : filter === "unread" ? "No unread project messages." : `No ${PROJECT_STATUS_LABELS[status].toLowerCase()} projects.`}
+                      {query ? "No projects match." : filter === "unread" ? "No unread project messages." : filter === "mentions" ? "No unread mentions. You're all caught up." : `No ${PROJECT_STATUS_LABELS[status].toLowerCase()} projects.`}
                     </p>
                   ) : projects.map((p) => (
                     <Row
@@ -329,6 +352,8 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
                       time={formatListTime(p.lastAt)}
                       preview={projectPreview(p)}
                       muted={!p.lastAt}
+                      mentions={p.mentionsUnread}
+                      silenced={p.notifyLevel === "none"}
                     />
                   ))
                 )}
@@ -352,6 +377,7 @@ export function InboxHub({ me }: { me: Me }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersFor, setMembersFor] = useState<{ tenantId: string; name: string } | null>(null);
   const openedInApp = useRef(false);
 
@@ -453,6 +479,7 @@ export function InboxHub({ me }: { me: Me }) {
             selectedKey={compact ? null : selectedKey}
             onOpen={open}
             onCompose={() => setComposeOpen(true)}
+            onSettings={() => setSettingsOpen(true)}
             onRetry={() => { setLoading(true); load(); }}
           />
         </aside>
@@ -487,7 +514,10 @@ export function InboxHub({ me }: { me: Me }) {
         />
       )}
       {membersFor && (
-        <MembersSheet project={membersFor} meId={me.id} onClose={() => setMembersFor(null)} onMessage={(id) => open(`dm:${id}`)} />
+        <MembersSheet project={membersFor} meId={me.id} onClose={() => setMembersFor(null)} onMessage={(id) => open(`dm:${id}`)} onNotifyChanged={load} />
+      )}
+      {settingsOpen && (
+        <NotificationSettingsSheet projects={data?.projects ?? []} onClose={() => setSettingsOpen(false)} onChanged={load} />
       )}
     </>
   );

@@ -110,6 +110,7 @@ async function sendOneFcm(deviceToken: string, accessToken: string, projectId: s
             priority: channel === "fyi" ? "NORMAL" : "HIGH",
             notification: {
               channel_id: channel,
+              ...(payload.threadId ? { tag: payload.threadId } : {}),
               sound: channel === "fyi" ? undefined : "default",
               notification_priority: channel === "urgent" ? "PRIORITY_HIGH" : channel === "fyi" ? "PRIORITY_LOW" : "PRIORITY_DEFAULT",
             },
@@ -134,6 +135,9 @@ interface PushPayload {
   body: string;
   /** In-app path to open on tap, e.g. "/inbox" — read client-side from the notification's data. */
   url?: string;
+  /** Groups notifications by conversation: iOS stacks them (thread-id);
+   * Android keeps one notification per conversation, showing the newest (tag). */
+  threadId?: string;
 }
 
 // Sends one push to one APNs device token. Resolves to "ok", "bad-token" (the
@@ -179,7 +183,7 @@ async function sendOne(deviceToken: string, jwtToken: string, payload: PushPaylo
     req.on("error", () => { client.close(); resolve("error"); });
 
     req.write(JSON.stringify({
-      aps: { alert: { title: payload.title, body: payload.body }, sound: "default" },
+      aps: { alert: { title: payload.title, body: payload.body }, sound: "default", ...(payload.threadId ? { "thread-id": payload.threadId } : {}) },
       url: payload.url,
     }));
     req.end();

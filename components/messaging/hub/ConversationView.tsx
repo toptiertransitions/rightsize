@@ -7,9 +7,30 @@ import { TEAM_CHANNEL } from "@/lib/airtable-messages";
 import type { ProjectMessage, MessageComment, MessageUrgency } from "@/lib/airtable-messages";
 import { AttachButton, AttachmentPendingChip, AttachmentView, prepareMessageAttachment, uploadMessageAttachment } from "../MessageAttachment";
 import { Avatar, ProjectGlyph, AnnouncementGlyph, BackIcon, CloseIcon, ctDateKey, formatDayLabel, formatTime } from "./shared";
+import { encodeMentions, splitMentions } from "@/lib/mentions";
 
-export type EnrichedComment = MessageComment & { authorName: string; authorPhotoUrl?: string };
-export type ChatMessage = ProjectMessage & { authorName: string; authorPhotoUrl?: string; comments: EnrichedComment[] };
+type Mention = { id: string; name: string };
+export type EnrichedComment = MessageComment & { authorName: string; authorPhotoUrl?: string; mentions?: Mention[] };
+export type ChatMessage = ProjectMessage & { authorName: string; authorPhotoUrl?: string; mentions?: Mention[]; comments: EnrichedComment[] };
+export interface MentionCandidate { id: string; name: string; photoUrl?: string; detail?: string }
+
+/** Message text with @mentions highlighted (yours stronger). */
+function MessageBody({ body, mentions, meId }: { body: string; mentions?: Mention[]; meId: string }) {
+  const nameOf = new Map((mentions ?? []).map((m) => [m.id, m.name]));
+  return (
+    <p className="text-[15px] text-gray-800 whitespace-pre-wrap break-words leading-relaxed">
+      {splitMentions(body).map((seg, i) =>
+        "text" in seg ? (
+          <span key={i}>{seg.text}</span>
+        ) : (
+          <span key={i} className={`rounded px-0.5 font-semibold ${seg.mentionId === meId ? "bg-amber-100 text-amber-900" : "bg-forest-50 text-forest-700"}`}>
+            @{nameOf.get(seg.mentionId) ?? "someone"}
+          </span>
+        )
+      )}
+    </p>
+  );
+}
 
 export interface ConversationInfo {
   kind: "announcements" | "dm" | "project";
@@ -82,9 +103,12 @@ function FlagIcon({ className = "w-4 h-4" }: { className?: string }) {
 
 // ─── Composer ────────────────────────────────────────────────────────────────
 
-function Composer({ placeholder, allowUrgency, kind, tenantId, onSend, compactTarget, padBottomSafeArea, autoFocus }: {
+function Composer({ placeholder, allowUrgency, allowAttach = true, mentionCandidates = [], kind, tenantId, onSend, compactTarget, padBottomSafeArea, autoFocus }: {
   placeholder: string;
   allowUrgency: boolean;
+  allowAttach?: boolean;
+  /** People who can be @mentioned (project channels). */
+  mentionCandidates?: MentionCandidate[];
   kind: ConversationInfo["kind"];
   tenantId: string;
   onSend: (data: { body: string; urgency: MessageUrgency; attachment?: Awaited<ReturnType<typeof uploadMessageAttachment>> }) => Promise<string | null>;
@@ -99,6 +123,32 @@ function Composer({ placeholder, allowUrgency, kind, tenantId, onSend, compactTa
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [picked, setPicked] = useState<Mention[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState(0);
+
+  // "@sa" right before the caret opens suggestions
+  function updateMentionQuery(value: string, caret: number) {
+    if (mentionCandidates.length === 0) return setMentionQuery(null);
+    const m = value.slice(0, caret).match(/(?:^|\s)@([^\s@]{0,30})$/);
+    setMentionQuery(m ? m[1].toLowerCase() : null);
+    setHighlight(0);
+  }
+
+  const suggestions = mentionQuery === null ? [] : mentionCandidates
+    .filter((c) => c.name.toLowerCase().split(" ").some((w) => w.startsWith(mentionQuery)) || c.name.toLowerCase().startsWith(mentionQuery))
+    .slice(0, 6);
+
+  function pickMention(c: MentionCandidate) {
+    const el = ref.current;
+    const caret = el?.selectionStart ?? body.length;
+    const before = body.slice(0, caret).replace(/@([^\s@]{0,30})$/, `@${c.name} `);
+    const next = before + body.slice(caret);
+    setBody(next);
+    setPicked((p) => (p.some((x) => x.id === c.id) ? p : [...p, { id: c.id, name: c.name }]));
+    setMentionQuery(null);
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(before.length, before.length); });
+  }
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -114,9 +164,10 @@ function Composer({ placeholder, allowUrgency, kind, tenantId, onSend, compactTa
     setError("");
     try {
       const attachment = file ? await uploadMessageAttachment(file, kind === "project" ? tenantId : undefined) : undefined;
-      const err = await onSend({ body: text, urgency, attachment });
+      const err = await onSend({ body: encodeMentions(text, picked), urgency, attachment });
       if (err) { setError(err); return; }
       setBody("");
+      setPicked([]);
       setFile(null);
       setUrgency("Normal");
       ref.current?.focus();
@@ -148,8 +199,28 @@ function Composer({ placeholder, allowUrgency, kind, tenantId, onSend, compactTa
       )}
       {file && <div className="mb-2"><AttachmentPendingChip file={file} onRemove={() => setFile(null)} /></div>}
       {error && <p className="mb-1.5 text-xs text-red-600" role="alert">{error}</p>}
+      {suggestions.length > 0 && (
+        <div className="mb-2 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden" role="listbox" aria-label="Mention someone">
+          {suggestions.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              role="option"
+              aria-selected={i === highlight}
+              onMouseDown={(e) => { e.preventDefault(); pickMention(c); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-left ${i === highlight ? "bg-forest-50" : "hover:bg-gray-50"}`}
+            >
+              <Avatar name={c.name} photoUrl={c.photoUrl} size={28} />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-gray-900 truncate">{c.name}</span>
+                {c.detail && <span className="block text-xs text-gray-500 truncate">{c.detail}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-end gap-1.5 rounded-2xl border border-gray-200 bg-white pl-1.5 pr-1.5 py-1.5 focus-within:border-forest-400 focus-within:ring-2 focus-within:ring-forest-100">
-        <AttachButton onSelect={attach} disabled={sending} />
+        {allowAttach && <AttachButton onSelect={attach} disabled={sending} />}
         {allowUrgency && (
           <div className="relative">
             <button
@@ -184,8 +255,14 @@ function Composer({ placeholder, allowUrgency, kind, tenantId, onSend, compactTa
           ref={ref}
           value={body}
           autoFocus={autoFocus}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => { setBody(e.target.value); updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
           onKeyDown={(e) => {
+            if (suggestions.length > 0) {
+              if (e.key === "ArrowDown") { e.preventDefault(); setHighlight((h) => (h + 1) % suggestions.length); return; }
+              if (e.key === "ArrowUp") { e.preventDefault(); setHighlight((h) => (h - 1 + suggestions.length) % suggestions.length); return; }
+              if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickMention(suggestions[highlight]); return; }
+              if (e.key === "Escape") { setMentionQuery(null); return; }
+            }
             const coarse = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
             if (e.key === "Enter" && !e.shiftKey && !coarse) { e.preventDefault(); send(); }
           }}
@@ -225,10 +302,11 @@ function MessageRow({ m, me, startsGroup, active, canAcknowledge, showThreadLink
   const liked = m.likedBy.includes(me.id);
   const replies = m.comments.length;
   const isUrgent = m.urgency === "Urgent";
+  const mentionsMe = (m.mentions ?? []).some((x) => x.id === me.id);
 
   return (
     <div
-      className={`group relative flex gap-2.5 px-4 ${startsGroup ? "pt-3" : "pt-0.5"} pb-0.5 ${active ? "bg-gray-50" : "lg:hover:bg-gray-50"} ${isUrgent ? "border-l-[3px] border-red-400 pl-[13px]" : ""}`}
+      className={`group relative flex gap-2.5 px-4 ${startsGroup ? "pt-3" : "pt-0.5"} pb-0.5 ${active ? "bg-gray-50" : mentionsMe ? "bg-amber-50/60 lg:hover:bg-amber-50" : "lg:hover:bg-gray-50"} ${isUrgent ? "border-l-[3px] border-red-400 pl-[13px]" : mentionsMe ? "border-l-[3px] border-amber-400 pl-[13px]" : ""}`}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("a,button")) return;
         onToggleActive();
@@ -253,7 +331,7 @@ function MessageRow({ m, me, startsGroup, active, canAcknowledge, showThreadLink
             <FlagIcon className="w-3 h-3" /> {m.urgency}
           </span>
         )}
-        {m.body && <p className="text-[15px] text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{m.body}</p>}
+        {m.body && <MessageBody body={m.body} mentions={m.mentions} meId={me.id} />}
         {m.attachment && <AttachmentView attachment={m.attachment} />}
 
         {isUrgent && (
@@ -326,8 +404,11 @@ function MessageRow({ m, me, startsGroup, active, canAcknowledge, showThreadLink
 
 // ─── Thread panel ────────────────────────────────────────────────────────────
 
-function ThreadPanel({ message, me, title, canAcknowledge, onClose, onLike, onAcknowledge, onReplied, fullscreen }: {
+function ThreadPanel({ message, me, title, kind, tenantId, mentionCandidates, canAcknowledge, onClose, onLike, onAcknowledge, onReplied, fullscreen }: {
   message: ChatMessage;
+  kind: ConversationInfo["kind"];
+  tenantId: string;
+  mentionCandidates: MentionCandidate[];
   me: Props["me"];
   title: string;
   canAcknowledge: boolean;
@@ -337,33 +418,20 @@ function ThreadPanel({ message, me, title, canAcknowledge, onClose, onLike, onAc
   onReplied: (c: EnrichedComment) => void;
   fullscreen: boolean;
 }) {
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [message.comments.length]);
 
-  async function reply() {
-    const text = body.trim();
-    if (!text || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/messages/${message.id}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: text }),
-      });
-      const data = await safeJson<{ comment?: EnrichedComment; error?: string }>(res);
-      if (!res.ok || !data.comment) throw new Error(data.error || "Couldn't send");
-      onReplied(data.comment);
-      setBody("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't send");
-    } finally {
-      setSending(false);
-    }
+  async function reply(data: { body: string }): Promise<string | null> {
+    const res = await fetch(`/api/messages/${message.id}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: data.body }),
+    });
+    const out = await safeJson<{ comment?: EnrichedComment; error?: string }>(res);
+    if (!res.ok || !out.comment) return out.error || "Couldn't send";
+    onReplied(out.comment);
+    return null;
   }
 
   return (
@@ -408,39 +476,23 @@ function ThreadPanel({ message, me, title, canAcknowledge, onClose, onLike, onAc
                     <span className="text-xs text-gray-400">{formatTime(c.createdAt)}</span>
                   </div>
                 )}
-                <p className="text-[15px] text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{c.body}</p>
+                <MessageBody body={c.body} mentions={c.mentions} meId={me.id} />
               </div>
             </div>
           );
         })}
         <div ref={endRef} />
       </div>
-      <div className="shrink-0 border-t border-gray-100 px-3 pt-2" style={{ paddingBottom: fullscreen ? "max(8px, var(--sab))" : 8 }}>
-        {error && <p className="mb-1.5 text-xs text-red-600" role="alert">{error}</p>}
-        <div className="flex items-end gap-1.5 rounded-2xl border border-gray-200 pl-3 pr-1.5 py-1.5 focus-within:border-forest-400 focus-within:ring-2 focus-within:ring-forest-100">
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => {
-              const coarse = window.matchMedia("(pointer: coarse)").matches;
-              if (e.key === "Enter" && !e.shiftKey && !coarse) { e.preventDefault(); reply(); }
-            }}
-            rows={1}
-            placeholder="Reply…"
-            aria-label="Reply in thread"
-            className="flex-1 min-w-0 resize-none bg-transparent py-1.5 text-base sm:text-sm text-gray-900 placeholder-gray-400 focus:outline-none max-h-36"
-          />
-          <button
-            type="button"
-            onClick={reply}
-            disabled={!body.trim() || sending}
-            aria-label="Send reply"
-            className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${body.trim() && !sending ? "bg-forest-600 text-white hover:bg-forest-700" : "bg-gray-100 text-gray-300"}`}
-          >
-            <SendIcon />
-          </button>
-        </div>
-      </div>
+      <Composer
+        placeholder="Reply…"
+        allowUrgency={false}
+        allowAttach={false}
+        mentionCandidates={mentionCandidates}
+        kind={kind}
+        tenantId={tenantId}
+        onSend={reply}
+        padBottomSafeArea={fullscreen}
+      />
     </div>
   );
 }
@@ -521,6 +573,47 @@ export function ConversationView({
   const lastSeenTimestamp = useRef<string>("");
   const fullscreen = mode === "fullscreen";
   const { tenantId, kind } = info;
+
+  // Project channels: everyone on the team can be @mentioned
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+  useEffect(() => {
+    if (kind !== "project") { setMentionCandidates([]); return; }
+    let cancelled = false;
+    fetch(`/api/messages/members?tenantId=${encodeURIComponent(tenantId)}`)
+      .then((r) => safeJson<{ teamLead: MentionCandidate | null; crew: MentionCandidate[]; hq: MentionCandidate[] }>(r))
+      .then((d) => {
+        if (cancelled || !d) return;
+        const list: MentionCandidate[] = [
+          ...(d.teamLead ? [{ ...d.teamLead, detail: "Team Lead" }] : []),
+          ...(d.crew ?? []).map((c) => ({ ...c, detail: "Crew" })),
+          ...(d.hq ?? []).map((c) => ({ ...c, detail: "HQ" })),
+        ].filter((c, i, all) => c.id !== me.id && all.findIndex((x) => x.id === c.id) === i);
+        setMentionCandidates(list.map(({ id, name, photoUrl, detail }) => ({ id, name, photoUrl, detail })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [kind, tenantId, me.id]);
+
+  // While this conversation is on screen, its pushes are skipped for me
+  useEffect(() => {
+    const beat = (viewing: boolean) => {
+      const body = JSON.stringify({ tenantId: viewing ? tenantId : null });
+      if (!viewing && navigator.sendBeacon) navigator.sendBeacon("/api/messages/presence", new Blob([body], { type: "application/json" }));
+      else fetch("/api/messages/presence", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+    };
+    const tick = () => beat(document.visibilityState === "visible");
+    tick();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") beat(true); }, 20000);
+    const leave = () => beat(false);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("pagehide", leave);
+      beat(false);
+    };
+  }, [tenantId]);
 
   // Android back closes an open thread / history view before the conversation
   useBackClose(threadId ? () => setThreadId(null) : showLegacy ? () => setShowLegacy(false) : null);
@@ -817,6 +910,7 @@ export function ConversationView({
           <Composer
             placeholder={placeholder}
             allowUrgency={kind === "project"}
+            mentionCandidates={mentionCandidates}
             kind={kind}
             tenantId={tenantId}
             onSend={send}
@@ -834,6 +928,9 @@ export function ConversationView({
           <ThreadPanel
             message={thread}
             me={me}
+            kind={kind}
+            tenantId={tenantId}
+            mentionCandidates={mentionCandidates}
             title={kind === "project" ? `#${info.title}` : info.title}
             canAcknowledge={canAcknowledge && kind === "project"}
             onClose={() => setThreadId(null)}

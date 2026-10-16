@@ -29,6 +29,8 @@ import {
 import { getAccessibleTenantIds, isCommsHubRole, isManagerEquivalent } from "./thread-access";
 import { getSuspendedOrDeletedClerkUserIds } from "./staff-visibility";
 import { getProjectStatus, type ProjectStatus } from "./project-status";
+import { plainMentions, mentionedIds } from "./mentions";
+import { getNotifyPrefs, defaultProjectLevel, type NotifyLevel } from "./notify-prefs";
 
 export const ANNOUNCEMENTS_KEY = "announcements";
 export const dmKey = (otherUserId: string) => `dm:${otherUserId}`;
@@ -67,6 +69,10 @@ export interface HubProject extends LastMessage {
   teamLeadId: string | null;
   teamLeadName: string | null;
   unread: number;
+  /** Unread messages that @mention the viewer. */
+  mentionsUnread: number;
+  /** Push setting for this project (explicit choice or the default). */
+  notifyLevel: NotifyLevel;
   /** Messages on retired private lines this viewer can still read. */
   legacyPrivateCount: number;
 }
@@ -85,9 +91,9 @@ export interface HubData {
   people: HubPerson[];
 }
 
-function preview(m: ProjectMessage | undefined): string | null {
+function preview(m: ProjectMessage | undefined, nameOf: (id: string) => string): string | null {
   if (!m) return null;
-  return m.body?.trim() || (m.attachment ? `Attachment: ${m.attachment.fileName}` : "");
+  return plainMentions(m.body?.trim() ?? "", nameOf) || (m.attachment ? `Attachment: ${m.attachment.fileName}` : "");
 }
 
 async function clerkProfiles(ids: string[]): Promise<Map<string, { name: string; photoUrl?: string }>> {
@@ -113,7 +119,7 @@ function lastOf(messages: ProjectMessage[], viewerId: string, nameOf: (id: strin
   const last = messages[0]; // callers pass desc-sorted lists
   return {
     lastAt: last?.timestamp ?? null,
-    lastPreview: preview(last),
+    lastPreview: preview(last, nameOf),
     lastAuthorName: last ? nameOf(last.authorClerkId) : null,
     lastIsMine: !!last && last.authorClerkId === viewerId,
   };
@@ -125,13 +131,14 @@ export async function getHubData(userId: string, sysRole: SystemRole | null): Pr
   const accessible = await getAccessibleTenantIds(userId, sysRole);
   const projectIds = accessible.filter((id) => id !== BROADCAST_TENANT_ID);
 
-  const [projectMessages, dmMessages, readState, tenants, staff, signedIds] = await Promise.all([
+  const [projectMessages, dmMessages, readState, tenants, staff, signedIds, prefs] = await Promise.all([
     getProjectMessagesForTenants([BROADCAST_TENANT_ID, ...projectIds]),
     getDmMessagesForUser(userId),
     getThreadReadState(userId),
     getTenants().catch(() => [] as Tenant[]),
     getStaffMembers().catch(() => [] as StaffMember[]),
     getSignedTenantIds().catch(() => new Set<string>()),
+    getNotifyPrefs(userId),
   ]);
 
   const tenantById = new Map(tenants.map((t) => [t.id, t]));
@@ -169,10 +176,11 @@ export async function getHubData(userId: string, sysRole: SystemRole | null): Pr
     leads: leadsById.get(id) ?? [],
   })).sort((a, b) => a.name.localeCompare(b.name));
 
-  const unreadIn = (tenantId: string, messages: ProjectMessage[]) => {
+  const unreadOf = (tenantId: string, messages: ProjectMessage[]) => {
     const lastReadAt = readState.get(readStateKey(tenantId, TEAM_CHANNEL));
-    return messages.filter((m) => m.authorClerkId !== userId && (!lastReadAt || m.timestamp > lastReadAt)).length;
+    return messages.filter((m) => m.authorClerkId !== userId && (!lastReadAt || m.timestamp > lastReadAt));
   };
+  const unreadIn = (tenantId: string, messages: ProjectMessage[]) => unreadOf(tenantId, messages).length;
 
   // DMs, one per other person
   const dmByOther = new Map<string, ProjectMessage[]>();
@@ -225,6 +233,8 @@ export async function getHubData(userId: string, sysRole: SystemRole | null): Pr
         teamLeadId: t.teamLeadClerkId || null,
         teamLeadName: t.teamLeadClerkId ? nameOf(t.teamLeadClerkId) : null,
         unread: unreadIn(tenantId, team),
+        mentionsUnread: unreadOf(tenantId, team).filter((m) => mentionedIds(m.body).includes(userId)).length,
+        notifyLevel: prefs.projects[tenantId] ?? defaultProjectLevel(userId, t),
         legacyPrivateCount,
         ...lastOf(team, userId, nameOf),
       };
