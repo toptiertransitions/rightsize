@@ -1868,6 +1868,7 @@ function ContactsTab({
   onViewOpportunity: (oppId: string) => void;
   onContactUpserted?: (c: ClientContact) => void;
 }) {
+  const router = useRouter();
   const [contacts, setContacts] = useState(initialContacts);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ClientContact | null>(null);
@@ -2055,6 +2056,9 @@ function ContactsTab({
         const data = await res.json();
         setContacts((prev) => prev.map((c) => (c.id === editing.id ? data.contact : c)));
         onContactUpserted?.(data.contact);
+        // A new Sales Owner also moved this client's opportunities (server
+        // side) — reload so the Opportunities tab and dashboard show it.
+        if (data.opportunitiesReassigned > 0) router.refresh();
       } else {
         const res = await fetch("/api/crm/client-contacts", {
           method: "POST",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getSystemRole, getClientContacts, createClientContact, updateClientContact, deleteClientContact, findClientContactByName } from "@/lib/airtable";
+import { getSystemRole, getClientContacts, createClientContact, updateClientContact, deleteClientContact, findClientContactByName, getOpportunitiesForContact, updateOpportunity } from "@/lib/airtable";
 
 async function requireCRMAccess(userId: string) {
   const sysRole = await getSystemRole(userId);
@@ -49,7 +49,19 @@ export async function PATCH(req: NextRequest) {
   if (data.email === "") delete data.email;
   if (data.phone === "") delete data.phone;
   const contact = await updateClientContact(id, data);
-  return NextResponse.json({ contact });
+
+  // An opportunity's owner is copied from its client when the opportunity is
+  // saved, so a new Sales Owner on the client has to move every one of their
+  // opportunities too — otherwise the Opportunities table, owner filters and
+  // dashboard keep showing the previous owner.
+  let opportunitiesReassigned = 0;
+  if (typeof data.assignedToClerkId === "string") {
+    const opps = await getOpportunitiesForContact(id);
+    const stale = opps.filter((o) => o.assignedToClerkId !== data.assignedToClerkId);
+    await Promise.all(stale.map((o) => updateOpportunity(o.id, { assignedToClerkId: data.assignedToClerkId })));
+    opportunitiesReassigned = stale.length;
+  }
+  return NextResponse.json({ contact, opportunitiesReassigned });
 }
 
 export async function DELETE(req: NextRequest) {
