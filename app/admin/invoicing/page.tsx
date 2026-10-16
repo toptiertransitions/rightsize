@@ -10,6 +10,8 @@ import { ClientPipelineReportButton } from "./ClientPipelineReportButton";
 import { SendQPlanningReportButton } from "./SendQPlanningReportButton";
 import { WarRoomForMeButton } from "./WarRoomForMeButton";
 import { ReferralFunnelForMeButton } from "./ReferralFunnelForMeButton";
+import { ActivityAnalysisForMeButton } from "./ActivityAnalysisForMeButton";
+import { getSalesReps } from "@/lib/sales-coaching-report";
 import { SalesGoalsClient } from "./SalesGoalsClient";
 
 export default async function InvoicingSettingsPage() {
@@ -17,9 +19,10 @@ export default async function InvoicingSettingsPage() {
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [settings, salesGoals] = await Promise.all([
+  const [settings, salesGoals, salesReps] = await Promise.all([
     getInvoiceSettings().catch(() => null),
     getSalesGoals().catch(() => []),
+    getSalesReps().catch(() => []),
   ]);
 
   return (
@@ -39,6 +42,7 @@ export default async function InvoicingSettingsPage() {
           <SendQPlanningReportButton />
           <WarRoomForMeButton />
           <ReferralFunnelForMeButton />
+          <ActivityAnalysisForMeButton reps={salesReps} />
         </div>
         <InvoicingSettingsClient initialSettings={settings} />
 
