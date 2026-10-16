@@ -549,9 +549,11 @@ export default async function PlanPage({ searchParams }: PageProps) {
       {(isManagerOrAdmin || isProjectTeamLead || (isTTTStaff && filteredEntries.length > 0)) && (
         <ProjectMessagesSection
           tenantId={tenantId}
+          projectName={tenant.name}
           currentUserId={userId!}
           currentUserName={currentUserName}
           currentUserPhoto={currentUserPhoto}
+          canAcknowledge={isManagerOrAdmin}
         />
       )}
 

@@ -1244,7 +1244,7 @@ export function buildUrgentMessageEmail({
             <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
               <tr>
                 <td style="background-color:#B91C1C;border-radius:8px;padding:13px 28px;">
-                  <a href="${planUrl}" style="color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">View Project →</a>
+                  <a href="${planUrl}" style="color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">Open Conversation →</a>
                 </td>
               </tr>
             </table>

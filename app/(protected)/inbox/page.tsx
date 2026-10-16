@@ -1,12 +1,16 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getSystemRole } from "@/lib/airtable";
-import { InboxClient } from "./InboxClient";
+import { Suspense } from "react";
+import { InboxHub } from "@/components/messaging/hub/InboxHub";
 
-// Communication Hub Phase A — unified inbox. Linked from the main nav for
-// Staff/TeamLead/Manager/Admin/Sales only (see components/layout/Header.tsx)
-// while we pilot this as the surface for push notifications; still enforces
-// the full role check below independent of the nav link.
+// Inbox — the internal communications hub, Slack-style: Announcements, 1:1
+// Direct Messages, and one channel per project (never user-created). On a
+// phone a conversation opens full screen; on desktop it's a two-pane view.
+// ?c=<key> selects a conversation ("announcements", "dm:<clerkUserId>",
+// "p:<tenantId>") — push notifications deep-link straight to one.
+// Linked from the main nav for Staff/TeamLead/Manager/Admin/Sales only (see
+// components/layout/Header.tsx); still enforces the role check below.
 export default async function InboxPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
@@ -15,23 +19,16 @@ export default async function InboxPage() {
   const allowed = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
   if (!allowed) redirect("/home");
 
-  const canBroadcast = sysRole === "TTTManager" || sysRole === "TTTAdmin" || sysRole === "TTTSales";
-
   const clerk = await clerkClient();
   const clerkUser = await clerk.users.getUser(userId).catch(() => null);
   const currentUserName =
     [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(" ") ||
     clerkUser?.emailAddresses?.[0]?.emailAddress ||
     "Staff";
-  const currentUserPhoto = clerkUser?.imageUrl || undefined;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
-        <p className="text-gray-500 mt-1 text-sm">Messages for you and across every project you're working on</p>
-      </div>
-      <InboxClient canBroadcast={canBroadcast} currentUserId={userId} currentUserName={currentUserName} currentUserPhoto={currentUserPhoto} />
-    </div>
+    <Suspense>
+      <InboxHub me={{ id: userId, name: currentUserName, photoUrl: clerkUser?.imageUrl || undefined }} />
+    </Suspense>
   );
 }

@@ -173,6 +173,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Broadcasts don't support channels" }, { status: 400 });
   }
 
+  // The per-project private lines (Staff <-> HQ, Crew <-> Team Lead) are
+  // retired in favor of plain 1:1 DMs; their history stays readable.
+  if (channel !== TEAM_CHANNEL) {
+    return NextResponse.json({ error: "Private project lines have moved to Direct Messages." }, { status: 400 });
+  }
+
   if (tenantId === BROADCAST_TENANT_ID) {
     // Company-wide broadcasts: Manager/Admin/Sales only.
     if (sysRole !== "TTTManager" && sysRole !== "TTTAdmin" && sysRole !== "TTTSales") {
@@ -230,7 +236,7 @@ export async function POST(req: NextRequest) {
             authorName: authorDisplayName,
             projectName: label,
             body: bodyPreview,
-            planUrl: tenant ? `${APP_URL}/plan?tenantId=${tenantId}` : `${APP_URL}/inbox`,
+            planUrl: tenant ? `${APP_URL}/inbox?c=p:${tenantId}` : `${APP_URL}/inbox?c=announcements`,
           });
           await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL || "notifications@toptiertransitions.com",
@@ -242,7 +248,7 @@ export async function POST(req: NextRequest) {
 
         await sendPushToClerkUsers(
           liveRecipients.map(s => s.clerkUserId),
-          { title: `Urgent — ${label}`, body: `${authorDisplayName}: ${bodyPreview}`, url: "/inbox" },
+          { title: `Urgent — ${label}`, body: `${authorDisplayName}: ${bodyPreview}`, url: tenant ? `/inbox?c=p:${tenantId}` : "/inbox?c=announcements" },
           { type: "Urgent" }
         );
       } catch (e) {
@@ -263,7 +269,8 @@ export async function POST(req: NextRequest) {
           await sendPushToClerkUsers([recipientId], {
             title: authorDisplayName,
             body: text?.trim() || `[Attachment: ${attachment?.fileName}]`,
-            url: "/inbox",
+            // Opens this exact conversation (the sender is the "other" person for the recipient)
+            url: `/inbox?c=dm:${userId}`,
           }, { type: "DM" });
         } catch (e) {
           console.error("[messages] DM push failed:", e);
