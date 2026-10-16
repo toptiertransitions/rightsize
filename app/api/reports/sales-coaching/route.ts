@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { repId } = await req.json().catch(() => ({ repId: "" }));
+  const { repId, refreshBaseline } = await req.json().catch(() => ({ repId: "", refreshBaseline: false }));
   const reps = await getSalesReps();
   const rep = reps.find((r) => r.id === repId);
   if (!rep) return NextResponse.json({ error: "Pick an active sales rep" }, { status: 400 });
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   after(async () => {
     try {
-      const job = await buildCoachingJob({ repId: rep.id, recipientEmail: email, recipientName: user.firstName || "" });
+      const job = await buildCoachingJob({ repId: rep.id, recipientEmail: email, recipientName: user.firstName || "", refreshBaseline: refreshBaseline === true });
       await continueCoachingJob(job.id, 0);
     } catch (e) {
       console.error("[sales-coaching] start failed:", e);

@@ -12,7 +12,9 @@
 //     partner or client, and split into ~70k-token chunks.
 //  2. Digest: one AI pass per chunk pulls out what's moving partners down
 //     the funnel and what isn't, with short quotes as evidence. A rep's
-//     digests are cached for the day, so analyzing a second rep reuses them.
+//     digests are the expensive part, so they're saved: every other rep's
+//     (the team baseline) is reused for 30 days, and the selected rep's own
+//     for 7, unless the admin asks to rebuild the baseline.
 //  3. Synthesize: one AI pass writes the coaching plan for the selected rep
 //     from their digests, every other rep's digests, and the numbers.
 //  4. Email.
@@ -39,7 +41,11 @@ const CHUNK_CHARS = 280_000; // ~70k tokens of activity text per digest call
 const MAX_ITEM_CHARS = 3500; // one email / note, after quoted replies are dropped
 const DIGEST_CONCURRENCY = 4;
 const JOB_TTL_S = 6 * 3600;
-const DIGEST_CACHE_TTL_S = 20 * 3600;
+// Saved digests: the team baseline (other reps) is reused for 30 days, the
+// rep being coached for 7, so their own coaching reflects recent activity.
+const BASELINE_MAX_AGE_DAYS = 30;
+const SUBJECT_MAX_AGE_DAYS = 7;
+const DIGEST_CACHE_TTL_S = BASELINE_MAX_AGE_DAYS * 86400;
 const MAX_INVOCATIONS = 25;
 // Test account, hidden everywhere in the CRM
 const EXCLUDE_REPS = ["MattTest Sales"];
@@ -107,6 +113,8 @@ export interface CoachingJobState {
   /** repId -> one digest (JSON string) per chunk */
   digests: Record<string, string[]>;
   digestErrors: string[];
+  /** repId -> when that rep's digests were made (ISO), for the email footer */
+  digestsAsOf: Record<string, string>;
   /** First half of the plan (diagnosis), written in its own leg */
   diagnosis?: Diagnosis;
 }
@@ -121,7 +129,8 @@ function redis(): Redis {
 }
 const jobKey = (id: string) => `coach:job:${id}`;
 const chunkKey = (id: string, repId: string, n: number) => `coach:chunk:${id}:${repId}:${n}`;
-const digestCacheKey = (repId: string) => `coach:digest:${repId}:${ctToday()}`;
+const digestCacheKey = (repId: string) => `coach:digest:v2:${repId}`;
+interface SavedDigests { at: string; digests: string[] }
 
 export async function saveJob(state: CoachingJobState): Promise<void> {
   await redis().set(jobKey(state.id), state, { ex: JOB_TTL_S });
@@ -486,7 +495,7 @@ function buildCorpus(rep: StaffMember, d: CrmData): string[] {
   return chunks;
 }
 
-export async function buildCoachingJob(params: { repId: string; recipientEmail: string; recipientName: string }): Promise<CoachingJobState> {
+export async function buildCoachingJob(params: { repId: string; recipientEmail: string; recipientName: string; refreshBaseline?: boolean }): Promise<CoachingJobState> {
   const d = await loadCrm();
   const target = d.reps.find((r) => r.clerkUserId === params.repId);
   if (!target) throw new Error("That sales rep wasn't found (active TTTSales only).");
@@ -496,13 +505,17 @@ export async function buildCoachingJob(params: { repId: string; recipientEmail: 
   const reps = d.reps.map((rep) => computeRepStats(rep, d));
   const digests: Record<string, string[]> = {};
   const pendingChunks: Chunk[] = [];
+  const digestsAsOf: Record<string, string> = {};
 
   for (const rep of d.reps) {
-    const cached = await r.get<string[]>(digestCacheKey(rep.clerkUserId)).catch(() => null);
-    if (cached?.length) {
-      digests[rep.clerkUserId] = cached;
+    const saved = params.refreshBaseline ? null : await r.get<SavedDigests>(digestCacheKey(rep.clerkUserId)).catch(() => null);
+    const maxAgeDays = rep.clerkUserId === params.repId ? SUBJECT_MAX_AGE_DAYS : BASELINE_MAX_AGE_DAYS;
+    if (saved?.digests?.length && Date.now() - new Date(saved.at).getTime() <= maxAgeDays * DAY) {
+      digests[rep.clerkUserId] = saved.digests;
+      digestsAsOf[rep.clerkUserId] = saved.at;
       continue;
     }
+    digestsAsOf[rep.clerkUserId] = new Date().toISOString();
     const chunks = buildCorpus(rep, d);
     digests[rep.clerkUserId] = [];
     for (let n = 0; n < chunks.length; n++) {
@@ -526,6 +539,7 @@ export async function buildCoachingJob(params: { repId: string; recipientEmail: 
     pendingChunks,
     digests,
     digestErrors: [],
+    digestsAsOf,
   };
   await saveJob(state);
   return state;
@@ -761,11 +775,15 @@ export async function stepCoachingJob(id: string): Promise<void> {
     }));
     for (const { c, digest } of results) if (digest) state.digests[c.repId].push(digest);
 
-    // A rep whose every chunk is done: cache their digests for the day
+    // A rep whose every chunk is done: save their digests (30 days)
     const r = redis();
     for (const repId of new Set(batch.map((c) => c.repId))) {
       if (!state.pendingChunks.some((c) => c.repId === repId) && state.digests[repId]?.length) {
-        await r.set(digestCacheKey(repId), state.digests[repId], { ex: DIGEST_CACHE_TTL_S }).catch(() => {});
+        // Only a complete set — a failed chunk would leave a gap for 30 days
+        if (!state.digestErrors.some((e) => e.startsWith(`${state.reps.find((x) => x.repId === repId)?.repName},`))) {
+          const saved: SavedDigests = { at: state.digestsAsOf?.[repId] ?? new Date().toISOString(), digests: state.digests[repId] };
+          await r.set(digestCacheKey(repId), saved, { ex: DIGEST_CACHE_TTL_S }).catch(() => {});
+        }
       }
     }
     await saveJob(state);
@@ -903,6 +921,7 @@ export function buildCoachingEmail(state: CoachingJobState, plan: CoachingPlan |
   const notes = [
     `Built from all ${Object.values(rep.activityAll).reduce((s, n) => s + n, 0).toLocaleString("en-US")} CRM activities ${esc(rep.repName)} has logged: every email in the last ${EMAIL_WINDOW_DAYS} days and every call, meeting, text and note, compared with ${state.reps.length - 1} other sales rep${state.reps.length === 2 ? "" : "s"}.`,
     "Numbers are computed directly from the CRM; the analysis and recommendations are AI-generated, so use judgment. Stage moves use each contact's most recent change.",
+    `Communication analysis as of: ${state.reps.map((x) => `${esc(x.repName)} ${fmtDay(state.digestsAsOf?.[x.repId] ?? state.startedAt)}`).join(", ")} (the team baseline is reused for up to ${BASELINE_MAX_AGE_DAYS} days and the coached rep's for ${SUBJECT_MAX_AGE_DAYS}; numbers are always current).`,
     state.digestErrors.length ? `Some activity couldn't be analyzed: ${esc(state.digestErrors.join("; "))}.` : "",
   ].filter(Boolean).join(" ");
 

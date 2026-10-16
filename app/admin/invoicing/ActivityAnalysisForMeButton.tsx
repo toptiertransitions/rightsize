@@ -8,6 +8,7 @@ import { useState } from "react";
 export function ActivityAnalysisForMeButton({ reps }: { reps: { id: string; name: string }[] }) {
   const [status, setStatus] = useState<"idle" | "confirm" | "loading" | "success" | "error">("idle");
   const [repId, setRepId] = useState("");
+  const [refreshBaseline, setRefreshBaseline] = useState(false);
   const [message, setMessage] = useState("");
   const repName = reps.find((r) => r.id === repId)?.name ?? "";
 
@@ -17,11 +18,11 @@ export function ActivityAnalysisForMeButton({ reps }: { reps: { id: string; name
       const res = await fetch("/api/reports/sales-coaching", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repId }),
+        body: JSON.stringify({ repId, refreshBaseline }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to start");
-      setMessage(`Analyzing ${data.repName}. The coaching plan will land in ${data.email} in about 15-25 minutes, ready to forward.`);
+      setMessage(`Analyzing ${data.repName}. The coaching plan will land in ${data.email} in about ${refreshBaseline ? "15-25" : "5-25"} minutes, ready to forward.`);
       setStatus("success");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Failed to start");
@@ -76,8 +77,15 @@ export function ActivityAnalysisForMeButton({ reps }: { reps: { id: string; name
             This reads {repName ? `all of ${repName}'s` : "all of the rep's"} CRM activity (every logged email in the last 180 days, and every call, meeting, text, note and task),
             their partner companies by type and priority, funnel stages, referrals, and won and lost leads, and compares it with every other sales rep.
             You&apos;ll get a branded coaching email with what&apos;s working, what isn&apos;t, language to use instead, ready-to-send messages,
-            next steps by referral partner, and a 30-day plan, written to forward to them. It takes about 15-25 minutes. Nothing in the CRM is changed.
+            next steps by referral partner, and a 30-day plan, written to forward to them. Nothing in the CRM is changed.
           </p>
+          <p className="mt-2 text-xs text-gray-500">
+            To save AI cost, the AI&apos;s read of each rep&apos;s communications is reused: the team baseline (the other reps) for up to 30 days, and the selected rep&apos;s own for up to 7. Numbers are always current. A run with saved reads takes about 5 minutes; a full read takes 15-25.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={refreshBaseline} onChange={(e) => setRefreshBaseline(e.target.checked)} className="w-4 h-4 accent-[#2d4a3e]" />
+            Rebuild the team baseline now (reads every rep fresh; slower and costs more)
+          </label>
           <div className="mt-3 flex gap-2">
             <button onClick={handleRun} disabled={!repId} className="px-3 py-2 rounded-lg text-sm font-semibold bg-[#2d4a3e] hover:bg-[#1e3329] text-white disabled:opacity-40">Run it</button>
             <button onClick={() => setStatus("idle")} className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
