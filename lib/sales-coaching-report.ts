@@ -542,6 +542,7 @@ export async function buildCoachingJob(params: { repId: string; recipientEmail: 
     digestsAsOf,
   };
   await saveJob(state);
+  console.log(`[sales-coaching] job ${id} started for ${target.displayName}: ${pendingChunks.length} chunk(s) to read, saved reads reused for ${d.reps.length - new Set(pendingChunks.map((c) => c.repId)).size} rep(s)`);
   return state;
 }
 
@@ -774,6 +775,7 @@ export async function stepCoachingJob(id: string): Promise<void> {
       }
     }));
     for (const { c, digest } of results) if (digest) state.digests[c.repId].push(digest);
+    console.log(`[sales-coaching] job ${state.id} leg ${state.invocation}: read ${results.filter((x) => x.digest).length}/${batch.length} chunk(s), ${state.pendingChunks.length} left`);
 
     // A rep whose every chunk is done: save their digests (30 days)
     const r = redis();
@@ -798,6 +800,7 @@ export async function stepCoachingJob(id: string): Promise<void> {
   try {
     if (!state.diagnosis) {
       state.diagnosis = await diagnose(state);
+      console.log(`[sales-coaching] job ${state.id} leg ${state.invocation}: diagnosis written`);
       await saveJob(state);
       await continueCoachingJob(state.id, state.invocation);
       return;
@@ -808,6 +811,7 @@ export async function stepCoachingJob(id: string): Promise<void> {
     error = e instanceof Error ? e.message : "The analysis failed";
   }
   await sendCoachingEmail(state, plan, error);
+  console.log(`[sales-coaching] job ${state.id} ${plan ? "emailed" : "failed, error email sent"} to ${state.recipientEmail} after ${Math.round((Date.now() - new Date(state.startedAt).getTime()) / 60000)} min`);
   await redis().del(jobKey(state.id)).catch(() => {});
 }
 
