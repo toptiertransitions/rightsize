@@ -23,7 +23,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 const ROLE_LABEL: Record<string, string> = {
-  TTTAdmin: "Admin", TTTManager: "Manager", TTTSales: "Sales", TTTTeamLead: "Team Lead", TTTStaff: "Staff",
+  TTTAdmin: "Admin", TTTManager: "Project Coord.", TTTSales: "Sales", TTTTeamLead: "Team Lead", TTTStaff: "Specialist",
 };
 
 interface Me { id: string; name: string; photoUrl?: string }
@@ -226,7 +226,7 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
           aria-label="Search people and projects"
           className="w-full h-11 px-4 rounded-xl bg-gray-100 text-base sm:text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forest-400 focus:bg-white"
         />
-        <div className="flex gap-2 mt-3 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" aria-label="Filter conversations">
+        <div className="flex gap-1.5 mt-3" role="tablist" aria-label="Filter conversations">
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -234,7 +234,7 @@ function ConversationList({ data, loading, error, me, selectedKey, onOpen, onCom
               role="tab"
               aria-selected={filter === f.key}
               onClick={() => setFilter(f.key)}
-              className={`h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border transition-colors ${filter === f.key ? "bg-gray-900 border-gray-900 text-white" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"}`}
+              className={`flex-1 min-w-0 h-8 px-1 rounded-full text-[13px] font-semibold whitespace-nowrap border transition-colors ${filter === f.key ? "bg-gray-900 border-gray-900 text-white" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"}`}
             >
               {f.label}
             </button>

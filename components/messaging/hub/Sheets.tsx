@@ -53,7 +53,7 @@ export function leadsLabel(leads: { name: string }[], max = 2): string {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  TTTAdmin: "Admin", TTTManager: "Manager", TTTSales: "Sales", TTTTeamLead: "Team Lead", TTTStaff: "Staff",
+  TTTAdmin: "Admin", TTTManager: "Project Coord.", TTTSales: "Sales", TTTTeamLead: "Team Lead", TTTStaff: "Specialist",
 };
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ export function MembersSheet({ project, meId, onClose, onMessage, onNotifyChange
             <p className="px-3 py-2 text-sm text-gray-500">No Team Lead assigned yet.</p>
           )}
 
-          <SectionLabel>Crew{members.crew.length > 0 && ` · ${members.crew.length}`}</SectionLabel>
+          <SectionLabel>Specialists{members.crew.length > 0 && ` · ${members.crew.length}`}</SectionLabel>
           {members.crew.length === 0 ? (
             <p className="px-3 py-2 text-sm text-gray-500">No one is scheduled on this project&apos;s shifts yet.</p>
           ) : members.crew.map((m) => (
@@ -238,7 +238,7 @@ export function MembersSheet({ project, meId, onClose, onMessage, onNotifyChange
               {members.hq.slice(0, 3).map((m) => <Avatar key={m.id} name={m.name} photoUrl={m.photoUrl} size={32} className="ring-2 ring-white" />)}
             </span>
             <span className="flex-1 min-w-0">
-              <span className="block text-[15px] font-semibold text-gray-900">Managers, Admins &amp; Sales</span>
+              <span className="block text-[15px] font-semibold text-gray-900">Project Coords, Admins &amp; Sales</span>
               <span className="block text-xs text-gray-500">{members.hq.length} people · can see every project</span>
             </span>
             <svg className={`w-4 h-4 text-gray-400 transition-transform ${showHq ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>

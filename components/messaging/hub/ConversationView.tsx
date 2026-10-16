@@ -585,7 +585,7 @@ export function ConversationView({
         if (cancelled || !d) return;
         const list: MentionCandidate[] = [
           ...(d.teamLead ? [{ ...d.teamLead, detail: "Team Lead" }] : []),
-          ...(d.crew ?? []).map((c) => ({ ...c, detail: "Crew" })),
+          ...(d.crew ?? []).map((c) => ({ ...c, detail: "Specialist" })),
           ...(d.hq ?? []).map((c) => ({ ...c, detail: "HQ" })),
         ].filter((c, i, all) => c.id !== me.id && all.findIndex((x) => x.id === c.id) === i);
         setMentionCandidates(list.map(({ id, name, photoUrl, detail }) => ({ id, name, photoUrl, detail })));
@@ -831,7 +831,7 @@ export function ConversationView({
                 <p className="mt-3 text-lg font-bold text-gray-900">{kind === "project" ? `#${info.title}` : info.title}</p>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {kind === "project"
-                    ? "Everyone on this project's team — the Team Lead, scheduled crew, and HQ — sees messages here."
+                    ? "Everyone on this project's team — the Team Lead, scheduled Specialists, and HQ — sees messages here."
                     : kind === "dm"
                       ? `This is the start of your direct messages with ${info.title}. Only the two of you can see them.`
                       : "Company-wide announcements from HQ."}
