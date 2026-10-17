@@ -16,7 +16,7 @@ import { PartnerRequestFlow } from "./PartnerRequestFlow";
 import { ReferralPartnerCard } from "./ReferralPartnerCard";
 import { PartnerDetailModal } from "./PartnerDetailModal";
 import { CategoryIcon } from "./categoryIcons";
-import { hasNonIllinoisZip } from "@/lib/partners/coverage";
+import { isNonIllinoisZip } from "@/lib/partners/coverage";
 
 interface Props {
   tenantId: string;
@@ -182,7 +182,7 @@ export function NonTTTPartnersPageClient({
           : "Track who’s on your team below, and answer a few quick questions to get matched in each category."}
       </p>
 
-      {hasNonIllinoisZip([prefillTenant.currentZip, prefillTenant.destinationZip], requestAnswers) && (
+      {isNonIllinoisZip(prefillTenant.currentZip) && (
         <div role="status" className="mb-6 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5">
           <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700" aria-hidden="true">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

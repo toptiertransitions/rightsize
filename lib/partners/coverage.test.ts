@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isIllinoisZip, hasNonIllinoisZip } from "./coverage";
+import { isIllinoisZip, isNonIllinoisZip } from "./coverage";
 
 describe("partner coverage", () => {
   it("knows Illinois zips", () => {
@@ -9,14 +9,11 @@ describe("partner coverage", () => {
     expect(isIllinoisZip("63101")).toBe(false);
   });
 
-  it("flags any full non-Illinois zip from the tenant or request answers", () => {
-    expect(hasNonIllinoisZip(["60091", undefined], {})).toBe(false);
-    expect(hasNonIllinoisZip(["60091", "33480"], {})).toBe(true);
-    expect(hasNonIllinoisZip([], { Realtor: { zip: "85251" } })).toBe(true);
-    expect(hasNonIllinoisZip([], { Realtor: { zip: "60614" } })).toBe(false);
-  });
-
-  it("ignores partial or blank entries", () => {
-    expect(hasNonIllinoisZip(["331", ""], { Realtor: { zip: "8525" } })).toBe(false);
+  it("flags only full non-Illinois zips", () => {
+    expect(isNonIllinoisZip("33480")).toBe(true);
+    expect(isNonIllinoisZip("60614")).toBe(false);
+    expect(isNonIllinoisZip("331")).toBe(false);
+    expect(isNonIllinoisZip("")).toBe(false);
+    expect(isNonIllinoisZip(undefined)).toBe(false);
   });
 });
