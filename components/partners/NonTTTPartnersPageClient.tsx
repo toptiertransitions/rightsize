@@ -16,6 +16,7 @@ import { PartnerRequestFlow } from "./PartnerRequestFlow";
 import { ReferralPartnerCard } from "./ReferralPartnerCard";
 import { PartnerDetailModal } from "./PartnerDetailModal";
 import { CategoryIcon } from "./categoryIcons";
+import { hasNonIllinoisZip } from "@/lib/partners/coverage";
 
 interface Props {
   tenantId: string;
@@ -180,6 +181,23 @@ export function NonTTTPartnersPageClient({
           ? "You told us you just want to use the app to simplify your move. If you change your mind on any of these, just say so below."
           : "Track who’s on your team below, and answer a few quick questions to get matched in each category."}
       </p>
+
+      {hasNonIllinoisZip([prefillTenant.currentZip, prefillTenant.destinationZip], requestAnswers) && (
+        <div role="status" className="mb-6 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+          <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700" aria-hidden="true">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" />
+              <circle cx="12" cy="9.5" r="2.5" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-900">We&apos;re growing beyond Illinois</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-amber-800">
+              Most of our vetted partners are based in Illinois right now, so matches outside the state may be limited for the moment. We&apos;re adding new partners all the time.
+            </p>
+          </div>
+        </div>
+      )}
 
       {activeCategories.length > 0 && (
         <SelectedPartnersTray
