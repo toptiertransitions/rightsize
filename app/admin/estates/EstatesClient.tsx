@@ -39,6 +39,8 @@ interface EstatesClientProps {
   estates: Estate[];
   tenants: Tenant[];
   estateItems: Item[];
+  /** TTTAdmin only: edit an estate item's Client Share. */
+  canEditShare: boolean;
 }
 
 const STATUS_COLORS: Record<EstateStatus, string> = {
@@ -406,7 +408,7 @@ function PickupBlastPanel({ estate, onClose }: { estate: Estate; onClose: () => 
   );
 }
 
-export function EstatesClient({ estates: initial, tenants, estateItems: initialEstateItems }: EstatesClientProps) {
+export function EstatesClient({ estates: initial, tenants, estateItems: initialEstateItems, canEditShare }: EstatesClientProps) {
   const [estates, setEstates] = useState<Estate[]>(initial);
   const [editing, setEditing] = useState<Estate | null>(null);
   const [creating, setCreating] = useState(false);
@@ -1551,6 +1553,7 @@ export function EstatesClient({ estates: initial, tenants, estateItems: initialE
         <EstateItemsTab
           items={estateItems}
           tenantMap={tenantMap}
+          canEditShare={canEditShare}
           onUpdate={(updated) => setEstateItems(prev => prev.map(i => i.id === updated.id ? updated : i))}
         />
       )}
@@ -1624,9 +1627,97 @@ const ITEM_STATUS_STYLE: Record<string, string> = {
   "Discarded":         "bg-red-900/40 text-red-300 border-red-700",
 };
 
-function EstateItemsTab({ items, tenantMap, onUpdate }: {
+// The Sales page, payout modal and payout PDF all pay the client
+// salePrice x this share, falling back to 67% when it's unset.
+const ESTATE_DEFAULT_CLIENT_SHARE = 67;
+
+function ClientShareCell({ item, onUpdate }: { item: Item; onUpdate: (updated: Item) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Set while leaving edit mode, so the blur that follows Enter or Escape
+  // doesn't save a second time (or save after a cancel).
+  const closing = useRef(false);
+  const current = item.clientSharePercent || undefined;
+
+  async function save() {
+    if (closing.current) return;
+    const trimmed = draft.trim();
+    const pct = trimmed === "" ? ESTATE_DEFAULT_CLIENT_SHARE : Number(trimmed);
+    if (!Number.isFinite(pct) || pct < 1 || pct > 100) {
+      setError("Enter 1-100");
+      return;
+    }
+    if (pct === (current ?? ESTATE_DEFAULT_CLIENT_SHARE) && current != null) {
+      closing.current = true;
+      setEditing(false);
+      return;
+    }
+    closing.current = true;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, tenantId: item.tenantId, clientSharePercent: pct }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.item) throw new Error(data.error || "Save failed");
+      onUpdate(data.item);
+      setEditing(false);
+    } catch (e) {
+      closing.current = false;
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => { closing.current = false; setDraft(String(current ?? ESTATE_DEFAULT_CLIENT_SHARE)); setError(null); setEditing(true); }}
+        className="text-sm text-gray-200 hover:text-white underline decoration-dotted decoration-gray-600 underline-offset-4 hover:decoration-gray-300"
+        title="Edit client share"
+      >
+        {current != null ? `${current}%` : <span className="text-gray-400">{ESTATE_DEFAULT_CLIENT_SHARE}% <span className="text-xs">(default)</span></span>}
+      </button>
+    );
+  }
+
+  return (
+    <div className="inline-flex flex-col items-end">
+      <div className="inline-flex items-center gap-1">
+        <input
+          type="text"
+          inputMode="decimal"
+          autoFocus
+          value={draft}
+          disabled={saving}
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => setDraft(e.target.value.replace(/[^0-9.]/g, ""))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") { closing.current = true; setEditing(false); }
+          }}
+          onBlur={() => save()}
+          className="w-14 px-2 py-1 bg-gray-800 border border-gray-600 rounded-md text-sm text-white text-right focus:outline-none focus:border-forest-500"
+          aria-label="Client share percent"
+        />
+        <span className="text-sm text-gray-400">%</span>
+      </div>
+      {error && <span className="mt-1 text-xs text-red-400">{error}</span>}
+    </div>
+  );
+}
+
+function EstateItemsTab({ items, tenantMap, canEditShare, onUpdate }: {
   items: Item[];
   tenantMap: Record<string, string>;
+  canEditShare: boolean;
   onUpdate: (updated: Item) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -1712,7 +1803,11 @@ function EstateItemsTab({ items, tenantMap, onUpdate }: {
                         <span className="text-sm text-gray-300">{fmt(item.valueMid)}</span>
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        <span className="text-sm text-gray-300">{item.clientSharePercent != null ? `${item.clientSharePercent}%` : "—"}</span>
+                        {canEditShare ? (
+                          <ClientShareCell item={item} onUpdate={onUpdate} />
+                        ) : (
+                          <span className="text-sm text-gray-300">{item.clientSharePercent || ESTATE_DEFAULT_CLIENT_SHARE}%{!item.clientSharePercent && <span className="text-xs text-gray-500"> (default)</span>}</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <EbayActionButton item={item} onUpdate={onUpdate} />

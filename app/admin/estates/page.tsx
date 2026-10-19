@@ -23,7 +23,7 @@ export default async function AdminEstatesPage() {
     <div className="min-h-screen bg-gray-950">
       <AdminHeader active="estates" />
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <EstatesClient estates={estates} tenants={tenants} estateItems={estateItems} />
+        <EstatesClient estates={estates} tenants={tenants} estateItems={estateItems} canEditShare={role === "TTTAdmin"} />
       </main>
     </div>
   );
