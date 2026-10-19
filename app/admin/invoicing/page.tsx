@@ -11,6 +11,7 @@ import { SendQPlanningReportButton } from "./SendQPlanningReportButton";
 import { WarRoomForMeButton } from "./WarRoomForMeButton";
 import { ReferralFunnelForMeButton } from "./ReferralFunnelForMeButton";
 import { ActivityAnalysisForMeButton } from "./ActivityAnalysisForMeButton";
+import { ConsignmentStatusForMeButton } from "./ConsignmentStatusForMeButton";
 import { getSalesReps } from "@/lib/sales-coaching-report";
 import { SalesGoalsClient } from "./SalesGoalsClient";
 
@@ -43,6 +44,7 @@ export default async function InvoicingSettingsPage() {
           <WarRoomForMeButton />
           <ReferralFunnelForMeButton />
           <ActivityAnalysisForMeButton reps={salesReps} />
+          <ConsignmentStatusForMeButton />
         </div>
         <InvoicingSettingsClient initialSettings={settings} />
 
