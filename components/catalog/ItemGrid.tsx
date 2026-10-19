@@ -34,6 +34,8 @@ interface ItemGridProps {
   isTTT?: boolean;
   staffMembers?: StaffMember[];
   isTTTUser?: boolean;
+  /** TTTTeamLead / TTTManager / TTTAdmin: bulk "Drop to $0" in the table view. */
+  canDropToZero?: boolean;
   initialSearch?: string;
 }
 
@@ -1423,7 +1425,7 @@ function BulkActionButton({ onClick, disabled, icon, variant = "default", childr
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, initialSearch = "" }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, initialSearch = "", canDropToZero = false }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -1836,6 +1838,46 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       alert(e instanceof Error ? e.message : "Failed to update routes");
     } finally {
       setRouteLoading(false);
+    }
+  };
+
+  // ── Bulk Drop to $0 ──────────────────────────────────────────────────────
+  // Clears Est. Value and sets Status to Donated. Nothing else on the item
+  // changes (see app/api/items/drop-to-zero/route.ts).
+  const [dropZeroOpen, setDropZeroOpen] = useState(false);
+  useBackClose(dropZeroOpen && (() => setDropZeroOpen(false)));
+  const [dropZeroLoading, setDropZeroLoading] = useState(false);
+  const [dropZeroError, setDropZeroError] = useState("");
+
+  const handleBulkDropToZero = async () => {
+    if (selected.size === 0) return;
+    setDropZeroLoading(true);
+    setDropZeroError("");
+    try {
+      const res = await fetch("/api/items/drop-to-zero", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to drop items to $0");
+      const updated = new Map<string, Item>((data.items ?? []).map((i: Item) => [i.id, i]));
+      setItems(prev => prev.map(i => {
+        const u = updated.get(i.id);
+        return u ? { ...i, valueMid: u.valueMid, status: u.status } : i;
+      }));
+      const failed: string[] = data.failed ?? [];
+      if (failed.length > 0) {
+        setSelected(new Set(failed));
+        setDropZeroError(`${failed.length} item${failed.length !== 1 ? "s" : ""} couldn't be updated. They're still selected, so you can try again.`);
+      } else {
+        setSelected(new Set());
+        setDropZeroOpen(false);
+      }
+    } catch (e) {
+      setDropZeroError(e instanceof Error ? e.message : "Failed to drop items to $0");
+    } finally {
+      setDropZeroLoading(false);
     }
   };
 
@@ -2289,6 +2331,44 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       )}
 
       {/* Bulk Route Modal */}
+      {dropZeroOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Drop to $0</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {selected.size} selected item{selected.size !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-2 text-sm text-gray-700">
+              <p>This will:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Clear the Est. Value (set to $0)</li>
+                <li>Set Status to <span className="font-semibold">Donated</span></li>
+              </ul>
+              <p className="text-xs text-gray-500">Routes, descriptions and everything else stay as they are.</p>
+              {dropZeroError && <p className="text-xs text-red-600">{dropZeroError}</p>}
+            </div>
+            <div className="px-6 pb-6 flex justify-end gap-2">
+              <button
+                onClick={() => { setDropZeroOpen(false); setDropZeroError(""); }}
+                disabled={dropZeroLoading}
+                className="h-9 px-4 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDropToZero}
+                disabled={dropZeroLoading || selected.size === 0}
+                className="h-9 px-4 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {dropZeroLoading ? "Updating…" : `Drop ${selected.size} to $0`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {routeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
@@ -2754,6 +2834,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <BulkActionButton onClick={() => { setRouteModalValue(""); setRouteModalOpen(true); }} disabled={routeLoading}
                   icon={<path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />}>
                   Route
+                </BulkActionButton>
+              )}
+              {canDropToZero && (
+                <BulkActionButton onClick={() => { setDropZeroError(""); setDropZeroOpen(true); }} disabled={dropZeroLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M4 4l16 16" />}>
+                  Drop to $0
                 </BulkActionButton>
               )}
               {isTTTUser && (

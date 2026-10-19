@@ -90,6 +90,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           allTenants={canReassign ? allTenants : undefined}
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
+          canDropToZero={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
         />
       </div>
     );
@@ -141,6 +142,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           isTTT={tenant.isTTT ?? true}
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
+          canDropToZero={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
           initialSearch={initialSearch}
         />
       </div>
