@@ -3,6 +3,8 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { getSystemRole, getExpenses, getExpensesForUser, getExpensesForTenant, getReimbursableExpenses, createExpense, updateExpense, deleteExpense } from "@/lib/airtable";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExpenseCategory } from "@/lib/types";
+import { ctToday } from "@/lib/date-ct";
+import { normalizeReceiptDate } from "@/lib/expense-date";
 
 export const maxDuration = 60;
 
@@ -75,7 +77,8 @@ export async function POST(req: NextRequest) {
   const reimbursable = typeof body.reimbursable === "boolean" ? body.reimbursable : defaultReimbursable;
 
   // ── Claude AI receipt analysis ─────────────────────────────────────────────
-  let date = new Date().toISOString().slice(0, 10);
+  const today = ctToday();
+  let date = today;
   let vendor = "";
   let total = 0;
   let category: ExpenseCategory = "Other";
@@ -147,7 +150,7 @@ export async function POST(req: NextRequest) {
         };
       }
 
-      const promptText = `Analyze this receipt and extract the following information. Return ONLY valid JSON with no markdown or extra text:
+      const promptText = `Today's date is ${today}. Analyze this receipt and extract the following information. Return ONLY valid JSON with no markdown or extra text:
 {
   "date": "YYYY-MM-DD",
   "vendor": "merchant or business name",
@@ -155,7 +158,8 @@ export async function POST(req: NextRequest) {
   "category": "one of: Meals & Entertainment | Travel & Transportation | Office Supplies | Technology & Software | Marketing & Advertising | Professional Services | Utilities | Other",
   "description": "one-sentence description of what was purchased"
 }
-If any field is unclear, use sensible defaults (today's date, "Unknown" for vendor, 0 for total, "Other" for category).`;
+If any field is unclear, use sensible defaults (today's date, "Unknown" for vendor, 0 for total, "Other" for category).
+Receipts are almost always recent: a 2-digit year like "26" means 2026, and the purchase date should not be after today.`;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const messageContent: any[] = [receiptContent, { type: "text", text: promptText }];
@@ -179,7 +183,7 @@ If any field is unclear, use sensible defaults (today's date, "Unknown" for vend
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) date = parsed.date;
+        if (parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) date = normalizeReceiptDate(parsed.date, today);
         if (parsed.vendor) vendor = String(parsed.vendor);
         if (typeof parsed.total === "number") total = parsed.total;
         if (parsed.category) category = parsed.category as ExpenseCategory;

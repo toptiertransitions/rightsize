@@ -5595,23 +5595,27 @@ function mapExpense(record: AirtableRecord): Expense {
   };
 }
 
+// Airtable returns at most 100 records per page — follow offsets to get them all.
+async function expensesFetchAll(query: string): Promise<Expense[]> {
+  const out: Expense[] = [];
+  let offset: string | undefined;
+  do {
+    const res = await expensesFetch(`${query}${offset ? `&offset=${offset}` : ""}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    out.push(...(data.records as AirtableRecord[]).map(mapExpense));
+    offset = data.offset;
+  } while (offset);
+  return out;
+}
+
 export async function getExpenses(): Promise<Expense[]> {
-  const res = await expensesFetch(
-    `?sort[0][field]=Date&sort[0][direction]=desc&sort[1][field]=CreatedAt&sort[1][direction]=desc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapExpense);
+  return expensesFetchAll(`?sort[0][field]=Date&sort[0][direction]=desc&sort[1][field]=CreatedAt&sort[1][direction]=desc`);
 }
 
 export async function getExpensesForUser(clerkUserId: string): Promise<Expense[]> {
   const formula = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
-  const res = await expensesFetch(
-    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapExpense);
+  return expensesFetchAll(`?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`);
 }
 
 export async function createExpense(data: {
@@ -5685,22 +5689,12 @@ export async function updateExpense(
 
 export async function getReimbursableExpenses(from: string, to: string): Promise<Expense[]> {
   const formula = encodeURIComponent(`AND({Reimbursable} = TRUE(), {Date} >= "${from}", {Date} <= "${to}")`);
-  const res = await expensesFetch(
-    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapExpense);
+  return expensesFetchAll(`?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=asc`);
 }
 
 export async function getExpensesForTenant(tenantId: string): Promise<Expense[]> {
   const formula = encodeURIComponent(`{TenantId} = "${tenantId}"`);
-  const res = await expensesFetch(
-    `?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`
-  );
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return (data.records as AirtableRecord[]).map(mapExpense);
+  return expensesFetchAll(`?filterByFormula=${formula}&sort[0][field]=Date&sort[0][direction]=desc`);
 }
 
 export async function deleteExpense(id: string): Promise<void> {
