@@ -20,13 +20,14 @@ const ALL_PROJECTS_PAGES = ["/catalog", "/plan"];
 // Not every item applies to every role (e.g. Invoices is TTT-client-only,
 // Inbox is staff-only) — the render below filters to whichever of these
 // actually have a matching navLinks entry for the current user.
-const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Invoices", "Inbox"] as const;
+const IOS_NAV_ORDER = ["Home", "Plan", "Catalog", "Partners", "Sales", "Tips", "Invoices", "Inbox"] as const;
 const IOS_NAV_ICONS: Record<(typeof IOS_NAV_ORDER)[number], React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Home: House,
   Plan: Calendar,
   Catalog: LayoutList,
   Partners: Handshake,
   Sales: DollarSign,
+  Tips: Lightbulb,
   Invoices: Receipt,
   Inbox: Inbox,
 };
@@ -45,9 +46,9 @@ interface HeaderProps {
   // actual native-iOS-platform check before the icon nav ever renders —
   // this prop alone is not enough, since it says nothing about web vs. app.
   showIOSNav?: boolean;
-  // Server-computed: NonTTTClient users only (lib/tips-access.ts). Adds a
-  // "Tips" text-nav link on web; in the iOS app it lives in the avatar menu
-  // so the 5-icon bottom bar is unchanged.
+  // Server-computed: NonTTTClient users only (lib/tips-access.ts). Tips takes
+  // Sales' slot in the nav (web text nav and native icon bar) — those users
+  // don't use Sales. Everyone else keeps Sales and has no Tips link.
   showTips?: boolean;
   // Community (white-label) brand for this user, if any (lib/brands). Its
   // logo replaces the Top Tier logo; colors come in through CSS variables.
@@ -184,7 +185,10 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     { href: `/plan${isStaff ? staffPlanTq : tq}`, base: "/plan", label: "Plan" },
     { href: `/catalog${tq}`, base: "/catalog", label: "Catalog" },
     { href: `/partners${tq}`, base: "/partners", label: "Partners" },
-    { href: `/sales${tq}`, base: "/sales", label: "Sales" },
+    // NonTTTClient: Tips replaces Sales in the same slot
+    showTips
+      ? { href: "/tips", base: "/tips", label: "Tips" }
+      : { href: `/sales${tq}`, base: "/sales", label: "Sales" },
     // Quoting — Manager and Admin; carry current project if one is selected
     ...(isManager ? [{ href: `/quoting${projectTq}`, base: "/quoting", label: "Quoting" }] : []),
     // Invoices — TTT clients (non-staff) only; tttTenantIds is server-determined
@@ -203,8 +207,6 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
     // (Sales gets it via salesOnlyLinks above). Never shown to clients —
     // the page itself redirects them to /home even if they reach the URL.
     ...(isStaff ? [{ href: "/inbox", base: "/inbox", label: "Inbox" }] : []),
-    // Tips: NonTTTClient only (server-computed showTips)
-    ...(showTips ? [{ href: "/tips", base: "/tips", label: "Tips" }] : []),
   ];
 
   // iOS compact nav only ever shows a subset of IOS_NAV_ORDER for a given
@@ -299,9 +301,6 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
             >
               <UserButton.MenuItems>
                 <UserButton.Action label="manageAccount" />
-                {useIOSNav && showTips && (
-                  <UserButton.Link label="Tips" href="/tips" labelIcon={<Lightbulb className="w-4 h-4" />} />
-                )}
                 <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
                 {isNativeShell && (
                   <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />
