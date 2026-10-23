@@ -13,7 +13,12 @@ describe("normalizeReceiptDate", () => {
   it("fixes a misread year to the most recent past occurrence", () => {
     expect(normalizeReceiptDate("2020-10-23", "2026-10-23")).toBe("2026-10-23");
     expect(normalizeReceiptDate("2024-10-01", TODAY)).toBe("2026-10-01");
-    expect(normalizeReceiptDate("2020-10-23", TODAY)).toBe("2025-10-23");
+    expect(normalizeReceiptDate("2020-11-15", TODAY)).toBe("2025-11-15");
+  });
+
+  it("treats a date a few days ahead as today", () => {
+    expect(normalizeReceiptDate("2020-10-23", TODAY)).toBe(TODAY);
+    expect(normalizeReceiptDate("2026-10-25", TODAY)).toBe(TODAY);
   });
 
   it("pulls future dates back", () => {
