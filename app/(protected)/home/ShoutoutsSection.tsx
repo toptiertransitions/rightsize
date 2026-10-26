@@ -135,7 +135,7 @@ export function ShoutoutsSection({
     <section className="mt-10 mb-10">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-          <Megaphone className="w-4 h-4 text-forest-600" /> Shoutouts
+          <Megaphone className="w-4 h-4 text-forest-600" /> Team Shoutouts
         </h2>
         {canGive && !composing && (
           <button
