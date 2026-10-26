@@ -19,7 +19,12 @@ import { AddClientUserButton } from "@/components/AddClientUserButton";
 import { AvailabilitySection } from "./AvailabilitySection";
 import { TodaysPlan } from "./TodaysPlan";
 import type { TodayShift } from "./TodaysPlan";
-import { MyPaySection } from "./MyPaySection";
+import { AboutMeSection } from "./AboutMeSection";
+import { ShoutoutsSection } from "./ShoutoutsSection";
+import { weeklyHours, goalStreak, nextBirthday, nextAnniversary, yearsOfService, dayOfWeek } from "@/lib/about-me";
+import { getRecentShoutouts, canGiveShoutout } from "@/lib/shoutouts";
+import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
+import { ctToday } from "@/lib/date-ct";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
 const OWNER_ROLES = ["Owner", "TTTAdmin"];
@@ -56,12 +61,13 @@ export default async function DashboardPage({
     const todayStr = new Date().toISOString().slice(0, 10);
     const showTodaysPlan = systemRole === "TTTStaff" || systemRole === "TTTManager" || systemRole === "TTTTeamLead";
 
-    const [allTenantsRaw, ownTimeEntries, allStaff, serviceList, signedIds] = await Promise.all([
+    const [allTenantsRaw, ownTimeEntries, allStaff, serviceList, signedIds, shoutouts] = await Promise.all([
       getTenants().catch(() => []),
       getTimeEntries(canViewAll ? undefined : { clerkUserId: userId }).catch(() => []),
       getStaffMembers().catch(() => []),
       getServices().catch(() => []),
       getSignedTenantIds().catch(() => new Set<string>()),
+      getRecentShoutouts(),
     ]);
 
     // Team Lead: also load all time entries for projects they lead
@@ -156,6 +162,18 @@ export default async function DashboardPage({
       ? allStaff.filter((s) => s.isActive).map((s) => ({ id: s.clerkUserId, name: s.displayName }))
       : undefined;
 
+    // ── About Me (own data only) + Shoutouts ─────────────────────────────────
+    const showAboutMe = systemRole === "TTTStaff" || systemRole === "TTTTeamLead" || systemRole === "TTTManager";
+    const ctTodayStr = ctToday();
+    const myWeeks = weeklyHours(ownTimeEntries.filter((e) => e.clerkUserId === userId), ctTodayStr);
+    const canShoutout = canGiveShoutout(systemRole);
+    let shoutoutTeam: { clerkUserId: string; name: string }[] = [];
+    if (canShoutout) {
+      const candidates = allStaff.filter((s) => s.isActive && s.clerkUserId && s.clerkUserId !== userId);
+      const hidden = await getSuspendedOrDeletedClerkUserIds(candidates.map((s) => s.clerkUserId)).catch(() => new Set<string>());
+      shoutoutTeam = candidates.filter((s) => !hidden.has(s.clerkUserId)).map((s) => ({ clerkUserId: s.clerkUserId, name: s.displayName }));
+    }
+
     // Filter tenants for staff views: admin sees all, staff/manager sees only TTT
     const filteredTenants = allTenants.filter(t => !t.isArchived && (isAdmin || t.isTTT === true));
 
@@ -200,10 +218,29 @@ export default async function DashboardPage({
           <AvailabilitySection />
         )}
 
-        {/* My Pay — TTTStaff, TTTTeamLead, and TTTManager */}
-        {(systemRole === "TTTStaff" || systemRole === "TTTTeamLead" || systemRole === "TTTManager") && (
-          <MyPaySection clerkUserId={userId} />
+        {/* About Me — TTTStaff, TTTTeamLead, and TTTManager (My Pay moved to /pay) */}
+        {showAboutMe && (
+          <AboutMeSection
+            weeks={myWeeks}
+            targetHours={currentStaff?.targetWeeklyHours}
+            minHours={currentStaff?.minWeeklyHours}
+            streak={goalStreak(myWeeks, currentStaff?.targetWeeklyHours)}
+            dayOfWeek={dayOfWeek(ctTodayStr)}
+            birthday={nextBirthday(currentStaff?.birthday, ctTodayStr)}
+            anniversary={nextAnniversary(currentStaff?.hireDate, ctTodayStr)}
+            yearsOfService={yearsOfService(currentStaff?.hireDate, ctTodayStr)}
+            hireDate={currentStaff?.hireDate}
+          />
         )}
+
+        {/* Shoutouts — team-wide feed; Team Leads, Managers, Admins can give them */}
+        <ShoutoutsSection
+          initialShoutouts={shoutouts}
+          currentUserId={userId}
+          canGive={canShoutout}
+          isAdmin={isAdmin}
+          team={shoutoutTeam}
+        />
       </div>
     );
   }

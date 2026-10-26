@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
+import { normalizeMonthDay } from "@/lib/about-me";
 
 const STAFF_ROLES_TABLE = process.env.STAFF_ROLES_TABLE_ID || "StaffRoles";
 const BASE_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${STAFF_ROLES_TABLE}`;
@@ -32,6 +34,7 @@ export interface StaffGoalRow {
   email: string;
   role: string;
   hireDate?: string;
+  birthday?: string; // "MM-DD"
   roleType?: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
@@ -59,6 +62,7 @@ function mapRecord(record: AirtableRecord): StaffGoalRow {
     email: toStr(f["Email"]),
     role: toStr(f["Role"]) || "TTTStaff",
     hireDate: toStr(f["HireDate"]) || undefined,
+    birthday: normalizeMonthDay(toStr(f["Birthday"])) ?? undefined,
     roleType:
       f["RoleType"] === "Staff" || f["RoleType"] === "Team Lead"
         ? (f["RoleType"] as "Staff" | "Team Lead")
@@ -71,8 +75,8 @@ function mapRecord(record: AirtableRecord): StaffGoalRow {
   };
 }
 
-// ─── GET — fetch all active TTTStaff + TTTManager with goals fields ────────────
-export async function GET() {
+// ─── GET — fetch all active TTTStaff + TTTManager (+ TTTTeamLead on request) with goals fields
+export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -83,9 +87,12 @@ export async function GET() {
 
   try {
     // Fetch all active staff (TTTStaff and TTTManager) — no fields[] restriction
-    // so all fields including newly added ones come back gracefully
+    // so all fields including newly added ones come back gracefully.
+    // ?includeTeamLeads=1 (Staff Goals tab only) adds TTTTeamLead; the AI
+    // Staff Mapping and Skills tabs keep their existing roster.
+    const includeTeamLeads = req.nextUrl.searchParams.get("includeTeamLeads") === "1";
     const formula = encodeURIComponent(
-      `AND({IsActive}=TRUE(),OR({Role}="TTTStaff",{Role}="TTTManager"))`
+      `AND({IsActive}=TRUE(),OR({Role}="TTTStaff",{Role}="TTTManager"${includeTeamLeads ? ',{Role}="TTTTeamLead"' : ""}))`
     );
     const qs = `?filterByFormula=${formula}&sort[0][field]=DisplayName&sort[0][direction]=asc`;
 
@@ -129,6 +136,7 @@ export async function PATCH(req: NextRequest) {
   let body: {
     id: string;
     hireDate?: string;
+    birthday?: string | null;
     roleType?: string;
     minWeeklyHours?: number | null;
     targetWeeklyHours?: number | null;
@@ -146,6 +154,11 @@ export async function PATCH(req: NextRequest) {
 
   const fields: Record<string, unknown> = {};
   if (rest.hireDate !== undefined) fields["HireDate"] = rest.hireDate || null;
+  if (rest.birthday !== undefined) {
+    const md = rest.birthday ? normalizeMonthDay(rest.birthday) : null;
+    if (rest.birthday && !md) return NextResponse.json({ error: "Birthday must be a valid month and day" }, { status: 400 });
+    fields["Birthday"] = md ?? "";
+  }
   if (rest.roleType !== undefined) fields["RoleType"] = rest.roleType || null;
   if (rest.minWeeklyHours !== undefined) fields["MinWeeklyHours"] = rest.minWeeklyHours ?? null;
   if (rest.targetWeeklyHours !== undefined) fields["TargetWeeklyHours"] = rest.targetWeeklyHours ?? null;
@@ -162,6 +175,7 @@ export async function PATCH(req: NextRequest) {
     });
     if (!res.ok) throw new Error(await res.text());
     const record = (await res.json()) as AirtableRecord;
+    revalidateTag("staff-members"); // home page About Me reads goals/birthday/hire date via getStaffMembers
     return NextResponse.json({ staff: mapRecord(record) });
   } catch (e) {
     console.error("[staff/goals PATCH]", e);

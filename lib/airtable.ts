@@ -3469,6 +3469,10 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
     hourlyRate: f["HourlyRate"] != null ? toNum(f["HourlyRate"]) : undefined,
     address: toStr(f["Address"]) || undefined,
     pinColor: toStr(f["PinColor"]) || undefined,
+    hireDate: toStr(f["HireDate"]) || undefined,
+    birthday: toStr(f["Birthday"]) || undefined,
+    minWeeklyHours: typeof f["MinWeeklyHours"] === "number" ? f["MinWeeklyHours"] : undefined,
+    targetWeeklyHours: typeof f["TargetWeeklyHours"] === "number" ? f["TargetWeeklyHours"] : undefined,
   };
 }
 

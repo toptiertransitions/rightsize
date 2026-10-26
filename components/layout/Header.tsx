@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { UserButton, useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt, Lightbulb, Trash2 } from "lucide-react";
+import { House, Calendar, LayoutList, Handshake, DollarSign, CircleHelp, Inbox, Bell, Receipt, Lightbulb, Trash2, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectSwitcher } from "@/components/ui/ProjectSwitcher";
 import { getPlatform, isNativeApp } from "@/lib/native";
@@ -50,12 +50,15 @@ interface HeaderProps {
   // Sales' slot in the nav (web text nav and native icon bar) — those users
   // don't use Sales. Everyone else keeps Sales and has no Tips link.
   showTips?: boolean;
+  // Server-computed: TTTStaff / TTTTeamLead / TTTManager get a "My Pay" link
+  // in the profile menu (the pay summary moved off the home page to /pay).
+  showMyPay?: boolean;
   // Community (white-label) brand for this user, if any (lib/brands). Its
   // logo replaces the Top Tier logo; colors come in through CSS variables.
   brand?: { logoUrl: string; displayName: string; primaryColor: string };
 }
 
-export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav, showTips, brand }: HeaderProps) {
+export function Header({ tenantName, isImpersonating: isImpersonatingProp, onStopImpersonating, isManager, isStaff, isAdmin, isSales, tttTenantIds, showIOSNav, showTips, showMyPay, brand }: HeaderProps) {
   // Capacitor's bridge isn't available during SSR/first paint, so this
   // starts false (matching the server-rendered text nav) and flips after
   // mount if we're actually in the native iOS shell — same pattern as
@@ -301,6 +304,9 @@ export function Header({ tenantName, isImpersonating: isImpersonatingProp, onSto
             >
               <UserButton.MenuItems>
                 <UserButton.Action label="manageAccount" />
+                {showMyPay && (
+                  <UserButton.Link label="My Pay" href="/pay" labelIcon={<Wallet className="w-4 h-4" />} />
+                )}
                 <UserButton.Link label="Get Help" href="/help" labelIcon={<CircleHelp className="w-4 h-4" />} />
                 {isNativeShell && (
                   <UserButton.Link label="Notifications" href="/notification-settings" labelIcon={<Bell className="w-4 h-4" />} />

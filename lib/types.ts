@@ -57,6 +57,10 @@ export interface StaffMember {
   hourlyRate?: number;
   address?: string;      // Home/work address for location map
   pinColor?: string;     // Hex color for map pin, e.g. "#4F46E5"
+  hireDate?: string;     // YYYY-MM-DD
+  birthday?: string;     // "MM-DD" (no year)
+  minWeeklyHours?: number;
+  targetWeeklyHours?: number;
 }
 
 // ─── First Visit Intake Form ──────────────────────────────────────────────────

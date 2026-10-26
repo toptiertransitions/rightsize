@@ -29,6 +29,8 @@ export default async function ProtectedLayout({
   // TTTTeamLead. TTTManager/TTTAdmin/TTTSales keep the text nav even in the
   // native app, since they're not the primary iOS audience.
   const showIOSNav = sysRole === null || sysRole === "TTTStaff" || sysRole === "TTTTeamLead";
+  // "My Pay" profile-menu link (page moved off the home page): same audience as /pay.
+  const showMyPay = sysRole === "TTTStaff" || sysRole === "TTTTeamLead" || sysRole === "TTTManager";
 
   // For non-staff users, build a tenantId→isTTT map server-side so the Header
   // can show/hide the Invoices link without a client-side fetch (avoids timing bugs).
@@ -60,7 +62,7 @@ export default async function ProtectedLayout({
       <PushNotificationBootstrap />
       {resolved?.preview && brand && <BrandPreviewBanner name={[brand.displayName, brand.subtitle].filter(Boolean).join(" ")} />}
       <Header
-        isManager={isManager} isStaff={isStaff} isAdmin={isAdmin} isSales={isSales} tttTenantIds={tttTenantIds} showIOSNav={showIOSNav} showTips={showTips}
+        isManager={isManager} isStaff={isStaff} isAdmin={isAdmin} isSales={isSales} tttTenantIds={tttTenantIds} showIOSNav={showIOSNav} showTips={showTips} showMyPay={showMyPay}
         brand={brand ? { logoUrl: brand.logoUrl, displayName: brand.displayName, primaryColor: brand.primaryColor } : undefined}
       />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

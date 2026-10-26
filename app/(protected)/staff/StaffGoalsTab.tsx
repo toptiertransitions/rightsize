@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { nextAnniversary, nextBirthday } from "@/lib/about-me";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface StaffMemberWithGoals {
@@ -9,6 +10,7 @@ export interface StaffMemberWithGoals {
   email: string;
   role: string;
   hireDate?: string;
+  birthday?: string; // "MM-DD"
   roleType?: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
@@ -30,7 +32,7 @@ interface BulkValues {
   hireDate: string;
 }
 
-type SortField = "name" | "hireDate" | "role" | "min" | "target" | "max" | "updatedAt";
+type SortField = "name" | "hireDate" | "birthday" | "role" | "min" | "target" | "max" | "updatedAt";
 type SortDir = "asc" | "desc";
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -50,12 +52,27 @@ function fmtUpdatedAt(d?: string): string {
   } catch { return "—"; }
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function fmtBirthday(md?: string): string {
+  if (!md) return "—";
+  const [m, d] = md.split("-").map(Number);
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function exportCSV(rows: StaffMemberWithGoals[]) {
-  const header = ["Name", "Email", "Hire Date", "Role Type", "Min Hours", "Target Hours", "Max Hours"];
+  const header = ["Name", "Email", "Hire Date", "Birthday", "Role Type", "Min Hours", "Target Hours", "Max Hours"];
   const lines = rows.map(r => [
     `"${r.displayName.replace(/"/g, '""')}"`,
     `"${r.email.replace(/"/g, '""')}"`,
     `"${fmtHireDate(r.hireDate)}"`,
+    `"${fmtBirthday(r.birthday)}"`,
     `"${r.roleType ?? "Staff"}"`,
     r.minWeeklyHours ?? "",
     r.targetWeeklyHours ?? "",
@@ -91,7 +108,7 @@ function SkeletonRow() {
   return (
     <tr className="border-t border-gray-100">
       <td className="pl-4 pr-2 py-3 w-8" />
-      {[...Array(7)].map((_, i) => (
+      {[...Array(8)].map((_, i) => (
         <td key={i} className="px-4 py-3">
           <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: i === 0 ? "80%" : "60%" }} />
         </td>
@@ -146,6 +163,78 @@ function HireDateInput({ value, canEdit, onBlur }: { value?: string; canEdit: bo
       onBlur={e => onBlur(e.target.value)}
       className="text-sm text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-forest-600 focus:ring-1 focus:ring-forest-600/20 rounded px-1.5 py-0.5 focus:outline-none transition-colors min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
     />
+  );
+}
+
+// ─── Birthday Input (month + day, no year) ─────────────────────────────────────
+function BirthdayInput({ value, canEdit, onSave }: { value?: string; canEdit: boolean; onSave: (v: string) => void }) {
+  const [m, d] = (value ?? "").split("-");
+  const [month, setMonth] = useState(m ?? "");
+  const [day, setDay] = useState(d ?? "");
+  useEffect(() => { const [vm, vd] = (value ?? "").split("-"); setMonth(vm ?? ""); setDay(vd ?? ""); }, [value]);
+
+  if (!canEdit) return <span className="text-gray-600 text-sm">{fmtBirthday(value)}</span>;
+
+  const commit = (nm: string, nd: string) => {
+    if (nm && nd) onSave(`${nm}-${nd}`);
+    else if (!nm && !nd && value) onSave("");
+  };
+  const maxDay = month ? DAYS_IN_MONTH[Number(month) - 1] : 31;
+  const cls = "text-sm text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-forest-600 focus:ring-1 focus:ring-forest-600/20 rounded px-1 py-0.5 focus:outline-none transition-colors";
+  return (
+    <span className="inline-flex gap-0.5">
+      <select
+        value={month} aria-label="Birthday month" className={cls}
+        onChange={e => {
+          const nm = e.target.value;
+          const nd = day && nm && Number(day) > DAYS_IN_MONTH[Number(nm) - 1] ? "" : day;
+          setMonth(nm); setDay(nd); commit(nm, nd);
+        }}
+      >
+        <option value="">—</option>
+        {MONTHS.map((label, i) => <option key={label} value={String(i + 1).padStart(2, "0")}>{label}</option>)}
+      </select>
+      <select
+        value={day} aria-label="Birthday day" className={cls}
+        onChange={e => { setDay(e.target.value); commit(month, e.target.value); }}
+      >
+        <option value="">—</option>
+        {Array.from({ length: maxDay }, (_, i) => String(i + 1).padStart(2, "0")).map(v => <option key={v} value={v}>{Number(v)}</option>)}
+      </select>
+    </span>
+  );
+}
+
+// ─── Upcoming Celebrations (next 30 days) ─────────────────────────────────────
+function UpcomingCelebrations({ members }: { members: StaffMemberWithGoals[] }) {
+  const today = localToday();
+  const items = members
+    .flatMap(m => {
+      const out: { key: string; name: string; label: string; date: string; daysAway: number }[] = [];
+      const b = nextBirthday(m.birthday, today);
+      if (b && b.daysAway <= 30) out.push({ key: `${m.id}-b`, name: m.displayName, label: "Birthday", date: b.date, daysAway: b.daysAway });
+      const a = nextAnniversary(m.hireDate, today);
+      if (a && a.daysAway <= 30) out.push({ key: `${m.id}-a`, name: m.displayName, label: `${a.years} yr anniversary`, date: a.date, daysAway: a.daysAway });
+      return out;
+    })
+    .sort((x, y) => x.daysAway - y.daysAway);
+
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-forest-200 bg-forest-50/60 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-forest-700 mb-2">Upcoming Celebrations · Next 30 Days</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map(i => (
+          <span key={i.key} className="inline-flex items-center gap-1.5 rounded-full bg-white border border-forest-200 px-3 py-1 text-xs text-gray-700">
+            <span className="font-semibold text-gray-900">{i.name}</span>
+            <span>{i.label}</span>
+            <span className={i.daysAway <= 7 ? "font-semibold text-forest-700" : "text-gray-400"}>
+              {i.daysAway === 0 ? "Today" : i.daysAway === 1 ? "Tomorrow" : new Date(i.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -232,7 +321,7 @@ function BulkEditBar({ count, values, onChange, onApply, onClear, saving }: {
 }
 
 // ─── Goals Row ────────────────────────────────────────────────────────────────
-function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle, onNumberBlur, onHireDateBlur }: {
+function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle, onNumberBlur, onHireDateBlur, onBirthdaySave }: {
   member: StaffMemberWithGoals;
   canEdit: boolean;
   saveState: SaveState;
@@ -241,6 +330,7 @@ function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle
   onRoleToggle: (id: string, current?: "Staff" | "Team Lead") => void;
   onNumberBlur: (id: string, field: "minWeeklyHours" | "targetWeeklyHours" | "maxWeeklyHours", val: string) => void;
   onHireDateBlur: (id: string, val: string) => void;
+  onBirthdaySave: (id: string, val: string) => void;
 }) {
   const rt = member.roleType ?? "Staff";
 
@@ -264,6 +354,10 @@ function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle
       {/* Hire Date */}
       <td className="px-4 py-3">
         <HireDateInput value={member.hireDate} canEdit={canEdit} onBlur={v => onHireDateBlur(member.id, v)} />
+      </td>
+      {/* Birthday */}
+      <td className="px-4 py-3 whitespace-nowrap">
+        <BirthdayInput value={member.birthday} canEdit={canEdit} onSave={v => onBirthdaySave(member.id, v)} />
       </td>
       {/* Role Type */}
       <td className="px-4 py-3">
@@ -321,7 +415,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
   // Fetch on mount
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/staff/goals")
+    fetch("/api/staff/goals?includeTeamLeads=1")
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (!cancelled && data?.staff) setMembers(data.staff); })
       .catch(() => {})
@@ -375,6 +469,11 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
     patchGoals(id, { hireDate: value || null });
   }, [patchGoals]);
 
+  const handleBirthdaySave = useCallback((id: string, value: string) => {
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, birthday: value || undefined, updatedAt: new Date().toISOString() } : m));
+    patchGoals(id, { birthday: value || null });
+  }, [patchGoals]);
+
   const handleSort = useCallback((field: SortField) => {
     setSortField(prev => {
       if (prev === field) { setSortDir(d => d === "asc" ? "desc" : "asc"); return prev; }
@@ -395,6 +494,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
       switch (sortField) {
         case "name": cmp = a.displayName.localeCompare(b.displayName); break;
         case "hireDate": cmp = (a.hireDate ?? "").localeCompare(b.hireDate ?? ""); break;
+        case "birthday": cmp = (a.birthday ?? "").localeCompare(b.birthday ?? ""); break;
         case "role": cmp = (a.roleType ?? "Staff").localeCompare(b.roleType ?? "Staff"); break;
         case "min": cmp = (a.minWeeklyHours ?? 0) - (b.minWeeklyHours ?? 0); break;
         case "target": cmp = (a.targetWeeklyHours ?? 0) - (b.targetWeeklyHours ?? 0); break;
@@ -496,6 +596,8 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
         </button>
       </div>
 
+      {!loading && <UpcomingCelebrations members={members} />}
+
       {/* Bulk Edit Bar */}
       {canEdit && selectedIds.size > 0 && (
         <BulkEditBar
@@ -511,7 +613,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
       {/* Table */}
       <div className="border border-gray-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="bg-gray-50">
                 {/* Select-all checkbox */}
@@ -528,6 +630,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
                 </th>
                 <SortHeader label="Name" field="name" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 <SortHeader label="Hire Date" field="hireDate" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Birthday" field="birthday" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 <SortHeader label="Role Type" field="role" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 <SortHeader label="Min Hrs" field="min" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                 <SortHeader label="Target Hrs" field="target" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -540,7 +643,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
                 [...Array(5)].map((_, i) => <SkeletonRow key={i} />)
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
+                  <td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-sm">
                     No staff members found. Adjust your filters.
                   </td>
                 </tr>
@@ -556,6 +659,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
                     onRoleToggle={handleRoleToggle}
                     onNumberBlur={handleNumberBlur}
                     onHireDateBlur={handleHireDateBlur}
+                    onBirthdaySave={handleBirthdaySave}
                   />
                 ))
               )}
