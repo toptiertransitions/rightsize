@@ -34,6 +34,7 @@ import { ProjectAddressBar } from "./ProjectAddressBar";
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
 import { WeeklyEmailButton } from "./WeeklyEmailButton";
+import { EmailMeButtons } from "./EmailMeButtons";
 import { DailyRecapSection } from "./DailyRecapSection";
 import type { Tenant } from "@/lib/types";
 
@@ -476,6 +477,9 @@ export default async function PlanPage({ searchParams }: PageProps) {
             <AddClientUserButton tenantId={tenantId} projectName={tenant.name} />
             {isManagerOrAdmin && (
               <WeeklyEmailButton tenantId={tenantId} />
+            )}
+            {isManagerOrAdmin && (
+              <EmailMeButtons tenantId={tenantId} />
             )}
           </div>
         )}

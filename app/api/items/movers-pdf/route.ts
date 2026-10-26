@@ -3,8 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getSystemRole, getUserRoleForTenant, getItemById, getInvoiceSettings, getTenantById } from "@/lib/airtable";
-import { renderMoversPDF } from "@/lib/movers-pdf";
-import { groupItemsForMovers } from "@/lib/anthropic";
+import { buildMoversPdf } from "@/lib/movers-pdf-build";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -34,36 +33,13 @@ export async function POST(req: NextRequest) {
     tenantId ? getTenantById(tenantId).catch(() => null) : Promise.resolve(null),
   ]);
 
-  const originAddress = [tenant?.address, tenant?.city, tenant?.state, tenant?.zip].filter(Boolean).join(", ") || undefined;
-  const destinationAddress = [tenant?.destAddress, tenant?.destCity, tenant?.destState, tenant?.destZip].filter(Boolean).join(", ") || undefined;
-
-  const items = itemResults
-    .filter(Boolean)
-    .map((item) => {
-      const photos: { url: string }[] = item!.photos?.length
-        ? item!.photos.map((p) => ({ url: p.url }))
-        : item!.photoUrl
-        ? [{ url: item!.photoUrl }]
-        : [];
-      return {
-        id: item!.id,
-        itemName: item!.itemName,
-        photoUrl: item!.photoUrl,
-        photos,
-        category: item!.category,
-        condition: item!.condition,
-        sizeClass: item!.sizeClass,
-      };
-    });
+  const items = itemResults.filter((i): i is NonNullable<typeof i> => !!i);
 
   if (!items.length) {
     return NextResponse.json({ error: "No valid items found" }, { status: 404 });
   }
 
-  // AI grouping for summary page — fire-and-forget with graceful fallback
-  const aiGroups = await groupItemsForMovers(items.map(i => i.itemName)).catch(() => null);
-
-  const pdfBuffer = await renderMoversPDF({ items, settings, aiGroups: aiGroups ?? undefined, originAddress, destinationAddress });
+  const pdfBuffer = await buildMoversPdf({ items, tenant, settings });
 
   const date = new Date().toISOString().slice(0, 10);
   return new NextResponse(new Uint8Array(pdfBuffer), {
