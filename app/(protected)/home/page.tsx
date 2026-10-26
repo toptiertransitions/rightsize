@@ -167,11 +167,12 @@ export default async function DashboardPage({
     const ctTodayStr = ctToday();
     const myWeeks = weeklyHours(ownTimeEntries.filter((e) => e.clerkUserId === userId), ctTodayStr);
     const canShoutout = canGiveShoutout(systemRole);
-    let shoutoutTeam: { clerkUserId: string; name: string }[] = [];
+    let shoutoutTeam: { clerkUserId: string; name: string; role: string }[] = [];
     if (canShoutout) {
       const candidates = allStaff.filter((s) => s.isActive && s.clerkUserId && s.clerkUserId !== userId);
       const hidden = await getSuspendedOrDeletedClerkUserIds(candidates.map((s) => s.clerkUserId)).catch(() => new Set<string>());
-      shoutoutTeam = candidates.filter((s) => !hidden.has(s.clerkUserId)).map((s) => ({ clerkUserId: s.clerkUserId, name: s.displayName }));
+      shoutoutTeam = candidates.filter((s) => !hidden.has(s.clerkUserId)).map((s) => ({ clerkUserId: s.clerkUserId, name: s.displayName, role: s.role.replace(/^TTT/, "").replace("TeamLead", "Team Lead") }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     }
 
     // Filter tenants for staff views: admin sees all, staff/manager sees only TTT

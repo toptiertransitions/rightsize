@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { nextAnniversary, nextBirthday } from "@/lib/about-me";
+import { nextAnniversary, nextBirthday, normalizeMonthDay } from "@/lib/about-me";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface StaffMemberWithGoals {
@@ -53,7 +53,6 @@ function fmtUpdatedAt(d?: string): string {
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 function fmtBirthday(md?: string): string {
   if (!md) return "—";
@@ -167,41 +166,57 @@ function HireDateInput({ value, canEdit, onBlur }: { value?: string; canEdit: bo
 }
 
 // ─── Birthday Input (month + day, no year) ─────────────────────────────────────
+// Accepts "2/1", "02-01", "Feb 1", "February 1st"; returns "MM-DD" or null.
+function parseBirthday(text: string): string | null {
+  const t = text.trim().toLowerCase().replace(/(st|nd|rd|th)\b/g, "");
+  const num = t.match(/^(\d{1,2})\s*[/.\-]\s*(\d{1,2})$/);
+  if (num) return normalizeMonthDay(`${num[1]}-${num[2]}`);
+  const named = t.match(/^([a-z]+)\.?\s+(\d{1,2})$/);
+  if (named) {
+    const mi = MONTHS.findIndex(m => named[1].startsWith(m.toLowerCase()));
+    if (mi >= 0) return normalizeMonthDay(`${mi + 1}-${named[2]}`);
+  }
+  return null;
+}
+
 function BirthdayInput({ value, canEdit, onSave }: { value?: string; canEdit: boolean; onSave: (v: string) => void }) {
-  const [m, d] = (value ?? "").split("-");
-  const [month, setMonth] = useState(m ?? "");
-  const [day, setDay] = useState(d ?? "");
-  useEffect(() => { const [vm, vd] = (value ?? "").split("-"); setMonth(vm ?? ""); setDay(vd ?? ""); }, [value]);
+  const [text, setText] = useState(fmtBirthday(value));
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => { setText(fmtBirthday(value)); setInvalid(false); }, [value]);
 
   if (!canEdit) return <span className="text-gray-600 text-sm">{fmtBirthday(value)}</span>;
 
-  const commit = (nm: string, nd: string) => {
-    if (nm && nd) onSave(`${nm}-${nd}`);
-    else if (!nm && !nd && value) onSave("");
+  const commit = () => {
+    if (!text.trim() || text.trim() === "—") {
+      setInvalid(false);
+      setText(fmtBirthday(""));
+      if (value) onSave("");
+      return;
+    }
+    const parsed = parseBirthday(text);
+    if (!parsed) { setInvalid(true); return; }
+    setInvalid(false);
+    setText(fmtBirthday(parsed));
+    if (parsed !== value) onSave(parsed);
   };
-  const maxDay = month ? DAYS_IN_MONTH[Number(month) - 1] : 31;
-  const cls = "text-sm text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-forest-600 focus:ring-1 focus:ring-forest-600/20 rounded px-1 py-0.5 focus:outline-none transition-colors";
   return (
-    <span className="inline-flex gap-0.5">
-      <select
-        value={month} aria-label="Birthday month" className={cls}
-        onChange={e => {
-          const nm = e.target.value;
-          const nd = day && nm && Number(day) > DAYS_IN_MONTH[Number(nm) - 1] ? "" : day;
-          setMonth(nm); setDay(nd); commit(nm, nd);
-        }}
-      >
-        <option value="">—</option>
-        {MONTHS.map((label, i) => <option key={label} value={String(i + 1).padStart(2, "0")}>{label}</option>)}
-      </select>
-      <select
-        value={day} aria-label="Birthday day" className={cls}
-        onChange={e => { setDay(e.target.value); commit(month, e.target.value); }}
-      >
-        <option value="">—</option>
-        {Array.from({ length: maxDay }, (_, i) => String(i + 1).padStart(2, "0")).map(v => <option key={v} value={v}>{Number(v)}</option>)}
-      </select>
-    </span>
+    <input
+      type="text"
+      aria-label="Birthday"
+      title={invalid ? "Try a format like Feb 1 or 2/1" : "Type a date like Feb 1 or 2/1"}
+      placeholder="e.g. Feb 1"
+      value={text === "—" ? "" : text}
+      onFocus={e => e.target.select()}
+      onChange={e => { setText(e.target.value); setInvalid(false); }}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") { setText(fmtBirthday(value)); setInvalid(false); }
+      }}
+      className={`w-20 text-sm text-gray-800 bg-transparent border rounded px-1 py-0.5 focus:outline-none focus:ring-1 transition-colors placeholder-gray-300 ${
+        invalid ? "border-red-400 focus:ring-red-400/30" : "border-transparent hover:border-gray-300 focus:border-forest-600 focus:ring-forest-600/20"
+      }`}
+    />
   );
 }
 

@@ -13,6 +13,13 @@ import {
   getAllItems,
 } from "@/lib/airtable";
 import type { Tenant, Contract } from "@/lib/types";
+import { getShoutoutsSince } from "@/lib/shoutouts";
+import {
+  buildShoutoutsSectionHtml,
+  parseBullets,
+  shoutoutLeaderboard,
+  takeawaysPrompt,
+} from "@/lib/weekly-shoutouts";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -80,7 +87,9 @@ export async function POST(req: NextRequest) {
   const ago = sevenDaysAgo();
 
   // Fetch all data in parallel
-  const [allStaff, tenants, opps, contacts, allActivities, allItems] =
+  // Shoutouts use the exact running 7 days (to the minute), not calendar days
+  const shoutoutsSinceIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const [allStaff, tenants, opps, contacts, allActivities, allItems, weekShoutouts] =
     await Promise.all([
       getStaffMembers().catch(() => []),
       getTenants().catch(() => []),
@@ -88,6 +97,7 @@ export async function POST(req: NextRequest) {
       getClientContacts().catch(() => []),
       getAllActivities().catch(() => []),
       getAllItems().catch(() => []),
+      getShoutoutsSince(shoutoutsSinceIso),
     ]);
 
   const clientTenants = tenants.filter((t) => t.isTTT !== false);
@@ -185,6 +195,18 @@ export async function POST(req: NextRequest) {
   const soldValue = recentSold.reduce((s, i) => s + (i.salePrice || i.valueMid || 0), 0);
   const donatedCount = recentDonated.length;
 
+  // ── AI: shoutout takeaways (runs alongside the announcements call) ──────────
+  const takeawaysPromise: Promise<string[]> = weekShoutouts.length === 0
+    ? Promise.resolve([])
+    : anthropic.messages
+        .create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 600,
+          messages: [{ role: "user", content: takeawaysPrompt([...weekShoutouts].reverse()) }],
+        })
+        .then((msg) => parseBullets(msg.content[0]?.type === "text" ? msg.content[0].text : ""))
+        .catch((e) => { console.error("[company-email] shoutout takeaways failed:", e); return []; });
+
   // ── AI: format announcements as bullets ──────────────────────────────────────
   let announcementBullets: string[] = [];
   if (announcementsText.trim()) {
@@ -208,6 +230,8 @@ export async function POST(req: NextRequest) {
         .filter(Boolean);
     } catch { /* non-fatal — fall back to raw text */ }
   }
+
+  const shoutoutTakeaways = await takeawaysPromise;
 
   // ── Email date helpers ───────────────────────────────────────────────────────
   const reportDate = new Date().toLocaleDateString("en-US", {
@@ -278,6 +302,14 @@ export async function POST(req: NextRequest) {
             )
             .join("")}
         </tr></table>`;
+
+  // ── Section: Shoutouts ────────────────────────────────────────────────────────
+  const shoutoutsContent = buildShoutoutsSectionHtml({
+    shoutouts: weekShoutouts,
+    leaderboard: shoutoutLeaderboard(weekShoutouts),
+    takeaways: shoutoutTakeaways,
+    colors: { sage: SAGE, tint: TINT, dark: DARK, muted: MUTED },
+  });
 
   // ── Section: New Projects ─────────────────────────────────────────────────────
   const newProjectsContent =
@@ -381,6 +413,7 @@ export async function POST(req: NextRequest) {
 
   ${section("Weekly Announcements", announcementsContent)}
   ${section("Our People" + (newStaffWithImages.length > 0 ? ` &mdash; Welcome Aboard!` : ""), ourPeopleContent)}
+  ${section(`Shoutouts &mdash; ${weekRangeLabel}`, shoutoutsContent)}
   ${section(`New Projects &mdash; ${weekRangeLabel}`, newProjectsContent)}
   ${section("Leads &amp; Hopeful Projects", salesContent)}
   ${section("Rehoming Our Clients&#39; Treasures", rehomingContent)}

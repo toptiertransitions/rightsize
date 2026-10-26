@@ -68,6 +68,32 @@ export async function getRecentShoutouts(limit = 50): Promise<Shoutout[]> {
   }
 }
 
+/** Every shoutout created at or after `sinceIso`, newest first. Empty (never throws) on failure. */
+export async function getShoutoutsSince(sinceIso: string): Promise<Shoutout[]> {
+  const out: Shoutout[] = [];
+  try {
+    let offset = "";
+    for (let page = 0; page < 10; page++) {
+      const res = await atFetch(`?pageSize=100&sort[0][field]=CreatedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`);
+      if (!res.ok) {
+        console.error("[shoutouts] since failed:", res.status, await res.text().catch(() => ""));
+        break;
+      }
+      const data = await res.json();
+      const batch = (data.records as { id: string; fields: Record<string, unknown> }[]).map(mapShoutout);
+      for (const s of batch) {
+        if (s.createdAt < sinceIso) return out;
+        if (s.message) out.push(s);
+      }
+      if (!data.offset) break;
+      offset = data.offset;
+    }
+  } catch (e) {
+    console.error("[shoutouts] since failed:", e);
+  }
+  return out;
+}
+
 export async function getShoutout(id: string): Promise<Shoutout | null> {
   const res = await atFetch(`/${id}`);
   if (!res.ok) return null;

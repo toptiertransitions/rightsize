@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Megaphone, Pin, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SearchCombobox } from "@/components/ui/SearchCombobox";
 import type { Shoutout } from "@/lib/shoutouts";
 
 const MAX_LENGTH = 1500; // matches SHOUTOUT_MAX_LENGTH (lib/shoutouts.ts is server-only)
@@ -68,7 +69,7 @@ export function ShoutoutsSection({
   currentUserId: string;
   canGive: boolean;
   isAdmin: boolean;
-  team: { clerkUserId: string; name: string }[];
+  team: { clerkUserId: string; name: string; role?: string }[];
 }) {
   const [shoutouts, setShoutouts] = useState(initialShoutouts);
   const [showCount, setShowCount] = useState(FEED_PAGE);
@@ -88,6 +89,7 @@ export function ShoutoutsSection({
 
   const mine = useMemo(() => shoutouts.filter((s) => s.recipientClerkId === currentUserId), [shoutouts, currentUserId]);
   const recipient = team.find((t) => t.clerkUserId === recipientId);
+  const teamOptions = useMemo(() => team.map((t) => ({ id: t.clerkUserId, label: t.name, sublabel: t.role })), [team]);
 
   function resetComposer() {
     setComposing(false);
@@ -156,14 +158,15 @@ export function ShoutoutsSection({
           {!reviewing ? (
             <>
               <label className="block text-xs font-medium text-gray-500 mb-1">Who are you recognizing?</label>
-              <select
+              <SearchCombobox
                 value={recipientId}
-                onChange={(e) => setRecipientId(e.target.value)}
-                className="w-full sm:w-80 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-forest-600/30"
-              >
-                <option value="">Select a team member</option>
-                {team.map((t) => <option key={t.clerkUserId} value={t.clerkUserId}>{t.name}</option>)}
-              </select>
+                onChange={setRecipientId}
+                options={teamOptions}
+                placeholder="Start typing a name…"
+                ariaLabel="Who are you recognizing?"
+                className="w-full sm:w-80"
+                autoFocus
+              />
               <label className="block text-xs font-medium text-gray-500 mt-4 mb-1">Your shoutout</label>
               <textarea
                 value={message}
