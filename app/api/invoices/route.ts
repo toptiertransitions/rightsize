@@ -21,7 +21,7 @@ import {
 import { getProjectNotes } from "@/lib/airtable-notes";
 import { getAdminEmails } from "@/lib/admin-notifications";
 import { AIRTABLE_TABLES } from "@/lib/config";
-import { createQBOInvoice } from "@/lib/qbo";
+import { createQBOInvoice, depositQBOLine } from "@/lib/qbo";
 import { buildInvoiceEmail, buildWrappedNotificationEmail } from "@/lib/email";
 import { Resend } from "resend";
 import type { Invoice } from "@/lib/types";
@@ -158,14 +158,8 @@ export async function POST(req: NextRequest) {
       let qboLineItems: Array<{ serviceName: string; hours: number; rate: number; qboItemId?: string }>;
 
       if (type === "Deposit") {
-        // Deposit: single line item with qty=1, rate=amount
-        const svc = serviceMap.get(serviceId);
-        qboLineItems = [{
-          serviceName: serviceName || "Deposit",
-          hours: 1,
-          rate: amount,
-          qboItemId: svc?.qboItemId,
-        }];
+        // Deposit: one "Services" line, e.g. "40% Deposit", qty 1 at the deposit amount
+        qboLineItems = [depositQBOLine(amount, depositType === "PercentOfEstimate" ? depositPercent : undefined)];
       } else {
         // Full: build from explicit lineItems, or fall back to a single line for "specific amount" invoices
         if (lineItems && lineItems.length > 0) {

@@ -277,6 +277,20 @@ async function findOrCreateQBOItem(serviceName: string): Promise<string> {
   return created.Item.Id;
 }
 
+/**
+ * QBO line for a deposit invoice: always the generic "Services" product,
+ * described as e.g. "40% Deposit", qty 1 at the deposit amount. Never the
+ * contract's first service.
+ */
+export function depositQBOLine(amount: number, percent?: number) {
+  return {
+    serviceName: "Services",
+    description: percent ? `${percent}% Deposit` : "Deposit",
+    hours: 1,
+    rate: amount,
+  };
+}
+
 export async function createQBOInvoice(opts: {
   customerName: string;
   lineItems: Array<{
@@ -284,6 +298,8 @@ export async function createQBOInvoice(opts: {
     hours: number;
     rate: number;
     qboItemId?: string;
+    /** Overrides the default "Name (N hrs @ $X/hr)" description */
+    description?: string;
   }>;
   memo?: string;
 }): Promise<{ id: string; docNumber: string }> {
@@ -296,7 +312,7 @@ export async function createQBOInvoice(opts: {
     lines.push({
       Amount: Math.round(item.hours * item.rate * 100) / 100,
       DetailType: "SalesItemLineDetail",
-      Description: `${item.serviceName} (${item.hours} hrs @ $${item.rate}/hr)`,
+      Description: item.description ?? `${item.serviceName} (${item.hours} hrs @ $${item.rate}/hr)`,
       SalesItemLineDetail: {
         ItemRef: { value: itemId },
         Qty: item.hours,
