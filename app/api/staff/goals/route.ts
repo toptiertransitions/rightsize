@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole } from "@/lib/airtable";
 import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
 import { normalizeMonthDay } from "@/lib/about-me";
@@ -35,7 +35,7 @@ export interface StaffGoalRow {
   role: string;
   hireDate?: string;
   birthday?: string; // "MM-DD"
-  headshot?: string; // Cloudinary URL; shown on client Partners page when this person is the Team Lead
+  profilePhoto?: string; // Clerk profile picture (only if they have a real one); also their client-facing headshot
   roleType?: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
@@ -64,7 +64,6 @@ function mapRecord(record: AirtableRecord): StaffGoalRow {
     role: toStr(f["Role"]) || "TTTStaff",
     hireDate: toStr(f["HireDate"]) || undefined,
     birthday: normalizeMonthDay(toStr(f["Birthday"])) ?? undefined,
-    headshot: toStr(f["Headshot"]) || undefined,
     roleType:
       f["RoleType"] === "Staff" || f["RoleType"] === "Team Lead"
         ? (f["RoleType"] as "Staff" | "Team Lead")
@@ -75,6 +74,23 @@ function mapRecord(record: AirtableRecord): StaffGoalRow {
     skillIds,
     updatedAt: toStr(f["LastModifiedTime"]) || toStr(f["LastModifiedAt"]) || undefined,
   };
+}
+
+// Profile pictures for the Staff Goals photo column. Clerk's generated
+// default avatar (hasImage false) is left out so "no photo yet" is visible.
+async function attachProfilePhotos(staff: StaffGoalRow[]) {
+  const ids = staff.map((s) => s.clerkUserId).filter(Boolean);
+  try {
+    const clerk = await clerkClient();
+    const photos = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data } = await clerk.users.getUserList({ userId: ids.slice(i, i + 100), limit: 100 });
+      for (const u of data) if (u.hasImage) photos.set(u.id, u.imageUrl);
+    }
+    for (const s of staff) s.profilePhoto = photos.get(s.clerkUserId);
+  } catch (e) {
+    console.error("[staff/goals] profile photo lookup failed:", e); // non-fatal
+  }
 }
 
 // ─── GET — fetch all active TTTStaff + TTTManager (+ TTTTeamLead on request) with goals fields
@@ -118,6 +134,7 @@ export async function GET(req: NextRequest) {
     // Hide suspended/deleted staff (Clerk-side; Airtable's IsActive doesn't track this)
     const excludedIds = await getSuspendedOrDeletedClerkUserIds(allStaff.map((s) => s.clerkUserId));
     const staff = allStaff.filter((s) => !excludedIds.has(s.clerkUserId));
+    if (includeTeamLeads) await attachProfilePhotos(staff);
     return NextResponse.json({ staff });
   } catch (e) {
     console.error("[staff/goals GET]", e);
@@ -139,7 +156,6 @@ export async function PATCH(req: NextRequest) {
     id: string;
     hireDate?: string;
     birthday?: string | null;
-    headshot?: string | null;
     roleType?: string;
     minWeeklyHours?: number | null;
     targetWeeklyHours?: number | null;
@@ -161,11 +177,6 @@ export async function PATCH(req: NextRequest) {
     const md = rest.birthday ? normalizeMonthDay(rest.birthday) : null;
     if (rest.birthday && !md) return NextResponse.json({ error: "Birthday must be a valid month and day" }, { status: 400 });
     fields["Birthday"] = md ?? "";
-  }
-  if (rest.headshot !== undefined) {
-    const url = (rest.headshot ?? "").trim();
-    if (url && !/^https:\/\/res\.cloudinary\.com\//.test(url)) return NextResponse.json({ error: "Headshot must be an uploaded image" }, { status: 400 });
-    fields["Headshot"] = url || null;
   }
   if (rest.roleType !== undefined) fields["RoleType"] = rest.roleType || null;
   if (rest.minWeeklyHours !== undefined) fields["MinWeeklyHours"] = rest.minWeeklyHours ?? null;

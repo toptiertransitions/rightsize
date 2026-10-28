@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { prepareImageForUpload } from "@/lib/image-utils";
 import { IMAGE_ACCEPT, previewUrl, uploadErrorMessage, uploadImageFile } from "./ImageUploadField";
 
 // Compact headshot slot for table rows: a small circle that uploads and
@@ -17,12 +18,18 @@ export function AvatarUploadButton({
   theme = "light",
   disabled,
   size = 36,
+  onUploadFile,
+  removable = true,
 }: {
   value?: string;
   /** Persist the new URL ("" to remove). Throw to show an error. */
-  onSave: (url: string) => Promise<void>;
+  onSave?: (url: string) => Promise<void>;
+  /** Handle the picked (already JPEG-normalized) file yourself instead of the Cloudinary upload. */
+  onUploadFile?: (file: File) => Promise<void>;
+  /** Show a Remove link when a photo is set (default true) */
+  removable?: boolean;
   name: string;
-  folder: string;
+  folder?: string;
   theme?: "light" | "dark";
   disabled?: boolean;
   size?: number;
@@ -68,7 +75,7 @@ export function AvatarUploadButton({
           </span>
         )}
       </button>
-      {value && !disabled && !busy && (
+      {value && removable && onSave && !disabled && !busy && (
         <button
           type="button"
           onClick={() => run(() => onSave(""))}
@@ -85,7 +92,11 @@ export function AvatarUploadButton({
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";
-          if (f) run(async () => onSave(await uploadImageFile(f, folder, true)));
+          if (!f) return;
+          run(async () => {
+            if (onUploadFile) await onUploadFile(await prepareImageForUpload(f));
+            else await onSave?.(await uploadImageFile(f, folder ?? "uploads", true));
+          });
         }}
       />
     </div>

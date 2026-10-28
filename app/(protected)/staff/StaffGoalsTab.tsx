@@ -12,7 +12,8 @@ export interface StaffMemberWithGoals {
   role: string;
   hireDate?: string;
   birthday?: string; // "MM-DD"
-  headshot?: string; // shown to clients on the Partners page when this person is a project's Team Lead
+  clerkUserId?: string;
+  profilePhoto?: string; // their profile picture; clients see it on the Partners page when they're the Team Lead
   roleType?: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
@@ -338,7 +339,7 @@ function BulkEditBar({ count, values, onChange, onApply, onClear, saving }: {
 }
 
 // ─── Goals Row ────────────────────────────────────────────────────────────────
-function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle, onNumberBlur, onHireDateBlur, onBirthdaySave, onHeadshotSave }: {
+function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle, onNumberBlur, onHireDateBlur, onBirthdaySave, onPhotoUpload }: {
   member: StaffMemberWithGoals;
   canEdit: boolean;
   saveState: SaveState;
@@ -348,7 +349,7 @@ function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle
   onNumberBlur: (id: string, field: "minWeeklyHours" | "targetWeeklyHours" | "maxWeeklyHours", val: string) => void;
   onHireDateBlur: (id: string, val: string) => void;
   onBirthdaySave: (id: string, val: string) => void;
-  onHeadshotSave: (id: string, url: string) => Promise<void>;
+  onPhotoUpload: (member: StaffMemberWithGoals, file: File) => Promise<void>;
 }) {
   const rt = member.roleType ?? "Staff";
 
@@ -370,10 +371,10 @@ function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle
           <AvatarUploadButton
             size={32}
             name={member.displayName}
-            folder="staff-headshots"
-            value={member.headshot}
-            disabled={!canEdit}
-            onSave={url => onHeadshotSave(member.id, url)}
+            value={member.profilePhoto}
+            disabled={!canEdit || !member.clerkUserId}
+            removable={false}
+            onUploadFile={file => onPhotoUpload(member, file)}
           />
           <span>
             {member.displayName}
@@ -504,15 +505,15 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
     patchGoals(id, { birthday: value || null });
   }, [patchGoals]);
 
-  // Saves immediately; throws so the avatar shows the error inline.
-  const handleHeadshotSave = useCallback(async (id: string, url: string) => {
-    const res = await fetch("/api/staff/goals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, headshot: url || null }),
-    });
-    if (!res.ok) throw new Error("Upload failed");
-    setMembers(prev => prev.map(m => m.id === id ? { ...m, headshot: url || undefined, updatedAt: new Date().toISOString() } : m));
+  // Sets the person's profile picture (their one photo). Replace only, no remove.
+  const handlePhotoUpload = useCallback(async (member: StaffMemberWithGoals, file: File) => {
+    const fd = new FormData();
+    fd.append("clerkUserId", member.clerkUserId ?? "");
+    fd.append("file", file);
+    const res = await fetch("/api/staff/profile-photo", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.photoUrl) throw new Error("Upload failed");
+    setMembers(prev => prev.map(m => m.id === member.id ? { ...m, profilePhoto: data.photoUrl } : m));
   }, []);
 
   const handleSort = useCallback((field: SortField) => {
@@ -701,7 +702,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
                     onNumberBlur={handleNumberBlur}
                     onHireDateBlur={handleHireDateBlur}
                     onBirthdaySave={handleBirthdaySave}
-                    onHeadshotSave={handleHeadshotSave}
+                    onPhotoUpload={handlePhotoUpload}
                   />
                 ))
               )}
