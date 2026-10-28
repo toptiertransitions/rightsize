@@ -7,6 +7,8 @@ export interface PartnerCardData {
   slug: string;
   companyName: string;
   logo?: string;
+  headshot?: string;
+  contactName?: string;
   shortBio?: string;
   cardAttributes: string[]; // 2-3 showOnCard field labels/values, already formatted
   avgRating: number;
@@ -35,7 +37,7 @@ export function PartnerCard({ partner, categoryHref }: { partner: PartnerCardDat
       href={`${categoryHref}/${partner.slug}`}
       className="flex gap-4 rounded-2xl border border-gray-100 p-4 sm:p-5 bg-white hover:border-forest-200 hover:shadow-sm transition-all"
     >
-      <PartnerLogo logo={partner.logo} name={partner.companyName} />
+      <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.companyName} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap mb-0.5">
           <h3 className="text-sm font-semibold text-gray-900 truncate">{partner.companyName}</h3>

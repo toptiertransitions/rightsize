@@ -90,6 +90,8 @@ export interface MarketplacePartner {
   state: string;
   zip: string;
   logo: string;
+  /** Optional photo of the point of contact (POCName), shown on the logo corner */
+  headshot: string;
   shortBio: string;
   aboutUs: string;
   deliveryMode: MarketplaceDeliveryMode;

@@ -9,6 +9,8 @@ export interface PublicListingRow {
   slug: string;
   companyName: string;
   logo: string;
+  headshot: string;
+  pocName: string;
   shortBio: string;
   aboutUs: string;
   city: string;
@@ -101,6 +103,8 @@ export function CategoryListClient({ category, rows }: { category: CategoryInfo;
       slug: r.slug,
       companyName: r.companyName,
       logo: r.logo || undefined,
+      headshot: r.headshot || undefined,
+      contactName: r.pocName || undefined,
       shortBio: r.shortBio,
       cardAttributes: category.cardFields.map((f) => formatAttr(f, r.attributes[f.key])).filter((v): v is string => v !== null).slice(0, 3),
       avgRating: r.avgRating,

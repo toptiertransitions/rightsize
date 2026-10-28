@@ -11,6 +11,8 @@ interface Partner {
   slug: string;
   companyName: string;
   logo: string;
+  headshot?: string;
+  pocName?: string;
   aboutUs: string;
   shortBio: string;
   city: string;
@@ -84,7 +86,7 @@ export function ProfileClient({
         <Link href={`/marketplace/${categorySlug}`} className="text-xs text-gray-400 hover:text-forest-600">&larr; {categoryLabel}</Link>
 
         <div className="flex items-start gap-4 mt-4 mb-6">
-          <PartnerLogo logo={partner.logo} name={partner.companyName} size="desktop" />
+          <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.pocName} name={partner.companyName} size="desktop" />
           <div className="flex-1">
             <h1 className="text-xl font-bold text-gray-900">{partner.companyName}</h1>
             <p className="text-sm text-gray-500">{[partner.city, partner.state].filter(Boolean).join(", ")}</p>

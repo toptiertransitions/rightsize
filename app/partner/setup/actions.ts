@@ -64,6 +64,7 @@ export async function saveBusinessAction(input: z.input<typeof businessSchema>):
 
 const aboutSchema = z.object({
   logo: z.string().trim().max(500),
+  headshot: z.string().trim().max(500).optional(),
   shortBio: z.string().trim().max(160),
   aboutUs: z.string().trim().max(3000),
 });

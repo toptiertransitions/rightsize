@@ -314,7 +314,10 @@ export default async function PartnersPage({ searchParams }: PageProps) {
         id: syntheticId,
         vendorName: "Top Tier Transitions",
         category: "Move Manager",
-        logo: teamLeadClerkUser?.imageUrl || undefined,
+        logo: "/ttt-icon.png",
+        // Staff Goals headshot first; else their own Clerk photo (never Clerk's generated default avatar)
+        headshot: lead?.headshot || (teamLeadClerkUser?.hasImage ? teamLeadClerkUser.imageUrl : undefined),
+        contactName: teamLeadName,
         zipCodesServed: "",
         city: tenant.city ?? "",
         state: tenant.state ?? "",

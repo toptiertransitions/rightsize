@@ -72,7 +72,7 @@ function MatchCard({
         featured ? "border-forest-300 ring-1 ring-forest-200 shadow-sm" : "border-gray-200"
       }`}
     >
-      <PartnerLogo logo={partner.logo} name={partner.vendorName} />
+      <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.vendorName} />
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         {featured && <p className="text-xs font-semibold text-forest-600 uppercase tracking-wide">Best match</p>}
         <div className="flex items-center gap-2 flex-wrap">

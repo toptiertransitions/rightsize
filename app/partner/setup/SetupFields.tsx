@@ -4,8 +4,9 @@
 // screen) and the My Listing page (as editable cards). Mobile first:
 // 16px inputs (no iOS zoom), 48px tap targets.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ImagePlus, MapPin, Monitor, Shuffle, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, MapPin, Monitor, Shuffle, X } from "lucide-react";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { cn } from "@/lib/utils";
 import { IL_COUNTY_OPTIONS } from "@/lib/marketplace/counties";
 import { previewRadiusAction } from "./actions";
@@ -78,63 +79,32 @@ export function BusinessFields({ data, onChange, realtor = false }: { data: Busi
 
 export interface AboutData {
   logo: string;
+  /** Optional photo of the point of contact */
+  headshot: string;
   shortBio: string;
   aboutUs: string;
 }
 
 export function AboutFields({ data, onChange }: { data: AboutData; onChange: (d: AboutData) => void }) {
   const set = (patch: Partial<AboutData>) => onChange({ ...data, ...patch });
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-
-  async function upload(file: File) {
-    setUploading(true);
-    setUploadError("");
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("tenantId", "partner-logos");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.photoUrl) throw new Error(json.error || "Upload failed");
-      set({ logo: json.photoUrl });
-    } catch {
-      setUploadError("That didn't upload. Try a different image.");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   return (
     <div className="space-y-5">
-      <div>
-        <p className={labelCls}>Logo</p>
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="w-20 h-20 rounded-2xl border-2 border-dashed border-gray-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0 hover:border-forest-400"
-            aria-label={data.logo ? "Change logo" : "Upload logo"}
-          >
-            {data.logo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={data.logo} alt="Your logo" className="w-full h-full object-contain" />
-            ) : (
-              <ImagePlus className="w-7 h-7 text-gray-400" />
-            )}
-          </button>
-          <div className="text-sm">
-            <button type="button" onClick={() => fileRef.current?.click()} className="font-semibold text-forest-600 min-h-[44px]">
-              {uploading ? "Uploading…" : data.logo ? "Change logo" : "Upload your logo"}
-            </button>
-            {data.logo && !uploading && (
-              <button type="button" onClick={() => set({ logo: "" })} className="block text-xs text-gray-400 hover:text-gray-600">Remove</button>
-            )}
-            {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-        </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <ImageUploadField
+          label="Logo"
+          value={data.logo}
+          onChange={(logo) => set({ logo })}
+          folder="partner-logos"
+        />
+        <ImageUploadField
+          label="Your headshot (optional)"
+          hint="Families see it next to your logo."
+          shape="circle"
+          value={data.headshot}
+          onChange={(headshot) => set({ headshot })}
+          folder="partner-headshots"
+        />
       </div>
       <div>
         <label htmlFor="p-short" className={labelCls}>One-line description</label>

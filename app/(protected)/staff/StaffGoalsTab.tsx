@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { nextAnniversary, nextBirthday, normalizeMonthDay } from "@/lib/about-me";
+import { AvatarUploadButton } from "@/components/ui/AvatarUploadButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface StaffMemberWithGoals {
@@ -11,6 +12,7 @@ export interface StaffMemberWithGoals {
   role: string;
   hireDate?: string;
   birthday?: string; // "MM-DD"
+  headshot?: string; // shown to clients on the Partners page when this person is a project's Team Lead
   roleType?: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
@@ -336,7 +338,7 @@ function BulkEditBar({ count, values, onChange, onApply, onClear, saving }: {
 }
 
 // ─── Goals Row ────────────────────────────────────────────────────────────────
-function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle, onNumberBlur, onHireDateBlur, onBirthdaySave }: {
+function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle, onNumberBlur, onHireDateBlur, onBirthdaySave, onHeadshotSave }: {
   member: StaffMemberWithGoals;
   canEdit: boolean;
   saveState: SaveState;
@@ -346,6 +348,7 @@ function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle
   onNumberBlur: (id: string, field: "minWeeklyHours" | "targetWeeklyHours" | "maxWeeklyHours", val: string) => void;
   onHireDateBlur: (id: string, val: string) => void;
   onBirthdaySave: (id: string, val: string) => void;
+  onHeadshotSave: (id: string, url: string) => Promise<void>;
 }) {
   const rt = member.roleType ?? "Staff";
 
@@ -362,9 +365,21 @@ function GoalsRow({ member, canEdit, saveState, selected, onSelect, onRoleToggle
         )}
       </td>
       {/* Name */}
-      <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-        {member.displayName}
-        <SaveIcon state={saveState} />
+      <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">
+        <div className="flex items-center gap-3">
+          <AvatarUploadButton
+            size={32}
+            name={member.displayName}
+            folder="staff-headshots"
+            value={member.headshot}
+            disabled={!canEdit}
+            onSave={url => onHeadshotSave(member.id, url)}
+          />
+          <span>
+            {member.displayName}
+            <SaveIcon state={saveState} />
+          </span>
+        </div>
       </td>
       {/* Hire Date */}
       <td className="px-4 py-3">
@@ -488,6 +503,17 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
     setMembers(prev => prev.map(m => m.id === id ? { ...m, birthday: value || undefined, updatedAt: new Date().toISOString() } : m));
     patchGoals(id, { birthday: value || null });
   }, [patchGoals]);
+
+  // Saves immediately; throws so the avatar shows the error inline.
+  const handleHeadshotSave = useCallback(async (id: string, url: string) => {
+    const res = await fetch("/api/staff/goals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, headshot: url || null }),
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, headshot: url || undefined, updatedAt: new Date().toISOString() } : m));
+  }, []);
 
   const handleSort = useCallback((field: SortField) => {
     setSortField(prev => {
@@ -675,6 +701,7 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
                     onNumberBlur={handleNumberBlur}
                     onHireDateBlur={handleHireDateBlur}
                     onBirthdaySave={handleBirthdaySave}
+                    onHeadshotSave={handleHeadshotSave}
                   />
                 ))
               )}

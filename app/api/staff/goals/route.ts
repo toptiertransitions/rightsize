@@ -35,6 +35,7 @@ export interface StaffGoalRow {
   role: string;
   hireDate?: string;
   birthday?: string; // "MM-DD"
+  headshot?: string; // Cloudinary URL; shown on client Partners page when this person is the Team Lead
   roleType?: "Staff" | "Team Lead";
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
@@ -63,6 +64,7 @@ function mapRecord(record: AirtableRecord): StaffGoalRow {
     role: toStr(f["Role"]) || "TTTStaff",
     hireDate: toStr(f["HireDate"]) || undefined,
     birthday: normalizeMonthDay(toStr(f["Birthday"])) ?? undefined,
+    headshot: toStr(f["Headshot"]) || undefined,
     roleType:
       f["RoleType"] === "Staff" || f["RoleType"] === "Team Lead"
         ? (f["RoleType"] as "Staff" | "Team Lead")
@@ -137,6 +139,7 @@ export async function PATCH(req: NextRequest) {
     id: string;
     hireDate?: string;
     birthday?: string | null;
+    headshot?: string | null;
     roleType?: string;
     minWeeklyHours?: number | null;
     targetWeeklyHours?: number | null;
@@ -158,6 +161,11 @@ export async function PATCH(req: NextRequest) {
     const md = rest.birthday ? normalizeMonthDay(rest.birthday) : null;
     if (rest.birthday && !md) return NextResponse.json({ error: "Birthday must be a valid month and day" }, { status: 400 });
     fields["Birthday"] = md ?? "";
+  }
+  if (rest.headshot !== undefined) {
+    const url = (rest.headshot ?? "").trim();
+    if (url && !/^https:\/\/res\.cloudinary\.com\//.test(url)) return NextResponse.json({ error: "Headshot must be an uploaded image" }, { status: 400 });
+    fields["Headshot"] = url || null;
   }
   if (rest.roleType !== undefined) fields["RoleType"] = rest.roleType || null;
   if (rest.minWeeklyHours !== undefined) fields["MinWeeklyHours"] = rest.minWeeklyHours ?? null;

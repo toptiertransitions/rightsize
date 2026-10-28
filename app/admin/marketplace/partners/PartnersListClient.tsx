@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MarketplacePartner, MarketplaceListingStatus, MarketplaceDeliveryMode } from "@/lib/marketplace/types";
 import type { PartnerReviewSummary } from "@/lib/partners/reviews";
-import { bulkUpdatePartnerLifecycleAction } from "../actions";
+import { bulkUpdatePartnerLifecycleAction, updatePartnerOverviewAction } from "../actions";
+import { AvatarUploadButton } from "@/components/ui/AvatarUploadButton";
 import { setDisplayReviewScoreAction } from "../reviews/actions";
 
 interface Row {
@@ -53,6 +54,7 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
   const [incompleteOnly, setIncompleteOnly] = useState(false);
   const [referralEligibleOnly, setReferralEligibleOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [headshots, setHeadshots] = useState<Record<string, string>>({}); // saved this session
   const [bulkMsg, setBulkMsg] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
 
@@ -164,6 +166,7 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
           <thead>
             <tr className="border-b border-gray-800 text-left text-xs text-gray-500 uppercase tracking-wide">
               <th className="px-4 py-2.5 w-8"></th>
+              <th className="px-4 py-2.5" title="Optional photo of the point of contact, shown on the partner's card">Headshot</th>
               <th className="px-4 py-2.5">Company</th>
               <th className="px-4 py-2.5">Categories</th>
               <th className="px-4 py-2.5">Lifecycle</th>
@@ -179,6 +182,20 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
               <tr key={r.partner.id} className="border-b border-gray-800/60 last:border-0 hover:bg-gray-800/30">
                 <td className="px-4 py-2.5">
                   <input type="checkbox" checked={selected.has(r.partner.id)} onChange={() => toggleSelected(r.partner.id)} />
+                </td>
+                <td className="px-4 py-1.5">
+                  <AvatarUploadButton
+                    theme="dark"
+                    size={32}
+                    name={r.partner.pocName || r.partner.companyName}
+                    folder="partner-headshots"
+                    value={headshots[r.partner.id] ?? r.partner.headshot}
+                    onSave={async (url) => {
+                      const result = await updatePartnerOverviewAction(r.partner.id, { headshot: url });
+                      if (!result.ok) throw new Error(result.error);
+                      setHeadshots((h) => ({ ...h, [r.partner.id]: url }));
+                    }}
+                  />
                 </td>
                 <td className="px-4 py-2.5">
                   <Link href={`/admin/marketplace/partners/${r.partner.id}`} className="text-gray-100 hover:text-forest-400 font-medium">
@@ -223,7 +240,7 @@ export function PartnersListClient({ rows, categories, canToggleScore }: Props) 
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">No partners match these filters.</td></tr>
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-500">No partners match these filters.</td></tr>
             )}
           </tbody>
         </table>

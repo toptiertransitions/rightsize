@@ -4,7 +4,7 @@
 import { useBackClose } from "@/lib/back-button";
 import { useEffect } from "react";
 import type { PartnerProfile } from "@/lib/partners/types";
-import { PartnerLogo } from "./PartnerLogo";
+import { PartnerLogo, transformHeadshotUrl } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
 
 function cleanDomain(url: string): string {
@@ -37,7 +37,7 @@ export function PartnerDetailModal({ partner, onClose }: { partner: PartnerProfi
       >
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 shrink-0">
           <div className="flex items-center gap-3.5 min-w-0">
-            <PartnerLogo logo={partner.logo} name={partner.vendorName} size="mobile" />
+            <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.vendorName} size="mobile" />
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-gray-900 leading-snug truncate">{partner.vendorName}</h2>
               {!partner.isTeamLead && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} hidden={partner.ratingHidden} />}
@@ -55,6 +55,17 @@ export function PartnerDetailModal({ partner, onClose }: { partner: PartnerProfi
         </div>
 
         <div className="overflow-y-auto px-6 pb-6 space-y-6">
+          {partner.headshot && partner.contactName && (
+            <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={transformHeadshotUrl(partner.headshot, 112)} alt={partner.contactName} className="w-11 h-11 rounded-full object-cover ring-2 ring-white shadow-sm flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{partner.contactName}</p>
+                <p className="text-xs text-gray-500">Your point of contact</p>
+              </div>
+            </div>
+          )}
+
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">About</h3>
             <p className="text-sm text-gray-700 leading-relaxed">

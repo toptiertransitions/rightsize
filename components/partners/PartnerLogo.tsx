@@ -32,8 +32,18 @@ function transformLogoUrl(url: string): string {
   return url.replace("/upload/", "/upload/c_pad,w_160,h_160,b_white,f_auto,q_auto,dpr_auto/");
 }
 
+// Face-centered square crop so any headshot (selfie, cropped portrait,
+// full-body) reads as a clean circular avatar.
+export function transformHeadshotUrl(url: string, px = 96): string {
+  if (!url.includes("res.cloudinary.com") || !url.includes("/upload/")) return url;
+  return url.replace("/upload/", `/upload/c_thumb,g_face,z_0.7,w_${px},h_${px},f_auto,q_auto,dpr_auto/`);
+}
+
 interface Props {
   logo?: string;
+  /** Optional person photo, shown as a small circle on the logo's corner */
+  headshot?: string;
+  headshotName?: string;
   name: string;
   size?: "mobile" | "desktop" | "tray";
 }
@@ -47,8 +57,33 @@ const SIZE_CLASSES: Record<NonNullable<Props["size"]>, string> = {
   tray: "w-[54px] h-[54px]",
 };
 
-export function PartnerLogo({ logo, name, size = "desktop" }: Props) {
-  const dims = SIZE_CLASSES[size];
+// Headshot badge size per logo size: big enough to recognize a face, small
+// enough that the company logo stays the primary mark.
+const HEADSHOT_CLASSES: Record<NonNullable<Props["size"]>, string> = {
+  mobile: "w-7 h-7 -bottom-2 -right-2",
+  desktop: "w-7 h-7 sm:w-8 sm:h-8 -bottom-2 -right-2",
+  tray: "w-5 h-5 -bottom-1.5 -right-1.5",
+};
+
+export function PartnerLogo({ logo, headshot, headshotName, name, size = "desktop" }: Props) {
+  const mark = <LogoMark logo={logo} name={name} size={size} />;
+  if (!headshot) return mark;
+  return (
+    <div className="relative flex-shrink-0 self-start">
+      {mark}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={transformHeadshotUrl(headshot)}
+        alt={headshotName ? `${headshotName}` : `${name} contact`}
+        title={headshotName || undefined}
+        className={`absolute ${HEADSHOT_CLASSES[size]} rounded-full object-cover bg-gray-100 ring-2 ring-white shadow-sm`}
+      />
+    </div>
+  );
+}
+
+function LogoMark({ logo, name, size = "desktop" }: Pick<Props, "logo" | "name" | "size">) {
+  const dims = SIZE_CLASSES[size ?? "desktop"];
   const isTray = size === "tray";
 
   if (logo) {

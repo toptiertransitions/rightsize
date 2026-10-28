@@ -69,6 +69,8 @@ export default async function PartnerProfilePage({ params }: { params: Promise<{
         slug: partner.slug,
         companyName: cat.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
         logo: partner.logo,
+        headshot: partner.headshot,
+        pocName: partner.pocName,
         aboutUs: partner.aboutUs,
         shortBio: partner.shortBio,
         city: partner.city,

@@ -33,7 +33,7 @@ export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, is
   if (partner.isTeamLead) {
     return (
       <div className="relative flex gap-4 rounded-2xl border border-forest-200 bg-forest-50/40 p-4 sm:p-5">
-        <PartnerLogo logo={partner.logo} name={partner.vendorName} />
+        <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.vendorName} />
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div>
             <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
@@ -71,7 +71,7 @@ export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, is
         </span>
       )}
 
-      <PartnerLogo logo={partner.logo} name={partner.vendorName} />
+      <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.vendorName} />
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div>

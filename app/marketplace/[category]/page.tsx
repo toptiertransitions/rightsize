@@ -65,6 +65,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
         slug: partner.slug,
         companyName: category.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
         logo: partner.logo,
+        headshot: partner.headshot,
+        pocName: partner.pocName,
         shortBio: partner.shortBio,
         aboutUs: partner.aboutUs,
         city: partner.city,

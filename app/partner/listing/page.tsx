@@ -29,7 +29,7 @@ export default async function PartnerListingPage() {
         state: partner.state,
         zip: partner.zip,
       }}
-      about={{ logo: partner.logo, shortBio: partner.shortBio, aboutUs: partner.aboutUs }}
+      about={{ logo: partner.logo, headshot: partner.headshot, shortBio: partner.shortBio, aboutUs: partner.aboutUs }}
       area={areaFormFor(partner)}
       listings={listings.map((l) => ({ id: l.id, label: l.category.label, status: l.status, fieldSchema: l.category.fieldSchema, attributes: l.attributes }))}
     />

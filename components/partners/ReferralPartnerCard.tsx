@@ -36,7 +36,7 @@ export function ReferralPartnerCard({ tenantId, partner, categoryLabel, canRemov
       </span>
 
       <div className="flex gap-4">
-        <PartnerLogo logo={partner.logo} name={partner.vendorName} />
+        <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.vendorName} />
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div>
             <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug line-clamp-2">{partner.vendorName}</h3>

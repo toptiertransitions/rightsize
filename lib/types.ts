@@ -59,6 +59,7 @@ export interface StaffMember {
   pinColor?: string;     // Hex color for map pin, e.g. "#4F46E5"
   hireDate?: string;     // YYYY-MM-DD
   birthday?: string;     // "MM-DD" (no year)
+  headshot?: string;     // Cloudinary URL, set on /staff > Staff Goals
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
 }

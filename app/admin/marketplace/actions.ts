@@ -61,6 +61,7 @@ export async function updatePartnerOverviewAction(
     zip?: string;
     deliveryMode?: "In-person" | "Virtual" | "Both";
     logo?: string;
+    headshot?: string;
     shortBio?: string;
     aboutUs?: string;
     languages?: string[];

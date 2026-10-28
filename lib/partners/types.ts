@@ -46,6 +46,10 @@ export interface PartnerProfile {
    * display. */
   isTeamLead?: boolean;
   teamLeadName?: string;
+  /** Optional person photo (partner point of contact, or the TTT Team Lead) */
+  headshot?: string;
+  /** Name of the person in the headshot */
+  contactName?: string;
   /** Vendor contact phone — populated both for the synthetic Team Lead
    * entry and for real partners (via legacyAdapter.ts). Shown to the
    * client once a partner is selected (see SelectedPartnersTray.tsx). */

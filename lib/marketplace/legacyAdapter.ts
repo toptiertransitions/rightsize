@@ -102,6 +102,8 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
       vendorName: category.label === "Realtor" ? realtorDisplayName(partner) : partner.companyName,
       category: category.label as PartnerCategory,
       logo: partner.logo || undefined,
+      headshot: partner.headshot || undefined,
+      contactName: partner.pocName || undefined,
       website: partner.website || undefined,
       zipCodesServed: partner.serviceArea.zips.join(","),
       city: partner.city,

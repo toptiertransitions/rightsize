@@ -102,7 +102,7 @@ export function SelectedPartnersTray({ categories, selectedPartners, onEmptyClic
                 <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-wider text-gray-400">
                   {category}
                 </span>
-                <PartnerLogo logo={partner.logo} name={partner.vendorName} size="tray" />
+                <PartnerLogo logo={partner.logo} headshot={partner.headshot} headshotName={partner.contactName} name={partner.vendorName} size="tray" />
               </div>
 
               <p

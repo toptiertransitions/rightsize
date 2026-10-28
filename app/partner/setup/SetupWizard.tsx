@@ -15,6 +15,7 @@ import {
   businessValid, areaValid, parseZipText, areaSaveInput, fieldScreenAnswered,
   type BusinessData, type AboutData, type AreaData,
 } from "./SetupFields";
+import { PartnerLogo } from "@/components/partners/PartnerLogo";
 import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, submitSetupAction } from "./actions";
 import {
   fieldScreensFor, setupDetailsFields, skipsAreaStep, inPersonOnly, partnerCategoryLabel, type FieldScreen,
@@ -378,7 +379,10 @@ function Review({ business, about, area, listings, criteria, onEdit }: {
         <p>{[business.pocName, business.phone, business.website].filter(Boolean).join(" · ")}</p>
       </ReviewCard>
       <ReviewCard title="About" onEdit={() => onEdit("about")}>
-        <p>{about.shortBio || <span className="italic text-gray-400">No description yet</span>}</p>
+        <div className="flex items-center gap-4">
+          <PartnerLogo logo={about.logo} headshot={about.headshot} headshotName={business.pocName} name={business.companyName || "Your business"} size="mobile" />
+          <p className="min-w-0">{about.shortBio || <span className="italic text-gray-400">No description yet</span>}</p>
+        </div>
       </ReviewCard>
       {area && (
         <ReviewCard title="Where you work" onEdit={() => onEdit("area")}>

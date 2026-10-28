@@ -167,6 +167,7 @@ function mapPartner(rec: AirtableRec): MarketplacePartner {
     state: str(f["State"]),
     zip: str(f["Zip"]),
     logo: str(f["Logo"]),
+    headshot: str(f["Headshot"]),
     shortBio: str(f["ShortBio"]),
     aboutUs: str(f["AboutUs"]),
     deliveryMode: (str(f["DeliveryMode"]) || "In-person") as MarketplacePartner["deliveryMode"],
@@ -258,6 +259,7 @@ export async function createPartner(data: CreatePartnerData): Promise<Marketplac
 interface UpdatePartnerData extends Partial<Omit<CreatePartnerData, "crmReferralCompanyId" | "localVendorId">> {
   crmReferralContactId?: string | null;
   logo?: string;
+  headshot?: string;
   shortBio?: string;
   aboutUs?: string;
   serviceArea?: MarketplaceServiceArea;
@@ -293,6 +295,7 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
   if (data.state !== undefined) fields["State"] = data.state;
   if (data.zip !== undefined) fields["Zip"] = data.zip;
   if (data.logo !== undefined) fields["Logo"] = data.logo;
+  if (data.headshot !== undefined) fields["Headshot"] = data.headshot;
   if (data.shortBio !== undefined) fields["ShortBio"] = data.shortBio;
   if (data.aboutUs !== undefined) fields["AboutUs"] = data.aboutUs;
   if (data.deliveryMode !== undefined) fields["DeliveryMode"] = data.deliveryMode;

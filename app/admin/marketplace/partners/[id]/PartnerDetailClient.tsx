@@ -20,6 +20,7 @@ import {
   invitePartnerToPortalAction,
 } from "../../actions";
 import { FieldInput } from "../../FieldInput";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { MatchCriteriaEditor } from "../../MatchCriteriaEditor";
 import type { PartnerCategory } from "@/lib/types";
 import { IL_COUNTY_OPTIONS, isKnownCounty, zipsForCounties } from "@/lib/marketplace/counties";
@@ -107,6 +108,7 @@ function OverviewTab({ partner }: { partner: MarketplacePartner }) {
     zip: partner.zip,
     deliveryMode: partner.deliveryMode,
     logo: partner.logo,
+    headshot: partner.headshot,
     shortBio: partner.shortBio,
     aboutUs: partner.aboutUs,
   });
@@ -122,7 +124,7 @@ function OverviewTab({ partner }: { partner: MarketplacePartner }) {
     setSaving(true);
     setMsg("");
     const payload = crmManaged
-      ? { deliveryMode: form.deliveryMode, logo: form.logo, shortBio: form.shortBio, aboutUs: form.aboutUs }
+      ? { deliveryMode: form.deliveryMode, logo: form.logo, headshot: form.headshot, shortBio: form.shortBio, aboutUs: form.aboutUs }
       : form;
     const result = await updatePartnerOverviewAction(partner.id, payload);
     setSaving(false);
@@ -163,7 +165,19 @@ function OverviewTab({ partner }: { partner: MarketplacePartner }) {
           <div><label className={labelCls}>Zip</label><input disabled={crmManaged} className={crmManaged ? disabledCls : inputCls} value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} /></div>
         </div>
       </div>
-      <div><label className={labelCls}>Logo URL</label><input className={inputCls} value={form.logo} onChange={(e) => setForm({ ...form, logo: e.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-4">
+        <ImageUploadField theme="dark" label="Logo" value={form.logo} onChange={(logo) => setForm({ ...form, logo })} folder="partner-logos" />
+        <ImageUploadField
+          theme="dark"
+          shape="circle"
+          label="Headshot (optional)"
+          hint={form.pocName ? `Photo of ${form.pocName}` : "Photo of the point of contact"}
+          value={form.headshot}
+          onChange={(headshot) => setForm({ ...form, headshot })}
+          folder="partner-headshots"
+        />
+      </div>
+      <p className="-mt-2 text-xs text-gray-500">Click Save to apply image changes.</p>
       <div><label className={labelCls}>Short Bio (card, ~160 chars)</label><input className={inputCls} value={form.shortBio} onChange={(e) => setForm({ ...form, shortBio: e.target.value })} /></div>
       <div><label className={labelCls}>About Us</label><textarea className={inputCls} rows={4} value={form.aboutUs} onChange={(e) => setForm({ ...form, aboutUs: e.target.value })} /></div>
       <div className="flex items-center gap-3">
