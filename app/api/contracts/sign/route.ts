@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
     );
   } catch { /* non-fatal */ }
 
-  // Notify TTTSales (to:) + TTTAdmin (cc:) with a team win email
+  // Notify TTTSales + TTTAdmin + TTTManager with a team win email
   try {
     const [staff, tenant] = await Promise.all([
       getStaffMembers().catch(() => []),
@@ -197,9 +197,10 @@ export async function POST(req: NextRequest) {
     const salesRecipients = activeStaff.filter((s) => s.role === "TTTSales").map((s) => s.email as string);
     // TTTAdmin users may be defined via env var (isTTTAdmin) rather than the StaffRoles table Role field
     const adminRecipients = activeStaff.filter((s) => s.role === "TTTAdmin" || isTTTAdmin(s.clerkUserId)).map((s) => s.email as string);
+    const managerRecipients = activeStaff.filter((s) => s.role === "TTTManager").map((s) => s.email as string);
 
-    // Always send to TTTSales + TTTAdmin (deduplicated)
-    const allRecipients = [...new Set([...salesRecipients, ...adminRecipients])];
+    // Always send to TTTSales + TTTAdmin + TTTManager (deduplicated)
+    const allRecipients = [...new Set([...salesRecipients, ...adminRecipients, ...managerRecipients].map((e) => e.toLowerCase()))];
     const toList = allRecipients;
     const ccList: string[] = [];
 
