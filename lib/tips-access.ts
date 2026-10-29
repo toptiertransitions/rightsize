@@ -12,3 +12,12 @@ export function isNonTTTClient(sysRole: string | null, tenants: Array<Pick<Tenan
   const known = tenants.filter((t): t is Pick<Tenant, "isTTT"> => !!t);
   return known.length > 0 && known.every((t) => t.isTTT !== true);
 }
+
+// Day of the year in Chicago, so the "Did you know?" tip changes daily and
+// is the same for the server render and the client.
+export function dayOfYearChicago(): number {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const today = Date.UTC(get("year"), get("month") - 1, get("day"));
+  return Math.floor((today - Date.UTC(get("year"), 0, 1)) / 86_400_000);
+}

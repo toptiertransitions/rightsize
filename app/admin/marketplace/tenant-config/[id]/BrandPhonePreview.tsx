@@ -15,11 +15,11 @@ import { useTenantPreview } from "./TenantPreviewContext";
 
 // Phone-sized live preview of what this community's residents see: Home,
 // Plan (with the community checklist), Partners (preferred partners ranked
-// first with their badge) and the Welcome screen. Reads the editors' live
+// first with their badge), Tips (self-serve residents) and the Welcome screen. Reads the editors' live
 // state from TenantPreviewContext and sets the brand's CSS variables on this
 // subtree only, so the real client components render in the brand's colors.
 
-type Screen = "home" | "plan" | "partners" | "welcome";
+type Screen = "home" | "plan" | "partners" | "tips" | "welcome";
 type Resident = "self" | "ttt";
 
 // Same order and icons as the app's bottom nav (components/layout/Header.tsx).
@@ -31,7 +31,7 @@ const NAV: Record<Resident, Array<{ label: string; icon: typeof House; screen?: 
     { label: "Plan", icon: Calendar, screen: "plan" },
     { label: "Catalog", icon: LayoutList },
     { label: "Partners", icon: Handshake, screen: "partners" },
-    { label: "Tips", icon: Lightbulb },
+    { label: "Tips", icon: Lightbulb, screen: "tips" },
   ],
   ttt: [
     { label: "Home", icon: House, screen: "home" },
@@ -93,7 +93,11 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
     box.scrollTo({ top, behavior: "smooth" });
   }, [pendingScroll, screen]);
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [resident]);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+    // Only self-serve residents have Tips
+    if (resident === "ttt") setScreen((cur) => (cur === "tips" ? "home" : cur));
+  }, [resident]);
 
   // Partners: the same matching the client Partners page runs, with this
   // community's preferred partners labeled and ranked first
@@ -155,8 +159,8 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <div className="flex gap-1 border border-gray-800 rounded-lg p-1">
-          {(["home", "plan", "partners", "welcome"] as const).map((k) => (
-            <button key={k} type="button" onClick={() => setScreen(k)} className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize ${screen === k ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"}`}>
+          {(["home", "plan", "partners", "tips", "welcome"] as const).map((k) => (
+            <button key={k} type="button" onClick={() => { setScreen(k); if (k === "tips") setResident("self"); }} className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize ${screen === k ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"}`}>
               {k}
             </button>
           ))}
@@ -209,6 +213,15 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
                 <span className="w-8 h-8 rounded-full bg-gray-300" />
               </div>
 
+              {screen === "tips" ? (
+                // The real Tips page, framed so its layout sees a phone-width screen
+                <iframe
+                  key={`${brand.primaryColor}${brand.secondaryColor}`}
+                  title="Tips preview"
+                  src={`/admin/marketplace/tenant-config/tips-preview?p=${brand.primaryColor.slice(1)}&s=${brand.secondaryColor.slice(1)}`}
+                  className="flex-1 w-full border-0 bg-cream-50"
+                />
+              ) : (
               <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4">
                 {screen === "home" && (
                   <div className="space-y-3">
@@ -236,7 +249,7 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
                         ? <Tile icon={<Handshake className="w-4 h-4" />} count="3" title="Partners on Your Team" go="View partners" to="partners" />
                         : <Tile icon={<House className="w-4 h-4" />} count="6" title="Rooms · 1,850 SF" go="View rooms" />}
                       <Tile icon={<Calendar className="w-4 h-4" />} title="Project Plan" sub="View timeline and plans" go="View plan" to="plan" wide={!selfServe} />
-                      {selfServe && <Tile icon={<Lightbulb className="w-4 h-4" />} title="Tips and Advice" sub="Guidance for every step" go="View tips" />}
+                      {selfServe && <Tile icon={<Lightbulb className="w-4 h-4" />} title="Tips and Advice" sub="Guidance for every step" go="View tips" to="tips" />}
                     </div>
                     <p className="text-[10px] text-gray-400 text-center pt-1">{powered}</p>
                   </div>
@@ -328,6 +341,7 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
                   </div>
                 )}
               </div>
+              )}
 
               <nav
                 className="flex-none bg-white border-t border-cream-200 grid pt-1.5 pb-4"
