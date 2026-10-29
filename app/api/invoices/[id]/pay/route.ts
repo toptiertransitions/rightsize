@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { getInvoiceById, updateInvoice, getInvoiceSettings, getTenantById } from "@/lib/airtable";
 import { buildPaymentReceiptEmail } from "@/lib/email";
+import { PAYMENT_PROCESSOR_ERROR_MSG, isGenericPaymentError } from "@/lib/payment-errors";
 
 // Public route — no auth required. Clients access this from the pay link in their email.
 // Card data is tokenized client-side by FluidPay; only the token reaches this server.
@@ -47,7 +48,7 @@ export async function POST(
   const fluidpayApiKey = process.env.FLUIDPAY_API_KEY;
   if (!fluidpayApiKey) {
     console.error("[pay] FLUIDPAY_API_KEY not configured");
-    return NextResponse.json({ error: "Payment processor is not configured. Please contact your coordinator." }, { status: 503 });
+    return NextResponse.json({ error: PAYMENT_PROCESSOR_ERROR_MSG }, { status: 503 });
   }
 
   const balance = invoice.amount - (invoice.paidAmount ?? 0);
@@ -124,10 +125,10 @@ export async function POST(
     clearTimeout(timeout);
     if ((err as Error)?.name === "AbortError") {
       console.error("[pay] FluidPay request timed out after 60s");
-      return NextResponse.json({ error: "The payment request timed out. Please try again." }, { status: 504 });
+      return NextResponse.json({ error: PAYMENT_PROCESSOR_ERROR_MSG }, { status: 504 });
     }
     console.error("[pay] FluidPay request failed:", err);
-    return NextResponse.json({ error: "Could not reach the payment processor. Please try again." }, { status: 502 });
+    return NextResponse.json({ error: PAYMENT_PROCESSOR_ERROR_MSG }, { status: 502 });
   }
 
   const topLevelStatus = fpData.status as string | undefined;
@@ -140,12 +141,13 @@ export async function POST(
   if (!approved) {
     console.error("[pay] FluidPay declined — full response:", JSON.stringify(fpData));
 
-    // Top-level API error (validation failure, bad key, etc.)
+    // Top-level API error (validation failure, bad key, etc.) — these are processor-side
+    // issues the client can't fix, so always show the general processor message.
     if (topLevelStatus === "error" || topLevelStatus === "failed" || !txnData) {
       // FluidPay sometimes puts errors in an `errors` array instead of `msg`
       const errorsArray = Array.isArray(fpData.errors) ? (fpData.errors as string[]).join("; ") : undefined;
-      const errMsg = topLevelMsg || errorsArray || "Payment processor error. Please contact your coordinator.";
-      return NextResponse.json({ error: errMsg }, { status: 402 });
+      console.error("[pay] FluidPay API error:", topLevelMsg || errorsArray || "(no message)");
+      return NextResponse.json({ error: PAYMENT_PROCESSOR_ERROR_MSG }, { status: 402 });
     }
 
     const responseBody = txnData.response_body as Record<string, unknown> | undefined;
@@ -153,11 +155,13 @@ export async function POST(
     const achBody = responseBody?.ach as Record<string, unknown> | undefined;
     const responseText = (cardBody?.response_text || achBody?.response_text || responseBody?.response_text) as string | undefined;
     console.error("[pay] decline detail — response:", response, "code:", responseCode, "responseBody:", JSON.stringify(responseBody));
-    const msg = responseText
-      ? `${responseText} (code ${responseCode})`
-      : (responseCode && responseCode >= 300
-        ? `Gateway error (code ${responseCode}). Please try again or contact your coordinator.`
-        : `Declined (code ${responseCode}). Please check your details or try a different payment method.`);
+    // Specific declines (2xx codes, e.g. insufficient funds) keep their text so the client
+    // can fix them. Gateway/processor errors (3xx+), unknown codes, and vague text get
+    // the general processor message.
+    const isDecline = typeof responseCode === "number" && responseCode >= 200 && responseCode < 300;
+    const msg = !isDecline || isGenericPaymentError(responseText)
+      ? PAYMENT_PROCESSOR_ERROR_MSG
+      : `${responseText} (code ${responseCode})`;
     return NextResponse.json({ error: msg }, { status: 402 });
   }
 

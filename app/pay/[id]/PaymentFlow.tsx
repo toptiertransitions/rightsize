@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { PAYMENT_PROCESSOR_ERROR_MSG, isGenericPaymentError } from "@/lib/payment-errors";
 
 type PayMethod = "credit_card" | "ach" | "check";
 type Step = "select" | "check_confirm" | "card_form" | "ach_form" | "processing" | "success";
@@ -250,11 +251,15 @@ export function PaymentFlow({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || data.message || "Payment failed. Please try again.");
+      if (!res.ok) {
+        const serverMsg = data.error || data.message;
+        throw new Error(isGenericPaymentError(serverMsg) ? PAYMENT_PROCESSOR_ERROR_MSG : serverMsg);
+      }
       setPaidByCard(method === "credit_card");
       setStep("success");
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Payment failed. Please try again.");
+      // Network failures (e.g. "Failed to fetch") are unknown — the charge may have gone through
+      setErrorMsg(err instanceof Error && !(err instanceof TypeError) ? err.message : PAYMENT_PROCESSOR_ERROR_MSG);
       setStep(method === "ach" ? "ach_form" : "card_form");
     }
   }
