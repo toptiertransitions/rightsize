@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden — TTT Staff or Manager required" }, { status: 403 });
   }
 
-  const { itemId, payoutPaidAmount, salePrice, payoutPaidAt } = await req.json();
+  const { itemId, payoutPaidAmount, salePrice, payoutPaidAt, payoutExpenseShare } = await req.json();
   if (!itemId || (payoutPaidAmount == null && salePrice == null)) {
     return NextResponse.json({ error: "Missing itemId or update fields" }, { status: 400 });
   }
@@ -26,8 +26,10 @@ export async function PATCH(req: NextRequest) {
       updates.payoutPaidAt = payoutPaidAt ?? new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     } else {
       updates.payoutPaidAt = undefined;
+      updates.payoutExpenseShare = 0;
     }
   }
+  if (payoutExpenseShare != null) updates.payoutExpenseShare = Number(payoutExpenseShare);
   if (salePrice != null) {
     updates.salePrice = Number(salePrice);
     updates.valueMid = Number(salePrice); // backfill Target Value

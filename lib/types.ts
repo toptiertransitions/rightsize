@@ -384,6 +384,9 @@ export interface Item {
   vendorNotes?: string;
   payoutPaidAmount?: number;
   payoutPaidAt?: string;
+  /** Portion of a project expense deducted from this item's payout. payoutPaidAmount is the
+   *  net the client received, so paid + expense share = the full payout that was settled. */
+  payoutExpenseShare?: number;
   vendorPriceApproved?: boolean;
   vendorExpectedPrice?: number;
   vendorRespondedAt?: string;

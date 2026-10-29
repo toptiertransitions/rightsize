@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { viewOrShareBlob } from "@/lib/native";
 import type { Item, Vendor, ProjectFile, ItemStatus, Room, LocalVendor, ItemSaleEvent, Tenant, PayoutMethod, StaffMember, Estate } from "@/lib/types";
 import { EditItemModal } from "@/components/catalog/ItemGrid";
-import { PayoutModal } from "./PayoutModal";
+import { PayoutModal, isItemPayoutSettled } from "./PayoutModal";
 import { ZellePayments } from "./ZellePayments";
 
 // ─── Calc payout from local vendor take rate ──────────────────────────────────
@@ -623,7 +623,7 @@ function PFPayoutSummary({
   }
   const calc = computeCalcPayout(item, localVendors);
   if (calc && calc.amount > 0) {
-    if ((item.payoutPaidAmount ?? 0) >= calc.amount * 0.99) {
+    if (isItemPayoutSettled(item, calc.amount)) {
       return <div className="text-xs text-green-700 font-semibold tabular-nums">{fmtCurrency(item.payoutPaidAmount!)} paid</div>;
     }
     return (
@@ -779,7 +779,7 @@ function usePFItemState(item: Item, initialEvents: ItemSaleEvent[]) {
   const totalOwed = events.reduce((s, e) => s + (e.payoutPaid ? 0 : e.clientPayout), 0);
   const totalPaidAmt = events.reduce((s, e) => s + (e.payoutPaid ? e.clientPayout : 0), 0);
   const totalEventPayout = totalOwed + totalPaidAmt;
-  const itemOverridePaid = totalOwed > 0 && (item.payoutPaidAmount ?? 0) >= totalEventPayout * 0.99;
+  const itemOverridePaid = totalOwed > 0 && isItemPayoutSettled(item, totalEventPayout);
 
   return {
     expanded, events, loading, togglingId, isSold, qtySold, qtyTotal,
@@ -2818,12 +2818,11 @@ export function SalesClient({
             if (markData) {
               const payoutDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
               if (markData.itemsToMark.length > 0) {
-                const paidMap = new Map(markData.itemsToMark.map(p => [p.id, p.amount]));
-                setItems(prev => prev.map(item =>
-                  paidMap.has(item.id)
-                    ? { ...item, payoutPaidAmount: paidMap.get(item.id)!, payoutPaidAt: payoutDate }
-                    : item
-                ));
+                const paidMap = new Map(markData.itemsToMark.map(p => [p.id, p]));
+                setItems(prev => prev.map(item => {
+                  const p = paidMap.get(item.id);
+                  return p ? { ...item, payoutPaidAmount: p.amount, payoutExpenseShare: p.expenseShare, payoutPaidAt: payoutDate } : item;
+                }));
               }
               if (markData.eventIdsToMark.length > 0) {
                 const paidSet = new Set(markData.eventIdsToMark);

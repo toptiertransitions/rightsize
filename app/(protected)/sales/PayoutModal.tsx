@@ -22,6 +22,12 @@ function channelLabel(route: string) {
 
 // ─── Build unpaid line items ───────────────────────────────────────────────────
 
+/** An item is settled when what the client received plus its share of any deducted
+ *  expense covers the payout (payoutPaidAmount is stored net of expenses). */
+export function isItemPayoutSettled(item: Item, payout: number): boolean {
+  return (item.payoutPaidAmount ?? 0) + (item.payoutExpenseShare ?? 0) >= payout * 0.99;
+}
+
 export function buildUnpaidLineItems(
   items: Item[],
   pfSaleEvents: ItemSaleEvent[],
@@ -63,7 +69,7 @@ export function buildUnpaidLineItems(
       payout = item.consignorPayout ?? 0;
     }
     if (payout <= 0) continue;
-    const alreadyPaid = (item.payoutPaidAmount ?? 0) >= payout;
+    const alreadyPaid = isItemPayoutSettled(item, payout);
     if (alreadyPaid) continue;
     result.push({
       itemName: item.itemName,
@@ -90,7 +96,7 @@ export function buildUnpaidLineItems(
       payout = item.consignorPayout ?? 0;
     }
     if (payout <= 0) continue;
-    const alreadyPaid = (item.payoutPaidAmount ?? 0) >= payout;
+    const alreadyPaid = isItemPayoutSettled(item, payout);
     if (alreadyPaid) continue;
     result.push({
       itemName: item.itemName,
@@ -112,7 +118,7 @@ export function buildUnpaidLineItems(
       payout = item.consignorPayout ?? 0;
     }
     if (payout <= 0) continue;
-    const alreadyPaid = (item.payoutPaidAmount ?? 0) >= payout;
+    const alreadyPaid = isItemPayoutSettled(item, payout);
     if (alreadyPaid) continue;
     result.push({
       itemName: item.itemName,
@@ -164,7 +170,8 @@ export function buildPaidLineItems(
 // ─── Mark-as-paid data ────────────────────────────────────────────────────────
 
 export interface PayoutMarkData {
-  itemsToMark: { id: string; amount: number }[];
+  /** amount = net paid to the client; expenseShare = the part of the expense taken from this item */
+  itemsToMark: { id: string; amount: number; expenseShare: number }[];
   eventIdsToMark: string[];
 }
 
@@ -183,7 +190,7 @@ export function buildPayoutMarkData(
   localVendors: LocalVendor[],
   expenseDeduction = 0
 ): PayoutMarkData {
-  const itemsToMark: { id: string; amount: number }[] = [];
+  const itemsToMark: { id: string; amount: number; expenseShare: number }[] = [];
   const eventIdsToMark: string[] = [];
 
   // PF Square events
@@ -207,8 +214,8 @@ export function buildPayoutMarkData(
     } else {
       payout = item.consignorPayout ?? 0;
     }
-    if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
-      itemsToMark.push({ id: item.id, amount: payout });
+    if (payout > 0 && !isItemPayoutSettled(item, payout)) {
+      itemsToMark.push({ id: item.id, amount: payout, expenseShare: 0 });
     }
   }
 
@@ -226,8 +233,8 @@ export function buildPayoutMarkData(
     } else {
       payout = item.consignorPayout ?? 0;
     }
-    if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
-      itemsToMark.push({ id: item.id, amount: payout });
+    if (payout > 0 && !isItemPayoutSettled(item, payout)) {
+      itemsToMark.push({ id: item.id, amount: payout, expenseShare: 0 });
     }
   }
 
@@ -239,8 +246,8 @@ export function buildPayoutMarkData(
       item.salePrice && item.salePrice > 0
         ? item.salePrice * (estateSharePct / 100)
         : (item.consignorPayout ?? 0);
-    if (payout > 0 && (item.payoutPaidAmount ?? 0) < payout) {
-      itemsToMark.push({ id: item.id, amount: payout });
+    if (payout > 0 && !isItemPayoutSettled(item, payout)) {
+      itemsToMark.push({ id: item.id, amount: payout, expenseShare: 0 });
     }
   }
 
@@ -253,10 +260,15 @@ export function buildPayoutMarkData(
       const scale = netTotal / grossTotal;
       let roundedSum = 0;
       for (let i = 0; i < itemsToMark.length - 1; i++) {
-        itemsToMark[i].amount = Math.round(itemsToMark[i].amount * scale * 100) / 100;
+        const gross = itemsToMark[i].amount;
+        itemsToMark[i].amount = Math.round(gross * scale * 100) / 100;
+        itemsToMark[i].expenseShare = Math.round((gross - itemsToMark[i].amount) * 100) / 100;
         roundedSum += itemsToMark[i].amount;
       }
-      itemsToMark[itemsToMark.length - 1].amount = Math.round((netTotal - roundedSum) * 100) / 100;
+      const last = itemsToMark[itemsToMark.length - 1];
+      const lastGross = last.amount;
+      last.amount = Math.round((netTotal - roundedSum) * 100) / 100;
+      last.expenseShare = Math.round((lastGross - last.amount) * 100) / 100;
     }
   }
 
@@ -349,11 +361,11 @@ export function PayoutModal({
         const markData = buildPayoutMarkData(items, pfSaleEvents, localVendors, deduction);
         const payoutDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         await Promise.allSettled([
-          ...markData.itemsToMark.map(({ id, amount }) =>
+          ...markData.itemsToMark.map(({ id, amount, expenseShare }) =>
             fetch("/api/sales/payout", {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ itemId: id, payoutPaidAmount: amount, payoutPaidAt: payoutDate }),
+              body: JSON.stringify({ itemId: id, payoutPaidAmount: amount, payoutPaidAt: payoutDate, payoutExpenseShare: expenseShare }),
             })
           ),
           ...markData.eventIdsToMark.map(eventId =>
