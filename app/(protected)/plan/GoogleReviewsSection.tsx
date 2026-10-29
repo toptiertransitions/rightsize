@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { GoogleReview } from "@/lib/types";
+import { CLIENT_TYPE_OPTIONS, COLLATERAL_MIN_STARS, type ReviewCollateralDetails } from "@/lib/review-collateral/shared";
+
+const EMPTY_DETAILS: ReviewCollateralDetails = { displayName: "", clientType: "", town: "" };
 
 function Stars({ count, size = "base" }: { count: number; size?: "sm" | "base" }) {
   const cls = size === "sm" ? "text-base" : "text-xl";
@@ -84,6 +87,11 @@ export function GoogleReviewsSection({ tenantId, canEdit }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // 5-star reviews: a branded PDF for Outreach > Content repository
+  const [makePdf, setMakePdf] = useState(true);
+  const [details, setDetails] = useState<ReviewCollateralDetails>(EMPTY_DETAILS);
+  const [notice, setNotice] = useState("");
+  const wantsPdf = stars >= COLLATERAL_MIN_STARS && makePdf;
 
   const fetchReviews = useCallback(() => {
     setLoading(true);
@@ -96,22 +104,40 @@ export function GoogleReviewsSection({ tenantId, canEdit }: Props) {
 
   useEffect(() => { fetchReviews(); }, [fetchReviews]);
 
+  function openForm() {
+    setShowForm(true);
+    setNotice("");
+    fetch(`/api/tenants/${tenantId}/reviews?collateral=1`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.defaults) setDetails(d.defaults); })
+      .catch(() => {});
+  }
+
+  function resetForm() {
+    setShowForm(false);
+    setText("");
+    setStars(5);
+    setError("");
+    setMakePdf(true);
+    setDetails(EMPTY_DETAILS);
+  }
+
   async function handleSubmit() {
     if (!text.trim()) { setError("Please enter the review text."); return; }
+    if (wantsPdf && !details.displayName.trim()) { setError("Add the name to show on the PDF, or uncheck Create marketing PDF."); return; }
     setSubmitting(true);
     setError("");
     try {
       const res = await fetch(`/api/tenants/${tenantId}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stars, text: text.trim() }),
+        body: JSON.stringify({ stars, text: text.trim(), collateral: wantsPdf ? details : undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
       setReviews((prev) => [data.review, ...prev]);
-      setShowForm(false);
-      setText("");
-      setStars(5);
+      if (data.collateral) setNotice("Review saved. Its marketing PDF will be in Outreach > Content repository in about a minute, and the team will get the usual email.");
+      resetForm();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save review");
     } finally {
@@ -148,7 +174,7 @@ export function GoogleReviewsSection({ tenantId, canEdit }: Props) {
         </div>
         {canEdit && !showForm && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={openForm}
             className="flex items-center gap-1.5 text-sm font-medium text-[#2d4a3e] hover:text-[#1e3329] transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -172,6 +198,41 @@ export function GoogleReviewsSection({ tenantId, canEdit }: Props) {
             rows={4}
             className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2d4a3e] resize-none"
           />
+          {stars >= COLLATERAL_MIN_STARS && (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={makePdf} onChange={(e) => setMakePdf(e.target.checked)} className="rounded border-gray-300 text-[#2d4a3e] focus:ring-[#2d4a3e]" />
+                Create marketing PDF
+              </label>
+              {makePdf && (
+                <>
+                  <p className="text-[11px] text-gray-400 mt-1 mb-2.5">Adds the branded Five-Star Client Story to Outreach &gt; Content repository and emails the team. The review text is used word for word.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {([
+                      ["displayName", "Name on PDF", "Jim K."],
+                      ["clientType", "Type of client", "Relocation Client"],
+                      ["town", "Town", "Oak Park, Illinois"],
+                    ] as const).map(([key, label, placeholder]) => (
+                      <label key={key} className="block">
+                        <span className="block text-[11px] font-medium text-gray-500 mb-1">{label}</span>
+                        <input
+                          value={details[key]}
+                          onChange={(e) => setDetails((d) => ({ ...d, [key]: e.target.value }))}
+                          placeholder={placeholder}
+                          list={key === "clientType" ? "review-client-types" : undefined}
+                          maxLength={key === "town" ? 60 : 40}
+                          className="w-full h-9 px-2.5 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2d4a3e]"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <datalist id="review-client-types">
+                    {CLIENT_TYPE_OPTIONS.map((o) => <option key={o} value={o} />)}
+                  </datalist>
+                </>
+              )}
+            </div>
+          )}
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           <div className="flex gap-2 mt-3">
             <button
@@ -182,7 +243,7 @@ export function GoogleReviewsSection({ tenantId, canEdit }: Props) {
               {submitting ? "Saving…" : "Save Review"}
             </button>
             <button
-              onClick={() => { setShowForm(false); setText(""); setStars(5); setError(""); }}
+              onClick={resetForm}
               className="h-8 px-4 text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
               Cancel
@@ -190,6 +251,8 @@ export function GoogleReviewsSection({ tenantId, canEdit }: Props) {
           </div>
         </div>
       )}
+
+      {notice && <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-4">{notice}</p>}
 
       {/* Review list */}
       {loading ? (

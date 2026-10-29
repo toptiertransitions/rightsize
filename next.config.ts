@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
     "fontkit",
     "linebreak",
   ],
+  // Fonts and images for the review collateral PDF (lib/review-collateral),
+  // read from disk at render time, so they must ship with these functions
+  outputFileTracingIncludes: {
+    "/api/tenants/[id]/reviews": ["./lib/review-collateral/assets/**"],
+  },
   async redirects() {
     return [
       { source: "/dashboard", destination: "/home", permanent: true },

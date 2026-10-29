@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import {
@@ -15,17 +15,32 @@ import {
 } from "@/lib/airtable";
 import { isTTTAdmin } from "@/lib/config";
 import { buildGoogleReviewNotificationEmail } from "@/lib/email";
+import { COLLATERAL_MIN_STARS, getReviewCollateralDefaults, parseCollateralDetails, publishReviewCollateral } from "@/lib/review-collateral";
+
+// PDF render + icon + team email for review collateral run after the response
+export const maxDuration = 60;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  // ?collateral=1: prefills for the 5-star PDF fields on the Add Review form
+  // (the CRM client contact's name, so Managers/Admins only)
+  if (req.nextUrl.searchParams.get("collateral") === "1") {
+    const sysRole = await getSystemRole(userId).catch(() => null);
+    if (!["TTTManager", "TTTAdmin"].includes(sysRole ?? "")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ defaults: await getReviewCollateralDefaults(id) });
+  }
+
   const reviews = await getReviewsForTenant(id).catch(() => []);
   return NextResponse.json({ reviews });
 }
@@ -43,7 +58,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  let body: { stars: number; text: string };
+  let body: { stars: number; text: string; collateral?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -61,6 +76,21 @@ export async function POST(
   } catch (e) {
     console.error("[reviews POST] Airtable error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+
+  // 5 stars: a branded PDF for the Content repository, with the usual
+  // new-content email (lib/review-collateral). Never blocks the save.
+  const collateral = stars >= COLLATERAL_MIN_STARS ? parseCollateralDetails(body.collateral) : null;
+  if (collateral) {
+    const reviewText = body.text.trim();
+    after(async () => {
+      try {
+        const item = await publishReviewCollateral({ stars, text: reviewText, details: collateral, authorClerkId: userId });
+        console.log(`[reviews POST] review collateral "${item.title}" added to the Content repository (${item.id})`);
+      } catch (e) {
+        console.error("[reviews POST] review collateral failed:", e);
+      }
+    });
   }
 
   // Send internal notification (non-blocking on error)
@@ -155,5 +185,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ review }, { status: 201 });
+  return NextResponse.json({ review, collateral: !!collateral }, { status: 201 });
 }
