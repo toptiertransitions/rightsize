@@ -15,31 +15,34 @@ import { useTenantPreview } from "./TenantPreviewContext";
 
 // Phone-sized live preview of what this community's residents see: Home,
 // Plan (with the community checklist), Partners (preferred partners ranked
-// first with their badge), Tips (self-serve residents) and the Welcome screen. Reads the editors' live
+// first with their badge), Catalog, Tips / Sales / Invoices and the Welcome
+// screen. Every nav tab opens. Reads the editors' live
 // state from TenantPreviewContext and sets the brand's CSS variables on this
 // subtree only, so the real client components render in the brand's colors.
 
-type Screen = "home" | "plan" | "partners" | "tips" | "welcome";
+type Screen = "home" | "plan" | "catalog" | "partners" | "tips" | "sales" | "invoices" | "welcome";
+// Shown from /admin/marketplace/tenant-config/app-preview/[screen] in a frame
+const FRAMED: ReadonlySet<Screen> = new Set(["catalog", "tips", "sales", "invoices"]);
 type Resident = "self" | "ttt";
 
 // Same order and icons as the app's bottom nav (components/layout/Header.tsx).
 // Self-serve residents get Tips in Sales' slot; Top Tier clients get Sales
 // and Invoices.
-const NAV: Record<Resident, Array<{ label: string; icon: typeof House; screen?: Screen }>> = {
+const NAV: Record<Resident, Array<{ label: string; icon: typeof House; screen: Screen }>> = {
   self: [
     { label: "Home", icon: House, screen: "home" },
     { label: "Plan", icon: Calendar, screen: "plan" },
-    { label: "Catalog", icon: LayoutList },
+    { label: "Catalog", icon: LayoutList, screen: "catalog" },
     { label: "Partners", icon: Handshake, screen: "partners" },
     { label: "Tips", icon: Lightbulb, screen: "tips" },
   ],
   ttt: [
     { label: "Home", icon: House, screen: "home" },
     { label: "Plan", icon: Calendar, screen: "plan" },
-    { label: "Catalog", icon: LayoutList },
+    { label: "Catalog", icon: LayoutList, screen: "catalog" },
     { label: "Partners", icon: Handshake, screen: "partners" },
-    { label: "Sales", icon: DollarSign },
-    { label: "Invoices", icon: Receipt },
+    { label: "Sales", icon: DollarSign, screen: "sales" },
+    { label: "Invoices", icon: Receipt, screen: "invoices" },
   ],
 };
 
@@ -95,8 +98,8 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
-    // Only self-serve residents have Tips
-    if (resident === "ttt") setScreen((cur) => (cur === "tips" ? "home" : cur));
+    // Tips is self-serve only; Sales and Invoices are Top Tier clients only
+    setScreen((cur) => (cur === "welcome" || NAV[resident].some((n) => n.screen === cur) ? cur : "home"));
   }, [resident]);
 
   // Partners: the same matching the client Partners page runs, with this
@@ -158,9 +161,9 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <div className="flex gap-1 border border-gray-800 rounded-lg p-1">
-          {(["home", "plan", "partners", "tips", "welcome"] as const).map((k) => (
-            <button key={k} type="button" onClick={() => { setScreen(k); if (k === "tips") setResident("self"); }} className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize ${screen === k ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"}`}>
+        <div className="flex flex-wrap gap-1 border border-gray-800 rounded-lg p-1">
+          {[...NAV[resident].map((n) => n.screen), "welcome" as const].map((k) => (
+            <button key={k} type="button" onClick={() => setScreen(k)} className={`px-2 py-1 rounded-md text-xs font-medium capitalize ${screen === k ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"}`}>
               {k}
             </button>
           ))}
@@ -213,12 +216,12 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
                 <span className="w-8 h-8 rounded-full bg-gray-300" />
               </div>
 
-              {screen === "tips" ? (
-                // The real Tips page, framed so its layout sees a phone-width screen
+              {FRAMED.has(screen) ? (
+                // The real page, framed so its layout sees a phone-width screen
                 <iframe
-                  key={`${brand.primaryColor}${brand.secondaryColor}`}
-                  title="Tips preview"
-                  src={`/admin/marketplace/tenant-config/tips-preview?p=${brand.primaryColor.slice(1)}&s=${brand.secondaryColor.slice(1)}`}
+                  key={`${screen}${brand.primaryColor}${brand.secondaryColor}`}
+                  title={`${screen} preview`}
+                  src={`/admin/marketplace/tenant-config/app-preview/${screen}?p=${brand.primaryColor.slice(1)}&s=${brand.secondaryColor.slice(1)}`}
                   className="flex-1 w-full border-0 bg-cream-50"
                 />
               ) : (
@@ -244,7 +247,7 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
                       <p className="text-xs text-gray-400 border border-dashed border-gray-300 rounded-xl p-3">No visible contacts, so the contacts card is hidden.</p>
                     )}
                     <div className="grid grid-cols-2 gap-2.5">
-                      <Tile icon={<LayoutList className="w-4 h-4" />} count="24" title="Items cataloged" go="View catalog" />
+                      <Tile icon={<LayoutList className="w-4 h-4" />} count="24" title="Items cataloged" go="View catalog" to="catalog" />
                       {selfServe
                         ? <Tile icon={<Handshake className="w-4 h-4" />} count="3" title="Partners on Your Team" go="View partners" to="partners" />
                         : <Tile icon={<House className="w-4 h-4" />} count="6" title="Rooms · 1,850 SF" go="View rooms" />}
@@ -353,8 +356,8 @@ export function BrandPhonePreview({ initialScreen = "home", initialResident = "s
                     <button
                       key={label}
                       type="button"
-                      onClick={() => to && setScreen(to)}
-                      className={cn("flex flex-col items-center gap-0.5 text-[10px] font-medium", active ? "text-accent-700" : "text-gray-500", to ? "cursor-pointer" : "cursor-default")}
+                      onClick={() => setScreen(to)}
+                      className={cn("flex flex-col items-center gap-0.5 text-[10px] font-medium cursor-pointer", active ? "text-accent-700" : "text-gray-500")}
                     >
                       <Icon className="w-5 h-5" strokeWidth={active ? 2.5 : 1.75} />{label}
                     </button>
