@@ -1,7 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { removeBackground } from "@/lib/remove-bg";
-import { uploadPng } from "@/lib/cloudinary";
+import { removeBackgroundFromUrl } from "@/lib/cloudinary";
 
 export const maxDuration = 60;
 
@@ -20,16 +19,8 @@ export async function POST(req: Request) {
   if (!url) return NextResponse.json({ error: "url is required" }, { status: 400 });
 
   try {
-    // Fetch the image from Cloudinary
-    const imgRes = await fetch(url);
-    if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`);
-    const imageBuffer = Buffer.from(await imgRes.arrayBuffer());
-
-    // Remove background
-    const pngBuffer = await removeBackground(imageBuffer);
-
-    // Upload PNG to Cloudinary
-    const uploaded = await uploadPng(pngBuffer, { tenantId });
+    // Cloudinary AI Background Removal add-on — re-uploads the photo as a transparent PNG
+    const uploaded = await removeBackgroundFromUrl(url, { tenantId });
 
     return NextResponse.json({
       photoUrl: uploaded.secureUrl,

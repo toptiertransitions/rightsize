@@ -66,6 +66,45 @@ export async function uploadPng(buffer: Buffer, options: { tenantId?: string } =
   };
 }
 
+/**
+ * Re-uploads an image (by URL) as a PNG with the Cloudinary AI Background Removal
+ * add-on, then waits for the add-on to finish. Removal runs asynchronously — the
+ * upload returns "pending" and Cloudinary swaps in the transparent version when done.
+ */
+export async function removeBackgroundFromUrl(
+  sourceUrl: string,
+  options: { tenantId?: string; timeoutMs?: number } = {}
+): Promise<UploadResult> {
+  const folder = `rightsize/${options.tenantId || "shared"}`;
+  const uploaded = await cloudinary.uploader.upload(sourceUrl, {
+    folder,
+    format: "png",
+    background_removal: "cloudinary_ai",
+    transformation: [{ width: 1200, height: 1200, crop: "limit" }],
+  });
+
+  const deadline = Date.now() + (options.timeoutMs ?? 45_000);
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 1500));
+    const res = await cloudinary.api.resource(uploaded.public_id);
+    const status = res.info?.background_removal?.cloudinary_ai?.status as string | undefined;
+    if (status === "complete") {
+      return {
+        publicId: res.public_id,
+        url: res.url,
+        secureUrl: res.secure_url,
+        width: res.width,
+        height: res.height,
+        format: res.format,
+      };
+    }
+    if (status === "failed") break;
+  }
+
+  await cloudinary.uploader.destroy(uploaded.public_id).catch(() => {});
+  throw new Error("Cloudinary background removal failed or timed out");
+}
+
 export async function deleteImage(publicId: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId);
 }
