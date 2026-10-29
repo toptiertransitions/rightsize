@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUp, ArrowDown, Eye, EyeOff, Trash2, Upload, Check, AlertTriangle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import {
 import {
   saveBrandAction, setBrandStatusAction, generateCodeAction, listCrmCompaniesAction, linkCrmCompanyAction, type SaveBrandInput,
 } from "../actions";
-import { BrandPhonePreview } from "./BrandPhonePreview";
+import { useTenantPreview } from "./TenantPreviewContext";
 import { JoinLinkPanel } from "./JoinLinkPanel";
 
 interface PickableContact { id: string; name: string; title: string; phone: string; email: string }
@@ -76,6 +76,19 @@ export function BrandEditor({ brand, partnerName, crmCompanyLinked, pickableCont
     });
 
   const colorsValid = HEX_RE.test(form.primaryColor) && HEX_RE.test(form.secondaryColor);
+
+  // Feed the live preview (TenantPreviewContext) as the form changes
+  const setPreviewBrand = useTenantPreview()?.setBrand;
+  const previewKey = JSON.stringify({ form, previewContacts });
+  useEffect(() => {
+    setPreviewBrand?.({
+      ...form,
+      primaryColor: HEX_RE.test(form.primaryColor) ? form.primaryColor : brand.primaryColor,
+      secondaryColor: HEX_RE.test(form.secondaryColor) ? form.secondaryColor : brand.secondaryColor,
+      contacts: previewContacts,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKey]);
   const warnings: string[] = [];
   if (colorsValid) {
     if (contrastRatio("#ffffff", form.primaryColor) < 4.5) warnings.push("White text on the primary color (buttons) is below WCAG AA (4.5:1).");
@@ -169,194 +182,177 @@ export function BrandEditor({ brand, partnerName, crmCompanyLinked, pickableCont
       </div>
       {msg && <p className={cn("text-sm mb-4", msg.ok ? "text-green-400" : "text-red-400")}>{msg.text}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
-        <div className="space-y-6">
-          {/* Identity */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-4">Identity</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className={labelCls}>Display name</label><input className={inputCls} value={form.displayName} onChange={(e) => set({ displayName: e.target.value })} placeholder="The Roosevelt" /></div>
-              <div><label className={labelCls}>Subtitle (optional)</label><input className={inputCls} value={form.subtitle} onChange={(e) => set({ subtitle: e.target.value })} placeholder="at Salt Creek" /></div>
-              <div>
-                <label className={labelCls}>Slug {slugLocked && <span className="text-gray-600">(locked after publishing)</span>}</label>
-                <input className={cn(inputCls, "font-mono")} value={form.slug} disabled={slugLocked} onChange={(e) => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} />
-              </div>
-              <div>
-                <label className={labelCls}>Community code</label>
-                <div className="flex gap-2">
-                  <input className={cn(inputCls, "font-mono uppercase")} value={form.communityCode} onChange={(e) => set({ communityCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} />
-                  <button
-                    type="button"
-                    onClick={async () => { const r = await generateCodeAction(form.displayName, brand.id); if (r.ok && r.data) set({ communityCode: r.data }); }}
-                    className="h-9 px-3 rounded-lg border border-gray-700 text-gray-300 text-sm hover:bg-gray-800 whitespace-nowrap"
-                  >Generate</button>
-                </div>
+      <div className="space-y-6">
+        {/* Identity */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-white mb-4">Identity</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label className={labelCls}>Display name</label><input className={inputCls} value={form.displayName} onChange={(e) => set({ displayName: e.target.value })} placeholder="The Roosevelt" /></div>
+            <div><label className={labelCls}>Subtitle (optional)</label><input className={inputCls} value={form.subtitle} onChange={(e) => set({ subtitle: e.target.value })} placeholder="at Salt Creek" /></div>
+            <div>
+              <label className={labelCls}>Slug {slugLocked && <span className="text-gray-600">(locked after publishing)</span>}</label>
+              <input className={cn(inputCls, "font-mono")} value={form.slug} disabled={slugLocked} onChange={(e) => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} />
+            </div>
+            <div>
+              <label className={labelCls}>Community code</label>
+              <div className="flex gap-2">
+                <input className={cn(inputCls, "font-mono uppercase")} value={form.communityCode} onChange={(e) => set({ communityCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} />
+                <button
+                  type="button"
+                  onClick={async () => { const r = await generateCodeAction(form.displayName, brand.id); if (r.ok && r.data) set({ communityCode: r.data }); }}
+                  className="h-9 px-3 rounded-lg border border-gray-700 text-gray-300 text-sm hover:bg-gray-800 whitespace-nowrap"
+                >Generate</button>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* Logo */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-1">Logo</h2>
-            <p className="text-xs text-gray-500 mb-4">PNG, SVG, or JPG under 2 MB. A transparent background works best.</p>
-            <div className="flex flex-wrap items-center gap-4">
-              {["bg-white", "bg-gray-950 border border-gray-700"].map((bg) => (
-                <div key={bg} className={cn("w-40 h-20 rounded-lg flex items-center justify-center p-2", bg)}>
-                  {form.logoUrl
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={form.logoUrl} alt="Logo preview" className="max-w-full max-h-full object-contain" />
-                    : <span className="text-xs text-gray-500">No logo</span>}
-                </div>
-              ))}
-              <div className="flex flex-col gap-2">
-                <label className="h-9 px-3 rounded-lg border border-gray-700 text-gray-300 text-sm hover:bg-gray-800 inline-flex items-center gap-1.5 cursor-pointer">
-                  <Upload className="w-4 h-4" /> {uploading === "logo" ? "Uploading…" : "Upload logo"}
-                  <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onLogo(f); e.target.value = ""; }} />
-                </label>
-                {form.logoUrl && <button type="button" onClick={() => set({ logoUrl: "" })} className="text-xs text-gray-500 hover:text-gray-300 text-left">Remove logo</button>}
+        {/* Logo */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-white mb-1">Logo</h2>
+          <p className="text-xs text-gray-500 mb-4">PNG, SVG, or JPG under 2 MB. A transparent background works best.</p>
+          <div className="flex flex-wrap items-center gap-4">
+            {["bg-white", "bg-gray-950 border border-gray-700"].map((bg) => (
+              <div key={bg} className={cn("w-40 h-20 rounded-lg flex items-center justify-center p-2", bg)}>
+                {form.logoUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={form.logoUrl} alt="Logo preview" className="max-w-full max-h-full object-contain" />
+                  : <span className="text-xs text-gray-500">No logo</span>}
               </div>
-            </div>
-          </section>
-
-          {/* Colors */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-4">Colors</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {([["primaryColor", "Primary", "Buttons, headings, status bar"], ["secondaryColor", "Secondary (accent)", "Icons, View links, Call buttons, active tab"]] as const).map(([key, label, hint]) => (
-                <div key={key}>
-                  <label className={labelCls}>{label}</label>
-                  <div className="flex gap-2">
-                    <input type="color" value={HEX_RE.test(form[key]) ? form[key] : "#000000"} onChange={(e) => set({ [key]: e.target.value.toUpperCase() } as Partial<typeof form>)} className="h-9 w-12 rounded border border-gray-700 bg-gray-950 p-0.5" />
-                    <input className={cn(inputCls, "font-mono uppercase")} value={form[key]} onChange={(e) => set({ [key]: e.target.value.toUpperCase() } as Partial<typeof form>)} maxLength={7} />
-                  </div>
-                  <p className="text-[11px] text-gray-600 mt-1">{hint}</p>
-                </div>
-              ))}
-            </div>
-            {!colorsValid && <p className="text-xs text-red-400 mt-3">Use 6-digit hex colors like #1F3A5F.</p>}
-            {warnings.map((w) => (
-              <p key={w} className="text-xs text-amber-400 mt-2 flex items-start gap-1.5"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{w}</p>
             ))}
-          </section>
+            <div className="flex flex-col gap-2">
+              <label className="h-9 px-3 rounded-lg border border-gray-700 text-gray-300 text-sm hover:bg-gray-800 inline-flex items-center gap-1.5 cursor-pointer">
+                <Upload className="w-4 h-4" /> {uploading === "logo" ? "Uploading…" : "Upload logo"}
+                <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onLogo(f); e.target.value = ""; }} />
+              </label>
+              {form.logoUrl && <button type="button" onClick={() => set({ logoUrl: "" })} className="text-xs text-gray-500 hover:text-gray-300 text-left">Remove logo</button>}
+            </div>
+          </div>
+        </section>
 
-          {/* Welcome */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-white mb-4">Welcome message</h2>
-            <textarea rows={3} maxLength={600} value={form.welcomeMessage} onChange={(e) => set({ welcomeMessage: e.target.value })}
-              placeholder="We're so glad you're joining us. Our team and Top Tier Transitions will help with every step."
-              className="w-full px-3 py-2 rounded-lg border border-gray-700 bg-gray-950 text-sm text-white placeholder-gray-600" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-              <div><label className={labelCls}>Sender name (optional)</label><input className={inputCls} value={form.welcomeSenderName} onChange={(e) => set({ welcomeSenderName: e.target.value })} /></div>
-              <div><label className={labelCls}>Sender title (optional)</label><input className={inputCls} value={form.welcomeSenderTitle} onChange={(e) => set({ welcomeSenderTitle: e.target.value })} /></div>
-            </div>
-            <div className="mt-4">
-              <label className={labelCls}>Top Tier visibility</label>
-              <select className={inputCls} value={form.topTierVisibility} onChange={(e) => set({ topTierVisibility: e.target.value as typeof form.topTierVisibility })}>
-                <option value="Partner visible">Partner visible: &ldquo;Move management by Top Tier Transitions · Powered by Rightsize&rdquo;</option>
-                <option value="Minimal">Minimal: only &ldquo;Powered by Rightsize&rdquo;</option>
-              </select>
-            </div>
-          </section>
+        {/* Colors */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-white mb-4">Colors</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {([["primaryColor", "Primary", "Buttons, headings, status bar"], ["secondaryColor", "Secondary (accent)", "Icons, View links, Call buttons, active tab"]] as const).map(([key, label, hint]) => (
+              <div key={key}>
+                <label className={labelCls}>{label}</label>
+                <div className="flex gap-2">
+                  <input type="color" value={HEX_RE.test(form[key]) ? form[key] : "#000000"} onChange={(e) => set({ [key]: e.target.value.toUpperCase() } as Partial<typeof form>)} className="h-9 w-12 rounded border border-gray-700 bg-gray-950 p-0.5" />
+                  <input className={cn(inputCls, "font-mono uppercase")} value={form[key]} onChange={(e) => set({ [key]: e.target.value.toUpperCase() } as Partial<typeof form>)} maxLength={7} />
+                </div>
+                <p className="text-[11px] text-gray-600 mt-1">{hint}</p>
+              </div>
+            ))}
+          </div>
+          {!colorsValid && <p className="text-xs text-red-400 mt-3">Use 6-digit hex colors like #1F3A5F.</p>}
+          {warnings.map((w) => (
+            <p key={w} className="text-xs text-amber-400 mt-2 flex items-start gap-1.5"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{w}</p>
+          ))}
+        </section>
 
-          {/* Contacts */}
-          <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <div className="flex items-baseline justify-between mb-1">
-              <h2 className="text-sm font-semibold text-white">Contacts</h2>
-              <span className="text-xs text-gray-500">{contacts.length} of {MAX_BRAND_CONTACTS}</span>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">Names, phones, and emails come from the CRM contact. You can override the title and add a headshot here.</p>
-            {!crmCompanyLinked ? (
-              <LinkCrmCompany brandId={brand.id} onLinked={() => router.refresh()} />
-            ) : (
-              <>
-                <ul className="space-y-3">
-                  {contacts.map((c, i) => {
-                    const p = byId.get(c.contactId);
-                    return (
-                      <li key={c.contactId} className={cn("rounded-lg border border-gray-800 p-3", !c.visible && "opacity-60")}>
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-full bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center text-xs text-gray-400">
-                            {c.photoUrl
-                              // eslint-disable-next-line @next/next/no-img-element
-                              ? <img src={c.photoUrl} alt="" className="w-full h-full object-cover" />
-                              : (p?.name ?? "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white truncate">{p?.name ?? "Contact not found"}</p>
-                            <p className="text-xs text-gray-500 truncate">{[p?.phone, p?.email].filter(Boolean).join(" · ") || "No phone or email on file"}</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <IconBtn label="Move up" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconBtn>
-                            <IconBtn label="Move down" onClick={() => move(i, 1)} disabled={i === contacts.length - 1}><ArrowDown className="w-4 h-4" /></IconBtn>
-                            <IconBtn label={c.visible ? "Hide" : "Show"} onClick={() => setContacts((cs) => cs.map((x) => (x.contactId === c.contactId ? { ...x, visible: !x.visible } : x)))}>
-                              {c.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                            </IconBtn>
-                            <IconBtn label="Remove" onClick={() => setContacts((cs) => cs.filter((x) => x.contactId !== c.contactId))}><Trash2 className="w-4 h-4" /></IconBtn>
-                          </div>
+        {/* Welcome */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-white mb-4">Welcome message</h2>
+          <textarea rows={3} maxLength={600} value={form.welcomeMessage} onChange={(e) => set({ welcomeMessage: e.target.value })}
+            placeholder="We're so glad you're joining us. Our team and Top Tier Transitions will help with every step."
+            className="w-full px-3 py-2 rounded-lg border border-gray-700 bg-gray-950 text-sm text-white placeholder-gray-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+            <div><label className={labelCls}>Sender name (optional)</label><input className={inputCls} value={form.welcomeSenderName} onChange={(e) => set({ welcomeSenderName: e.target.value })} /></div>
+            <div><label className={labelCls}>Sender title (optional)</label><input className={inputCls} value={form.welcomeSenderTitle} onChange={(e) => set({ welcomeSenderTitle: e.target.value })} /></div>
+          </div>
+          <div className="mt-4">
+            <label className={labelCls}>Top Tier visibility</label>
+            <select className={inputCls} value={form.topTierVisibility} onChange={(e) => set({ topTierVisibility: e.target.value as typeof form.topTierVisibility })}>
+              <option value="Partner visible">Partner visible: &ldquo;Move management by Top Tier Transitions · Powered by Rightsize&rdquo;</option>
+              <option value="Minimal">Minimal: only &ldquo;Powered by Rightsize&rdquo;</option>
+            </select>
+          </div>
+        </section>
+
+        {/* Contacts */}
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="flex items-baseline justify-between mb-1">
+            <h2 className="text-sm font-semibold text-white">Contacts</h2>
+            <span className="text-xs text-gray-500">{contacts.length} of {MAX_BRAND_CONTACTS}</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">Names, phones, and emails come from the CRM contact. You can override the title and add a headshot here.</p>
+          {!crmCompanyLinked ? (
+            <LinkCrmCompany brandId={brand.id} onLinked={() => router.refresh()} />
+          ) : (
+            <>
+              <ul className="space-y-3">
+                {contacts.map((c, i) => {
+                  const p = byId.get(c.contactId);
+                  return (
+                    <li key={c.contactId} className={cn("rounded-lg border border-gray-800 p-3", !c.visible && "opacity-60")}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-full bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center text-xs text-gray-400">
+                          {c.photoUrl
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={c.photoUrl} alt="" className="w-full h-full object-cover" />
+                            : (p?.name ?? "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 mt-3">
-                          <input className={inputCls} placeholder={p?.title ? `Title (default: ${p.title})` : "Title override"} value={c.titleOverride ?? ""}
-                            onChange={(e) => setContacts((cs) => cs.map((x) => (x.contactId === c.contactId ? { ...x, titleOverride: e.target.value } : x)))} />
-                          <div className="flex items-center gap-2">
-                            <label className="h-9 px-3 rounded-lg border border-gray-700 text-gray-300 text-xs hover:bg-gray-800 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
-                              <Upload className="w-3.5 h-3.5" /> {uploading === c.contactId ? "Uploading…" : c.photoUrl ? "Replace headshot" : "Add headshot"}
-                              <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onPhoto(c.contactId, f); e.target.value = ""; }} />
-                            </label>
-                            {c.photoUrl && (
-                              <button type="button" onClick={() => setContacts((cs) => cs.map((x) => (x.contactId === c.contactId ? { ...x, photoUrl: undefined } : x)))} className="text-xs text-gray-500 hover:text-gray-300">Remove</button>
-                            )}
-                          </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{p?.name ?? "Contact not found"}</p>
+                          <p className="text-xs text-gray-500 truncate">{[p?.phone, p?.email].filter(Boolean).join(" · ") || "No phone or email on file"}</p>
                         </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {contacts.length >= MAX_BRAND_CONTACTS ? (
-                  <p className="text-xs text-amber-400 mt-3">That&apos;s the limit of {MAX_BRAND_CONTACTS} contacts. Remove one to add another.</p>
-                ) : remaining.length > 0 ? (
-                  <select
-                    value=""
-                    onChange={(e) => { if (e.target.value) setContacts((cs) => [...cs, { contactId: e.target.value, order: cs.length, visible: true }]); }}
-                    className={cn(inputCls, "mt-3")}
-                  >
-                    <option value="">+ Add a contact…</option>
-                    {remaining.map((p) => <option key={p.id} value={p.id}>{p.name}{p.title ? ` (${p.title})` : ""}</option>)}
-                  </select>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-3">All of this company&apos;s contacts are added. Add more people to the company in the CRM.</p>
-                )}
-              </>
-            )}
-          </section>
-
-          <JoinLinkPanel joinUrl={`${joinBaseUrl}${form.slug}`} code={form.communityCode} displayName={[form.displayName, form.subtitle].filter(Boolean).join(" ")} />
-
-          {audit.length > 0 && (
-            <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-white mb-3">Recent changes</h2>
-              <ul className="space-y-1.5 text-xs text-gray-400">
-                {audit.map((a, i) => (
-                  <li key={i}><span className="text-gray-500">{new Date(a.timestamp).toLocaleString()}</span> · {a.actorName} changed <span className="text-gray-300">{a.field}</span>{a.field !== "contacts" && a.newValue ? <> to <span className="text-gray-300">{a.newValue.slice(0, 60)}</span></> : null}</li>
-                ))}
+                        <div className="flex items-center gap-1">
+                          <IconBtn label="Move up" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp className="w-4 h-4" /></IconBtn>
+                          <IconBtn label="Move down" onClick={() => move(i, 1)} disabled={i === contacts.length - 1}><ArrowDown className="w-4 h-4" /></IconBtn>
+                          <IconBtn label={c.visible ? "Hide" : "Show"} onClick={() => setContacts((cs) => cs.map((x) => (x.contactId === c.contactId ? { ...x, visible: !x.visible } : x)))}>
+                            {c.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </IconBtn>
+                          <IconBtn label="Remove" onClick={() => setContacts((cs) => cs.filter((x) => x.contactId !== c.contactId))}><Trash2 className="w-4 h-4" /></IconBtn>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 mt-3">
+                        <input className={inputCls} placeholder={p?.title ? `Title (default: ${p.title})` : "Title override"} value={c.titleOverride ?? ""}
+                          onChange={(e) => setContacts((cs) => cs.map((x) => (x.contactId === c.contactId ? { ...x, titleOverride: e.target.value } : x)))} />
+                        <div className="flex items-center gap-2">
+                          <label className="h-9 px-3 rounded-lg border border-gray-700 text-gray-300 text-xs hover:bg-gray-800 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                            <Upload className="w-3.5 h-3.5" /> {uploading === c.contactId ? "Uploading…" : c.photoUrl ? "Replace headshot" : "Add headshot"}
+                            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onPhoto(c.contactId, f); e.target.value = ""; }} />
+                          </label>
+                          {c.photoUrl && (
+                            <button type="button" onClick={() => setContacts((cs) => cs.map((x) => (x.contactId === c.contactId ? { ...x, photoUrl: undefined } : x)))} className="text-xs text-gray-500 hover:text-gray-300">Remove</button>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
-            </section>
+              {contacts.length >= MAX_BRAND_CONTACTS ? (
+                <p className="text-xs text-amber-400 mt-3">That&apos;s the limit of {MAX_BRAND_CONTACTS} contacts. Remove one to add another.</p>
+              ) : remaining.length > 0 ? (
+                <select
+                  value=""
+                  onChange={(e) => { if (e.target.value) setContacts((cs) => [...cs, { contactId: e.target.value, order: cs.length, visible: true }]); }}
+                  className={cn(inputCls, "mt-3")}
+                >
+                  <option value="">+ Add a contact…</option>
+                  {remaining.map((p) => <option key={p.id} value={p.id}>{p.name}{p.title ? ` (${p.title})` : ""}</option>)}
+                </select>
+              ) : (
+                <p className="text-xs text-gray-500 mt-3">All of this company&apos;s contacts are added. Add more people to the company in the CRM.</p>
+              )}
+            </>
           )}
-        </div>
+        </section>
 
-        <div className="lg:sticky lg:top-6 self-start">
-          <BrandPhonePreview
-            displayName={form.displayName}
-            subtitle={form.subtitle}
-            logoUrl={form.logoUrl}
-            primaryColor={HEX_RE.test(form.primaryColor) ? form.primaryColor : brand.primaryColor}
-            secondaryColor={HEX_RE.test(form.secondaryColor) ? form.secondaryColor : brand.secondaryColor}
-            welcomeMessage={form.welcomeMessage}
-            welcomeSenderName={form.welcomeSenderName}
-            welcomeSenderTitle={form.welcomeSenderTitle}
-            topTierVisibility={form.topTierVisibility}
-            contacts={previewContacts}
-          />
-        </div>
+        <JoinLinkPanel joinUrl={`${joinBaseUrl}${form.slug}`} code={form.communityCode} displayName={[form.displayName, form.subtitle].filter(Boolean).join(" ")} />
+
+        {audit.length > 0 && (
+          <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-3">Recent changes</h2>
+            <ul className="space-y-1.5 text-xs text-gray-400">
+              {audit.map((a, i) => (
+                <li key={i}><span className="text-gray-500">{new Date(a.timestamp).toLocaleString()}</span> · {a.actorName} changed <span className="text-gray-300">{a.field}</span>{a.field !== "contacts" && a.newValue ? <> to <span className="text-gray-300">{a.newValue.slice(0, 60)}</span></> : null}</li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   );

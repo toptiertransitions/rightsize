@@ -10,7 +10,10 @@ import { hasCapability, type MarketplaceRole } from "@/lib/marketplace/permissio
 import { PreferredPartnersEditor } from "./PreferredPartnersEditor";
 import { BrandEditor } from "./BrandEditor";
 import { getChecklistItems } from "@/lib/checklists/data";
-import { ChecklistEditor } from "@/components/community-checklist/ChecklistEditor";
+import { getPartnerDirectory } from "@/lib/partners/queries";
+import { LiveChecklistEditor } from "./LiveChecklistEditor";
+import { TenantPreviewProvider } from "./TenantPreviewContext";
+import { BrandPhonePreview } from "./BrandPhonePreview";
 import { adminRemoveChecklistItemAction, adminReorderChecklistAction, adminSaveChecklistItemAction } from "../checklist-actions";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +24,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
   if (!brand) notFound();
 
   const { userId } = await auth();
-  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role] = await Promise.all([
+  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role, directory] = await Promise.all([
     getPartnerById(brand.marketplacePartnerId).catch(() => null),
     getPickableContacts(brand),
     getAuditForEntity(brand.id, 15).catch(() => []),
@@ -30,6 +33,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
     getAllCategories().catch(() => []),
     getAllListingsAdmin().catch(() => []),
     userId ? getSystemRole(userId).catch(() => null) : Promise.resolve(null),
+    getPartnerDirectory().catch(() => []),
   ]);
   const categoryLabel = new Map(categories.map((c) => [c.id, c.label]));
   const pickablePartners = allPartners
@@ -50,36 +54,64 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
       <MarketplaceNav />
       <main className="max-w-7xl mx-auto px-6 pb-16">
         <Link href="/admin/marketplace/tenant-config" className="text-sm text-gray-400 hover:text-white">← All tenants</Link>
-        <BrandEditor
-          brand={brand}
-          partnerName={partner?.companyName ?? "Partner not found"}
-          crmCompanyLinked={!!pickable.companyId}
-          pickableContacts={pickable.contacts.map((c) => ({ id: c.id, name: c.name, title: c.title, phone: c.phone, email: c.email }))}
-          joinBaseUrl={`${appUrl}/join/`}
-          audit={audit.map((a) => ({ timestamp: a.timestamp, actorName: a.actorName, field: a.field, newValue: a.newValue }))}
-        />
-        <div id="preferred-partners" className="mt-10 max-w-3xl scroll-mt-24">
-          <PreferredPartnersEditor
-            brandId={brand.id}
-            communityName={brand.displayName || partner?.companyName || "this community"}
-            initialIds={brand.preferredPartnerIds}
-            partners={pickablePartners}
-            canEdit={!!role && hasCapability(role as MarketplaceRole, "managePreferredPartners")}
-          />
-        </div>
-        <div id="checklist" className="mt-10 max-w-3xl scroll-mt-24">
-          <ChecklistEditor
-            theme="dark"
-            communityName={brand.displayName || partner?.companyName || "this community"}
-            initialItems={checklistItems}
-            onSave={adminSaveChecklistItemAction.bind(null, brand.id)}
-            onRemove={adminRemoveChecklistItemAction.bind(null, brand.id)}
-            onReorder={adminReorderChecklistAction.bind(null, brand.id)}
-          />
-          <p className="text-xs text-gray-500 mt-3">
-            The community&rsquo;s account owner can also edit this list from their partner portal, and every partner user there can track each resident&rsquo;s progress.
-          </p>
-        </div>
+        <TenantPreviewProvider
+          initialBrand={{
+            displayName: brand.displayName,
+            subtitle: brand.subtitle,
+            logoUrl: brand.logoUrl,
+            primaryColor: brand.primaryColor,
+            secondaryColor: brand.secondaryColor,
+            welcomeMessage: brand.welcomeMessage,
+            welcomeSenderName: brand.welcomeSenderName,
+            welcomeSenderTitle: brand.welcomeSenderTitle,
+            topTierVisibility: brand.topTierVisibility,
+            contacts: [],
+          }}
+          initialChecklistItems={checklistItems}
+          initialPreferredIds={brand.preferredPartnerIds}
+          directory={directory}
+          defaultLocation={{ zip: partner?.zip || undefined, state: partner?.state || undefined, city: partner?.city || undefined }}
+          communityPartnerId={brand.marketplacePartnerId}
+        >
+          {/* Editors on the left; the live resident preview stays in view on the right */}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_370px] gap-8">
+            <div className="min-w-0">
+              <BrandEditor
+                brand={brand}
+                partnerName={partner?.companyName ?? "Partner not found"}
+                crmCompanyLinked={!!pickable.companyId}
+                pickableContacts={pickable.contacts.map((c) => ({ id: c.id, name: c.name, title: c.title, phone: c.phone, email: c.email }))}
+                joinBaseUrl={`${appUrl}/join/`}
+                audit={audit.map((a) => ({ timestamp: a.timestamp, actorName: a.actorName, field: a.field, newValue: a.newValue }))}
+              />
+              <div id="preferred-partners" className="mt-10 scroll-mt-24">
+                <PreferredPartnersEditor
+                  brandId={brand.id}
+                  communityName={brand.displayName || partner?.companyName || "this community"}
+                  initialIds={brand.preferredPartnerIds}
+                  partners={pickablePartners}
+                  canEdit={!!role && hasCapability(role as MarketplaceRole, "managePreferredPartners")}
+                />
+              </div>
+              <div id="checklist" className="mt-10 scroll-mt-24">
+                <LiveChecklistEditor
+                  theme="dark"
+                  communityName={brand.displayName || partner?.companyName || "this community"}
+                  initialItems={checklistItems}
+                  onSave={adminSaveChecklistItemAction.bind(null, brand.id)}
+                  onRemove={adminRemoveChecklistItemAction.bind(null, brand.id)}
+                  onReorder={adminReorderChecklistAction.bind(null, brand.id)}
+                />
+                <p className="text-xs text-gray-500 mt-3">
+                  The community&rsquo;s account owner can also edit this list from their partner portal, and every partner user there can track each resident&rsquo;s progress.
+                </p>
+              </div>
+            </div>
+            <div className="lg:sticky lg:top-6 self-start lg:mt-[76px]">
+              <BrandPhonePreview />
+            </div>
+          </div>
+        </TenantPreviewProvider>
       </main>
     </div>
   );

@@ -16,6 +16,7 @@ export function ResidentChecklistCard({
   summary,
   canToggle,
   onToggle,
+  refreshOnToggle = true,
 }: {
   communityName: string;
   logoUrl?: string;
@@ -25,6 +26,8 @@ export function ResidentChecklistCard({
   summary: ChecklistSummary;
   canToggle: boolean;
   onToggle: (itemId: string, done: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** Re-render the page from the server after a toggle (off for previews) */
+  refreshOnToggle?: boolean;
 }) {
   const router = useRouter();
   const pct = summary.total ? Math.round((summary.done / summary.total) * 100) : 0;
@@ -65,7 +68,7 @@ export function ResidentChecklistCard({
           accent={color}
           onToggle={async (itemId, done) => {
             const r = await onToggle(itemId, done);
-            if (r.ok) router.refresh();
+            if (r.ok && refreshOnToggle) router.refresh();
             return r;
           }}
         />

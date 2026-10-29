@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { Search, Star, X } from "lucide-react";
 import { setPreferredPartnerAction } from "../preferred-actions";
+import { useTenantPreview } from "./TenantPreviewContext";
 
 export interface PickablePartner {
   id: string;
@@ -37,6 +38,7 @@ export function PreferredPartnersEditor({
   const [error, setError] = useState("");
   const [, start] = useTransition();
   const boxRef = useRef<HTMLDivElement>(null);
+  const setPreviewIds = useTenantPreview()?.setPreferredIds;
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +71,7 @@ export function PreferredPartnersEditor({
       setBusy(null);
       if (!r.ok) return setError(r.error);
       setIds(r.ids);
+      setPreviewIds?.(r.ids, { partnerId: id, added: preferred });
       if (preferred) { setQuery(""); setOpen(false); }
     });
   }
