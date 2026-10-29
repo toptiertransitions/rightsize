@@ -1,24 +1,33 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { ReferralContact, ReferralCompany, StaffMember } from "@/lib/types";
+import { useState, useMemo, useEffect } from "react";
+import type { ClientContact, ClientOpportunity, ReferralContact, ReferralCompany, StaffMember } from "@/lib/types";
+import { buildCrmTasks, taskGroup, type CrmTask, type CrmTaskGroup } from "@/lib/crm-tasks";
 
 interface Props {
   referralContacts: ReferralContact[];
   companies: ReferralCompany[];
+  clientContacts: ClientContact[];
+  opportunities: ClientOpportunity[];
   currentUserId: string;
   staffMembers: StaffMember[];
   onContactUpdated: (id: string, updates: Partial<ReferralContact>) => void;
 }
 
-interface Task {
-  contactId: string;
-  contactName: string;
-  companyName: string;
-  date: string;
-  note: string;
-  ownerClerkId: string;
-}
+// Undated Next Steps show on today, matching how they've always appeared on the calendar
+type Task = CrmTask;
+
+const TYPE_FILTERS: { id: "all" | CrmTaskGroup; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "referral", label: "Referral Partner" },
+  { id: "client", label: "Client/Opportunity" },
+];
+
+const KIND_BADGE: Record<CrmTask["kind"], { label: string; cls: string }> = {
+  referral: { label: "Referral", cls: "bg-purple-50 text-purple-700" },
+  client: { label: "Client", cls: "bg-sky-50 text-sky-700" },
+  opportunity: { label: "Opportunity", cls: "bg-amber-50 text-amber-700" },
+};
 
 type ViewMode = "week" | "day" | "month";
 type SortCol = "date" | "contact" | "company";
@@ -74,7 +83,7 @@ interface ConfirmState {
   nextStepDate: string;
 }
 
-export default function TasksTab({ referralContacts, companies, currentUserId, staffMembers, onContactUpdated }: Props) {
+export default function TasksTab({ referralContacts, companies, clientContacts: initialClientContacts, opportunities: initialOpportunities, currentUserId, staffMembers, onContactUpdated }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [anchor, setAnchor] = useState(today);
@@ -88,8 +97,16 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   // "all" or a clerkUserId — defaults to the logged-in user
   const [userFilter, setUserFilter] = useState<string>(currentUserId);
+  const [typeFilter, setTypeFilter] = useState<"all" | CrmTaskGroup>("all");
+  const [clientContacts, setClientContacts] = useState(initialClientContacts);
+  const [opportunities, setOpportunities] = useState(initialOpportunities);
 
-  const companyMap = useMemo(() => new Map(companies.map(c => [c.id, c])), [companies]);
+  // Clients and opportunities are edited in other tabs that keep their own state,
+  // so refresh them when the Tasks tab opens to pick up any new Next Steps.
+  useEffect(() => {
+    fetch("/api/crm/client-contacts").then(r => r.ok ? r.json() : null).then(d => { if (d?.contacts) setClientContacts(d.contacts); }).catch(() => {});
+    fetch("/api/crm/opportunities").then(r => r.ok ? r.json() : null).then(d => { if (d?.opportunities) setOpportunities(d.opportunities); }).catch(() => {});
+  }, []);
 
   // Sales staff who can own contacts (for the filter bar)
   const salesStaff = useMemo(
@@ -97,25 +114,21 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
     [staffMembers]
   );
 
-  // All tasks across every contact with a next step (excluding already-completed this session)
+  // All Next Steps across referral contacts, clients and opportunities (excluding already-completed this session)
   const allTasks = useMemo<Task[]>(() => {
-    return referralContacts
-      .filter(rc => rc.nextStepDate || rc.nextStepNote)
-      .filter(rc => !completedIds.has(rc.id))
-      .map(rc => ({
-        contactId: rc.id,
-        contactName: rc.name,
-        companyName: companyMap.get(rc.referralCompanyId)?.name ?? "—",
-        date: rc.nextStepDate ?? today,
-        note: rc.nextStepNote ?? "",
-        ownerClerkId: companyMap.get(rc.referralCompanyId)?.assignedToClerkId ?? "",
-      }));
-  }, [referralContacts, companyMap, completedIds, today]);
+    return buildCrmTasks({ referralContacts, companies, clientContacts, opportunities })
+      .filter(t => !completedIds.has(t.key))
+      .map(t => ({ ...t, date: t.date || today }));
+  }, [referralContacts, companies, clientContacts, opportunities, completedIds, today]);
 
-  // Apply owner filter
-  const visibleTasks = useMemo(
+  // Apply owner filter, then type filter
+  const ownerTasks = useMemo(
     () => userFilter === "all" ? allTasks : allTasks.filter(t => t.ownerClerkId === userFilter),
     [allTasks, userFilter]
+  );
+  const visibleTasks = useMemo(
+    () => typeFilter === "all" ? ownerTasks : ownerTasks.filter(t => taskGroup(t.kind) === typeFilter),
+    [ownerTasks, typeFilter]
   );
 
   // Calendar period bounds
@@ -189,7 +202,7 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
     });
   }
 
-  function selectAll() { setSelected(new Set(tableRows.map(t => t.contactId))); }
+  function selectAll() { setSelected(new Set(tableRows.map(t => t.key))); }
   function clearAll() { setSelected(new Set()); }
 
   function openConfirm(tasks: Task[]) {
@@ -212,12 +225,13 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
     setSaveError("");
     try {
       for (const task of confirm.tasks) {
-        // 1. Log activity on referral contact
+        // 1. Log activity — on the referral/client contact, plus the opportunity for opportunity tasks
         const actRes = await fetch("/api/crm/activities", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            clientContactId: task.contactId,
+            clientContactId: task.kind === "referral" ? task.recordId : task.clientContactId,
+            ...(task.kind === "opportunity" && { opportunityId: task.recordId }),
             type: confirm.activityType,
             activityDate: confirm.activityDate,
             note: confirm.activityNote || task.note || "Completed task",
@@ -228,35 +242,45 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
           throw new Error(`Failed to log activity: ${err}`);
         }
 
-        // 2. Update next step fields + lastActivityDate on the referral contact.
+        // 2. Update next step fields on the task's record.
         // If the user entered a new next step, save it; otherwise clear.
         const hasNewNextStep = !!(confirm.nextStepNote || confirm.nextStepDate);
-        const contactRes = await fetch("/api/crm/contacts", {
+        const nextStepDate = hasNewNextStep ? (confirm.nextStepDate || null) : null;
+        const nextStepNote = hasNewNextStep ? confirm.nextStepNote : "";
+        const endpoint = task.kind === "referral" ? "/api/crm/contacts"
+          : task.kind === "client" ? "/api/crm/client-contacts"
+          : "/api/crm/opportunities";
+        const updateRes = await fetch(endpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            id: task.contactId,
-            nextStepDate: hasNewNextStep ? (confirm.nextStepDate || null) : null,
-            nextStepNote: hasNewNextStep ? confirm.nextStepNote : "",
-            lastActivityDate: confirm.activityDate,
+            id: task.recordId,
+            nextStepDate,
+            nextStepNote,
+            ...(task.kind === "referral" && { lastActivityDate: confirm.activityDate }),
           }),
         });
-        if (!contactRes.ok) {
-          const err = await contactRes.text().catch(() => contactRes.statusText);
-          throw new Error(`Failed to update contact: ${err}`);
+        if (!updateRes.ok) {
+          const err = await updateRes.text().catch(() => updateRes.statusText);
+          throw new Error(`Failed to update ${task.kind === "opportunity" ? "opportunity" : "contact"}: ${err}`);
         }
 
-        // 3. Optimistically update parent state — no page refresh needed
-        onContactUpdated(task.contactId, {
-          lastActivityDate: confirm.activityDate,
-          nextStepDate: hasNewNextStep ? (confirm.nextStepDate || undefined) : undefined,
-          nextStepNote: hasNewNextStep ? confirm.nextStepNote : undefined,
-        });
+        // 3. Optimistically update state — no page refresh needed
+        const updates = { nextStepDate: nextStepDate ?? undefined, nextStepNote: nextStepNote || undefined };
+        if (task.kind === "referral") {
+          onContactUpdated(task.recordId, { lastActivityDate: confirm.activityDate, ...updates });
+        } else if (task.kind === "client") {
+          setClientContacts(prev => prev.map(c => c.id === task.recordId ? { ...c, ...updates } : c));
+        } else {
+          setOpportunities(prev => prev.map(o => o.id === task.recordId ? { ...o, ...updates } : o));
+        }
       }
 
-      setCompletedIds(prev => {
+      // A task that got a new Next Step stays on the calendar under its new date
+      const hasNewNextStep = !!(confirm.nextStepNote || confirm.nextStepDate);
+      if (!hasNewNextStep) setCompletedIds(prev => {
         const next = new Set(prev);
-        confirm.tasks.forEach(t => next.add(t.contactId));
+        confirm.tasks.forEach(t => next.add(t.key));
         return next;
       });
       setSelected(new Set());
@@ -288,6 +312,16 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
     </span>
   );
 
+  // Count tasks per type (within the current owner filter) for the type pills
+  const taskCountByGroup = useMemo(() => {
+    const m = new Map<string, number>([["all", ownerTasks.length]]);
+    for (const t of ownerTasks) {
+      const g = taskGroup(t.kind);
+      m.set(g, (m.get(g) ?? 0) + 1);
+    }
+    return m;
+  }, [ownerTasks]);
+
   // Count tasks per owner for filter pills
   const taskCountByOwner = useMemo(() => {
     const m = new Map<string, number>();
@@ -305,11 +339,11 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Next steps across referral contacts</p>
+          <p className="text-sm text-gray-500 mt-0.5">Next steps across referral partners, clients and opportunities</p>
         </div>
         {selected.size > 0 && (
           <button
-            onClick={() => openConfirm(visibleTasks.filter(t => selected.has(t.contactId)))}
+            onClick={() => openConfirm(visibleTasks.filter(t => selected.has(t.key)))}
             className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -376,6 +410,27 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
         </button>
       </div>
 
+      {/* Type filter */}
+      <div className="flex flex-wrap items-center gap-2 -mt-3">
+        <span className="text-xs font-medium text-gray-400 mr-1">Type</span>
+        {TYPE_FILTERS.map(f => (
+          <button
+            key={f.id}
+            onClick={() => { setTypeFilter(f.id); setSelected(new Set()); }}
+            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+              typeFilter === f.id
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "border-gray-300 text-gray-600 hover:border-indigo-400"
+            }`}
+          >
+            {f.label}
+            <span className={`ml-1.5 ${typeFilter === f.id ? "opacity-75" : "text-gray-400"}`}>
+              {taskCountByGroup.get(f.id) ?? 0}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Calendar */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {/* Calendar controls */}
@@ -413,7 +468,7 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
                   </p>
                   <div className="space-y-1">
                     {tasks.map(t => (
-                      <button key={t.contactId} onClick={() => openConfirm([t])}
+                      <button key={t.key} onClick={() => openConfirm([t])}
                         className={`w-full text-left text-xs px-1.5 py-1 rounded ${chipColor(t.date)} hover:opacity-80 transition-opacity`}>
                         <span className="font-medium block truncate">{t.contactName}</span>
                         {t.note && <span className="block truncate opacity-75">{t.note}</span>}
@@ -434,9 +489,12 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
             ) : (
               <div className="space-y-2">
                 {(tasksByDay.get(anchor) ?? []).map(t => (
-                  <div key={t.contactId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div key={t.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">{t.contactName}</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {t.contactName}
+                        <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded ${KIND_BADGE[t.kind].cls}`}>{KIND_BADGE[t.kind].label}</span>
+                      </p>
                       <p className="text-xs text-gray-500">{t.companyName}</p>
                       {t.note && <p className="text-xs text-gray-600 mt-1">{t.note}</p>}
                     </div>
@@ -478,7 +536,7 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
                         </p>
                         <div className="space-y-0.5">
                           {tasks.slice(0, 2).map(t => (
-                            <button key={t.contactId} onClick={() => openConfirm([t])}
+                            <button key={t.key} onClick={() => openConfirm([t])}
                               className={`w-full text-left text-xs px-1 py-0.5 rounded truncate ${chipColor(t.date)} hover:opacity-80`}>
                               {t.contactName}
                             </button>
@@ -537,7 +595,7 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
                 Contact <SortIcon col="contact" />
               </th>
               <th className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 whitespace-nowrap" onClick={() => toggleSort("company")}>
-                Company <SortIcon col="company" />
+                Company / Type <SortIcon col="company" />
               </th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Next Step Note</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Action</th>
@@ -556,19 +614,22 @@ export default function TasksTab({ referralContacts, companies, currentUserId, s
               </tr>
             )}
             {tableRows.map(task => {
-              const isSelected = selected.has(task.contactId);
+              const isSelected = selected.has(task.key);
               return (
-                <tr key={task.contactId}
+                <tr key={task.key}
                   className={`border-b border-gray-100 transition-colors ${isSelected ? "bg-green-50" : "hover:bg-gray-50"}`}>
                   <td className="px-4 py-3">
-                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(task.contactId)} className="rounded border-gray-300" />
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(task.key)} className="rounded border-gray-300" />
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${chipColor(task.date)}`}>
                       {isOverdue(task.date) ? "Overdue · " : ""}{fmtDisplay(task.date)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{task.contactName}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {task.contactName}
+                    <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded ${KIND_BADGE[task.kind].cls}`}>{KIND_BADGE[task.kind].label}</span>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{task.companyName}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{task.note || <span className="text-gray-400">—</span>}</td>
                   <td className="px-4 py-3 text-right">

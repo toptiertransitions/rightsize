@@ -4511,6 +4511,8 @@ function mapClientContact(record: AirtableRecord): ClientContact {
     createdAt: toStr(f["CreatedAt"]),
     tags: toStr(f["Tags"]) || undefined,
     emailOptout: !!f["EmailOptout"],
+    nextStepDate: toStr(f["NextStepDate"]) || undefined,
+    nextStepNote: toStr(f["NextStepNote"]) || undefined,
   };
 }
 
@@ -4576,7 +4578,7 @@ export async function createClientContact(data: {
 
 export async function updateClientContact(
   id: string,
-  data: Partial<{ name: string; email: string; phone: string; source: string; referralPartnerId: string; clientReferralId: string; staffReferralId: string; notes: string; assignedToClerkId: string }>
+  data: Partial<{ name: string; email: string; phone: string; source: string; referralPartnerId: string; clientReferralId: string; staffReferralId: string; notes: string; assignedToClerkId: string; nextStepDate: string | null; nextStepNote: string }>
 ): Promise<ClientContact> {
   const fields: Record<string, unknown> = {};
   if (data.name !== undefined) fields["Name"] = data.name;
@@ -4588,6 +4590,8 @@ export async function updateClientContact(
   if (data.staffReferralId !== undefined) fields["StaffReferralId"] = data.staffReferralId;
   if (data.notes !== undefined) fields["Notes"] = data.notes;
   if (data.assignedToClerkId !== undefined) fields["AssignedToClerkId"] = data.assignedToClerkId;
+  if (data.nextStepDate !== undefined) fields["NextStepDate"] = data.nextStepDate || null;
+  if (data.nextStepNote !== undefined) fields["NextStepNote"] = data.nextStepNote;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_CLIENT_CONTACTS, `/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ fields }),

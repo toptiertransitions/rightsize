@@ -37,6 +37,14 @@
     {
       "path": "/api/cron/close-home-pickup-sales",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/cron/crm-tasks-report",
+      "schedule": "0 14 * * 5"
+    },
+    {
+      "path": "/api/cron/crm-tasks-report",
+      "schedule": "0 15 * * 5"
     }
   ]
 }

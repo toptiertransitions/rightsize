@@ -1153,6 +1153,8 @@ export interface ClientContact {
   createdAt: string;
   tags?: string;
   emailOptout?: boolean;
+  nextStepDate?: string;
+  nextStepNote?: string;
 }
 
 export type OpportunityStage = "Lead" | "Qualifying" | "Proposing" | "Won" | "Lost";

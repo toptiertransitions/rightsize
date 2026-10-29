@@ -1678,10 +1678,15 @@ function ContactActivityPanel({
   contact,
   onClose,
   afterLog,
+  clientNextStep,
+  onClientNextStepSaved,
 }: {
   contact: { id: string; name: string; email?: string };
   onClose: () => void;
   afterLog?: (contactId: string, date: string) => void;
+  /** Pass for client contacts to show the Next Step editor (feeds CRM → Tasks) */
+  clientNextStep?: { date?: string; note?: string };
+  onClientNextStepSaved?: (contact: ClientContact) => void;
 }) {
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1689,6 +1694,34 @@ function ContactActivityPanel({
   const [activityNote, setActivityNote] = useState("");
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [editingActivity, setEditingActivity] = useState<CRMActivity | null>(null);
+  const [nextStepNote, setNextStepNote] = useState(clientNextStep?.note ?? "");
+  const [nextStepDate, setNextStepDate] = useState(clientNextStep?.date?.slice(0, 10) ?? "");
+  const [savedNextStep, setSavedNextStep] = useState({ note: clientNextStep?.note ?? "", date: clientNextStep?.date?.slice(0, 10) ?? "" });
+  const [nextStepSaving, setNextStepSaving] = useState(false);
+  const [nextStepError, setNextStepError] = useState("");
+  const nextStepDirty = nextStepNote !== savedNextStep.note || nextStepDate !== savedNextStep.date;
+
+  async function saveNextStep(note: string, date: string) {
+    setNextStepSaving(true);
+    setNextStepError("");
+    try {
+      const res = await fetch("/api/crm/client-contacts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: contact.id, nextStepNote: note.trim(), nextStepDate: date || null }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setNextStepNote(note.trim());
+      setNextStepDate(date);
+      setSavedNextStep({ note: note.trim(), date });
+      if (data.contact) onClientNextStepSaved?.(data.contact);
+    } catch {
+      setNextStepError("Couldn't save the Next Step. Please try again.");
+    } finally {
+      setNextStepSaving(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1781,6 +1814,52 @@ function ContactActivityPanel({
               </button>
             </div>
           </div>
+
+          {/* Next Step — shows on CRM → Tasks */}
+          {clientNextStep && (
+            <div className="border-t border-gray-100 pt-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Next Step</h3>
+                {(savedNextStep.note || savedNextStep.date) && !nextStepDirty && (
+                  <button
+                    onClick={() => saveNextStep("", "")}
+                    disabled={nextStepSaving}
+                    className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="date"
+                  value={nextStepDate}
+                  onChange={(e) => setNextStepDate(e.target.value)}
+                  className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:text-left"
+                />
+              </div>
+              <div className="flex gap-2">
+                <textarea
+                  value={nextStepNote}
+                  onChange={(e) => setNextStepNote(e.target.value)}
+                  placeholder="What needs to happen next?"
+                  rows={2}
+                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 resize-none"
+                />
+                <button
+                  onClick={() => saveNextStep(nextStepNote, nextStepDate)}
+                  disabled={nextStepSaving || !nextStepDirty || (!nextStepNote.trim() && !nextStepDate)}
+                  className="text-sm bg-forest-600 text-white rounded-lg px-3 py-2 hover:bg-forest-700 disabled:opacity-50 self-end"
+                >
+                  {nextStepSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+              {nextStepError && <p className="text-xs text-red-600 mt-1.5">{nextStepError}</p>}
+              {!nextStepError && (savedNextStep.note || savedNextStep.date) && !nextStepDirty && (
+                <p className="text-xs text-gray-400 mt-1.5">Saved · shows on CRM → Tasks</p>
+              )}
+            </div>
+          )}
 
           {/* Timeline */}
           <div>
@@ -2607,6 +2686,11 @@ function ContactsTab({
         <ContactActivityPanel
           contact={activityContact}
           onClose={() => setActivityContact(null)}
+          clientNextStep={{ date: activityContact.nextStepDate, note: activityContact.nextStepNote }}
+          onClientNextStepSaved={(updated) => {
+            setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+            onContactUpserted?.(updated);
+          }}
         />
       )}
     </div>
@@ -6161,6 +6245,8 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         <TasksTab
           referralContacts={localReferralContacts}
           companies={companies}
+          clientContacts={localContacts}
+          opportunities={opportunities}
           currentUserId={currentUserId}
           staffMembers={staffMembers}
           onContactUpdated={handleReferralContactUpdated}
