@@ -9,6 +9,7 @@ import { WeeklyActiveProjectsButton } from "./WeeklyActiveProjectsButton";
 import { ClientPipelineReportButton } from "./ClientPipelineReportButton";
 import { SendQPlanningReportButton } from "./SendQPlanningReportButton";
 import { WarRoomForMeButton } from "./WarRoomForMeButton";
+import { WeeklyWinsForMeButton } from "./WeeklyWinsForMeButton";
 import { ReferralFunnelForMeButton } from "./ReferralFunnelForMeButton";
 import { ActivityAnalysisForMeButton } from "./ActivityAnalysisForMeButton";
 import { ConsignmentStatusForMeButton } from "./ConsignmentStatusForMeButton";
@@ -45,6 +46,7 @@ export default async function InvoicingSettingsPage() {
           <ReferralFunnelForMeButton />
           <ActivityAnalysisForMeButton reps={salesReps} />
           <ConsignmentStatusForMeButton />
+          <WeeklyWinsForMeButton />
         </div>
         <InvoicingSettingsClient initialSettings={settings} />
 

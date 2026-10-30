@@ -7863,6 +7863,15 @@ export async function getReviewsForTenant(tenantId: string): Promise<import("./t
   return records.map(mapGoogleReview);
 }
 
+/** Every Google review (all projects) logged on or after `sinceDate` (YYYY-MM-DD). */
+export async function getAllGoogleReviewsSince(sinceDate: string): Promise<import("./types").GoogleReview[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.GOOGLE_REVIEWS)
+    .select({ sort: [{ field: "CreatedAt", direction: "desc" }] })
+    .all();
+  return records.map(mapGoogleReview).filter((r) => r.createdAt.slice(0, 10) >= sinceDate);
+}
+
 export async function createGoogleReview(tenantId: string, stars: number, text: string): Promise<import("./types").GoogleReview> {
   const base = getBase();
   const record = await base(AIRTABLE_TABLES.GOOGLE_REVIEWS).create({
