@@ -1,10 +1,12 @@
-// Team shoutouts: Team Leads, Managers and Admins recognize any TTT team
+// Team shoutouts: Team Leads, Sales, Managers and Admins recognize any TTT team
 // member. Stored in the Shoutouts Airtable table; shown on every staff home
-// page (team-wide feed) and emailed to the recipient with leadership CC'd.
+// page and the CRM Dashboard (team-wide feed) and emailed to the recipient
+// with leadership CC'd.
 import { AIRTABLE_TABLES } from "./config";
-import type { SystemRole } from "./types";
+import { getSuspendedOrDeletedClerkUserIds } from "./staff-visibility";
+import type { StaffMember, SystemRole } from "./types";
 
-export const SHOUTOUT_AUTHOR_ROLES: SystemRole[] = ["TTTTeamLead", "TTTManager", "TTTAdmin"];
+export const SHOUTOUT_AUTHOR_ROLES: SystemRole[] = ["TTTTeamLead", "TTTSales", "TTTManager", "TTTAdmin"];
 // CC'd on every shoutout email (besides the recipient, who is the To).
 export const SHOUTOUT_CC_ROLES: SystemRole[] = ["TTTTeamLead", "TTTManager", "TTTAdmin", "TTTSales"];
 export const SHOUTOUT_MAX_LENGTH = 1500;
@@ -21,6 +23,16 @@ export interface Shoutout {
 
 export function canGiveShoutout(role: SystemRole | null | undefined): boolean {
   return !!role && SHOUTOUT_AUTHOR_ROLES.includes(role);
+}
+
+/** Who `userId` can give a shoutout to: active staff, minus themselves and suspended/deleted Clerk accounts. */
+export async function getShoutoutTeam(allStaff: StaffMember[], userId: string): Promise<{ clerkUserId: string; name: string; role: string }[]> {
+  const candidates = allStaff.filter((s) => s.isActive && s.clerkUserId && s.clerkUserId !== userId);
+  const hidden = await getSuspendedOrDeletedClerkUserIds(candidates.map((s) => s.clerkUserId)).catch(() => new Set<string>());
+  return candidates
+    .filter((s) => !hidden.has(s.clerkUserId))
+    .map((s) => ({ clerkUserId: s.clerkUserId, name: s.displayName, role: s.role.replace(/^TTT/, "").replace("TeamLead", "Team Lead") }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function atFetch(path: string, options?: RequestInit) {

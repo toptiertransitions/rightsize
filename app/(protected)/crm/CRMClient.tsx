@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import VoiceLogTab from "./VoiceLogTab";
 import TasksTab from "./TasksTab";
+import { ShoutoutsSection } from "../home/ShoutoutsSection";
+import type { Shoutout } from "@/lib/shoutouts";
 import WarRoomTab from "./WarRoomTab";
 import NurtureTab from "./NurtureTab";
 import AvailabilityTab from "./AvailabilityTab";
@@ -61,6 +63,9 @@ interface CRMClientProps {
   tenants: Tenant[];
   currentUserId: string;
   sysRole: string;
+  shoutouts: Shoutout[];
+  canGiveShoutout: boolean;
+  shoutoutTeam: { clerkUserId: string; name: string; role: string }[];
 }
 
 const STAGES: OpportunityStage[] = ["Lead", "Qualifying", "Proposing", "Won", "Lost"];
@@ -6098,7 +6103,7 @@ function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { g
 }
 
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
-export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants, currentUserId, sysRole }: CRMClientProps) {
+export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants, currentUserId, sysRole, shoutouts, canGiveShoutout, shoutoutTeam }: CRMClientProps) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -6201,6 +6206,18 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           tenants={tenants}
           onNavigate={handleDashboardNavigate}
         />
+      )}
+      {/* Shoutouts — same team-wide feed as the staff Home page, at the very bottom of the Dashboard */}
+      {tab === "dashboard" && (
+        <div className="mt-10">
+          <ShoutoutsSection
+            initialShoutouts={shoutouts}
+            currentUserId={currentUserId}
+            canGive={canGiveShoutout}
+            isAdmin={sysRole === "TTTAdmin"}
+            team={shoutoutTeam}
+          />
+        </div>
       )}
       {tab === "opportunities" && (
         <OpportunitiesTab

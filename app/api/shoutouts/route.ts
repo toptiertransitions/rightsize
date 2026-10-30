@@ -21,7 +21,7 @@ export async function GET() {
   return NextResponse.json({ shoutouts: await getRecentShoutouts() });
 }
 
-// POST: Team Leads, Managers and Admins only. Recipient is resolved from
+// POST: Team Leads, Sales, Managers and Admins only. Recipient is resolved from
 // StaffRoles server-side; the CC list is never taken from the client.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();

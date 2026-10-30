@@ -22,8 +22,7 @@ import type { TodayShift } from "./TodaysPlan";
 import { AboutMeSection } from "./AboutMeSection";
 import { ShoutoutsSection } from "./ShoutoutsSection";
 import { weeklyHours, goalStreak, nextBirthday, nextAnniversary, yearsOfService, dayOfWeek } from "@/lib/about-me";
-import { getRecentShoutouts, canGiveShoutout } from "@/lib/shoutouts";
-import { getSuspendedOrDeletedClerkUserIds } from "@/lib/staff-visibility";
+import { getRecentShoutouts, canGiveShoutout, getShoutoutTeam } from "@/lib/shoutouts";
 import { ctToday } from "@/lib/date-ct";
 
 const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
@@ -167,13 +166,7 @@ export default async function DashboardPage({
     const ctTodayStr = ctToday();
     const myWeeks = weeklyHours(ownTimeEntries.filter((e) => e.clerkUserId === userId), ctTodayStr);
     const canShoutout = canGiveShoutout(systemRole);
-    let shoutoutTeam: { clerkUserId: string; name: string; role: string }[] = [];
-    if (canShoutout) {
-      const candidates = allStaff.filter((s) => s.isActive && s.clerkUserId && s.clerkUserId !== userId);
-      const hidden = await getSuspendedOrDeletedClerkUserIds(candidates.map((s) => s.clerkUserId)).catch(() => new Set<string>());
-      shoutoutTeam = candidates.filter((s) => !hidden.has(s.clerkUserId)).map((s) => ({ clerkUserId: s.clerkUserId, name: s.displayName, role: s.role.replace(/^TTT/, "").replace("TeamLead", "Team Lead") }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    }
+    const shoutoutTeam = canShoutout ? await getShoutoutTeam(allStaff, userId) : [];
 
     // Filter tenants for staff views: admin sees all, staff/manager sees only TTT
     const filteredTenants = allTenants.filter(t => !t.isArchived && (isAdmin || t.isTTT === true));
@@ -234,7 +227,7 @@ export default async function DashboardPage({
           />
         )}
 
-        {/* Shoutouts — team-wide feed; Team Leads, Managers, Admins can give them */}
+        {/* Shoutouts — team-wide feed; Team Leads, Sales, Managers, Admins can give them */}
         <ShoutoutsSection
           initialShoutouts={shoutouts}
           currentUserId={userId}

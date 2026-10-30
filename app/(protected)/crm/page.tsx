@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getSystemRole, getOpportunities, getClientContacts, getReferralCompanies, getReferralContacts, getGmailToken, getStaffMembers, getTenants } from "@/lib/airtable";
+import { getRecentShoutouts, canGiveShoutout, getShoutoutTeam } from "@/lib/shoutouts";
 import { CRMClient } from "./CRMClient";
 
 export default async function CRMPage() {
@@ -12,7 +13,7 @@ export default async function CRMPage() {
     redirect("/home");
   }
 
-  const [opportunities, clientContacts, companies, referralContacts, staffMembers, token, tenants] = await Promise.all([
+  const [opportunities, clientContacts, companies, referralContacts, staffMembers, token, tenants, shoutouts] = await Promise.all([
     getOpportunities(),
     getClientContacts(),
     getReferralCompanies(),
@@ -20,7 +21,11 @@ export default async function CRMPage() {
     getStaffMembers().catch(() => []),
     getGmailToken(userId).catch(() => null),
     getTenants().catch(() => []),
+    getRecentShoutouts(),
   ]);
+
+  const canShoutout = canGiveShoutout(sysRole);
+  const shoutoutTeam = canShoutout ? await getShoutoutTeam(staffMembers, userId) : [];
 
   // A token record with empty refreshToken means the connection expired (invalid_grant).
   const gmailConnected = !!token?.refreshToken;
@@ -39,6 +44,9 @@ export default async function CRMPage() {
       tenants={tenants}
       currentUserId={userId}
       sysRole={sysRole ?? ""}
+      shoutouts={shoutouts}
+      canGiveShoutout={canShoutout}
+      shoutoutTeam={shoutoutTeam}
     />
   );
 }
