@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PreferredBadge } from "./PreferredBadge";
+import { PartnerContactName } from "./PartnerContactName";
 import type { ScoredMatch, ScoringResult } from "@/lib/partners/scoring";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { communityCompletionLabel } from "@/lib/partners/copy";
@@ -79,6 +80,8 @@ function MatchCard({
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">{partner.vendorName}</h3>
           <DeliveryPill match={match} />
         </div>
+        {/* Pulled up against the name row (the column's gap is meant for sections) */}
+        <PartnerContactName contactName={partner.contactName} vendorName={partner.vendorName} className="-mt-1" />
         <PreferredBadge communities={partner.preferredBy} />
         {partner.reviewCount > 0 && !partner.ratingHidden && <RatingStars rating={partner.avgRating} reviewCount={partner.reviewCount} />}
         <p className="text-sm text-gray-600 leading-relaxed">{match.whyThisMatch}</p>

@@ -6,6 +6,7 @@ import { PartnerLogo } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
 import { PartnerFilesSection } from "./PartnerFilesSection";
 import { PreferredBadge } from "./PreferredBadge";
+import { PartnerContactName } from "./PartnerContactName";
 
 function cleanDomain(url: string): string {
   try {
@@ -78,6 +79,7 @@ export function PartnerCard({ tenantId, partner, isTopMatch, matchedLocation, is
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug line-clamp-2">
             {partner.vendorName}
           </h3>
+          <PartnerContactName contactName={partner.contactName} vendorName={partner.vendorName} />
           {matchedLocation === "nearby" && (
             <span className="text-[11px] text-amber-600 font-medium">Serves nearby</span>
           )}
