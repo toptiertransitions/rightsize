@@ -53,6 +53,14 @@ export default async function MarketplaceDashboardPage() {
   const canReview = role === "TTTAdmin" || (!!userId && isTTTAdmin(userId));
   const stalePartners = partners.filter((p) => p.lifecycleStatus === "Live" && daysAgo(p.updatedAt) > STALE_DAYS);
 
+  // A category a live partner added later, submitted on its own. First-time
+  // submissions (partner itself Submitted) stay in Partner Review below.
+  const partnerById = new Map(partners.map((p) => [p.id, p]));
+  const newCategoryRows = listings
+    .filter((l) => l.status === "Submitted" && ["Live", "Paused"].includes(partnerById.get(l.partnerId)?.lifecycleStatus ?? ""))
+    .map((l) => ({ listing: l, partner: partnerById.get(l.partnerId)!, label: categoryLabel.get(l.categoryId) ?? "Category" }))
+    .sort((a, b) => (b.listing.updatedAt || "").localeCompare(a.listing.updatedAt || ""));
+
   const listingsByCategory = categories.map((c) => ({
     category: c,
     live: listings.filter((l) => l.categoryId === c.id && l.status === "Live").length,
@@ -130,6 +138,24 @@ export default async function MarketplaceDashboardPage() {
             </table>
           </div>
         </section>
+
+        {/* New categories from partners who are already live */}
+        {newCategoryRows.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">New Categories Awaiting Approval</h2>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800/60">
+              {newCategoryRows.map(({ listing, partner, label }) => (
+                <Link key={listing.id} href={`/admin/marketplace/partners/${partner.id}?tab=listings`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-800/40 transition-colors">
+                  <span className="text-sm text-gray-200">
+                    {partner.companyName}
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300">{label}</span>
+                  </span>
+                  <span className="text-xs text-gray-500 whitespace-nowrap">Review and move to Live →</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Partner review: Submitted by default, filter any statuses */}
         <section>

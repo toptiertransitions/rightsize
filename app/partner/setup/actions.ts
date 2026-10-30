@@ -5,12 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Resend } from "resend";
 import { getPartnerAccount } from "@/lib/marketplace/partnerAccount";
-import { updatePartner, updateListing } from "@/lib/marketplace/data";
+import { updatePartner, updateListing, createListing, getAllCategories } from "@/lib/marketplace/data";
 import { computeListingCompleteness } from "@/lib/marketplace/completeness";
 import { zipsForCounties, isKnownCounty } from "@/lib/marketplace/counties";
-import { applyMirrors } from "@/lib/marketplace/partnerScreens";
 import { zipsInRadius, placeForZip, RADIUS_MIN_MILES, RADIUS_MAX_MILES, RADIUS_DEFAULT_MILES } from "@/lib/marketplace/serviceRadius";
-import { getPartnerCriteria, MATCH_CRITERIA_ATTR, readMatchCriteria } from "@/lib/partners/criteria";
+import { getPartnerCriteria, MATCH_CRITERIA_ATTR, readMatchCriteria, currentCriteriaValues } from "@/lib/partners/criteria";
+import { applyMirrors, partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import { getAdminEmails } from "@/lib/admin-notifications";
 import { updateReferralCompany, updateReferralContact } from "@/lib/airtable";
 import type { PartnerCategory } from "@/lib/types";
@@ -226,5 +226,62 @@ export async function requestCategoryChangeAction(message: string): Promise<Resu
       </div>`,
     });
     if (error) throw new Error("We couldn't send that right now. Please try again.");
+  });
+}
+
+// ─── Adding a category after setup ────────────────────────────────────────────
+// One partner can be listed in several categories (one listing each). Partners
+// who are already live add a category here: it starts as a Draft, they fill in
+// its questions on My Listing, then submit just that category for review.
+// Partners still in their first review get it reviewed with the whole profile
+// (submitSetupAction moves every Draft listing to Submitted).
+
+const ADDABLE_STATUSES = new Set(["Submitted", "Waiting on Partner", "Live", "Paused"]);
+
+export async function addCategoryAction(categoryId: string): Promise<Result> {
+  return run(async () => {
+    const { partner, listings } = await requireAccount();
+    if (!ADDABLE_STATUSES.has(partner.lifecycleStatus)) throw new Error("Categories can't be added to your profile right now. Please contact Top Tier.");
+    if (listings.some((l) => l.categoryId === categoryId)) throw new Error("You're already in that category.");
+    const category = (await getAllCategories()).find((c) => c.id === categoryId);
+    if (!category) throw new Error("That category wasn't found.");
+    await createListing({ partnerId: partner.id, categoryId, status: "Draft", isPrimary: listings.length === 0 });
+    revalidatePath("/partner/listing");
+  });
+}
+
+/** Live/Paused partners: hands one newly added category to TTT for review. */
+export async function submitCategoryAction(listingId: string): Promise<Result> {
+  return run(async () => {
+    const { partner, listings, contact, membership } = await requireAccount();
+    const listing = listings.find((l) => l.id === listingId);
+    if (!listing) throw new Error("That category wasn't found on your profile.");
+    if (listing.status !== "Draft") throw new Error("That category was already submitted.");
+    const defs = getPartnerCriteria(listing.category.label as PartnerCategory);
+    const criteria = readMatchCriteria(listing.attributes);
+    if (!defs.every((c) => currentCriteriaValues(c, criteria).length > 0)) {
+      throw new Error("Answer and save the \"who you serve\" questions for this category first.");
+    }
+    await updateListing(listing.id, { status: "Submitted" });
+
+    const resendKey = process.env.RESEND_API_KEY;
+    const admins = await getAdminEmails().catch(() => []);
+    if (resendKey && admins.length > 0) {
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+      const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const label = esc(partnerCategoryLabel(listing.category.label));
+      await new Resend(resendKey).emails.send({
+        from: process.env.RESEND_FROM_EMAIL ?? "noreply@toptiertransitions.com",
+        to: admins,
+        subject: `New category for review: ${partner.companyName} (${partnerCategoryLabel(listing.category.label)})`,
+        html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;">
+          <p style="font-size:16px;font-weight:700;color:#111827;">${esc(partner.companyName)} added a new category: ${label}</p>
+          <p style="font-size:14px;color:#4B5563;line-height:1.6;">${esc((contact?.name || membership.name) || partner.pocName)} filled in their ${label} details and submitted them. Their other categories stay live. Review the new one, set its referral terms, and move it to Live when it looks good.</p>
+          <p><a href="${appUrl}/admin/marketplace/partners/${partner.id}?tab=listings" style="display:inline-block;background:#2d4a3e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">Review ${label}</a></p>
+        </div>`,
+      }).catch((e) => console.error("[partner category] admin email failed:", e));
+    }
+    revalidatePath("/partner/listing");
+    revalidatePath("/admin/marketplace");
   });
 }

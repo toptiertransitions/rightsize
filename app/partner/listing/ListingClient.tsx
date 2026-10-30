@@ -12,7 +12,8 @@ import {
   type BusinessData, type AboutData, type AreaData,
 } from "../setup/SetupFields";
 import { inPersonOnly, partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
-import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, requestCategoryChangeAction, submitSetupAction } from "../setup/actions";
+import { SearchCombobox } from "@/components/ui/SearchCombobox";
+import { saveBusinessAction, saveAboutAction, saveServiceAreaAction, saveListingAction, requestCategoryChangeAction, submitSetupAction, addCategoryAction, submitCategoryAction } from "../setup/actions";
 
 interface ListingData {
   id: string;
@@ -32,7 +33,7 @@ const STATUS_COPY: Partial<Record<MarketplaceLifecycleStatus, { text: string; cl
   Rejected: { text: "Your profile wasn't approved for the partner network. Questions? Reply to our email.", cls: "bg-gray-50 border-gray-200 text-gray-700" },
 };
 
-export function ListingClient({ status, reviewFeedback, business: b0, about: a0, area: ar0, listings }: {
+export function ListingClient({ status, reviewFeedback, business: b0, about: a0, area: ar0, listings, addableCategories }: {
   status: MarketplaceLifecycleStatus;
   /** Our latest review note, shown while changes are requested */
   reviewFeedback?: string;
@@ -40,6 +41,8 @@ export function ListingClient({ status, reviewFeedback, business: b0, about: a0,
   about: AboutData;
   area: AreaData;
   listings: ListingData[];
+  /** Categories this partner isn't in yet, for "Add a category" */
+  addableCategories: { id: string; label: string }[];
 }) {
   const router = useRouter();
   const [business, setBusiness] = useState(b0);
@@ -100,15 +103,18 @@ export function ListingClient({ status, reviewFeedback, business: b0, about: a0,
           <AreaFields data={area} onChange={setArea} defaultZip={business.zip} inPersonOnly={inPersonOnly(listings.map((l) => l.label))} />
         </Card>
 
-        {listings.map((l) => <CategoryCards key={l.id} listing={l} />)}
+        {listings.map((l) => <CategoryCards key={l.id} listing={l} partnerStatus={status} />)}
 
-        <CategoryChangeRequest current={listings.map((l) => partnerCategoryLabel(l.label))} />
+        <CategoriesSection listings={listings} partnerStatus={status} addable={addableCategories} />
       </div>
     </div>
   );
 }
 
-function CategoryCards({ listing }: { listing: ListingData }) {
+// A partner already live elsewhere submits a newly added category on its own
+const SUBMIT_PER_CATEGORY: MarketplaceLifecycleStatus[] = ["Live", "Paused"];
+
+function CategoryCards({ listing, partnerStatus }: { listing: ListingData; partnerStatus: MarketplaceLifecycleStatus }) {
   const defs = getPartnerCriteria(listing.label as PartnerCategory);
   const [criteria, setCriteria] = useState<MatchCriteria>(() => readMatchCriteria(listing.attributes));
   const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...listing.attributes }));
@@ -146,7 +152,45 @@ function CategoryCards({ listing }: { listing: ListingData }) {
           <DetailsFields schema={fields} values={values} onChange={setValues} />
         </Card>
       )}
+      {listing.status === "Draft" && SUBMIT_PER_CATEGORY.includes(partnerStatus) && <SubmitCategory listing={listing} />}
+      {listing.status === "Submitted" && SUBMIT_PER_CATEGORY.includes(partnerStatus) && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {partnerCategoryLabel(listing.label)} is under review. Your other categories stay live in the meantime.
+        </p>
+      )}
     </>
+  );
+}
+
+function SubmitCategory({ listing }: { listing: ListingData }) {
+  const router = useRouter();
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const label = partnerCategoryLabel(listing.label);
+
+  async function submit() {
+    setSending(true);
+    setError("");
+    const r = await submitCategoryAction(listing.id);
+    setSending(false);
+    if (!r.ok) setError(r.error);
+    else router.refresh();
+  }
+
+  return (
+    <section className="rounded-2xl border border-forest-200 bg-forest-50 p-5">
+      <h2 className="text-base font-bold text-gray-900">Ready to add {label}?</h2>
+      <p className="text-sm text-gray-600 mt-1">Save your {label} answers above, then send them to our team. Your other categories stay live while we review.</p>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={sending}
+        className="mt-4 h-11 px-5 rounded-xl bg-forest-600 text-white text-sm font-semibold hover:bg-forest-700 disabled:opacity-40"
+      >
+        {sending ? "Submitting…" : `Submit ${label} for review`}
+      </button>
+      {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+    </section>
   );
 }
 
@@ -194,11 +238,42 @@ function Card({ title, subtitle, children, onSave, onSaved, valid = true }: {
   );
 }
 
-function CategoryChangeRequest({ current }: { current: string[] }) {
-  const [open, setOpen] = useState(false);
+const LISTING_BADGE: Record<MarketplaceListingStatus, { text: string; cls: string }> = {
+  Live: { text: "Live", cls: "bg-forest-50 text-forest-700 border-forest-100" },
+  Submitted: { text: "In review", cls: "bg-amber-50 text-amber-800 border-amber-200" },
+  Draft: { text: "Needs details", cls: "bg-gray-50 text-gray-600 border-gray-200" },
+  Paused: { text: "Paused", cls: "bg-gray-50 text-gray-600 border-gray-200" },
+};
+
+const CAN_ADD: MarketplaceLifecycleStatus[] = ["Submitted", "Waiting on Partner", "Live", "Paused"];
+
+function CategoriesSection({ listings, partnerStatus, addable }: {
+  listings: ListingData[];
+  partnerStatus: MarketplaceLifecycleStatus;
+  addable: { id: string; label: string }[];
+}) {
+  const router = useRouter();
+  const [adding, setAdding] = useState(false);
+  const [categoryId, setCategoryId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState("");
+  const [requestOpen, setRequestOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // Several categories only show status chips once there's more than one to compare
+  const multi = listings.length > 1;
+
+  async function add() {
+    setSaving(true);
+    setAddError("");
+    const r = await addCategoryAction(categoryId);
+    setSaving(false);
+    if (!r.ok) return setAddError(r.error);
+    setAdding(false);
+    setCategoryId("");
+    router.refresh();
+  }
 
   async function send() {
     setSending(true);
@@ -207,7 +282,7 @@ function CategoryChangeRequest({ current }: { current: string[] }) {
     if (r.ok) {
       setResult({ ok: true, text: "Sent. Our team will follow up with you." });
       setMessage("");
-      setOpen(false);
+      setRequestOpen(false);
     } else {
       setResult({ ok: false, text: r.error });
     }
@@ -217,33 +292,66 @@ function CategoryChangeRequest({ current }: { current: string[] }) {
     <section className="bg-white rounded-2xl border border-gray-200 p-5">
       <h2 className="text-base font-bold text-gray-900">Your categories</h2>
       <div className="flex flex-wrap gap-2 mt-3">
-        {current.map((l) => (
-          <span key={l} className="px-3 py-1.5 rounded-full bg-forest-50 text-forest-700 text-sm font-medium border border-forest-100">{l}</span>
+        {listings.map((l) => (
+          <span key={l.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-forest-50 text-forest-700 text-sm font-medium border border-forest-100">
+            {partnerCategoryLabel(l.label)}
+            {multi && partnerStatus !== "Submitted" && partnerStatus !== "Waiting on Partner" && (
+              <span className={cn("text-[11px] px-1.5 py-0.5 rounded-full border", LISTING_BADGE[l.status].cls)}>{LISTING_BADGE[l.status].text}</span>
+            )}
+          </span>
         ))}
       </div>
-      {open ? (
+
+      {CAN_ADD.includes(partnerStatus) && addable.length > 0 && (
+        adding ? (
+          <div className="mt-4">
+            <p className="text-sm text-gray-600 mb-2">Does your business also offer another service? Add it to be listed there too.</p>
+            <SearchCombobox
+              value={categoryId}
+              onChange={setCategoryId}
+              options={addable}
+              placeholder="Search categories…"
+              ariaLabel="Category to add"
+              inputClassName="h-11 text-base rounded-xl"
+            />
+            <div className="flex gap-2 mt-3">
+              <button type="button" onClick={add} disabled={saving || !categoryId} className="h-11 px-5 rounded-xl bg-forest-600 text-white text-sm font-semibold disabled:opacity-40">
+                {saving ? "Adding…" : "Add category"}
+              </button>
+              <button type="button" onClick={() => { setAdding(false); setCategoryId(""); setAddError(""); }} className="h-11 px-4 rounded-xl text-sm text-gray-500">Cancel</button>
+            </div>
+            {addError && <p className="text-sm text-red-600 mt-2">{addError}</p>}
+          </div>
+        ) : (
+          <button type="button" onClick={() => { setAdding(true); setResult(null); }} className="mt-3 text-sm font-medium text-forest-600 min-h-[44px] block">
+            + Add a category
+          </button>
+        )
+      )}
+
+      {requestOpen ? (
         <div className="mt-4">
           <textarea
             rows={3}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Which categories would you like to add or remove?"
+            placeholder="Which categories would you like to remove or change?"
             className="w-full px-4 py-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-forest-400 placeholder:text-gray-400 resize-none"
           />
           <div className="flex gap-2 mt-3">
             <button type="button" onClick={send} disabled={sending || !message.trim()} className="h-11 px-5 rounded-xl bg-forest-600 text-white text-sm font-semibold disabled:opacity-40">
               {sending ? "Sending…" : "Send request"}
             </button>
-            <button type="button" onClick={() => setOpen(false)} className="h-11 px-4 rounded-xl text-sm text-gray-500">Cancel</button>
+            <button type="button" onClick={() => setRequestOpen(false)} className="h-11 px-4 rounded-xl text-sm text-gray-500">Cancel</button>
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => { setOpen(true); setResult(null); }} className="mt-3 text-sm font-medium text-forest-600 min-h-[44px]">
-          Request a category change
+        <button type="button" onClick={() => { setRequestOpen(true); setResult(null); }} className="mt-1 text-sm font-medium text-gray-500 hover:text-forest-600 min-h-[44px]">
+          Remove or change a category
         </button>
       )}
       {result && <p className={cn("text-sm mt-2", result.ok ? "text-forest-600" : "text-red-600")}>{result.text}</p>}
-      <p className="text-xs text-gray-400 mt-1">Category changes are reviewed by our team.</p>
+      <p className="text-xs text-gray-400 mt-1">New categories are reviewed by our team before they go live.</p>
     </section>
   );
 }

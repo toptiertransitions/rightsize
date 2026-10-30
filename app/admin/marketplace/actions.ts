@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import zipcodes from "zipcodes";
 import { getSystemRole, getReferralCompanies, createReferralCompany, createReferralContact, findReferralContactByEmail, getReferralCompanyById, getReferralContactById } from "@/lib/airtable";
 import { sendPartnerPortalInviteEmail } from "@/lib/admin-notifications";
+import { Resend } from "resend";
+import { partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import { hasCapability, canAccessMarketplaceAdmin, type MarketplaceRole } from "@/lib/marketplace/permissions";
 import {
   getAllCategories,
@@ -308,6 +310,59 @@ export async function updateListingAttributesAction(
 /** Status transitions go through this one path (used by both the partner
  * detail page and the pipeline kanban) so the Live completeness gate is
  * enforced exactly once, everywhere. */
+/** Adds categories (Draft listings) to an existing partner. Their current
+ * listings are untouched. Optionally emails the partner to fill the new
+ * category in on My Listing; they submit it, and it's approved on its own. */
+export async function addPartnerCategoriesAction(partnerId: string, categoryIds: string[], notifyPartner: boolean): Promise<ActionResult<{ added: string[]; emailed: boolean }>> {
+  const role = await requireMarketplaceRole();
+  if (!hasCapability(role, "editPartners")) return { ok: false, error: "You don't have permission to edit partners." };
+  try {
+    const partner = await getPartnerById(partnerId);
+    if (!partner) return { ok: false, error: "Partner not found" };
+    const [listings, categories] = await Promise.all([getListingsForPartnerAdmin(partnerId), getAllCategories()]);
+    const have = new Set(listings.map((l) => l.categoryId));
+    const chosen = categories.filter((c) => categoryIds.includes(c.id) && !have.has(c.id));
+    if (chosen.length === 0) return { ok: false, error: "Pick at least one new category." };
+
+    let hasPrimary = listings.some((l) => l.isPrimary);
+    for (const c of chosen) {
+      await createListing({ partnerId, categoryId: c.id, status: "Draft", isPrimary: !hasPrimary });
+      hasPrimary = true;
+    }
+    const added = chosen.map((c) => partnerCategoryLabel(c.label));
+
+    // Only partners who have portal access can act on the email
+    let emailed = false;
+    const canLogIn = !["Prospect", "Rejected", "Archived"].includes(partner.lifecycleStatus);
+    if (notifyPartner && canLogIn && partner.email && process.env.RESEND_API_KEY) {
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+      const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const list = esc(added.join(" and "));
+      const firstName = esc((partner.pocName || "").split(" ")[0]);
+      const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
+        from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+        to: partner.email,
+        subject: `Add ${added.join(" and ")} to your Top Tier partner listing`,
+        html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;color:#1f2937;">
+          <p style="font-size:15px;">Hi${firstName ? ` ${firstName}` : ""},</p>
+          <p style="font-size:15px;line-height:1.6;">We've added <strong>${list}</strong> to ${esc(partner.companyName)}'s Top Tier partner profile, so families looking for ${added.length > 1 ? "those services" : "that service"} can find you too.</p>
+          <p style="font-size:15px;line-height:1.6;">Please take a few minutes to answer the ${list} questions on your My Listing page and submit ${added.length > 1 ? "them" : "it"} for review. Your current listing stays live the whole time.</p>
+          <p><a href="${appUrl}/partner/listing" style="display:inline-block;background:#2d4a3e;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">Open My Listing</a></p>
+          <p style="font-size:14px;color:#6b7280;">The Top Tier Transitions team</p>
+        </div>`,
+      });
+      if (error) console.error("[marketplace] add-category email failed:", error);
+      else emailed = true;
+    }
+
+    revalidatePath(`/admin/marketplace/partners/${partnerId}`);
+    revalidatePath("/admin/marketplace");
+    return { ok: true, data: { added, emailed } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't add the category" };
+  }
+}
+
 export async function moveListingStatusAction(
   listingId: string,
   categoryId: string,

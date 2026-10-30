@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type {
   MarketplacePartner,
   MarketplaceCategory,
@@ -15,6 +16,7 @@ import {
   lookupZipsInRadiusAction,
   updateListingAttributesAction,
   moveListingStatusAction,
+  addPartnerCategoriesAction,
   updateReferralTermsAction,
   updateListingIntroNotificationAction,
   invitePartnerToPortalAction,
@@ -37,13 +39,14 @@ interface Props {
   reviews: ReviewSummaryRow[];
   canEditReferralTerms: boolean;
   canViewReferralAuditLog: boolean;
+  initialTab?: string;
 }
 
 type Tab = "overview" | "listings" | "service-area" | "referral-terms" | "reviews" | "activity" | "portal";
 
 export function PartnerDetailClient(props: Props) {
-  const { partner, categories, listings, auditLogs, introEvents, legacyPortalLinked, reviews, canEditReferralTerms, canViewReferralAuditLog } = props;
-  const [tab, setTab] = useState<Tab>("overview");
+  const { partner, categories, listings, auditLogs, introEvents, legacyPortalLinked, reviews, canEditReferralTerms, canViewReferralAuditLog, initialTab } = props;
+  const [tab, setTab] = useState<Tab>(initialTab === "listings" ? "listings" : "overview");
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
@@ -193,6 +196,8 @@ function OverviewTab({ partner }: { partner: MarketplacePartner }) {
 // ─── Listings ──────────────────────────────────────────────────────────────
 
 function ListingsTab({
+  partner,
+  categories,
   listings,
   categoryById,
 }: {
@@ -201,19 +206,89 @@ function ListingsTab({
   listings: MarketplaceListing[];
   categoryById: Map<string, MarketplaceCategory>;
 }) {
-  if (listings.length === 0) return <p className="text-sm text-gray-500">No listings yet.</p>;
   return (
     <div className="space-y-8 max-w-2xl">
+      {listings.length === 0 && <p className="text-sm text-gray-500">No listings yet.</p>}
       {listings.map((listing) => {
         const category = categoryById.get(listing.categoryId);
         if (!category) return null;
         return <ListingEditor key={listing.id} listing={listing} category={category} />;
       })}
+      <AddCategories partner={partner} categories={categories} held={new Set(listings.map((l) => l.categoryId))} />
+    </div>
+  );
+}
+
+// One partner, several service lines: each category is its own listing
+function AddCategories({ partner, categories, held }: { partner: MarketplacePartner; categories: MarketplaceCategory[]; held: Set<string> }) {
+  const router = useRouter();
+  const options = categories.filter((c) => !held.has(c.id));
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [notify, setNotify] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const canEmail = !!partner.email && !["Prospect", "Rejected", "Archived"].includes(partner.lifecycleStatus);
+
+  if (options.length === 0) return null;
+
+  async function add() {
+    setSaving(true);
+    setMsg("");
+    const r = await addPartnerCategoriesAction(partner.id, picked, notify && canEmail);
+    setSaving(false);
+    if (!r.ok) return setMsg(r.error);
+    setMsg(`Added ${r.data!.added.join(", ")} as Draft${r.data!.emailed ? ` and emailed ${partner.email}` : ""}.`);
+    setPicked([]);
+    setOpen(false);
+    router.refresh();
+  }
+
+  return (
+    <div className="border border-dashed border-gray-700 rounded-xl p-5">
+      {!open ? (
+        <>
+          <button onClick={() => { setOpen(true); setMsg(""); }} className="text-sm font-medium text-forest-400 hover:text-forest-300">+ Add a category</button>
+          <p className="text-xs text-gray-500 mt-1">For a partner who also offers another service. Their current listings stay as they are.</p>
+        </>
+      ) : (
+        <>
+          <p className="text-sm font-semibold text-white mb-3">Add categories to {partner.companyName}</p>
+          <div className="flex flex-wrap gap-2">
+            {options.map((c) => {
+              const on = picked.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setPicked((p) => on ? p.filter((x) => x !== c.id) : [...p, c.id])}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${on ? "bg-forest-600 border-forest-600 text-white" : "border-gray-700 text-gray-300 hover:border-gray-500"}`}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+          <label className={`flex items-center gap-2 mt-4 text-sm ${canEmail ? "text-gray-300" : "text-gray-600"}`}>
+            <input type="checkbox" checked={notify && canEmail} disabled={!canEmail} onChange={(e) => setNotify(e.target.checked)} className="rounded border-gray-600" />
+            Email {partner.pocName || "the partner"} to fill in the new {picked.length > 1 ? "categories" : "category"}
+            {!canEmail && <span className="text-xs">(not available until they have portal access)</span>}
+          </label>
+          <div className="flex items-center gap-3 mt-4">
+            <button onClick={add} disabled={saving || picked.length === 0} className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50">
+              {saving ? "Adding…" : picked.length > 1 ? `Add ${picked.length} categories` : "Add category"}
+            </button>
+            <button onClick={() => { setOpen(false); setPicked([]); }} className="h-9 px-3 text-sm text-gray-400 hover:text-white">Cancel</button>
+          </div>
+        </>
+      )}
+      {msg && <p className="text-xs text-gray-400 mt-3">{msg}</p>}
     </div>
   );
 }
 
 function ListingEditor({ listing, category }: { listing: MarketplaceListing; category: MarketplaceCategory }) {
+  const router = useRouter();
   const [attributes, setAttributes] = useState<Record<string, unknown>>(listing.attributes);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -234,16 +309,20 @@ function ListingEditor({ listing, category }: { listing: MarketplaceListing; cat
     const result = await moveListingStatusAction(listing.id, listing.categoryId, "Live", attributes);
     setMoving(false);
     if (!result.ok) setBlockReason(result.error);
+    else router.refresh();
   }
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">{category.label}</h3>
-        <span className={`text-xs px-2 py-0.5 rounded-full ${listing.status === "Live" ? "bg-green-900/40 text-green-300" : "bg-gray-800 text-gray-400"}`}>
-          {listing.status}
+        <span className={`text-xs px-2 py-0.5 rounded-full ${listing.status === "Live" ? "bg-green-900/40 text-green-300" : listing.status === "Submitted" ? "bg-amber-900/40 text-amber-300" : "bg-gray-800 text-gray-400"}`}>
+          {listing.status === "Submitted" ? "Submitted for review" : listing.status}
         </span>
       </div>
+      {listing.status !== "Live" && listing.feeType === "none" && !listing.referralNotes && !listing.agreementOnFile && (
+        <p className="text-xs text-amber-400 mb-4">No referral terms set for {category.label} yet. Check the Referral Terms tab before moving it to Live.</p>
+      )}
       <MatchCriteriaEditor
         category={category.label as PartnerCategory}
         attributes={attributes}

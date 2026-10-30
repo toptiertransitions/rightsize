@@ -1,6 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getPartnerAccount, needsSetup } from "@/lib/marketplace/partnerAccount";
+import { getAllCategories } from "@/lib/marketplace/data";
+import { partnerCategoryLabel } from "@/lib/marketplace/partnerScreens";
 import { areaFormFor } from "@/lib/marketplace/serviceRadius";
 import { ListingClient } from "./ListingClient";
 
@@ -15,6 +17,10 @@ export default async function PartnerListingPage() {
   if (needsSetup(account.partner)) redirect("/partner/setup");
 
   const { partner, contact, listings, membership } = account;
+  const held = new Set(listings.map((l) => l.categoryId));
+  const addableCategories = (await getAllCategories().catch(() => []))
+    .filter((c) => !held.has(c.id))
+    .map((c) => ({ id: c.id, label: partnerCategoryLabel(c.label) }));
 
   return (
     <ListingClient
@@ -32,6 +38,7 @@ export default async function PartnerListingPage() {
       about={{ logo: partner.logo, headshot: partner.headshot, shortBio: partner.shortBio, aboutUs: partner.aboutUs }}
       area={areaFormFor(partner)}
       listings={listings.map((l) => ({ id: l.id, label: l.category.label, status: l.status, fieldSchema: l.category.fieldSchema, attributes: l.attributes }))}
+      addableCategories={addableCategories}
     />
   );
 }

@@ -19,8 +19,9 @@ import { getAllBrands } from "@/lib/brands/data";
 
 export const dynamic = "force-dynamic";
 
-export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PartnerDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
+  const { tab: initialTab } = await searchParams;
 
   // CRM is the source of truth for a linked partner's business details —
   // refresh from it before rendering so this page (and the Partners record
@@ -101,6 +102,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           reviews={reviews.map((r) => ({ score: r.score, comment: r.comment, date: r.date, tags: r.tags, reviewerName: r.reviewerName, status: r.status }))}
           canEditReferralTerms={canEditReferralTerms}
           canViewReferralAuditLog={canViewReferralAuditLog}
+          initialTab={initialTab}
         />
       </main>
     </div>
