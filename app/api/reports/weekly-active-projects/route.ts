@@ -5,7 +5,7 @@ import {
   getSystemRole,
   getTenants,
   getSignedTenantIds,
-  getContractsForTenant,
+  getContractsByTenant,
   getTimeEntriesForTenants,
   getPlanEntriesForTenants,
   getStaffMembers,
@@ -434,8 +434,9 @@ export async function POST() {
   activeTenants.sort((a, b) => a.name.localeCompare(b.name));
 
   // Fetch contracts and notes per project in parallel
-  const [contractsPerProject, notesPerProject] = await Promise.all([
-    Promise.all(activeTenants.map(t => getContractsForTenant(t.id).catch(() => [] as Contract[]))),
+  // Contracts come from one paged query; per-project fetches tripped Airtable's rate limit
+  const [contractsByTenant, notesPerProject] = await Promise.all([
+    getContractsByTenant(),
     Promise.all(activeTenants.map(t => getProjectNotes(t.id).catch(() => []))),
   ]);
 
@@ -455,7 +456,7 @@ export async function POST() {
 
   // ── Assemble per-project data ─────────────────────────────────────────────
   const projects: ProjectData[] = activeTenants.map((tenant, i) => {
-    const contracts   = contractsPerProject[i];
+    const contracts   = contractsByTenant.get(tenant.id) ?? [];
     const rawNotes    = notesPerProject[i];
     const planEntries = planByTenant.get(tenant.id) ?? [];
     const timeEntries = timeByTenant.get(tenant.id) ?? [];

@@ -3955,15 +3955,13 @@ export async function getContractsForTenant(tenantId: string): Promise<Contract[
   return (data.records as AirtableRecord[]).map(mapContract);
 }
 
-/** Every Signed contract with SignedAt on or after `sinceDate` (YYYY-MM-DD), in one paged query */
-export async function getSignedContractsSince(sinceDate: string): Promise<Contract[]> {
-  const formula = encodeURIComponent(`AND({Status} = "Signed", {SignedAt} != "", NOT(IS_BEFORE({SignedAt}, "${sinceDate}")))`);
+async function fetchContractsWhere(formula: string): Promise<Contract[]> {
   const out: Contract[] = [];
   let offset: string | undefined;
   do {
     const res = await contractFetch(
       AIRTABLE_TABLES.CONTRACTS,
-      `?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`
+      `?filterByFormula=${encodeURIComponent(formula)}&sort[0][field]=CreatedAt&sort[0][direction]=desc${offset ? `&offset=${offset}` : ""}`
     );
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
@@ -3971,6 +3969,25 @@ export async function getSignedContractsSince(sinceDate: string): Promise<Contra
     offset = data.offset;
   } while (offset);
   return out;
+}
+
+/** Every Signed contract with SignedAt on or after `sinceDate` (YYYY-MM-DD), in one paged query */
+export async function getSignedContractsSince(sinceDate: string): Promise<Contract[]> {
+  return fetchContractsWhere(`AND({Status} = "Signed", {SignedAt} != "", NOT(IS_BEFORE({SignedAt}, "${sinceDate}")))`);
+}
+
+/**
+ * All contracts grouped by project (newest first, same order as getContractsForTenant), in one
+ * paged query. Use instead of calling getContractsForTenant per project, which trips
+ * Airtable's rate limit on reports that cover every project.
+ */
+export async function getContractsByTenant(): Promise<Map<string, Contract[]>> {
+  const map = new Map<string, Contract[]>();
+  for (const c of await fetchContractsWhere(`{TenantId} != ""`)) {
+    if (!map.has(c.tenantId)) map.set(c.tenantId, []);
+    map.get(c.tenantId)!.push(c);
+  }
+  return map;
 }
 
 export async function getContractByToken(signToken: string): Promise<Contract | null> {

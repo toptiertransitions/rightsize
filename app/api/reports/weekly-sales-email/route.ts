@@ -5,7 +5,7 @@ import { Resend } from "resend";
 import {
   getSystemRole,
   getTenants,
-  getContractsForTenant,
+  getContractsByTenant,
   getInvoicesForTenant,
   getOpportunities,
   getClientContacts,
@@ -148,22 +148,6 @@ function inBucket(dateStr: string | undefined, bucket: WeekBucket): boolean {
 
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 300;
-
-async function fetchAllContracts(tenants: Tenant[]): Promise<Map<string, Contract[]>> {
-  const map = new Map<string, Contract[]>();
-  for (let i = 0; i < tenants.length; i += BATCH_SIZE) {
-    const batch = tenants.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map((t) => getContractsForTenant(t.id).then((cs) => ({ id: t.id, cs })))
-    );
-    for (const r of results) {
-      if (r.status === "fulfilled") map.set(r.value.id, r.value.cs);
-      else console.error("[weekly-report] contract fetch failed:", r.reason);
-    }
-    if (i + BATCH_SIZE < tenants.length) await new Promise(res => setTimeout(res, BATCH_DELAY_MS));
-  }
-  return map;
-}
 
 async function fetchAllInvoices(tenants: Tenant[]): Promise<Map<string, Invoice[]>> {
   const map = new Map<string, Invoice[]>();
@@ -905,7 +889,9 @@ async function buildReportHtml(_userId: string): Promise<{ html: string; reportD
 
   // ── Fetch contracts + invoices across all client tenants ──
   // Run sequentially (not concurrently) to avoid hitting Airtable's rate limit.
-  const contractsByTenant = await fetchAllContracts(clientTenants);
+  // Contracts come from one paged query; per-project fetches could silently drop projects.
+  const allContractsByTenant = await getContractsByTenant();
+  const contractsByTenant = new Map(clientTenants.map((t) => [t.id, allContractsByTenant.get(t.id) ?? []]));
   const invoicesByTenant  = await fetchAllInvoices(clientTenants);
 
   // ── Build lookup maps ──
