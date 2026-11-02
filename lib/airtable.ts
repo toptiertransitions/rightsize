@@ -3955,6 +3955,24 @@ export async function getContractsForTenant(tenantId: string): Promise<Contract[
   return (data.records as AirtableRecord[]).map(mapContract);
 }
 
+/** Every Signed contract with SignedAt on or after `sinceDate` (YYYY-MM-DD), in one paged query */
+export async function getSignedContractsSince(sinceDate: string): Promise<Contract[]> {
+  const formula = encodeURIComponent(`AND({Status} = "Signed", {SignedAt} != "", NOT(IS_BEFORE({SignedAt}, "${sinceDate}")))`);
+  const out: Contract[] = [];
+  let offset: string | undefined;
+  do {
+    const res = await contractFetch(
+      AIRTABLE_TABLES.CONTRACTS,
+      `?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`
+    );
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    out.push(...(data.records as AirtableRecord[]).map(mapContract));
+    offset = data.offset;
+  } while (offset);
+  return out;
+}
+
 export async function getContractByToken(signToken: string): Promise<Contract | null> {
   const table = AIRTABLE_TABLES.CONTRACTS;
   const formula = encodeURIComponent(`{SignToken} = "${signToken}"`);

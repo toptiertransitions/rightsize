@@ -6,13 +6,12 @@ import {
   getSystemRole,
   getStaffMembers,
   getTenants,
-  getContractsForTenant,
+  getSignedContractsSince,
   getOpportunities,
   getClientContacts,
   getAllActivities,
   getAllItems,
 } from "@/lib/airtable";
-import type { Tenant, Contract } from "@/lib/types";
 import { getShoutoutsSince } from "@/lib/shoutouts";
 import {
   buildShoutoutsSectionHtml,
@@ -28,23 +27,6 @@ function sevenDaysAgo(): string {
   const d = new Date();
   d.setDate(d.getDate() - 7);
   return d.toISOString().split("T")[0];
-}
-
-async function fetchAllContracts(
-  tenants: Tenant[]
-): Promise<{ tenantId: string; contracts: Contract[] }[]> {
-  const results = await Promise.allSettled(
-    tenants.map(async (t) => ({
-      tenantId: t.id,
-      contracts: await getContractsForTenant(t.id).catch(() => [] as Contract[]),
-    }))
-  );
-  return results
-    .filter(
-      (r): r is PromiseFulfilledResult<{ tenantId: string; contracts: Contract[] }> =>
-        r.status === "fulfilled"
-    )
-    .map((r) => r.value);
 }
 
 function fmtMoney(n: number): string {
@@ -102,7 +84,9 @@ export async function POST(req: NextRequest) {
 
   const clientTenants = tenants.filter((t) => t.isTTT !== false);
   const tenantMap = new Map(tenants.map((t) => [t.id, t]));
-  const contractResults = await fetchAllContracts(clientTenants);
+  // One query for the week's signed contracts. Fetching every project's contracts in
+  // parallel tripped Airtable's rate limit and silently dropped wins from the email.
+  const signedThisWeek = await getSignedContractsSince(ago);
 
   // ── New staff (last 7 days) ──────────────────────────────────────────────────
   // Use Clerk as the authoritative source for account creation date.
@@ -142,18 +126,14 @@ export async function POST(req: NextRequest) {
 
   // ── New signed projects (last 7 days) ────────────────────────────────────────
   const newProjects: { clientName: string; city: string }[] = [];
-  for (const { tenantId, contracts } of contractResults) {
+  const clientTenantIds = new Set(clientTenants.map((t) => t.id));
+  for (const tenantId of new Set(signedThisWeek.filter((c) => c.signedAt && c.signedAt.slice(0, 10) >= ago).map((c) => c.tenantId))) {
     const tenant = tenantMap.get(tenantId);
-    if (!tenant) continue;
-    const hasSigned = contracts.some(
-      (c) => c.status === "Signed" && c.signedAt && c.signedAt.slice(0, 10) >= ago
-    );
-    if (hasSigned) {
-      newProjects.push({
-        clientName: tenant.name,
-        city: [tenant.city, tenant.state].filter(Boolean).join(", "),
-      });
-    }
+    if (!tenant || !clientTenantIds.has(tenantId)) continue;
+    newProjects.push({
+      clientName: tenant.name,
+      city: [tenant.city, tenant.state].filter(Boolean).join(", "),
+    });
   }
 
   // ── CRM pipeline (active leads) ──────────────────────────────────────────────
