@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getSystemRole, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity, getClientContactById, getTenantById, updateTenant, getOpportunityById } from "@/lib/airtable";
-import { createProjectNote } from "@/lib/airtable-notes";
+import { createProjectNote, getProjectNotes } from "@/lib/airtable-notes";
 import type { KeyPerson } from "@/lib/types";
 
 async function requireCRMAccess(userId: string) {
@@ -88,11 +88,22 @@ export async function PATCH(req: NextRequest) {
       addedKeyPeople = (data.keyPeople as KeyPerson[]).filter(p => !existingNames.has(p.name.toLowerCase().trim()));
     }
 
-    // Case B: tenantId being set for the first time → backfill all existing key people as notes
+    // Case B: project linked for the first time, or re-linked to a different project
+    // (e.g. a duplicate project was created and the opportunity moved to the real one)
+    // → backfill every key person who doesn't already have a note on that project.
     const isFirstProjectLink = !!data.tenantId && !!current && !current.tenantId;
-    const firstLinkKeyPeople: KeyPerson[] = isFirstProjectLink ? (current!.keyPeople ?? []) : [];
+    const isProjectLinkChange = !!data.tenantId && !!current && current.tenantId !== data.tenantId;
 
     const opportunity = await updateOpportunity(id, data);
+
+    let firstLinkKeyPeople: KeyPerson[] = [];
+    if (isProjectLinkChange) {
+      const alreadyNoted = await getProjectNotes(data.tenantId).then(
+        notes => new Set(notes.map(n => n.content.match(/^Key Person Added: (.+?) \(/)?.[1]?.toLowerCase().trim()).filter(Boolean)),
+        () => new Set<string>(),
+      );
+      firstLinkKeyPeople = (opportunity.keyPeople ?? []).filter(p => !alreadyNoted.has(p.name.toLowerCase().trim()));
+    }
 
     // Sync notes changes to Internal Notes on the linked Plan page (staff-only, never visible to clients)
     const notesChanged = "notes" in data && (data.notes ?? "").trim() !== (current?.notes ?? "").trim();
@@ -113,7 +124,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Create internal Plan notes for key people (Case A: new additions; Case B: first project link backfill)
-    const peopleToNote = firstLinkKeyPeople.length > 0 ? firstLinkKeyPeople : addedKeyPeople;
+    const peopleToNote = isProjectLinkChange ? firstLinkKeyPeople : addedKeyPeople;
     if (peopleToNote.length > 0 && opportunity.tenantId) {
       try {
         const clerk = await clerkClient();

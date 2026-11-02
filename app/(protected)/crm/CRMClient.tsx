@@ -805,7 +805,7 @@ function OpportunityPanel({
         nextStepDate,
         nextStepNote,
         lostReason: stage === "Lost" ? lostReason : "",
-        keyPeople,
+        keyPeople: keyPeopleIncludingPending(),
         wonAt: stage === "Won" && !opportunity?.wonAt ? new Date().toISOString() : opportunity?.wonAt,
         lostAt: stage === "Lost" && !opportunity?.lostAt ? new Date().toISOString() : opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
@@ -911,6 +911,19 @@ function OpportunityPanel({
     }
   }
 
+  // Key People plus anyone typed into the Name field but not yet added with "Add Person",
+  // so saving or creating the project never silently drops them
+  function keyPeopleIncludingPending(): KeyPerson[] {
+    const name = newPersonName.trim();
+    if (!name || keyPeople.some(p => p.name.toLowerCase().trim() === name.toLowerCase())) return keyPeople;
+    return [...keyPeople, {
+      name,
+      relationship: newPersonRelationship.trim(),
+      email: newPersonEmail.trim() || undefined,
+      phone: newPersonPhone.trim() || undefined,
+    }];
+  }
+
   function addKeyPerson() {
     if (!newPersonName) return;
     setKeyPeople((prev) => [
@@ -1002,7 +1015,7 @@ function OpportunityPanel({
         nextStepDate,
         nextStepNote,
         lostReason: stage === "Lost" ? lostReason : "",
-        keyPeople,
+        keyPeople: keyPeopleIncludingPending(),
         wonAt: opportunity?.wonAt,
         lostAt: opportunity?.lostAt,
         assignedToClerkId: derivedOwnerClerkId,
@@ -1083,8 +1096,11 @@ function OpportunityPanel({
       } catch { /* non-fatal */ }
 
       // Step 4: Both succeeded — update parent state then navigate
-      // (call onSaved last so the panel doesn't close before we navigate)
-      onSaved(savedOpp);
+      // (call onSaved last so the panel doesn't close before we navigate).
+      // Carry the new project link so reopening this opportunity shows the project
+      // instead of offering Create Project again (which made duplicate projects).
+      setConvertedProject({ id: tenantData.tenant.id, name: tenantData.tenant.name });
+      onSaved({ ...savedOpp, tenantId: tenantData.tenant.id });
       router.push(`/quoting?tenantId=${tenantData.tenant.id}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "An unexpected error occurred.");
