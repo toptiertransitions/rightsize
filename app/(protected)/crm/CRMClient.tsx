@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import VoiceLogTab from "./VoiceLogTab";
 import TasksTab from "./TasksTab";
+import ReportingTab from "./ReportingTab";
 import { ShoutoutsSection } from "../home/ShoutoutsSection";
 import type { Shoutout } from "@/lib/shoutouts";
 import WarRoomTab from "./WarRoomTab";
@@ -49,7 +50,7 @@ function parseCSV(text: string): Record<string, string>[] {
   }).filter(row => Object.values(row).some(v => v.trim()));
 }
 
-type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "voice" | "activity" | "settings" | "warroom" | "nurture" | "availability";
+type Tab = "dashboard" | "opportunities" | "contacts" | "referrals" | "tasks" | "reporting" | "voice" | "activity" | "settings" | "warroom" | "nurture" | "availability";
 
 interface CRMClientProps {
   opportunities: ClientOpportunity[];
@@ -6172,7 +6173,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
   }
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "dashboard", label: "Dashboard" },
+    { key: "dashboard", label: "Dash" },
     { key: "opportunities", label: "Opportunities" },
     { key: "contacts", label: "Clients" },
     { key: "referrals", label: "Referral Partners" },
@@ -6180,7 +6181,8 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
     { key: "nurture", label: "Referral Funnel" },
     { key: "availability", label: "Availability" },
     { key: "tasks", label: "Tasks" },
-    { key: "voice", label: "Log with Voice" },
+    { key: "reporting", label: "Reporting" },
+    { key: "voice", label: "Log w/Voice" },
     { key: "activity", label: "Activity Log" },
     { key: "settings", label: "Settings" },
   ];
@@ -6283,6 +6285,15 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
           currentUserId={currentUserId}
           staffMembers={staffMembers}
           onContactUpdated={handleReferralContactUpdated}
+        />
+      )}
+      {tab === "reporting" && (
+        <ReportingTab
+          opportunities={opportunities}
+          referralContacts={localReferralContacts}
+          companies={companies}
+          staffMembers={staffMembers}
+          currentUserId={currentUserId}
         />
       )}
       {tab === "voice" && (
