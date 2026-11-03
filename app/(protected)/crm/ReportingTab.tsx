@@ -100,7 +100,7 @@ interface OppRec {
 }
 interface PartnerRec {
   id: string; name: string; companyId: string; company: string; rep: string; stage: string;
-  previousStage: string; stageChangedAt: string; lastActivity: string; tags: Set<MetricKey>;
+  previousStage: string; stageChangedAt: string; lastActivity: string; lastReferral: string; tags: Set<MetricKey>;
 }
 interface ContactRec {
   key: string; id: string; name: string; kind: "Client" | "Referral Partner"; company: string;
@@ -113,9 +113,9 @@ interface Selection { rep: string | null; metric: MetricKey | null }
 
 interface Col<T> { key: string; label: string; value: (r: T) => string | number; render?: (r: T) => ReactNode; right?: boolean }
 
-function DataTable<T>({ rows, cols, rowKey, defaultSort, onRowClick, empty }: {
+function DataTable<T>({ rows, cols, rowKey, defaultSort, onRowClick, empty, compactHeaders }: {
   rows: T[]; cols: Col<T>[]; rowKey: (r: T) => string; defaultSort: string;
-  onRowClick?: (r: T) => void; empty: string;
+  onRowClick?: (r: T) => void; empty: string; compactHeaders?: boolean;
 }) {
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: defaultSort, dir: -1 });
   const sorted = useMemo(() => {
@@ -134,7 +134,7 @@ function DataTable<T>({ rows, cols, rowKey, defaultSort, onRowClick, empty }: {
         <thead className="sticky top-0 bg-gray-50 z-10">
           <tr className="border-b border-gray-200">
             {cols.map(c => (
-              <th key={c.key} className={cn("px-4 py-2.5 font-medium whitespace-nowrap", c.right ? "text-right" : "text-left")}>
+              <th key={c.key} className={cn("font-medium whitespace-nowrap", compactHeaders ? "px-3 py-1.5 text-xs" : "px-4 py-2.5", c.right ? "text-right" : "text-left")}>
                 <button
                   onClick={() => setSort(s => ({ key: c.key, dir: s.key === c.key ? (s.dir === 1 ? -1 : 1) : -1 }))}
                   className={cn("hover:text-gray-900", sort.key === c.key ? "text-forest-700" : "text-gray-500")}
@@ -270,6 +270,16 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       });
     }
 
+    // Last Referral: newest opp whose client was referred by this partner (any date, any owner)
+    const lastReferral = new Map<string, string>();
+    const clientById = new Map(clientContacts.map(c => [c.id, c]));
+    for (const o of opportunities) {
+      const cc = clientById.get(o.clientContactId);
+      if (cc?.source !== "Referral Partner" || !cc.referralPartnerId) continue;
+      const d = ctDateStr(o.createdAt);
+      if (d > (lastReferral.get(cc.referralPartnerId) ?? "")) lastReferral.set(cc.referralPartnerId, d);
+    }
+
     // Referral partners are owned through their company
     const partners: PartnerRec[] = [];
     const refById = new Map<string, ReferralContact>();
@@ -290,7 +300,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       repIds.add(rep);
       partners.push({
         id: rc.id, name: rc.name, companyId: rc.referralCompanyId, company: co?.name ?? "", rep, stage: rc.stage,
-        previousStage: rc.previousStage ?? "", stageChangedAt: rc.stageChangedAt ?? "", lastActivity: rc.lastActivityDate ?? "", tags,
+        previousStage: rc.previousStage ?? "", stageChangedAt: rc.stageChangedAt ?? "", lastActivity: rc.lastActivityDate ?? "", lastReferral: lastReferral.get(rc.id) ?? "", tags,
       });
     }
 
@@ -583,6 +593,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
           defaultSort={partnerMetric === "activeReferrals" ? "lastActivity" : "changed"}
           onRowClick={p => p.companyId && window.open(`/crm?tab=referrals&company=${p.companyId}`, "_blank")}
           empty="No referral partners match."
+          compactHeaders
           cols={[
             { key: "name", label: "Partner", value: p => p.name, render: p => <span className="font-medium text-gray-900">{p.name}</span> },
             { key: "company", label: "Company", value: p => p.company },
@@ -594,6 +605,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
             },
             { key: "changed", label: "Stage Changed", value: p => ctDateStr(p.stageChangedAt), render: p => fmtDate(p.stageChangedAt), right: true },
             { key: "lastActivity", label: "Last Activity", value: p => ctDateStr(p.lastActivity), render: p => fmtDate(p.lastActivity), right: true },
+            { key: "lastReferral", label: "Last Referral", value: p => p.lastReferral, render: p => p.lastReferral ? fmtDate(p.lastReferral) : <span className="text-gray-300">—</span>, right: true },
           ]}
         />
       </Panel>
