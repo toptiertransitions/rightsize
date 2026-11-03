@@ -6290,10 +6290,12 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
       {tab === "reporting" && (
         <ReportingTab
           opportunities={opportunities}
+          clientContacts={localContacts}
           referralContacts={localReferralContacts}
           companies={companies}
           staffMembers={staffMembers}
           currentUserId={currentUserId}
+          onViewOpportunity={handleViewOpportunity}
         />
       )}
       {tab === "voice" && (
