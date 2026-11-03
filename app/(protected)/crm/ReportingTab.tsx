@@ -15,7 +15,7 @@ interface Props {
   onViewOpportunity: (oppId: string) => void;
 }
 
-type Period = "30d" | "week" | "month" | "lastMonth" | "quarter";
+type Period = "30d" | "week" | "month" | "lastMonth" | "quarter" | "custom";
 
 const PERIODS: { id: Period; label: string }[] = [
   { id: "30d", label: "Rolling 30 Days" },
@@ -23,6 +23,7 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: "month", label: "This Month" },
   { id: "lastMonth", label: "Last Month" },
   { id: "quarter", label: "This Quarter" },
+  { id: "custom", label: "Custom" },
 ];
 
 // Forward order of the referral funnel; Inactive is a drop-out, never a progression
@@ -47,7 +48,7 @@ function lastOfMonth(y: number, m: number): string {
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 }
 
-function periodRange(period: Period, today: string): { start: string; end: string } {
+function periodRange(period: Exclude<Period, "custom">, today: string): { start: string; end: string } {
   const [y, m, d] = today.split("-").map(Number);
   if (period === "30d") return { start: addDays(today, -29), end: today };
   if (period === "week") {
@@ -200,6 +201,7 @@ const Badge = ({ text }: { text: string }) =>
 
 export default function ReportingTab({ opportunities, clientContacts, referralContacts, companies, staffMembers, currentUserId, onViewOpportunity }: Props) {
   const [period, setPeriod] = useState<Period>("30d");
+  const [custom, setCustom] = useState<{ start: string; end: string }>(() => periodRange("30d", ctToday()));
   const [sortKey, setSortKey] = useState<MetricKey>("wonValue");
   const [sel, setSel] = useState<Selection>({ rep: null, metric: null });
   const [search, setSearch] = useState("");
@@ -217,7 +219,16 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
   }, []);
 
   const today = ctToday();
-  const { start, end } = periodRange(period, today);
+  // Custom: an inverted range is read as the same span, so a half-edited range never empties the board
+  const { start, end } = period === "custom"
+    ? (custom.start <= custom.end ? custom : { start: custom.end, end: custom.start })
+    : periodRange(period, today);
+
+  function choosePeriod(next: Period) {
+    // Seed Custom with whatever range is showing, so it opens on familiar dates
+    if (next === "custom" && period !== "custom") setCustom({ start, end });
+    setPeriod(next);
+  }
 
   // Every number on the board is a count/sum over these records, so a drill-down always matches the cell
   const { reps, opps, partners, contacts } = useMemo(() => {
@@ -398,19 +409,47 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
           <h2 className="text-lg font-semibold text-gray-900">Activity and Progress Leaderboard</h2>
           <p className="text-sm text-gray-500">{fmtRange(start, end)} · click any number to see the records behind it</p>
         </div>
-        <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-white p-0.5">
-          {PERIODS.map(p => (
-            <button
-              key={p.id}
-              onClick={() => setPeriod(p.id)}
-              className={cn(
-                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                period === p.id ? "bg-forest-600 text-white" : "text-gray-600 hover:text-gray-900"
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="flex flex-col items-stretch sm:items-end gap-2">
+          <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-white p-0.5">
+            {PERIODS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => choosePeriod(p.id)}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  period === p.id ? "bg-forest-600 text-white" : "text-gray-600 hover:text-gray-900"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {period === "custom" && (
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 shadow-sm">
+              <label className="sr-only" htmlFor="report-start">Start date</label>
+              <input
+                id="report-start"
+                type="date"
+                value={custom.start}
+                max={custom.end || undefined}
+                onChange={e => e.target.value && setCustom(c => ({ ...c, start: e.target.value }))}
+                className="bg-transparent text-sm text-gray-800 focus:outline-none [color-scheme:light]"
+              />
+              <span className="text-gray-300">→</span>
+              <label className="sr-only" htmlFor="report-end">End date</label>
+              <input
+                id="report-end"
+                type="date"
+                value={custom.end}
+                min={custom.start || undefined}
+                onChange={e => e.target.value && setCustom(c => ({ ...c, end: e.target.value }))}
+                className="bg-transparent text-sm text-gray-800 focus:outline-none [color-scheme:light]"
+              />
+              <span className="text-xs text-gray-400 tabular-nums whitespace-nowrap">
+                {Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1}d
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
