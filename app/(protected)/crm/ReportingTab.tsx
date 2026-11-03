@@ -27,6 +27,10 @@ const STAGE_ORDER: ReferralContactStage[] = ["Identified", "Met", "Agreed to Ref
 
 const UNASSIGNED = "__unassigned__";
 
+// Admin and test accounts, hidden from the board (and its totals)
+const EXCLUDE_REP_NAMES = ["MattTest", "Julie Johnstone"];
+const isExcluded = (name: string) => EXCLUDE_REP_NAMES.some(n => name.startsWith(n));
+
 // ─── Date helpers (YYYY-MM-DD strings, Central time) ─────────────────────────
 
 function addDays(ymd: string, n: number): string {
@@ -197,7 +201,7 @@ export default function ReportingTab({ opportunities, referralContacts, companie
       }
     }
 
-    return [...byRep.values()];
+    return [...byRep.values()].filter(r => !isExcluded(r.name));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opportunities, referralContacts, companies, staffMembers, activities, start, end]);
 
