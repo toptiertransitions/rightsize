@@ -75,6 +75,34 @@ const TYPE_COLORS: Record<ContentItemType, string> = {
   LinkedIn: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
+const TYPE_LABEL: Record<ContentItemType, string> = {
+  PDF: "PDF", Image: "Image", PartnerLogo: "Partner Logo", URL: "Link", LinkedIn: "LinkedIn",
+};
+
+// A piece of content can carry one file (PDF / Image / Partner Logo) and one link (URL / LinkedIn).
+// ContentType holds the file type whenever there is one, so downloads and emails keep treating it
+// as that file; the link side is read from LinkUrl.
+const FILE_TYPES = new Set<ContentItemType>(["PDF", "Image", "PartnerLogo"]);
+const LINK_TYPES = new Set<ContentItemType>(["URL", "LinkedIn"]);
+
+function contentTypesOf(item: ContentItem): ContentItemType[] {
+  const types: ContentItemType[] = [item.contentType];
+  if (FILE_TYPES.has(item.contentType) && item.linkUrl) {
+    types.push(/linkedin\.com/i.test(item.linkUrl) ? "LinkedIn" : "URL");
+  }
+  return types;
+}
+
+function TypeBadges({ item }: { item: ContentItem }) {
+  return (
+    <>
+      {contentTypesOf(item).map(t => (
+        <span key={t} className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", TYPE_COLORS[t])}>{TYPE_LABEL[t]}</span>
+      ))}
+    </>
+  );
+}
+
 const AUDIENCE_COLORS: Record<ContentAudience, string> = {
   Clients: "bg-emerald-50 text-emerald-700",
   ReferralPartners: "bg-violet-50 text-violet-700",
@@ -99,7 +127,8 @@ const PROXIED_TYPES = new Set<ContentItemType>(["PDF"]);
 function buildDownloadUrl(item: ContentItem): string {
   if (!item.fileUrl) return item.linkUrl ?? "";
   if (PROXIED_TYPES.has(item.contentType)) {
-    return `/api/content/items/${item.id}/file`;
+    // Version by UpdatedAt so a replaced file isn't served from the browser cache
+    return `/api/content/items/${item.id}/file?v=${encodeURIComponent(item.updatedAt ?? "")}`;
   }
   return item.fileUrl;
 }
@@ -207,9 +236,7 @@ function ContentCard({
       <button onClick={onSelect} className="flex-1 text-left p-4 flex flex-col gap-2">
         {/* Badges */}
         <div className="flex flex-wrap gap-1.5">
-          <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", TYPE_COLORS[item.contentType])}>
-            {item.contentType === "LinkedIn" ? "LinkedIn" : item.contentType}
-          </span>
+          <TypeBadges item={item} />
           <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", AUDIENCE_COLORS[item.audience])}>
             {audienceLabel(item.audience)}
           </span>
@@ -296,8 +323,8 @@ function ContentDetailPanel({
     setSubmitting(false);
   }
 
-  const url = item.fileUrl ? buildDownloadUrl(item) : item.linkUrl;
-  const isExternal = !item.fileUrl && item.linkUrl;
+  const fileHref = item.fileUrl ? buildDownloadUrl(item) : "";
+  const fileLabel = item.contentType === "PDF" ? "Download PDF" : item.contentType === "PartnerLogo" ? "Download Logo" : "Download Image";
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -309,7 +336,7 @@ function ContentDetailPanel({
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-500 truncate">{item.contentType} · {audienceLabel(item.audience)}</p>
+            <p className="text-xs text-gray-500 truncate">{contentTypesOf(item).map(t => TYPE_LABEL[t]).join(" + ")} · {audienceLabel(item.audience)}</p>
           </div>
           {isAdmin && (
             <button onClick={onEdit} className="text-xs text-forest-600 hover:text-forest-700 font-medium px-3 py-1.5 rounded-lg border border-forest-200 hover:bg-forest-50 transition-colors">
@@ -326,7 +353,7 @@ function ContentDetailPanel({
           {/* Badges + title */}
           <div>
             <div className="flex flex-wrap gap-1.5 mb-3">
-              <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", TYPE_COLORS[item.contentType])}>{item.contentType}</span>
+              <TypeBadges item={item} />
               {item.pipelineStage !== "All" && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-forest-50 text-forest-700 font-medium">{item.pipelineStage}</span>
               )}
@@ -362,22 +389,36 @@ function ContentDetailPanel({
             </div>
           </div>
 
-          {/* Action buttons */}
-          {url && (
-            <div className="flex gap-2">
-              <a
-                href={url}
-                target="_blank"
-                rel="noreferrer"
-                onClick={onDownload}
-                className="flex-1 flex items-center justify-center gap-2 bg-forest-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-700 transition-colors"
-              >
-                {isExternal ? (
-                  <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>Open Link</>
-                ) : (
-                  <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download</>
-                )}
-              </a>
+          {/* Action buttons — a file download and/or a link, whichever this content has */}
+          {(fileHref || item.linkUrl) && (
+            <div className="flex flex-wrap gap-2">
+              {fileHref && (
+                <a
+                  href={fileHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={onDownload}
+                  className="flex-1 min-w-[150px] flex items-center justify-center gap-2 bg-forest-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-forest-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  {fileLabel}
+                </a>
+              )}
+              {item.linkUrl && (
+                <a
+                  href={item.linkUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={onDownload}
+                  className={cn(
+                    "flex-1 min-w-[150px] flex items-center justify-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors",
+                    fileHref ? "bg-white border border-forest-200 text-forest-700 hover:bg-forest-50" : "bg-forest-600 text-white hover:bg-forest-700"
+                  )}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  {/linkedin\.com/i.test(item.linkUrl) ? "Open LinkedIn Post" : "Open Link"}
+                </a>
+              )}
               <button
                 onClick={onToggleLike}
                 className={cn("flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors", likedByMe ? "bg-red-50 border-red-200 text-red-600" : "bg-white border-gray-200 text-gray-600 hover:border-red-200 hover:text-red-500")}
@@ -386,6 +427,9 @@ function ContentDetailPanel({
                 {likedByMe ? "Liked" : "Like"}
               </button>
             </div>
+          )}
+          {item.linkUrl && fileHref && (
+            <p className="-mt-3 text-xs text-gray-400 truncate">{item.linkUrl}</p>
           )}
 
           {/* Comments */}
@@ -458,7 +502,8 @@ function ContentFormModal({
 }) {
   const [title, setTitle] = useState(item?.title ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
-  const [contentType, setContentType] = useState<ContentItemType>(item?.contentType ?? "PDF");
+  const [types, setTypes] = useState<ContentItemType[]>(item ? contentTypesOf(item) : ["PDF"]);
+  const [uploadError, setUploadError] = useState("");
   const [audience, setAudience] = useState<ContentAudience>(item?.audience ?? "Both");
   const [pipelineStage, setPipelineStage] = useState<ContentPipelineStage>(item?.pipelineStage ?? "All");
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? "");
@@ -488,23 +533,43 @@ function ContentFormModal({
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const needsFile = contentType === "PDF" || contentType === "Image" || contentType === "PartnerLogo";
-  const needsLink = contentType === "URL" || contentType === "LinkedIn";
+  const fileType = types.find(t => FILE_TYPES.has(t));
+  const linkType = types.find(t => LINK_TYPES.has(t));
+  const contentType: ContentItemType = fileType ?? linkType ?? "PDF";
+  const needsFile = !!fileType;
+  const needsLink = !!linkType;
+  // A new upload this session replaces the saved file; the record (title, stats, comments) stays
+  const isReplacing = !!item?.fileUrl && !!fileObj;
+
+  // One file type and one link type at most; picking a second of the same kind swaps it
+  function toggleType(t: ContentItemType) {
+    setTypes(prev => {
+      if (prev.includes(t)) return prev.length > 1 ? prev.filter(x => x !== t) : prev;
+      const group = FILE_TYPES.has(t) ? FILE_TYPES : LINK_TYPES;
+      return [...prev.filter(x => !group.has(x)), t];
+    });
+  }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFileObj(file);
+    e.target.value = ""; // so picking the same file again still fires
     setUploading(true);
+    setUploadError("");
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("tenantId", "content");
       const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      setUploadedUrl(data.photoUrl || data.fileUrl || "");
+      const data = await res.json().catch(() => ({}));
+      const url = data.photoUrl || data.fileUrl || "";
+      if (!res.ok || !url) { setUploadError(data.error ?? "Upload failed. Try again."); return; }
+      setFileObj(file);
+      setUploadedUrl(url);
       setUploadedPublicId(data.photoPublicId || data.filePublicId || "");
-      if (file.type.startsWith("image/")) setFilePreview(URL.createObjectURL(file));
+      setFilePreview(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
+    } catch {
+      setUploadError("Upload failed. Try again.");
     } finally {
       setUploading(false);
     }
@@ -545,9 +610,10 @@ function ContentFormModal({
       tags: parsedTags,
       status,
       scheduledDate: scheduledDate || undefined,
-      linkUrl: needsLink ? linkUrl : undefined,
-      fileUrl: uploadedUrl || undefined,
-      filePublicId: uploadedPublicId || undefined,
+      // Clear whichever side was deselected so a removed link or file doesn't linger
+      linkUrl: needsLink ? linkUrl.trim() : "",
+      fileUrl: needsFile ? uploadedUrl : "",
+      filePublicId: needsFile ? uploadedPublicId : "",
       thumbnailUrl: thumbnailUrl || undefined,
       thumbnailPublicId: thumbnailPublicId || undefined,
       sharedWith: shareMode === "specific" ? sharedWith : shareMode === "private" ? ["__private__"] : [],
@@ -570,15 +636,20 @@ function ContentFormModal({
         <div className="p-6 space-y-4">
           {/* Type */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Content Type</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Content Type</label>
+            <p className="text-xs text-gray-400 mb-2">Pick one or both: a file to download and a link to open.</p>
             <div className="flex flex-wrap gap-2">
-              {TYPES.slice(1).map(t => (
-                <button key={t.key} onClick={() => setContentType(t.key as ContentItemType)}
-                  className={cn("px-3 py-1.5 text-sm rounded-lg border transition-colors", contentType === t.key ? "border-forest-500 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300")}
-                >
-                  {t.icon} {t.label}
-                </button>
-              ))}
+              {TYPES.slice(1).map(t => {
+                const on = types.includes(t.key as ContentItemType);
+                return (
+                  <button key={t.key} type="button" aria-pressed={on} onClick={() => toggleType(t.key as ContentItemType)}
+                    className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors", on ? "border-forest-500 bg-forest-50 text-forest-700 font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300")}
+                  >
+                    {on && <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
+                    {t.icon} {t.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -597,11 +668,15 @@ function ContentFormModal({
                 ) : uploadedUrl || filePreview ? (
                   <div className="flex items-center gap-3">
                     {filePreview && <img src={filePreview} alt="" className="h-12 w-12 object-cover rounded-lg" />}
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-gray-900">{fileObj?.name ?? "File uploaded"}</p>
-                      <p className="text-xs text-green-600">✓ Ready to save</p>
+                    <div className="text-left min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{fileObj?.name ?? "Current file"}</p>
+                      <p className={cn("text-xs", fileObj ? "text-green-600" : "text-gray-500")}>
+                        {isReplacing ? "Replaces the current file when you save" : fileObj ? "Ready to save" : "Saved on this content"}
+                      </p>
                     </div>
-                    <svg className="w-4 h-4 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    <span className="ml-auto flex-shrink-0 text-xs font-medium text-forest-700 border border-forest-200 rounded-lg px-2.5 py-1 hover:bg-forest-50">
+                      Replace
+                    </span>
                   </div>
                 ) : (
                   <>
@@ -611,18 +686,19 @@ function ContentFormModal({
                 )}
                 <input ref={fileInputRef} type="file" accept={contentType === "PDF" ? ".pdf" : "image/*"} onChange={handleFileChange} className="hidden" />
               </div>
+              {uploadError && <p className="text-xs text-red-600 mt-1.5">{uploadError}</p>}
             </div>
           )}
           {needsLink && (
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {contentType === "LinkedIn" ? "LinkedIn Post URL" : "Link URL"}
+                {linkType === "LinkedIn" ? "LinkedIn Post URL" : "Link URL"}
               </label>
               <input
                 type="url"
                 value={linkUrl}
                 onChange={e => setLinkUrl(e.target.value)}
-                placeholder={contentType === "LinkedIn" ? "https://linkedin.com/posts/…" : "https://…"}
+                placeholder={linkType === "LinkedIn" ? "https://linkedin.com/posts/…" : "https://…"}
                 className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest-500"
               />
             </div>
@@ -1158,7 +1234,7 @@ export default function ContentRepository({ isAdmin, currentUserId, staffMembers
     if (audienceFilter === "Both") { if (item.audience === "InternalTraining") return false; }
     else if (audienceFilter !== "All" && item.audience !== audienceFilter && item.audience !== "Both") return false;
     if (stageFilter !== "All" && item.pipelineStage !== stageFilter && item.pipelineStage !== "All") return false;
-    if (typeFilter !== "All" && item.contentType !== typeFilter) return false;
+    if (typeFilter !== "All" && !contentTypesOf(item).includes(typeFilter as ContentItemType)) return false;
     if (search) {
       const q = search.toLowerCase();
       const matchTitle = item.title.toLowerCase().includes(q);
@@ -1367,7 +1443,7 @@ export default function ContentRepository({ isAdmin, currentUserId, staffMembers
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", TYPE_COLORS[item.contentType])}>{item.contentType}</span>
+                      <div className="flex flex-wrap gap-1"><TypeBadges item={item} /></div>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{audienceLabel(item.audience)}</td>
                     <td className="px-4 py-3 text-gray-600">{item.pipelineStage}</td>

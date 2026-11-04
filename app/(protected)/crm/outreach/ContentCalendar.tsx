@@ -14,7 +14,8 @@ const PROXIED_TYPES = new Set<ContentItemType>(["PDF"]);
 function buildDownloadUrl(item: ContentItem): string {
   if (!item.fileUrl) return item.linkUrl ?? "";
   if (PROXIED_TYPES.has(item.contentType)) {
-    return `/api/content/items/${item.id}/file`;
+    // Version by UpdatedAt so a replaced file isn't served from the browser cache
+    return `/api/content/items/${item.id}/file?v=${encodeURIComponent(item.updatedAt ?? "")}`;
   }
   return item.fileUrl;
 }
