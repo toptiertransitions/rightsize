@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "
 import type { ClientContact, ClientOpportunity, CRMActivity, ReferralCompany, ReferralContact, ReferralContactStage, StaffMember } from "@/lib/types";
 import { ctDateStr, ctToday } from "@/lib/date-ct";
 import { cn } from "@/lib/utils";
+import ReportingInsights from "./ReportingInsights";
 
 interface Props {
   opportunities: ClientOpportunity[];
@@ -81,7 +82,7 @@ function fmt$(n: number): string {
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 
-type MetricKey = "wonValue" | "wonCount" | "expectedValue" | "created" | "contactsTouched" | "activeReferrals" | "progressions";
+type MetricKey = "wonValue" | "wonCount" | "expectedValue" | "created" | "uniqueMeetings" | "contactsTouched" | "activeReferrals" | "progressions";
 type Section = "opps" | "partners" | "contacts";
 
 const COLUMNS: { key: MetricKey; label: string; sub: string; money?: boolean; section: Section }[] = [
@@ -89,6 +90,7 @@ const COLUMNS: { key: MetricKey; label: string; sub: string; money?: boolean; se
   { key: "wonCount", label: "Won", sub: "opps closed", section: "opps" },
   { key: "expectedValue", label: "Pipeline $", sub: "open, exp. close in period", money: true, section: "opps" },
   { key: "created", label: "Opps Created", sub: "by created date", section: "opps" },
+  { key: "uniqueMeetings", label: "Unique Meetings", sub: "partners met, once each", section: "contacts" },
   { key: "contactsTouched", label: "Contacts Touched", sub: "unique, by activity date", section: "contacts" },
   { key: "activeReferrals", label: "Active Referral", sub: "partners right now", section: "partners" },
   { key: "progressions", label: "Stage Moves", sub: "partners advanced", section: "partners" },
@@ -105,10 +107,12 @@ interface PartnerRec {
 }
 interface ContactRec {
   key: string; id: string; name: string; kind: "Client" | "Referral Partner"; company: string;
-  rep: string; touches: number; lastTouch: string;
+  rep: string; touches: number; meetings: number; lastTouch: string;
 }
 
 interface Selection { rep: string | null; metric: MetricKey | null }
+
+const isPartnerMeeting = (c: ContactRec) => c.kind === "Referral Partner" && c.meetings > 0;
 
 // ─── Sortable table ──────────────────────────────────────────────────────────
 
@@ -231,7 +235,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
   }
 
   // Every number on the board is a count/sum over these records, so a drill-down always matches the cell
-  const { reps, opps, partners, contacts } = useMemo(() => {
+  const { reps, opps, partners, contacts, partnerOwner } = useMemo(() => {
     const inPeriod = (s: string | null | undefined) => {
       const d = ctDateStr(s);
       return !!d && d >= start && d <= end;
@@ -293,12 +297,14 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
 
     // Referral partners are owned through their company
     const partners: PartnerRec[] = [];
+    const partnerOwner = new Map<string, string>();
     const refById = new Map<string, ReferralContact>();
     for (const rc of referralContacts) {
       refById.set(rc.id, rc);
       const co = companyById.get(rc.referralCompanyId);
       const rep = resolve(co?.assignedToClerkId);
       if (!rep) continue;
+      partnerOwner.set(rc.id, rep);
       const tags = new Set<MetricKey>();
       if (rc.stage === "Active Referral") tags.add("activeReferrals");
       if (inPeriod(rc.stageChangedAt)) {
@@ -329,7 +335,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       if (!rec) {
         const ref = refById.get(id);
         rec = {
-          key, id, rep, touches: 0, lastTouch: "",
+          key, id, rep, touches: 0, meetings: 0, lastTouch: "",
           name: ref?.name ?? contactName.get(id) ?? "(unknown contact)",
           kind: ref ? "Referral Partner" : "Client",
           company: ref ? companyById.get(ref.referralCompanyId)?.name ?? "" : "",
@@ -337,13 +343,14 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
         touched.set(key, rec);
       }
       rec.touches++;
+      if (a.type === "Meeting") rec.meetings++;
       const d = ctDateStr(a.activityDate);
       if (d > rec.lastTouch) rec.lastTouch = d;
       repIds.add(rep);
     }
 
     const reps = [...repIds].map(id => ({ id, name: staffById.get(id)?.displayName ?? "Unknown" }));
-    return { reps, opps, partners, contacts: [...touched.values()] };
+    return { reps, opps, partners, contacts: [...touched.values()], partnerOwner };
   }, [opportunities, clientContacts, referralContacts, companies, staffMembers, activities, start, end]);
 
   const repName = useMemo(() => new Map(reps.map(r => [r.id, r.name])), [reps]);
@@ -351,6 +358,8 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
   function metricValue(key: MetricKey, rep: string | null): number {
     const mine = <T extends { rep: string }>(rs: T[]) => (rep ? rs.filter(r => r.rep === rep) : rs);
     if (key === "contactsTouched") return mine(contacts).length;
+    // Each referral partner met at least once counts one, however many meetings
+    if (key === "uniqueMeetings") return mine(contacts).filter(isPartnerMeeting).length;
     if (COLUMN[key].section === "partners") return mine(partners).filter(p => p.tags.has(key)).length;
     const tagged = mine(opps).filter(o => o.tags.has(key));
     return COLUMN[key].money ? tagged.reduce((s, o) => s + o.value, 0) : tagged.length;
@@ -391,7 +400,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
   const shownOpps = opps.filter(o => byRep(o) && (!oppMetric || o.tags.has(oppMetric)) && matches(o.client, repName.get(o.rep) ?? "", o.stage));
   const partnerMetric = metricFor("partners");
   const shownPartners = partners.filter(p => byRep(p) && (!partnerMetric || p.tags.has(partnerMetric)) && matches(p.name, p.company, repName.get(p.rep) ?? "", p.stage));
-  const shownContacts = contacts.filter(c => byRep(c) && matches(c.name, c.company, repName.get(c.rep) ?? "", c.kind));
+  const shownContacts = contacts.filter(c => byRep(c) && (sel.metric !== "uniqueMeetings" || isPartnerMeeting(c)) && matches(c.name, c.company, repName.get(c.rep) ?? "", c.kind));
 
   const filterLabel = (section: Section, fallback: string) => {
     const parts = [sel.rep ? repName.get(sel.rep) : "All reps", metricFor(section) ? COLUMN[metricFor(section)!].label : fallback];
@@ -454,7 +463,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       </div>
 
       {/* Team totals — click to filter the tables by metric across all reps */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         {COLUMNS.map(c => {
           const active = sel.rep === null && sel.metric === c.key;
           const v = metricValue(c.key, null);
@@ -469,7 +478,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
             >
               <div className="text-xs font-medium text-gray-500">{c.label}</div>
               <div className="text-xl font-bold text-gray-900 mt-0.5">
-                {c.key === "contactsTouched" && activitiesLoading ? "…" : c.money ? fmt$(v) : v}
+                {c.section === "contacts" && activitiesLoading ? "…" : c.money ? fmt$(v) : v}
               </div>
               <div className="text-[11px] text-gray-400 leading-tight mt-0.5">
                 {c.key === "expectedValue" ? `${expectedCount(null)} open opps` : c.sub}
@@ -488,17 +497,17 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left font-medium text-gray-500 px-4 py-3 w-10">#</th>
-              <th className="text-left font-medium text-gray-500 px-4 py-3">Rep</th>
+              <th className="text-left text-xs font-medium text-gray-500 px-3 py-2.5 w-10">#</th>
+              <th className="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Rep</th>
               {COLUMNS.map(c => (
-                <th key={c.key} className="text-right px-4 py-3 whitespace-nowrap">
+                <th key={c.key} className="text-right align-top px-2.5 py-2.5">
                   <button
                     onClick={() => setSortKey(c.key)}
-                    className={cn("font-medium hover:text-gray-900", sortKey === c.key ? "text-forest-700" : "text-gray-500")}
+                    className={cn("text-xs font-medium whitespace-nowrap hover:text-gray-900", sortKey === c.key ? "text-forest-700" : "text-gray-500")}
                   >
                     {c.label}{sortKey === c.key ? " ↓" : ""}
                   </button>
-                  <div className="text-[10px] font-normal text-gray-400">{c.sub}</div>
+                  <div className="text-[10px] leading-tight font-normal text-gray-400 max-w-[6.5rem] ml-auto">{c.sub}</div>
                 </th>
               ))}
             </tr>
@@ -510,7 +519,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
               const repActive = sel.rep === r.id;
               return (
                 <tr key={r.id} className={cn("border-b border-gray-100 last:border-0", repActive ? "bg-forest-50/70" : isMe && "bg-forest-50/30")}>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <span className={cn(
                       "inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-semibold",
                       rank === 1 ? "bg-amber-100 text-amber-800" : rank === 2 ? "bg-gray-200 text-gray-700" : rank === 3 ? "bg-orange-100 text-orange-800" : "text-gray-400"
@@ -518,7 +527,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
                       {rank}
                     </span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <button
                       onClick={() => pick({ rep: r.id, metric: null })}
                       className={cn("font-medium hover:text-forest-700 hover:underline", repActive && sel.metric === null ? "text-forest-700 underline" : "text-gray-900")}
@@ -530,10 +539,10 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
                   {COLUMNS.map(c => {
                     const v = r.values[c.key];
                     const leads = v > 0 && v === leaders[c.key];
-                    const loading = c.key === "contactsTouched" && activitiesLoading;
+                    const loading = c.section === "contacts" && activitiesLoading;
                     const active = sel.rep === r.id && sel.metric === c.key;
                     return (
-                      <td key={c.key} className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                      <td key={c.key} className="px-2.5 py-3 text-right tabular-nums whitespace-nowrap">
                         <button
                           onClick={() => pick({ rep: r.id, metric: c.key })}
                           disabled={loading}
@@ -654,7 +663,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
         count={shownContacts.length}
         filterLabel={filterLabel("contacts", "Activity logged in period")}
         innerRef={refs.contacts}
-        highlight={sel.metric === "contactsTouched"}
+        highlight={!!sel.metric && COLUMN[sel.metric].section === "contacts"}
       >
         {activitiesLoading ? (
           <p className="px-4 py-6 text-sm text-gray-400 text-center">Loading activities…</p>
@@ -670,11 +679,25 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
               { key: "company", label: "Company", value: c => c.company },
               { key: "rep", label: "Touched By", value: c => repCell(c.rep) },
               { key: "touches", label: "Activities", value: c => c.touches, right: true },
+              { key: "meetings", label: "Meetings", value: c => c.meetings, right: true },
               { key: "lastTouch", label: "Last Touch", value: c => c.lastTouch, render: c => fmtDate(c.lastTouch), right: true },
             ]}
           />
         )}
       </Panel>
+
+      <ReportingInsights
+        activities={activities}
+        activitiesLoading={activitiesLoading}
+        opportunities={opportunities}
+        clientContacts={clientContacts}
+        referralContacts={referralContacts}
+        partnerOwner={partnerOwner}
+        periodStart={start}
+        periodEnd={end}
+        selectedRep={sel.rep}
+        selectedRepName={sel.rep ? repName.get(sel.rep) ?? "" : ""}
+      />
 
       <div className="text-xs text-gray-400 space-y-1">
         <p>Opportunities are credited to the assigned rep. Won opps count on their close date, or their expected close date if no close date was recorded. Pipeline is open opps expected to close in the period.</p>
