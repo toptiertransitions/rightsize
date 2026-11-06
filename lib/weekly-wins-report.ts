@@ -53,6 +53,7 @@ export interface RepWeek {
   leadsCreated: { client: string; stage: string; value: number; source: string }[];
   leadsWon: { client: string; value: number; source: string }[];
   activity: { calls: number; meetings: number; emails: number; texts: number; other: number };
+  uniqueMeetings: number; // referral partners met at least once this week (same as CRM Reporting)
 }
 
 export interface WeeklyWinsData {
@@ -138,8 +139,10 @@ export async function gatherWeeklyWins(now = new Date()): Promise<WeeklyWinsData
       .map((o) => ({ client: clientMap.get(o.clientContactId)?.name ?? "Client", value: o.estimatedValue || 0, source: leadSource(o.clientContactId) }));
 
     const activity = { calls: 0, meetings: 0, emails: 0, texts: 0, other: 0 };
+    const partnersMet = new Set<string>();
     for (const a of activities) {
       if (!owns(a.createdByClerkId) || !inWeek(a.activityDate)) continue;
+      if (a.type === "Meeting" && a.clientContactId && partnerMap.has(a.clientContactId)) partnersMet.add(a.clientContactId);
       if (a.type === "Call") activity.calls++;
       else if (a.type === "Meeting") activity.meetings++;
       else if (a.type === "Email") activity.emails++;
@@ -147,7 +150,7 @@ export async function gatherWeeklyWins(now = new Date()): Promise<WeeklyWinsData
       else activity.other++;
     }
 
-    return { name: rep.displayName, stageMoves, newPartnerContacts, leadsCreated, leadsWon, activity };
+    return { name: rep.displayName, stageMoves, newPartnerContacts, leadsCreated, leadsWon, activity, uniqueMeetings: partnersMet.size };
   });
 
   // Billable hours: project time (not internal/training), in rolling 7-day buckets
@@ -301,10 +304,13 @@ function statTile(label: string, value: string, last = false): string {
 
 function repCard(rep: RepWeek, highlights: string[]): string {
   const forward = rep.stageMoves.filter((m) => m.forward).length;
+  const createdValue = rep.leadsCreated.reduce((s, l) => s + l.value, 0);
+  const wonValue = rep.leadsWon.reduce((s, l) => s + l.value, 0);
   const facts = [
     `${forward} partner stage move${forward === 1 ? "" : "s"}`,
-    `${rep.leadsCreated.length} new lead${rep.leadsCreated.length === 1 ? "" : "s"}`,
-    `${rep.leadsWon.length} won`,
+    `${rep.leadsCreated.length} new lead${rep.leadsCreated.length === 1 ? "" : "s"} (${money(createdValue)})`,
+    `${rep.leadsWon.length} won (${money(wonValue)})`,
+    `${rep.uniqueMeetings} unique meeting${rep.uniqueMeetings === 1 ? "" : "s"}`,
   ];
   return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
     <tr><td style="background:${TINT};padding:14px 20px;border-bottom:1px solid #e5e7eb;">
