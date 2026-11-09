@@ -6,6 +6,7 @@ import { getSystemRole, getStaffMembers } from "@/lib/airtable";
 import { getValidAccessToken, sendGmailMessage } from "@/lib/gmail";
 import { clerkClient } from "@clerk/nextjs/server";
 import { injectTracking } from "@/lib/tracking";
+import { buildEmailAttachment } from "@/lib/email-attachment";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -55,9 +56,8 @@ export async function POST(req: NextRequest) {
     try {
       const fileRes = await fetch(attachmentUrl);
       if (fileRes.ok) {
-        const mimeType = fileRes.headers.get("content-type") || "application/octet-stream";
         const attachName = attachmentName || decodeURIComponent(new URL(attachmentUrl).pathname.split("/").pop() || "attachment");
-        attachment = { data: Buffer.from(await fileRes.arrayBuffer()), name: attachName, mimeType };
+        attachment = buildEmailAttachment(Buffer.from(await fileRes.arrayBuffer()), attachName, fileRes.headers.get("content-type"));
       }
     } catch { /* best-effort */ }
   }

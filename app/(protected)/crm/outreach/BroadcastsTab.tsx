@@ -386,9 +386,11 @@ function ContentPickerModal({
 
   function contentFileInfo(item: ContentItem): { fileUrl: string; fileName: string } | null {
     if (item.contentType !== "PDF" || !item.fileUrl) return null;
+    // Raw uploads often have no extension in the URL; only use one from the last path segment
     let ext = "pdf";
-    try { ext = new URL(item.fileUrl).pathname.split(".").pop()?.toLowerCase() || "pdf"; } catch { /* ignore */ }
-    return { fileUrl: item.fileUrl, fileName: `${item.title}.${ext}` };
+    try { ext = new URL(item.fileUrl).pathname.split("/").pop()?.match(/\.([a-z0-9]{2,5})$/i)?.[1].toLowerCase() || "pdf"; } catch { /* ignore */ }
+    const safeTitle = item.title.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "attachment";
+    return { fileUrl: item.fileUrl, fileName: `${safeTitle}.${ext}` };
   }
 
   async function handleAiGenerate() {
