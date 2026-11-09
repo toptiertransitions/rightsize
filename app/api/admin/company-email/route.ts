@@ -7,6 +7,7 @@ import {
   getStaffMembers,
   getTenants,
   getSignedContractsSince,
+  getContractsByTenant,
   getOpportunities,
   getClientContacts,
   getAllActivities,
@@ -18,9 +19,18 @@ import {
   parseBullets,
   takeawaysPrompt,
 } from "@/lib/weekly-shoutouts";
+import type { Contract } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Same as the Plan page: line items first, then the legacy hours fields
+function contractHours(c: Contract): number {
+  const items = (c.lineItems ?? []).reduce((s, li) => s + (li.hours || 0), 0);
+  return items > 0 ? items : c.rightsizingHours + c.packingHours + c.unpackingHours;
+}
+
+const fmtHours = (h: number | null) => (h && h > 0 ? `${Math.round(h * 10) / 10} hrs` : "—");
 
 function sevenDaysAgo(): string {
   const d = new Date();
@@ -86,6 +96,8 @@ export async function POST(req: NextRequest) {
   // One query for the week's signed contracts. Fetching every project's contracts in
   // parallel tripped Airtable's rate limit and silently dropped wins from the email.
   const signedThisWeek = await getSignedContractsSince(ago);
+  // Every project's contracts in one paged query, for signed and quoted hours
+  const contractsByTenant = await getContractsByTenant().catch(() => new Map<string, Contract[]>());
 
   // ── New staff (last 7 days) ──────────────────────────────────────────────────
   // Use Clerk as the authoritative source for account creation date.
@@ -124,7 +136,7 @@ export async function POST(req: NextRequest) {
     });
 
   // ── New signed projects (last 7 days) ────────────────────────────────────────
-  const newProjects: { clientName: string; city: string }[] = [];
+  const newProjects: { clientName: string; city: string; hours: number | null }[] = [];
   const clientTenantIds = new Set(clientTenants.map((t) => t.id));
   for (const tenantId of new Set(signedThisWeek.filter((c) => c.signedAt && c.signedAt.slice(0, 10) >= ago).map((c) => c.tenantId))) {
     const tenant = tenantMap.get(tenantId);
@@ -132,6 +144,8 @@ export async function POST(req: NextRequest) {
     newProjects.push({
       clientName: tenant.name,
       city: [tenant.city, tenant.state].filter(Boolean).join(", "),
+      // All signed contracts on the project (incl. add-ons), else the project's own estimate
+      hours: (contractsByTenant.get(tenantId) ?? []).filter((c) => c.status === "Signed").reduce((s, c) => s + contractHours(c), 0) || tenant.estimatedHours || null,
     });
   }
 
@@ -147,10 +161,15 @@ export async function POST(req: NextRequest) {
   const contactMap = new Map(contacts.map((c) => [c.id, c]));
   const pipelineItems = opps
     .filter((o) => ACTIVE_STAGES.has(o.stage))
-    .map((o) => ({
-      name: contactMap.get(o.clientContactId)?.name || "Unknown",
-      city: o.city || "—",
-    }));
+    .map((o) => {
+      // Proposed hours only when a quote is out: the newest sent, unsigned contract on the project
+      const quote = o.tenantId ? (contractsByTenant.get(o.tenantId) ?? []).find((c) => c.status === "Sent") : undefined;
+      return {
+        name: contactMap.get(o.clientContactId)?.name || "Unknown",
+        city: o.city || "—",
+        proposedHours: quote ? contractHours(quote) : null,
+      };
+    });
 
   // ── Weekly CRM activity — unique contacts ────────────────────────────────────
   const oppContactMap = new Map(opps.map((o) => [o.id, o.clientContactId]));
@@ -297,6 +316,7 @@ export async function POST(req: NextRequest) {
           <thead><tr>
             <th style="padding:8px 14px;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.6px;background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:left;">Client</th>
             <th style="padding:8px 14px;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.6px;background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:left;">Location</th>
+            <th style="padding:8px 14px;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.6px;background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:right;">Est. Hours</th>
           </tr></thead>
           <tbody>
           ${newProjects
@@ -304,6 +324,7 @@ export async function POST(req: NextRequest) {
               (p, i) => `<tr style="background:${i % 2 === 0 ? "#fff" : TINT};">
               <td style="padding:10px 14px;font-size:14px;font-weight:600;color:${DARK};border-bottom:1px solid #f3f4f6;">${p.clientName}</td>
               <td style="padding:10px 14px;font-size:13px;color:${MUTED};border-bottom:1px solid #f3f4f6;">${p.city || "—"}</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:600;color:${DARK};border-bottom:1px solid #f3f4f6;text-align:right;white-space:nowrap;">${fmtHours(p.hours)}</td>
             </tr>`
             )
             .join("")}
@@ -319,6 +340,7 @@ export async function POST(req: NextRequest) {
             <thead><tr>
               <th style="padding:8px 14px;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.6px;background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:left;">Opportunity</th>
               <th style="padding:8px 14px;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.6px;background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:left;">Town</th>
+              <th style="padding:8px 14px;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:.6px;background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:right;">Proposed Hours<br><span style="font-weight:400;text-transform:none;letter-spacing:0;">not confirmed</span></th>
             </tr></thead>
             <tbody>
             ${pipelineItems
@@ -326,6 +348,7 @@ export async function POST(req: NextRequest) {
                 (p, i) => `<tr style="background:${i % 2 === 0 ? "#fff" : TINT};">
                 <td style="padding:10px 14px;font-size:13px;color:${DARK};border-bottom:1px solid #f3f4f6;">${p.name}</td>
                 <td style="padding:10px 14px;font-size:13px;color:${MUTED};border-bottom:1px solid #f3f4f6;">${p.city}</td>
+                <td style="padding:10px 14px;font-size:13px;color:${p.proposedHours ? DARK : "#9ca3af"};border-bottom:1px solid #f3f4f6;text-align:right;white-space:nowrap;">${p.proposedHours ? fmtHours(p.proposedHours) : "TBD"}</td>
               </tr>`
               )
               .join("")}
