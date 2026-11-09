@@ -4941,6 +4941,8 @@ export async function createActivity(data: {
         CreatedByClerkId: data.createdByClerkId,
         CreatedAt: new Date().toISOString(),
       },
+      // typecast lets Airtable add a new Type select option (e.g. "Event") on first use
+      typecast: true,
     }),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -5007,7 +5009,7 @@ export async function updateActivity(
   if (data.activityDate !== undefined) fields["ActivityDate"] = data.activityDate;
   const res = await crmFetch(AIRTABLE_TABLES.CRM_ACTIVITIES, `/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields, typecast: true }),
   });
   if (!res.ok) throw new Error(await res.text());
   return mapCRMActivity(await res.json());

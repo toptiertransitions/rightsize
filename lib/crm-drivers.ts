@@ -7,6 +7,7 @@
 
 export const DRIVER_FEATURES = [
   { key: "Meeting", plural: "meetings", singular: "meeting" },
+  { key: "Event", plural: "events", singular: "event" },
   { key: "Call", plural: "calls", singular: "call" },
   { key: "Email", plural: "emails", singular: "email" },
   { key: "Text Message", plural: "texts", singular: "text" },

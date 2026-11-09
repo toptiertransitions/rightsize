@@ -180,7 +180,7 @@ export default function ReportingInsights({
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <h4 className="font-semibold text-gray-900">{selectedRepName}&apos;s activity mix vs team</h4>
               <p className="text-sm text-gray-500 mt-0.5 mb-3">Activities per 10 partners owned ({mix.n} partners)</p>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 {DRIVER_FEATURES.map((f, j) => {
                   const r = mix.rep[j], t = mix.team[j];
                   const diff = t > 0 ? r / t : r > 0 ? Infinity : 1;
@@ -199,7 +199,7 @@ export default function ReportingInsights({
           )}
 
           <p className="text-xs text-gray-400">
-            Each partner is one data point: their meetings, calls, emails, texts and notes in the window, and whether they moved up a stage or sent a referral.
+            Each partner is one data point: their meetings, events, calls, emails, texts and notes in the window, and whether they moved up a stage or sent a referral.
             A regression weighs all activity types together, so a &quot;clear signal&quot; means that type matters even after accounting for the others.
             Week and month views look back {MIN_WINDOW_DAYS} days so there&apos;s enough to learn from. This shows what goes together, not proof of cause.
           </p>

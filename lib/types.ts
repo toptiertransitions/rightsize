@@ -1201,7 +1201,7 @@ export interface ClientOpportunity {
   originParkingNotes?: string;
 }
 
-export type CRMActivityType = "Call" | "Email" | "Meeting" | "Note" | "Task" | "Text Message";
+export type CRMActivityType = "Call" | "Email" | "Meeting" | "Event" | "Note" | "Task" | "Text Message";
 
 export interface CRMActivity {
   id: string;

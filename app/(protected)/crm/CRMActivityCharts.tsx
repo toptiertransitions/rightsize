@@ -6,6 +6,7 @@ const ACTIVITY_BAR_COLORS: Record<string, string> = {
   Call:           "#22c55e",
   Email:          "#3b82f6",
   Meeting:        "#a855f7",
+  Event:          "#ec4899",
   Note:           "#9ca3af",
   Task:           "#f97316",
   "Text Message": "#06b6d4",
@@ -23,6 +24,7 @@ interface WeeklyDataPoint {
   Call: number;
   Email: number;
   Meeting: number;
+  Event: number;
   Note: number;
   Task: number;
   "Text Message": number;
@@ -82,7 +84,7 @@ export default function CRMActivityCharts({ weeklyActivityData, dailyRepData, un
                 cursor={{ fill: "#f9fafb" }}
               />
               <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-              {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as const).map(type => (
+              {(["Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"] as const).map(type => (
                 <Bar key={type} dataKey={type} stackId="a" fill={ACTIVITY_BAR_COLORS[type]} />
               ))}
             </BarChart>

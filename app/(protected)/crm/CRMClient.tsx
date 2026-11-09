@@ -143,7 +143,7 @@ function ActivityEditModal({
             onChange={(e) => setType(e.target.value as CRMActivityType)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           >
-            {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
+            {(["Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
@@ -1605,7 +1605,7 @@ function OpportunityPanel({
                   onChange={(e) => setActivityType(e.target.value as CRMActivityType)}
                   className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
                 >
-                  {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
+                  {(["Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
@@ -1639,6 +1639,7 @@ function OpportunityPanel({
                         a.type === "Email" ? "bg-blue-100 text-blue-700" :
                         a.type === "Call" ? "bg-green-100 text-green-700" :
                         a.type === "Meeting" ? "bg-purple-100 text-purple-700" :
+                        a.type === "Event" ? "bg-pink-100 text-pink-700" :
                         a.type === "Task" ? "bg-orange-100 text-orange-700" :
                         a.type === "Text Message" ? "bg-cyan-100 text-cyan-700" :
                         "bg-gray-100 text-gray-600"
@@ -1808,7 +1809,7 @@ function ContactActivityPanel({
                 onChange={(e) => setActivityType(e.target.value as CRMActivityType)}
                 className="text-sm border border-gray-300 rounded-lg px-2 py-1.5"
               >
-                {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
+                {(["Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
@@ -1900,6 +1901,7 @@ function ContactActivityPanel({
                         a.type === "Email" ? "bg-blue-100 text-blue-700" :
                         a.type === "Call" ? "bg-green-100 text-green-700" :
                         a.type === "Meeting" ? "bg-purple-100 text-purple-700" :
+                        a.type === "Event" ? "bg-pink-100 text-pink-700" :
                         a.type === "Task" ? "bg-orange-100 text-orange-700" :
                         a.type === "Text Message" ? "bg-cyan-100 text-cyan-700" :
                         "bg-gray-100 text-gray-600"
@@ -4308,6 +4310,7 @@ function DashboardTab({
         Call:    wkActs.filter(a => a.type === "Call").length,
         Email:   wkActs.filter(a => a.type === "Email").length,
         Meeting: wkActs.filter(a => a.type === "Meeting").length,
+        Event:   wkActs.filter(a => a.type === "Event").length,
         Note:    wkActs.filter(a => a.type === "Note").length,
         Task:    wkActs.filter(a => a.type === "Task").length,
         "Text Message": wkActs.filter(a => a.type === "Text Message").length,
@@ -5288,7 +5291,7 @@ function DashboardTab({
                   {spotlightActivities.map(a => (
                     <div key={a.id} className="flex gap-3">
                       <div className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs">
-                        {a.type === "Call" ? "☎" : a.type === "Email" ? "✉" : a.type === "Meeting" ? "👤" : a.type === "Text Message" ? "💬" : "·"}
+                        {a.type === "Call" ? "☎" : a.type === "Email" ? "✉" : a.type === "Meeting" ? "👤" : a.type === "Event" ? "★" : a.type === "Text Message" ? "💬" : "·"}
                       </div>
                       <div>
                         <p className="text-xs font-medium text-gray-700">{a.type} · {(a.activityDate || a.createdAt).slice(0, 10)}</p>
@@ -5455,6 +5458,7 @@ const ACTIVITY_TYPE_COLORS: Record<string, string> = {
   Call: "bg-green-100 text-green-700",
   Email: "bg-blue-100 text-blue-700",
   Meeting: "bg-purple-100 text-purple-700",
+  Event: "bg-pink-100 text-pink-700",
   Note: "bg-gray-100 text-gray-600",
   Task: "bg-orange-100 text-orange-700",
   "Text Message": "bg-cyan-100 text-cyan-700",
@@ -5663,7 +5667,7 @@ function ActivityLogTab({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        {(["All", "Call", "Email", "Meeting", "Note", "Task", "Text Message"] as const).map((t) => (
+        {(["All", "Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"] as const).map((t) => (
           <button
             key={t}
             onClick={() => { setTypeFilter(t); setPage(1); }}
@@ -5936,7 +5940,7 @@ function ActivityLogTab({
                   onChange={(e) => setLogForm((f) => ({ ...f, type: e.target.value as CRMActivityType }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 >
-                  {(["Call", "Email", "Meeting", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
+                  {(["Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"] as CRMActivityType[]).map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>

@@ -52,7 +52,7 @@ export interface RepWeek {
   newPartnerContacts: { contact: string; company: string }[];
   leadsCreated: { client: string; stage: string; value: number; source: string }[];
   leadsWon: { client: string; value: number; source: string }[];
-  activity: { calls: number; meetings: number; emails: number; texts: number; other: number };
+  activity: { calls: number; meetings: number; events: number; emails: number; texts: number; other: number };
   uniqueMeetings: number; // referral partners met at least once this week (same as CRM Reporting)
 }
 
@@ -138,13 +138,14 @@ export async function gatherWeeklyWins(now = new Date()): Promise<WeeklyWinsData
       .filter((o) => o.stage === "Won" && inWeek(o.wonAt))
       .map((o) => ({ client: clientMap.get(o.clientContactId)?.name ?? "Client", value: o.estimatedValue || 0, source: leadSource(o.clientContactId) }));
 
-    const activity = { calls: 0, meetings: 0, emails: 0, texts: 0, other: 0 };
+    const activity = { calls: 0, meetings: 0, events: 0, emails: 0, texts: 0, other: 0 };
     const partnersMet = new Set<string>();
     for (const a of activities) {
       if (!owns(a.createdByClerkId) || !inWeek(a.activityDate)) continue;
       if (a.type === "Meeting" && a.clientContactId && partnerMap.has(a.clientContactId)) partnersMet.add(a.clientContactId);
       if (a.type === "Call") activity.calls++;
       else if (a.type === "Meeting") activity.meetings++;
+      else if (a.type === "Event") activity.events++;
       else if (a.type === "Email") activity.emails++;
       else if (a.type === "Text Message") activity.texts++;
       else activity.other++;

@@ -80,7 +80,7 @@ interface ParsedRefContact {
 
 type RecordingState = "idle" | "recording" | "processing" | "results" | "error";
 
-const ACTIVITY_TYPES: CRMActivityType[] = ["Call", "Email", "Meeting", "Note", "Task", "Text Message"];
+const ACTIVITY_TYPES: CRMActivityType[] = ["Call", "Email", "Meeting", "Event", "Note", "Task", "Text Message"];
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 

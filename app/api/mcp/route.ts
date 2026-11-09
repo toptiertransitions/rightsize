@@ -47,9 +47,9 @@ async function atFetchAll(table: string, params: Record<string, string> = {}): P
   return all;
 }
 
-async function atCreate(table: string, fields: Fields): Promise<ARecord> {
+async function atCreate(table: string, fields: Fields, typecast = false): Promise<ARecord> {
   const res = await fetch(`${AT_BASE}/${encodeURIComponent(table)}`, {
-    method: "POST", headers: AT_HEADERS(), body: JSON.stringify({ fields }),
+    method: "POST", headers: AT_HEADERS(), body: JSON.stringify(typecast ? { fields, typecast } : { fields }),
   });
   if (!res.ok) throw new Error(`Airtable create [${table}]: ${await res.text()}`);
   return res.json() as Promise<ARecord>;
@@ -405,16 +405,16 @@ async function logActivity(args: Fields): Promise<string> {
   const contactId    = s(args.contact_id).trim();
   const activityDate = s(args.activity_date) || todayISO();
 
-  if (!type) throw new Error("type is required: Call, Email, Meeting, Note, Task");
+  if (!type) throw new Error("type is required: Call, Email, Meeting, Event, Note, Task, Text Message");
   if (!note) throw new Error("note is required");
   if (!opportunityId && !contactId) throw new Error("Either opportunity_id or contact_id is required");
-  if (!["Call","Email","Meeting","Note","Task"].includes(type)) throw new Error(`Invalid type: ${type}`);
+  if (!["Call","Email","Meeting","Event","Note","Task","Text Message"].includes(type)) throw new Error(`Invalid type: ${type}`);
 
   const fields: Fields = { Type: type, Note: note, ActivityDate: activityDate, IsGmailImported: false, CreatedAt: new Date().toISOString() };
   if (opportunityId) fields.OpportunityId   = opportunityId;
   if (contactId)     fields.ClientContactId = contactId;
 
-  const record = await atCreate(T.CRM_ACTIVITIES, fields);
+  const record = await atCreate(T.CRM_ACTIVITIES, fields, true);
   if (contactId) {
     try { await atPatch(T.CRM_CONTACTS, contactId, { LastActivityDate: activityDate }); } catch { /* ok */ }
   }
@@ -639,12 +639,12 @@ const TOOLS = [
   { name: "get_referral_partners", description: "List all referral partner companies with contacts, best stage, and last activity. Filter by stage or search by name/city/type.", inputSchema: { type: "object", properties: { stage_filter: { type: "string", enum: ["Identified","Met","Agreed to Refer","Shared Leads","Active Referral","Inactive Referral"] }, search: { type: "string" } }, required: [] } },
   { name: "get_opportunities", description: "Client opportunity pipeline sorted by next step date. Includes client name, stage, estimated value, and next step.", inputSchema: { type: "object", properties: { stage: { type: "string", enum: ["Lead","Qualifying","Proposing","Won","Lost"] }, search: { type: "string" }, include_closed: { type: "boolean" } }, required: [] } },
   { name: "search_contacts", description: "Find a referral contact or client contact by name, email, or title. Returns Airtable IDs needed for log_activity.", inputSchema: { type: "object", properties: { query: { type: "string", description: "Name, email, or title" } }, required: ["query"] } },
-  { name: "get_recent_activities", description: "Recent CRM activities — calls, emails, meetings, notes, tasks.", inputSchema: { type: "object", properties: { days: { type: "number" }, limit: { type: "number" }, type: { type: "string", enum: ["Call","Email","Meeting","Note","Task"] } }, required: [] } },
+  { name: "get_recent_activities", description: "Recent CRM activities — calls, emails, meetings (1-on-1s), events (conferences, happy hours, meetups), notes, tasks, texts.", inputSchema: { type: "object", properties: { days: { type: "number" }, limit: { type: "number" }, type: { type: "string", enum: ["Call","Email","Meeting","Event","Note","Task","Text Message"] } }, required: [] } },
   { name: "get_projects", description: "List active client projects with city, estimated hours, and payout method.", inputSchema: { type: "object", properties: { include_all: { type: "boolean" } }, required: [] } },
   { name: "create_referral_company", description: "Add a new referral partner company to the CRM.", inputSchema: { type: "object", properties: { name: { type: "string" }, type: { type: "string" }, city: { type: "string" }, state: { type: "string" }, zip: { type: "string" }, address: { type: "string" }, priority: { type: "string", enum: ["High","Medium","Low"] }, notes: { type: "string" }, website: { type: "string" } }, required: ["name"] } },
   { name: "create_referral_contact", description: "Add a contact at a referral partner company. Provide company_id or exact company_name.", inputSchema: { type: "object", properties: { name: { type: "string" }, company_id: { type: "string" }, company_name: { type: "string" }, title: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, stage: { type: "string", enum: ["Identified","Met","Agreed to Refer","Shared Leads","Active Referral","Inactive Referral"] }, notes: { type: "string" }, interests: { type: "string" }, date_introduced: { type: "string" } }, required: ["name"] } },
   { name: "create_client_lead", description: "Create a new client lead — adds a ClientContact and an Opportunity in Lead stage.", inputSchema: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, source: { type: "string" }, notes: { type: "string" }, opportunity_notes: { type: "string" }, estimated_value: { type: "number" }, next_step: { type: "string" }, next_step_date: { type: "string" } }, required: ["name"] } },
-  { name: "log_activity", description: "Log a CRM activity (Call/Email/Meeting/Note/Task) against an opportunity or contact. Use search_contacts to get contact IDs.", inputSchema: { type: "object", properties: { type: { type: "string", enum: ["Call","Email","Meeting","Note","Task"] }, note: { type: "string" }, opportunity_id: { type: "string" }, contact_id: { type: "string" }, activity_date: { type: "string" } }, required: ["type","note"] } },
+  { name: "log_activity", description: "Log a CRM activity (Call/Email/Meeting/Event/Note/Task/Text Message) against an opportunity or contact. Use search_contacts to get contact IDs.", inputSchema: { type: "object", properties: { type: { type: "string", enum: ["Call","Email","Meeting","Event","Note","Task","Text Message"] }, note: { type: "string" }, opportunity_id: { type: "string" }, contact_id: { type: "string" }, activity_date: { type: "string" } }, required: ["type","note"] } },
   { name: "delete_activity", description: "Permanently delete a CRM activity. DESTRUCTIVE — requires confirm: true.", inputSchema: { type: "object", properties: { activity_id: { type: "string" }, confirm: { type: "boolean" } }, required: ["activity_id"] } },
   {
     name: "get_catalog_items",

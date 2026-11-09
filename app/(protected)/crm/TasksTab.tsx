@@ -71,7 +71,7 @@ function fmtWeekRange(start: string): string {
   return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-const ACTIVITY_TYPES = ["Call", "Meeting", "Email", "Text Message", "Note", "Task"] as const;
+const ACTIVITY_TYPES = ["Call", "Meeting", "Event", "Email", "Text Message", "Note", "Task"] as const;
 type ActivityType = typeof ACTIVITY_TYPES[number];
 
 interface ConfirmState {

@@ -64,7 +64,7 @@ Parse this transcript into structured CRM data. Return ONLY a valid JSON object 
       "contactId": "<refContactId from list above if matched, else null>",
       "contactName": "<name as mentioned or matched>",
       "companyName": "<company name>",
-      "type": "<Call|Email|Meeting|Note|Task|Text Message>",
+      "type": "<Call|Email|Meeting|Event|Note|Task|Text Message>",
       "date": "<ISO YYYY-MM-DD, convert relative dates using TODAY, default to today>",
       "notes": "<descriptive note summarizing the interaction>"
     }
@@ -106,7 +106,7 @@ Rules:
 2. Match names to existing contacts/companies using fuzzy matching where reasonable
 3. Use null for any field that cannot be determined — never guess
 4. Convert relative date expressions ("yesterday", "last Tuesday", "next week") using TODAY
-5. For activity type: Meeting = in-person or video, Call = phone, Email = email reference, Note = general info
+5. For activity type: Meeting = a 1-on-1 in person or on video, Event = a conference, happy hour, meetup, networking or group event, Call = phone, Email = email reference, Text Message = text, Note = general info
 6. If the transcript mentions following up or a next step, put it in nextSteps (not just activitiesToLog)
 7. Only add to newClientLeads if someone is described as a potential client, homeowner needing services, or lead
 8. Only add to newReferralContacts if someone is a new professional contact (agent, attorney, advisor, etc.) not yet in the system`;
