@@ -196,6 +196,7 @@ function OpportunitiesTab({
   pendingOppId,
   clearPending,
   initialStageFilter = "All",
+  onOpportunitiesChange,
 }: {
   initialOpportunities: ClientOpportunity[];
   clientContacts: ClientContact[];
@@ -207,8 +208,13 @@ function OpportunitiesTab({
   pendingOppId?: string | null;
   clearPending?: () => void;
   initialStageFilter?: OpportunityStage | "All";
+  onOpportunitiesChange?: (opps: ClientOpportunity[]) => void;
 }) {
   const [opportunities, setOpportunities] = useState(initialOpportunities);
+  useEffect(() => {
+    if (opportunities !== initialOpportunities) onOpportunitiesChange?.(opportunities);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opportunities]);
   const [stageFilter, setStageFilter] = useState<OpportunityStage | "All">(initialStageFilter);
   const [sort, setSort] = useState<{ col: OppSortCol; dir: "asc" | "desc" }>(
     initialStageFilter !== "All"
@@ -6124,10 +6130,12 @@ function GmailSettingsTab({ gmailConnected, gmailEmail, gmailTokenRevoked }: { g
 }
 
 // ─── Main CRMClient ───────────────────────────────────────────────────────────
-export function CRMClient({ opportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants, currentUserId, sysRole, shoutouts, canGiveShoutout, shoutoutTeam }: CRMClientProps) {
+export function CRMClient({ opportunities: serverOpportunities, clientContacts, companies, referralContacts, staffMembers, gmailConnected, gmailEmail, gmailTokenRevoked, tenants, currentUserId, sysRole, shoutouts, canGiveShoutout, shoutoutTeam }: CRMClientProps) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) || "dashboard";
   const [tab, setTab] = useState<Tab>(initialTab);
+  // Shared across tabs so an edit in Opportunities shows up in Reporting, Dash, etc. without a refresh
+  const [opportunities, setOpportunities] = useState(serverOpportunities);
   const [localContacts, setLocalContacts] = useState(clientContacts);
   const [localReferralContacts, setLocalReferralContacts] = useState(referralContacts);
   const [pendingContactId, setPendingContactId] = useState<string | null>(null);
@@ -6245,6 +6253,7 @@ export function CRMClient({ opportunities, clientContacts, companies, referralCo
         <OpportunitiesTab
           key={oppTabKey}
           initialOpportunities={opportunities}
+          onOpportunitiesChange={setOpportunities}
           clientContacts={localContacts}
           referralContacts={referralContacts}
           staffMembers={staffMembers}
