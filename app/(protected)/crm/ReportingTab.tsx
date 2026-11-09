@@ -82,14 +82,15 @@ function fmt$(n: number): string {
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 
-type MetricKey = "wonValue" | "wonCount" | "expectedValue" | "created" | "uniqueMeetings" | "contactsTouched" | "activeReferrals" | "progressions";
+type MetricKey = "wonValue" | "wonCount" | "expectedValue" | "created" | "createdValue" | "uniqueMeetings" | "contactsTouched" | "activeReferrals" | "progressions";
 type Section = "opps" | "partners" | "contacts";
 
 const COLUMNS: { key: MetricKey; label: string; sub: string; money?: boolean; section: Section }[] = [
   { key: "wonValue", label: "Won $", sub: "by close date", money: true, section: "opps" },
   { key: "wonCount", label: "Won", sub: "opps closed", section: "opps" },
-  { key: "expectedValue", label: "Pipeline $", sub: "open, exp. close in period", money: true, section: "opps" },
+  { key: "expectedValue", label: "Open Pipe $", sub: "open, exp. close in period", money: true, section: "opps" },
   { key: "created", label: "Opps Created", sub: "by created date", section: "opps" },
+  { key: "createdValue", label: "Pipe $ Created", sub: "by created date, any stage", money: true, section: "opps" },
   { key: "uniqueMeetings", label: "Unique Meetings", sub: "partners met, once each", section: "contacts" },
   { key: "contactsTouched", label: "Contacts Touched", sub: "unique, by activity date", section: "contacts" },
   { key: "activeReferrals", label: "Active Referral", sub: "partners right now", section: "partners" },
@@ -276,7 +277,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       } else if (o.stage !== "Lost" && inPeriod(o.expectedCloseDate)) {
         tags.add("expectedValue");
       }
-      if (inPeriod(o.createdAt)) tags.add("created");
+      if (inPeriod(o.createdAt)) { tags.add("created"); tags.add("createdValue"); }
       if (!tags.size) continue;
       repIds.add(rep);
       opps.push({
@@ -463,7 +464,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       </div>
 
       {/* Team totals — click to filter the tables by metric across all reps */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-3">
         {COLUMNS.map(c => {
           const active = sel.rep === null && sel.metric === c.key;
           const v = metricValue(c.key, null);
@@ -500,14 +501,14 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
               <th className="text-left text-xs font-medium text-gray-500 px-3 py-2.5 w-10">#</th>
               <th className="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Rep</th>
               {COLUMNS.map(c => (
-                <th key={c.key} className="text-right align-top px-2.5 py-2.5">
+                <th key={c.key} className="text-right align-top px-2 py-2.5">
                   <button
                     onClick={() => setSortKey(c.key)}
                     className={cn("text-xs font-medium whitespace-nowrap hover:text-gray-900", sortKey === c.key ? "text-forest-700" : "text-gray-500")}
                   >
                     {c.label}{sortKey === c.key ? " ↓" : ""}
                   </button>
-                  <div className="text-[10px] leading-tight font-normal text-gray-400 max-w-[6.5rem] ml-auto">{c.sub}</div>
+                  <div className="text-[10px] leading-tight font-normal text-gray-400 max-w-[5.75rem] ml-auto">{c.sub}</div>
                 </th>
               ))}
             </tr>
@@ -542,7 +543,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
                     const loading = c.section === "contacts" && activitiesLoading;
                     const active = sel.rep === r.id && sel.metric === c.key;
                     return (
-                      <td key={c.key} className="px-2.5 py-3 text-right tabular-nums whitespace-nowrap">
+                      <td key={c.key} className="px-2 py-3 text-right tabular-nums whitespace-nowrap">
                         <button
                           onClick={() => pick({ rep: r.id, metric: c.key })}
                           disabled={loading}
@@ -605,7 +606,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
           key={`opps-${oppMetric ?? "all"}`}
           rows={shownOpps}
           rowKey={o => o.id}
-          defaultSort={oppMetric === "created" ? "created" : "close"}
+          defaultSort={oppMetric === "created" || oppMetric === "createdValue" ? "created" : "close"}
           onRowClick={o => onViewOpportunity(o.id)}
           empty="No opportunities match."
           cols={[
@@ -619,7 +620,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
               key: "tags", label: "Counts Toward", value: o => [...o.tags].join(","),
               render: o => (
                 <span className="text-xs text-gray-500">
-                  {[o.tags.has("wonCount") && "Won", o.tags.has("expectedValue") && "Pipeline", o.tags.has("created") && "Created"].filter(Boolean).join(", ")}
+                  {[o.tags.has("wonCount") && "Won", o.tags.has("expectedValue") && "Open Pipe", o.tags.has("created") && "Created"].filter(Boolean).join(", ")}
                 </span>
               ),
             },
@@ -700,7 +701,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       />
 
       <div className="text-xs text-gray-400 space-y-1">
-        <p>Opportunities are credited to the assigned rep. Won opps count on their close date, or their expected close date if no close date was recorded. Pipeline is open opps expected to close in the period.</p>
+        <p>Opportunities are credited to the assigned rep. Won opps count on their close date, or their expected close date if no close date was recorded. Open Pipe is open opps expected to close in the period. Pipe $ Created is the value of every opp created in the period, whether it is now open, won or lost.</p>
         <p>Contacts Touched counts each client or referral contact once per rep, from activities logged in the period. Referral partners are credited to their company&apos;s owner; Active Referral is a current count, and Stage Moves counts partners whose latest stage change in the period moved them up the funnel. Unassigned records and admin/test accounts are left out.</p>
       </div>
     </div>
