@@ -16,7 +16,6 @@ import { getShoutoutsSince } from "@/lib/shoutouts";
 import {
   buildShoutoutsSectionHtml,
   parseBullets,
-  shoutoutLeaderboard,
   takeawaysPrompt,
 } from "@/lib/weekly-shoutouts";
 
@@ -286,7 +285,6 @@ export async function POST(req: NextRequest) {
   // ── Section: Shoutouts ────────────────────────────────────────────────────────
   const shoutoutsContent = buildShoutoutsSectionHtml({
     shoutouts: weekShoutouts,
-    leaderboard: shoutoutLeaderboard(weekShoutouts),
     takeaways: shoutoutTakeaways,
     colors: { sage: SAGE, tint: TINT, dark: DARK, muted: MUTED },
   });

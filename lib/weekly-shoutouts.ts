@@ -1,6 +1,6 @@
 // Shoutouts section of the Weekly Company Update email (/admin > Create Weekly
-// Co. Email): every shoutout from the running 7 days, a leaderboard of who
-// was recognized most, and AI takeaways. Pure helpers; the route does the I/O.
+// Co. Email): every shoutout from the running 7 days, optionally a leaderboard
+// of who was recognized most (Weekly Wins only), and AI takeaways. Pure helpers; the route does the I/O.
 import type { Shoutout } from "./shoutouts";
 
 export interface LeaderboardRow {
@@ -71,7 +71,7 @@ export function buildShoutoutsSectionHtml({
   colors,
 }: {
   shoutouts: Shoutout[]; // newest first
-  leaderboard: LeaderboardRow[];
+  leaderboard?: LeaderboardRow[]; // omit to skip the ranked table (Weekly Company email keeps it non-competitive)
   takeaways: string[];
   colors: { sage: string; tint: string; dark: string; muted: string };
 }): string {
@@ -102,7 +102,7 @@ export function buildShoutoutsSectionHtml({
       </td></tr>
     </table>`;
 
-  const leaderboardHtml = `
+  const leaderboardHtml = !leaderboard ? "" : `
     <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:${muted};text-transform:uppercase;letter-spacing:.6px;">Leaderboard</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:22px;">
       ${leaderboard.map((r, i) => {
@@ -124,7 +124,7 @@ export function buildShoutoutsSectionHtml({
     </table>`;
 
   const feedHtml = `
-    <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:${muted};text-transform:uppercase;letter-spacing:.6px;">All shoutouts</p>
+    <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:${muted};text-transform:uppercase;letter-spacing:.6px;">${leaderboard ? "All shoutouts" : "Recent Shoutouts"}</p>
     ${shoutouts.map((s) => `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
       <tr><td style="border-left:4px solid ${sage};background:#fafafa;border-radius:0 8px 8px 0;padding:12px 16px;">
