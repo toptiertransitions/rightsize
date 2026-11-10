@@ -1830,6 +1830,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           projectNames={isAllProjectsMode ? projectNamesMap : undefined}
           isStaff={isStaff}
           isTTT={isTTT}
+          simpleTags={isClientUser && isTTT !== true}
         />
       </div>
 

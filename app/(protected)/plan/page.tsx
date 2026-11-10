@@ -433,6 +433,8 @@ export default async function PlanPage({ searchParams }: PageProps) {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-gray-900">Plan</h1>
           <p className="text-gray-500 mt-0.5">Schedule daily focus areas for your project</p>
+          {/* NonTTTClient owners and invited users don't need origin / destination / team lead */}
+          {!(tenant.isTTT !== true && !sysRole && !isAdmin) && (
           <ProjectAddressBar
             tenantId={tenantId}
             initialAddress={tenant.address}
@@ -455,6 +457,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
             initialTeamLeadPhone={teamLeadPhone}
             isTTT={tenant.isTTT === true}
           />
+          )}
           {isTTTStaffOrAbove && (
             <ClientContactBar
               tenantId={tenantId}

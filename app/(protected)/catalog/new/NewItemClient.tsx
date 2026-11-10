@@ -20,6 +20,8 @@ interface NewItemClientProps {
   tenantId: string;
   rooms: Room[];
   isTTT?: boolean;
+  // NonTTTClient owners and their invited users: a shorter form (target value only, no shipping/consignment/staff fields)
+  simpleMode?: boolean;
   estateMode?: boolean;
   tenantName?: string;
 }
@@ -58,7 +60,7 @@ const BLANK_ANALYSIS: Partial<ItemAnalysis> = {
 };
 
 
-export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = false, tenantName = "" }: NewItemClientProps) {
+export function NewItemClient({ tenantId, rooms, isTTT = true, simpleMode = false, estateMode = false, tenantName = "" }: NewItemClientProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -807,22 +809,26 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3 items-end">
-                  <Input label="Value Low ($)" type="number" inputMode="decimal"
-                    value={merged.value_low || ""}
-                    placeholder="0"
-                    onFocus={e => e.target.select()}
-                    onChange={(e) => update("value_low", e.target.value === "" ? 0 : Number(e.target.value))} />
+                <div className={simpleMode ? "" : "grid grid-cols-3 gap-3 items-end"}>
+                  {!simpleMode && (
+                    <Input label="Value Low ($)" type="number" inputMode="decimal"
+                      value={merged.value_low || ""}
+                      placeholder="0"
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => update("value_low", e.target.value === "" ? 0 : Number(e.target.value))} />
+                  )}
                   <Input label="Target Value ($)" type="number" inputMode="decimal"
                     value={merged.value_mid || ""}
                     placeholder="0"
                     onFocus={e => e.target.select()}
                     onChange={(e) => update("value_mid", e.target.value === "" ? 0 : Number(e.target.value))} />
-                  <Input label="Value High ($)" type="number" inputMode="decimal"
-                    value={merged.value_high || ""}
-                    placeholder="0"
-                    onFocus={e => e.target.select()}
-                    onChange={(e) => update("value_high", e.target.value === "" ? 0 : Number(e.target.value))} />
+                  {!simpleMode && (
+                    <Input label="Value High ($)" type="number" inputMode="decimal"
+                      value={merged.value_high || ""}
+                      placeholder="0"
+                      onFocus={e => e.target.select()}
+                      onChange={(e) => update("value_high", e.target.value === "" ? 0 : Number(e.target.value))} />
+                  )}
                 </div>
                 <Input label="Quantity" type="number" inputMode="numeric"
                   value={merged.quantity || ""}
@@ -847,6 +853,8 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                     ]}
                   />
                 </div>
+                {!simpleMode && (
+                  <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Dimensions / Box Size (optional, inches)</label>
                   <div className="grid grid-cols-3 gap-3">
@@ -920,6 +928,8 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
                 {rooms.length > 0 && (
                   <Select label="Room (optional)" value={selectedRoomId}
                     onChange={(e) => setSelectedRoomId(e.target.value)}
@@ -929,8 +939,10 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                     ]}
                   />
                 )}
-                <Input label="Consignment Category" value={merged.consignment_category ?? ""}
-                  onChange={(e) => update("consignment_category", e.target.value)} />
+                {!simpleMode && (
+                  <Input label="Consignment Category" value={merged.consignment_category ?? ""}
+                    onChange={(e) => update("consignment_category", e.target.value)} />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -954,17 +966,20 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                     onChange={(e) => update("listing_fb", e.target.value)}
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
                 </div>
+                {!simpleMode && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">OfferUp</label>
                   <textarea rows={2} value={merged.listing_offerup ?? ""}
                     onChange={(e) => update("listing_offerup", e.target.value)}
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
                 </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Staff Tips */}
+          {!simpleMode && (
           <Card>
             <CardContent>
               <h3 className="font-semibold text-gray-900 mb-3">Staff Notes</h3>
@@ -974,6 +989,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, estateMode = fals
                 className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent resize-none" />
             </CardContent>
           </Card>
+          )}
 
           {error && (
             <div ref={errorRef} className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-3">

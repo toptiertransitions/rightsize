@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getRoomsForTenant, getUserRoleForTenant, getTenantById, getSystemRole } from "@/lib/airtable";
 import { NewItemClient } from "./NewItemClient";
+import { isTTTAdmin } from "@/lib/config";
 
 interface PageProps {
   searchParams: Promise<{ tenantId?: string; estateMode?: string }>;
@@ -46,7 +47,7 @@ export default async function NewItemPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} estateMode={estateMode} tenantName={tenant.name ?? ""} />
+      <NewItemClient tenantId={tenantId} rooms={rooms} isTTT={tenant.isTTT === true} simpleMode={tenant.isTTT !== true && !sysRole && !isTTTAdmin(userId)} estateMode={estateMode} tenantName={tenant.name ?? ""} />
     </div>
   );
 }

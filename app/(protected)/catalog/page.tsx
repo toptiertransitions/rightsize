@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { isTTTAdmin } from "@/lib/config";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
@@ -142,6 +143,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           isTTT={tenant.isTTT ?? true}
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
+          simpleMode={tenant.isTTT !== true && !sysRole && !isTTTAdmin(userId!)}
           canDropToZero={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
           initialSearch={initialSearch}
         />

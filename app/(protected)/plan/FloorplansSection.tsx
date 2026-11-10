@@ -35,6 +35,8 @@ const TAG_CONFIG: Record<FileTag, { label: string; color: string }> = {
   "Client File":  { label: "Client File",  color: "bg-amber-100 text-amber-800" },
 };
 const TAG_ORDER: FileTag[] = ["Daily Recap", "Floorplan", "Room Image", "Layout Image", "Damage Image", "Client File"];
+// NonTTTClient owners and their invited users only pick from the simpler set when adding files
+const SIMPLE_TAGS: FileTag[] = ["Floorplan", "Room Image", "Layout Image"];
 
 // ─── Sort helper ──────────────────────────────────────────────────────────────
 function sortFiles(files: ProjectFile[]): ProjectFile[] {
@@ -80,12 +82,13 @@ interface UploadModalProps {
   tenantId: string;
   onClose: () => void;
   onUploaded: (files: ProjectFile[]) => void;
+  tagOptions: FileTag[];
 }
 
-function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
+function UploadModal({ tenantId, onClose, onUploaded, tagOptions }: UploadModalProps) {
   useBackClose(onClose);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [tag, setTag] = useState<FileTag>("Daily Recap");
+  const [tag, setTag] = useState<FileTag>(tagOptions[0]);
   const [roomLabel, setRoomLabel] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -161,7 +164,7 @@ function UploadModal({ tenantId, onClose, onUploaded }: UploadModalProps) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Tag</label>
             <select value={tag} onChange={e => setTag(e.target.value as FileTag)} className={inputCls}>
-              {TAG_ORDER.map(t => <option key={t} value={t}>{t}</option>)}
+              {tagOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
@@ -206,9 +209,10 @@ interface EditFileModalProps {
   onClose: () => void;
   onSaved: (updated: ProjectFile) => void;
   onDeleted: (file: ProjectFile) => void;
+  tagOptions: FileTag[];
 }
 
-function EditFileModal({ file, onClose, onSaved, onDeleted }: EditFileModalProps) {
+function EditFileModal({ file, onClose, onSaved, onDeleted, tagOptions }: EditFileModalProps) {
   useBackClose(onClose);
   const [fileName, setFileName] = useState(file.fileName);
   const [fileTag, setFileTag] = useState<FileTag>(file.fileTag);
@@ -294,7 +298,8 @@ function EditFileModal({ file, onClose, onSaved, onDeleted }: EditFileModalProps
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Tag</label>
             <select value={fileTag} onChange={e => setFileTag(e.target.value as FileTag)} className={inputCls}>
-              {TAG_ORDER.map(t => <option key={t} value={t}>{t}</option>)}
+              {/* Keep the file's current tag selectable even if it's outside the simpler set */}
+              {(tagOptions.includes(file.fileTag) ? tagOptions : [file.fileTag, ...tagOptions]).map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
@@ -437,10 +442,13 @@ interface FloorplansSectionProps {
   // since staff-authored recaps are a TTT-managed-project concept.
   isStaff?: boolean;
   isTTT?: boolean;
+  // NonTTTClient owners and invited users (no TTT system role): only Floorplan / Room / Layout tags
+  simpleTags?: boolean;
 }
 
-export function FloorplansSection({ tenantId, canEdit, initialFiles, projectNames, isStaff, isTTT }: FloorplansSectionProps) {
+export function FloorplansSection({ tenantId, canEdit, initialFiles, projectNames, isStaff, isTTT, simpleTags }: FloorplansSectionProps) {
   const isNonTTTClient = !isStaff && isTTT !== true;
+  const tagOptions = simpleTags ? SIMPLE_TAGS : TAG_ORDER;
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
   const [showUpload, setShowUpload] = useState(false);
   const [editingFile, setEditingFile] = useState<ProjectFile | null>(null);
@@ -587,6 +595,7 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles, projectName
           tenantId={tenantId}
           onClose={() => setShowUpload(false)}
           onUploaded={handleUploaded}
+          tagOptions={tagOptions}
         />
       )}
 
@@ -597,6 +606,7 @@ export function FloorplansSection({ tenantId, canEdit, initialFiles, projectName
           onClose={() => setEditingFile(null)}
           onSaved={f => { handleUpdated(f); setEditingFile(null); }}
           onDeleted={f => { handleDeletedFromEdit(f); setEditingFile(null); }}
+          tagOptions={tagOptions}
         />
       )}
     </section>

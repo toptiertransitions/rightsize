@@ -34,6 +34,8 @@ interface ItemGridProps {
   isTTT?: boolean;
   staffMembers?: StaffMember[];
   isTTTUser?: boolean;
+  /** NonTTTClient owners and their invited users: simpler item editing. */
+  simpleMode?: boolean;
   /** TTTTeamLead / TTTManager / TTTAdmin: bulk "Drop to $0" in the table view. */
   canDropToZero?: boolean;
   initialSearch?: string;
@@ -211,6 +213,7 @@ interface EditModalProps {
   isTTT?: boolean;
   staffMembers?: StaffMember[];
   isTTTUser?: boolean;
+  simpleMode?: boolean;
   onClose: () => void;
   onSaved: (item: Item) => void;
   onItemUpdated?: (item: Item) => void;
@@ -219,7 +222,7 @@ interface EditModalProps {
 
 type EditableItem = Partial<Omit<Item, "id" | "airtableId" | "tenantId" | "createdAt" | "updatedAt" | "photoUrl" | "photoPublicId" | "photos">>;
 
-export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, onClose, onSaved, onItemUpdated, onDeleted }: EditModalProps) {
+export function EditItemModal({ item, rooms, localVendors, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, simpleMode = false, onClose, onSaved, onItemUpdated, onDeleted }: EditModalProps) {
   useBackClose(onClose);
   const [form, setForm] = useState<EditableItem>({
     itemName: item.itemName,
@@ -896,6 +899,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 ]}
               />
             </div>
+            {!simpleMode && (
+              <>
             <div>
               <label className={labelClass}>Dimensions / Box Size (optional, inches)</label>
               <div className="grid grid-cols-3 gap-3">
@@ -969,6 +974,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 </div>
               </div>
             </div>
+              </>
+            )}
             {itemRooms.length > 0 && (
               <Select label="Room" value={form.roomId ?? ""}
                 onChange={e => set("roomId", e.target.value)}
@@ -1014,8 +1021,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
                 ]}
               />
-              <Input label="Consignment Category" value={form.consignmentCategory ?? ""}
-                onChange={e => set("consignmentCategory", e.target.value)} />
+              {!simpleMode && (
+                <Input label="Consignment Category" value={form.consignmentCategory ?? ""}
+                  onChange={e => set("consignmentCategory", e.target.value)} />
+              )}
             </div>
             <div>
               <label className={labelClass}>Route Reasoning</label>
@@ -1066,22 +1075,26 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 </div>
               );
             })()}
-            <div className="grid grid-cols-3 gap-3">
-              <Input label="Low ($)" type="number" inputMode="decimal"
-                value={form.valueLow || ""}
-                placeholder="0"
-                onFocus={e => e.target.select()}
-                onChange={e => set("valueLow", e.target.value === "" ? undefined : Number(e.target.value))} />
-              <Input label="Target ($)" type="number" inputMode="decimal"
+            <div className={simpleMode ? "" : "grid grid-cols-3 gap-3"}>
+              {!simpleMode && (
+                <Input label="Low ($)" type="number" inputMode="decimal"
+                  value={form.valueLow || ""}
+                  placeholder="0"
+                  onFocus={e => e.target.select()}
+                  onChange={e => set("valueLow", e.target.value === "" ? undefined : Number(e.target.value))} />
+              )}
+              <Input label={simpleMode ? "Target Value ($)" : "Target ($)"} type="number" inputMode="decimal"
                 value={form.valueMid || ""}
                 placeholder="0"
                 onFocus={e => e.target.select()}
                 onChange={e => set("valueMid", e.target.value === "" ? undefined : Number(e.target.value))} />
-              <Input label="High ($)" type="number" inputMode="decimal"
-                value={form.valueHigh || ""}
-                placeholder="0"
-                onFocus={e => e.target.select()}
-                onChange={e => set("valueHigh", e.target.value === "" ? undefined : Number(e.target.value))} />
+              {!simpleMode && (
+                <Input label="High ($)" type="number" inputMode="decimal"
+                  value={form.valueHigh || ""}
+                  placeholder="0"
+                  onFocus={e => e.target.select()}
+                  onChange={e => set("valueHigh", e.target.value === "" ? undefined : Number(e.target.value))} />
+              )}
             </div>
             <Input label="Quantity" type="number" inputMode="numeric"
               value={form.quantity || ""}
@@ -1188,18 +1201,22 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               <label className={labelClass}>Facebook Marketplace</label>
               <textarea rows={2} value={form.listingFb ?? ""} onChange={e => set("listingFb", e.target.value)} className={textareaClass} />
             </div>
-            <div>
-              <label className={labelClass}>OfferUp</label>
-              <textarea rows={2} value={form.listingOfferup ?? ""} onChange={e => set("listingOfferup", e.target.value)} className={textareaClass} />
-            </div>
+            {!simpleMode && (
+              <div>
+                <label className={labelClass}>OfferUp</label>
+                <textarea rows={2} value={form.listingOfferup ?? ""} onChange={e => set("listingOfferup", e.target.value)} className={textareaClass} />
+              </div>
+            )}
           </section>
 
           {/* Cataloging Notes (stored as staffTips) */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cataloging Notes</h3>
-            <textarea rows={3} value={form.staffTips ?? ""} onChange={e => set("staffTips", e.target.value)}
-              placeholder="Internal notes for TTT staff…" className={textareaClass} />
-          </section>
+          {!simpleMode && (
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cataloging Notes</h3>
+              <textarea rows={3} value={form.staffTips ?? ""} onChange={e => set("staffTips", e.target.value)}
+                placeholder="Internal notes for TTT staff…" className={textareaClass} />
+            </section>
+          )}
 
           {/* Reassign Project */}
           {canReassign && allTenants && allTenants.length > 1 && (
@@ -1425,7 +1442,7 @@ function BulkActionButton({ onClick, disabled, icon, variant = "default", childr
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, initialSearch = "", canDropToZero = false }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, simpleMode = false, initialSearch = "", canDropToZero = false }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -2162,6 +2179,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           isTTT={isTTT}
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
+          simpleMode={simpleMode}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
           onItemUpdated={(savedItem) => setItems(prev => prev.map(i => i.id === savedItem.id ? savedItem : i))}

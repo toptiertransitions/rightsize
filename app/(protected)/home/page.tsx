@@ -711,7 +711,8 @@ export default async function DashboardPage({
           </div>
         )}
 
-        {isOwner && (
+        {/* NonTTTClients delete their account from the profile menu instead */}
+        {isOwner && !isNonTTTClient && (
           <DeleteAccountAction
             tenantId={tenant.id}
             tenantName={tenant.name}
@@ -781,6 +782,7 @@ export default async function DashboardPage({
                     tenantState={tenant!.state}
                     tenantZip={tenant!.zip}
                     canDeleteAccount={!isStaff && membership.role === "Owner"}
+                    hideDangerZone={!isStaff && tenant!.isTTT !== true}
                   />
                   </div>
                 )}
