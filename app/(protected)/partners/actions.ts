@@ -13,6 +13,8 @@ import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
 import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification, sendPartnerIntroPartnerNotification, sendPartnerIntroClientConfirmation, sendPartnerIntroNotificationToAdmins, postPartnerIntroToCustomUrl } from "@/lib/admin-notifications";
 import { getAllPartners, getAllListingsAdmin, getAllCategories, createIntroductionEvent } from "@/lib/marketplace/data";
+import { canSeeRehoming } from "@/lib/partners/rehoming";
+import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -439,5 +441,27 @@ export async function deactivateServiceInterestAction(
     return { ok: true };
   } catch {
     return { ok: false, error: "Couldn't update this. Please try again." };
+  }
+}
+
+// Staff-only Rehoming Resources: crow-flies distances from a zip the staff
+// member typed in. Not tied to a project, so gated on system role alone.
+export async function rehomingDistancesAction(
+  zip: string
+): Promise<{ ok: true; distances: Record<string, number> } | { ok: false; error: string }> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Please sign in again." };
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (!canSeeRehoming(sysRole)) return { ok: false, error: "Not available." };
+
+  const parsed = z.string().trim().regex(/^\d{5}$/).safeParse(zip);
+  if (!parsed.success) return { ok: false, error: "Enter a 5-digit zip code." };
+
+  try {
+    const distances = rehomingDistances(await loadRehomingResources(), parsed.data);
+    if (!distances) return { ok: false, error: `We couldn't find zip ${parsed.data}.` };
+    return { ok: true, distances };
+  } catch {
+    return { ok: false, error: "Couldn't load distances. Please try again." };
   }
 }

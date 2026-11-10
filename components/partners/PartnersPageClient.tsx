@@ -10,6 +10,7 @@ import { CategoryChipBar } from "./CategoryChipBar";
 import { CategorySection } from "./CategorySection";
 import { PartnerDetailModal } from "./PartnerDetailModal";
 import { DocumentsSection } from "./DocumentsSection";
+import { RehomingResourcesSection, type RehomingSectionData } from "./RehomingResourcesSection";
 
 interface Props {
   tenantId: string;
@@ -26,9 +27,11 @@ interface Props {
   /** Categories locked to the client's destination senior community. */
   destinationCategories?: PartnerCategory[];
   reviews?: TrayReviewConfig;
+  /** Staff-only Rehoming Resources; set by the server only for TTT staff roles. */
+  rehoming?: RehomingSectionData;
 }
 
-export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews }: Props) {
+export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews, rehoming }: Props) {
   const router = useRouter();
   const [selections, setSelections] = useState(initialSelections);
   const [lockedCategories, setLockedCategories] = useState(initialLocked);
@@ -188,6 +191,8 @@ export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, 
           />
         ))}
       </div>
+
+      {rehoming && <RehomingResourcesSection {...rehoming} />}
 
       {detailPartnerId && partnersById[detailPartnerId] && (
         <PartnerDetailModal partner={partnersById[detailPartnerId]} onClose={() => setDetailPartnerId(null)} />

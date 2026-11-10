@@ -34,6 +34,10 @@ import { StaffProjectPicker } from "@/components/partners/StaffProjectPicker";
 import { Card, CardContent } from "@/components/ui/Card";
 import type { TrayReviewConfig } from "@/components/partners/SelectedPartnersTray";
 import { isReviewableCategory } from "@/lib/partners/reviews";
+import { canSeeRehoming } from "@/lib/partners/rehoming";
+import { isTTTAdmin } from "@/lib/config";
+import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
+import type { RehomingSectionData } from "@/components/partners/RehomingResourcesSection";
 
 export const metadata = { robots: "noindex, nofollow" };
 
@@ -366,9 +370,28 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     c === "Move Manager" || lockedCategories.includes(c) || destinationCategories.includes(c) || !!selections[c] || !hiddenCategories.has(c)
   );
 
+  // Staff-only Rehoming Resources (TTTStaff/TeamLead/Manager/Admin). Built
+  // only for those roles so no client ever receives the data. The project's
+  // origin zip is the default search center.
+  let rehoming: RehomingSectionData | undefined;
+  if (canSeeRehoming(sysRole)) {
+    const resources = await loadRehomingResources().catch((e) => {
+      console.error("[partners] rehoming resources failed:", e);
+      return [];
+    });
+    const originZip = (tenant.zip || tenant.currentZip || "").trim();
+    rehoming = {
+      resources,
+      projectZip: originZip,
+      initialDistances: originZip ? rehomingDistances(resources, originZip) : null,
+      canManage: isTTTAdmin(userId), // /admin/local-vendors gate
+    };
+  }
+
   return (
     <PartnersPageClient
       tenantId={tenantId}
+      rehoming={rehoming}
       categories={visibleCategories}
       lockedCategories={lockedCategories}
       canRemoveReferral={canRemoveReferral}

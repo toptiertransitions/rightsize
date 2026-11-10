@@ -2215,6 +2215,29 @@ export const getAllLocalVendors = unstable_cache(
   { revalidate: 300 }
 );
 
+/** Active Donation Org / Consignment Store / Collector/Reseller entries for
+ * the staff-only Rehoming Resources section on the Partners page. Paginated
+ * (getAllLocalVendors reads a single 100-record page). */
+export const getRehomingVendors = unstable_cache(
+  async function _getRehomingVendors(): Promise<LocalVendor[]> {
+    const formula = encodeURIComponent(
+      `AND({IsActive}=TRUE(), OR({VendorType}='Donation Org', {VendorType}='Consignment Store', {VendorType}='Collector/Reseller'))`
+    );
+    const records: AirtableRecord[] = [];
+    let offset: string | undefined;
+    do {
+      const res = await localVendorFetch(`?filterByFormula=${formula}${offset ? `&offset=${offset}` : ""}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      records.push(...(data.records as AirtableRecord[]));
+      offset = data.offset;
+    } while (offset);
+    return records.map(mapLocalVendor);
+  },
+  ["rehoming-vendors"],
+  { revalidate: 300 }
+);
+
 export async function getLocalVendorByClerkId(clerkUserId: string): Promise<LocalVendor | null> {
   const encoded = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
   const res = await localVendorFetch(`?filterByFormula=${encoded}&maxRecords=1`);
