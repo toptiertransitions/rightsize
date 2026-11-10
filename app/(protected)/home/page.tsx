@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ProjectActions } from "./ProjectActions";
 import { DeleteAccountAction } from "./DeleteAccountAction";
-import { RenameProjectAction } from "./RenameProjectAction";
 import { AdminProjectsClient } from "./AdminProjectsClient";
 import { FreeEstimatorCard } from "./FreeEstimatorCard";
 import { AddClientUserButton } from "@/components/AddClientUserButton";
@@ -721,17 +720,6 @@ export default async function DashboardPage({
           />
         )}
 
-        {isOwner && isNonTTTClient && (
-          <RenameProjectAction
-            tenantId={tenant.id}
-            tenantName={tenant.name}
-            tenantAddress={tenant.address}
-            tenantCity={tenant.city}
-            tenantState={tenant.state}
-            tenantZip={tenant.zip}
-            variant="standalone"
-          />
-        )}
       </div>
     );
   }
@@ -783,6 +771,7 @@ export default async function DashboardPage({
                     tenantZip={tenant!.zip}
                     canDeleteAccount={!isStaff && membership.role === "Owner"}
                     hideDangerZone={!isStaff && tenant!.isTTT !== true}
+                    hideRename={!isStaff && tenant!.isTTT !== true}
                   />
                   </div>
                 )}

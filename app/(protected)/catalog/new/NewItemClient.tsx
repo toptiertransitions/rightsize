@@ -952,7 +952,7 @@ export function NewItemClient({ tenantId, rooms, isTTT = true, simpleMode = fals
             <CardContent>
               <h3 className="font-semibold text-gray-900 mb-4">Marketplace Listings</h3>
               <div className="space-y-4">
-                <Input label="eBay Title" value={merged.listing_title_ebay ?? ""}
+                <Input label={simpleMode ? "Online Title for Item" : "eBay Title"} value={merged.listing_title_ebay ?? ""}
                   onChange={(e) => update("listing_title_ebay", e.target.value)} />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">eBay Description</label>

@@ -768,8 +768,8 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Rejected / Revisit",label: "Rejected / Revisit" },
                 ]}
               />
-              {/* Site? — storefrontActive toggle */}
-              {(() => {
+              {/* Site? — storefrontActive toggle (not for NonTTTClient users) */}
+              {!simpleMode && (() => {
                 const eligible = (form.primaryRoute === "ProFoundFinds Consignment" || form.primaryRoute === "Estate Sale") && form.status === "Listed";
                 return (
                   <div className="flex flex-col items-center gap-1.5 pb-0.5">
@@ -852,16 +852,18 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                 )}
               </div>
             )}
-            <div>
-              <label className={labelClass}>Box ID <span className="font-normal text-gray-400">(optional)</span></label>
-              <input
-                type="text"
-                value={form.boxId ?? ""}
-                onChange={e => set("boxId", e.target.value)}
-                placeholder="e.g. A1, Box-12, Living Room Box 3"
-                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent font-mono"
-              />
-            </div>
+            {!simpleMode && (
+              <div>
+                <label className={labelClass}>Box ID <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  type="text"
+                  value={form.boxId ?? ""}
+                  onChange={e => set("boxId", e.target.value)}
+                  placeholder="e.g. A1, Box-12, Living Room Box 3"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:border-transparent font-mono"
+                />
+              </div>
+            )}
             <div>
               <label className={labelClass}>Brand <span className="font-normal text-gray-400">(optional)</span></label>
               <input
@@ -1112,7 +1114,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
               const filteredVendors = requiredType
                 ? (localVendors ?? []).filter(v => v.vendorType === requiredType)
                 : [];
-              return requiredType && filteredVendors.length > 0 ? (
+              return !simpleMode && requiredType && filteredVendors.length > 0 ? (
                 <Select label="Assigned Vendor" value={form.assignedVendorId ?? ""}
                   onChange={e => set("assignedVendorId", e.target.value || "")}
                   options={[
@@ -1191,10 +1193,10 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
           {/* Listings */}
           <section className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Marketplace Listings</h3>
-            <Input label="eBay Title" value={form.listingTitleEbay ?? ""}
+            <Input label={simpleMode ? "Online Title for Item" : "eBay Title"} value={form.listingTitleEbay ?? ""}
               onChange={e => set("listingTitleEbay", e.target.value)} />
             <div>
-              <label className={labelClass}>Estate / eBay / Site Description</label>
+              <label className={labelClass}>{simpleMode ? "eBay Description" : "Estate / eBay / Site Description"}</label>
               <textarea rows={3} value={form.listingDescriptionEbay ?? ""} onChange={e => set("listingDescriptionEbay", e.target.value)} className={textareaClass} />
             </div>
             <div>
