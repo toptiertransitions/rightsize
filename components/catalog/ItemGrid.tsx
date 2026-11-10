@@ -1018,7 +1018,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Family to Take",               label: "Family to Take" },
                   { value: "Storage Unit - Offsite",       label: "Storage Unit - Offsite" },
                   { value: "Leaving with Home",            label: "Leaving with Home" },
-                  ...(isTTT ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
+                  ...(isTTT && !simpleMode ? [{ value: "ProFoundFinds Consignment", label: "ProFoundFinds Consignment" }] : []),
                   { value: "FB/Marketplace",               label: "FB/Marketplace" },
                   { value: "Online Marketplace",           label: "eBay" },
                   { value: "Other Consignment",            label: "Other Consignment Store" },
@@ -2414,7 +2414,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <option value="Family to Take">Family to Take</option>
                 <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
                 <option value="Leaving with Home">Leaving with Home</option>
-                {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
+                {isTTT && !simpleMode && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
                 {isTTT && <option value="Estate Sale">Estate Sale</option>}
                 <option value="FB/Marketplace">FB/Marketplace</option>
                 <option value="Online Marketplace">Online Marketplace</option>
@@ -2547,7 +2547,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="Family to Take">Family to Take</option>
           <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
           <option value="Leaving with Home">Leaving with Home</option>
-          {isTTT && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
+          {isTTT && !simpleMode && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
           {isTTT && <option value="Estate Sale">Estate Sale</option>}
           <option value="FB/Marketplace">FB/Marketplace</option>
           <option value="Online Marketplace">eBay</option>

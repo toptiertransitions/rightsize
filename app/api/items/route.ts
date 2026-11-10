@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse, after } from "next/server";
+import { isNonTTTClientViewer } from "@/lib/nonTTTClientRouting";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { createItem, deleteItem, getItemById, getItemsForTenant, getItemSaleEvents, deleteItemSaleEvent, getLocalVendorById, getNextBarcodeNumber, getStaffMembers, getSystemRole, getTenantById, getUserRoleForTenant, updateItem, logItemPriceChange, logItemRouteChange, logItemStatusChange, getAnyGmailToken, getGmailTokenByEmail } from "@/lib/airtable";
 import { buildVendorAssignmentEmail, buildItemSoldEmail, buildStaffItemSoldEmail } from "@/lib/email";
@@ -85,7 +86,9 @@ export async function POST(req: NextRequest) {
 
   // Check if this is a non-TTT project
   const itemTenant = await getTenantById(tenantId).catch(() => null);
-  const isNonTTT = itemTenant ? !(itemTenant.isTTT ?? true) : false;
+  // A blank IsTTT reads as TTT here (staff behavior unchanged); NonTTTClient
+  // users are always treated as non-TTT so ProFoundFinds can't be saved.
+  const isNonTTT = itemTenant ? !(itemTenant.isTTT ?? true) || await isNonTTTClientViewer(userId, itemTenant) : false;
 
   try {
     // Substitute ProFoundFinds → Other Consignment for non-TTT projects
@@ -197,7 +200,7 @@ export async function PATCH(req: NextRequest) {
   // Check if non-TTT project for route/share overrides
   const patchTenantId = (tenantId ?? (await getItemById(id as string).catch(() => null))?.tenantId) as string | undefined;
   const patchTenant = patchTenantId ? await getTenantById(patchTenantId).catch(() => null) : null;
-  const patchIsNonTTT = patchTenant ? !(patchTenant.isTTT ?? true) : false;
+  const patchIsNonTTT = patchTenant ? !(patchTenant.isTTT ?? true) || await isNonTTTClientViewer(userId, patchTenant) : false;
 
   // Substitute ProFoundFinds → Other Consignment for non-TTT projects
   const newRoute = updates.primaryRoute as string | undefined;
