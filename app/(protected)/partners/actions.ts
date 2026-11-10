@@ -4,16 +4,18 @@ import { sendLeadToPartnerTeam } from "@/lib/marketplace/leads";
 import { isDemoTenant } from "@/lib/demo";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, getPartnerSelectionsForTenant, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity } from "@/lib/airtable";
+import { getUserRoleForTenant, getSystemRole, getTenantById, updateTenant, upsertPartnerSelection, deletePartnerSelection, getPartnerSelectionsForTenant, savePartnerRequestAnswers, getPartnerRequestsForTenant, addPartnerIntroRequest, createClientContact, createOpportunity, createRehomingSubmission, getPendingRehomingSubmissions, getRehomingVendors } from "@/lib/airtable";
 import { PARTNER_CATEGORIES, type PartnerCategory } from "@/lib/types";
 import { CATEGORY_TO_SERVICE_INTEREST, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { getPartnerQuestions, formatAnswersForEmail, migrateLegacyAnswerKeys } from "@/lib/partners/questions";
 import { getPartnerDirectory } from "@/lib/partners/queries";
 import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { logPartnerMatchEvent } from "@/lib/partners/analytics";
-import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification, sendPartnerIntroPartnerNotification, sendPartnerIntroClientConfirmation, sendPartnerIntroNotificationToAdmins, postPartnerIntroToCustomUrl } from "@/lib/admin-notifications";
+import { sendMoveManagementCrossSellNotification, sendPartnerIntroAdminNotification, sendPartnerIntroPartnerNotification, sendPartnerIntroClientConfirmation, sendPartnerIntroNotificationToAdmins, postPartnerIntroToCustomUrl, sendRehomingSubmissionToAdmins } from "@/lib/admin-notifications";
 import { getAllPartners, getAllListingsAdmin, getAllCategories, createIntroductionEvent } from "@/lib/marketplace/data";
-import { canSeeRehoming } from "@/lib/partners/rehoming";
+import { canSeeRehoming, ACCEPT_BUCKETS, REHOMING_TYPES, serializeAccepts, normalizeResourceName } from "@/lib/partners/rehoming";
+import { isTTTAdmin } from "@/lib/config";
+import { revalidateTag } from "next/cache";
 import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -463,5 +465,84 @@ export async function rehomingDistancesAction(
     return { ok: true, distances };
   } catch {
     return { ok: false, error: "Couldn't load distances. Please try again." };
+  }
+}
+
+const rehomingSubmissionSchema = z.object({
+  vendorType: z.enum(REHOMING_TYPES),
+  vendorName: z.string().trim().min(2, "Add the organization's name.").max(120),
+  buckets: z.array(z.enum(ACCEPT_BUCKETS)).max(ACCEPT_BUCKETS.length),
+  otherItems: z.string().trim().max(300),
+  pocName: z.string().trim().max(120),
+  phone: z.string().trim().max(40),
+  email: z.union([z.literal(""), z.string().trim().email("That email doesn't look right.")]),
+  website: z.string().trim().max(300),
+  address: z.string().trim().max(200),
+  city: z.string().trim().max(80),
+  state: z.string().trim().max(30),
+  zip: z.union([z.literal(""), z.string().trim().regex(/^\d{5}$/, "Zip should be 5 digits.")]),
+  consignmentTake: z.number().min(0).max(100),
+  notes: z.string().trim().max(2000),
+}).refine((d) => d.phone || d.email || d.website, { message: "Add at least a phone, email or website." });
+
+export type RehomingSubmissionInput = z.input<typeof rehomingSubmissionSchema>;
+
+// Staff suggest a Rehoming Resource. Saved inactive + Pending and emailed to
+// admins; an admin adding one is approved on the spot.
+export async function submitRehomingResourceAction(
+  input: RehomingSubmissionInput
+): Promise<{ ok: true; live: boolean } | { ok: false; error: string }> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Please sign in again." };
+  const sysRole = await getSystemRole(userId).catch(() => null);
+  if (!canSeeRehoming(sysRole)) return { ok: false, error: "Not available." };
+
+  const parsed = rehomingSubmissionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check the form." };
+  const d = parsed.data;
+
+  try {
+    const name = normalizeResourceName(d.vendorName);
+    const [live, pending] = await Promise.all([getRehomingVendors(), getPendingRehomingSubmissions()]);
+    if (live.some((v) => normalizeResourceName(v.vendorName) === name)) {
+      return { ok: false, error: `${d.vendorName} is already in Rehoming Resources.` };
+    }
+    if (pending.some((v) => normalizeResourceName(v.vendorName) === name)) {
+      return { ok: false, error: `${d.vendorName} was already submitted and is waiting for approval.` };
+    }
+
+    const user = await currentUser().catch(() => null);
+    const submittedBy = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "A team member";
+    const submittedByEmail = user?.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? "";
+    const autoApprove = isTTTAdmin(userId);
+
+    const vendor = await createRehomingSubmission({
+      vendorType: d.vendorType,
+      vendorName: d.vendorName,
+      pocName: d.pocName,
+      email: d.email,
+      phone: d.phone,
+      website: d.website,
+      address: d.address,
+      city: d.city,
+      state: d.state.toUpperCase(),
+      zip: d.zip,
+      itemCategories: serializeAccepts(d.buckets, d.otherItems),
+      consignmentTake: d.vendorType === "Consignment Store" ? d.consignmentTake : 0,
+      notes: d.notes,
+      submittedBy,
+      submittedByEmail,
+      autoApprove,
+    });
+
+    if (autoApprove) {
+      revalidateTag("rehoming-vendors");
+    } else {
+      await sendRehomingSubmissionToAdmins(vendor).catch((e) => console.error("[rehoming] admin email failed:", e));
+    }
+    return { ok: true, live: autoApprove };
+  } catch (e) {
+    console.error("[rehoming] submission failed:", e);
+    return { ok: false, error: "Couldn't send that. Please try again." };
   }
 }

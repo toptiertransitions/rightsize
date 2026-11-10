@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { SuggestRehomingResourceModal } from "./SuggestRehomingResourceModal";
 import { rehomingDistancesAction } from "@/app/(protected)/partners/actions";
 import {
   ACCEPT_BUCKETS,
@@ -74,6 +76,8 @@ function contactText(r: RehomingResource): string {
 }
 
 export function RehomingResourcesSection({ resources, projectZip, initialDistances, canManage }: RehomingSectionData) {
+  const router = useRouter();
+  const [showAdd, setShowAdd] = useState(false);
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<RehomingType[]>([]);
   const [buckets, setBuckets] = useState<AcceptBucket[]>([]);
@@ -169,6 +173,15 @@ export function RehomingResourcesSection({ resources, projectZip, initialDistanc
         <h2 className="text-lg sm:text-xl font-bold text-gray-900 whitespace-nowrap">Rehoming Resources</h2>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Staff only</span>
         <div className="h-px flex-1 bg-gray-200" />
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="flex-shrink-0 inline-flex items-center gap-1 text-sm font-medium text-forest-700 bg-forest-50 border border-forest-200 rounded-xl px-3 py-1.5 hover:bg-forest-100"
+        >
+          <span aria-hidden="true" className="text-base leading-none">+</span>
+          <span className="hidden sm:inline">Add New Resource</span>
+          <span className="sm:hidden">Add</span>
+        </button>
       </div>
       <p className="text-sm text-gray-500 mb-4 leading-relaxed">
         Resellers, collectors, consignment stores and donation orgs near this client. Pick what you&rsquo;re rehoming to see who takes it.
@@ -315,6 +328,10 @@ export function RehomingResourcesSection({ resources, projectZip, initialDistanc
           </div>
         )}
       </div>
+
+      {showAdd && (
+        <SuggestRehomingResourceModal isAdmin={canManage} onClose={() => setShowAdd(false)} onAddedLive={() => router.refresh()} />
+      )}
     </section>
   );
 }

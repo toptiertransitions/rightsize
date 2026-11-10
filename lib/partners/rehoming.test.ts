@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canSeeRehoming, tokenToBucket, itemCategoryToBucket, toRehomingResource, filterRehomingResources, letterFor, type RehomingFilters } from "./rehoming";
+import { canSeeRehoming, serializeAccepts, normalizeResourceName, tokenToBucket, itemCategoryToBucket, toRehomingResource, filterRehomingResources, letterFor, type RehomingFilters } from "./rehoming";
 import type { LocalVendor } from "@/lib/types";
 
 function vendor(over: Partial<LocalVendor>): LocalVendor {
@@ -67,5 +67,20 @@ describe("letterFor", () => {
   it("ignores a leading 'The'", () => {
     expect(letterFor("The Economy Shop")).toBe("E");
     expect(letterFor("4 Paws Resale")).toBe("#");
+  });
+});
+
+describe("serializeAccepts", () => {
+  it("round-trips bucket labels through the comma-split read path", () => {
+    const str = serializeAccepts(["Furniture", "Antiques, Vintage & Collectibles"], "pianos, Furniture");
+    expect(str).toBe("Furniture, Antiques / Vintage & Collectibles, pianos");
+    const r = toRehomingResource(vendor({ itemCategories: str }), true);
+    expect(r.buckets).toEqual(["Furniture", "Antiques, Vintage & Collectibles", "Musical Instruments"]);
+  });
+});
+
+describe("normalizeResourceName", () => {
+  it("treats punctuation, case and a leading The as the same name", () => {
+    expect(normalizeResourceName("The Brown Elephant Resale")).toBe(normalizeResourceName("brown elephant  resale!"));
   });
 });

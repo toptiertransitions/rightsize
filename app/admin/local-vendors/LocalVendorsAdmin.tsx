@@ -6,6 +6,7 @@ import { AdminHeader } from "../components/AdminHeader";
 import { Pagination } from "../components/Pagination";
 import { ProjectHistoryTab, type AdminProject, type AdminCommunityOption } from "./ProjectHistoryTab";
 import { ZipCoverageTab } from "./ZipCoverageTab";
+import { RehomingSubmissionsTab } from "./RehomingSubmissionsTab";
 
 const PAGE_SIZE = 25;
 import { VENDOR_TYPES, ITEM_CATEGORIES, PARTNER_CATEGORIES } from "@/lib/types";
@@ -539,13 +540,17 @@ interface LocalVendorsAdminProps {
   projects: AdminProject[];
   seniorCommunities: AdminCommunityOption[];
   completions: PartnerCommunityCompletion[];
+  /** Staff-suggested Rehoming Resources awaiting approval. */
+  pendingSubmissions: LocalVendor[];
+  /** Submission id from the approval email's Review link. */
+  reviewId?: string;
 }
 
-type AdminTab = "directory" | "history" | "zip-coverage";
+type AdminTab = "directory" | "submissions" | "history" | "zip-coverage";
 
-export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCommunities, completions }: LocalVendorsAdminProps) {
+export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCommunities, completions, pendingSubmissions, reviewId }: LocalVendorsAdminProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<AdminTab>("directory");
+  const [tab, setTab] = useState<AdminTab>(reviewId || pendingSubmissions.length > 0 ? "submissions" : "directory");
   const [stateFilter, setStateFilter] = useState("");
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -672,6 +677,15 @@ export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCom
             Directory
           </button>
           <button
+            onClick={() => setTab("submissions")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${tab === "submissions" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
+          >
+            Submissions
+            {pendingSubmissions.length > 0 && (
+              <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-amber-500 text-gray-950 text-[11px] font-bold inline-flex items-center justify-center">{pendingSubmissions.length}</span>
+            )}
+          </button>
+          <button
             onClick={() => setTab("history")}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === "history" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
           >
@@ -685,6 +699,12 @@ export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCom
           </button>
         </div>
       </div>
+
+      {tab === "submissions" && (
+        <main className="max-w-7xl mx-auto px-6 py-6">
+          <RehomingSubmissionsTab submissions={pendingSubmissions} reviewId={reviewId} onEdit={openEdit} />
+        </main>
+      )}
 
       {tab === "history" && (
         <main className="max-w-7xl mx-auto px-6 py-6">

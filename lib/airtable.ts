@@ -2235,8 +2235,98 @@ export const getRehomingVendors = unstable_cache(
     return records.map(mapLocalVendor);
   },
   ["rehoming-vendors"],
-  { revalidate: 300 }
+  // partners-directory is what the Local Vendors admin API revalidates on edits
+  { revalidate: 300, tags: ["rehoming-vendors", "partners-directory"] }
 );
+
+const REHOMING_VENDOR_TYPES = ["Donation Org", "Consignment Store", "Collector/Reseller"] as const;
+
+/** A staff member's suggested Rehoming Resource. Saved inactive with
+ * SubmissionStatus=Pending until a TTTAdmin approves it (or saved live and
+ * Approved when an admin adds it themselves). */
+export async function createRehomingSubmission(data: {
+  vendorType: (typeof REHOMING_VENDOR_TYPES)[number];
+  vendorName: string;
+  pocName: string;
+  email: string;
+  phone: string;
+  website: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  itemCategories: string;
+  consignmentTake: number;
+  notes: string;
+  submittedBy: string;
+  submittedByEmail: string;
+  autoApprove: boolean;
+}): Promise<LocalVendor> {
+  const now = new Date().toISOString();
+  const res = await localVendorFetch("", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        VendorType: data.vendorType,
+        VendorName: data.vendorName,
+        POCName: data.pocName,
+        Email: data.email,
+        Phone: data.phone,
+        Website: data.website,
+        Address: data.address,
+        City: data.city,
+        State: data.state,
+        Zip: data.zip,
+        ItemCategories: data.itemCategories,
+        ConsignmentTake: data.consignmentTake,
+        Notes: data.notes,
+        IsActive: data.autoApprove,
+        CreatedAt: now,
+        SubmissionStatus: data.autoApprove ? "Approved" : "Pending",
+        SubmittedBy: data.submittedBy,
+        SubmittedByEmail: data.submittedByEmail,
+        SubmittedAt: now,
+        ...(data.autoApprove ? { ReviewedBy: data.submittedBy } : {}),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapLocalVendor(await res.json());
+}
+
+/** Pending staff submissions, oldest first. Not cached — admin review queue. */
+export async function getPendingRehomingSubmissions(): Promise<LocalVendor[]> {
+  const formula = encodeURIComponent(`AND({SubmissionStatus}='Pending', NOT({IsActive}))`);
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const res = await localVendorFetch(`?filterByFormula=${formula}&sort[0][field]=SubmittedAt&sort[0][direction]=asc${offset ? `&offset=${offset}` : ""}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    records.push(...(data.records as AirtableRecord[]));
+    offset = data.offset;
+  } while (offset);
+  return records.map(mapLocalVendor);
+}
+
+export async function decideRehomingSubmission(
+  id: string,
+  decision: { approve: boolean; reviewedBy: string; reviewNote: string }
+): Promise<LocalVendor> {
+  const res = await localVendorFetch(`/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      fields: {
+        IsActive: decision.approve,
+        SubmissionStatus: decision.approve ? "Approved" : "Rejected",
+        ReviewedBy: decision.reviewedBy,
+        ReviewNote: decision.reviewNote,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return mapLocalVendor(await res.json());
+}
 
 export async function getLocalVendorByClerkId(clerkUserId: string): Promise<LocalVendor | null> {
   const encoded = encodeURIComponent(`{ClerkUserId} = "${clerkUserId}"`);
@@ -3079,6 +3169,12 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     aboutUs: toStr(f["AboutUs"]) || undefined,
     seniorSpecialty: f["SeniorSpecialty"] === true,
     responsivenessScore: typeof f["ResponsivenessScore"] === "number" ? f["ResponsivenessScore"] : undefined,
+    submissionStatus: (["Pending", "Approved", "Rejected"] as const).find((v) => v === toStr(f["SubmissionStatus"])),
+    submittedBy: toStr(f["SubmittedBy"]) || undefined,
+    submittedByEmail: toStr(f["SubmittedByEmail"]) || undefined,
+    submittedAt: toStr(f["SubmittedAt"]) || undefined,
+    reviewedBy: toStr(f["ReviewedBy"]) || undefined,
+    reviewNote: toStr(f["ReviewNote"]) || undefined,
   };
 }
 

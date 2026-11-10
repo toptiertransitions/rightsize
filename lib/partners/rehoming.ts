@@ -208,3 +208,19 @@ export function letterFor(name: string): string {
   const c = sortKey(name).charAt(0).toUpperCase();
   return /[A-Z]/.test(c) ? c : "#";
 }
+
+/** Accepts chips + free text → the LocalVendors ItemCategories string. Bucket
+ * labels containing commas are written with "/" so they survive the
+ * comma split on read (and still map back to the same bucket). */
+export function serializeAccepts(buckets: readonly AcceptBucket[], otherItems: string): string {
+  const parts = buckets.map((b) => b.replace(/, /g, " / "));
+  for (const t of otherItems.split(",").map((x) => x.trim()).filter(Boolean)) {
+    if (!parts.some((p) => p.toLowerCase() === t.toLowerCase())) parts.push(t);
+  }
+  return parts.join(", ");
+}
+
+/** For duplicate checks: case, punctuation and a leading "The" ignored. */
+export function normalizeResourceName(name: string): string {
+  return sortKey(name.trim()).replace(/[^a-z0-9]+/g, "");
+}

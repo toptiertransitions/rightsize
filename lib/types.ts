@@ -796,6 +796,13 @@ export interface LocalVendor {
   aboutUs?: string;          // paragraph shown in the Partners "Learn More" detail popup
   seniorSpecialty?: boolean;    // admin-set: experienced working with senior/downsizing clients
   responsivenessScore?: number; // admin-set, 1-5; unset treated as neutral (3) when scoring
+  // ─── Staff-submitted Rehoming Resources (approval queue) ──
+  submissionStatus?: "Pending" | "Approved" | "Rejected";
+  submittedBy?: string;
+  submittedByEmail?: string;
+  submittedAt?: string;
+  reviewedBy?: string;
+  reviewNote?: string;
 }
 
 // ─── Client-facing Partners marketplace ──────────────────────────────────────

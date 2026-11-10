@@ -5,18 +5,24 @@ import {
   getLocalVendors,
   getTenants,
   getAllPartnerCommunityCompletions,
+  getPendingRehomingSubmissions,
 } from "@/lib/airtable";
 import { LocalVendorsAdmin } from "./LocalVendorsAdmin";
 
-export default async function LocalVendorsPage() {
+export default async function LocalVendorsPage({ searchParams }: { searchParams: Promise<{ review?: string }> }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   if (!isTTTAdmin(userId)) redirect("/home");
 
-  const [vendors, allTenants, completions] = await Promise.all([
+  const { review } = await searchParams;
+  const [vendors, allTenants, completions, pendingSubmissions] = await Promise.all([
     getLocalVendors().catch(() => []),
     getTenants().catch(() => []),
     getAllPartnerCommunityCompletions().catch(() => []),
+    getPendingRehomingSubmissions().catch((e) => {
+      console.error("[local-vendors] pending rehoming submissions failed:", e);
+      return [];
+    }),
   ]);
   // Same source as the onboarding "Where are you moving" community search —
   // not the CRM's Sales-managed "Senior Living" company list — so an
@@ -42,6 +48,8 @@ export default async function LocalVendorsPage() {
       }))}
       seniorCommunities={seniorCommunities.map((c) => ({ id: c.id, name: c.vendorName, city: c.city }))}
       completions={completions}
+      pendingSubmissions={pendingSubmissions}
+      reviewId={review}
     />
   );
 }

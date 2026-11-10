@@ -6893,3 +6893,166 @@ export function buildPartnerTeamJoinedEmail({
             </td></tr>
           </table>`);
 }
+
+// ─── Rehoming Resources: staff submission → admin approval ────────────────────
+
+const REHOMING_TYPE_BADGE: Record<string, { label: string; bg: string; border: string; text: string }> = {
+  "Collector/Reseller": { label: "Reseller / Collector", bg: "#ede9fe", border: "#c4b5fd", text: "#5b21b6" },
+  "Consignment Store":  { label: "Consignment Store",    bg: "#fef3c7", border: "#fcd34d", text: "#92400e" },
+  "Donation Org":       { label: "Donation Org",         bg: "#e0f2fe", border: "#7dd3fc", text: "#075985" },
+};
+
+function rehomingShell(eyebrow: string, title: string, body: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escHtml(title)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr>
+          <td style="background-color:#1a3d2b;padding:28px 32px;border-radius:14px 14px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a8d4bc;">${escHtml(eyebrow)}</p>
+            <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">${escHtml(title)}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 14px 14px;">
+            ${body}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 8px 0;text-align:center;font-size:11px;color:#9ca3af;">Top Tier Transitions &middot; Rightsize internal notification</td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function rehomingResourceCard(r: { vendorName: string; vendorType: string; city?: string; state?: string; zip?: string }): string {
+  const badge = REHOMING_TYPE_BADGE[r.vendorType] ?? { label: r.vendorType, bg: "#f3f4f6", border: "#d1d5db", text: "#374151" };
+  const where = [[r.city, r.state].filter(Boolean).join(", "), r.zip].filter(Boolean).join(" ");
+  return `
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:24px;">
+              <tr>
+                <td style="padding:22px 24px;">
+                  <span style="display:inline-block;background:${badge.bg};border:1px solid ${badge.border};color:${badge.text};font-size:11px;font-weight:700;padding:3px 12px;border-radius:999px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;">${escHtml(badge.label)}</span>
+                  <p style="margin:0;font-size:22px;font-weight:700;color:#111827;line-height:1.2;">${escHtml(r.vendorName)}</p>
+                  ${where ? `<p style="margin:6px 0 0;font-size:13px;color:#6b7280;">${escHtml(where)}</p>` : ""}
+                </td>
+              </tr>
+            </table>`;
+}
+
+function rehomingButton(label: string, href: string): string {
+  return `
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto 8px;">
+              <tr><td style="background:#2E6B4F;border-radius:10px;">
+                <a href="${escHtml(href)}" style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">${escHtml(label)}</a>
+              </td></tr>
+            </table>`;
+}
+
+export function buildRehomingSubmissionAdminEmail(p: {
+  vendorName: string;
+  vendorType: string;
+  accepts?: string;
+  pocName?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  consignmentTake?: number;
+  notes?: string;
+  submittedBy: string;
+  submittedByEmail?: string;
+  submittedAt: string;
+  reviewUrl: string;
+}): string {
+  const row = (label: string, value?: string, href?: string) => {
+    if (!value) return "";
+    const v = escHtml(value);
+    return `
+              <tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:11px 16px;font-size:13px;font-weight:600;color:#6b7280;width:34%;white-space:nowrap;vertical-align:top;">${escHtml(label)}</td>
+                <td style="padding:11px 16px;font-size:13px;color:#111827;">${href ? `<a href="${escHtml(href)}" style="color:#2E6B4F;text-decoration:none;">${v}</a>` : v}</td>
+              </tr>`;
+  };
+  const site = p.website ? (p.website.startsWith("http") ? p.website : `https://${p.website}`) : undefined;
+  const fullAddress = [p.address, [p.city, p.state].filter(Boolean).join(", "), p.zip].filter(Boolean).join(", ");
+
+  const body = `
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+              <strong>${escHtml(p.submittedBy)}</strong> suggested a new rehoming resource. Once you approve it, it shows up in Rehoming Resources on the Partners page for all staff.
+            </p>
+            ${rehomingResourceCard(p)}
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+              <tr style="background:#f9fafb;">
+                <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e5e7eb;">Details</td>
+              </tr>
+              ${row("Accepts", p.accepts)}
+              ${row("Contact", p.pocName)}
+              ${row("Phone", p.phone, p.phone ? `tel:${p.phone.replace(/[^\d+]/g, "")}` : undefined)}
+              ${row("Email", p.email, p.email ? `mailto:${p.email}` : undefined)}
+              ${row("Website", p.website, site)}
+              ${row("Address", fullAddress)}
+              ${row("Consignment take", p.consignmentTake ? `${p.consignmentTake}%` : undefined)}
+            </table>
+            ${p.notes ? `
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin-bottom:24px;">
+              <tr><td style="padding:14px 16px;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.6px;">Notes from ${escHtml(p.submittedBy)}</p>
+                <p style="margin:0;font-size:13px;color:#78350f;line-height:1.6;white-space:pre-line;">${escHtml(p.notes)}</p>
+              </td></tr>
+            </table>` : ""}
+            ${rehomingButton("Review & approve", p.reviewUrl)}
+            <p style="margin:12px 0 0;font-size:12px;color:#9ca3af;text-align:center;">
+              Submitted ${escHtml(p.submittedAt)}${p.submittedByEmail ? ` &middot; ${escHtml(p.submittedByEmail)}` : ""}
+            </p>`;
+  return rehomingShell("Top Tier Transitions · Approval needed", "New Rehoming Resource", body);
+}
+
+export function buildRehomingDecisionEmail(p: {
+  submitterFirstName: string;
+  vendorName: string;
+  vendorType: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  approved: boolean;
+  reviewedBy: string;
+  reviewNote?: string;
+  partnersUrl: string;
+}): string {
+  const body = `
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+              Hi ${escHtml(p.submitterFirstName || "there")},<br /><br />
+              ${p.approved
+                ? `Good news. ${escHtml(p.reviewedBy)} approved the resource you suggested. It&rsquo;s now live in Rehoming Resources for the whole team.`
+                : `${escHtml(p.reviewedBy)} reviewed the resource you suggested and decided not to add it right now.`}
+            </p>
+            ${rehomingResourceCard(p)}
+            ${p.reviewNote ? `
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:24px;">
+              <tr><td style="padding:14px 16px;">
+                <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;">Note from ${escHtml(p.reviewedBy)}</p>
+                <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;white-space:pre-line;">${escHtml(p.reviewNote)}</p>
+              </td></tr>
+            </table>` : ""}
+            ${p.approved ? rehomingButton("Open Rehoming Resources", p.partnersUrl) : ""}
+            <p style="margin:16px 0 0;font-size:13px;color:#6b7280;text-align:center;">Thanks for helping the team find good homes for our clients&rsquo; things.</p>`;
+  return rehomingShell(
+    "Top Tier Transitions · Rehoming Resources",
+    p.approved ? "Your suggestion is live" : "Update on your suggestion",
+    body
+  );
+}

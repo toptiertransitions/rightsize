@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getReferralContactById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail, buildPartnerTeamInviteEmail, buildPartnerTeamJoinedEmail } from "./email";
+import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail, buildPartnerTeamInviteEmail, buildPartnerTeamJoinedEmail, buildRehomingSubmissionAdminEmail, buildRehomingDecisionEmail } from "./email";
 import type { LocalVendor } from "./types";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
@@ -1037,5 +1037,83 @@ export async function sendPartnerTeamJoinedEmail(params: {
     to: params.to,
     subject: `${params.memberName} joined ${params.companyName} on Rightsize`,
     html: buildPartnerTeamJoinedEmail({ ...params, teamUrl: `${appUrl}/partner/team` }),
+  });
+}
+
+// ─── Rehoming Resources approval flow ─────────────────────────────────────────
+
+const REHOMING_TYPE_SHORT: Record<string, string> = {
+  "Collector/Reseller": "Reseller / Collector",
+  "Consignment Store": "Consignment Store",
+  "Donation Org": "Donation Org",
+};
+
+/** Staff suggested a resource → every admin gets a Review & approve email
+ * (submitter CC'd so they have a record of what they sent). */
+export async function sendRehomingSubmissionToAdmins(vendor: LocalVendor): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return;
+  const adminEmails = await getAdminEmails();
+  if (adminEmails.length === 0) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildRehomingSubmissionAdminEmail({
+    vendorName: vendor.vendorName,
+    vendorType: vendor.vendorType,
+    accepts: vendor.itemCategories || undefined,
+    pocName: vendor.pocName || undefined,
+    phone: vendor.phone || undefined,
+    email: vendor.email || undefined,
+    website: vendor.website || undefined,
+    address: vendor.address || undefined,
+    city: vendor.city || undefined,
+    state: vendor.state || undefined,
+    zip: vendor.zip || undefined,
+    consignmentTake: vendor.consignmentTake > 0 ? vendor.consignmentTake : undefined,
+    notes: vendor.notes || undefined,
+    submittedBy: vendor.submittedBy ?? "A team member",
+    submittedByEmail: vendor.submittedByEmail,
+    submittedAt: new Date().toLocaleString("en-US", { timeZone: "America/Chicago", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }),
+    reviewUrl: `${appUrl}/admin/local-vendors?review=${vendor.id}`,
+  });
+
+  const submitter = vendor.submittedByEmail?.toLowerCase();
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: adminEmails,
+    ...(submitter && !adminEmails.includes(submitter) ? { cc: [submitter] } : {}),
+    subject: `Approval needed: ${vendor.vendorName} (${REHOMING_TYPE_SHORT[vendor.vendorType] ?? vendor.vendorType}) - Rehoming Resources`,
+    html,
+  });
+}
+
+export async function sendRehomingDecisionToSubmitter(vendor: LocalVendor, approved: boolean): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  const to = vendor.submittedByEmail;
+  if (!resendKey || !to) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const html = buildRehomingDecisionEmail({
+    submitterFirstName: (vendor.submittedBy ?? "").split(" ")[0],
+    vendorName: vendor.vendorName,
+    vendorType: vendor.vendorType,
+    city: vendor.city || undefined,
+    state: vendor.state || undefined,
+    zip: vendor.zip || undefined,
+    approved,
+    reviewedBy: vendor.reviewedBy ?? "An admin",
+    reviewNote: vendor.reviewNote,
+    partnersUrl: `${appUrl}/partners#rehoming-resources`,
+  });
+
+  const resend = new Resend(resendKey);
+  await resend.emails.send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to: [to],
+    subject: approved
+      ? `Approved: ${vendor.vendorName} is now in Rehoming Resources`
+      : `Update on your Rehoming Resources suggestion: ${vendor.vendorName}`,
+    html,
   });
 }
