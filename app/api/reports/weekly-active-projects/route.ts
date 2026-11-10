@@ -80,6 +80,7 @@ function contractEstimatedHours(contract: Contract | null): number {
 
 const KEY_DATE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   "Start Date":       { bg: "#d1fae5", border: "#6ee7b7", text: "#065f46" },
+  "Packing/Sorting":  { bg: "#ffedd5", border: "#fdba74", text: "#9a3412" },
   "Move Date":        { bg: "#fef3c7", border: "#fcd34d", text: "#92400e" },
   "Pickup Date":      { bg: "#dbeafe", border: "#93c5fd", text: "#1e3a8a" },
   "Estate Sale Date": { bg: "#ede9fe", border: "#c4b5fd", text: "#4c1d95" },

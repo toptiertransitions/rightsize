@@ -9,6 +9,12 @@ import {
   deleteLocalVendor,
 } from "@/lib/airtable";
 import { sendNewVendorNotification } from "@/lib/admin-notifications";
+import { getAllPartners } from "@/lib/marketplace/data";
+
+// Edited only in the Partner Marketplace for a vendor linked to a Marketplace
+// partner (mirrored here by updatePartner), so a Vendors-tab save can never
+// overwrite them with a stale copy.
+const MARKETPLACE_OWNED_FIELDS = ["vendorName", "pocName", "email", "phone", "website", "address", "city", "state", "zip"];
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,6 +56,9 @@ export async function PATCH(req: NextRequest) {
 
     const { id, ...data } = await req.json();
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const linked = (await getAllPartners()).some((p) => p.localVendorId === id);
+    if (linked) for (const k of MARKETPLACE_OWNED_FIELDS) delete data[k];
 
     const vendor = await updateLocalVendor(id, data);
     revalidateTag("partners-directory");

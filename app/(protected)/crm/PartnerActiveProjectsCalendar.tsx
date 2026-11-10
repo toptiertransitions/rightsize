@@ -19,6 +19,7 @@ const PROJECT_COLOR_PALETTE = [
 
 const KEY_DATE_COLORS: Record<string, string> = {
   "Start Date": "bg-emerald-50 text-emerald-800 border border-emerald-300",
+  "Packing/Sorting": "bg-orange-50 text-orange-800 border border-orange-300",
   "Move Date": "bg-amber-50 text-amber-800 border border-amber-300",
   "Pickup Date": "bg-blue-50 text-blue-800 border border-blue-300",
   "Estate Sale Date": "bg-purple-50 text-purple-800 border border-purple-300",

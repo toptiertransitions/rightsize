@@ -97,7 +97,6 @@ export interface MarketplacePartner {
   deliveryMode: MarketplaceDeliveryMode;
   serviceArea: MarketplaceServiceArea;
   languages: string[];
-  seniorSpecialty: string[];
   priceTier: MarketplacePriceTier | "";
   responsivenessScore?: number;
   featuredRank?: number;

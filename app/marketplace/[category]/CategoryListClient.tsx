@@ -18,7 +18,6 @@ export interface PublicListingRow {
   deliveryMode: MarketplaceDeliveryMode;
   priceTier: MarketplacePriceTier | "";
   languages: string[];
-  seniorSpecialty: string[];
   serviceArea: MarketplaceServiceArea;
   featuredRank: number | undefined;
   responsivenessScore: number | undefined;
@@ -54,18 +53,15 @@ export function CategoryListClient({ category, rows }: { category: CategoryInfo;
   const [virtualOnly, setVirtualOnly] = useState(false);
   const [priceTier, setPriceTier] = useState("");
   const [language, setLanguage] = useState("");
-  const [specialty, setSpecialty] = useState("");
   const [fieldFilters, setFieldFilters] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<SortKey>("best");
 
   const allLanguages = useMemo(() => Array.from(new Set(rows.flatMap((r) => r.languages))).sort(), [rows]);
-  const allSpecialties = useMemo(() => Array.from(new Set(rows.flatMap((r) => r.seniorSpecialty))).sort(), [rows]);
 
   const filtered = rows.filter((r) => {
     if (virtualOnly && r.deliveryMode === "In-person") return false;
     if (priceTier && r.priceTier !== priceTier) return false;
     if (language && !r.languages.includes(language)) return false;
-    if (specialty && !r.seniorSpecialty.includes(specialty)) return false;
     if (zip.trim() && !matchesLocation(r.serviceArea, { zip: zip.trim() }, r.state, r.deliveryMode)) return false;
     for (const [key, val] of Object.entries(fieldFilters)) {
       if (!val) continue;
@@ -148,12 +144,6 @@ export function CategoryListClient({ category, rows }: { category: CategoryInfo;
             <select value={language} onChange={(e) => setLanguage(e.target.value)} className="h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-600">
               <option value="">Any language</option>
               {allLanguages.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          )}
-          {allSpecialties.length > 0 && (
-            <select value={specialty} onChange={(e) => setSpecialty(e.target.value)} className="h-10 px-3 rounded-xl border border-gray-200 text-sm text-gray-600">
-              <option value="">Any specialty</option>
-              {allSpecialties.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
           {category.filterableFields.map((f) => (

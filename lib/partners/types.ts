@@ -56,7 +56,6 @@ export interface PartnerProfile {
   phone?: string;
   /** Admin-set in /admin/local-vendors — feeds the scoring engine's "senior
    * specialty" factor (see lib/partners/scoring.ts). */
-  seniorSpecialty?: boolean;
   /** Admin-set 1-5 in /admin/local-vendors — feeds the "responsiveness"
    * factor; unset is treated as neutral (3) rather than penalized. */
   responsivenessScore?: number;

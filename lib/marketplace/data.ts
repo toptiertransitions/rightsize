@@ -7,6 +7,7 @@
 // stays enforced in one place.
 import { revalidateTag } from "next/cache";
 import { AIRTABLE_TABLES } from "../config";
+import { updateLocalVendor } from "../airtable";
 import type {
   MarketplaceCategory,
   MarketplaceFieldDef,
@@ -174,7 +175,6 @@ function mapPartner(rec: AirtableRec): MarketplacePartner {
     deliveryMode: (str(f["DeliveryMode"]) || "In-person") as MarketplacePartner["deliveryMode"],
     serviceArea: parseJson<MarketplaceServiceArea>(f["ServiceAreaJson"], { zips: [], counties: [], statewide: false, nationwide: false }),
     languages: strArr(f["Languages"]),
-    seniorSpecialty: strArr(f["SeniorSpecialty"]),
     priceTier: (str(f["PriceTier"]) || "") as MarketplacePartner["priceTier"],
     responsivenessScore: f["ResponsivenessScore"] != null ? num(f["ResponsivenessScore"]) : undefined,
     featuredRank: f["FeaturedRank"] != null ? num(f["FeaturedRank"]) : undefined,
@@ -265,7 +265,6 @@ interface UpdatePartnerData extends Partial<Omit<CreatePartnerData, "crmReferral
   aboutUs?: string;
   serviceArea?: MarketplaceServiceArea;
   languages?: string[];
-  seniorSpecialty?: string[];
   priceTier?: MarketplacePartner["priceTier"];
   responsivenessScore?: number | null;
   featuredRank?: number | null;
@@ -302,7 +301,6 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
   if (data.deliveryMode !== undefined) fields["DeliveryMode"] = data.deliveryMode;
   if (data.serviceArea !== undefined) fields["ServiceAreaJson"] = JSON.stringify(data.serviceArea);
   if (data.languages !== undefined) fields["Languages"] = data.languages;
-  if (data.seniorSpecialty !== undefined) fields["SeniorSpecialty"] = data.seniorSpecialty;
   if (data.priceTier !== undefined) fields["PriceTier"] = data.priceTier;
   if (data.responsivenessScore !== undefined) fields["ResponsivenessScore"] = data.responsivenessScore;
   if (data.featuredRank !== undefined) fields["FeaturedRank"] = data.featuredRank;
@@ -328,7 +326,36 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
     body: JSON.stringify({ records: [{ id, fields }], typecast: true }),
   });
   if (!res.ok) throw new Error(`updatePartner failed: ${await res.text()}`);
+  const updated = ((await res.json().catch(() => null)) as { records?: AirtableRec[] } | null)?.records?.[0];
+  await mirrorToLinkedLocalVendor(updated ? linkedId(updated.fields["LocalVendorId"]) : "", data);
   refreshPartnerDirectory();
+}
+
+// A Marketplace partner migrated from LocalVendors keeps that record (Vendors
+// tab) for item routing, project vendor quick-picks, the vendor portal and
+// senior-community onboarding. The Marketplace is the one place its name and
+// contact info are edited; every change is copied onto the linked LocalVendor
+// so those screens never show a stale copy. Logged, never thrown.
+const MIRRORED_PARTNER_FIELDS = ["companyName", "pocName", "email", "phone", "website", "address", "city", "state", "zip"] as const;
+
+async function mirrorToLinkedLocalVendor(localVendorId: string, data: UpdatePartnerData): Promise<void> {
+  if (!localVendorId || !MIRRORED_PARTNER_FIELDS.some((k) => data[k] !== undefined)) return;
+  try {
+    await updateLocalVendor(localVendorId, {
+      vendorName: data.companyName,
+      pocName: data.pocName,
+      email: data.email,
+      phone: data.phone,
+      website: data.website,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      zip: data.zip,
+    });
+    revalidateTag("rehoming-vendors");
+  } catch (e) {
+    console.error(`[marketplace] mirror to LocalVendor ${localVendorId} failed:`, e);
+  }
 }
 
 // The in-app Partners page reads a 5-minute cached directory; drop it so a

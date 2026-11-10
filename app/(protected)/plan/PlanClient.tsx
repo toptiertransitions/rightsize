@@ -4,7 +4,7 @@
 import { useBackClose } from "@/lib/back-button";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { PLAN_ACTIVITIES, KEY_DATE_ACTIVITIES } from "@/lib/types";
+import { PLAN_ACTIVITIES, KEY_DATE_ACTIVITIES, NON_TTT_KEY_DATE_ACTIVITIES } from "@/lib/types";
 import type { PlanEntry, PlanActivity, PlanHelper, PlanEntryType, Room, ProjectFile, TimeEntry, Contract, WeeklySchedule, TimeOffEntry } from "@/lib/types";
 import { FloorplansSection } from "./FloorplansSection";
 import { HoursWorkedSection } from "./HoursWorkedSection";
@@ -41,6 +41,7 @@ const LEGACY_ACTIVITY_COLORS: Record<string, string> = {
 
 const KEY_DATE_COLORS: Record<string, string> = {
   "Start Date":                "bg-emerald-50 text-emerald-800 border border-emerald-300",
+  "Packing/Sorting":           "bg-orange-50 text-orange-800 border border-orange-300",
   "Move Date":                 "bg-amber-50 text-amber-800 border border-amber-300",
   "Pickup Date":               "bg-blue-50 text-blue-800 border border-blue-300",
   "Estate Sale Date":          "bg-purple-50 text-purple-800 border border-purple-300",
@@ -193,16 +194,25 @@ interface ModalProps {
   tenantOptions?: TenantOption[];
   originParkingNotes?: string;
   defaultEntryType?: PlanEntryType;
+  /** NonTTTClient: Key Dates only, labeled "Activity", with a short list of
+   * activity types. Everyone else gets the full Daily Focus / Key Date modal. */
+  simpleActivities?: boolean;
 }
 
-function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions, originParkingNotes, defaultEntryType = "focus" }: ModalProps) {
+function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, services, canManageTTTHelpers, tenantOptions, originParkingNotes, defaultEntryType = "focus", simpleActivities = false }: ModalProps) {
   useBackClose(onClose);
   const focusActivityOptions = services && services.length > 0 ? services : PLAN_ACTIVITIES;
-  const [entryType, setEntryType] = useState<PlanEntryType>(entry?.entryType ?? defaultEntryType);
-  const activityOptions = entryType === "keydate" ? KEY_DATE_ACTIVITIES : focusActivityOptions;
+  const [entryType, setEntryType] = useState<PlanEntryType>(simpleActivities ? "keydate" : entry?.entryType ?? defaultEntryType);
+  // An existing entry keeps its activity in the list even if it isn't one of
+  // the simple options (e.g. a Pickup Date added before this list existed).
+  const simpleOptions = entry?.activity && !NON_TTT_KEY_DATE_ACTIVITIES.includes(entry.activity)
+    ? [...NON_TTT_KEY_DATE_ACTIVITIES, entry.activity]
+    : NON_TTT_KEY_DATE_ACTIVITIES;
+  const keyDateOptions = simpleActivities ? simpleOptions : KEY_DATE_ACTIVITIES;
+  const activityOptions = entryType === "keydate" ? keyDateOptions : focusActivityOptions;
   const [date, setDate] = useState(entry?.date ?? defaultDate ?? toISO(new Date()));
   const [activity, setActivity] = useState<PlanActivity>(
-    entry?.activity ?? (defaultEntryType === "keydate" ? (KEY_DATE_ACTIVITIES[0] as PlanActivity) : (services?.[0] ?? "Coordinating"))
+    entry?.activity ?? (simpleActivities || defaultEntryType === "keydate" ? (keyDateOptions[0] as PlanActivity) : (services?.[0] ?? "Coordinating"))
   );
   // In all-projects mode (tenantId=""), track which project is selected
   const [selectedTenantId, setSelectedTenantId] = useState(entry?.tenantId ?? "");
@@ -535,9 +545,11 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
         {/* Header */}
         <div className="px-6 py-5 border-b border-cream-100 flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-bold text-gray-900">
-            {isEdit
-              ? entryType === "keydate" ? "Edit Key Date" : "Edit Focus"
-              : entryType === "keydate" ? "Add Key Date" : "Add Daily Focus"}
+            {simpleActivities
+              ? isEdit ? "Edit Activity" : "Add Activity"
+              : isEdit
+                ? entryType === "keydate" ? "Edit Key Date" : "Edit Focus"
+                : entryType === "keydate" ? "Add Key Date" : "Add Daily Focus"}
           </h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -549,7 +561,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
         {/* Body */}
         <div className="px-6 py-5 space-y-4 overflow-y-auto overflow-x-hidden flex-1">
           {/* Type toggle */}
-          {!isEdit && (
+          {!isEdit && !simpleActivities && (
             <div className="flex rounded-xl border border-gray-200 overflow-hidden">
               <button
                 type="button"
@@ -974,7 +986,7 @@ function AddFocusModal({ tenantId, rooms, entry, defaultDate, onClose, onSaved, 
           </button>
           <button onClick={handleSave} disabled={loading}
             className="flex-1 h-11 rounded-xl bg-forest-600 text-white text-sm font-semibold shadow-sm hover:bg-forest-700 active:scale-[0.99] transition-all disabled:opacity-50 disabled:active:scale-100">
-            {loading ? "Saving…" : isEdit ? "Save Changes" : entryType === "keydate" ? "Add Key Date" : "Add Focus"}
+            {loading ? "Saving…" : isEdit ? "Save Changes" : simpleActivities ? "Add Activity" : entryType === "keydate" ? "Add Key Date" : "Add Focus"}
           </button>
         </div>
       </div>
@@ -1848,6 +1860,7 @@ export function PlanClient({ entries, rooms, tenantId, tenantName, canEdit, proj
           tenantOptions={tenantOptions}
           originParkingNotes={originParkingNotes}
           defaultEntryType={isClientUser && isTTT !== true ? "keydate" : "focus"}
+          simpleActivities={isClientUser && isTTT !== true}
         />
       )}
 

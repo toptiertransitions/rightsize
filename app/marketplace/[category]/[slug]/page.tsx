@@ -79,7 +79,6 @@ export default async function PartnerProfilePage({ params }: { params: Promise<{
         deliveryMode: partner.deliveryMode,
         serviceArea: partner.serviceArea,
         languages: partner.languages,
-        seniorSpecialty: partner.seniorSpecialty,
         priceTier: partner.priceTier,
       }}
       avgRating={rating?.avgRating ?? 0}

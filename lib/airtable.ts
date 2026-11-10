@@ -2093,7 +2093,6 @@ export async function createLocalVendor(data: {
   featuredRank?: number;
   projectsCompletedAdjustment?: number;
   aboutUs?: string;
-  seniorSpecialty?: boolean;
   responsivenessScore?: number;
 }): Promise<LocalVendor> {
   const res = await localVendorFetch("", {
@@ -2121,7 +2120,6 @@ export async function createLocalVendor(data: {
         ...(data.featuredRank !== undefined ? { FeaturedRank: data.featuredRank } : {}),
         ...(data.projectsCompletedAdjustment !== undefined ? { ProjectsCompletedAdjustment: data.projectsCompletedAdjustment } : {}),
         ...(data.aboutUs !== undefined ? { AboutUs: data.aboutUs } : {}),
-        ...(data.seniorSpecialty !== undefined ? { SeniorSpecialty: data.seniorSpecialty } : {}),
         ...(data.responsivenessScore !== undefined ? { ResponsivenessScore: data.responsivenessScore } : {}),
       },
     }),
@@ -2155,7 +2153,6 @@ export async function updateLocalVendor(
     featuredRank: number | null;
     projectsCompletedAdjustment: number;
     aboutUs: string;
-    seniorSpecialty: boolean;
     responsivenessScore: number | null;
   }>
 ): Promise<LocalVendor> {
@@ -2181,7 +2178,6 @@ export async function updateLocalVendor(
   if (data.featuredRank !== undefined) fields["FeaturedRank"] = data.featuredRank;
   if (data.projectsCompletedAdjustment !== undefined) fields["ProjectsCompletedAdjustment"] = data.projectsCompletedAdjustment;
   if (data.aboutUs !== undefined) fields["AboutUs"] = data.aboutUs;
-  if (data.seniorSpecialty !== undefined) fields["SeniorSpecialty"] = data.seniorSpecialty;
   if (data.responsivenessScore !== undefined) fields["ResponsivenessScore"] = data.responsivenessScore;
   if (data.prefCategories !== undefined) {
     for (let i = 1; i <= 5; i++) {
@@ -3167,7 +3163,6 @@ function mapLocalVendor(record: AirtableRecord): LocalVendor {
     featuredRank: typeof f["FeaturedRank"] === "number" ? f["FeaturedRank"] : undefined,
     projectsCompletedAdjustment: typeof f["ProjectsCompletedAdjustment"] === "number" ? f["ProjectsCompletedAdjustment"] : undefined,
     aboutUs: toStr(f["AboutUs"]) || undefined,
-    seniorSpecialty: f["SeniorSpecialty"] === true,
     responsivenessScore: typeof f["ResponsivenessScore"] === "number" ? f["ResponsivenessScore"] : undefined,
     submissionStatus: (["Pending", "Approved", "Rejected"] as const).find((v) => v === toStr(f["SubmissionStatus"])),
     submittedBy: toStr(f["SubmittedBy"]) || undefined,

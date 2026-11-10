@@ -67,7 +67,6 @@ export async function updatePartnerOverviewAction(
     shortBio?: string;
     aboutUs?: string;
     languages?: string[];
-    seniorSpecialty?: string[];
     priceTier?: "" | "$" | "$$" | "$$$" | "Contact for pricing";
     featuredRank?: number | null;
     projectsCompletedAdjustment?: number;

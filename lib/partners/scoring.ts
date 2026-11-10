@@ -4,30 +4,20 @@ import { parseZipList } from "./match";
 import { getPartnerQuestions, VIRTUAL_OK_QUESTION_ID } from "./questions";
 import { readMatchCriteria, NEUTRAL_OPTION_VALUES } from "./criteria";
 
-// Deterministic, no-LLM scoring for Phase 3 guided matching. Weights are
-// exactly as specified (fit 35 / seniorSpecialty 20 / responsiveness 15 /
-// reviews 10 / pastOutcomes 10 / adminOrder 5) — these sum to 0.95, not 1.0,
-// kept verbatim rather than silently rescaled since relative ranking between
-// partners is unaffected either way. Two of the six factors (reviews, adminOrder) are backed by real
-// existing data (PartnerReview aggregates, LocalVendors.FeaturedRank);
-// seniorSpecialty and responsiveness are backed by two new admin-set
-// LocalVendors fields (SeniorSpecialty checkbox, ResponsivenessScore 1-5);
-// fit and pastOutcomes are necessarily proxies given what data exists today
-// (service-area match strength, and completed-project volume respectively)
-// — documented here rather than hidden, since neither is a true semantic
-// "fit to this client's answers" or "outcome quality" measure yet.
-// The six original factors keep their relative proportions (35/20/15/10/
-// 10/5), scaled to share 75% so attributeOverlap can carry 25% and the
-// total stays 1.0. Scaling them uniformly means partners with no criteria
-// set rank among themselves exactly as before.
-const BASE_SCALE = 0.75 / 0.95;
+// Deterministic, no-LLM scoring for guided matching: fit 35 / responsiveness
+// 15 / reviews 10 / pastOutcomes 10 / adminOrder 5 / attributeOverlap 25,
+// summing to 1.0. Reviews and adminOrder are backed by real data
+// (PartnerReview aggregates, FeaturedRank); responsiveness is admin-set
+// (1-5); fit and pastOutcomes are proxies (service-area match strength and
+// completed-project volume) — documented here rather than hidden, since
+// neither is a true "fit to this client's answers" or "outcome quality"
+// measure yet. (A seniorSpecialty factor was removed in Nov 2026.)
 export const SCORING_WEIGHTS = {
-  fit: 0.35 * BASE_SCALE,
-  seniorSpecialty: 0.2 * BASE_SCALE,
-  responsiveness: 0.15 * BASE_SCALE,
-  reviews: 0.1 * BASE_SCALE,
-  pastOutcomes: 0.1 * BASE_SCALE,
-  adminOrder: 0.05 * BASE_SCALE,
+  fit: 0.35,
+  responsiveness: 0.15,
+  reviews: 0.1,
+  pastOutcomes: 0.1,
+  adminOrder: 0.05,
   // How well the client's category-specific answers fit what this listing
   // says it serves (see attributeOverlapScore below). Raised from 0.05 once
   // partners could set exact matching criteria (lib/partners/criteria.ts):
@@ -153,7 +143,6 @@ function buildWhyThisMatch(partner: PartnerProfile, zipMatch: boolean, fitsAnswe
   const reasons: string[] = [];
   if (fitsAnswers) reasons.push("offers what you're looking for");
   if (zipMatch) reasons.push("serves your area");
-  if (partner.seniorSpecialty) reasons.push("experienced with senior moves");
   // A score an admin hasn't set to display never appears in this text either
   if (partner.ratingHidden) {
     // no rating reason
@@ -228,7 +217,6 @@ export function scoreAndRankPartners(
     if (!isLocalMatch && !virtualCoverageMatch) continue;
 
     const fitScore = zipMatch ? 1 : isLocalMatch ? 0.75 : 0.6;
-    const seniorScore = partner.seniorSpecialty ? 1 : 0;
     const responsivenessScore = (partner.responsivenessScore ?? 3) / 5;
     const reviewsScore = partner.reviewCount > 0 ? partner.avgRating / 5 : 0.5; // no reviews yet — neutral, not penalized
     const pastOutcomesScore = Math.min(partner.projectsCompleted / PAST_OUTCOMES_CAP, 1);
@@ -237,7 +225,6 @@ export function scoreAndRankPartners(
 
     const score =
       SCORING_WEIGHTS.fit * fitScore +
-      SCORING_WEIGHTS.seniorSpecialty * seniorScore +
       SCORING_WEIGHTS.responsiveness * responsivenessScore +
       SCORING_WEIGHTS.reviews * reviewsScore +
       SCORING_WEIGHTS.pastOutcomes * pastOutcomesScore +

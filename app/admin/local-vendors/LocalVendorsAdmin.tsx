@@ -9,8 +9,8 @@ import { ZipCoverageTab } from "./ZipCoverageTab";
 import { RehomingSubmissionsTab } from "./RehomingSubmissionsTab";
 
 const PAGE_SIZE = 25;
-import { VENDOR_TYPES, ITEM_CATEGORIES, PARTNER_CATEGORIES } from "@/lib/types";
-import type { LocalVendor, VendorType, PartnerCategory, PartnerCommunityCompletion } from "@/lib/types";
+import { VENDOR_TYPES, ITEM_CATEGORIES } from "@/lib/types";
+import type { LocalVendor, VendorType, PartnerCommunityCompletion } from "@/lib/types";
 
 // ─── Type badge colors ────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<VendorType, string> = {
@@ -30,11 +30,14 @@ const TYPE_COLORS: Record<VendorType, string> = {
 // ─── LocalVendorModal ─────────────────────────────────────────────────────────
 interface ModalProps {
   vendor?: LocalVendor;
+  /** Set when this vendor is linked to a Partner Marketplace partner, whose
+   * admin page is then the only place its name and contact info are edited. */
+  marketplacePartnerId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
+function LocalVendorModal({ vendor, marketplacePartnerId, onClose, onSaved }: ModalProps) {
   const isEdit = !!vendor;
   const [vendorType, setVendorType] = useState<VendorType>(vendor?.vendorType ?? "Other");
   const [vendorName, setVendorName] = useState(vendor?.vendorName ?? "");
@@ -51,16 +54,6 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
   const [zipCodesServed, setZipCodesServed] = useState(vendor?.zipCodesServed ?? "");
   const [notes, setNotes] = useState(vendor?.notes ?? "");
   const [isActive, setIsActive] = useState(vendor?.isActive ?? true);
-  // Partners marketplace fields
-  const [category, setCategory] = useState<PartnerCategory | "">(vendor?.category ?? "");
-  const [logo, setLogo] = useState(vendor?.logo ?? "");
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [logoError, setLogoError] = useState("");
-  const [aboutUs, setAboutUs] = useState(vendor?.aboutUs ?? "");
-  const [featuredRank, setFeaturedRank] = useState(vendor?.featuredRank !== undefined ? String(vendor.featuredRank) : "");
-  const [projectsAdjustment, setProjectsAdjustment] = useState(String(vendor?.projectsCompletedAdjustment ?? 0));
-  const [seniorSpecialty, setSeniorSpecialty] = useState(vendor?.seniorSpecialty ?? false);
-  const [responsivenessScore, setResponsivenessScore] = useState(vendor?.responsivenessScore !== undefined ? String(vendor.responsivenessScore) : "");
   const [prefSlots, setPrefSlots] = useState<Array<{ category: string; minPrice: string; maxPrice: string }>>(() => {
     const slots = (vendor?.prefCategories ?? []).map(p => ({
       category: p.category,
@@ -96,25 +89,6 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
     }
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file after an error
-    if (!file) return;
-    setLogoUploading(true);
-    setLogoError("");
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
-      setLogo(data.photoUrl);
-    } catch (e) {
-      setLogoError(e instanceof Error ? e.message : "Upload failed");
-    } finally {
-      setLogoUploading(false);
-    }
-  };
 
   const handleSave = async () => {
     if (!vendorName.trim()) { setError("Vendor name is required"); return; }
@@ -136,13 +110,6 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
         consignmentTake: Number(consignmentTake) || 0,
         zipCodesServed: zipCodesServed.trim(), notes: notes.trim(), isActive,
         prefCategories,
-        category: category || undefined,
-        logo: logo.trim(),
-        featuredRank: featuredRank.trim() ? Number(featuredRank) : null,
-        projectsCompletedAdjustment: Number(projectsAdjustment) || 0,
-        aboutUs: aboutUs.trim(),
-        seniorSpecialty,
-        responsivenessScore: responsivenessScore.trim() ? Number(responsivenessScore) : null,
       };
       const payload = isEdit ? { id: vendor.id, ...base } : base;
       const res = await fetch("/api/local-vendors", {
@@ -224,6 +191,14 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
             </select>
           </div>
 
+          {marketplacePartnerId && (
+            <div className="rounded-xl border border-forest-700/50 bg-forest-900/20 px-4 py-3 text-sm text-gray-300">
+              This vendor is also in the Partner Marketplace. Edit its name and contact info there; changes copy here automatically.{" "}
+              <a href={`/admin/marketplace/partners/${marketplacePartnerId}`} className="text-forest-400 hover:underline whitespace-nowrap">Open in Marketplace →</a>
+            </div>
+          )}
+
+          <fieldset disabled={!!marketplacePartnerId} className="space-y-4 disabled:opacity-60">
           {/* Vendor Name */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Vendor Name *</label>
@@ -298,6 +273,8 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
               className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
           </div>
 
+          </fieldset>
+
           {/* Item Categories */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Item Categories (comma-separated)</label>
@@ -324,93 +301,6 @@ function LocalVendorModal({ vendor, onClose, onSaved }: ModalProps) {
               className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
           </div>
 
-          {/* Partners marketplace fields */}
-          <div className="border-t border-gray-700 pt-4 space-y-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Client-Facing Partners Page</p>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Partner Category</label>
-              <p className="text-xs text-gray-500 mb-1.5">Only vendors with a category set appear on the client-facing Partners page.</p>
-              <select value={category} onChange={(e) => setCategory(e.target.value as PartnerCategory | "")}
-                className="w-full h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400">
-                <option value="">— Not shown on Partners page —</option>
-                {PARTNER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Logo</label>
-              <div className="flex items-center gap-3">
-                {logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={logo}
-                    alt="Vendor logo"
-                    className="w-14 h-14 object-contain rounded-lg border border-gray-700 bg-white p-1.5"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-lg border border-dashed border-gray-600 flex items-center justify-center text-gray-600 text-[10px] text-center px-1">
-                    No logo
-                  </div>
-                )}
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <span className="px-4 py-2 rounded-xl border border-gray-600 text-sm font-medium text-gray-300 hover:bg-gray-800 hover:border-gray-500 transition-colors">
-                    {logoUploading ? "Uploading…" : logo ? "Replace Logo" : "Upload Logo"}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleLogoUpload}
-                    disabled={logoUploading}
-                  />
-                </label>
-                {logo && !logoUploading && (
-                  <button
-                    type="button"
-                    onClick={() => setLogo("")}
-                    className="text-xs text-gray-500 hover:text-red-400"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-              {logoError && <p className="text-xs text-red-400 mt-1.5">{logoError}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">About Us</label>
-              <p className="text-xs text-gray-500 mb-1.5">Shown in the "Learn More" popup on the client-facing Partners page.</p>
-              <textarea value={aboutUs} onChange={(e) => setAboutUs(e.target.value)}
-                rows={4}
-                placeholder="A short paragraph introducing this partner to clients…"
-                className="w-full px-3 py-2 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400 resize-y" />
-            </div>
-            <div className="flex gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Featured Rank</label>
-                <p className="text-xs text-gray-500 mb-1.5">Lower shows first. Leave blank for normal ranking.</p>
-                <input type="number" value={featuredRank} onChange={(e) => setFeaturedRank(e.target.value)}
-                  placeholder="e.g. 1"
-                  className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Projects Completed Adjustment</label>
-                <p className="text-xs text-gray-500 mb-1.5">Manual +/- on top of the auto-computed count.</p>
-                <input type="number" value={projectsAdjustment} onChange={(e) => setProjectsAdjustment(e.target.value)}
-                  className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Responsiveness (1-5)</label>
-                <p className="text-xs text-gray-500 mb-1.5">Feeds guided matching. Blank = neutral.</p>
-                <input type="number" min={1} max={5} value={responsivenessScore} onChange={(e) => setResponsivenessScore(e.target.value)}
-                  placeholder="3"
-                  className="w-32 h-10 px-3 rounded-xl border border-gray-600 text-sm bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-forest-400" />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
-              <input type="checkbox" checked={seniorSpecialty} onChange={(e) => setSeniorSpecialty(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-forest-500 focus:ring-forest-400" />
-              Experienced with senior/downsizing clients
-            </label>
-          </div>
 
           {/* Item Category Preferences */}
           <div>
@@ -544,11 +434,13 @@ interface LocalVendorsAdminProps {
   pendingSubmissions: LocalVendor[];
   /** Submission id from the approval email's Review link. */
   reviewId?: string;
+  /** LocalVendor id → linked Partner Marketplace partner id. */
+  marketplaceLinks: Record<string, string>;
 }
 
 type AdminTab = "directory" | "submissions" | "history" | "zip-coverage";
 
-export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCommunities, completions, pendingSubmissions, reviewId }: LocalVendorsAdminProps) {
+export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCommunities, completions, pendingSubmissions, reviewId, marketplaceLinks }: LocalVendorsAdminProps) {
   const router = useRouter();
   const [tab, setTab] = useState<AdminTab>(reviewId || pendingSubmissions.length > 0 ? "submissions" : "directory");
   const [stateFilter, setStateFilter] = useState("");
@@ -845,7 +737,19 @@ export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCom
                         {v.vendorType}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-medium text-white">{v.vendorName}</td>
+                    <td className="px-4 py-3 font-medium text-white">
+                      {v.vendorName}
+                      {marketplaceLinks[v.id] && (
+                        <a
+                          href={`/admin/marketplace/partners/${marketplaceLinks[v.id]}`}
+                          onClick={(e) => e.stopPropagation()}
+                          title="Name and contact info are edited in the Partner Marketplace"
+                          className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide text-forest-300 bg-forest-900/40 border border-forest-700/50 rounded-full px-2 py-0.5 hover:bg-forest-900/70"
+                        >
+                          Marketplace
+                        </a>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-300">
                       {[v.city, v.state].filter(Boolean).join(", ")}
                     </td>
@@ -936,6 +840,7 @@ export function LocalVendorsAdmin({ vendors: initialVendors, projects, seniorCom
       {showModal && (
         <LocalVendorModal
           vendor={editVendor}
+          marketplacePartnerId={editVendor ? marketplaceLinks[editVendor.id] : undefined}
           onClose={closeModal}
           onSaved={onSaved}
         />

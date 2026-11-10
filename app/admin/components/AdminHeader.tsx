@@ -39,7 +39,7 @@ const NAV_LINKS: { tab: AdminTab; label: string; href: string }[] = [
   { tab: "estates", label: "Estates", href: "/admin/estates" },
   { tab: "pay", label: "Pay", href: "/admin/pay" },
   { tab: "items", label: "Items", href: "/admin/items" },
-  { tab: "partners", label: "Partners", href: "/admin/partners" },
+  { tab: "partners", label: "Loyalty", href: "/admin/partners" },
   { tab: "marketplace", label: "Marketplace", href: "/admin/marketplace" },
 ];
 

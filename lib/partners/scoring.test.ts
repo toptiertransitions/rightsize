@@ -36,12 +36,7 @@ function request(overrides: Partial<PartnerRequest>): PartnerRequest {
 }
 
 describe("SCORING_WEIGHTS", () => {
-  // The originally-specified weights (fit 35 / seniorSpecialty 20 /
-  // responsiveness 15 / reviews 10 / pastOutcomes 10 / adminOrder 5) summed
-  // to 95%, not 100%, kept verbatim rather than silently rescaled. Phase 5
-  // added attributeOverlap at 5%, bringing the total to exactly 100% —
-  // this test's job is just to flag any further silent drift, not to
-  // enforce a specific total.
+  // Flags any silent drift in the factor weights.
   it("sums to 1.0 after the Phase 5 attributeOverlap addition", () => {
     const total = Object.values(SCORING_WEIGHTS).reduce((s, w) => s + w, 0);
     expect(Math.round(total * 100) / 100).toBe(1);
@@ -87,13 +82,13 @@ describe("scoreAndRankPartners", () => {
     expect(result.alternates[0]?.matchedLocation).toBe("nearby");
   });
 
-  it("a strong senior-specialty + high-rated partner outranks a plain in-area one", () => {
+  it("a high-rated, responsive, experienced partner outranks a plain in-area one", () => {
     const partners = [
       profile({ id: "plain", zipCodesServed: "60601", avgRating: 3.5, reviewCount: 5 }),
-      profile({ id: "senior", zipCodesServed: "60601", avgRating: 4.9, reviewCount: 40, seniorSpecialty: true, responsivenessScore: 5, projectsCompleted: 15 }),
+      profile({ id: "strong", zipCodesServed: "60601", avgRating: 4.9, reviewCount: 40, responsivenessScore: 5, projectsCompleted: 15 }),
     ];
     const result = scoreAndRankPartners(partners, "Mover", { zip: "60601" });
-    expect(result.best?.partner.id).toBe("senior");
+    expect(result.best?.partner.id).toBe("strong");
   });
 
   it("uses featuredRank as a tiebreaker when scores are otherwise identical", () => {
@@ -113,7 +108,7 @@ describe("scoreAndRankPartners", () => {
   });
 
   it("includes a non-empty whyThisMatch for every match", () => {
-    const partners = [profile({ id: "a", zipCodesServed: "60601", seniorSpecialty: true, avgRating: 4.8, reviewCount: 12 })];
+    const partners = [profile({ id: "a", zipCodesServed: "60601", avgRating: 4.8, reviewCount: 12 })];
     const result = scoreAndRankPartners(partners, "Mover", { zip: "60601" });
     expect(result.best?.whyThisMatch.length).toBeGreaterThan(0);
   });

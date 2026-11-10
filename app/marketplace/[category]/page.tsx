@@ -74,7 +74,6 @@ export default async function CategoryPage({ params }: { params: Promise<{ categ
         deliveryMode: partner.deliveryMode,
         priceTier: partner.priceTier,
         languages: partner.languages,
-        seniorSpecialty: partner.seniorSpecialty,
         serviceArea: partner.serviceArea,
         featuredRank: partner.featuredRank,
         responsivenessScore: partner.responsivenessScore,

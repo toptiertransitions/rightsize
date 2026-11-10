@@ -21,7 +21,6 @@ interface Partner {
   deliveryMode: MarketplaceDeliveryMode;
   serviceArea: MarketplaceServiceArea;
   languages: string[];
-  seniorSpecialty: string[];
   priceTier: string;
 }
 
@@ -104,7 +103,6 @@ export function ProfileClient({
           )}
           {partner.priceTier && <span className="text-xs px-2.5 py-1 rounded-full bg-gray-50 text-gray-600">{partner.priceTier}</span>}
           {partner.languages.map((l) => <span key={l} className="text-xs px-2.5 py-1 rounded-full bg-gray-50 text-gray-600">{l}</span>)}
-          {partner.seniorSpecialty.map((s) => <span key={s} className="text-xs px-2.5 py-1 rounded-full bg-gray-50 text-gray-600">{s}</span>)}
         </div>
 
         {profileFields.length > 0 && (

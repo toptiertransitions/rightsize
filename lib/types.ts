@@ -649,11 +649,22 @@ export const PLAN_ACTIVITIES: string[] = [
 
 export const KEY_DATE_ACTIVITIES: string[] = [
   "Start Date",
+  "Packing/Sorting",
   "Move Date",
   "Pickup Date",
   "Estate Sale Date",
   "Close Date",
   "Consign/ProFound Delivery",
+];
+
+// The only Key Date types NonTTTClient users pick from (shown to them as
+// "Activity" on the Plan page).
+export const NON_TTT_KEY_DATE_ACTIVITIES: string[] = [
+  "Start Date",
+  "Packing/Sorting",
+  "Move Date",
+  "Estate Sale Date",
+  "Close Date",
 ];
 
 export interface PlanHelper {
@@ -794,7 +805,6 @@ export interface LocalVendor {
   featuredRank?: number;     // lower = shown first, manual override
   projectsCompletedAdjustment?: number; // manual +/- on top of the dynamically computed count
   aboutUs?: string;          // paragraph shown in the Partners "Learn More" detail popup
-  seniorSpecialty?: boolean;    // admin-set: experienced working with senior/downsizing clients
   responsivenessScore?: number; // admin-set, 1-5; unset treated as neutral (3) when scoring
   // ─── Staff-submitted Rehoming Resources (approval queue) ──
   submissionStatus?: "Pending" | "Approved" | "Rejected";

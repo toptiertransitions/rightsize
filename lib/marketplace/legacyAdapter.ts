@@ -10,7 +10,7 @@
 // concept; applying it to /partners would silently hide real, currently-
 // visible partners in thin categories and change live behavior, which is
 // outside this adapter's job).
-import { getAllPartnerReviews, getAllVendorsWithLocalVendorLink, getTenants, getAllLocalVendors } from "@/lib/airtable";
+import { getAllPartnerReviews, getAllVendorsWithLocalVendorLink, getTenants } from "@/lib/airtable";
 import { realtorDisplayName } from "./partnerScreens";
 import { computeBayesianRating } from "@/lib/partners/match";
 import type { PartnerProfile, PartnerCategory } from "@/lib/partners/types";
@@ -21,19 +21,17 @@ const BAYESIAN_CONFIDENCE = 5;
 const DEFAULT_PRIOR_MEAN = 4.5;
 
 export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[]> {
-  const [partners, listings, categories, reviews, linkedVendors, tenants, legacyVendors] = await Promise.all([
+  const [partners, listings, categories, reviews, linkedVendors, tenants] = await Promise.all([
     getAllPartners(),
     getAllListingsAdmin(),
     getAllCategories(),
     getAllPartnerReviews(),
     getAllVendorsWithLocalVendorLink(),
     getTenants(),
-    getAllLocalVendors(),
   ]);
 
   const partnerById = new Map(partners.map((p) => [p.id, p]));
   const categoryById = new Map(categories.map((c) => [c.id, c]));
-  const legacyVendorById = new Map(legacyVendors.map((v) => [v.id, v]));
 
   // One PartnerProfile row per Live listing — mirrors the old model, where
   // a LocalVendor record had exactly one `category`. A partner with
@@ -123,13 +121,6 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
       projectsCompleted,
       aboutUs: partner.aboutUs || undefined,
       recentProjectMonths,
-      // The new, structured seniorSpecialty taxonomy is the source of truth
-      // once filled in; until then, fall back to the old boolean flag so a
-      // backfilled partner's existing signal (and scoring boost) isn't
-      // silently lost just because the new field hasn't been populated yet.
-      seniorSpecialty: partner.seniorSpecialty.length > 0
-        ? true
-        : Boolean(legacyId && legacyVendorById.get(legacyId)?.seniorSpecialty),
       responsivenessScore: partner.responsivenessScore,
       email: partner.email || undefined,
       phone: partner.phone || undefined,

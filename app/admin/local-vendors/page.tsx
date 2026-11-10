@@ -7,6 +7,7 @@ import {
   getAllPartnerCommunityCompletions,
   getPendingRehomingSubmissions,
 } from "@/lib/airtable";
+import { getAllPartners } from "@/lib/marketplace/data";
 import { LocalVendorsAdmin } from "./LocalVendorsAdmin";
 
 export default async function LocalVendorsPage({ searchParams }: { searchParams: Promise<{ review?: string }> }) {
@@ -15,7 +16,7 @@ export default async function LocalVendorsPage({ searchParams }: { searchParams:
   if (!isTTTAdmin(userId)) redirect("/home");
 
   const { review } = await searchParams;
-  const [vendors, allTenants, completions, pendingSubmissions] = await Promise.all([
+  const [vendors, allTenants, completions, pendingSubmissions, marketplacePartners] = await Promise.all([
     getLocalVendors().catch(() => []),
     getTenants().catch(() => []),
     getAllPartnerCommunityCompletions().catch(() => []),
@@ -23,7 +24,10 @@ export default async function LocalVendorsPage({ searchParams }: { searchParams:
       console.error("[local-vendors] pending rehoming submissions failed:", e);
       return [];
     }),
+    getAllPartners().catch(() => []),
   ]);
+  const marketplaceLinks: Record<string, string> = {};
+  for (const p of marketplacePartners) if (p.localVendorId) marketplaceLinks[p.localVendorId] = p.id;
   // Same source as the onboarding "Where are you moving" community search —
   // not the CRM's Sales-managed "Senior Living" company list — so an
   // admin-tagged completion's communityId always lands in the same ID
@@ -50,6 +54,7 @@ export default async function LocalVendorsPage({ searchParams }: { searchParams:
       completions={completions}
       pendingSubmissions={pendingSubmissions}
       reviewId={review}
+      marketplaceLinks={marketplaceLinks}
     />
   );
 }
