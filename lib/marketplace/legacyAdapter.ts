@@ -40,11 +40,14 @@ export async function getPartnerDirectoryFromNewModel(): Promise<PartnerProfile[
   // multiple Live listings now (not possible yet from the Phase 2 backfill,
   // but possible going forward) correctly produces one row per category,
   // same as if it had been two separate old-model vendor records.
+  // A paused, archived or rejected partner is off the marketplace even if a
+  // listing of theirs is still marked Live.
+  const OFF_MARKET = new Set(["Paused", "Archived", "Rejected"]);
   const liveRows = listings
     .filter((l) => l.status === "Live")
     .map((l) => ({ listing: l, partner: partnerById.get(l.partnerId), category: categoryById.get(l.categoryId) }))
     .filter((r): r is { listing: typeof r.listing; partner: NonNullable<typeof r.partner>; category: NonNullable<typeof r.category> } =>
-      Boolean(r.partner && r.category)
+      Boolean(r.partner && r.category) && !OFF_MARKET.has(r.partner!.lifecycleStatus)
     );
 
   // Reviews left in the app are keyed by the marketplace Partner id; older

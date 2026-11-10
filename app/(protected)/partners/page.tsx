@@ -192,6 +192,14 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   }
   const lockedCategories = Object.keys(referralPartners) as PartnerCategory[];
 
+  // Categories an admin has switched off (Public toggle on the marketplace
+  // dashboard). Applies to every viewer: NonTTTClients, TTT clients and staff.
+  const hiddenCategories = new Set(
+    (await getAllCategories().catch(() => []))
+      .filter((c) => !c.publicVisible)
+      .map((c) => c.label as PartnerCategory)
+  );
+
   // NonTTTClient: entirely separate render path, computed and returned here
   // so the TTT branch below (including the Team Lead injection, which only
   // ever applies to isTTT===true projects anyway) is never reached for a
@@ -202,14 +210,8 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     partnersById[TTT_MOVE_MANAGER_PARTNER_ID] = buildTTTMoveManagerPartner();
 
     const ordered = orderCategoriesForNonTTTClient(tenant.serviceInterests ?? []);
-    // Categories an admin has switched off (Public toggle on the marketplace
-    // dashboard) aren't shown. Move Manager is Top Tier's own service and a
+    // Hidden categories aren't shown. Move Manager is Top Tier's own service and a
     // referral-locked category is the client's own partner, so both stay.
-    const hiddenCategories = new Set(
-      (await getAllCategories().catch(() => []))
-        .filter((c) => !c.publicVisible)
-        .map((c) => c.label as PartnerCategory)
-    );
     const isShown = (c: PartnerCategory) => c === "Move Manager" || lockedCategories.includes(c) || !hiddenCategories.has(c);
     // A referral-locked category is always shown, whether or not the client
     // picked it as a service interest during signup.
@@ -357,9 +359,17 @@ export default async function PartnersPage({ searchParams }: PageProps) {
     }
   }
 
+  // Hidden categories drop out here too, except ones that are the project's own:
+  // Top Tier as Move Manager, a referral-locked partner, the destination
+  // community, or a partner already chosen for the project.
+  const visibleCategories = PARTNER_CATEGORIES.filter((c) =>
+    c === "Move Manager" || lockedCategories.includes(c) || destinationCategories.includes(c) || !!selections[c] || !hiddenCategories.has(c)
+  );
+
   return (
     <PartnersPageClient
       tenantId={tenantId}
+      categories={visibleCategories}
       lockedCategories={lockedCategories}
       canRemoveReferral={canRemoveReferral}
       destinationCategories={destinationCategories}

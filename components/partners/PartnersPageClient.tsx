@@ -13,6 +13,8 @@ import { DocumentsSection } from "./DocumentsSection";
 
 interface Props {
   tenantId: string;
+  /** Categories to show (admin-hidden ones removed); defaults to all. */
+  categories?: readonly PartnerCategory[];
   matchesByCategory: Record<PartnerCategory, MatchResult[]>;
   initialSelections: Partial<Record<PartnerCategory, string>>;
   partnersById: Record<string, PartnerProfile>;
@@ -26,14 +28,14 @@ interface Props {
   reviews?: TrayReviewConfig;
 }
 
-export function PartnersPageClient({ tenantId, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews }: Props) {
+export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews }: Props) {
   const router = useRouter();
   const [selections, setSelections] = useState(initialSelections);
   const [lockedCategories, setLockedCategories] = useState(initialLocked);
   const [removingReferral, setRemovingReferral] = useState<PartnerCategory | null>(null);
   const [pendingCategory, setPendingCategory] = useState<PartnerCategory | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<PartnerCategory>(PARTNER_CATEGORIES[0]);
+  const [activeCategory, setActiveCategory] = useState<PartnerCategory>(categories[0] ?? PARTNER_CATEGORIES[0]);
   const [detailPartnerId, setDetailPartnerId] = useState<string | null>(null);
 
   const sectionRefs = useRef<Partial<Record<PartnerCategory, HTMLElement>>>({});
@@ -50,7 +52,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length === 0) return;
         const topMost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b));
-        const cat = PARTNER_CATEGORIES.find((c) => sectionRefs.current[c] === topMost.target);
+        const cat = categories.find((c) => sectionRefs.current[c] === topMost.target);
         if (cat) setActiveCategory(cat);
       },
       { rootMargin: "-140px 0px -55% 0px", threshold: 0 }
@@ -115,7 +117,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
   }, [tenantId, router]);
 
   const selectedPartners: Partial<Record<PartnerCategory, PartnerProfile>> = {};
-  for (const cat of PARTNER_CATEGORIES) {
+  for (const cat of categories) {
     const id = selections[cat];
     if (id && partnersById[id]) selectedPartners[cat] = partnersById[id];
   }
@@ -136,7 +138,7 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
       </p>
 
       <SelectedPartnersTray
-        categories={PARTNER_CATEGORIES}
+        categories={categories}
         selectedPartners={selectedPartners}
         onEmptyClick={scrollToCategory}
         onChangeClick={scrollToCategory}
@@ -158,14 +160,14 @@ export function PartnersPageClient({ tenantId, matchesByCategory, initialSelecti
       </p>
 
       <CategoryChipBar
-        categories={PARTNER_CATEGORIES}
+        categories={categories}
         activeCategory={activeCategory}
         selections={selections}
         onChipClick={scrollToCategory}
       />
 
       <div className="mt-8 space-y-10">
-        {PARTNER_CATEGORIES.map((category) => (
+        {categories.map((category) => (
           <CategorySection
             key={category}
             tenantId={tenantId}

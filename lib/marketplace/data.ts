@@ -5,6 +5,7 @@
 // fetch() against these tables itself — go through the functions here so the
 // referral-terms exposure boundary (see getPublicListing/getPartnerOwnListing)
 // stays enforced in one place.
+import { revalidateTag } from "next/cache";
 import { AIRTABLE_TABLES } from "../config";
 import type {
   MarketplaceCategory,
@@ -327,6 +328,14 @@ export async function updatePartner(id: string, data: UpdatePartnerData): Promis
     body: JSON.stringify({ records: [{ id, fields }], typecast: true }),
   });
   if (!res.ok) throw new Error(`updatePartner failed: ${await res.text()}`);
+  refreshPartnerDirectory();
+}
+
+// The in-app Partners page reads a 5-minute cached directory; drop it so a
+// pause/archive/approve or listing change shows up right away. Outside a
+// request (scripts) there's no cache to drop, so a failure here is ignored.
+function refreshPartnerDirectory() {
+  try { revalidateTag("partners-directory"); } catch { /* not in a request */ }
 }
 
 // ─── Listings ──────────────────────────────────────────────────────────────────
@@ -459,6 +468,7 @@ export async function updateListing(id: string, data: UpdateListingData): Promis
     body: JSON.stringify({ records: [{ id, fields }] }),
   });
   if (!res.ok) throw new Error(`updateListing failed: ${await res.text()}`);
+  refreshPartnerDirectory();
 }
 
 interface UpdateReferralTermsData {
