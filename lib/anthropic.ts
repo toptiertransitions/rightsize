@@ -182,9 +182,23 @@ export async function analyzeShelfPhoto(imageBase64: string): Promise<ShelfMedia
   }));
 }
 
+// NonTTTClient projects have no ProFoundFinds store: the route is removed
+// from the allowed list (and the worked example) so the model never picks it.
+export const NO_PROFOUNDFINDS_PROMPT = ANALYSIS_PROMPT
+  .replace('"primary_route": "ProFoundFinds Consignment"', '"primary_route": "Other Consignment"')
+  .replace(
+    "Leaving with Home | ProFoundFinds Consignment | FB/Marketplace",
+    "Leaving with Home | FB/Marketplace"
+  )
+  .replace(
+    '(never use "Estate Sale" — that is assigned by the system, not AI)',
+    '(never use "Estate Sale" — that is assigned by the system, not AI; never use "ProFoundFinds Consignment" — for consignment-worthy items use "Other Consignment")'
+  );
+
 export async function analyzeItemPhoto(
   imageData: string | { url: string },
-  mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg"
+  mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg",
+  opts: { excludeProFoundFinds?: boolean } = {}
 ): Promise<ItemAnalysis> {
   const imageSource =
     typeof imageData === "string"
@@ -208,7 +222,7 @@ export async function analyzeItemPhoto(
           },
           {
             type: "text",
-            text: ANALYSIS_PROMPT,
+            text: opts.excludeProFoundFinds ? NO_PROFOUNDFINDS_PROMPT : ANALYSIS_PROMPT,
           },
         ],
       },
@@ -236,6 +250,10 @@ export async function analyzeItemPhoto(
     ) ?? "Other";
     console.warn(`[analyzeItemPhoto] AI returned unknown category "${analysis.category}", coerced to "${fallback}"`);
     analysis = { ...analysis, category: fallback };
+  }
+
+  if (opts.excludeProFoundFinds && analysis.primary_route === "ProFoundFinds Consignment") {
+    analysis = { ...analysis, primary_route: "Other Consignment" };
   }
 
   return analysis;

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { analyzeItemPhoto } from "@/lib/anthropic";
+import { getTenantById } from "@/lib/airtable";
+import { isNonTTTClientViewer } from "@/lib/nonTTTClientRouting";
 import { uploadImage } from "@/lib/cloudinary";
 import sharp from "sharp";
 
@@ -53,9 +55,10 @@ export async function POST(req: NextRequest) {
 
   // Run Cloudinary upload and Claude analysis in parallel to save time.
   // Send processedBuffer (JPEG) to Cloudinary — avoids uploading raw HEIC.
+  const excludeProFoundFinds = await isNonTTTClientViewer(userId, await getTenantById(tenantId).catch(() => null));
   const [uploadResult, analysisResult] = await Promise.allSettled([
     uploadImage(processedBuffer, { tenantId, mimeType: "image/jpeg" }),
-    analyzeItemPhoto(processedBuffer.toString("base64")),
+    analyzeItemPhoto(processedBuffer.toString("base64"), "image/jpeg", { excludeProFoundFinds }),
   ]);
 
   if (analysisResult.status === "rejected") {

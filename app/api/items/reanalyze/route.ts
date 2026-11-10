@@ -9,6 +9,7 @@ import {
   applyRoutingRules,
 } from "@/lib/airtable";
 import type { Item } from "@/lib/types";
+import { isNonTTTClientViewer, withoutProFoundFinds } from "@/lib/nonTTTClientRouting";
 
 export const maxDuration = 60;
 
@@ -29,10 +30,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "photoUrl is required" }, { status: 400 });
   }
 
+  // NonTTTClient: no ProFoundFinds from the AI or the routing rules
+  const itemForTenant = itemId ? await getItemById(itemId).catch(() => null) : null;
+  const itemTenant = itemForTenant?.tenantId ? await getTenantById(itemForTenant.tenantId).catch(() => null) : null;
+  const excludeProFoundFinds = await isNonTTTClientViewer(userId, itemTenant);
+
   let analysis;
   try {
     const { data, mimeType } = await fetchImageAsBase64(photoUrl);
-    analysis = await analyzeItemPhoto(data, mimeType);
+    analysis = await analyzeItemPhoto(data, mimeType, { excludeProFoundFinds });
   } catch (e) {
     console.error("[reanalyze] error:", e);
     return NextResponse.json(
@@ -104,7 +110,7 @@ export async function POST(req: NextRequest) {
     valueLow: analysis.value_low ?? null,
     valueMid: analysis.value_mid ?? null,
     valueHigh: analysis.value_high ?? null,
-    primaryRoute,
+    primaryRoute: excludeProFoundFinds ? withoutProFoundFinds(primaryRoute) : primaryRoute,
   });
 }
 

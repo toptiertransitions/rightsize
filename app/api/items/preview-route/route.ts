@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getRoutingRules, getAllLocalVendors, applyRoutingRules, getTenantById } from "@/lib/airtable";
 import type { Item } from "@/lib/types";
+import { isNonTTTClientViewer, withoutProFoundFinds } from "@/lib/nonTTTClientRouting";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -37,7 +38,8 @@ export async function POST(req: NextRequest) {
   } as unknown as Item;
 
   const assignments = applyRoutingRules([mockItem], localVendors, activeRules, "", tenant?.isEstateSale ?? false);
-  const primaryRoute = assignments[0]?.primaryRoute ?? null;
+  const rawRoute = assignments[0]?.primaryRoute ?? null;
+  const primaryRoute = (await isNonTTTClientViewer(userId, tenant)) ? withoutProFoundFinds(rawRoute) : rawRoute;
 
   return NextResponse.json({ primaryRoute });
 }

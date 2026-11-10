@@ -52,6 +52,10 @@ const STATUS_BADGE: Record<string, { variant: "yellow" | "blue" | "purple" | "gr
   "Rejected / Revisit":{ variant: "red",    label: "Rejected / Revisit" },
 };
 
+// Statuses NonTTTClient users (simpleMode) never pick or filter by. An item
+// already in one of these keeps it in its own editor so it isn't lost.
+const NON_TTT_HIDDEN_STATUSES = new Set(["Listed", "In Cart", "Rejected / Revisit"]);
+
 const ROUTE_BADGE: Record<string, { variant: "blue" | "orange" | "teal" | "gray" | "green" | "purple" | "yellow" | "red"; label: string }> = {
   "To Be Moved":                  { variant: "green",  label: "To Be Moved" },
   "Family to Take":               { variant: "green",  label: "Family to Take" },
@@ -766,7 +770,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Donated",           label: "Donated" },
                   { value: "Discarded",         label: "Discarded" },
                   { value: "Rejected / Revisit",label: "Rejected / Revisit" },
-                ]}
+                ].filter(o => !simpleMode || !NON_TTT_HIDDEN_STATUSES.has(o.value) || o.value === item.status)}
               />
               {/* Site? — storefrontActive toggle (not for NonTTTClient users) */}
               {!simpleMode && (() => {
@@ -2561,12 +2565,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="">All Statuses</option>
           <option value="Pending Review">Pending Review</option>
           <option value="Approved">Approved</option>
-          <option value="Listed">Listed</option>
-          <option value="In Cart">In Cart</option>
+          {!simpleMode && <option value="Listed">Listed</option>}
+          {!simpleMode && <option value="In Cart">In Cart</option>}
           <option value="Sold">Sold</option>
           <option value="Donated">Donated</option>
           <option value="Discarded">Discarded</option>
-          <option value="Rejected / Revisit">Rejected / Revisit</option>
+          {!simpleMode && <option value="Rejected / Revisit">Rejected / Revisit</option>}
         </select>
 
         {/* Staff Seller filter — TTT users only */}

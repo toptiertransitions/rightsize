@@ -21,6 +21,7 @@ import { ItemGrid } from "@/components/catalog/ItemGrid";
 import { CatalogHeader } from "./CatalogHeader";
 import { NoProjectsState } from "@/components/shared/NoProjectsState";
 import type { Tenant } from "@/lib/types";
+import { isNonTTTClient } from "@/lib/tips-access";
 
 interface PageProps {
   searchParams: Promise<{ tenantId?: string; search?: string }>;
@@ -163,10 +164,11 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
   const tenantIds = memberships.map((m) => m.tenantId);
 
-  const [items, tenantObjects, rooms] = await Promise.all([
+  const [items, tenantObjects, rooms, allModeSysRole] = await Promise.all([
     getItemsForTenants(tenantIds).catch(() => []),
     Promise.all(tenantIds.map((tid) => getTenantById(tid).catch(() => null))),
     getRoomsForTenants(tenantIds).catch(() => []),
+    getSystemRole(userId).catch(() => null),
   ]);
 
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -193,7 +195,11 @@ export default async function CatalogPage({ searchParams }: PageProps) {
         )}
       </div>
 
-      <ItemGrid items={items} canEdit={canEdit} rooms={rooms} tenants={tenants} />
+      {/* A NonTTTClient across several projects gets the same simplified grid as on one project */}
+      {(() => {
+        const nonTTT = isNonTTTClient(allModeSysRole, tenantObjects) && !isTTTAdmin(userId);
+        return <ItemGrid items={items} canEdit={canEdit} rooms={rooms} tenants={tenants} isTTT={!nonTTT} simpleMode={nonTTT} />;
+      })()}
     </div>
   );
 }
