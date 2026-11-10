@@ -1024,7 +1024,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
                   { value: "Other Consignment",            label: "Other Consignment Store" },
                   { value: "Donate",                       label: "Donate" },
                   { value: "Discard",                      label: "Discard" },
-                  ...(isTTT ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
+                  ...(isTTT && !simpleMode ? [{ value: "Estate Sale", label: "Estate Sale" }] : []),
                 ]}
               />
               {!simpleMode && (
@@ -2415,7 +2415,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
                 <option value="Leaving with Home">Leaving with Home</option>
                 {isTTT && !simpleMode && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
-                {isTTT && <option value="Estate Sale">Estate Sale</option>}
+                {isTTT && !simpleMode && <option value="Estate Sale">Estate Sale</option>}
                 <option value="FB/Marketplace">FB/Marketplace</option>
                 <option value="Online Marketplace">Online Marketplace</option>
                 <option value="Other Consignment">Other Consignment</option>
@@ -2548,7 +2548,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
           <option value="Storage Unit - Offsite">Storage Unit - Offsite</option>
           <option value="Leaving with Home">Leaving with Home</option>
           {isTTT && !simpleMode && <option value="ProFoundFinds Consignment">ProFoundFinds Consignment</option>}
-          {isTTT && <option value="Estate Sale">Estate Sale</option>}
+          {isTTT && !simpleMode && <option value="Estate Sale">Estate Sale</option>}
           <option value="FB/Marketplace">FB/Marketplace</option>
           <option value="Online Marketplace">eBay</option>
           <option value="Other Consignment">Other Consignment Store</option>
