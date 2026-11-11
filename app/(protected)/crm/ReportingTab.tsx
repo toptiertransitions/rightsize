@@ -16,9 +16,10 @@ interface Props {
   onViewOpportunity: (oppId: string) => void;
 }
 
-type Period = "30d" | "week" | "month" | "lastMonth" | "quarter" | "custom";
+type Period = "7d" | "30d" | "week" | "month" | "lastMonth" | "quarter" | "custom";
 
 const PERIODS: { id: Period; label: string }[] = [
+  { id: "7d", label: "Rolling 7 Days" },
   { id: "30d", label: "Rolling 30 Days" },
   { id: "week", label: "This Week" },
   { id: "month", label: "This Month" },
@@ -51,6 +52,7 @@ function lastOfMonth(y: number, m: number): string {
 
 function periodRange(period: Exclude<Period, "custom">, today: string): { start: string; end: string } {
   const [y, m, d] = today.split("-").map(Number);
+  if (period === "7d") return { start: addDays(today, -6), end: today };
   if (period === "30d") return { start: addDays(today, -29), end: today };
   if (period === "week") {
     const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
