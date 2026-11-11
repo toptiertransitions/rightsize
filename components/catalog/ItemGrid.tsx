@@ -1904,6 +1904,54 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     }
   };
 
+  // ── Bulk Remove BG ─────────────────────────────────────────────────────────
+  // Swaps each selected item's primary photo for a transparent-background copy
+  // (app/api/items/remove-bg/route.ts). One item per request since removal
+  // takes up to ~45s; a few run at once so a page of items finishes quickly.
+  const [removeBgProgress, setRemoveBgProgress] = useState<{ done: number; total: number } | null>(null);
+  const [removeBgResult, setRemoveBgResult] = useState<{ cleaned: number; alreadyClean: number; noPhoto: number; errors: string[] } | null>(null);
+  useBackClose(!!removeBgResult && (() => setRemoveBgResult(null)));
+
+  const handleBulkRemoveBg = async () => {
+    const targets = items.filter(i => selected.has(i.id));
+    if (targets.length === 0) return;
+    const result = { cleaned: 0, alreadyClean: 0, noPhoto: 0, errors: [] as string[] };
+    const failedIds: string[] = [];
+    let done = 0;
+    setRemoveBgProgress({ done, total: targets.length });
+    const queue = [...targets];
+    const worker = async () => {
+      for (let item = queue.shift(); item; item = queue.shift()) {
+        try {
+          const res = await fetch("/api/items/remove-bg", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: item.id }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Background removal failed");
+          if (data.skipped === "no-photo") result.noPhoto++;
+          else if (data.skipped === "already-clean") result.alreadyClean++;
+          else {
+            result.cleaned++;
+            const photos = data.photos as Item["photos"];
+            const id = item.id;
+            setItems(prev => prev.map(i => i.id === id ? { ...i, photos, photoUrl: photos?.[0]?.url, photoPublicId: photos?.[0]?.publicId } : i));
+          }
+        } catch (e) {
+          failedIds.push(item.id);
+          result.errors.push(`${item.itemName || "Untitled Item"}: ${e instanceof Error ? e.message : "failed"}`);
+        }
+        done++;
+        setRemoveBgProgress({ done, total: targets.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker));
+    setRemoveBgProgress(null);
+    setSelected(new Set(failedIds));
+    setRemoveBgResult(result);
+  };
+
   // ── Bulk Site? ─────────────────────────────────────────────────────────────
   // Turns the profoundfinds.com toggle on for the selected items that are off,
   // or off for the ones that are on (see app/api/items/bulk-site/route.ts).
@@ -2549,6 +2597,58 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         </div>
       )}
 
+      {/* Bulk Remove BG Progress Overlay */}
+      {removeBgProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center space-y-4">
+            <svg className="w-8 h-8 text-forest-600 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Removing backgrounds…</p>
+              <p className="text-xs text-gray-500 mt-1">Primary photos only. Keep this tab open.</p>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div
+                className="bg-forest-600 h-2 rounded-full transition-all"
+                style={{ width: `${(removeBgProgress.done / removeBgProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400">{removeBgProgress.done} of {removeBgProgress.total}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Remove BG Result Modal */}
+      {removeBgResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Remove BG Complete</h2>
+            </div>
+            <div className="px-6 py-4 space-y-2 max-h-72 overflow-y-auto">
+              <p className="text-sm text-forest-700 font-medium">{removeBgResult.cleaned} primary photo{removeBgResult.cleaned !== 1 ? "s" : ""} cleaned.</p>
+              {removeBgResult.alreadyClean > 0 && (
+                <p className="text-sm text-gray-600">{removeBgResult.alreadyClean} already had the background removed (skipped).</p>
+              )}
+              {removeBgResult.noPhoto > 0 && (
+                <p className="text-sm text-gray-600">{removeBgResult.noPhoto} had no photo (skipped).</p>
+              )}
+              {removeBgResult.errors.length > 0 && (
+                <p className="text-sm text-red-600 font-medium">{removeBgResult.errors.length} failed. They&apos;re still selected, so you can try again:</p>
+              )}
+              {removeBgResult.errors.map((e, i) => (
+                <p key={i} className="text-xs text-red-500 ml-2">{e}</p>
+              ))}
+            </div>
+            <div className="px-6 pb-6 flex justify-end">
+              <button onClick={() => setRemoveBgResult(null)} className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 transition-colors">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bulk AI Progress Overlay */}
       {bulkAIProgress && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -3009,6 +3109,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <BulkActionButton onClick={() => setMaxsoldOpen(true)}
                   icon={<path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}>
                   MaxSold
+                </BulkActionButton>
+              )}
+              {isTTTUser && (
+                <BulkActionButton onClick={handleBulkRemoveBg} disabled={!!removeBgProgress}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M5 3l1.5 1.5M3 5l1.5 1.5M12 3l1.5 1.5M3 12l1.5 1.5M7.5 7.5l9 9M16 8l-1-1 1-3 3-1 1 1-1 3-3 1z" />}>
+                  Remove BG
                 </BulkActionButton>
               )}
             </div>
