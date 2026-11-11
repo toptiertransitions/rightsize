@@ -1904,6 +1904,57 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     }
   };
 
+  // ── Bulk Site? ─────────────────────────────────────────────────────────────
+  // Turns the profoundfinds.com toggle on for the selected items that are off,
+  // or off for the ones that are on (see app/api/items/bulk-site/route.ts).
+  const [siteOpen, setSiteOpen] = useState(false);
+  useBackClose(siteOpen && (() => setSiteOpen(false)));
+  const [siteLoading, setSiteLoading] = useState<null | "on" | "off">(null);
+  const [siteError, setSiteError] = useState("");
+  const selectedSite = useMemo(() => {
+    const sel = items.filter(i => selected.has(i.id));
+    return { off: sel.filter(i => !i.storefrontActive), on: sel.filter(i => i.storefrontActive) };
+  }, [items, selected]);
+
+  const handleBulkSite = async (on: boolean) => {
+    const targets = on ? selectedSite.off : selectedSite.on;
+    if (targets.length === 0) return;
+    setSiteLoading(on ? "on" : "off");
+    setSiteError("");
+    try {
+      const res = await fetch("/api/items/bulk-site", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          on,
+          items: targets.map(i => ({
+            id: i.id,
+            pickupLocation: on && !i.pickupLocation ? allTenants?.find(t => t.id === i.tenantId)?.city : undefined,
+          })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update Site?");
+      const updated = new Map<string, Item>((data.items ?? []).map((i: Item) => [i.id, i]));
+      setItems(prev => prev.map(i => {
+        const u = updated.get(i.id);
+        return u ? { ...i, storefrontActive: on, pickupLocation: u.pickupLocation ?? i.pickupLocation } : i;
+      }));
+      const failed: string[] = data.failed ?? [];
+      if (failed.length > 0) {
+        setSelected(new Set(failed));
+        setSiteError(`${failed.length} item${failed.length !== 1 ? "s" : ""} couldn't be updated. They're still selected, so you can try again.`);
+      } else {
+        setSelected(new Set());
+        setSiteOpen(false);
+      }
+    } catch (e) {
+      setSiteError(e instanceof Error ? e.message : "Failed to update Site?");
+    } finally {
+      setSiteLoading(null);
+    }
+  };
+
   const handlePrintLabels = async (widthIn: number, heightIn: number) => {
     const pfItems = [...selected]
       .map(id => items.find(i => i.id === id))
@@ -2123,6 +2174,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         case "status":    av = a.status.toLowerCase();     bv = b.status.toLowerCase();     break;
         case "createdAt":     av = a.createdAt ?? "";                       bv = b.createdAt ?? "";                       break;
         case "completedDate": av = a.completedDate ?? "";                   bv = b.completedDate ?? "";                   break;
+        case "site":      av = a.storefrontActive ? 0 : 1; bv = b.storefrontActive ? 0 : 1; break; // first click puts Y on top
       }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
@@ -2388,6 +2440,61 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
               >
                 {dropZeroLoading ? "Updating…" : `Drop ${selected.size} to $0`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Site? Modal */}
+      {siteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Site? (profoundfinds.com)</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {selected.size} selected item{selected.size !== 1 ? "s" : ""}: {selectedSite.off.length} off, {selectedSite.on.length} on
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-2 text-sm text-gray-700">
+              {selectedSite.off.length > 0 && (
+                <p>
+                  <span className="font-semibold">Turn ON</span> checks Site? for the {selectedSite.off.length} item{selectedSite.off.length !== 1 ? "s" : ""} that {selectedSite.off.length !== 1 ? "are" : "is"} off.
+                </p>
+              )}
+              {selectedSite.on.length > 0 && (
+                <p>
+                  <span className="font-semibold">Turn OFF</span> unchecks Site? for the {selectedSite.on.length} item{selectedSite.on.length !== 1 ? "s" : ""} that {selectedSite.on.length !== 1 ? "are" : "is"} on.
+                </p>
+              )}
+              <p className="text-xs text-gray-500">Status, route and everything else stay as they are.</p>
+              {siteError && <p className="text-xs text-red-600">{siteError}</p>}
+            </div>
+            <div className="px-6 pb-6 flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => { setSiteOpen(false); setSiteError(""); }}
+                disabled={!!siteLoading}
+                className="h-9 px-4 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              {selectedSite.on.length > 0 && (
+                <button
+                  onClick={() => handleBulkSite(false)}
+                  disabled={!!siteLoading}
+                  className="h-9 px-4 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {siteLoading === "off" ? "Updating…" : `Turn OFF ${selectedSite.on.length}`}
+                </button>
+              )}
+              {selectedSite.off.length > 0 && (
+                <button
+                  onClick={() => handleBulkSite(true)}
+                  disabled={!!siteLoading}
+                  className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50"
+                >
+                  {siteLoading === "on" ? "Updating…" : `Turn ON ${selectedSite.off.length}`}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2860,6 +2967,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   Route
                 </BulkActionButton>
               )}
+              {isTTTUser && !simpleMode && (
+                <BulkActionButton onClick={() => { setSiteError(""); setSiteOpen(true); }} disabled={!!siteLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />}>
+                  Site?
+                </BulkActionButton>
+              )}
               {canDropToZero && (
                 <BulkActionButton onClick={() => { setDropZeroError(""); setDropZeroOpen(true); }} disabled={dropZeroLoading}
                   icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M4 4l16 16" />}>
@@ -2928,6 +3041,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   {sortTh("value", "Value", "", "right")}
                   {sortTh("route", "Recommended Route")}
                   {sortTh("status", "Status")}
+                  {!simpleMode && sortTh("site", "Site?")}
                   {sortTh("completedDate", "Completed")}
                   {localVendors && <th className="text-left px-4 py-3 font-semibold text-gray-600">Vendor</th>}
                   {canEdit && <th className="w-10 px-3 py-3"></th>}
@@ -3029,6 +3143,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       <td className="px-4 py-2.5">
                         <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
                       </td>
+                      {/* Site? */}
+                      {!simpleMode && (
+                        <td className="px-4 py-2.5 text-xs font-semibold">
+                          {item.storefrontActive ? <span className="text-forest-700">Y</span> : <span className="text-gray-400">N</span>}
+                        </td>
+                      )}
                       {/* Completed Date */}
                       <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">
                         {item.completedDate ?? "—"}
