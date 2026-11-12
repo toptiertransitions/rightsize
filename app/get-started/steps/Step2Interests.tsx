@@ -24,10 +24,14 @@ interface Props {
   data: WizardData;
   update: (patch: Partial<WizardData>) => void;
   onAppOnlyAdvance: () => void;
+  /** Set when a senior community referred this resident: they already have
+   * their community, so community recommendations are greyed out. */
+  referringCommunity?: { name: string; logoUrl: string | null } | null;
 }
 
-export function Step2Interests({ data, update, onAppOnlyAdvance }: Props) {
+export function Step2Interests({ data, update, onAppOnlyAdvance, referringCommunity }: Props) {
   function toggle(key: ServiceInterest) {
+    if (referringCommunity && key === "senior_community") return;
     const has = data.serviceInterests.includes(key);
     update({
       serviceInterests: has ? data.serviceInterests.filter(k => k !== key) : [...data.serviceInterests, key],
@@ -41,7 +45,9 @@ export function Step2Interests({ data, update, onAppOnlyAdvance }: Props) {
       <p className="text-sm text-gray-500 mb-5">Pick as many as you like.</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {OPTIONS.map(opt => (
+        {OPTIONS.map(opt => referringCommunity && opt.key === "senior_community" ? (
+          <ReferredCommunityTile key={opt.key} label={opt.label} icon={opt.icon} community={referringCommunity} />
+        ) : (
           <Tile
             key={opt.key}
             label={opt.label}
@@ -59,6 +65,30 @@ export function Step2Interests({ data, update, onAppOnlyAdvance }: Props) {
       >
         I just want to use the Rightsize app to simplify my move.
       </button>
+    </div>
+  );
+}
+
+// Greyed-out stand-in for the Senior Community tile, marked with the
+// community that referred the resident.
+function ReferredCommunityTile({ label, icon, community }: { label: string; icon: React.ReactNode; community: { name: string; logoUrl: string | null } }) {
+  return (
+    <div
+      aria-disabled="true"
+      title={`${community.name} referred you to Rightsize, so they're already your community`}
+      className="relative flex flex-col items-start gap-2.5 min-h-[92px] p-4 rounded-2xl border border-gray-200 bg-gray-50 text-left cursor-not-allowed"
+    >
+      <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-300">{icon}</span>
+      <span className="text-sm font-semibold text-gray-400 leading-snug">{label}</span>
+      <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600">
+        <span className="shrink-0">Referred by</span>
+        {community.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={community.logoUrl} alt={community.name} className="h-4 w-auto max-w-[84px] object-contain" />
+        ) : (
+          <span className="truncate font-semibold">{community.name}</span>
+        )}
+      </span>
     </div>
   );
 }

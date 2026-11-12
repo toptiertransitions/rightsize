@@ -8,6 +8,7 @@ import type { Tenant } from "@/lib/types";
 import { getAllBrands } from "@/lib/brands/data";
 import { getJoinCookieBrand } from "@/lib/brands/attach";
 import { brandCss, fullBrandName, type CommunityBrand } from "@/lib/brands/shared";
+import { getPendingResidentInviteName } from "@/lib/brands/residentInvites";
 
 // The community the user is joining through, if known: the project's brand,
 // a code/link already on the account, or a pending join-link cookie.
@@ -61,8 +62,12 @@ export default async function GetStartedPage() {
   if (state.status === "done") redirect("/home");
 
   const user = await currentUser().catch(() => null);
-  const fallbackFirstName = user?.firstName ?? "";
-  const fallbackLastName = user?.lastName ?? "";
+  // Invited residents: prefill the name the community typed on the invite
+  const invited = !user?.firstName
+    ? await getPendingResidentInviteName(user?.primaryEmailAddress?.emailAddress ?? "")
+    : null;
+  const fallbackFirstName = user?.firstName || invited?.firstName || "";
+  const fallbackLastName = user?.lastName || invited?.lastName || "";
 
   const brand = await onboardingBrand(state.status === "resume" ? state.tenant : null, user?.publicMetadata?.brandSlug);
 
@@ -92,7 +97,7 @@ export default async function GetStartedPage() {
         initialTenantId={null}
         initialData={emptyWizardData(fallbackFirstName, fallbackLastName, "")}
         initialBrandName={brand ? fullBrandName(brand) : null}
-          initialBrandLogo={brand?.logoUrl || null}
+        initialBrandLogo={brand?.logoUrl || null}
       />
     </>
   );

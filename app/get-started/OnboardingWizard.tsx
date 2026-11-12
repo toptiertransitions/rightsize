@@ -211,7 +211,7 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData, in
             <div key={n} className="w-full h-full shrink-0 overflow-y-auto px-6 pb-4">
               <div className="max-w-md mx-auto pt-2">
                 {n === 1 && <Step1About data={data} update={update} brandName={brandName} onBrandApplied={(name) => { setBrandName(name); setBrandLogo(null); setBrandStep4(true); router.refresh(); }} />}
-                {n === 2 && <Step2Interests data={data} update={update} onAppOnlyAdvance={handleAppOnlyAdvance} />}
+                {n === 2 && <Step2Interests data={data} update={update} onAppOnlyAdvance={handleAppOnlyAdvance} referringCommunity={brandStep4 && brandName ? { name: brandName, logoUrl: brandLogo } : null} />}
                 {n === 3 && <Step3Timeline data={data} update={update} />}
                 {n === 4 && (brandStep4 && brandName ? <BrandCommunityConfirm name={brandName} logoUrl={brandLogo} /> : <Step4Destination data={data} update={update} />)}
                 {n === 5 && <Step5Starting data={data} update={update} />}

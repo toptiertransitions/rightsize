@@ -209,6 +209,29 @@ export async function cancelResidentInvite(brand: CommunityBrand, inviteId: stri
 }
 
 /**
+ * The name the community typed when inviting this user, so onboarding can
+ * prefill "What's your name?". Read-only: the invite is claimed later, on
+ * step 1. Matches the join-link cookie first, then an open invite for the
+ * email.
+ */
+export async function getPendingResidentInviteName(email: string): Promise<{ firstName: string; lastName: string } | null> {
+  try {
+    const jar = await cookies();
+    const cookieId = verifyValue(jar.get(RESIDENT_INVITE_COOKIE)?.value);
+    let invite = cookieId ? await getResidentInviteById(cookieId) : null;
+    if (!invite || invite.status !== "Invited") {
+      const e = email.trim().toLowerCase();
+      invite = e.includes("@") ? (await select(`AND(LOWER({Email}) = "${esc(e)}", {Status} = "Invited")`))[0] ?? null : null;
+    }
+    if (!invite || invite.status !== "Invited" || !invite.name.trim()) return null;
+    const [firstName, ...rest] = invite.name.trim().split(/\s+/);
+    return { firstName, lastName: rest.join(" ") };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Called once the new user's project exists (onboarding step 1). Matches the
  * invite from the join-link cookie, or else an open invite for their email,
  * marks it Joined, makes sure the project carries the community's brand, and

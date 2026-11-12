@@ -21,6 +21,7 @@ import { getCommunityCompletionCounts, resolveTenantCommunity, communityCompleti
 import { matchPartnersForCategory } from "@/lib/partners/match";
 import { findDestinationCommunityPartner } from "@/lib/partners/destinationCommunity";
 import { getTenantCommunityBrands, preferredMap } from "@/lib/partners/preferred";
+import { fullBrandName } from "@/lib/brands/shared";
 import { getAllCategories } from "@/lib/marketplace/data";
 import { orderCategoriesForNonTTTClient, buildTTTMoveManagerPartner, TTT_MOVE_MANAGER_PARTNER_ID, nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { sendZeroMatchAdminNotification } from "@/lib/admin-notifications";
@@ -38,6 +39,8 @@ import { canSeeRehoming } from "@/lib/partners/rehoming";
 import { isTTTAdmin } from "@/lib/config";
 import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
 import type { RehomingSectionData } from "@/components/partners/RehomingResourcesSection";
+
+const sameName = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export const metadata = { robots: "noindex, nofollow" };
 
@@ -191,6 +194,12 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   for (const sel of selectionRows) {
     if (!sel.referralLocked) continue;
     const partner = buildReferralPartner(sel, directory);
+    // A community brand's resident: the community card carries the brand's
+    // logo when it isn't a marketplace listing with a logo of its own
+    if (sel.category === "Community" && !partner.logo) {
+      const brand = communityBrands.find((b) => b.marketplacePartnerId === sel.partnerId || sameName(fullBrandName(b), sel.referralName) || sameName(b.displayName, sel.referralName));
+      if (brand?.logoUrl) partner.logo = brand.logoUrl;
+    }
     referralPartners[sel.category] = partner;
     partnersById[partner.id] = partner;
   }
