@@ -4,6 +4,7 @@ import { getSystemRole } from "@/lib/airtable";
 import { getBrandBySlug } from "@/lib/brands/data";
 import { attachBrandToUser } from "@/lib/brands/attach";
 import { JOIN_COOKIE, JOIN_COOKIE_MAX_AGE, signValue } from "@/lib/brands/cookies";
+import { RESIDENT_INVITE_COOKIE, getResidentInviteById, inviteCookieValue, verifyInviteToken } from "@/lib/brands/residentInvites";
 
 // "Get started" from /join/[slug]. Signed out: remember the community in a
 // signed cookie and go to sign-up (or sign-in, which comes back here).
@@ -24,10 +25,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     return NextResponse.redirect(new URL(meta?.userType === "partner" ? "/partner/home" : "/home", req.url));
   }
 
+  // Emailed resident invite: remember it for onboarding (marks it Joined and
+  // adds their move date) and fill in their email on sign-up
+  const inviteId = verifyInviteToken(req.nextUrl.searchParams.get("ri"));
+  const invite = inviteId ? await getResidentInviteById(inviteId).catch(() => null) : null;
+  const residentInvite = invite && invite.brandId === brand.id && invite.status === "Invited" ? invite : null;
+
   const dest = req.nextUrl.searchParams.get("signin")
     ? `/sign-in?redirect_url=${encodeURIComponent(`/join/${brand.slug}/start`)}&brand=${brand.slug}`
-    : `/sign-up?brand=${brand.slug}`;
+    : `/sign-up?brand=${brand.slug}${residentInvite ? `&email=${encodeURIComponent(residentInvite.email)}` : ""}`;
   const res = NextResponse.redirect(new URL(dest, req.url));
+  if (residentInvite) {
+    res.cookies.set(RESIDENT_INVITE_COOKIE, inviteCookieValue(residentInvite.id), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: JOIN_COOKIE_MAX_AGE,
+    });
+  }
   res.cookies.set(JOIN_COOKIE, signValue(brand.id, JOIN_COOKIE_MAX_AGE), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

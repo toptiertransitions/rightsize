@@ -15,6 +15,9 @@ import { LiveChecklistEditor } from "./LiveChecklistEditor";
 import { TenantPreviewProvider } from "./TenantPreviewContext";
 import { BrandPhonePreview } from "./BrandPhonePreview";
 import { adminRemoveChecklistItemAction, adminReorderChecklistAction, adminSaveChecklistItemAction } from "../checklist-actions";
+import { adminCancelResidentInviteAction, adminInviteResidentAction, adminResendResidentInviteAction } from "../resident-invite-actions";
+import { getResidentInvites } from "@/lib/brands/residentInvites";
+import { ResidentInvitesPanel } from "@/components/brands/ResidentInvitesPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
   if (!brand) notFound();
 
   const { userId } = await auth();
-  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role, directory] = await Promise.all([
+  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role, directory, residentInvites] = await Promise.all([
     getPartnerById(brand.marketplacePartnerId).catch(() => null),
     getPickableContacts(brand),
     getAuditForEntity(brand.id, 15).catch(() => []),
@@ -34,6 +37,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
     getAllListingsAdmin().catch(() => []),
     userId ? getSystemRole(userId).catch(() => null) : Promise.resolve(null),
     getPartnerDirectory().catch(() => []),
+    brand.status === "Active" ? getResidentInvites(brand.id).catch(() => []) : Promise.resolve([]),
   ]);
   const categoryLabel = new Map(categories.map((c) => [c.id, c.label]));
   const pickablePartners = allPartners
@@ -105,6 +109,25 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
                 <p className="text-xs text-gray-500 mt-3">
                   The community&rsquo;s account owner can also edit this list from their partner portal, and every partner user there can track each resident&rsquo;s progress.
                 </p>
+              </div>
+              <div id="invite-residents" className="mt-10 scroll-mt-24">
+                {brand.status === "Active" ? (
+                  <>
+                    <ResidentInvitesPanel
+                      theme="dark"
+                      communityName={brand.displayName}
+                      invites={residentInvites.map(({ brandId: _b, tenantId: _t, ...row }) => row)}
+                      onInvite={adminInviteResidentAction.bind(null, brand.id)}
+                      onResend={adminResendResidentInviteAction.bind(null, brand.id)}
+                      onCancel={adminCancelResidentInviteAction.bind(null, brand.id)}
+                    />
+                    <p className="text-xs text-gray-500 mt-3">
+                      The community&rsquo;s own partner users can send these too, from Resident Plans in their portal.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500">Publish this tenant to invite residents by email. Until then, the community&rsquo;s partner users can&rsquo;t send invites either.</p>
+                )}
               </div>
             </div>
             <div className="lg:sticky lg:top-6 self-start lg:mt-[76px]">

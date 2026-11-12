@@ -35,6 +35,7 @@ import type { RoomType, Tenant } from "@/lib/types";
 import { getAllBrands, getBrandByCode, getBrandBySlug } from "@/lib/brands/data";
 import { attachBrandToUser, claimJoinBrand } from "@/lib/brands/attach";
 import { checkCodeRateLimit } from "@/lib/brands/ratelimit";
+import { claimResidentInvite } from "@/lib/brands/residentInvites";
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let lastErr: unknown;
@@ -125,6 +126,7 @@ export async function submitStep1(input: Step1Input): Promise<{ tenantId: string
       await withRetry(() => updateTenant(t.id, { currentZip: parsed.currentZip, onboardingCurrentStep: 2 }));
       await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: false } });
       await applyKnownBrand(userId, clerkUser.publicMetadata);
+      await claimResidentInvite({ clerkUserId: userId, email, tenantId: t.id });
       logOnboardingEvent("step_completed", { step: 1, tenantId: t.id, resumed: true });
       return { tenantId: t.id };
     }
@@ -146,6 +148,7 @@ export async function submitStep1(input: Step1Input): Promise<{ tenantId: string
   await withRetry(() => createMembership({ tenantId: tenant.id, clerkUserId: userId, role: "Owner" }));
   await clerk.users.updateUserMetadata(userId, { publicMetadata: { onboardingComplete: false } });
   await applyKnownBrand(userId, clerkUser.publicMetadata);
+  await claimResidentInvite({ clerkUserId: userId, email, tenantId: tenant.id });
 
   // Sent directly here rather than relying solely on the Clerk user.created
   // webhook — that webhook fires before this project/tenant exists, so it

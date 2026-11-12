@@ -4,6 +4,7 @@ import Image from "next/image";
 import { getBrandBySlug } from "@/lib/brands/data";
 import { fullBrandName } from "@/lib/brands/shared";
 import { JoinLanding } from "@/components/brands/JoinLanding";
+import { getResidentInviteById, verifyInviteToken } from "@/lib/brands/residentInvites";
 
 // Public branded landing for a community's join link / QR code.
 // "Get started" goes through ./start, which remembers the community in a
@@ -21,8 +22,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: brand ? `${fullBrandName(brand)} · Plan your move` : "Rightsize by Top Tier" };
 }
 
-export default async function JoinPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function JoinPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ ri?: string }> }) {
   const { slug } = await params;
+  const { ri } = await searchParams;
   const brand = await activeBrand(slug);
 
   if (!brand) {
@@ -41,5 +43,12 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  return <JoinLanding brand={brand} />;
+  // Emailed resident invite: greet them by name and carry the invite through sign-up
+  const inviteId = verifyInviteToken(ri);
+  const invite = inviteId ? await getResidentInviteById(inviteId).catch(() => null) : null;
+  const residentInvite = invite && invite.brandId === brand.id && invite.status === "Invited"
+    ? { token: ri!, firstName: invite.name.trim().split(/\s+/)[0] ?? "" }
+    : undefined;
+
+  return <JoinLanding brand={brand} residentInvite={residentInvite} />;
 }

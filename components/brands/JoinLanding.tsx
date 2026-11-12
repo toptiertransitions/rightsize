@@ -2,8 +2,13 @@ import Link from "next/link";
 import { brandCss, type CommunityBrand } from "@/lib/brands/shared";
 
 // Branded landing for /join/[slug] (the community's join link / QR code).
-export function JoinLanding({ brand }: { brand: CommunityBrand }) {
+export function JoinLanding({ brand, residentInvite }: {
+  brand: CommunityBrand;
+  /** From an emailed resident invite (?ri=): greets them and carries the invite to sign-up */
+  residentInvite?: { token: string; firstName: string };
+}) {
   const minimal = brand.topTierVisibility === "Minimal";
+  const ri = residentInvite ? `ri=${encodeURIComponent(residentInvite.token)}` : "";
   const sender = [brand.welcomeSenderName, brand.welcomeSenderTitle].filter(Boolean).join(", ");
 
   return (
@@ -19,7 +24,12 @@ export function JoinLanding({ brand }: { brand: CommunityBrand }) {
         )}
         {brand.subtitle && <p className="text-sm text-gray-500 mt-2">{brand.subtitle}</p>}
 
-        <h1 className="text-2xl font-bold text-gray-900 mt-8 leading-snug">
+        {residentInvite && (
+          <p className="mt-8 text-sm font-semibold uppercase tracking-wider text-accent-600">
+            {residentInvite.firstName ? `Welcome, ${residentInvite.firstName}` : "You're invited"}
+          </p>
+        )}
+        <h1 className={`text-2xl font-bold text-gray-900 ${residentInvite ? "mt-2" : "mt-8"} leading-snug`}>
           {minimal ? "Plan your move, one step at a time" : `${brand.displayName} and Top Tier are here to help with your move`}
         </h1>
         <p className="text-sm text-gray-600 mt-3 leading-relaxed">
@@ -33,10 +43,10 @@ export function JoinLanding({ brand }: { brand: CommunityBrand }) {
           </blockquote>
         )}
 
-        <Link href={`/join/${brand.slug}/start`} className="mt-8 w-full inline-flex items-center justify-center h-12 rounded-xl bg-forest-600 hover:bg-forest-700 text-white font-semibold">
+        <Link href={`/join/${brand.slug}/start${ri ? `?${ri}` : ""}`} className="mt-8 w-full inline-flex items-center justify-center h-12 rounded-xl bg-forest-600 hover:bg-forest-700 text-white font-semibold">
           Get started
         </Link>
-        <Link href={`/join/${brand.slug}/start?signin=1`} className="mt-3 text-sm text-gray-500 underline">
+        <Link href={`/join/${brand.slug}/start?signin=1${ri ? `&${ri}` : ""}`} className="mt-3 text-sm text-gray-500 underline">
           I already have an account
         </Link>
       </main>

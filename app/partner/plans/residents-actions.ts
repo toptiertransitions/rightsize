@@ -7,6 +7,8 @@ import { getChecklistItems, upsertChecklistState } from "@/lib/checklists/data";
 import { getBrandsForPartner, isResidentOf } from "@/lib/checklists/service";
 import { removeChecklistItem, reorderChecklist, saveChecklistItem, type ItemInput } from "@/lib/checklists/template";
 import type { ChecklistItem } from "@/lib/checklists/shared";
+import { cancelResidentInvite, createAndSendResidentInvite, resendResidentInvite } from "@/lib/brands/residentInvites";
+import { residentInviteSchema, type ResidentInviteInput, type ResidentInviteResult } from "@/lib/brands/residentInviteShared";
 
 const RECORD_ID = /^rec[A-Za-z0-9]{14}$/;
 
@@ -71,4 +73,55 @@ export async function partnerRemoveChecklistItemAction(brandId: string, itemId: 
 }
 export async function partnerReorderChecklistAction(brandId: string, ids: string[]) {
   return ownerEdit(brandId, () => reorderChecklist(brandId, ids));
+}
+
+// ─── Resident invites ────────────────────────────────────────────────────────
+// Partner users can email residents only when their community has an Active
+// co-branded tenant; otherwise there's no invite at all.
+async function inviteContext(brandId: string) {
+  const ctx = await account();
+  if (!ctx) throw new Error("You don't have access.");
+  const brand = ctx.brands.find((b) => b.id === brandId && b.status === "Active");
+  if (!brand) throw new Error("Inviting residents isn't available for your community.");
+  const name = ctx.acct.membership.name || ctx.acct.partner.companyName;
+  return { brand, inviter: { name, email: ctx.acct.membership.email || undefined, clerkUserId: ctx.acct.membership.clerkUserId ?? "", side: "Community" as const } };
+}
+
+function inviteFail(e: unknown): ResidentInviteResult {
+  console.error("[resident invite]", e);
+  return { ok: false, error: e instanceof Error ? e.message : "That didn't send. Please try again." };
+}
+
+export async function partnerInviteResidentAction(brandId: string, input: ResidentInviteInput): Promise<ResidentInviteResult> {
+  try {
+    const parsed = residentInviteSchema.parse(input);
+    const { brand, inviter } = await inviteContext(brandId);
+    await createAndSendResidentInvite({ brand, ...parsed, inviter });
+    revalidatePath("/partner/plans");
+    return { ok: true };
+  } catch (e) {
+    return inviteFail(e);
+  }
+}
+
+export async function partnerResendResidentInviteAction(brandId: string, inviteId: string): Promise<ResidentInviteResult> {
+  try {
+    const { brand, inviter } = await inviteContext(brandId);
+    await resendResidentInvite(brand, inviteId, inviter);
+    revalidatePath("/partner/plans");
+    return { ok: true };
+  } catch (e) {
+    return inviteFail(e);
+  }
+}
+
+export async function partnerCancelResidentInviteAction(brandId: string, inviteId: string): Promise<ResidentInviteResult> {
+  try {
+    const { brand } = await inviteContext(brandId);
+    await cancelResidentInvite(brand, inviteId);
+    revalidatePath("/partner/plans");
+    return { ok: true };
+  } catch (e) {
+    return inviteFail(e);
+  }
 }

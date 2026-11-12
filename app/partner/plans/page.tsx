@@ -15,7 +15,12 @@ import {
   partnerReorderChecklistAction,
   partnerSaveChecklistItemAction,
   setResidentChecklistItemAction,
+  partnerInviteResidentAction,
+  partnerResendResidentInviteAction,
+  partnerCancelResidentInviteAction,
 } from "./residents-actions";
+import { getResidentInvites } from "@/lib/brands/residentInvites";
+import { ResidentInvitesPanel } from "@/components/brands/ResidentInvitesPanel";
 
 export default async function PartnerPlansPage({
   searchParams,
@@ -37,6 +42,9 @@ export default async function PartnerPlansPage({
 
   const residentsSection = isCommunity ? await (async () => {
     const { residents, itemsByBrand } = await getResidentsOverview(brands);
+    // Email invites only for a community with an Active co-branded tenant
+    const activeBrands = brands.filter((b) => b.status === "Active");
+    const invitesByBrand = await Promise.all(activeBrands.map((b) => getResidentInvites(b.id).catch(() => [])));
     const isOwner = account!.membership.role === "Primary";
     const hasChecklist = brands.some((b) => (itemsByBrand[b.id] ?? []).length > 0);
     return (
@@ -45,6 +53,17 @@ export default async function PartnerPlansPage({
           <h1 className="text-2xl font-semibold text-[#2d4a3e]">Resident Plans</h1>
           <p className="text-sm text-gray-500 mt-1">Where each resident moving into {brands.map((b) => b.displayName).join(" and ")} stands on your checklist.</p>
         </div>
+        {activeBrands.map((b, i) => (
+          <ResidentInvitesPanel
+            key={b.id}
+            theme="light"
+            communityName={b.displayName}
+            invites={invitesByBrand[i].map(({ brandId: _b, tenantId: _t, ...row }) => row)}
+            onInvite={partnerInviteResidentAction.bind(null, b.id)}
+            onResend={partnerResendResidentInviteAction.bind(null, b.id)}
+            onCancel={partnerCancelResidentInviteAction.bind(null, b.id)}
+          />
+        ))}
         {!hasChecklist ? (
           brands.map((b) => (
             <ChecklistGetStarted

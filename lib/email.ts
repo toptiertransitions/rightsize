@@ -642,6 +642,8 @@ export function buildBrandedInviteEmail({
   inviteUrl,
   isClientInvite,
   contacts,
+  variant,
+  recipientFirstName,
 }: {
   brand: BrandedInviteBrand;
   inviterName: string;
@@ -649,7 +651,12 @@ export function buildBrandedInviteEmail({
   inviteUrl: string;
   isClientInvite: boolean;
   contacts: BrandedInviteContact[];
+  /** "resident": the community invites someone who has no account yet */
+  variant?: "resident";
+  recipientFirstName?: string;
 }): string {
+  const resident = variant === "resident";
+  const first = recipientFirstName ? escHtml(recipientFirstName) : "";
   const name = escHtml(brand.displayName);
   const p = /^#[0-9a-fA-F]{6}$/.test(brand.primaryColor) ? brand.primaryColor : "#2E6B4F";
   const s = /^#[0-9a-fA-F]{6}$/.test(brand.secondaryColor) ? brand.secondaryColor : p;
@@ -658,14 +665,18 @@ export function buildBrandedInviteEmail({
   const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
   const serif = "Georgia,'Times New Roman',serif";
 
-  const eyebrow = isClientInvite ? "Welcome" : "You&rsquo;re invited";
-  const headline = isClientInvite
+  const eyebrow = resident ? (first ? `Hello, ${first}` : "Welcome") : isClientInvite ? "Welcome" : "You&rsquo;re invited";
+  const headline = resident
+    ? `${name} invited you to plan your move`
+    : isClientInvite
     ? `Your move to ${name} starts here`
     : `${inviter} invited you to help plan a move to ${name}`;
-  const intro = isClientInvite
+  const intro = resident
+    ? `We&rsquo;re so glad you&rsquo;re joining us. ${inviter ? `${inviter} at ${name}` : name} has invited you to a free, private move plan. It keeps your dates, your move-in checklist, your belongings and your ${name} team together in one simple place, and family can join you too.`
+    : isClientInvite
     ? `${name} has set up a private move plan for you. It keeps your dates, your move-in checklist, your belongings and your ${name} team together in one simple place.`
     : `Join the move plan to follow the schedule, see the move-in checklist and help decide what comes along. ${role === "Viewer" ? "You&rsquo;ll be able to view everything." : "You&rsquo;ll be able to view and add to the plan."}`;
-  const cta = isClientInvite ? "Open my move plan" : "Accept invitation";
+  const cta = resident ? "Get started" : isClientInvite ? "Open my move plan" : "Accept invitation";
 
   const welcome = brand.welcomeMessage.trim();
   const welcomeText = welcome.length > 320 ? `${welcome.slice(0, 317).replace(/\s+\S*$/, "")}&hellip;` : welcome;
@@ -731,7 +742,7 @@ export function buildBrandedInviteEmail({
   <title>${isClientInvite ? `Welcome to ${name}` : `You&rsquo;re invited &middot; ${name}`}</title>
 </head>
 <body style="margin:0;padding:0;background-color:${hexTint(p, 0.92)};font-family:${font};">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${isClientInvite ? `Your ${name} move plan is ready.` : `${inviter} invited you to the ${name} move plan.`}</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${resident ? `Your free ${name} move plan is waiting.` : isClientInvite ? `Your ${name} move plan is ready.` : `${inviter} invited you to the ${name} move plan.`}</div>
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${hexTint(p, 0.92)};padding:32px 12px;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
@@ -769,14 +780,14 @@ export function buildBrandedInviteEmail({
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F9FAFB;border-radius:12px;">
             <tr><td style="padding:18px 20px;">
               ${poweredBy}
-              <p style="margin:12px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:#4B5563;">On iPhone? <a href="${IOS_APP_STORE_URL}" style="color:${p};font-weight:600;text-decoration:none;">Get the Rightsize app</a>, then tap the button above to open your plan in the app.</p>
+              <p style="margin:12px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:#4B5563;">On iPhone? <a href="${IOS_APP_STORE_URL}" style="color:${p};font-weight:600;text-decoration:none;">Get the Rightsize app</a>, then tap the button above to ${resident ? "create your account" : "open your plan in the app"}.</p>
             </td></tr>
           </table>
         </td></tr>
 
         <tr><td style="padding:16px 36px 28px;text-align:center;">
           <p style="margin:0;font-family:${font};font-size:12px;line-height:1.6;color:#9CA3AF;">
-            This invitation expires in 7 days. If you weren&rsquo;t expecting it, you can safely ignore this email.<br />${brandEmailFooterLine(brand)}
+            This invitation expires in ${resident ? "30" : "7"} days. If you weren&rsquo;t expecting it, you can safely ignore this email.<br />${brandEmailFooterLine(brand)}
           </p>
         </td></tr>
       </table>
