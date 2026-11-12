@@ -12,8 +12,10 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { revalidateTag } from "next/cache";
 import { AIRTABLE_TABLES } from "@/lib/config";
-import { getMembershipsForUser, getTenantById, updateTenant } from "@/lib/airtable";
-import { getAllBrands } from "./data";
+import { getMembershipsForUser, getPartnerSelectionsForTenant, getTenantById, updateTenant } from "@/lib/airtable";
+import { getPartnerDirectory } from "@/lib/partners/queries";
+import { attachReferralPartner } from "@/lib/partners/referral";
+import { getAllBrands, getBrandContactViews } from "./data";
 import { JOIN_COOKIE, verifyValue } from "./cookies";
 import type { CommunityBrand } from "./shared";
 
@@ -35,6 +37,35 @@ async function addBrandToUserRecord(clerkUserId: string, brandId: string): Promi
   if (!upd.ok) throw new Error(`Users update failed (${upd.status})`);
 }
 
+/**
+ * A resident who joins through a community (join link, code or emailed
+ * invite) was referred by that community: lock the project's Community
+ * category to it, exactly like naming a referring community at signup. Uses
+ * the community's marketplace listing when it has one, otherwise a card with
+ * its name and first contact. Never replaces an existing Community referral.
+ */
+export async function lockCommunityReferral(tenantId: string, brand: CommunityBrand, selectedBy: string): Promise<void> {
+  const selections = await getPartnerSelectionsForTenant(tenantId).catch(() => []);
+  if (selections.some((s) => s.category === "Community" && s.referralLocked)) return;
+  const directory = await getPartnerDirectory();
+  const listed = directory.some((p) => p.id === brand.marketplacePartnerId && p.category === "Community");
+  const contact = listed ? undefined : (await getBrandContactViews(brand).catch(() => []))[0];
+  await attachReferralPartner({
+    tenantId,
+    attachment: {
+      category: "Community",
+      partnerId: listed ? brand.marketplacePartnerId : undefined,
+      name: [brand.displayName, brand.subtitle].filter(Boolean).join(" "),
+      contactName: contact?.name,
+      phone: contact?.phone,
+      email: contact?.email,
+    },
+    directory,
+    selectedBy,
+    source: "Signup",
+  });
+}
+
 export async function attachBrandToUser(clerkUserId: string, brand: CommunityBrand): Promise<void> {
   const clerk = await clerkClient();
   await clerk.users.updateUserMetadata(clerkUserId, { publicMetadata: { brandSlug: brand.slug } });
@@ -47,6 +78,7 @@ export async function attachBrandToUser(clerkUserId: string, brand: CommunityBra
     const t = await getTenantById(m.tenantId).catch(() => null);
     if (!t || t.isTTT === true || t.communityBrandId) continue;
     await updateTenant(t.id, { communityBrandId: brand.id }).catch((e) => console.error("[brands] tenant:", e));
+    await lockCommunityReferral(t.id, brand, clerkUserId).catch((e) => console.error("[brands] community referral:", e));
     changed = true;
   }
   if (changed) revalidateTag("tenants");

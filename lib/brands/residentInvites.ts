@@ -13,7 +13,7 @@ import { AIRTABLE_TABLES } from "@/lib/config";
 import { createPlanEntry, getPlanEntriesForTenant, getTenantById, updateTenant } from "@/lib/airtable";
 import { buildBrandedInviteEmail } from "@/lib/email";
 import { getAllBrands, getBrandContactViews } from "./data";
-import { attachBrandToUser } from "./attach";
+import { attachBrandToUser, lockCommunityReferral } from "./attach";
 import { signValue, verifyValue } from "./cookies";
 import type { CommunityBrand } from "./shared";
 
@@ -215,24 +215,25 @@ export async function cancelResidentInvite(brand: CommunityBrand, inviteId: stri
  * adds the invite's move date as a Move Date key date. Best-effort; never
  * blocks onboarding.
  */
-export async function claimResidentInvite(params: { clerkUserId: string; email: string; tenantId: string }): Promise<void> {
+export async function claimResidentInvite(params: { clerkUserId: string; email: string; tenantId: string; inviteId?: string }): Promise<void> {
   try {
     const jar = await cookies();
-    const cookieId = verifyValue(jar.get(RESIDENT_INVITE_COOKIE)?.value);
+    const cookieId = params.inviteId ?? verifyValue(jar.get(RESIDENT_INVITE_COOKIE)?.value);
     let invite = cookieId ? await getResidentInviteById(cookieId) : null;
     if (!invite || invite.status !== "Invited") {
       const email = params.email.trim().toLowerCase();
       invite = email.includes("@") ? (await select(`AND(LOWER({Email}) = "${esc(email)}", {Status} = "Invited")`))[0] ?? null : null;
     }
-    if (cookieId) jar.delete(RESIDENT_INVITE_COOKIE);
+    if (jar.get(RESIDENT_INVITE_COOKIE)) jar.delete(RESIDENT_INVITE_COOKIE);
     if (!invite || invite.status !== "Invited") return;
 
     const brand = (await getAllBrands()).find((b) => b.id === invite!.brandId);
     if (brand?.status === "Active") {
       await attachBrandToUser(params.clerkUserId, brand).catch((e) => console.error("[resident invite] attach:", e));
       const tenant = await getTenantById(params.tenantId).catch(() => null);
-      if (tenant && tenant.isTTT !== true && !tenant.communityBrandId) {
-        await updateTenant(tenant.id, { communityBrandId: brand.id }).catch((e) => console.error("[resident invite] tenant brand:", e));
+      if (tenant && tenant.isTTT !== true && (!tenant.communityBrandId || tenant.communityBrandId === brand.id)) {
+        if (!tenant.communityBrandId) await updateTenant(tenant.id, { communityBrandId: brand.id }).catch((e) => console.error("[resident invite] tenant brand:", e));
+        await lockCommunityReferral(tenant.id, brand, params.clerkUserId).catch((e) => console.error("[resident invite] community referral:", e));
       }
     }
 
