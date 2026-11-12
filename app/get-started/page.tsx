@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { currentUser } from "@clerk/nextjs/server";
+import { clerkClient, currentUser } from "@clerk/nextjs/server";
 import { getOnboardingState } from "@/lib/onboarding/state";
 import { getLocalVendorById } from "@/lib/airtable";
 import { emptyWizardData, type WizardData } from "./wizardTypes";
 import { OnboardingWizard } from "./OnboardingWizard";
 import type { Tenant } from "@/lib/types";
 import { getAllBrands } from "@/lib/brands/data";
-import { getJoinCookieBrand } from "@/lib/brands/attach";
+import { attachBrandToUser, getJoinCookieBrand } from "@/lib/brands/attach";
 import { brandCss, fullBrandName, type CommunityBrand } from "@/lib/brands/shared";
 import { getPendingResidentInviteName } from "@/lib/brands/residentInvites";
 
@@ -57,11 +57,16 @@ export default async function GetStartedPage() {
   const state = await getOnboardingState();
 
   if (state.status === "signed_out") redirect("/sign-in");
-  if (state.status === "ineligible") redirect("/home");
-  if (state.status === "partner") redirect("/partner/home");
-  if (state.status === "done") redirect("/home");
-
   const user = await currentUser().catch(() => null);
+  if (state.status === "ineligible" || state.status === "partner" || state.status === "done") {
+    // A stale "mid-onboarding" flag (e.g. they were invited to a Top Tier
+    // project before finishing) would bounce them straight back here
+    if (user?.publicMetadata?.onboardingComplete === false) {
+      const clerk = await clerkClient();
+      await clerk.users.updateUserMetadata(user.id, { publicMetadata: { onboardingComplete: state.status === "done" ? true : null } }).catch(() => {});
+    }
+    redirect(state.status === "partner" ? "/partner/home" : "/home");
+  }
   // Invited residents: prefill the name the community typed on the invite
   const invited = !user?.firstName
     ? await getPendingResidentInviteName(user?.primaryEmailAddress?.emailAddress ?? "")
@@ -70,6 +75,12 @@ export default async function GetStartedPage() {
   const fallbackLastName = user?.lastName || invited?.lastName || "";
 
   const brand = await onboardingBrand(state.status === "resume" ? state.tenant : null, user?.publicMetadata?.brandSlug);
+  // Save a join-link community to the account right away, so it survives
+  // leaving the wizard before step 1 (the link's cookie lives in one
+  // browser; the account follows them to the app and other devices)
+  if (brand && user && user.publicMetadata?.brandSlug !== brand.slug) {
+    await attachBrandToUser(user.id, brand).catch((e) => console.error("[get-started] brand attach:", e));
+  }
 
   if (state.status === "resume") {
     const community = state.tenant.destinationCommunity

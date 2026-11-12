@@ -256,6 +256,13 @@ export default async function DashboardPage({
     if (vendor) redirect("/vendor");
   }
 
+  // ── Signed up but left before onboarding made a project ─────────────────────
+  // Not staff, partner or vendor, and no project: they're a self-serve
+  // signup who exited the wizard before step 1 was saved. Send them back to
+  // it (it picks up their community from the account or join link) rather
+  // than the generic "Create Your First Project" screen.
+  if (!systemRole && memberships.length === 0) redirect("/get-started");
+
   // ── No projects ──────────────────────────────────────────────────────────────
   if (memberships.length === 0) {
     return (
@@ -310,6 +317,14 @@ export default async function DashboardPage({
     // Tenant not found — if we auto-selected (no explicit tenantId param), fall
     // back to the grid so other valid memberships are still reachable.
     if (!tenant) redirect(tenantIdParam ? "/onboarding" : "/home?all=1");
+
+    // Their own self-serve project is still mid-onboarding (they exited the
+    // wizard and reopened the app before the session picked up the
+    // onboarding flag middleware checks): finish the wizard first
+    if (
+      !isStaff && memberships.length === 1 && membership.role === "Owner" &&
+      tenant.isTTT !== true && tenant.onboardingComplete !== true && (tenant.onboardingCurrentStep ?? 0) > 0
+    ) redirect("/get-started");
 
     const canEdit = EDIT_ROLES.includes(membership.role);
     const isOwner = OWNER_ROLES.includes(membership.role);
