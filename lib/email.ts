@@ -609,6 +609,183 @@ export function buildClientWelcomeEmail({
 </html>`;
 }
 
+// ─── Co-branded invite (community brand projects) ───────────────────────────
+// Sent instead of the standard invite / client welcome when a project has an
+// Active community brand: the community's logo, both colors, its welcome
+// note and team, and how the app is powered by Rightsize (a Top Tier
+// Transitions company, unless the brand is set to "Minimal").
+
+export interface BrandedInviteBrand extends EmailBrand {
+  secondaryColor: string;
+  welcomeMessage: string;
+  welcomeSenderName: string;
+  welcomeSenderTitle: string;
+}
+
+export interface BrandedInviteContact {
+  name: string;
+  title: string;
+  phone: string;
+  email: string;
+}
+
+function hexTint(hex: string, toWhite: number): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(c + (255 - c) * toWhite));
+  return `#${ch.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+export function buildBrandedInviteEmail({
+  brand,
+  inviterName,
+  role,
+  inviteUrl,
+  isClientInvite,
+  contacts,
+}: {
+  brand: BrandedInviteBrand;
+  inviterName: string;
+  role: string;
+  inviteUrl: string;
+  isClientInvite: boolean;
+  contacts: BrandedInviteContact[];
+}): string {
+  const name = escHtml(brand.displayName);
+  const p = /^#[0-9a-fA-F]{6}$/.test(brand.primaryColor) ? brand.primaryColor : "#2E6B4F";
+  const s = /^#[0-9a-fA-F]{6}$/.test(brand.secondaryColor) ? brand.secondaryColor : p;
+  const inviter = escHtml(inviterName);
+  const url = escHtml(inviteUrl);
+  const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+  const serif = "Georgia,'Times New Roman',serif";
+
+  const eyebrow = isClientInvite ? "Welcome" : "You&rsquo;re invited";
+  const headline = isClientInvite
+    ? `Your move to ${name} starts here`
+    : `${inviter} invited you to help plan a move to ${name}`;
+  const intro = isClientInvite
+    ? `${name} has set up a private move plan for you. It keeps your dates, your move-in checklist, your belongings and your ${name} team together in one simple place.`
+    : `Join the move plan to follow the schedule, see the move-in checklist and help decide what comes along. ${role === "Viewer" ? "You&rsquo;ll be able to view everything." : "You&rsquo;ll be able to view and add to the plan."}`;
+  const cta = isClientInvite ? "Open my move plan" : "Accept invitation";
+
+  const welcome = brand.welcomeMessage.trim();
+  const welcomeText = welcome.length > 320 ? `${welcome.slice(0, 317).replace(/\s+\S*$/, "")}&hellip;` : welcome;
+  const welcomeBlock = welcome
+    ? `<tr><td style="padding:0 36px 8px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${hexTint(s, 0.93)};border-left:4px solid ${s};border-radius:10px;">
+          <tr><td style="padding:20px 22px;">
+            <p style="margin:0;font-family:${serif};font-size:16px;line-height:1.6;color:#374151;font-style:italic;">&ldquo;${escHtml(welcomeText).replace(/&amp;hellip;$/, "&hellip;")}&rdquo;</p>
+            ${brand.welcomeSenderName ? `<p style="margin:12px 0 0;font-family:${font};font-size:13px;color:#6B7280;"><strong style="color:#111827;">${escHtml(brand.welcomeSenderName)}</strong>${brand.welcomeSenderTitle ? `, ${escHtml(brand.welcomeSenderTitle)}` : ""} &middot; ${name}</p>` : ""}
+          </td></tr>
+        </table>
+      </td></tr>`
+    : "";
+
+  const features: Array<[string, string]> = [
+    ["Your plan and move-in checklist", `Key dates and everything ${name} needs from you before move-in day, all in one list.`],
+    ["What comes, what goes", "Snap a photo of each item and decide together what moves, what&rsquo;s shared with family and what&rsquo;s sold or donated."],
+    ["Trusted local help", "Movers, packers and other vetted partners, recommended for your move."],
+    [`Your ${name} team, one tap away`, "Call or email the people helping with your move right from the app."],
+  ];
+  const featureRows = features.map(([t, d], i) => `<tr>
+      <td width="40" valign="top" style="padding:0 0 18px;">
+        <div style="width:28px;height:28px;border-radius:14px;background-color:${s};color:#ffffff;font-family:${font};font-size:13px;font-weight:700;line-height:28px;text-align:center;">${i + 1}</div>
+      </td>
+      <td valign="top" style="padding:2px 0 18px;">
+        <p style="margin:0;font-family:${font};font-size:15px;font-weight:600;color:#111827;">${t}</p>
+        <p style="margin:3px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:#6B7280;">${d}</p>
+      </td>
+    </tr>`).join("");
+
+  const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const contactRows = contacts.slice(0, 3).map((c) => `<tr>
+      <td width="52" valign="top" style="padding:10px 0;">
+        <div style="width:40px;height:40px;border-radius:20px;background-color:${hexTint(p, 0.85)};color:${p};font-family:${font};font-size:14px;font-weight:700;line-height:40px;text-align:center;">${escHtml(initials(c.name))}</div>
+      </td>
+      <td valign="top" style="padding:10px 0;">
+        <p style="margin:0;font-family:${font};font-size:14px;font-weight:600;color:#111827;">${escHtml(c.name)}</p>
+        ${c.title ? `<p style="margin:1px 0 0;font-family:${font};font-size:12px;color:#6B7280;">${escHtml(c.title)}</p>` : ""}
+        <p style="margin:4px 0 0;font-family:${font};font-size:12px;">
+          ${c.phone ? `<a href="tel:${escHtml(c.phone.replace(/[^\d+]/g, ""))}" style="color:${s};text-decoration:none;font-weight:600;">${escHtml(c.phone)}</a>` : ""}
+          ${c.phone && c.email ? `<span style="color:#D1D5DB;">&nbsp;&middot;&nbsp;</span>` : ""}
+          ${c.email ? `<a href="mailto:${escHtml(c.email)}" style="color:${s};text-decoration:none;font-weight:600;">${escHtml(c.email)}</a>` : ""}
+        </p>
+      </td>
+    </tr>`).join("");
+  const teamBlock = contactRows
+    ? `<tr><td style="padding:8px 36px 4px;">
+        <p style="margin:0 0 4px;font-family:${font};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${s};">Your ${name} team</p>
+        <table width="100%" cellpadding="0" cellspacing="0">${contactRows}</table>
+      </td></tr>`
+    : "";
+
+  const poweredBy = brand.minimal
+    ? `<p style="margin:0;font-family:${font};font-size:13px;line-height:1.6;color:#4B5563;">${name}&rsquo;s move plan is <strong style="color:#111827;">powered by Rightsize</strong>, a move-planning app built for seniors and their families.</p>`
+    : `<p style="margin:0 0 6px;font-family:${font};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#9CA3AF;">Powered by Rightsize</p>
+       <p style="margin:0;font-family:${font};font-size:13px;line-height:1.6;color:#4B5563;">${name} partners with <strong style="color:#111827;">Top Tier Transitions</strong>, Chicagoland&rsquo;s senior move management team, to give residents and families one place to plan the move. The app, <strong style="color:#111827;">Rightsize</strong>, is a Top Tier Transitions company.</p>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${isClientInvite ? `Welcome to ${name}` : `You&rsquo;re invited &middot; ${name}`}</title>
+</head>
+<body style="margin:0;padding:0;background-color:${hexTint(p, 0.92)};font-family:${font};">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${isClientInvite ? `Your ${name} move plan is ready.` : `${inviter} invited you to the ${name} move plan.`}</div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${hexTint(p, 0.92)};padding:32px 12px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+        <tr>${brandEmailHeader(brand, "0")}</tr>
+
+        <tr><td style="background-color:${p};padding:34px 36px 30px;">
+          <p style="margin:0 0 10px;font-family:${font};font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${hexTint(s, 0.6)};">${eyebrow}</p>
+          <p style="margin:0;font-family:${serif};font-size:27px;line-height:1.3;color:#ffffff;">${headline}</p>
+        </td></tr>
+
+        <tr><td style="padding:28px 36px 20px;">
+          <p style="margin:0;font-family:${font};font-size:15px;line-height:1.65;color:#4B5563;">${intro}</p>
+        </td></tr>
+
+        ${welcomeBlock}
+
+        <tr><td style="padding:22px 36px 6px;">
+          <p style="margin:0 0 16px;font-family:${font};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${s};">What you can do</p>
+          <table width="100%" cellpadding="0" cellspacing="0">${featureRows}</table>
+        </td></tr>
+
+        <tr><td align="center" style="padding:6px 36px 8px;">
+          <table cellpadding="0" cellspacing="0"><tr>
+            <td style="background-color:${p};border-radius:12px;">
+              <a href="${url}" style="display:inline-block;padding:16px 40px;font-family:${font};font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;">${cta} &rarr;</a>
+            </td>
+          </tr></table>
+          <p style="margin:14px 0 0;font-family:${font};font-size:12px;color:#9CA3AF;">Or paste this link into your browser:<br /><span style="color:#6B7280;word-break:break-all;">${url}</span></p>
+        </td></tr>
+
+        <tr><td style="padding:24px 36px 0;"><div style="border-top:1px solid #F3F4F6;"></div></td></tr>
+        ${teamBlock}
+
+        <tr><td style="padding:16px 36px 8px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F9FAFB;border-radius:12px;">
+            <tr><td style="padding:18px 20px;">
+              ${poweredBy}
+              <p style="margin:12px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:#4B5563;">On iPhone? <a href="${IOS_APP_STORE_URL}" style="color:${p};font-weight:600;text-decoration:none;">Get the Rightsize app</a>, then tap the button above to open your plan in the app.</p>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:16px 36px 28px;text-align:center;">
+          <p style="margin:0;font-family:${font};font-size:12px;line-height:1.6;color:#9CA3AF;">
+            This invitation expires in 7 days. If you weren&rsquo;t expecting it, you can safely ignore this email.<br />${brandEmailFooterLine(brand)}
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildVendorFileEmail({
   vendorName,
   itemCount,

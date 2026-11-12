@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import type { BrandProjectRow } from "@/lib/brands/projects";
 import { assignProjectsBrandAction } from "../actions";
+import { InviteToProjectModal } from "./InviteToProjectModal";
 
 type Brand = { id: string; name: string; status: string };
 type SortKey = "name" | "brand" | "lastActivity" | "createdAt" | "linkedUsers";
@@ -30,6 +31,8 @@ export function ProjectsTable({ rows, brands, canImpersonate }: { rows: BrandPro
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [inviting, setInviting] = useState<BrandProjectRow | null>(null);
+  const brandStatus = useMemo(() => new Map(brands.map((b) => [b.id, b.status])), [brands]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -202,7 +205,10 @@ export function ProjectsTable({ rows, brands, canImpersonate }: { rows: BrandPro
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-300 tabular-nums">{r.linkedUsers}</td>
                 <td className="px-3 py-2.5 text-gray-400 whitespace-nowrap">{fmtDate(r.lastActivity)}</td>
-                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                <td className="px-3 py-2.5 text-right whitespace-nowrap space-x-3">
+                  <button type="button" onClick={() => setInviting(r)} className="text-xs text-forest-400 hover:text-forest-300">
+                    Invite
+                  </button>
                   {canImpersonate && r.ownerClerkId && (
                     <button type="button" disabled={viewing !== null} onClick={() => viewAsClient(r)} className="text-xs text-forest-400 hover:text-forest-300 disabled:opacity-50">
                       {viewing === r.id ? "Opening…" : "View as client"}
@@ -217,6 +223,14 @@ export function ProjectsTable({ rows, brands, canImpersonate }: { rows: BrandPro
           </tbody>
         </table>
       </div>
+      {inviting && (
+        <InviteToProjectModal
+          projectId={inviting.id}
+          projectName={inviting.name}
+          brandName={inviting.brandId && brandStatus.get(inviting.brandId) === "Active" ? brandName.get(inviting.brandId) : undefined}
+          onClose={() => setInviting(null)}
+        />
+      )}
     </div>
   );
 }

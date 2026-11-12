@@ -3,8 +3,8 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { getUserRoleForTenant, getTenantById, getLocalVendorById, getSystemRole } from "@/lib/airtable";
 import { createInviteToken, createVendorInviteToken } from "@/lib/invites";
 import type { InviteRole } from "@/lib/invites";
-import { buildClientWelcomeEmail, brandEmailHeader, brandEmailFooterLine, type EmailBrand } from "@/lib/email";
-import { getBrandById } from "@/lib/brands/data";
+import { buildClientWelcomeEmail, buildBrandedInviteEmail, brandEmailHeader, brandEmailFooterLine, type EmailBrand } from "@/lib/email";
+import { getBrandById, getBrandContactViews } from "@/lib/brands/data";
 import { Resend } from "resend";
 import { PARTNER_CATEGORIES } from "@/lib/types";
 import { getPartnerDirectory } from "@/lib/partners/queries";
@@ -147,17 +147,49 @@ export async function POST(req: NextRequest) {
       : null;
     const senderName = brand ? brand.displayName.replace(/[<>"]/g, "") : "Top Tier Transitions";
 
+    // Branded projects get the full co-branded invite, sent from the
+    // community's own alias on our sending domain (e.g. silverleaf@...), with
+    // replies going to whoever sent the invite.
+    let message: { from: string; subject: string; html: string; replyTo?: string };
+    if (brandRec && brand) {
+      const contacts = await getBrandContactViews(brandRec).catch(() => []);
+      const domain = fromEmail.split("@")[1] || "toptiertransitions.com";
+      const inviterEmail = clerk?.emailAddresses.find((e) => e.id === clerk.primaryEmailAddressId)?.emailAddress;
+      message = {
+        from: `${senderName} <${brandRec.slug}@${domain}>`,
+        subject: isClientInvite
+          ? `Welcome to ${senderName}: your move plan is ready`
+          : `${inviterName} invited you to plan a move to ${senderName}`,
+        html: buildBrandedInviteEmail({
+          brand: {
+            ...brand,
+            secondaryColor: brandRec.secondaryColor,
+            welcomeMessage: brandRec.welcomeMessage,
+            welcomeSenderName: brandRec.welcomeSenderName,
+            welcomeSenderTitle: brandRec.welcomeSenderTitle,
+          },
+          inviterName,
+          role,
+          inviteUrl,
+          isClientInvite,
+          contacts,
+        }),
+        ...(inviterEmail && inviterEmail.toLowerCase() !== email.toLowerCase() ? { replyTo: inviterEmail } : {}),
+      };
+    } else {
+      message = {
+        from: `${senderName} <${fromEmail}>`,
+        subject: isClientInvite
+          ? `Your ${projectName} project is ready on Rightsize`
+          : `${inviterName} invited you to ${projectName} on Rightsize`,
+        html: isClientInvite
+          ? buildClientWelcomeEmail({ projectName, inviteUrl, brand })
+          : buildInviteEmail({ inviterName, projectName, role, inviteUrl, brand }),
+      };
+    }
+
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const { error: sendError } = await resend.emails.send({
-      from: `${senderName} <${fromEmail}>`,
-      to: email,
-      subject: isClientInvite
-        ? `Your ${projectName} project is ready on Rightsize`
-        : `${inviterName} invited you to ${projectName} on Rightsize`,
-      html: isClientInvite
-        ? buildClientWelcomeEmail({ projectName, inviteUrl, brand })
-        : buildInviteEmail({ inviterName, projectName, role, inviteUrl, brand }),
-    });
+    const { error: sendError } = await resend.emails.send({ ...message, to: email });
 
     if (sendError) {
       console.error("Resend error:", sendError);
