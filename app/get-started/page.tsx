@@ -7,7 +7,7 @@ import { OnboardingWizard } from "./OnboardingWizard";
 import type { Tenant } from "@/lib/types";
 import { getAllBrands } from "@/lib/brands/data";
 import { getJoinCookieBrand } from "@/lib/brands/attach";
-import { brandCss, type CommunityBrand } from "@/lib/brands/shared";
+import { brandCss, fullBrandName, type CommunityBrand } from "@/lib/brands/shared";
 
 // The community the user is joining through, if known: the project's brand,
 // a code/link already on the account, or a pending join-link cookie.
@@ -77,7 +77,8 @@ export default async function GetStartedPage() {
           initialStep={Math.max(state.tenant.onboardingCurrentStep ?? 1, 1)}
           initialTenantId={state.tenant.id}
           initialData={tenantToWizardData(state.tenant, fallbackFirstName, fallbackLastName, community?.vendorName ?? "")}
-          initialBrandName={brand?.displayName ?? null}
+          initialBrandName={brand ? fullBrandName(brand) : null}
+          initialBrandLogo={brand?.logoUrl || null}
         />
       </>
     );
@@ -90,7 +91,8 @@ export default async function GetStartedPage() {
         initialStep={1}
         initialTenantId={null}
         initialData={emptyWizardData(fallbackFirstName, fallbackLastName, "")}
-        initialBrandName={brand?.displayName ?? null}
+        initialBrandName={brand ? fullBrandName(brand) : null}
+          initialBrandLogo={brand?.logoUrl || null}
       />
     </>
   );

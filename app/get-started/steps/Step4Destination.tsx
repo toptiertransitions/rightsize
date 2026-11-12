@@ -222,3 +222,31 @@ export function step4Valid(data: WizardData): boolean {
   }
   return true;
 }
+
+// Step 4 for a resident who came through a community (join link, code or
+// emailed invite): nothing to answer, just a confirmation of where they're
+// moving and who referred them. Saved by confirmBrandCommunity.
+export function BrandCommunityConfirm({ name, logoUrl }: { name: string; logoUrl?: string | null }) {
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-gray-900 mb-5">Where you&rsquo;re moving</h2>
+      <div className="rounded-2xl border border-forest-200 bg-white p-6 text-center shadow-sm motion-safe:animate-[fadeInScale_0.25s_ease-out]">
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={name} className="h-16 w-auto max-w-[220px] object-contain mx-auto" />
+        ) : (
+          <div className="mx-auto w-12 h-12 rounded-full bg-forest-50 text-forest-600 flex items-center justify-center">
+            <Building className="w-6 h-6" />
+          </div>
+        )}
+        <p className="mt-4 text-lg font-semibold text-gray-900 leading-snug">You&rsquo;re moving to {name}</p>
+        <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+          {name} invited you to Rightsize, so your plan, move-in checklist and {name} team are already set up for you.
+        </p>
+        <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-forest-50 px-3 py-1 text-xs font-semibold text-forest-700">
+          <Check className="w-3.5 h-3.5" strokeWidth={3} /> Referred by {name}
+        </p>
+      </div>
+    </div>
+  );
+}

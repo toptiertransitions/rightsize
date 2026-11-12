@@ -33,7 +33,9 @@ import { placeForZip } from "@/lib/marketplace/serviceRadius";
 import { after } from "next/server";
 import type { RoomType, Tenant } from "@/lib/types";
 import { getAllBrands, getBrandByCode, getBrandBySlug } from "@/lib/brands/data";
-import { attachBrandToUser, claimJoinBrand } from "@/lib/brands/attach";
+import { attachBrandToUser, claimJoinBrand, lockCommunityReferral } from "@/lib/brands/attach";
+import { getPartnerById } from "@/lib/marketplace/data";
+import { fullBrandName } from "@/lib/brands/shared";
 import { checkCodeRateLimit } from "@/lib/brands/ratelimit";
 import { claimResidentInvite } from "@/lib/brands/residentInvites";
 
@@ -205,6 +207,32 @@ export async function submitStep4(tenantId: string, input: Step4Input): Promise<
   logOnboardingEvent("step_completed", { step: 4, tenantId: tenant.id });
 }
 
+// Step 4 for a resident who came through a community (join link, code or
+// emailed invite): instead of asking where they're moving and who referred
+// them, confirm the community. Saves it as the destination, records the
+// community as how they heard about us, and locks it as their Community
+// referral; step 7 is then skipped. Returns false when the project has no
+// Active brand, and the wizard falls back to the normal question.
+export async function confirmBrandCommunity(tenantId: string): Promise<{ ok: boolean }> {
+  const { userId, tenant } = await requireOwnedOnboardingTenant(tenantId);
+  const brand = tenant.communityBrandId ? (await getAllBrands()).find((b) => b.id === tenant.communityBrandId && b.status === "Active") : undefined;
+  if (!brand) return { ok: false };
+  const name = fullBrandName(brand);
+  const partner = await getPartnerById(brand.marketplacePartnerId).catch(() => null);
+  await withRetry(() => updateTenant(tenant.id, {
+    destinationType: "senior_community",
+    destinationCommunity: partner?.localVendorId || null,
+    destinationCommunityOther: partner?.localVendorId ? null : name,
+    destinationZip: partner?.zip || null,
+    howHeard: "senior_community",
+    howHeardDetail: name,
+    onboardingCurrentStep: 5,
+  }));
+  await lockCommunityReferral(tenant.id, brand, userId).catch((e) => console.error("[onboarding] community referral:", e));
+  logOnboardingEvent("step_completed", { step: 4, tenantId: tenant.id, brandCommunity: brand.slug });
+  return { ok: true };
+}
+
 export async function submitStep5(tenantId: string, input: Step5Input): Promise<void> {
   const { tenant } = await requireOwnedOnboardingTenant(tenantId);
   const parsed = step5Schema.parse(input);
@@ -244,14 +272,17 @@ function roomTypeForSpaceKey(key: string): RoomType {
 // re-run getOnboardingState() on the still-mounted /get-started page,
 // which redirects "done" tenants to /home — interrupting the tour a
 // fraction of a second after it appears, before anyone can read it.
-export async function completeOnboarding(tenantId: string, input: Step6Input): Promise<{ tenantId: string }> {
-  const { tenant } = await requireOwnedOnboardingTenant(tenantId);
+export async function completeOnboarding(tenantId: string, input: Step6Input): Promise<{ tenantId: string; skipReferral: boolean }> {
+  const { userId, tenant } = await requireOwnedOnboardingTenant(tenantId);
   const parsed = step6Schema.parse(input);
+  // A community resident's referral was recorded on step 4 (see
+  // confirmBrandCommunity), so "How did you hear about us?" is skipped.
+  const skipReferral = !!tenant.communityBrandId && tenant.howHeard === "senior_community";
 
   await withRetry(() => updateTenant(tenant.id, {
     bedrooms: parsed.bedrooms,
     bathrooms: parsed.bathrooms,
-    onboardingCurrentStep: 7,
+    onboardingCurrentStep: skipReferral ? 8 : 7,
   }));
 
   const roomsToCreate: Array<{ name: string; roomType: RoomType }> = [];
@@ -275,7 +306,11 @@ export async function completeOnboarding(tenantId: string, input: Step6Input): P
   );
 
   logOnboardingEvent("step_completed", { step: 6, tenantId: tenant.id, roomCount: roomsToCreate.length });
-  return { tenantId: tenant.id };
+  // With step 7 skipped, the signup questions end here (see submitStep7)
+  if (skipReferral && (tenant.onboardingCurrentStep ?? 0) < 8) {
+    after(() => sendSignupSummary(userId, tenant.id).catch((e) => console.error("[onboarding] signup summary email failed:", e)));
+  }
+  return { tenantId: tenant.id, skipReferral };
 }
 
 // Marketplace listings offered in the step-7 referrer search — only the

@@ -6,13 +6,13 @@ import { ProgressBar, BackLink, BottomCTA } from "@/components/onboarding/shared
 import { Step1About, step1Valid } from "./steps/Step1About";
 import { Step2Interests, step2Valid } from "./steps/Step2Interests";
 import { Step3Timeline, step3Valid } from "./steps/Step3Timeline";
-import { Step4Destination, step4Valid } from "./steps/Step4Destination";
+import { Step4Destination, step4Valid, BrandCommunityConfirm } from "./steps/Step4Destination";
 import { Step5Starting, step5Valid } from "./steps/Step5Starting";
 import { Step6Layout } from "./steps/Step6Layout";
 import { Step7Referral, step7Valid } from "./steps/Step7Referral";
 import { Step7Done } from "./steps/Step7Done";
 import type { WizardData } from "./wizardTypes";
-import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, submitStep7, finishOnboardingTour, resolveCommunityReferralPartner } from "./actions";
+import { submitStep1, submitStep2, submitStep3, submitStep4, submitStep5, completeOnboarding, submitStep7, finishOnboardingTour, resolveCommunityReferralPartner, confirmBrandCommunity } from "./actions";
 import { logOnboardingEvent } from "@/lib/onboarding/analytics";
 
 const TOTAL_STEPS = 7; // the progress bar tracks steps 1-7; step 8 is the completion screen
@@ -24,10 +24,15 @@ interface Props {
   initialData: WizardData;
   /** Community the user came from (join link or code), if any */
   initialBrandName?: string | null;
+  initialBrandLogo?: string | null;
 }
 
-export function OnboardingWizard({ initialStep, initialTenantId, initialData, initialBrandName = null }: Props) {
+export function OnboardingWizard({ initialStep, initialTenantId, initialData, initialBrandName = null, initialBrandLogo = null }: Props) {
   const [brandName, setBrandName] = useState<string | null>(initialBrandName);
+  const [brandLogo, setBrandLogo] = useState<string | null>(initialBrandLogo);
+  // A community resident confirms their community on step 4 instead of
+  // choosing a destination, and isn't asked who referred them (step 7)
+  const [brandStep4, setBrandStep4] = useState(!!initialBrandName);
   const router = useRouter();
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), DONE_STEP));
   const [tenantId, setTenantId] = useState<string | null>(initialTenantId);
@@ -55,7 +60,7 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData, in
       case 1: return step1Valid(data);
       case 2: return step2Valid(data);
       case 3: return step3Valid(data);
-      case 4: return step4Valid(data);
+      case 4: return brandStep4 || step4Valid(data);
       case 5: return step5Valid(data);
       case 6: return true;
       case 7: return step7Valid(data);
@@ -79,6 +84,11 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData, in
         if (!tenantId) throw new Error("Missing project");
         await submitStep3(tenantId, { timelineType: data.timelineType!, timelineValue: data.timelineValue });
         setStep(4);
+      } else if (step === 4 && brandStep4) {
+        if (!tenantId) throw new Error("Missing project");
+        const res = await confirmBrandCommunity(tenantId);
+        if (res.ok) setStep(5);
+        else setBrandStep4(false); // no Active brand on the project after all: ask normally
       } else if (step === 4) {
         if (!tenantId) throw new Error("Missing project");
         await submitStep4(tenantId, {
@@ -94,12 +104,15 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData, in
         setStep(6);
       } else if (step === 6) {
         if (!tenantId) throw new Error("Missing project");
-        await completeOnboarding(tenantId, {
+        const done = await completeOnboarding(tenantId, {
           bedrooms: data.bedrooms,
           bathrooms: data.bathrooms,
           spaces: data.spaces.map(s => ({ key: s.key, name: s.name, on: s.on })),
         });
-        if (data.communityReferred) {
+        if (done.skipReferral) {
+          // Community resident: the referral was recorded on step 4
+          setStep(DONE_STEP);
+        } else if (data.communityReferred) {
           // Already answered on step 4 ("heard about us from [community]"),
           // so save that as the step-7 answer and skip the question.
           const name = data.destinationCommunityName.trim();
@@ -197,10 +210,10 @@ export function OnboardingWizard({ initialStep, initialTenantId, initialData, in
           {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
             <div key={n} className="w-full h-full shrink-0 overflow-y-auto px-6 pb-4">
               <div className="max-w-md mx-auto pt-2">
-                {n === 1 && <Step1About data={data} update={update} brandName={brandName} onBrandApplied={(name) => { setBrandName(name); router.refresh(); }} />}
+                {n === 1 && <Step1About data={data} update={update} brandName={brandName} onBrandApplied={(name) => { setBrandName(name); setBrandLogo(null); setBrandStep4(true); router.refresh(); }} />}
                 {n === 2 && <Step2Interests data={data} update={update} onAppOnlyAdvance={handleAppOnlyAdvance} />}
                 {n === 3 && <Step3Timeline data={data} update={update} />}
-                {n === 4 && <Step4Destination data={data} update={update} />}
+                {n === 4 && (brandStep4 && brandName ? <BrandCommunityConfirm name={brandName} logoUrl={brandLogo} /> : <Step4Destination data={data} update={update} />)}
                 {n === 5 && <Step5Starting data={data} update={update} />}
                 {n === 6 && <Step6Layout data={data} update={update} />}
                 {n === 7 && <Step7Referral data={data} update={update} />}
