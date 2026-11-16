@@ -1292,7 +1292,7 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
 
 // ─── Label Modal ─────────────────────────────────────────────────────────────
 
-function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () => void; onPrint: (w: number, h: number) => void }) {
+function LabelModal({ count, error, onClose, onPrint }: { count: number; error: string | null; onClose: () => void; onPrint: (w: number, h: number) => Promise<void> }) {
   useBackClose(onClose);
   const [width, setWidth] = useState("2");
   const [height, setHeight] = useState("1");
@@ -1334,6 +1334,7 @@ function LabelModal({ count, onClose, onPrint }: { count: number; onClose: () =>
             />
           </div>
         </div>
+        {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
         <p className="text-xs text-gray-500 mb-5">Each label includes the price, item name, scannable barcode, and barcode number. One label per page — use printer settings to fit multiple on a sheet.</p>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 h-9 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800 transition-colors">Cancel</button>
@@ -1469,6 +1470,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelLoading, setLabelLoading] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
   const [downloadItem, setDownloadItem] = useState<Item | null>(null);
   useBackClose(!!downloadItem && (() => setDownloadItem(null)));
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -2008,6 +2010,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       .map(id => items.find(i => i.id === id))
       .filter((i): i is Item => !!i && i.primaryRoute === "ProFoundFinds Consignment");
     if (pfItems.length === 0) return;
+    setLabelError(null);
     setLabelLoading(true);
     try {
       const labelItems = pfItems.map(i => ({
@@ -2021,17 +2024,21 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: labelItems, widthIn, heightIn }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const err = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(err?.error || `Couldn't generate labels (${res.status})`);
+      }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `labels-${Date.now()}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Same download path as the other catalog PDFs: the share sheet in the
+      // iOS/Android app, a kept-alive link in browsers (Safari drops a
+      // download whose blob URL is revoked right after the click)
+      await downloadOrShareBlob(blob, `labels-${new Date().toISOString().slice(0, 10)}.pdf`);
       setShowLabelModal(false);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to generate labels");
+      // Closing the app's share sheet isn't a failure
+      if (e instanceof Error && /cancel/i.test(e.message)) { setShowLabelModal(false); return; }
+      // Shown in the modal: alert() is swallowed inside the native app
+      setLabelError(e instanceof Error ? e.message : "Failed to generate labels");
     } finally {
       setLabelLoading(false);
     }
@@ -3379,7 +3386,8 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       {showLabelModal && (
         <LabelModal
           count={[...selected].filter(id => items.find(i => i.id === id)?.primaryRoute === "ProFoundFinds Consignment").length}
-          onClose={() => setShowLabelModal(false)}
+          error={labelError}
+          onClose={() => { setShowLabelModal(false); setLabelError(null); }}
           onPrint={handlePrintLabels}
         />
       )}
