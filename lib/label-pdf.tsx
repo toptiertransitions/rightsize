@@ -169,15 +169,15 @@ function AutomatedLabelPage({ item, barcodeDataUrl }: { item: LabelItem; barcode
         {item.itemName}
       </Text>
 
-      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", marginTop: 3 }}>
-        <View style={{ flex: 1, justifyContent: "center" }}>
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start", marginTop: 2 }}>
+        <View style={{ flex: 1 }}>
           <Text style={{ fontSize: priceSize, fontFamily: "Helvetica-Bold", color: "#000000", letterSpacing: -0.5 }}>{priceStr}</Text>
           {item.barcodeNumber ? (
             <Text style={{ fontSize: 8, color: "#555555", marginTop: 1, letterSpacing: 0.4 }}>ID # {item.barcodeNumber}</Text>
           ) : null}
         </View>
         {steps.length > 0 && (
-          <View style={{ width: 112, borderLeftWidth: 0.75, borderLeftColor: "#bbbbbb", paddingLeft: 8, justifyContent: "center" }}>
+          <View style={{ width: 112, borderLeftWidth: 0.75, borderLeftColor: "#bbbbbb", paddingLeft: 8, paddingTop: 2 }}>
             {steps.map((st, i) => (
               <View key={st.day} style={{ marginTop: i === 0 ? 0 : 5 }}>
                 <Text style={{ fontSize: 7, color: "#666666", textTransform: "uppercase", letterSpacing: 0.5 }}>Starting {shortDay(st.day)}</Text>
@@ -188,8 +188,10 @@ function AutomatedLabelPage({ item, barcodeDataUrl }: { item: LabelItem; barcode
         )}
       </View>
 
+      {/* 50% larger than the first version, with a white quiet zone built
+          into the image so scanners find the start and end bars */}
       {barcodeDataUrl ? (
-        <Image src={barcodeDataUrl} style={{ width: 150, height: 20, objectFit: "contain", objectPosition: "left" }} />
+        <Image src={barcodeDataUrl} style={{ width: 225, height: 30, marginLeft: -pad + 2, objectFit: "contain", objectPosition: "left" }} />
       ) : null}
     </Page>
   );
@@ -233,6 +235,8 @@ export async function renderLabelPDF({ items, widthIn, heightIn, mode = "simple"
 
   const barcodePngs: (string | null)[] = await Promise.all(
     items.map(async (item) => {
+      // Automated labels: wider bars and a 10-module white quiet zone each side
+      const auto = mode === "automated";
       const code = item.barcodeNumber?.trim();
       if (!code) return null;
       try {
@@ -240,9 +244,9 @@ export async function renderLabelPDF({ items, widthIn, heightIn, mode = "simple"
           bcid: "code128",
           text: code,
           scale: 4,
-          height: 8,       // bar height in mm — enough for scanning
+          height: auto ? 6 : 8,       // bar height in mm — enough for scanning
           includetext: false,
-          padding: 0,
+          ...(auto ? { paddingwidth: 10, paddingheight: 0 } : { padding: 0 }),
           backgroundcolor: "ffffff",
         });
         return `data:image/png;base64,${png.toString("base64")}`;
