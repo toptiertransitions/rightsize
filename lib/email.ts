@@ -3198,6 +3198,88 @@ export function buildAppliedPriceDropEmail({
 </html>`;
 }
 
+export type AutoPriceDropEmailItem = AppliedDropEmailItem & { projectName: string; step: 1 | 2 };
+
+/** 7 AM digest to TTT Admins of the ProFoundFinds automated price drops made that morning. */
+export function buildAutoPriceDropDigestEmail({ dateLabel, items, appUrl }: {
+  dateLabel: string;
+  items: AutoPriceDropEmailItem[];
+  appUrl: string;
+}): string {
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const before = items.reduce((t, i) => t + i.prevPrice, 0);
+  const after = items.reduce((t, i) => t + i.newPrice, 0);
+
+  const row = (item: AutoPriceDropEmailItem, i: number) => {
+    const thumb = cldThumb(item.photoUrl, 80);
+    return `
+    <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};border-bottom:1px solid #e5e7eb;">
+      <td style="padding:10px 8px 10px 12px;width:64px;vertical-align:middle;">
+        ${thumb
+          ? `<img src="${thumb}" width="56" height="56" alt="" style="border-radius:8px;display:block;object-fit:cover;">`
+          : `<div style="width:56px;height:56px;background:#f3f4f6;border-radius:8px;"></div>`}
+      </td>
+      <td style="padding:10px 12px;vertical-align:middle;">
+        <p style="margin:0;font-size:13px;color:#111827;font-weight:600;">${escHtml(item.itemName)}</p>
+        <p style="margin:3px 0 0;font-size:11px;color:#6b7280;">#${escHtml(item.displayId)} &middot; ${escHtml(item.projectName)}</p>
+      </td>
+      <td style="padding:10px 12px;font-size:13px;color:#9ca3af;text-align:right;vertical-align:middle;white-space:nowrap;text-decoration:line-through;">${fmt(item.prevPrice)}</td>
+      <td style="padding:10px 12px;font-size:15px;color:#2d4a3e;font-weight:700;text-align:right;vertical-align:middle;white-space:nowrap;">${fmt(item.newPrice)}</td>
+    </tr>`;
+  };
+
+  const section = (step: 1 | 2) => {
+    const list = items.filter((i) => i.step === step);
+    if (!list.length) return "";
+    const pct = list[0].dropPct;
+    return `
+        <tr><td style="padding:24px 32px 0;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2d4a3e;">
+            ${step === 1 ? "First" : "Second"} price drop &middot; <span style="color:#92400e;">&minus;${pct}% off listed price</span> &middot; ${list.length} item${list.length === 1 ? "" : "s"}
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <tbody>${list.map(row).join("")}</tbody>
+          </table>
+        </td></tr>`;
+  };
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAF8F5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table width="100%" style="max-width:680px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);" cellpadding="0" cellspacing="0">
+        <tr style="background:#2d4a3e;">
+          <td style="padding:28px 32px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">ProFound Finds &nbsp;&middot;&nbsp; Automated Pricing</p>
+            <h1 style="margin:8px 0 0;font-size:22px;font-weight:700;color:#ffffff;">${items.length} price${items.length === 1 ? "" : "s"} dropped this morning</h1>
+            <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.70);">${escHtml(dateLabel)} &nbsp;&middot;&nbsp; Updated in Rightsize, Square and ProFoundFinds.com</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 32px;background:#f0fdf4;border-bottom:1px solid #d1fae5;">
+            <p style="margin:0;font-size:13px;color:#374151;">
+              Listed value <strong>${fmt(before)}</strong> &rarr; <strong>${fmt(after)}</strong>. The automated price labels already show these prices, so nothing needs re-tagging.
+            </p>
+          </td>
+        </tr>
+        ${section(1)}${section(2)}
+        <tr><td style="padding:24px 32px 32px;">
+          <a href="${appUrl}/admin/pfinventory" style="display:inline-block;background:#2d4a3e;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;">Open ProFound Finds inventory</a>
+        </td></tr>
+        <tr style="background:#f9fafb;border-top:1px solid #e5e7eb;">
+          <td style="padding:16px 32px;font-size:11px;color:#9ca3af;">
+            Drops run at 7 AM Central, 30 and 60 days after each item's delivery date (or a project's own Price Drop settings). Each drop is off the listed price; a lower price set by hand is kept. Rightsize &middot; Top Tier Transitions &middot; Internal use only.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 export function buildTrainingCertificateEmail(params: {
   userName: string;
   userEmail: string;

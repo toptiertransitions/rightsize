@@ -6,13 +6,21 @@ export interface LabelItem {
   itemName: string;
   price: number;
   barcodeNumber?: string;
+  /** Automated pricing labels: the scheduled price drops */
+  schedule?: { day: string; price: number }[];
 }
+
+export type LabelMode = "simple" | "automated";
 
 interface Props {
   items: LabelItem[];
   widthIn: number;
   heightIn: number;
+  mode?: LabelMode;
 }
+
+/** Automated pricing labels are always 4" x 2" landscape. */
+export const AUTOMATED_LABEL_SIZE = { widthIn: 4, heightIn: 2 } as const;
 
 const PT = 72; // 1 inch = 72 pt
 
@@ -138,20 +146,73 @@ function LabelPage({
   );
 }
 
+
+// ─── Automated pricing label (4" x 2" landscape) ──────────────────────────────
+// Name, ID, the price today in the largest type, then each scheduled price
+// drop with the date it starts, so the tag stays right without re-tagging.
+const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`;
+const shortDay = (day: string) =>
+  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+function AutomatedLabelPage({ item, barcodeDataUrl }: { item: LabelItem; barcodeDataUrl: string | null }) {
+  const W = AUTOMATED_LABEL_SIZE.widthIn * PT;
+  const H = AUTOMATED_LABEL_SIZE.heightIn * PT;
+  const pad = 9;
+  const nameSize = item.itemName.length > 70 ? 8.5 : item.itemName.length > 45 ? 10 : 11.5;
+  const priceStr = item.price > 0 ? money(item.price) : "";
+  const priceSize = priceStr.length > 7 ? 26 : priceStr.length > 5 ? 32 : 38;
+  const steps = item.schedule ?? [];
+
+  return (
+    <Page size={[W, H]} style={{ width: W, height: H, padding: pad, flexDirection: "column", backgroundColor: "#ffffff", fontFamily: "Helvetica", overflow: "hidden" }}>
+      <Text style={{ fontSize: nameSize, fontFamily: "Helvetica-Bold", color: "#111111", lineHeight: 1.2, maxLines: 2 }}>
+        {item.itemName}
+      </Text>
+
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", marginTop: 3 }}>
+        <View style={{ flex: 1, justifyContent: "center" }}>
+          <Text style={{ fontSize: priceSize, fontFamily: "Helvetica-Bold", color: "#000000", letterSpacing: -0.5 }}>{priceStr}</Text>
+          {item.barcodeNumber ? (
+            <Text style={{ fontSize: 8, color: "#555555", marginTop: 1, letterSpacing: 0.4 }}>ID # {item.barcodeNumber}</Text>
+          ) : null}
+        </View>
+        {steps.length > 0 && (
+          <View style={{ width: 112, borderLeftWidth: 0.75, borderLeftColor: "#bbbbbb", paddingLeft: 8, justifyContent: "center" }}>
+            {steps.map((st, i) => (
+              <View key={st.day} style={{ marginTop: i === 0 ? 0 : 5 }}>
+                <Text style={{ fontSize: 7, color: "#666666", textTransform: "uppercase", letterSpacing: 0.5 }}>Starting {shortDay(st.day)}</Text>
+                <Text style={{ fontSize: 15, fontFamily: "Helvetica-Bold", color: "#111111", marginTop: 1 }}>{money(st.price)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {barcodeDataUrl ? (
+        <Image src={barcodeDataUrl} style={{ width: 150, height: 20, objectFit: "contain", objectPosition: "left" }} />
+      ) : null}
+    </Page>
+  );
+}
+
 function LabelDocument({
   items,
   barcodePngs,
   widthIn,
   heightIn,
+  mode,
 }: {
   items: LabelItem[];
   barcodePngs: (string | null)[];
   widthIn: number;
   heightIn: number;
+  mode: LabelMode;
 }) {
   return (
     <Document>
-      {items.map((item, i) => (
+      {items.map((item, i) => mode === "automated" ? (
+        <AutomatedLabelPage key={item.id} item={item} barcodeDataUrl={barcodePngs[i]} />
+      ) : (
         <LabelPage
           key={item.id}
           item={item}
@@ -164,7 +225,7 @@ function LabelDocument({
   );
 }
 
-export async function renderLabelPDF({ items, widthIn, heightIn }: Props): Promise<Buffer> {
+export async function renderLabelPDF({ items, widthIn, heightIn, mode = "simple" }: Props): Promise<Buffer> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const bwipjs = require("bwip-js") as {
     toBuffer: (opts: Record<string, unknown>) => Promise<Buffer>;
@@ -197,6 +258,7 @@ export async function renderLabelPDF({ items, widthIn, heightIn }: Props): Promi
       barcodePngs={barcodePngs}
       widthIn={widthIn}
       heightIn={heightIn}
+      mode={mode}
     />
   );
 

@@ -1292,53 +1292,78 @@ export function EditItemModal({ item, rooms, localVendors, canReassign, allTenan
 
 // ─── Label Modal ─────────────────────────────────────────────────────────────
 
-function LabelModal({ count, error, onClose, onPrint }: { count: number; error: string | null; onClose: () => void; onPrint: (w: number, h: number) => Promise<void> }) {
+function LabelModal({ count, error, onClose, onPrint }: { count: number; error: string | null; onClose: () => void; onPrint: (w: number, h: number, mode: "simple" | "automated") => Promise<void> }) {
   useBackClose(onClose);
+  const [mode, setMode] = useState<"simple" | "automated" | null>(null);
   const [width, setWidth] = useState("2");
   const [height, setHeight] = useState("1");
   const [printing, setPrinting] = useState(false);
 
   const handlePrint = async () => {
-    const w = parseFloat(width) || 2;
-    const h = parseFloat(height) || 1;
+    if (!mode) return;
+    const w = mode === "automated" ? 4 : parseFloat(width) || 2;
+    const h = mode === "automated" ? 2 : parseFloat(height) || 1;
     setPrinting(true);
-    await onPrint(w, h);
+    await onPrint(w, h, mode);
     setPrinting(false);
   };
+
+  const choice = (value: "automated" | "simple", title: string, size: string, desc: string) => (
+    <button
+      type="button"
+      onClick={() => setMode(value)}
+      aria-pressed={mode === value}
+      className={`w-full text-left rounded-xl border p-3 transition-colors ${mode === value ? "border-forest-400 bg-forest-600/15" : "border-gray-700 hover:border-gray-500"}`}
+    >
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-white">{title}</span>
+        <span className="text-[11px] text-gray-400 tabular-nums">{size}</span>
+      </span>
+      <span className="block text-xs text-gray-400 mt-1 leading-snug">{desc}</span>
+    </button>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-80">
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6 w-[22rem] max-w-full">
         <h3 className="text-white font-bold text-lg mb-1">Print Labels</h3>
-        <p className="text-gray-400 text-sm mb-5">{count} label{count !== 1 ? "s" : ""} will be generated as a PDF.</p>
-        <div className="flex gap-3 mb-4">
-          <div className="flex-1">
-            <label className="block text-xs text-gray-400 mb-1">Width (in)</label>
-            <input
-              type="number"
-              value={width}
-              onChange={e => setWidth(e.target.value)}
-              min={0.5} max={8} step={0.25}
-              className="w-full h-9 px-3 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs text-gray-400 mb-1">Height (in)</label>
-            <input
-              type="number"
-              value={height}
-              onChange={e => setHeight(e.target.value)}
-              min={0.25} max={8} step={0.25}
-              className="w-full h-9 px-3 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
-            />
-          </div>
+        <p className="text-gray-400 text-sm mb-4">{count} label{count !== 1 ? "s" : ""} will be generated as a PDF.</p>
+        <div className="space-y-2 mb-4">
+          {choice("automated", "Automated Pricing", '4" × 2"', "Name, ID #, today's price, and the price-drop dates and prices. No re-tagging when prices drop.")}
+          {choice("simple", "Simple Pricing", '2" × 1"', "Price, name and barcode only.")}
         </div>
+        {mode === "simple" && (
+          <div className="flex gap-3 mb-4">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1">Width (in)</label>
+              <input
+                type="number"
+                value={width}
+                onChange={e => setWidth(e.target.value)}
+                min={0.5} max={8} step={0.25}
+                className="w-full h-9 px-3 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1">Height (in)</label>
+              <input
+                type="number"
+                value={height}
+                onChange={e => setHeight(e.target.value)}
+                min={0.25} max={8} step={0.25}
+                className="w-full h-9 px-3 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-forest-400"
+              />
+            </div>
+          </div>
+        )}
+        {mode === "automated" && (
+          <p className="text-xs text-gray-500 mb-4">Drop dates count from the day the item was listed (today, if it isn&apos;t listed yet). One 4&quot; × 2&quot; landscape label per page.</p>
+        )}
         {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
-        <p className="text-xs text-gray-500 mb-5">Each label includes the price, item name, scannable barcode, and barcode number. One label per page — use printer settings to fit multiple on a sheet.</p>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 h-9 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800 transition-colors">Cancel</button>
-          <button onClick={handlePrint} disabled={printing} className="flex-1 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors">
+          <button onClick={handlePrint} disabled={printing || !mode} className="flex-1 h-9 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50 transition-colors">
             {printing ? "Generating…" : "Download PDF"}
           </button>
         </div>
@@ -2005,7 +2030,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     }
   };
 
-  const handlePrintLabels = async (widthIn: number, heightIn: number) => {
+  const handlePrintLabels = async (widthIn: number, heightIn: number, mode: "simple" | "automated") => {
     const pfItems = [...selected]
       .map(id => items.find(i => i.id === id))
       .filter((i): i is Item => !!i && i.primaryRoute === "ProFoundFinds Consignment");
@@ -2022,7 +2047,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       const res = await fetch("/api/pfinventory/labels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: labelItems, widthIn, heightIn }),
+        body: JSON.stringify({ items: labelItems, widthIn, heightIn, mode }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null) as { error?: string } | null;
@@ -2032,7 +2057,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       // Same download path as the other catalog PDFs: the share sheet in the
       // iOS/Android app, a kept-alive link in browsers (Safari drops a
       // download whose blob URL is revoked right after the click)
-      await downloadOrShareBlob(blob, `labels-${new Date().toISOString().slice(0, 10)}.pdf`);
+      await downloadOrShareBlob(blob, `${mode === "automated" ? "price-labels" : "labels"}-${new Date().toISOString().slice(0, 10)}.pdf`);
       setShowLabelModal(false);
     } catch (e) {
       // Closing the app's share sheet isn't a failure

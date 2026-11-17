@@ -830,7 +830,7 @@ function InventorySection({
                 ? item.priceDropOriginalValue
                 : item.valueMid;
               const currentPrice = item.valueMid;
-              const hasDropped = !!(item.priceDropOriginalValue && item.priceDropOriginalValue > 0);
+              const hasDropped = !!(item.priceDropOriginalValue && item.priceDropOriginalValue > currentPrice);
 
               return (
                 <tr key={item.id}

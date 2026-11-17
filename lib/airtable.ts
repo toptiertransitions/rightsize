@@ -4,6 +4,7 @@
  */
 
 import Airtable from "airtable";
+import { AUTO_DROP_ROUTE, chicagoToday } from "./pricing/autoDrop";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { DateTime } from "luxon";
@@ -699,7 +700,10 @@ export async function createItem(data: Partial<Item> & {
     BarcodeNumber: data.barcodeNumber || "",
     Quantity: data.quantity || 1,
     ClientSharePercent: data.clientSharePercent ?? 0,
-    DeliveryDate: data.deliveryDate || "",
+    // Created already listed on ProFoundFinds: listed today (see updateItem)
+    DeliveryDate: data.deliveryDate || (data.status === "Listed" && data.primaryRoute === AUTO_DROP_ROUTE ? chicagoToday() : ""),
+    ...(data.status === "Listed" && data.primaryRoute === AUTO_DROP_ROUTE && (data.valueMid ?? 0) > 0 && !data.priceDropOriginalValue
+      ? { PriceDropOriginalValue: data.valueMid } : {}),
     ...(data.widthInches != null ? { WidthInches: data.widthInches } : {}),
     ...(data.heightInches != null ? { HeightInches: data.heightInches } : {}),
     ...(data.depthInches != null ? { DepthInches: data.depthInches } : {}),
@@ -717,6 +721,25 @@ export async function updateItem(
 ): Promise<Item> {
   const base = getBase();
   const fields: Airtable.FieldSet = { UpdatedAt: new Date().toISOString() };
+
+  // ProFoundFinds automated pricing: the day an item is newly listed on
+  // ProFoundFinds is its Delivery Date (the price-drop clock), and its price
+  // that day is the listed price the drops come off. Coming back to Listed
+  // from In Cart (an abandoned checkout) or Sold (a refund) isn't a new
+  // listing, so the clock keeps running.
+  if ((data.status === "Listed" || data.primaryRoute === AUTO_DROP_ROUTE) && data.deliveryDate === undefined) {
+    const cur = await base(AIRTABLE_TABLES.ITEMS).find(id).catch(() => null);
+    if (cur) {
+      const curRoute = toStr(cur.fields["PrimaryRoute"]);
+      const curStatus = toStr(cur.fields["Status"]);
+      const wasListed = curRoute === AUTO_DROP_ROUTE && ["Listed", "In Cart", "Sold"].includes(curStatus);
+      if ((data.primaryRoute ?? curRoute) === AUTO_DROP_ROUTE && (data.status ?? curStatus) === "Listed" && !wasListed) {
+        fields["DeliveryDate"] = chicagoToday();
+        const price = data.valueMid ?? toNum(cur.fields["ValueMid"]);
+        if (price > 0) fields["PriceDropOriginalValue"] = price;
+      }
+    }
+  }
 
   // Handle photos specially — writes all three related Airtable fields
   if (data.photos !== undefined) {
@@ -873,6 +896,15 @@ export async function batchUpdateItemPrices(
       }))
     );
   }
+}
+
+/** Every ProFoundFinds Consignment item that's Listed (automated pricing). */
+export async function getListedProFoundFindsItems(): Promise<Item[]> {
+  const base = getBase();
+  const records = await base(AIRTABLE_TABLES.ITEMS)
+    .select({ filterByFormula: `AND({PrimaryRoute} = "${AUTO_DROP_ROUTE}", {Status} = "Listed")` })
+    .all();
+  return records.map(mapItem);
 }
 
 export async function deleteItem(id: string): Promise<void> {

@@ -45,6 +45,14 @@
     {
       "path": "/api/cron/crm-tasks-report",
       "schedule": "0 15 * * 5"
+    },
+    {
+      "path": "/api/cron/auto-price-drops",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/auto-price-drops",
+      "schedule": "0 13 * * *"
     }
   ]
 }

@@ -1875,7 +1875,9 @@ export function SalesClient({
     .filter((d): d is string => !!d)
     .sort()[0] ?? null;
 
-  const hasPriceDropApplied = items.some(i => (i.priceDropOriginalValue ?? 0) > 0);
+  // The listed price is stored on every ProFoundFinds listing (automated
+  // pricing), so "dropped" means the price is actually below it
+  const hasPriceDropApplied = items.some(i => (i.priceDropOriginalValue ?? 0) > i.valueMid);
 
   function addDaysToDate(dateStr: string, days: number): string {
     const d = new Date(dateStr + "T00:00:00");
