@@ -134,6 +134,8 @@ export async function POST(req: NextRequest) {
         salePrice: unitPriceDollars,
         clientPayout,
         primaryRoute: item.primaryRoute,
+        currentValueMid: item.valueMid,
+        currentOriginalValue: item.originalValue,
       });
       console.log(`[square/webhook] applied sale to item=${item.id}`);
 

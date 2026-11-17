@@ -6329,6 +6329,9 @@ export async function applySquareSaleToItem(opts: {
   salePrice?: number;
   clientPayout?: number;
   primaryRoute?: string;
+  /** The item's price in Rightsize before the sale, so Value can follow the Square price */
+  currentValueMid?: number;
+  currentOriginalValue?: number;
 }): Promise<Item> {
   const newQty = Math.max(0, opts.currentQuantity - opts.quantitySold);
   const newQtySold = opts.currentQuantitySold + opts.quantitySold;
@@ -6344,6 +6347,13 @@ export async function applySquareSaleToItem(opts: {
     fields["CompletedDate"] = saleDateIso.split("T")[0];
     if (opts.salePrice != null) fields["SalePrice"] = opts.salePrice;
     if (opts.clientPayout != null) fields["ConsignorPayout"] = opts.clientPayout;
+    // Value follows what Square actually charged (a markdown made in Square
+    // never reaches Rightsize otherwise); the earlier price is kept as the
+    // original so the Sales page still shows the markdown
+    if (opts.salePrice != null && opts.salePrice > 0 && opts.currentValueMid != null && Math.abs(opts.salePrice - opts.currentValueMid) >= 0.01) {
+      fields["ValueMid"] = opts.salePrice;
+      if (!(opts.currentOriginalValue && opts.currentOriginalValue > 0) && opts.currentValueMid > 0) fields["OriginalValue"] = opts.currentValueMid;
+    }
     // ProFoundFinds Consignment sales have no individual staff seller — clear
     // any stale value before the sold-item email reads it.
     if (opts.primaryRoute === "ProFoundFinds Consignment") {
