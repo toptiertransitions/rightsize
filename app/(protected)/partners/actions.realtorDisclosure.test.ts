@@ -6,6 +6,8 @@ import { PARTNER_CATEGORIES } from "@/lib/types";
 
 const h = vi.hoisted(() => ({
   flag: false,
+  brandId: undefined as string | undefined,
+  brandAllowed: false,
   ackResult: null as string | null,
   acknowledge: vi.fn(),
   upsert: vi.fn(),
@@ -17,7 +19,7 @@ vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }));
 vi.mock("@/lib/airtable", () => ({
   getSystemRole: async () => null,
   getUserRoleForTenant: async () => "Owner",
-  getTenantById: async () => ({ id: "recTenant", name: "Smith Move" }),
+  getTenantById: async () => ({ id: "recTenant", name: "Smith Move", communityBrandId: h.brandId }),
   getPartnerSelectionsForTenant: async () => [],
   upsertPartnerSelection: (...a: unknown[]) => h.upsert(...a),
   getPartnerRequestsForTenant: async () => [],
@@ -34,6 +36,7 @@ vi.mock("@/lib/marketplace/data", () => ({}));
 vi.mock("@/lib/partners/rehomingServer", () => ({}));
 vi.mock("@/lib/partners/realtorDisclosureServer", () => ({
   isRealtorDisclosureEnabled: () => h.flag,
+  isRealtorDisclosureActive: async (_u: string, t: { communityBrandId?: string }) => h.flag && (!t.communityBrandId || h.brandAllowed),
   acknowledgeRealtorDisclosure: async (p: unknown) => { h.acknowledge(p); return h.ackResult; },
 }));
 
@@ -43,6 +46,8 @@ const ack = { version: "v1-draft", understandsCompensation: true, consentsToShar
 
 beforeEach(() => {
   h.flag = false;
+  h.brandId = undefined;
+  h.brandAllowed = false;
   h.ackResult = null;
   h.acknowledge.mockReset();
   h.upsert.mockReset().mockResolvedValue(undefined);
@@ -88,6 +93,21 @@ describe("flag on", () => {
       tenant: { id: "recTenant", name: "Smith Move" }, realtors: [{ id: "rec-Realtor", name: "Realtor Co" }],
     }));
     expect(h.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("co-branded project, community toggle off (default): realtor match goes through with no disclosure or record", async () => {
+    h.brandId = "recBrandA";
+    expect(await selectPartnerAction("recTenant", "Realtor", "rec-Realtor")).toEqual({ ok: true });
+    expect(await requestPartnerIntroAction("recTenant", "Realtor", "rec-Realtor")).toEqual({ ok: true });
+    expect(h.acknowledge).not.toHaveBeenCalled();
+  });
+
+  it("co-branded project, community toggle on: realtor matches are gated", async () => {
+    h.brandId = "recBrandA";
+    h.brandAllowed = true;
+    h.ackResult = "Please check both boxes to continue.";
+    expect((await selectPartnerAction("recTenant", "Realtor", "rec-Realtor")).ok).toBe(false);
+    expect(h.upsert).not.toHaveBeenCalled();
   });
 
   it("gates realtor intro requests the same way", async () => {

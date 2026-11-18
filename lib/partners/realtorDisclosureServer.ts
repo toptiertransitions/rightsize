@@ -9,7 +9,8 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { AIRTABLE_TABLES, isTTTAdmin } from "@/lib/config";
 import { getMembershipsForTenant } from "@/lib/airtable";
 import { sendRealtorDisclosureAckAdminNotification } from "@/lib/admin-notifications";
-import { REALTOR_DISCLOSURE, disclosureSnapshot, realtorAckError, type RealtorAckInput } from "./realtorDisclosure";
+import { REALTOR_DISCLOSURE, disclosureSnapshot, realtorAckError, realtorDisclosureAppliesToTenant, type RealtorAckInput } from "./realtorDisclosure";
+import { getReferralFeeBrandIds } from "./realtorReferralBrands";
 
 // ─── Feature flag ────────────────────────────────────────────────────────────
 // REALTOR_DISCLOSURE_FLAG:
@@ -24,6 +25,24 @@ export function isRealtorDisclosureEnabled(userId: string | null | undefined, en
   if (mode !== "test" || !userId) return false;
   const testers = (env.REALTOR_DISCLOSURE_TEST_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return testers.includes(userId) || isTTTAdmin(userId);
+}
+
+/** The flag, plus the community switch: a co-branded project's clients only
+ * get the disclosure (and tracking) when their community allows referral
+ * fees, which is off unless a TTT Admin turns it on. If the switch can't be
+ * read, a co-branded project stays off. */
+export async function isRealtorDisclosureActive(
+  userId: string | null | undefined,
+  tenant: { communityBrandId?: string | null },
+  deps: { brandIds?: () => Promise<string[]>; env?: Record<string, string | undefined> } = {}
+): Promise<boolean> {
+  if (!isRealtorDisclosureEnabled(userId, deps.env)) return false;
+  if (!tenant.communityBrandId) return true;
+  const allowed = await (deps.brandIds ?? getReferralFeeBrandIds)().catch((e) => {
+    console.error("[realtor-disclosure] community settings unavailable:", e);
+    return [] as string[];
+  });
+  return realtorDisclosureAppliesToTenant(tenant.communityBrandId, new Set(allowed));
 }
 
 // ─── Record ──────────────────────────────────────────────────────────────────

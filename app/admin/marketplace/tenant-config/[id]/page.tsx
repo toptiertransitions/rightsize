@@ -18,6 +18,8 @@ import { adminRemoveChecklistItemAction, adminReorderChecklistAction, adminSaveC
 import { adminCancelResidentInviteAction, adminInviteResidentAction, adminResendResidentInviteAction } from "../resident-invite-actions";
 import { getResidentInvites } from "@/lib/brands/residentInvites";
 import { ResidentInvitesPanel } from "@/components/brands/ResidentInvitesPanel";
+import { RealtorReferralToggle } from "./RealtorReferralToggle";
+import { getReferralFeeBrandIds } from "@/lib/partners/realtorReferralBrands";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
   if (!brand) notFound();
 
   const { userId } = await auth();
-  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role, directory, residentInvites] = await Promise.all([
+  const [partner, pickable, audit, checklistItems, allPartners, categories, listings, role, directory, residentInvites, referralFeeBrandIds] = await Promise.all([
     getPartnerById(brand.marketplacePartnerId).catch(() => null),
     getPickableContacts(brand),
     getAuditForEntity(brand.id, 15).catch(() => []),
@@ -38,6 +40,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
     userId ? getSystemRole(userId).catch(() => null) : Promise.resolve(null),
     getPartnerDirectory().catch(() => []),
     brand.status === "Active" ? getResidentInvites(brand.id).catch(() => []) : Promise.resolve([]),
+    getReferralFeeBrandIds().catch(() => [] as string[]),
   ]);
   const categoryLabel = new Map(categories.map((c) => [c.id, c.label]));
   const pickablePartners = allPartners
@@ -95,6 +98,14 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
                   initialIds={brand.preferredPartnerIds}
                   partners={pickablePartners}
                   canEdit={!!role && hasCapability(role as MarketplaceRole, "managePreferredPartners")}
+                />
+              </div>
+              <div id="realtor-referral-fees" className="mt-10 scroll-mt-24">
+                <RealtorReferralToggle
+                  brandId={brand.id}
+                  communityName={brand.displayName || partner?.companyName || "this community"}
+                  initialAllowed={referralFeeBrandIds.includes(brand.id)}
+                  canEdit={role === "TTTAdmin"}
                 />
               </div>
               <div id="checklist" className="mt-10 scroll-mt-24">

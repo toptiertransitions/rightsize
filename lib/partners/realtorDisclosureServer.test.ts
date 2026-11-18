@@ -3,13 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const getMembershipsForTenant = vi.fn();
 vi.mock("@/lib/airtable", () => ({ getMembershipsForTenant: (...a: unknown[]) => getMembershipsForTenant(...a) }));
 vi.mock("@/lib/admin-notifications", () => ({ sendRealtorDisclosureAckAdminNotification: vi.fn() }));
+vi.mock("./realtorReferralBrands", () => ({ getReferralFeeBrandIds: vi.fn(async () => []) }));
 vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: async () => ({
     users: { getUser: async (id: string) => ({ firstName: id === "user_owner" ? "Olive" : "Sam", lastName: id === "user_owner" ? "Owner" : "Staff", emailAddresses: [] }) },
   }),
 }));
 
-import { acknowledgeRealtorDisclosure, createRealtorAckRecord, isRealtorDisclosureEnabled, type RealtorAckRecord } from "./realtorDisclosureServer";
+import { acknowledgeRealtorDisclosure, createRealtorAckRecord, isRealtorDisclosureActive, isRealtorDisclosureEnabled, type RealtorAckRecord } from "./realtorDisclosureServer";
 import { REALTOR_DISCLOSURE, disclosureSnapshot } from "./realtorDisclosure";
 
 const goodAck = { version: REALTOR_DISCLOSURE.version, understandsCompensation: true, consentsToShareInfo: true };
@@ -32,6 +33,28 @@ describe("feature flag", () => {
     expect(isRealtorDisclosureEnabled("user_b", env)).toBe(true);
     expect(isRealtorDisclosureEnabled("user_c", env)).toBe(false);
     expect(isRealtorDisclosureEnabled(null, env)).toBe(false);
+  });
+});
+
+describe("isRealtorDisclosureActive (community toggle)", () => {
+  const on = { REALTOR_DISCLOSURE_FLAG: "on" };
+  it("is off everywhere with the flag off", async () => {
+    expect(await isRealtorDisclosureActive("u", {}, { env: {} })).toBe(false);
+    expect(await isRealtorDisclosureActive("u", { communityBrandId: "recBrandA" }, { env: {}, brandIds: async () => ["recBrandA"] })).toBe(false);
+  });
+  it("is on for projects that aren't co-branded", async () => {
+    const brandIds = vi.fn(async () => []);
+    expect(await isRealtorDisclosureActive("u", {}, { env: on, brandIds })).toBe(true);
+    expect(brandIds).not.toHaveBeenCalled();
+  });
+  it("is off by default for co-branded projects, on once their community allows it", async () => {
+    expect(await isRealtorDisclosureActive("u", { communityBrandId: "recBrandA" }, { env: on, brandIds: async () => [] })).toBe(false);
+    expect(await isRealtorDisclosureActive("u", { communityBrandId: "recBrandA" }, { env: on, brandIds: async () => ["recBrandA"] })).toBe(true);
+  });
+  it("stays off for a co-branded project when the setting can't be read", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await isRealtorDisclosureActive("u", { communityBrandId: "recBrandA" }, { env: on, brandIds: async () => { throw new Error("down"); } })).toBe(false);
+    logged.mockRestore();
   });
 });
 

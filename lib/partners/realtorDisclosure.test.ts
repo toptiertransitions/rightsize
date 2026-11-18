@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PARTNER_CATEGORIES } from "@/lib/types";
 import {
-  REALTOR_DISCLOSURE, canSubmitRealtorAck, disclosureSnapshot, realtorAckError, realtorAckRequired, type RealtorAckInput,
+  REALTOR_DISCLOSURE, canSubmitRealtorAck, disclosureSnapshot, realtorAckError, realtorAckRequired, realtorDisclosureAppliesToTenant, type RealtorAckInput,
 } from "./realtorDisclosure";
 
 const ack = (o: Partial<RealtorAckInput> = {}): RealtorAckInput => ({
@@ -31,6 +31,18 @@ describe("realtorAckRequired (regression: only Realtor, only with the flag on)",
   });
   it("is required for Realtor only with the flag on", () => {
     for (const c of PARTNER_CATEGORIES) expect(realtorAckRequired(c, true)).toBe(c === "Realtor");
+  });
+});
+
+describe("co-branded projects", () => {
+  it("applies to projects with no community brand", () => {
+    expect(realtorDisclosureAppliesToTenant(undefined, new Set())).toBe(true);
+    expect(realtorDisclosureAppliesToTenant("", new Set())).toBe(true);
+  });
+  it("is off for a co-branded project unless its community allows referral fees", () => {
+    expect(realtorDisclosureAppliesToTenant("recBrandA", new Set())).toBe(false);
+    expect(realtorDisclosureAppliesToTenant("recBrandA", new Set(["recBrandB"]))).toBe(false);
+    expect(realtorDisclosureAppliesToTenant("recBrandA", new Set(["recBrandA"]))).toBe(true);
   });
 });
 

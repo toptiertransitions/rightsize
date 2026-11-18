@@ -38,7 +38,7 @@ import { isReviewableCategory } from "@/lib/partners/reviews";
 import { canSeeRehoming } from "@/lib/partners/rehoming";
 import { isTTTAdmin } from "@/lib/config";
 import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
-import { isRealtorDisclosureEnabled } from "@/lib/partners/realtorDisclosureServer";
+import { isRealtorDisclosureActive } from "@/lib/partners/realtorDisclosureServer";
 import type { RehomingSectionData } from "@/components/partners/RehomingResourcesSection";
 
 const sameName = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -127,9 +127,10 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   const canEdit =
     (!!sysRole && STAFF_EDIT_ROLES.includes(sysRole)) ||
     (!!tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole));
-  // Realtor referral disclosure (REALTOR_DISCLOSURE_FLAG, off by default).
+  // Realtor referral disclosure (REALTOR_DISCLOSURE_FLAG, off by default;
+  // co-branded projects only when their community allows referral fees).
   // Staff matching on a project that isn't their own confirm for the client.
-  const realtorDisclosure = isRealtorDisclosureEnabled(userId);
+  const realtorDisclosure = await isRealtorDisclosureActive(userId, tenant);
   const actingAsStaff = isStaff && !(tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole));
 
   const [rawDirectory, selectionRows] = await Promise.all([

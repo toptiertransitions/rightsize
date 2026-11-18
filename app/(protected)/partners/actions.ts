@@ -18,7 +18,7 @@ import { isTTTAdmin } from "@/lib/config";
 import { revalidateTag } from "next/cache";
 import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
 import { realtorAckRequired, type RealtorAckInput } from "@/lib/partners/realtorDisclosure";
-import { acknowledgeRealtorDisclosure, isRealtorDisclosureEnabled } from "@/lib/partners/realtorDisclosureServer";
+import { acknowledgeRealtorDisclosure, isRealtorDisclosureActive, isRealtorDisclosureEnabled } from "@/lib/partners/realtorDisclosureServer";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -70,8 +70,9 @@ async function assertCanEdit(tenantId: string): Promise<string | null> {
 
 // Realtor referral disclosure (behind REALTOR_DISCLOSURE_FLAG): a realtor
 // intro or selection needs a recorded acknowledgment first. Returns an error
-// to show, or null to carry on. Every other category, and Realtor with the
-// flag off, returns null without doing anything.
+// to show, or null to carry on. Every other category, Realtor with the flag
+// off, and co-branded projects whose community hasn't allowed referral fees
+// return null without recording anything.
 async function realtorDisclosureGate(
   userId: string,
   tenantId: string,
@@ -81,13 +82,14 @@ async function realtorDisclosureGate(
   context: "intro_request" | "select"
 ): Promise<string | null> {
   if (!realtorAckRequired(category, isRealtorDisclosureEnabled(userId))) return null;
-  const [sysRole, tenantRole, tenant, directory] = await Promise.all([
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return "Project not found.";
+  if (!(await isRealtorDisclosureActive(userId, tenant))) return null;
+  const [sysRole, tenantRole, directory] = await Promise.all([
     getSystemRole(userId).catch(() => null),
     getUserRoleForTenant(userId, tenantId).catch(() => null),
-    getTenantById(tenantId),
     getPartnerDirectory(),
   ]);
-  if (!tenant) return "Project not found.";
   const partner = directory.find((p) => p.id === partnerId);
   // Staff acting on a project that isn't their own confirm for the client
   const staffRole = sysRole && !(tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole)) ? sysRole : null;

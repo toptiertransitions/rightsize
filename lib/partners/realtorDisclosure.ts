@@ -46,6 +46,13 @@ export interface RealtorAckInput {
   staffConfirmedClientAgreed?: boolean;
 }
 
+/** Co-branded clients (a project that came in through a community brand)
+ * only get the disclosure when a TTT Admin has switched referral fees on for
+ * that community; off by default. Everyone else gets it. */
+export function realtorDisclosureAppliesToTenant(communityBrandId: string | null | undefined, feeAllowedBrandIds: ReadonlySet<string>): boolean {
+  return !communityBrandId || feeAllowedBrandIds.has(communityBrandId);
+}
+
 /** Only the Realtor category is ever gated, and only with the flag on. */
 export function realtorAckRequired(category: PartnerCategory, enabled: boolean): boolean {
   return enabled && category === REALTOR_CATEGORY;
