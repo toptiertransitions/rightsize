@@ -53,7 +53,7 @@ export interface RepWeek {
   leadsCreated: { client: string; stage: string; value: number; source: string }[];
   leadsWon: { client: string; value: number; source: string }[];
   activity: { calls: number; meetings: number; events: number; emails: number; texts: number; other: number };
-  uniqueMeetings: number; // referral partners met at least once this week (same as CRM Reporting)
+  uniqueMeetings: number; // partner meetings this week, one per company per day (same as CRM Reporting)
 }
 
 export interface WeeklyWinsData {
@@ -142,7 +142,9 @@ export async function gatherWeeklyWins(now = new Date()): Promise<WeeklyWinsData
     const partnersMet = new Set<string>();
     for (const a of activities) {
       if (!owns(a.createdByClerkId) || !inWeek(a.activityDate)) continue;
-      if (a.type === "Meeting" && a.clientContactId && partnerMap.has(a.clientContactId)) partnersMet.add(a.clientContactId);
+      // Several contacts from one company on the same day is one meeting
+      const partner = a.type === "Meeting" && a.clientContactId ? partnerMap.get(a.clientContactId) : undefined;
+      if (partner) partnersMet.add(`${partner.referralCompanyId || partner.id}|${a.activityDate.slice(0, 10)}`);
       if (a.type === "Call") activity.calls++;
       else if (a.type === "Meeting") activity.meetings++;
       else if (a.type === "Event") activity.events++;

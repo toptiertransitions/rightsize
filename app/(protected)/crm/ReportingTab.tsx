@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import type { ClientContact, ClientOpportunity, CRMActivity, ReferralCompany, ReferralContact, ReferralContactStage, StaffMember } from "@/lib/types";
 import { ctDateStr, ctToday } from "@/lib/date-ct";
 import { cn } from "@/lib/utils";
@@ -93,7 +93,7 @@ const COLUMNS: { key: MetricKey; label: string; sub: string; money?: boolean; se
   { key: "expectedValue", label: "Open Pipe $", sub: "open, exp. close in period", money: true, section: "opps" },
   { key: "created", label: "Opps Created", sub: "by created date", section: "opps" },
   { key: "createdValue", label: "Pipe $ Created", sub: "by created date, any stage", money: true, section: "opps" },
-  { key: "uniqueMeetings", label: "Unique Meetings", sub: "partners met, once each", section: "contacts" },
+  { key: "uniqueMeetings", label: "Unique Meetings", sub: "partner meetings, 1 per company/day", section: "contacts" },
   { key: "contactsTouched", label: "Contacts Touched", sub: "unique, by activity date", section: "contacts" },
   { key: "activeReferrals", label: "Active Referral", sub: "partners right now", section: "partners" },
   { key: "progressions", label: "Stage Moves", sub: "partners advanced", section: "partners" },
@@ -110,12 +110,29 @@ interface PartnerRec {
 }
 interface ContactRec {
   key: string; id: string; name: string; kind: "Client" | "Referral Partner"; company: string;
+  /** Company id, or the contact's own id when it has no company */
+  groupKey: string;
   rep: string; touches: number; meetings: number; lastTouch: string;
+  /** Days (YYYY-MM-DD) this rep met this contact */
+  meetingDays: Set<string>;
 }
 
 interface Selection { rep: string | null; metric: MetricKey | null }
 
 const isPartnerMeeting = (c: ContactRec) => c.kind === "Referral Partner" && c.meetings > 0;
+
+// A meeting is one rep, one company, one day: several contacts from the same
+// company met on the same date count once. Returns each meeting's attendees.
+function meetingsOf(cs: ContactRec[]): Map<string, ContactRec[]> {
+  const out = new Map<string, ContactRec[]>();
+  for (const c of cs) {
+    for (const day of c.meetingDays) {
+      const k = `${c.rep}|${c.groupKey}|${day}`;
+      out.set(k, [...(out.get(k) ?? []), c]);
+    }
+  }
+  return out;
+}
 
 // ─── Sortable table ──────────────────────────────────────────────────────────
 
@@ -203,6 +220,150 @@ const STAGE_BADGE: Record<string, string> = {
 };
 const Badge = ({ text }: { text: string }) =>
   text ? <span className={cn("inline-block rounded-full px-2 py-0.5 text-xs font-medium", STAGE_BADGE[text] ?? "bg-gray-100 text-gray-700")}>{text}</span> : null;
+
+// ─── Contacts Touched, by company ───────────────────────────────────────────
+
+interface CompanyGroup {
+  key: string; company: string; contacts: ContactRec[]; kinds: string; reps: string;
+  activities: number; meetings: number; lastTouch: string;
+  /** Meetings attended by more than one contact: day + attendee names */
+  joint: { day: string; names: string[] }[];
+}
+
+type GroupSort = "company" | "kind" | "rep" | "activities" | "meetings" | "lastTouch";
+
+// Report-only view: contacts nested under their company. A company's Meetings
+// counts each rep/day once however many of its contacts were there, and its
+// Activities count that meeting once too.
+function CompanyContactsTable({ contacts, repCell }: { contacts: ContactRec[]; repCell: (rep: string) => string }) {
+  const [sort, setSort] = useState<{ key: GroupSort; dir: 1 | -1 }>({ key: "company", dir: 1 });
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const groups = useMemo(() => {
+    const byKey = new Map<string, ContactRec[]>();
+    for (const c of contacts) {
+      const k = c.company ? c.groupKey : "";
+      byKey.set(k, [...(byKey.get(k) ?? []), c]);
+    }
+    const out: CompanyGroup[] = [];
+    for (const [key, cs] of byKey) {
+      const meetings = meetingsOf(cs);
+      const joint = [...meetings.entries()]
+        .filter(([, who]) => new Set(who.map(c => c.id)).size > 1)
+        .map(([k, who]) => ({ day: k.slice(k.lastIndexOf("|") + 1), names: [...new Set(who.map(c => c.name))] }))
+        .sort((a, b) => a.day.localeCompare(b.day));
+      // Meeting activities collapse to one per meeting, so a group meeting is one activity
+      const meetingActivities = cs.reduce((n, c) => n + c.meetings, 0);
+      out.push({
+        key, company: key ? cs[0].company : "", contacts: cs,
+        kinds: [...new Set(cs.map(c => c.kind))].join(", "),
+        reps: [...new Set(cs.map(c => repCell(c.rep)))].join(", "),
+        activities: cs.reduce((n, c) => n + c.touches, 0) - meetingActivities + meetings.size,
+        meetings: meetings.size,
+        lastTouch: cs.reduce((d, c) => (c.lastTouch > d ? c.lastTouch : d), ""),
+        joint,
+      });
+    }
+    const val = (g: CompanyGroup): string | number =>
+      sort.key === "company" ? (g.company || "\uffff").toLowerCase() : sort.key === "kind" ? g.kinds : sort.key === "rep" ? g.reps : g[sort.key];
+    return out.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
+      return cmp * sort.dir || a.company.localeCompare(b.company);
+    });
+  }, [contacts, repCell, sort]);
+
+  if (!contacts.length) return <p className="px-4 py-6 text-sm text-gray-400 text-center">No contacts match.</p>;
+
+  const cols: { key: GroupSort | "contact"; label: string; right?: boolean }[] = [
+    { key: "company", label: "Company" },
+    { key: "contact", label: "Contact" },
+    { key: "kind", label: "Type" },
+    { key: "rep", label: "Touched By" },
+    { key: "activities", label: "Activities", right: true },
+    { key: "meetings", label: "Meetings", right: true },
+    { key: "lastTouch", label: "Last Touch", right: true },
+  ];
+  const toggle = (k: string) => setCollapsed(s => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+
+  return (
+    <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-gray-50 z-10">
+          <tr className="border-b border-gray-200">
+            {cols.map(c => (
+              <th key={c.key} className={cn("font-medium whitespace-nowrap px-4 py-2.5", c.right ? "text-right" : "text-left")}>
+                {c.key === "contact" ? <span className="text-gray-500">{c.label}</span> : (
+                  <button
+                    onClick={() => setSort(s => ({ key: c.key as GroupSort, dir: s.key === c.key ? (s.dir === 1 ? -1 : 1) : c.key === "company" ? 1 : -1 }))}
+                    className={cn("hover:text-gray-900", sort.key === c.key ? "text-forest-700" : "text-gray-500")}
+                  >
+                    {c.label}{sort.key === c.key ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
+                  </button>
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map(g => {
+            const open = !collapsed.has(g.key);
+            const jointDays = new Set(g.joint.map(j => j.day));
+            return (
+              <Fragment key={g.key || "none"}>
+                <tr onClick={() => toggle(g.key)} className="border-b border-gray-100 bg-gray-50/60 cursor-pointer hover:bg-gray-100/70">
+                  <td className="px-4 py-2.5 whitespace-nowrap font-semibold text-gray-900">
+                    <span className="inline-block w-4 text-gray-400">{open ? "▾" : "▸"}</span>
+                    {g.company || <span className="text-gray-500 font-medium">No company</span>}
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-gray-500">{g.contacts.length} contact{g.contacts.length === 1 ? "" : "s"}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-gray-600">{g.kinds}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-gray-600">{g.reps}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-right tabular-nums font-semibold text-gray-900">{g.activities}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-right tabular-nums">
+                    <span className="font-semibold text-gray-900">{g.meetings}</span>
+                    {g.joint.length > 0 && (
+                      <span
+                        title={g.joint.map(j => `${fmtDate(j.day)}: ${j.names.join(", ")}`).join("\n")}
+                        className="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200"
+                      >
+                        {g.joint.length === 1
+                          ? `${g.joint[0].names.length} attendees`
+                          : `${g.joint.length} group meetings`}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-right tabular-nums text-gray-700">{fmtDate(g.lastTouch)}</td>
+                </tr>
+                {open && [...g.contacts].sort((a, b) => b.lastTouch.localeCompare(a.lastTouch) || a.name.localeCompare(b.name)).map(c => {
+                  const shared = [...c.meetingDays].filter(d => jointDays.has(d));
+                  return (
+                    <tr key={c.key} className="border-b border-gray-100 last:border-0">
+                      <td className="px-4 py-2" />
+                      <td className="px-4 py-2 whitespace-nowrap pl-6 font-medium text-gray-900">{c.name}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-gray-600">{c.kind}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-gray-600">{repCell(c.rep)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-right tabular-nums text-gray-500">{c.touches}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-right tabular-nums text-gray-500">
+                        {c.meetings}
+                        {shared.length > 0 && (
+                          <span title={`Group meeting on ${shared.map(fmtDate).join(", ")}, counted once for ${g.company}`} className="ml-1.5 text-[11px] text-amber-700">
+                            group
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-right tabular-nums text-gray-500">{fmtDate(c.lastTouch)}</td>
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -338,16 +499,17 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       if (!rec) {
         const ref = refById.get(id);
         rec = {
-          key, id, rep, touches: 0, meetings: 0, lastTouch: "",
+          key, id, rep, touches: 0, meetings: 0, lastTouch: "", meetingDays: new Set(),
           name: ref?.name ?? contactName.get(id) ?? "(unknown contact)",
           kind: ref ? "Referral Partner" : "Client",
           company: ref ? companyById.get(ref.referralCompanyId)?.name ?? "" : "",
+          groupKey: (ref && companyById.has(ref.referralCompanyId) ? ref.referralCompanyId : "") || id,
         };
         touched.set(key, rec);
       }
       rec.touches++;
-      if (a.type === "Meeting") rec.meetings++;
       const d = ctDateStr(a.activityDate);
+      if (a.type === "Meeting") { rec.meetings++; if (d) rec.meetingDays.add(d); }
       if (d > rec.lastTouch) rec.lastTouch = d;
       repIds.add(rep);
     }
@@ -361,8 +523,8 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
   function metricValue(key: MetricKey, rep: string | null): number {
     const mine = <T extends { rep: string }>(rs: T[]) => (rep ? rs.filter(r => r.rep === rep) : rs);
     if (key === "contactsTouched") return mine(contacts).length;
-    // Each referral partner met at least once counts one, however many meetings
-    if (key === "uniqueMeetings") return mine(contacts).filter(isPartnerMeeting).length;
+    // Partner meetings, one per company per day however many contacts attended
+    if (key === "uniqueMeetings") return meetingsOf(mine(contacts).filter(isPartnerMeeting)).size;
     if (COLUMN[key].section === "partners") return mine(partners).filter(p => p.tags.has(key)).length;
     const tagged = mine(opps).filter(o => o.tags.has(key));
     return COLUMN[key].money ? tagged.reduce((s, o) => s + o.value, 0) : tagged.length;
@@ -412,7 +574,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
 
   const oppValueTotal = shownOpps.reduce((s, o) => s + o.value, 0);
 
-  const repCell = (rep: string) => repName.get(rep) ?? "";
+  const repCell = useCallback((rep: string) => repName.get(rep) ?? "", [repName]);
 
   return (
     <div className="space-y-6">
@@ -664,28 +826,14 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
       <Panel
         title="Contacts Touched"
         count={shownContacts.length}
-        filterLabel={filterLabel("contacts", "Activity logged in period")}
+        filterLabel={`${filterLabel("contacts", "Activity logged in period")} · ${new Set(shownContacts.map(c => c.groupKey)).size} companies · ${meetingsOf(shownContacts).size} meetings`}
         innerRef={refs.contacts}
         highlight={!!sel.metric && COLUMN[sel.metric].section === "contacts"}
       >
         {activitiesLoading ? (
           <p className="px-4 py-6 text-sm text-gray-400 text-center">Loading activities…</p>
         ) : (
-          <DataTable
-            rows={shownContacts}
-            rowKey={c => c.key}
-            defaultSort="lastTouch"
-            empty="No contacts match."
-            cols={[
-              { key: "name", label: "Contact", value: c => c.name, render: c => <span className="font-medium text-gray-900">{c.name}</span> },
-              { key: "kind", label: "Type", value: c => c.kind },
-              { key: "company", label: "Company", value: c => c.company },
-              { key: "rep", label: "Touched By", value: c => repCell(c.rep) },
-              { key: "touches", label: "Activities", value: c => c.touches, right: true },
-              { key: "meetings", label: "Meetings", value: c => c.meetings, right: true },
-              { key: "lastTouch", label: "Last Touch", value: c => c.lastTouch, render: c => fmtDate(c.lastTouch), right: true },
-            ]}
-          />
+          <CompanyContactsTable contacts={shownContacts} repCell={repCell} />
         )}
       </Panel>
 
@@ -704,7 +852,7 @@ export default function ReportingTab({ opportunities, clientContacts, referralCo
 
       <div className="text-xs text-gray-400 space-y-1">
         <p>Opportunities are credited to the assigned rep. Won opps count on their close date, or their expected close date if no close date was recorded. Open Pipe is open opps expected to close in the period. Pipe $ Created is the value of every opp created in the period, whether it is now open, won or lost.</p>
-        <p>Contacts Touched counts each client or referral contact once per rep, from activities logged in the period. Referral partners are credited to their company&apos;s owner; Active Referral is a current count, and Stage Moves counts partners whose latest stage change in the period moved them up the funnel. Unassigned records and admin/test accounts are left out.</p>
+        <p>Contacts Touched counts each client or referral contact once per rep, from activities logged in the period. A meeting with several contacts from the same company on the same day counts as one meeting, in Unique Meetings and in the Contacts Touched table. Referral partners are credited to their company&apos;s owner; Active Referral is a current count, and Stage Moves counts partners whose latest stage change in the period moved them up the funnel. Unassigned records and admin/test accounts are left out.</p>
       </div>
     </div>
   );
