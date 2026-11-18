@@ -38,6 +38,7 @@ import { isReviewableCategory } from "@/lib/partners/reviews";
 import { canSeeRehoming } from "@/lib/partners/rehoming";
 import { isTTTAdmin } from "@/lib/config";
 import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
+import { isRealtorDisclosureEnabled } from "@/lib/partners/realtorDisclosureServer";
 import type { RehomingSectionData } from "@/components/partners/RehomingResourcesSection";
 
 const sameName = (a?: string, b?: string) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -126,6 +127,10 @@ export default async function PartnersPage({ searchParams }: PageProps) {
   const canEdit =
     (!!sysRole && STAFF_EDIT_ROLES.includes(sysRole)) ||
     (!!tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole));
+  // Realtor referral disclosure (REALTOR_DISCLOSURE_FLAG, off by default).
+  // Staff matching on a project that isn't their own confirm for the client.
+  const realtorDisclosure = isRealtorDisclosureEnabled(userId);
+  const actingAsStaff = isStaff && !(tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole));
 
   const [rawDirectory, selectionRows] = await Promise.all([
     getPartnerDirectory(),
@@ -295,6 +300,7 @@ export default async function PartnersPage({ searchParams }: PageProps) {
         lockedCategories={lockedCategories}
         canRemoveReferral={canRemoveReferral}
         reviews={reviews}
+        realtorDisclosure={realtorDisclosure}
         prefillTenant={{
           currentZip: tenant.currentZip,
           destinationZip: tenant.destinationZip,
@@ -412,6 +418,8 @@ export default async function PartnersPage({ searchParams }: PageProps) {
       isStaffPreview={isStaff}
       clientLabel={tenant.name}
       reviews={reviews}
+      realtorDisclosure={realtorDisclosure}
+      actingAsStaff={actingAsStaff}
     />
   );
 }

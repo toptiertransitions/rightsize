@@ -6,6 +6,8 @@ import { isPartnerRequestComplete } from "@/lib/partners/questions";
 import { nonTTTCategoryLabel } from "@/lib/partners/nonTTTCategories";
 import { CategoryIcon } from "./categoryIcons";
 import { PartnerMatchResults } from "./PartnerMatchResults";
+import { RealtorDisclosureBlock } from "./RealtorDisclosure";
+import { realtorAckRequired, type RealtorAckInput } from "@/lib/partners/realtorDisclosure";
 
 interface Props {
   category: PartnerCategory;
@@ -16,12 +18,14 @@ interface Props {
   matchResult?: ScoringResult;
   requestedPartnerIds: string[];
   pendingPartnerId: string | null;
-  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean) => void;
+  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean, realtorAck?: RealtorAckInput) => void;
   selectedPartnerId?: string;
   pendingSelect: boolean;
-  onSelect: (partnerId: string) => void;
+  onSelect: (partnerId: string, realtorAck?: RealtorAckInput) => void;
   onDeselect: () => void;
   onLearnMore?: (partnerId: string) => void;
+  /** Realtor referral disclosure on (REALTOR_DISCLOSURE_FLAG) */
+  realtorDisclosure?: boolean;
 }
 
 // NonTTTClient-only: replaces the static "3 random partners" CategorySection
@@ -31,8 +35,9 @@ interface Props {
 // holding message.
 export function PartnerRequestCard({
   category, answers, onOpenFlow, sectionRef, canEdit, matchResult, requestedPartnerIds, pendingPartnerId, onRequestIntro,
-  selectedPartnerId, pendingSelect, onSelect, onDeselect, onLearnMore,
+  selectedPartnerId, pendingSelect, onSelect, onDeselect, onLearnMore, realtorDisclosure = false,
 }: Props) {
+  const showDisclosure = realtorAckRequired(category, realtorDisclosure);
   const label = nonTTTCategoryLabel(category);
   const started = Object.keys(answers).length > 0;
   const complete = isPartnerRequestComplete(category, answers);
@@ -46,9 +51,12 @@ export function PartnerRequestCard({
         <h2 className="text-base sm:text-lg font-bold text-gray-900">{label}</h2>
       </div>
 
+      {showDisclosure && <RealtorDisclosureBlock />}
+
       {complete && matchResult ? (
         <div className="flex flex-col gap-3">
           <PartnerMatchResults
+            realtorDisclosure={showDisclosure}
             result={matchResult}
             requestedPartnerIds={requestedPartnerIds}
             canEdit={canEdit}

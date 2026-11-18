@@ -11,6 +11,8 @@ import { CategorySection } from "./CategorySection";
 import { PartnerDetailModal } from "./PartnerDetailModal";
 import { DocumentsSection } from "./DocumentsSection";
 import { RehomingResourcesSection, type RehomingSectionData } from "./RehomingResourcesSection";
+import { RealtorAckDialog, RealtorDisclosureBlock } from "./RealtorDisclosure";
+import { realtorAckRequired, type RealtorAckInput } from "@/lib/partners/realtorDisclosure";
 
 interface Props {
   tenantId: string;
@@ -29,9 +31,13 @@ interface Props {
   reviews?: TrayReviewConfig;
   /** Staff-only Rehoming Resources; set by the server only for TTT staff roles. */
   rehoming?: RehomingSectionData;
+  /** Realtor referral disclosure on (REALTOR_DISCLOSURE_FLAG) */
+  realtorDisclosure?: boolean;
+  /** Staff matching on the client's behalf */
+  actingAsStaff?: boolean;
 }
 
-export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews, rehoming }: Props) {
+export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, matchesByCategory, initialSelections, partnersById, canEdit, isStaffPreview, clientLabel, lockedCategories: initialLocked, canRemoveReferral, destinationCategories = [], reviews, rehoming, realtorDisclosure = false, actingAsStaff = false }: Props) {
   const router = useRouter();
   const [selections, setSelections] = useState(initialSelections);
   const [lockedCategories, setLockedCategories] = useState(initialLocked);
@@ -40,6 +46,8 @@ export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, 
   const [toast, setToast] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<PartnerCategory>(categories[0] ?? PARTNER_CATEGORIES[0]);
   const [detailPartnerId, setDetailPartnerId] = useState<string | null>(null);
+  // Realtor waiting on the disclosure acknowledgment before it's selected
+  const [ackPartnerId, setAckPartnerId] = useState<string | null>(null);
 
   const sectionRefs = useRef<Partial<Record<PartnerCategory, HTMLElement>>>({});
 
@@ -71,17 +79,23 @@ export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, 
     el.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
   }, []);
 
-  const handleSelect = useCallback(async (category: PartnerCategory, partnerId: string) => {
+  const handleSelect = useCallback(async (category: PartnerCategory, partnerId: string, realtorAck?: RealtorAckInput) => {
+    // Realtors need the disclosure acknowledged first (flag on only)
+    if (realtorAckRequired(category, realtorDisclosure) && !realtorAck) {
+      setAckPartnerId(partnerId);
+      return;
+    }
     const prev = selections[category];
     setSelections((s) => ({ ...s, [category]: partnerId }));
     setPendingCategory(category);
-    const result = await selectPartnerAction(tenantId, category, partnerId);
+    const result = await selectPartnerAction(tenantId, category, partnerId, realtorAck);
     setPendingCategory(null);
+    if (realtorAck && result.ok) setAckPartnerId(null);
     if (!result.ok) {
       setSelections((s) => ({ ...s, [category]: prev }));
       setToast(result.error);
     }
-  }, [selections, tenantId]);
+  }, [selections, tenantId, realtorDisclosure]);
 
   const handleDeselect = useCallback(async (category: PartnerCategory) => {
     const prev = selections[category];
@@ -188,11 +202,23 @@ export function PartnersPageClient({ tenantId, categories = PARTNER_CATEGORIES, 
             canRemoveReferral={canRemoveReferral}
             removingReferral={removingReferral === category}
             onRemoveReferral={() => handleRemoveReferral(category)}
+            disclosure={realtorAckRequired(category, realtorDisclosure) && !lockedCategories.includes(category) ? <RealtorDisclosureBlock /> : undefined}
           />
         ))}
       </div>
 
       {rehoming && <RehomingResourcesSection {...rehoming} />}
+
+      {ackPartnerId && (
+        <RealtorAckDialog
+          realtorName={partnersById[ackPartnerId]?.vendorName ?? "this realtor"}
+          actingAsStaff={actingAsStaff}
+          clientLabel={clientLabel}
+          pending={pendingCategory === "Realtor"}
+          onConfirm={(ack) => handleSelect("Realtor", ackPartnerId, ack)}
+          onClose={() => setAckPartnerId(null)}
+        />
+      )}
 
       {detailPartnerId && partnersById[detailPartnerId] && (
         <PartnerDetailModal partner={partnersById[detailPartnerId]} onClose={() => setDetailPartnerId(null)} />

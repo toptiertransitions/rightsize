@@ -17,6 +17,8 @@ import { canSeeRehoming, ACCEPT_BUCKETS, REHOMING_TYPES, serializeAccepts, norma
 import { isTTTAdmin } from "@/lib/config";
 import { revalidateTag } from "next/cache";
 import { loadRehomingResources, rehomingDistances } from "@/lib/partners/rehomingServer";
+import { realtorAckRequired, type RealtorAckInput } from "@/lib/partners/realtorDisclosure";
+import { acknowledgeRealtorDisclosure, isRealtorDisclosureEnabled } from "@/lib/partners/realtorDisclosureServer";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -66,10 +68,45 @@ async function assertCanEdit(tenantId: string): Promise<string | null> {
   return null;
 }
 
+// Realtor referral disclosure (behind REALTOR_DISCLOSURE_FLAG): a realtor
+// intro or selection needs a recorded acknowledgment first. Returns an error
+// to show, or null to carry on. Every other category, and Realtor with the
+// flag off, returns null without doing anything.
+async function realtorDisclosureGate(
+  userId: string,
+  tenantId: string,
+  category: PartnerCategory,
+  partnerId: string,
+  ack: RealtorAckInput | undefined,
+  context: "intro_request" | "select"
+): Promise<string | null> {
+  if (!realtorAckRequired(category, isRealtorDisclosureEnabled(userId))) return null;
+  const [sysRole, tenantRole, tenant, directory] = await Promise.all([
+    getSystemRole(userId).catch(() => null),
+    getUserRoleForTenant(userId, tenantId).catch(() => null),
+    getTenantById(tenantId),
+    getPartnerDirectory(),
+  ]);
+  if (!tenant) return "Project not found.";
+  const partner = directory.find((p) => p.id === partnerId);
+  // Staff acting on a project that isn't their own confirm for the client
+  const staffRole = sysRole && !(tenantRole && CLIENT_EDIT_ROLES.includes(tenantRole)) ? sysRole : null;
+  return acknowledgeRealtorDisclosure({
+    ack,
+    actingUserId: userId,
+    staffRole,
+    tenant: { id: tenant.id, name: tenant.name },
+    realtors: [{ id: partnerId, name: partner?.vendorName ?? partnerId }],
+    context,
+    sendEmail: !isDemoTenant(tenantId),
+  });
+}
+
 export async function selectPartnerAction(
   tenantId: string,
   category: PartnerCategory,
-  partnerId: string
+  partnerId: string,
+  realtorAck?: RealtorAckInput
 ): Promise<ActionResult> {
   const input = z.object({ tenantId: tenantIdSchema, category: categorySchema, partnerId: partnerIdSchema }).safeParse({ tenantId, category, partnerId });
   if (!input.success) return { ok: false, error: "That selection wasn't valid — please try again." };
@@ -79,6 +116,8 @@ export async function selectPartnerAction(
 
   try {
     if (await withRetry(() => isReferralLocked(tenantId, category))) return { ok: false, error: REFERRAL_LOCKED_ERROR };
+    const disclosureError = await realtorDisclosureGate(userId, tenantId, category, partnerId, realtorAck, "select");
+    if (disclosureError) return { ok: false, error: disclosureError };
     await withRetry(() => upsertPartnerSelection({ tenantId, category, partnerId, selectedBy: userId }));
     return { ok: true };
   } catch {
@@ -236,7 +275,8 @@ export async function requestPartnerIntroAction(
   tenantId: string,
   category: PartnerCategory,
   partnerId: string,
-  disclosureAcknowledged: boolean = false
+  disclosureAcknowledged: boolean = false,
+  realtorAck?: RealtorAckInput
 ): Promise<ActionResult> {
   const input = z.object({ tenantId: tenantIdSchema, category: categorySchema, partnerId: partnerIdSchema }).safeParse({ tenantId, category, partnerId });
   if (!input.success) return { ok: false, error: "That request wasn't valid — please try again." };
@@ -266,6 +306,9 @@ export async function requestPartnerIntroAction(
     if (request && request.introRequests.length >= MAX_INTRO_REQUESTS_PER_CATEGORY && !request.introRequests.some((r) => r.partnerId === partnerId)) {
       return { ok: false, error: `You've already requested an intro for the maximum of ${MAX_INTRO_REQUESTS_PER_CATEGORY} partners in this category.` };
     }
+
+    const disclosureError = await realtorDisclosureGate(userId, tenantId, category, partnerId, realtorAck, "intro_request");
+    if (disclosureError) return { ok: false, error: disclosureError };
 
     await withRetry(() => addPartnerIntroRequest(tenantId, category, partnerId, MAX_INTRO_REQUESTS_PER_CATEGORY));
 

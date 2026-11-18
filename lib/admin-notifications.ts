@@ -2,8 +2,10 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Resend } from "resend";
 import { getStaffMembers, getReferralCompanyById, getReferralContactById, getActivitiesForContact, getOpportunitiesForTenant, getClientContactById, getMembershipsForTenant } from "./airtable";
 import { isTTTAdmin } from "./config";
-import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail, buildPartnerTeamInviteEmail, buildPartnerTeamJoinedEmail, buildRehomingSubmissionAdminEmail, buildRehomingDecisionEmail } from "./email";
+import { buildNonClientSignupSummaryEmail, type NonClientSummaryRow, buildNewUserAdminEmail, buildStageProgressEmail, buildActiveReferralCelebrationEmail, buildNewPartnerAccountEmail, buildQuoteAlertEmail, buildNewVendorAdminEmail, buildDailyRecapEmail, buildScheduleModificationEmail, buildMoveManagementCrossSellEmail, buildPartnerIntroAdminNotificationEmail, buildPartnerDocumentSharedEmail, buildPartnerIntroRequestNotificationEmail, buildPartnerIntroConfirmationEmail, buildPartnerInviteEmail, buildMarketplacePartnerInviteEmail, buildPartnerTeamInviteEmail, buildPartnerTeamJoinedEmail, buildRehomingSubmissionAdminEmail, buildRehomingDecisionEmail, buildRealtorDisclosureAckEmail } from "./email";
 import type { LocalVendor } from "./types";
+import type { RealtorAckRecord } from "./partners/realtorDisclosureServer";
+import { REALTOR_DISCLOSURE } from "./partners/realtorDisclosure";
 
 // ─── Stage ordering for improvement detection ─────────────────────────────────
 const STAGE_PROGRESSION = ["Identified", "Met", "Agreed to Refer", "Shared Leads", "Active Referral"];
@@ -1116,4 +1118,41 @@ export async function sendRehomingDecisionToSubmitter(vendor: LocalVendor, appro
       : `Update on your Rehoming Resources suggestion: ${vendor.vendorName}`,
     html,
   });
+}
+
+
+/** Realtor referral disclosure acknowledged: one email to the TTT Admins.
+ * Throws on failure; the caller logs it and never blocks the client. */
+export async function sendRealtorDisclosureAckAdminNotification(
+  r: RealtorAckRecord,
+  deps: { send?: (msg: { from: string; to: string[]; subject: string; html: string }) => Promise<{ error?: { message: string } | null } | unknown>; adminEmails?: () => Promise<string[]> } = {}
+): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey && !deps.send) return;
+  const to = await (deps.adminEmails ?? getAdminEmails)();
+  if (to.length === 0) return;
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
+  const send = deps.send ?? ((msg) => new Resend(resendKey).emails.send(msg));
+  const result = (await send({
+    from: `Top Tier Transitions <${process.env.RESEND_FROM_EMAIL ?? "hello@toptiertransitions.com"}>`,
+    to,
+    subject: `Realtor referral disclosure acknowledged: ${r.clientName} / ${r.projectName}`,
+    html: buildRealtorDisclosureAckEmail({
+      clientName: r.clientName,
+      projectName: r.projectName,
+      realtorNames: r.realtors.map((x) => x.name),
+      acknowledgedAt: r.acknowledgedAt,
+      disclosureVersion: r.disclosureVersion,
+      understandsCompensation: r.understandsCompensation,
+      consentsToShareInfo: r.consentsToShareInfo,
+      compensationLabel: REALTOR_DISCLOSURE.checkboxCompensation,
+      shareInfoLabel: REALTOR_DISCLOSURE.checkboxShareInfo,
+      actingUserName: r.actingUserName,
+      actingRole: r.actingRole,
+      staffConfirmedClientAgreed: r.staffConfirmedClientAgreed,
+      projectUrl: `${appUrl}/partners?tenantId=${r.tenantId}`,
+    }),
+  })) as { error?: { message: string } | null } | undefined;
+  if (result && typeof result === "object" && "error" in result && result.error) throw new Error(result.error.message);
 }

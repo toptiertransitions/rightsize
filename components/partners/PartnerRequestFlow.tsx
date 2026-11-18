@@ -2,6 +2,8 @@
 
 
 import { useBackClose } from "@/lib/back-button";
+import { RealtorDisclosureReminder } from "./RealtorDisclosure";
+import { REALTOR_CATEGORY } from "@/lib/partners/realtorDisclosure";
 import { useEffect, useMemo, useState } from "react";
 import type { PartnerCategory } from "@/lib/types";
 import { getVisibleQuestions, getPrefillAnswers, type PrefillTenant } from "@/lib/partners/questions";
@@ -17,9 +19,11 @@ interface Props {
   crossCategoryAnswers: Record<string, string>;
   onClose: () => void;
   onSaved: (patch: Record<string, string | string[]>) => void;
+  /** Realtor referral disclosure on: the short reminder stays on every step */
+  realtorDisclosure?: boolean;
 }
 
-export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefillTenant, crossCategoryAnswers, onClose, onSaved }: Props) {
+export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefillTenant, crossCategoryAnswers, onClose, onSaved, realtorDisclosure = false }: Props) {
   useBackClose(onClose);
   const questions = useMemo(() => getVisibleQuestions(category, prefillTenant, crossCategoryAnswers), [category, prefillTenant, crossCategoryAnswers]);
   const prefill = useMemo(() => getPrefillAnswers(category, prefillTenant, crossCategoryAnswers), [category, prefillTenant, crossCategoryAnswers]);
@@ -130,6 +134,12 @@ export function PartnerRequestFlow({ tenantId, category, initialAnswers, prefill
             </svg>
           </button>
         </div>
+
+        {realtorDisclosure && category === REALTOR_CATEGORY && (
+          <div className="shrink-0 px-5 pb-3 max-h-[40vh] overflow-y-auto">
+            <RealtorDisclosureReminder />
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-5 pb-4">
           <p className="text-xs font-semibold text-forest-600 uppercase tracking-wide mb-1.5">{nonTTTCategoryLabel(category)}</p>

@@ -7326,3 +7326,80 @@ export function buildRehomingDecisionEmail(p: {
     body
   );
 }
+
+// ─── Realtor referral disclosure acknowledged (TTT Admins) ───────────────────
+// Internal record that a client acknowledged the realtor referral disclosure
+// (see lib/partners/realtorDisclosure.ts). Name and project only: no
+// contact details or situation answers.
+export function buildRealtorDisclosureAckEmail(p: {
+  clientName: string;
+  projectName: string;
+  realtorNames: string[];
+  acknowledgedAt: string;
+  disclosureVersion: string;
+  understandsCompensation: boolean;
+  consentsToShareInfo: boolean;
+  compensationLabel: string;
+  shareInfoLabel: string;
+  actingUserName: string;
+  actingRole: string;
+  staffConfirmedClientAgreed: boolean;
+  projectUrl: string;
+}): string {
+  const when = new Date(p.acknowledgedAt).toLocaleString("en-US", {
+    timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const yes = (v: boolean) => (v ? "&#10003; Checked" : "&#10007; Not checked");
+  const actor = p.actingRole === "Client"
+    ? `${escHtml(p.actingUserName || p.clientName)} (client)`
+    : `${escHtml(p.actingUserName || "Staff member")} (${escHtml(p.actingRole)}, on the client's behalf)${p.staffConfirmedClientAgreed ? " &middot; confirmed the client reviewed and agreed" : ""}`;
+  const row = (label: string, value: string, first = false) => `
+              <tr${first ? ' style="background-color:#f9fafb;"' : ' style="border-top:1px solid #e5e7eb;"'}>
+                <td style="padding:10px 16px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;width:150px;vertical-align:top;">${label}</td>
+                <td style="padding:10px 16px;font-size:14px;color:#111827;">${value}</td>
+              </tr>`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Realtor referral disclosure acknowledged</title></head>
+<body style="margin:0;padding:0;background-color:#F5F0E8;font-family:Georgia,serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F0E8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#2E6B4F;padding:28px 32px;border-radius:12px 12px 0 0;">
+            <p style="margin:0;color:#F5F0E8;font-size:22px;font-weight:bold;letter-spacing:-0.3px;">Top Tier Transitions</p>
+            <p style="margin:6px 0 0;color:#a8d4bc;font-size:13px;">Realtor Referral Disclosure Acknowledged</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+              A realtor referral disclosure was acknowledged and recorded.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
+              ${row("Client", `<strong>${escHtml(p.clientName)}</strong>`, true)}
+              ${row("Project", escHtml(p.projectName))}
+              ${row("Realtor(s)", escHtml(p.realtorNames.join(", ")))}
+              ${row("Date / time", escHtml(when))}
+              ${row("Disclosure", `Version ${escHtml(p.disclosureVersion)}`)}
+              ${row("Compensation", `${yes(p.understandsCompensation)}<br/><span style="font-size:12px;color:#6b7280;">${escHtml(p.compensationLabel)}</span>`)}
+              ${row("Share info", `${yes(p.consentsToShareInfo)}<br/><span style="font-size:12px;color:#6b7280;">${escHtml(p.shareInfoLabel)}</span>`)}
+              ${row("Submitted by", actor)}
+            </table>
+            <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background-color:#2E6B4F;border-radius:8px;padding:13px 28px;">
+                  <a href="${escHtml(p.projectUrl)}" style="color:#ffffff;font-size:14px;font-weight:bold;text-decoration:none;">View Project Partners &rarr;</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">Top Tier Transitions &mdash; Internal Notification. The full record, including the exact text shown, is kept in Rightsize.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}

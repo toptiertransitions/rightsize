@@ -29,9 +29,11 @@ interface Props {
   onRemoveReferral?: () => void;
   /** Set with `locked` when the lock is the client's destination community. */
   lockReason?: "referral" | "destination";
+  /** Shown under the heading (the realtor referral disclosure) */
+  disclosure?: React.ReactNode;
 }
 
-export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label, locked, canRemoveReferral, removingReferral, onRemoveReferral, lockReason }: Props) {
+export function CategorySection({ tenantId, category, matches, selectedPartnerId, canEdit, pending, onSelect, onDeselect, onLearnMore, sectionRef, label, locked, canRemoveReferral, removingReferral, onRemoveReferral, lockReason, disclosure }: Props) {
   const slug = category.toLowerCase().replace(/\s+/g, "-");
 
   return (
@@ -42,6 +44,8 @@ export function CategorySection({ tenantId, category, matches, selectedPartnerId
         </span>
         <h2 className="text-base sm:text-lg font-bold text-gray-900">{label ?? category}</h2>
       </div>
+
+      {disclosure}
 
       {locked && matches[0] ? (
         <ReferralPartnerCard

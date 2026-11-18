@@ -17,6 +17,7 @@ import { ReferralPartnerCard } from "./ReferralPartnerCard";
 import { PartnerDetailModal } from "./PartnerDetailModal";
 import { CategoryIcon } from "./categoryIcons";
 import { isNonIllinoisZip } from "@/lib/partners/coverage";
+import type { RealtorAckInput } from "@/lib/partners/realtorDisclosure";
 
 interface Props {
   tenantId: string;
@@ -34,12 +35,14 @@ interface Props {
   lockedCategories: PartnerCategory[];
   canRemoveReferral: boolean;
   reviews?: TrayReviewConfig;
+  /** Realtor referral disclosure on (REALTOR_DISCLOSURE_FLAG) */
+  realtorDisclosure?: boolean;
 }
 
 export function NonTTTPartnersPageClient({
   tenantId, tenantName, initialActiveCategories, initialGreyedCategories,
   initialSelections, partnersById, canEdit, appOnlyIntent, initialRequestAnswers,
-  initialIntroRequests, initialMatches, prefillTenant, lockedCategories: initialLocked, canRemoveReferral, reviews,
+  initialIntroRequests, initialMatches, prefillTenant, lockedCategories: initialLocked, canRemoveReferral, reviews, realtorDisclosure = false,
 }: Props) {
   const router = useRouter();
   const [activeCategories, setActiveCategories] = useState(initialActiveCategories);
@@ -95,9 +98,9 @@ export function NonTTTPartnersPageClient({
     setGreyedCategories((g) => (g.includes(category) ? g : [...g, category]));
   }, [tenantId]);
 
-  const handleRequestIntro = useCallback(async (category: PartnerCategory, partnerId: string, disclosureAcknowledged: boolean) => {
+  const handleRequestIntro = useCallback(async (category: PartnerCategory, partnerId: string, disclosureAcknowledged: boolean, realtorAck?: RealtorAckInput) => {
     setPendingRequest({ category, partnerId });
-    const result = await requestPartnerIntroAction(tenantId, category, partnerId, disclosureAcknowledged);
+    const result = await requestPartnerIntroAction(tenantId, category, partnerId, disclosureAcknowledged, realtorAck);
     setPendingRequest(null);
     if (!result.ok) {
       setToast(result.error);
@@ -116,11 +119,11 @@ export function NonTTTPartnersPageClient({
   // the separate, explicit action that actually puts a partner on "Your
   // Team," same mechanism (and same PartnerSelections data) the TTT-managed
   // marketplace flow already uses.
-  const handleSelect = useCallback(async (category: PartnerCategory, partnerId: string) => {
+  const handleSelect = useCallback(async (category: PartnerCategory, partnerId: string, realtorAck?: RealtorAckInput) => {
     const prev = selections[category];
     setSelections((s) => ({ ...s, [category]: partnerId }));
     setPendingSelect(category);
-    const result = await selectPartnerAction(tenantId, category, partnerId);
+    const result = await selectPartnerAction(tenantId, category, partnerId, realtorAck);
     setPendingSelect(null);
     if (!result.ok) {
       setSelections((s) => ({ ...s, [category]: prev }));
@@ -259,10 +262,11 @@ export function NonTTTPartnersPageClient({
                 matchResult={initialMatches[category]}
                 requestedPartnerIds={(introRequests[category] ?? []).map((r) => r.partnerId)}
                 pendingPartnerId={pendingRequest?.category === category ? pendingRequest.partnerId : null}
-                onRequestIntro={(partnerId, disclosureAcknowledged) => handleRequestIntro(category, partnerId, disclosureAcknowledged)}
+                onRequestIntro={(partnerId, disclosureAcknowledged, realtorAck) => handleRequestIntro(category, partnerId, disclosureAcknowledged, realtorAck)}
                 selectedPartnerId={selections[category]}
                 pendingSelect={pendingSelect === category}
-                onSelect={(partnerId) => handleSelect(category, partnerId)}
+                onSelect={(partnerId, realtorAck) => handleSelect(category, partnerId, realtorAck)}
+                realtorDisclosure={realtorDisclosure}
                 onDeselect={() => handleDeselect(category)}
                 onLearnMore={(partnerId) => setDetailPartnerId(partnerId)}
               />
@@ -305,6 +309,7 @@ export function NonTTTPartnersPageClient({
           initialAnswers={requestAnswers[flowCategory] ?? {}}
           prefillTenant={prefillTenant}
           crossCategoryAnswers={getCrossCategoryAnswers(flowCategory, requestAnswers)}
+          realtorDisclosure={realtorDisclosure}
           onClose={() => setFlowCategory(null)}
           onSaved={(patch) =>
             setRequestAnswers((a) => {

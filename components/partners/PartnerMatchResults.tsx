@@ -8,18 +8,23 @@ import { MAX_INTRO_REQUESTS_PER_CATEGORY } from "@/lib/partners/scoring";
 import { communityCompletionLabel } from "@/lib/partners/copy";
 import { PartnerLogo } from "./PartnerLogo";
 import { RatingStars } from "./RatingStars";
+import { RealtorAckFields, EMPTY_REALTOR_ACK } from "./RealtorDisclosure";
+import { canSubmitRealtorAck, type RealtorAckInput } from "@/lib/partners/realtorDisclosure";
 
 interface Props {
   result: ScoringResult;
   requestedPartnerIds: string[];
   canEdit: boolean;
   pendingPartnerId: string | null;
-  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean) => void;
+  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean, realtorAck?: RealtorAckInput) => void;
   selectedPartnerId?: string;
   pendingSelect: boolean;
-  onSelect: (partnerId: string) => void;
+  onSelect: (partnerId: string, realtorAck?: RealtorAckInput) => void;
   onDeselect: () => void;
   onLearnMore?: (partnerId: string) => void;
+  /** Realtor referral disclosure on: intro and selection both need the
+   * disclosure acknowledged (two required checkboxes) first */
+  realtorDisclosure?: boolean;
 }
 
 // The pill, not a question: shows the client which of their 1-2 local
@@ -48,6 +53,7 @@ function MatchCard({
   onSelect,
   onDeselect,
   onLearnMore,
+  realtorDisclosure = false,
 }: {
   match: ScoredMatch;
   featured: boolean;
@@ -55,15 +61,20 @@ function MatchCard({
   atCap: boolean;
   canEdit: boolean;
   pending: boolean;
-  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean) => void;
+  onRequestIntro: (partnerId: string, disclosureAcknowledged: boolean, realtorAck?: RealtorAckInput) => void;
   isSelected: boolean;
   selectPending: boolean;
-  onSelect: (partnerId: string) => void;
+  onSelect: (partnerId: string, realtorAck?: RealtorAckInput) => void;
   onDeselect: () => void;
   onLearnMore?: (partnerId: string) => void;
+  realtorDisclosure?: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [realtorAck, setRealtorAck] = useState<RealtorAckInput>(EMPTY_REALTOR_ACK);
+  // Realtor + flag: "Choose this partner" also goes through the disclosure
+  const [confirmingSelect, setConfirmingSelect] = useState(false);
+  const realtorReady = canSubmitRealtorAck(realtorAck, false);
   const { partner } = match;
   const needsAcknowledgment = Boolean(partner.hasReferralDisclosure);
 
@@ -128,7 +139,12 @@ function MatchCard({
                 Because you were referred through Top Tier, you&rsquo;ll receive a ${partner.seniorCreditAmount.toFixed(2)} credit toward move management services.
               </p>
             )}
-            {needsAcknowledgment && (
+            {realtorDisclosure && (
+              <div className="mb-3">
+                <RealtorAckFields value={realtorAck} onChange={setRealtorAck} actingAsStaff={false} />
+              </div>
+            )}
+            {needsAcknowledgment && !realtorDisclosure && (
               <label className="flex items-start gap-2 text-xs text-gray-500 mb-2.5 leading-relaxed">
                 <input
                   type="checkbox"
@@ -142,8 +158,12 @@ function MatchCard({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => onRequestIntro(partner.id, acknowledged)}
-                disabled={pending || (needsAcknowledgment && !acknowledged)}
+                onClick={() =>
+                  realtorDisclosure
+                    ? onRequestIntro(partner.id, realtorAck.understandsCompensation, realtorAck)
+                    : onRequestIntro(partner.id, acknowledged)
+                }
+                disabled={pending || (realtorDisclosure ? !realtorReady : needsAcknowledgment && !acknowledged)}
                 className="min-h-[40px] px-3.5 rounded-lg text-sm font-semibold bg-forest-600 text-white hover:bg-forest-700 disabled:opacity-50"
               >
                 {pending ? "Requesting…" : "Yes, request intro"}
@@ -160,11 +180,37 @@ function MatchCard({
           </div>
         ) : null}
 
+        {canEdit && realtorDisclosure && confirmingSelect && !isSelected && (
+          <div className="mt-1 rounded-xl bg-gray-50 border border-gray-200 p-3">
+            <div className="mb-3">
+              <RealtorAckFields value={realtorAck} onChange={setRealtorAck} actingAsStaff={false} />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { onSelect(partner.id, realtorAck); setConfirmingSelect(false); }}
+                disabled={selectPending || !realtorReady}
+                className="min-h-[40px] px-3.5 rounded-lg text-sm font-semibold bg-forest-600 text-white hover:bg-forest-700 disabled:opacity-50"
+              >
+                {selectPending ? "Saving…" : "Yes, add to my team"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingSelect(false)}
+                disabled={selectPending}
+                className="min-h-[40px] px-3.5 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {canEdit && (
           <div className="pt-2 mt-0.5 border-t border-gray-100">
             <button
               type="button"
-              onClick={() => (isSelected ? onDeselect() : onSelect(partner.id))}
+              onClick={() => (isSelected ? onDeselect() : realtorDisclosure ? setConfirmingSelect(true) : onSelect(partner.id))}
               disabled={selectPending}
               className={`min-h-[36px] -ml-2 inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2 transition-colors disabled:opacity-50 ${
                 isSelected ? "text-forest-700" : "text-gray-400 hover:text-forest-700"
@@ -188,7 +234,7 @@ function MatchCard({
   );
 }
 
-export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pendingPartnerId, onRequestIntro, selectedPartnerId, pendingSelect, onSelect, onDeselect, onLearnMore }: Props) {
+export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pendingPartnerId, onRequestIntro, selectedPartnerId, pendingSelect, onSelect, onDeselect, onLearnMore, realtorDisclosure = false }: Props) {
   const remaining = Math.max(0, MAX_INTRO_REQUESTS_PER_CATEGORY - requestedPartnerIds.length);
   const atCap = remaining <= 0;
 
@@ -218,6 +264,7 @@ export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pend
         onSelect={onSelect}
         onDeselect={onDeselect}
         onLearnMore={onLearnMore}
+        realtorDisclosure={realtorDisclosure}
       />
       {result.alternates.map((m) => (
         <MatchCard
@@ -234,6 +281,7 @@ export function PartnerMatchResults({ result, requestedPartnerIds, canEdit, pend
           onSelect={onSelect}
           onDeselect={onDeselect}
           onLearnMore={onLearnMore}
+          realtorDisclosure={realtorDisclosure}
         />
       ))}
       {atCap && (
