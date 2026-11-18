@@ -3621,6 +3621,7 @@ function mapStaffMember(record: AirtableRecord): StaffMember {
     birthday: toStr(f["Birthday"]) || undefined,
     minWeeklyHours: typeof f["MinWeeklyHours"] === "number" ? f["MinWeeklyHours"] : undefined,
     targetWeeklyHours: typeof f["TargetWeeklyHours"] === "number" ? f["TargetWeeklyHours"] : undefined,
+    maxWeeklyHours: typeof f["MaxWeeklyHours"] === "number" ? f["MaxWeeklyHours"] : undefined,
   };
 }
 

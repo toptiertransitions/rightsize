@@ -61,6 +61,7 @@ export interface StaffMember {
   birthday?: string;     // "MM-DD" (no year)
   minWeeklyHours?: number;
   targetWeeklyHours?: number;
+  maxWeeklyHours?: number;
 }
 
 // ─── First Visit Intake Form ──────────────────────────────────────────────────

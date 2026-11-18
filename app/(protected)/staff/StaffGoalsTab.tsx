@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { nextAnniversary, nextBirthday, normalizeMonthDay } from "@/lib/about-me";
 import { AvatarUploadButton } from "@/components/ui/AvatarUploadButton";
+import { StaffHoursWatch } from "./StaffHoursWatch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface StaffMemberWithGoals {
@@ -716,6 +717,8 @@ export function StaffGoalsTab({ members: initialMembers, canEdit }: StaffGoalsTa
           Click any cell to edit inline. Select rows with checkboxes for bulk edits.
         </p>
       )}
+
+      {canEdit && <StaffHoursWatch />}
     </div>
   );
 }
