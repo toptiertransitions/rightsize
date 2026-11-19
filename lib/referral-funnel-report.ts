@@ -622,7 +622,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
         <tr style="background:#2d4a3e;">
           <td style="padding:28px 28px;">
             <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions &middot; Rightsize</p>
-            <h1 style="margin:6px 0 0;font-size:26px;font-weight:700;color:#ffffff;">Referral Funnel for ${esc(state.recipientName || "You")}</h1>
+            <h1 style="margin:6px 0 0;font-size:26px;font-weight:700;color:#ffffff;">Referral Funnel</h1>
             <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">${esc(state.quarter.label)} &middot; Identified, Met, and not-yet-contacted companies &middot; last 30 days</p>
             <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Generated ${generated} CT</p>
           </td>
@@ -663,7 +663,7 @@ export function buildFunnelEmail(state: FunnelJobState): { subject: string; html
 </html>`;
 
   const gaps = movedNoNext.length + noPlan.length;
-  const subject = `Referral Funnel for ${state.recipientName || "You"}: ${tr.movesForward + tr.movesBackward} stage move${tr.movesForward + tr.movesBackward === 1 ? "" : "s"}, ${gaps} planning gap${gaps === 1 ? "" : "s"}`;
+  const subject = `Referral Funnel: ${tr.movesForward + tr.movesBackward} stage move${tr.movesForward + tr.movesBackward === 1 ? "" : "s"}, ${gaps} planning gap${gaps === 1 ? "" : "s"}`;
   return { subject, html };
 }
 

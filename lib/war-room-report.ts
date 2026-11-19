@@ -437,7 +437,7 @@ export function buildWarRoomEmail(state: WarRoomJobState): { subject: string; ht
         <tr style="background:#2d4a3e;">
           <td style="padding:28px 28px;">
             <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.12em;color:#C9A96E;text-transform:uppercase;">Top Tier Transitions &middot; Rightsize</p>
-            <h1 style="margin:6px 0 0;font-size:26px;font-weight:700;color:#ffffff;">War Room for ${esc(state.recipientName || "You")}</h1>
+            <h1 style="margin:6px 0 0;font-size:26px;font-weight:700;color:#ffffff;">War Room</h1>
             <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">${esc(state.quarter.label)} &middot; ${pct}% of the quarter gone &middot; ${totalActual} / ${totalGoal} referrals team-wide</p>
             <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.5);">Generated ${generated} CT</p>
           </td>
@@ -472,7 +472,7 @@ export function buildWarRoomEmail(state: WarRoomJobState): { subject: string; ht
 </body>
 </html>`;
 
-  const subject = `War Room for ${state.recipientName || "You"}: ${state.quarter.label} (${critical + high} partner${critical + high === 1 ? "" : "s"} at high risk)`;
+  const subject = `War Room: ${state.quarter.label} (${critical + high} partner${critical + high === 1 ? "" : "s"} at high risk)`;
   return { subject, html };
 }
 
