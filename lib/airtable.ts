@@ -2240,7 +2240,7 @@ export const getAllLocalVendors = unstable_cache(
     return (data.records as AirtableRecord[]).map(mapLocalVendor);
   },
   ["local-vendors"],
-  { revalidate: 300 }
+  { revalidate: 300, tags: ["partners-directory"] }
 );
 
 /** Active Donation Org / Consignment Store / Collector/Reseller entries for
