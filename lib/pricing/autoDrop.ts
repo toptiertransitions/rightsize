@@ -109,3 +109,18 @@ export function scheduledPriceOn(
   const pct = step === 2 ? settings.drop2Pct : settings.drop1Pct;
   return { price: Math.min(item.valueMid, dropPrice(base, pct)), step, base };
 }
+
+/** The automated drop the item's current price reflects (e.g. 33), or 0.
+ * Only a price that exactly equals a drop already due counts, so a price
+ * staff set by hand (higher, lower or between drops) never reads as one. */
+export function autoDiscountPct(
+  item: Pick<Item, "valueMid" | "priceDropOriginalValue" | "deliveryDate">,
+  settings: DropSettings,
+  today: string
+): number {
+  const due = scheduledPriceOn(item, settings, today);
+  if (!due || due.step === 0) return 0;
+  if (due.step === 2 && item.valueMid === dropPrice(due.base, settings.drop2Pct)) return settings.drop2Pct;
+  if (item.valueMid === dropPrice(due.base, settings.drop1Pct)) return settings.drop1Pct;
+  return 0;
+}
