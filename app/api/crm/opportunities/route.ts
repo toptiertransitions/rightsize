@@ -189,6 +189,12 @@ export async function PATCH(req: NextRequest) {
             const fromOpp = (opportunity[f] ?? "").trim();
             if (fromOpp && !(tenant[f] ?? "").trim()) patch[f] = fromOpp;
           }
+          // Same for the client's own phone/email from the linked Client Contact
+          if (opportunity.clientContactId && (!tenant.clientEmail || !tenant.clientPhone)) {
+            const contact = await getClientContactById(opportunity.clientContactId);
+            if (contact?.email?.trim() && !tenant.clientEmail) patch.clientEmail = contact.email.trim();
+            if (contact?.phone?.trim() && !tenant.clientPhone) patch.clientPhone = contact.phone.trim();
+          }
           if (Object.keys(patch).length > 0) await updateTenant(opportunity.tenantId, patch);
         }
       } catch (e) { console.error("[opportunities] first-link sync to project failed:", e); }

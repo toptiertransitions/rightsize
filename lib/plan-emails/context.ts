@@ -148,14 +148,27 @@ export function buildPlanEmailContext(input: {
   const lead = tenant.teamLeadClerkId ? staff.find((s) => s.clerkUserId === tenant.teamLeadClerkId) : undefined;
   const opp = opportunities.find((o) => o.stage !== "Won" && o.stage !== "Lost") ?? opportunities.find((o) => o.stage === "Won") ?? opportunities[0];
 
-  const clientContacts: Person[] = (opp?.keyPeople ?? [])
+  // The client's own phone/email (project's Client Contact) always leads, with
+  // the opportunity's Key People after it. When a key person already carries
+  // that phone or email they stand in for the client (keeping their name and
+  // relationship) instead of being listed twice.
+  const keyPeople: Person[] = (opp?.keyPeople ?? [])
     .slice()
     .sort((a, b) => Number(!!b.isPrimary) - Number(!!a.isPrimary))
     .map((k) => ({ name: k.name, relationship: k.relationship || undefined, phone: k.phone || undefined, email: k.email || undefined }));
-  if (clientContacts.length === 0 && (tenant.clientEmail || tenant.clientPhone)) {
-    clientContacts.push({ name: tenant.name, phone: tenant.clientPhone, email: tenant.clientEmail });
-  }
-  const primary = clientContacts[0];
+  const digits = (s?: string) => (s ?? "").replace(/\D/g, "").slice(-10);
+  const clientEmail = (tenant.clientEmail ?? "").trim().toLowerCase();
+  const clientPhone = digits(tenant.clientPhone);
+  const isClient = (p: Person) =>
+    (!!clientEmail && (p.email ?? "").trim().toLowerCase() === clientEmail) || (!!clientPhone && digits(p.phone) === clientPhone);
+  const clientAsKeyPerson = keyPeople.find(isClient);
+  const clientContacts: Person[] = clientAsKeyPerson
+    ? [clientAsKeyPerson, ...keyPeople.filter((p) => p !== clientAsKeyPerson)]
+    : clientEmail || clientPhone
+      ? [{ name: tenant.name, phone: tenant.clientPhone || undefined, email: tenant.clientEmail || undefined }, ...keyPeople]
+      : keyPeople;
+  // Greeting: the key person marked Primary, otherwise whoever leads the list.
+  const primary = opp?.keyPeople?.some((k) => k.isPrimary) ? keyPeople[0] : clientContacts[0];
 
   const mover = vendors.find((v) => v.vendorType === "Mover");
   const communityVendor = vendors.find((v) => v.vendorType === "Future Home/Community");
