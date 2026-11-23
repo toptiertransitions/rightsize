@@ -48,6 +48,11 @@ export async function POST(req: NextRequest) {
         itemName: item.itemName,
         price: sched?.current ?? item.valueMid ?? 0,
         barcodeNumber: item.barcodeNumber,
+        // Same W x H x D order as the catalog item editor; only the ones filled in
+        dimensions: ([[item.widthInches, "W"], [item.heightInches, "H"], [item.depthInches, "D"]] as const)
+          .filter(([n]) => n)
+          .map(([n, l]) => `${n}" ${l}`)
+          .join(" x ") || undefined,
         // Only drops still to come (a reprint after a drop shows the next one)
         schedule: sched?.steps.filter((st) => st.day > today && st.price < sched.current).map((st) => ({ day: st.day, price: st.price })),
       };

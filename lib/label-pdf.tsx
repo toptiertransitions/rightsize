@@ -8,6 +8,8 @@ export interface LabelItem {
   barcodeNumber?: string;
   /** Automated pricing labels: the scheduled price drops */
   schedule?: { day: string; price: number }[];
+  /** Automated pricing labels: e.g. 24" W x 30" H x 18" D (omitted when none) */
+  dimensions?: string;
 }
 
 export type LabelMode = "simple" | "automated";
@@ -174,6 +176,9 @@ function AutomatedLabelPage({ item, barcodeDataUrl }: { item: LabelItem; barcode
           <Text style={{ fontSize: priceSize, fontFamily: "Helvetica-Bold", color: "#000000", letterSpacing: -0.5 }}>{priceStr}</Text>
           {item.barcodeNumber ? (
             <Text style={{ fontSize: 8, color: "#555555", marginTop: 1, letterSpacing: 0.4 }}>ID # {item.barcodeNumber}</Text>
+          ) : null}
+          {item.dimensions ? (
+            <Text style={{ fontSize: 7, color: "#666666", marginTop: 1 }}>{item.dimensions}</Text>
           ) : null}
         </View>
         {steps.length > 0 && (
