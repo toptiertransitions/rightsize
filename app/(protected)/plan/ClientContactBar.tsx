@@ -4,6 +4,7 @@ import { useState } from "react";
 
 interface Props {
   tenantId: string;
+  clientName?: string;
   initialEmail?: string;
   initialPhone?: string;
   initialSecondaryEmail?: string;
@@ -41,7 +42,7 @@ function PencilIcon() {
   );
 }
 
-export function ClientContactBar({ tenantId, initialEmail, initialPhone, initialSecondaryEmail, initialSecondaryPhone, parkingNotes, primaryContact }: Props) {
+export function ClientContactBar({ tenantId, clientName, initialEmail, initialPhone, initialSecondaryEmail, initialSecondaryPhone, parkingNotes, primaryContact }: Props) {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState(initialPhone ?? "");
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -193,6 +194,10 @@ export function ClientContactBar({ tenantId, initialEmail, initialPhone, initial
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Client</span>
+          {clientName && <span className="text-sm font-medium text-gray-700">{clientName}</span>}
+        </span>
         {displayPhone ? (
           <a
             href={`tel:${displayPhone.replace(/\D/g, "")}`}

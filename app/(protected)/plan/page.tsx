@@ -461,6 +461,7 @@ export default async function PlanPage({ searchParams }: PageProps) {
           {isTTTStaffOrAbove && (
             <ClientContactBar
               tenantId={tenantId}
+              clientName={tenant.name}
               initialEmail={tenant.clientEmail}
               initialPhone={tenant.clientPhone}
               initialSecondaryEmail={tenant.secondaryClientEmail}
