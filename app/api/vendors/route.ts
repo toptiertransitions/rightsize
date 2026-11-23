@@ -11,7 +11,7 @@ import {
 } from "@/lib/airtable";
 import type { VendorType } from "@/lib/types";
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth();

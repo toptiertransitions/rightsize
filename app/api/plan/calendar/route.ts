@@ -8,7 +8,7 @@ import { formatShiftDateTime } from "@/lib/shift-time";
 import type { PlanHelper } from "@/lib/types";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com";
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTManager", "TTTAdmin"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTTeamLead", "TTTManager", "TTTAdmin"];
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();

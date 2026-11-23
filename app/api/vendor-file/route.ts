@@ -24,7 +24,7 @@ import { buildVendorFileEmail } from "@/lib/email";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTAdmin", "TTTManager"];
+const EDIT_ROLES = ["Owner", "Collaborator", "TTTStaff", "TTTTeamLead", "TTTAdmin", "TTTManager"];
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();

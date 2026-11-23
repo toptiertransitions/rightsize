@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sysRole = await getSystemRole(userId);
-  if (!sysRole || !["TTTAdmin", "TTTManager", "TTTStaff", "TTTSales"].includes(sysRole)) {
+  if (!sysRole || !["TTTAdmin", "TTTManager", "TTTStaff", "TTTTeamLead", "TTTSales"].includes(sysRole)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
