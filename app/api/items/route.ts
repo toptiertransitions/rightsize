@@ -350,8 +350,14 @@ export async function PATCH(req: NextRequest) {
 
   // Backfill: assign a permanent barcode to any existing item that doesn't have one yet.
   // Only assigned once — never changed.
-  if (!existing?.barcodeNumber && !(updates as Record<string, unknown>).barcodeNumber) {
-    (updates as Record<string, unknown>).barcodeNumber = await getNextBarcodeNumber();
+  // `existing` is only loaded for some edits (not e.g. a Delivery Date-only
+  // save), so read the item here when it wasn't: never re-number an item that
+  // already has a barcode, and skip the backfill if the read fails.
+  if (!(updates as Record<string, unknown>).barcodeNumber) {
+    const current = existing ?? await getItemById(id as string).catch(() => null);
+    if (current && !current.barcodeNumber) {
+      (updates as Record<string, unknown>).barcodeNumber = await getNextBarcodeNumber();
+    }
   }
 
   // Snapshot originalValue the first time an item is in Listed status (transition or backfill for already-listed items)
