@@ -38,6 +38,8 @@ interface ItemGridProps {
   simpleMode?: boolean;
   /** TTTTeamLead / TTTManager / TTTAdmin: bulk "Drop to $0" in the table view. */
   canDropToZero?: boolean;
+  /** TTTAdmin only: bulk "% Change" of prices in the table view. */
+  canChangePrices?: boolean;
   initialSearch?: string;
 }
 
@@ -1474,7 +1476,7 @@ function BulkActionButton({ onClick, disabled, icon, variant = "default", childr
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, simpleMode = false, initialSearch = "", canDropToZero = false }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, simpleMode = false, initialSearch = "", canDropToZero = false, canChangePrices = false }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -1928,6 +1930,56 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
       setDropZeroError(e instanceof Error ? e.message : "Failed to drop items to $0");
     } finally {
       setDropZeroLoading(false);
+    }
+  };
+
+  // ── Bulk % Change (TTT Admins) ─────────────────────────────────────────────
+  // Raises or lowers the selected items' prices by a percentage, rounded to
+  // whole dollars (never below $1). Delivery Date isn't touched, so automated
+  // 30/60-day drops keep their dates (see app/api/items/price-change/route.ts).
+  const [priceChangeOpen, setPriceChangeOpen] = useState(false);
+  useBackClose(priceChangeOpen && (() => setPriceChangeOpen(false)));
+  const [priceChangeDir, setPriceChangeDir] = useState<"up" | "down">("up");
+  const [priceChangePct, setPriceChangePct] = useState("");
+  const [priceChangeLoading, setPriceChangeLoading] = useState(false);
+  const [priceChangeError, setPriceChangeError] = useState("");
+  const priceChangeSigned = (parseFloat(priceChangePct) || 0) * (priceChangeDir === "down" ? -1 : 1);
+  const priceChangeValid = priceChangeSigned !== 0 && priceChangeSigned > -100 && priceChangeSigned <= 1000;
+  const scaledPrice = (price: number) => Math.max(1, Math.round(price * (1 + priceChangeSigned / 100)));
+
+  const handleBulkPriceChange = async () => {
+    if (selected.size === 0 || !priceChangeValid) return;
+    setPriceChangeLoading(true);
+    setPriceChangeError("");
+    try {
+      const res = await fetch("/api/items/price-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected], percent: priceChangeSigned }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to change prices");
+      const updated = new Map<string, Item>((data.items ?? []).map((i: Item) => [i.id, i]));
+      setItems(prev => prev.map(i => {
+        const u = updated.get(i.id);
+        return u ? { ...i, valueMid: u.valueMid, priceDropOriginalValue: u.priceDropOriginalValue } : i;
+      }));
+      const failed: string[] = data.failed ?? [];
+      const notes: string[] = [];
+      if (failed.length > 0) notes.push(`${failed.length} item${failed.length !== 1 ? "s" : ""} couldn't be updated. They're still selected, so you can try again.`);
+      if (data.squareFailed > 0) notes.push(`${data.squareFailed} price${data.squareFailed !== 1 ? "s" : ""} didn't reach Square. Check those in Square.`);
+      if (notes.length > 0) {
+        setSelected(new Set(failed));
+        setPriceChangeError(notes.join(" "));
+      } else {
+        setSelected(new Set());
+        setPriceChangeOpen(false);
+        setPriceChangePct("");
+      }
+    } catch (e) {
+      setPriceChangeError(e instanceof Error ? e.message : "Failed to change prices");
+    } finally {
+      setPriceChangeLoading(false);
     }
   };
 
@@ -2525,6 +2577,82 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         </div>
       )}
 
+      {priceChangeOpen && (() => {
+        const chosen = items.filter(i => selected.has(i.id));
+        const priced = chosen.filter(i => (i.valueMid ?? 0) > 0);
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">% Change</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {selected.size} selected item{selected.size !== 1 ? "s" : ""}
+                {priced.length < chosen.length ? ` (${chosen.length - priced.length} without a price will be skipped)` : ""}
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-3 text-sm text-gray-700">
+              <div className="flex items-center gap-2">
+                <div className="inline-flex rounded-lg border border-gray-200 p-0.5">
+                  {(["up", "down"] as const).map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setPriceChangeDir(d)}
+                      className={`h-8 px-3 rounded-md text-sm font-medium transition-colors ${priceChangeDir === d ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      {d === "up" ? "Increase" : "Decrease"}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    placeholder="10"
+                    value={priceChangePct}
+                    onFocus={e => e.target.select()}
+                    onChange={e => setPriceChangePct(e.target.value)}
+                    className="w-20 h-9 px-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+                    autoFocus
+                  />
+                  <span className="text-gray-500">%</span>
+                </div>
+              </div>
+              {priceChangeValid && priced.length > 0 && (
+                <ul className="text-xs text-gray-600 space-y-0.5">
+                  {priced.slice(0, 3).map(i => (
+                    <li key={i.id} className="truncate">
+                      {i.itemName}: ${i.valueMid} &rarr; <span className="font-semibold text-gray-900">${scaledPrice(i.valueMid)}</span>
+                    </li>
+                  ))}
+                  {priced.length > 3 && <li className="text-gray-400">and {priced.length - 3} more</li>}
+                </ul>
+              )}
+              <p className="text-xs text-gray-500">Prices round to whole dollars (never below $1). Delivery dates don&apos;t change, so automated price drops keep their dates. Listed ProFoundFinds items update in Square. Printed tags need reprinting.</p>
+              {priceChangeError && <p className="text-xs text-red-600">{priceChangeError}</p>}
+            </div>
+            <div className="px-6 pb-6 flex justify-end gap-2">
+              <button
+                onClick={() => { setPriceChangeOpen(false); setPriceChangeError(""); }}
+                disabled={priceChangeLoading}
+                className="h-9 px-4 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkPriceChange}
+                disabled={priceChangeLoading || selected.size === 0 || !priceChangeValid}
+                className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50"
+              >
+                {priceChangeLoading ? "Updating…" : priceChangeValid ? `${priceChangeDir === "up" ? "Raise" : "Lower"} ${selected.size} by ${Math.abs(priceChangeSigned)}%` : "Enter a %"}
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
       {/* Bulk Site? Modal */}
       {siteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -3103,6 +3231,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                 <BulkActionButton onClick={() => { setSiteError(""); setSiteOpen(true); }} disabled={!!siteLoading}
                   icon={<path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />}>
                   Site?
+                </BulkActionButton>
+              )}
+              {canChangePrices && (
+                <BulkActionButton onClick={() => { setPriceChangeError(""); setPriceChangeOpen(true); }} disabled={priceChangeLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M19 5L5 19M6.5 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5zm11 11a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />}>
+                  % Change
                 </BulkActionButton>
               )}
               {canDropToZero && (
