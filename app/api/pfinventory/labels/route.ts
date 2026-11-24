@@ -53,8 +53,10 @@ export async function POST(req: NextRequest) {
           .filter(([n]) => n)
           .map(([n, l]) => `${n}" ${l}`)
           .join(" x ") || undefined,
-        // Only drops still to come (a reprint after a drop shows the next one)
-        schedule: sched?.steps.filter((st) => st.day > today && st.price < sched.current).map((st) => ({ day: st.day, price: st.price })),
+        // Only drops still to come (a reprint after a drop shows the next one);
+        // none when "Price Drop?" is off, leaving that part of the tag blank
+        noPriceDrop: item.noPriceDrop,
+        schedule: item.noPriceDrop ? [] : sched?.steps.filter((st) => st.day > today && st.price < sched.current).map((st) => ({ day: st.day, price: st.price })),
       };
     }));
   }

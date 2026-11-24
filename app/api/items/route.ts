@@ -182,6 +182,9 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // "Price Drop?" override is TTTTeamLead/Manager/Admin only
+  if (!isAdmin) delete (updates as Record<string, unknown>).noPriceDrop;
+
   // Handle project reassignment (TTTManager/TTTAdmin only)
   const reassignTenantId = (updates as Record<string, unknown>).reassignTenantId as string | undefined;
   if (reassignTenantId !== undefined) {

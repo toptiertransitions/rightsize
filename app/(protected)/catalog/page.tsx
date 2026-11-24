@@ -93,6 +93,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           staffMembers={staffMembers}
           isTTTUser={isTTTUser}
           canDropToZero={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
+          canOverridePriceDrops={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
           canChangePrices={sysRole === "TTTAdmin" || isTTTAdmin(userId!)}
         />
       </div>
@@ -147,6 +148,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
           isTTTUser={isTTTUser}
           simpleMode={tenant.isTTT !== true && !sysRole && !isTTTAdmin(userId!)}
           canDropToZero={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
+          canOverridePriceDrops={["TTTTeamLead", "TTTManager", "TTTAdmin"].includes(sysRole ?? "")}
           canChangePrices={sysRole === "TTTAdmin" || isTTTAdmin(userId!)}
           initialSearch={initialSearch}
         />

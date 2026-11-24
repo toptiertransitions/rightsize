@@ -41,8 +41,10 @@ export async function POST(req: NextRequest) {
 
   if (!tenant) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
+  // Items with "Price Drop?" turned off never take a drop (revert still applies)
   const listedItems = allItems.filter(i =>
-    i.status === "Listed" && CONSIGNMENT_ROUTES.includes(i.primaryRoute)
+    i.status === "Listed" && CONSIGNMENT_ROUTES.includes(i.primaryRoute) &&
+    (type === "revert" || !i.noPriceDrop)
   );
 
   if (listedItems.length === 0) {

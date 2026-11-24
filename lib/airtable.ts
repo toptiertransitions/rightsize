@@ -842,6 +842,7 @@ export async function updateItem(
     // Bulk price drop tracking
     priceDropOriginalValue: "PriceDropOriginalValue",
     originalValue: "OriginalValue",
+    noPriceDrop: "NoPriceDrop",
     // Vendor Outreach
     vendorOutreachStatus: "VendorOutreachStatus",
     currentVendorId: "CurrentVendorId",
@@ -1383,6 +1384,7 @@ function mapItem(record: Airtable.Record<Airtable.FieldSet>): Item {
     commissionPaidAt: toStr(f["CommissionPaidAt"]) || undefined,
     priceDropOriginalValue: f["PriceDropOriginalValue"] != null ? (toNum(f["PriceDropOriginalValue"]) || undefined) : undefined,
     originalValue: f["OriginalValue"] != null ? (toNum(f["OriginalValue"]) || undefined) : undefined,
+    noPriceDrop: f["NoPriceDrop"] === true ? true : undefined,
     vendorOutreachStatus: (toStr(f["VendorOutreachStatus"]) || undefined) as "With Vendor" | "Claimed" | "Passed" | undefined,
     currentVendorId: toStr(f["CurrentVendorId"]) || undefined,
     claimedByVendorId: toStr(f["ClaimedByVendorId"]) || undefined,

@@ -8,6 +8,8 @@ export interface LabelItem {
   barcodeNumber?: string;
   /** Automated pricing labels: the scheduled price drops */
   schedule?: { day: string; price: number }[];
+  /** "Price Drop?" off: the schedule column stays, blank */
+  noPriceDrop?: boolean;
   /** Automated pricing labels: e.g. 24" W x 30" H x 18" D (omitted when none) */
   dimensions?: string;
 }
@@ -181,7 +183,9 @@ function AutomatedLabelPage({ item, barcodeDataUrl }: { item: LabelItem; barcode
             <Text style={{ fontSize: 7, color: "#666666", marginTop: 1 }}>{item.dimensions}</Text>
           ) : null}
         </View>
-        {steps.length > 0 && (
+        {item.noPriceDrop ? (
+          <View style={{ width: 112 }} />
+        ) : steps.length > 0 && (
           <View style={{ width: 112, borderLeftWidth: 0.75, borderLeftColor: "#bbbbbb", paddingLeft: 8, paddingTop: 2 }}>
             {steps.map((st, i) => (
               <View key={st.day} style={{ marginTop: i === 0 ? 0 : 5 }}>

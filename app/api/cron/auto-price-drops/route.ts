@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
   const baseStamps: { id: string; valueMid: number; priceDropOriginalValue: number }[] = [];
 
   for (const item of items) {
+    if (item.noPriceDrop) continue; // "Price Drop?" turned off for this item
     const settings = dropSettings(tenantById.get(item.tenantId));
     const due = scheduledPriceOn(item, settings, today);
     if (!due) continue;

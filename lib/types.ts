@@ -440,6 +440,9 @@ export interface Item {
   commissionPaidAt?: string;  // ISO date — set when commission is marked as paid
   // Bulk price drop tracking
   priceDropOriginalValue?: number; // Stored before bulk price drop applied; cleared (0) after revert
+  /** Bulk "Price Drop?" override (TTTTeamLead/Manager/Admin): the price never
+   * drops on the automated schedule or a project's Drop 1/Drop 2 buttons */
+  noPriceDrop?: boolean;
   originalValue?: number;
   // Vendor Outreach (Vendor Outreach feature)
   vendorOutreachStatus?: "With Vendor" | "Claimed" | "Passed";

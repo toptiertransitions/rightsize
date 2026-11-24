@@ -40,6 +40,8 @@ interface ItemGridProps {
   canDropToZero?: boolean;
   /** TTTAdmin only: bulk "% Change" of prices in the table view. */
   canChangePrices?: boolean;
+  /** TTTTeamLead / TTTManager / TTTAdmin: bulk "Price Drop?" override in the table view. */
+  canOverridePriceDrops?: boolean;
   initialSearch?: string;
 }
 
@@ -1476,7 +1478,7 @@ function BulkActionButton({ onClick, disabled, icon, variant = "default", childr
 
 // ─── Item Grid ────────────────────────────────────────────────────────────────
 
-export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, simpleMode = false, initialSearch = "", canDropToZero = false, canChangePrices = false }: ItemGridProps) {
+export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenants, localVendors, canAutoRoute, canReassign, allTenants, isTTT = true, staffMembers = [], isTTTUser = false, simpleMode = false, initialSearch = "", canDropToZero = false, canChangePrices = false, canOverridePriceDrops = false }: ItemGridProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -2082,6 +2084,48 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
     }
   };
 
+  // ── Bulk Price Drop? ───────────────────────────────────────────────────────
+  // Turns the automated price drops off for the selected items that have them,
+  // or back on for the ones that don't (see app/api/items/bulk-price-drop/route.ts).
+  const [priceDropOpen, setPriceDropOpen] = useState(false);
+  useBackClose(priceDropOpen && (() => setPriceDropOpen(false)));
+  const [priceDropLoading, setPriceDropLoading] = useState<null | "on" | "off">(null);
+  const [priceDropError, setPriceDropError] = useState("");
+  const selectedPriceDrop = useMemo(() => {
+    const sel = items.filter(i => selected.has(i.id));
+    return { on: sel.filter(i => !i.noPriceDrop), off: sel.filter(i => i.noPriceDrop) };
+  }, [items, selected]);
+
+  const handleBulkPriceDrop = async (on: boolean) => {
+    const targets = on ? selectedPriceDrop.off : selectedPriceDrop.on;
+    if (targets.length === 0) return;
+    setPriceDropLoading(on ? "on" : "off");
+    setPriceDropError("");
+    try {
+      const res = await fetch("/api/items/bulk-price-drop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on, ids: targets.map(i => i.id) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update Price Drop?");
+      const updated = new Set<string>((data.items ?? []).map((i: Item) => i.id));
+      setItems(prev => prev.map(i => updated.has(i.id) ? { ...i, noPriceDrop: on ? undefined : true } : i));
+      const failed: string[] = data.failed ?? [];
+      if (failed.length > 0) {
+        setSelected(new Set(failed));
+        setPriceDropError(`${failed.length} item${failed.length !== 1 ? "s" : ""} couldn't be updated. They're still selected, so you can try again.`);
+      } else {
+        setSelected(new Set());
+        setPriceDropOpen(false);
+      }
+    } catch (e) {
+      setPriceDropError(e instanceof Error ? e.message : "Failed to update Price Drop?");
+    } finally {
+      setPriceDropLoading(null);
+    }
+  };
+
   const handlePrintLabels = async (widthIn: number, heightIn: number, mode: "simple" | "automated") => {
     const pfItems = [...selected]
       .map(id => items.find(i => i.id === id))
@@ -2307,6 +2351,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
         case "createdAt":     av = a.createdAt ?? "";                       bv = b.createdAt ?? "";                       break;
         case "completedDate": av = a.completedDate ?? "";                   bv = b.completedDate ?? "";                   break;
         case "site":      av = a.storefrontActive ? 0 : 1; bv = b.storefrontActive ? 0 : 1; break; // first click puts Y on top
+        case "priceDrop": av = a.noPriceDrop ? 1 : 0; bv = b.noPriceDrop ? 1 : 0; break; // first click puts Y on top
       }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
@@ -2327,7 +2372,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
   const sortTh = (col: string, label: string, extraClass = "", align?: "right") => (
     <th
       onClick={() => handleSort(col)}
-      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-3 font-semibold text-gray-600 cursor-pointer select-none hover:bg-cream-100 transition-colors ${extraClass}`}
+      className={`${align === "right" ? "text-right" : "text-left"} px-2.5 py-3 font-semibold text-gray-600 cursor-pointer select-none hover:bg-cream-100 transition-colors ${extraClass}`}
     >
       <span className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end w-full" : ""}`}>
         {label}
@@ -2701,6 +2746,61 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50"
                 >
                   {siteLoading === "on" ? "Updating…" : `Turn ON ${selectedSite.off.length}`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Price Drop? Modal */}
+      {priceDropOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Price Drop? (automated)</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {selected.size} selected item{selected.size !== 1 ? "s" : ""}: {selectedPriceDrop.on.length} dropping, {selectedPriceDrop.off.length} not dropping
+              </p>
+            </div>
+            <div className="px-6 py-4 space-y-2 text-sm text-gray-700">
+              {selectedPriceDrop.on.length > 0 && (
+                <p>
+                  <span className="font-semibold">Turn OFF</span> stops the automated price drops for the {selectedPriceDrop.on.length} item{selectedPriceDrop.on.length !== 1 ? "s" : ""} that {selectedPriceDrop.on.length !== 1 ? "have" : "has"} them. The price stays where it is, whatever the project or system settings say, and automated labels leave the drop dates blank.
+                </p>
+              )}
+              {selectedPriceDrop.off.length > 0 && (
+                <p>
+                  <span className="font-semibold">Turn ON</span> puts the {selectedPriceDrop.off.length} item{selectedPriceDrop.off.length !== 1 ? "s" : ""} that {selectedPriceDrop.off.length !== 1 ? "are" : "is"} off back on the automated schedule.
+                </p>
+              )}
+              <p className="text-xs text-gray-500">Prices, status, route and everything else stay as they are.</p>
+              {priceDropError && <p className="text-xs text-red-600">{priceDropError}</p>}
+            </div>
+            <div className="px-6 pb-6 flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => { setPriceDropOpen(false); setPriceDropError(""); }}
+                disabled={!!priceDropLoading}
+                className="h-9 px-4 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              {selectedPriceDrop.off.length > 0 && (
+                <button
+                  onClick={() => handleBulkPriceDrop(true)}
+                  disabled={!!priceDropLoading}
+                  className="h-9 px-4 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {priceDropLoading === "on" ? "Updating…" : `Turn ON ${selectedPriceDrop.off.length}`}
+                </button>
+              )}
+              {selectedPriceDrop.on.length > 0 && (
+                <button
+                  onClick={() => handleBulkPriceDrop(false)}
+                  disabled={!!priceDropLoading}
+                  className="h-9 px-4 rounded-lg bg-forest-600 text-white text-sm font-medium hover:bg-forest-700 disabled:opacity-50"
+                >
+                  {priceDropLoading === "off" ? "Updating…" : `Turn OFF ${selectedPriceDrop.on.length}`}
                 </button>
               )}
             </div>
@@ -3233,6 +3333,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   Site?
                 </BulkActionButton>
               )}
+              {canOverridePriceDrops && !simpleMode && (
+                <BulkActionButton onClick={() => { setPriceDropError(""); setPriceDropOpen(true); }} disabled={!!priceDropLoading}
+                  icon={<path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />}>
+                  Price Drop?
+                </BulkActionButton>
+              )}
               {canChangePrices && (
                 <BulkActionButton onClick={() => { setPriceChangeError(""); setPriceChangeOpen(true); }} disabled={priceChangeLoading}
                   icon={<path strokeLinecap="round" strokeLinejoin="round" d="M19 5L5 19M6.5 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5zm11 11a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />}>
@@ -3292,7 +3398,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-cream-100 bg-cream-50">
-                  <th className="px-4 py-3 w-10">
+                  <th className="px-2.5 py-3 w-10">
                     <input type="checkbox"
                       checked={paged.length > 0 && paged.every(i => selected.has(i.id))}
                       onChange={e => {
@@ -3306,7 +3412,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       className="rounded border-gray-300 text-forest-600 focus:ring-forest-500"
                     />
                   </th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 w-12"></th>
+                  <th className="text-left px-2.5 py-3 font-semibold text-gray-600 w-12"></th>
                   {sortTh("itemName", "Item")}
                   {multiTenant && sortTh("project", "Project")}
                   {sortTh("category", "Category")}
@@ -3314,9 +3420,10 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   {sortTh("route", "Recommended Route")}
                   {sortTh("status", "Status")}
                   {!simpleMode && sortTh("site", "Site?")}
+                  {!simpleMode && sortTh("priceDrop", "Price Drop")}
                   {sortTh("completedDate", "Completed")}
-                  {localVendors && <th className="text-left px-4 py-3 font-semibold text-gray-600">Vendor</th>}
-                  {canEdit && <th className="w-10 px-3 py-3"></th>}
+                  {localVendors && <th className="text-left px-2.5 py-3 font-semibold text-gray-600">Vendor</th>}
+                  {canEdit && <th className="w-10 px-2 py-3"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
@@ -3326,7 +3433,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                   return (
                     <tr key={item.id} className={`hover:bg-cream-50 transition-colors ${selected.has(item.id) ? "bg-forest-50" : ""}`}>
                       {/* Checkbox */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-2.5 py-2.5">
                         <input type="checkbox"
                           checked={selected.has(item.id)}
                           onChange={e => {
@@ -3341,7 +3448,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                         />
                       </td>
                       {/* Photo thumb */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-2.5 py-2.5">
                         <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                           {item.photoUrl ? (
                             <Image src={item.photoUrl} alt={item.itemName} fill className="object-cover" sizes="36px" />
@@ -3355,7 +3462,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                         </div>
                       </td>
                       {/* Item name */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-2.5 py-2.5">
                         <span className="font-medium text-gray-900">{item.itemName || "Untitled Item"}</span>
                         {item.barcodeNumber && (
                           <span className="block font-mono text-[10px] text-gray-400 mt-0.5">#{item.barcodeNumber}</span>
@@ -3363,12 +3470,12 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       </td>
                       {/* Project (multi-tenant only) */}
                       {multiTenant && (
-                        <td className="px-4 py-2.5 text-gray-500">{tenantMap.get(item.tenantId) ?? "—"}</td>
+                        <td className="px-2.5 py-2.5 text-gray-500">{tenantMap.get(item.tenantId) ?? "—"}</td>
                       )}
                       {/* Category */}
-                      <td className="px-4 py-2.5 text-gray-500">{item.category || "—"}</td>
+                      <td className="px-2.5 py-2.5 text-gray-500">{item.category || "—"}</td>
                       {/* Value */}
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-2.5 py-2.5 text-right">
                         <div className="flex flex-col items-end gap-0.5">
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-forest-700">
@@ -3386,7 +3493,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                         </div>
                       </td>
                       {/* Route */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-2.5 py-2.5">
                         <div className="flex flex-col gap-1">
                           <Badge variant={route.variant} className="text-[10px] px-1.5 py-0.5">
                             {item.primaryRoute}
@@ -3412,22 +3519,28 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                         </div>
                       </td>
                       {/* Status */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-2.5 py-2.5">
                         <Badge variant={status.variant} className="text-[10px] px-1.5 py-0.5">{status.label}</Badge>
                       </td>
                       {/* Site? */}
                       {!simpleMode && (
-                        <td className="px-4 py-2.5 text-xs font-semibold">
+                        <td className="px-2.5 py-2.5 text-xs font-semibold">
                           {item.storefrontActive ? <span className="text-forest-700">Y</span> : <span className="text-gray-400">N</span>}
                         </td>
                       )}
+                      {/* Price Drop */}
+                      {!simpleMode && (
+                        <td className="px-2.5 py-2.5 text-xs font-semibold">
+                          {item.noPriceDrop ? <span className="text-gray-400">N</span> : <span className="text-forest-700">Y</span>}
+                        </td>
+                      )}
                       {/* Completed Date */}
-                      <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">
+                      <td className="px-2.5 py-2.5 text-gray-500 text-xs whitespace-nowrap">
                         {item.completedDate ?? "—"}
                       </td>
                       {/* Vendor */}
                       {localVendors && (
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">
+                        <td className="px-2.5 py-2.5 text-gray-500 text-xs">
                           {item.assignedVendorId ? (
                             <span className="flex flex-col gap-0.5">
                               <span className="flex items-center gap-1.5 flex-wrap">
@@ -3459,7 +3572,7 @@ export function ItemGrid({ items: initialItems, tenantId, canEdit, rooms, tenant
                       )}
                       {/* Edit + Send to PF */}
                       {canEdit && (
-                        <td className="px-3 py-2.5">
+                        <td className="px-2 py-2.5">
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setEditingItem(item)}
