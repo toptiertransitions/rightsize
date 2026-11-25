@@ -4,10 +4,10 @@ import { join } from "node:path";
 import type { Item, ItemSaleEvent, LocalVendor, Tenant } from "@/lib/types";
 import { RESALE_TEMPLATES } from "./templates.generated";
 import { renderResaleBody, renderResaleEmail, RESALE_EMAIL_ORDER, type ResaleMergeData } from "./render";
-import { buildResaleData, computeAnchor, formatPhone, monthDay } from "./data";
+import { buildResaleData, computeAnchor, monthDay } from "./data";
 
 const merge: ResaleMergeData = {
-  contact_first_name: "Susan", pc_first_name: "The Top Tier Team", pc_phone: "(847) 555-0142",
+  contact_first_name: "Susan", pc_first_name: "The Top Tier Team",
   listed_count: 18, sales_channels: "ProFound Finds and eBay", sales_page_link: "https://app.example.com/sales?tenantId=rec1&x=1",
   day30_date: "January 8", day60_date: "February 7", window_end_date: "March 9", disposition_deadline: "March 2",
   blank_count: 3, donate_count: 9, return_count: 2, sold_since_last: 4,
@@ -36,6 +36,8 @@ describe("renderResaleBody", () => {
   it("keeps or drops IF blocks", () => {
     expect(renderResaleBody("hands-on", merge)).toContain("One quick ask");
     expect(renderResaleBody("hands-on", merge)).toContain("And one more");
+    expect(renderResaleBody("hands-on", merge).match(/reply to this email/g)).toHaveLength(2);
+    expect(renderResaleBody("day90", merge)).not.toMatch(/\(\d{3}\)|\| /);
     const none = renderResaleBody("hands-on", { ...merge, blank_count: 0, payout_method: "Check" });
     expect(none).not.toContain("One quick ask");
     expect(none).not.toContain("And one more");
@@ -88,7 +90,7 @@ describe("buildResaleData", () => {
   const events = [{ itemId: "i4", tenantId: "recT", totalAmount: 100, clientPayout: 67, saleDate: "2026-12-20" }] as ItemSaleEvent[];
   const d = buildResaleData({
     type: "day30", tenant, items, saleEvents: events, localVendors: [] as LocalVendor[],
-    contactName: "Susan Smith", companyPhone: "(847) 555-0100", anchor: "2026-12-09", sinceDay: "2026-12-31", appUrl: "https://app",
+    contactName: "Susan Smith", anchor: "2026-12-09", sinceDay: "2026-12-31", appUrl: "https://app",
   });
   it("splits listed items by Donate / Return choice", () => {
     expect(d.merge.listed_count).toBe(2);
@@ -118,12 +120,6 @@ describe("buildResaleData", () => {
     });
     expect(blank.merge.blank_count).toBe(2);
     expect(blank.merge.contact_first_name).toBe("there");
-  });
-  it("formats the phone", () => {
-    expect(d.merge.pc_phone).toBe("(847) 555-0100");
-    expect(formatPhone("8473225488")).toBe("(847) 322-5488");
-    expect(formatPhone("+1 847 322 5488")).toBe("(847) 322-5488");
-    expect(formatPhone("ext 12")).toBe("ext 12");
   });
   it("formats month and day", () => {
     expect(monthDay("2027-01-08")).toBe("January 8");

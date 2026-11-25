@@ -28,11 +28,6 @@ export function monthDay(day: string): string {
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
-/** "(847) 322-5488" for a 10-digit US number, otherwise as stored. */
-export function formatPhone(raw?: string): string {
-  const digits = (raw ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
-  return digits.length === 10 ? `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}` : (raw ?? "").trim();
-}
 
 const CHANNEL_LABEL: Partial<Record<Item["primaryRoute"], string>> = {
   "ProFoundFinds Consignment": "ProFound Finds",
@@ -53,7 +48,6 @@ export interface ResaleDataInput {
   saleEvents: ItemSaleEvent[];
   localVendors: LocalVendor[];
   contactName?: string;
-  companyPhone?: string;
   anchor: string;
   /** Day the previous email in the sequence went out (or the anchor). */
   sinceDay: string;
@@ -120,13 +114,11 @@ export function buildResaleData(input: ResaleDataInput): ResaleData {
   if (!tenant.clientEmail) flags.push("No client email on the project");
   if (noPayout > 0) flags.push(`${noPayout} sold item${noPayout === 1 ? " has" : "s have"} no payout amount, so proceeds may read low`);
   if (noDate > 0) flags.push(`${noDate} sold item${noDate === 1 ? " has" : "s have"} no sale date and ${noDate === 1 ? "isn't" : "aren't"} counted in "sold since last"`);
-  if (!input.companyPhone) flags.push("No company phone in Invoice Settings, so the signature has no phone number");
 
   return {
     merge: {
       contact_first_name: firstName || "there",
       pc_first_name: SIGNED_AS,
-      pc_phone: formatPhone(input.companyPhone),
       listed_count: listed.length,
       sales_channels: joinList(ordered.length ? ordered : ["ProFound Finds"]),
       sales_page_link: salesUrl,

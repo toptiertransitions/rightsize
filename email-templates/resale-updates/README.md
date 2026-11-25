@@ -27,8 +27,7 @@ Written as `{{field}}` in the files.
 | Field | Meaning |
 | --- | --- |
 | `contact_first_name` | Client contact's first name |
-| `pc_first_name` | Project coordinator's first name (signature) |
-| `pc_phone` | Project coordinator's phone (signature) |
+| `pc_first_name` | Signature name: always "The Top Tier Team" |
 | `listed_count` | Items currently Listed on the project |
 | `sales_channels` | Where items are selling, e.g. "ProFound Finds, Facebook Marketplace, and eBay" |
 | `sales_page_link` | The client's Rightsize sales page for the project (every button) |

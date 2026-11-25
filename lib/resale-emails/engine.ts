@@ -17,7 +17,6 @@ import {
   getAdminAndManagerStaffEmails,
   getAllLocalVendors,
   getClientContactById,
-  getInvoiceSettings,
   getItemSaleEventsForTenant,
   getItemsForTenant,
   getListedProFoundFindsItems,
@@ -48,6 +47,8 @@ export const RESALE_LAUNCH_DATE = "2026-11-26";
 export const isResaleLive = () => process.env.RESALE_EMAILS_LIVE === "1";
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.toptiertransitions.com").trim();
 const FROM = "Top Tier Transitions <noreply@toptiertransitions.com>";
+/** Replies (from staff, or from a client on a forward that keeps it) go to Julie. */
+const REPLY_TO = "julie@toptiertransitions.com";
 
 const keyFor = (tenantId: string, type: ResaleEmailType) => `${tenantId}:${type}`;
 const isDone = (log: ResaleLogRow[], type: ResaleEmailType) =>
@@ -96,11 +97,10 @@ export async function renderForProject(
   type: ResaleEmailType,
   opts: { state: ResaleProjectState; log: ResaleLogRow[]; trigger: string; anchorOverride?: string }
 ): Promise<RenderedResaleEmail | { error: string }> {
-  const [items, saleEvents, localVendors, settings, contactName] = await Promise.all([
+  const [items, saleEvents, localVendors, contactName] = await Promise.all([
     getItemsForTenant(tenant.id),
     getItemSaleEventsForTenant(tenant.id).catch(() => []),
     getAllLocalVendors().catch(() => []),
-    getInvoiceSettings().catch(() => null),
     contactNameFor(tenant.id),
   ]);
   const anchor = opts.anchorOverride ?? opts.state.anchorDate ?? computeAnchor(items);
@@ -109,7 +109,6 @@ export async function renderForProject(
 
   const data = buildResaleData({
     type, tenant, items, saleEvents, localVendors, contactName,
-    companyPhone: settings?.companyPhone || undefined,
     anchor,
     sinceDay: sinceDayFor(type, opts.log, anchor),
     appUrl: APP_URL,
@@ -207,7 +206,7 @@ export async function sendResaleEmail(params: {
   }
 
   try {
-    const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({ from: FROM, to: recipients, subject: email.subject, html: email.html });
+    const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({ from: FROM, to: recipients, replyTo: REPLY_TO, subject: email.subject, html: email.html });
     if (error) throw new Error(error.message || "Resend error");
   } catch (e) {
     const reason = e instanceof Error ? e.message : "Send failed";

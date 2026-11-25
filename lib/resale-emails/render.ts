@@ -10,7 +10,6 @@ import { RESALE_EMAIL_LABEL, type ResaleEmailType } from "./constants";
 export interface ResaleMergeData {
   contact_first_name: string;
   pc_first_name: string;
-  pc_phone: string;
   listed_count: number;
   sales_channels: string;
   sales_page_link: string;
