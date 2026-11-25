@@ -10,6 +10,7 @@ import { StaffSkillsTab } from "./StaffSkillsTab";
 import { AIStaffMappingTab } from "./AIStaffMappingTab";
 import { OpenIssuesTab } from "./OpenIssuesTab";
 import { StaffByZipTab } from "./StaffByZipTab";
+import { CommunityTab } from "./community/CommunityTab";
 import { DEFAULT_WEEKLY_SCHEDULE } from "@/lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1578,7 +1579,11 @@ interface Props {
 }
 
 export function StaffClient({ members, locationMembers, crateLocations, inventoryContainers, storageUnits, tenants, subcontractors, canEdit = false, canAccessOpenIssues = false }: Props) {
-  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "zip" | "calendar" | "goals" | "skills" | "location" | "supply" | "subcontractors" | "open-issues">("availability");
+  const [activeTab, setActiveTab] = useState<"ai-mapping" | "availability" | "zip" | "calendar" | "goals" | "skills" | "location" | "community" | "supply" | "subcontractors" | "open-issues">("availability");
+  // Shared Community links (?tab=community&community=rec...) open that tab
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "community") setActiveTab("community");
+  }, []);
   const today = todayStr();
   const totalOut = members.filter(m => (m.timeOff ?? []).some(e => e.date === today)).length;
 
@@ -1672,6 +1677,7 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
           { key: "goals", label: "Staff Goals" },
           { key: "skills", label: "Staff Skills" },
           { key: "location", label: "Location Mgmt" },
+          { key: "community", label: "Community" },
           { key: "supply", label: "Supply Tracking" },
           { key: "subcontractors", label: "Subcontractor Management" },
           { key: "open-issues", label: "Open Issues" },
@@ -1919,6 +1925,9 @@ export function StaffClient({ members, locationMembers, crateLocations, inventor
       {activeTab === "location" && (
         <LocationMgmtTab members={locationMembers} />
       )}
+
+      {/* Community Tab */}
+      {activeTab === "community" && <CommunityTab />}
 
       {/* Supply Tracking Tab */}
       {activeTab === "supply" && (

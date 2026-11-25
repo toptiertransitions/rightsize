@@ -29,6 +29,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (body && "archived" in body) return apiError(400, "Use Archive to archive or restore a community.");
   const parsed = updateCommunitySchema.safeParse(body);
   if (!parsed.success) return apiError(400, "Check the highlighted fields.", fieldErrors(parsed.error));
+  // "Mark verified today" records who verified it
+  if (parsed.data.lastVerified && parsed.data.lastVerifiedBy === undefined) parsed.data.lastVerifiedBy = actor.name.replace(/\s*\(.*\)$/, "");
   try {
     const community = await updateCommunity(id, parsed.data, actor.name);
     if (!community) return apiError(404, "Community not found.");
