@@ -25,6 +25,8 @@ const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "completeness", label: "Completeness" },
   { key: "verified", label: "Last Verified" },
 ];
+/** Narrower columns that step aside on tablets (still sortable, still in the drawer). */
+const WIDE_ONLY: Partial<Record<ColumnKey, string>> = { type: "hidden lg:table-cell", verified: "hidden lg:table-cell" };
 const SORT_LABELS: Record<SortKey, string> = { name: "Name", type: "Type", city: "City", contact: "Move-In Contact", coi: "COI", completeness: "Completeness", verified: "Last Verified" };
 const COLUMNS_KEY = "rightsize.communities.columns";
 
@@ -464,7 +466,7 @@ export function CommunityTab() {
               <thead className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <SortTh label="Community" k="name" sort={sort} onSort={sortBy} ariaSort={ariaSort("name")} />
-                  {COLUMNS.filter((c) => isShown(c.key)).map((c) => <SortTh key={c.key} label={c.label} k={c.key} sort={sort} onSort={sortBy} ariaSort={ariaSort(c.key)} />)}
+                  {COLUMNS.filter((c) => isShown(c.key)).map((c) => <SortTh key={c.key} label={c.label} k={c.key} sort={sort} onSort={sortBy} ariaSort={ariaSort(c.key)} className={WIDE_ONLY[c.key]} />)}
                   <th className="w-12"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -487,7 +489,7 @@ export function CommunityTab() {
                         {c.operator && <div className="text-xs text-gray-500"><Highlight text={c.operator} query={filters.q} /></div>}
                         {c.archived && <span className="text-[11px] text-gray-500">Archived</span>}
                       </td>
-                      {isShown("type") && <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{c.type}</td>}
+                      {isShown("type") && <td className={cn("px-4 py-3 text-gray-700 whitespace-nowrap", WIDE_ONLY.type)}>{c.type}</td>}
                       {isShown("city") && <td className="px-4 py-3 text-gray-700 whitespace-nowrap"><Highlight text={c.city} query={filters.q} /></td>}
                       {isShown("contact") && (
                         <td className="px-4 py-2">
@@ -503,7 +505,7 @@ export function CommunityTab() {
                       {isShown("coi") && <td className="px-4 py-3"><CoiBadge value={c.rules.coi_required} /></td>}
                       {isShown("completeness") && <td className="px-4 py-3"><CompletenessBar known={score.known} total={score.total} compact /></td>}
                       {isShown("verified") && (
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className={cn("px-4 py-3 whitespace-nowrap", WIDE_ONLY.verified)}>
                           {age === null ? <span className="text-gray-400">Never</span> : (
                             <span className={cn("inline-flex items-center gap-1", age > STALE_DAYS ? "text-amber-700" : "text-gray-700")} title={c.lastVerified}>
                               {age > STALE_DAYS && <Icon name="alert" className="w-3.5 h-3.5" />}
@@ -634,9 +636,9 @@ function relativeDays(days: number): string {
   const y = Math.floor(days / 365); return `${y} year${y === 1 ? "" : "s"} ago`;
 }
 
-function SortTh({ label, k, sort, onSort, ariaSort }: { label: string; k: SortKey; sort: SortState; onSort: (k: SortKey) => void; ariaSort: "ascending" | "descending" | "none" }) {
+function SortTh({ label, k, sort, onSort, ariaSort, className }: { label: string; k: SortKey; sort: SortState; onSort: (k: SortKey) => void; ariaSort: "ascending" | "descending" | "none"; className?: string }) {
   return (
-    <th aria-sort={ariaSort} className="px-4 py-2.5 font-semibold whitespace-nowrap">
+    <th aria-sort={ariaSort} className={cn("px-4 py-2.5 font-semibold whitespace-nowrap", className)}>
       <button onClick={() => onSort(k)} className="inline-flex items-center gap-1 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 rounded min-h-[32px] uppercase tracking-wide">
         {label}
         <Icon name={sort.key === k ? (sort.dir === "asc" ? "arrowUp" : "arrowDown") : "sort"} className={cn("w-3.5 h-3.5", sort.key === k ? "text-forest-600" : "text-gray-300")} />

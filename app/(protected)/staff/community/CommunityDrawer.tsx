@@ -147,8 +147,8 @@ export function CommunityDrawer({
     if (res?.ok) setActivity((await res.json()).activity);
   }, [id, isNew]);
 
-  // Keep the list's contacts (primary column, search) in step
-  useEffect(() => { if (community) onSaved({ id: community.id, contacts }); }, [contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keep the list (contacts, rules, verified date) in step with the drawer
+  useEffect(() => { if (community) onSaved({ ...community, contacts }); }, [community, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const requestClose = useCallback((then?: () => void) => {
     const go = then ?? onClose;
@@ -227,26 +227,17 @@ export function CommunityDrawer({
   /** Small one-off changes from view mode (Mark N/A, Mark verified). */
   async function quickPatch(changes: Partial<Community>, message: string) {
     if (!community) return;
-    const before = community;
-    const optimistic = { ...community, ...changes };
-    setCommunity(optimistic);
-    onSaved(optimistic);
+    setCommunity((c) => (c ? { ...c, ...changes } : c));
     try {
       const res = await fetch(`/api/staff/communities/${community.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Couldn't save.");
-      setCommunity(data.community);
-      onSaved(data.community);
-      const d = toDraft(data.community);
-      setBase(d);
-      setDraft(d);
       toast(message);
-      refreshActivity();
     } catch (e) {
-      setCommunity(before);
-      onSaved(before);
       toast(e instanceof Error ? e.message : "Couldn't save.", "error");
     }
+    // Reload either way: confirms the save, or rolls the screen back
+    await load();
   }
 
   // Keyboard: Esc closes (or cancels), Cmd/Ctrl+S saves
@@ -310,9 +301,9 @@ export function CommunityDrawer({
       >
         {/* Sticky header */}
         <div className="border-b border-gray-100 px-4 md:px-6 pt-4 pb-3 bg-white">
-          <div className="flex items-start gap-2">
+          <div className="flex flex-wrap md:flex-nowrap items-start gap-2">
             <button onClick={() => requestClose()} aria-label="Close" className="md:hidden -ml-2 w-11 h-11 inline-flex items-center justify-center rounded-xl hover:bg-gray-100"><Icon name="chevronDown" className="w-5 h-5 rotate-90" /></button>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-[calc(100%-3.5rem)] md:basis-0">
               <h2 id="community-drawer-title" className="text-xl font-semibold text-gray-900 leading-tight break-words">{title}</h2>
               {view && !editing && (
                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
@@ -324,15 +315,15 @@ export function CommunityDrawer({
               )}
               {view && !editing && address && (
                 <a href={`https://maps.google.com/?q=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-forest-700 hover:underline min-h-[32px]">
-                  <Icon name="pin" className="w-4 h-4" />{address}
+                  <Icon name="pin" className="w-4 h-4 shrink-0" />{address}
                 </a>
               )}
             </div>
             {!editing && view && (
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1 shrink-0 w-full md:w-auto justify-end">
                 <div className="relative">
                   <button onClick={() => setPdfOpen((o) => !o)} aria-expanded={pdfOpen} className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-500">
-                    <Icon name="download" className="w-4 h-4" /><span className="hidden sm:inline">PDF</span>
+                    <Icon name="download" className="w-4 h-4" />PDF
                   </button>
                   {pdfOpen && (
                     <div className="absolute right-0 z-20 mt-1.5 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
@@ -642,7 +633,8 @@ function EditForm({ draft, setDraft, errors, duplicates, onOpenDuplicate, setRul
         <div className="space-y-5">
           {RULE_DEFINITIONS.map((r) => {
             const explicit = draft.ruleStatus[r.key];
-            const mode: RuleStatus = explicit === "not_applicable" ? "not_applicable" : explicit === "unknown" ? "unknown" : "known";
+            const empty = !draft.rules[r.key].trim() || (r.fieldType === "coi" && draft.rules[r.key] === "Unknown");
+            const mode: RuleStatus = explicit === "not_applicable" ? "not_applicable" : explicit === "unknown" || empty ? "unknown" : "known";
             return (
               <div key={r.key} id={`rule-${r.key}`} className={cn("rounded-xl", focusRule === r.key && "ring-2 ring-[#C9A96E] ring-offset-4")}>
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -650,7 +642,10 @@ function EditForm({ draft, setDraft, errors, duplicates, onOpenDuplicate, setRul
                   <label htmlFor={`rule-input-${r.key}`} className="text-sm font-semibold text-gray-900">{r.label}</label>
                   <div role="radiogroup" aria-label={`${r.label} status`} className="ml-auto inline-flex rounded-lg bg-gray-100 p-0.5 text-xs">
                     {([["known", "Has a rule"], ["unknown", "Ask community"], ["not_applicable", "Not applicable"]] as const).map(([m, l]) => (
-                      <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setRuleMode(r.key, m)}
+                      <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => {
+                        setRuleMode(r.key, m);
+                        if (m === "known") setTimeout(() => document.getElementById(`rule-input-${r.key}`)?.focus(), 0);
+                      }}
                         className={cn("px-2.5 min-h-[32px] rounded-md font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-500", mode === m ? (m === "unknown" ? "bg-amber-100 text-amber-900 shadow-sm" : "bg-white text-gray-900 shadow-sm") : "text-gray-600")}>
                         {l}
                       </button>
