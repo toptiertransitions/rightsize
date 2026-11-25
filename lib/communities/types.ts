@@ -61,7 +61,7 @@ export interface RuleDefinition {
   essential: boolean;
   /** Shown in the drawer's "At a glance" strip. */
   glance: boolean;
-  /** Printed in the PDF's "Move-Day at a Glance" panel (otherwise its own block). */
+  /** Its own row in the PDF's "Move-Day at a Glance" panel. COI Details prints inside the COI row; Other Rules & Tips gets its own block. */
   pdfGlance: boolean;
   airtableField: string;
 }
@@ -73,7 +73,7 @@ export const RULE_DEFINITIONS: RuleDefinition[] = [
   { key: "move_hours", label: "Move Hours & Timing Limits", shortLabel: "Move Hours", help: "Allowed move windows and hard stops (meals, quiet hours).", icon: "clock", fieldType: "text", essential: true, glance: false, pdfGlance: true, airtableField: "Move Hours & Timing Limits" },
   { key: "advance_notice", label: "Advance Notice / Reservation", shortLabel: "Advance Notice", help: "What to book ahead and how far in advance.", icon: "calendar", fieldType: "text", essential: true, glance: false, pdfGlance: true, airtableField: "Advance Notice / Reservation" },
   { key: "coi_required", label: "COI Required", shortLabel: "COI", help: "Does the mover or TTT need a certificate of insurance?", icon: "shield", fieldType: "coi", essential: true, glance: false, pdfGlance: true, airtableField: "COI Required" },
-  { key: "coi_details", label: "COI Details", shortLabel: "COI Details", help: "Certificate holder, additional insured wording, who supplies it.", icon: "file", fieldType: "text", essential: false, glance: false, pdfGlance: true, airtableField: "COI Details" },
+  { key: "coi_details", label: "COI Details", shortLabel: "COI Details", help: "Certificate holder, additional insured wording, who supplies it.", icon: "file", fieldType: "text", essential: false, glance: false, pdfGlance: false, airtableField: "COI Details" },
   { key: "apartment_access", label: "Apartment Access", shortLabel: "Apartment Access", help: "How the unit gets opened on move day.", icon: "key", fieldType: "text", essential: true, glance: false, pdfGlance: true, airtableField: "Apartment Access" },
   { key: "trash", label: "Trash & Packing Materials", shortLabel: "Trash & Packing", help: "Dumpsters, chutes and who hauls packing materials.", icon: "trash", fieldType: "text", essential: true, glance: false, pdfGlance: true, airtableField: "Trash & Packing Materials" },
   { key: "other", label: "Other Rules & Tips", shortLabel: "Other Rules & Tips", help: "Anything else the team should know before move day.", icon: "info", fieldType: "text", essential: false, glance: false, pdfGlance: false, airtableField: "Other Rules & Tips" },

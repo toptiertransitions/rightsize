@@ -3,6 +3,12 @@
 import { nameKey, normalizeText } from "./search";
 import type { CoiRequired, CommunityType, ContactRole } from "./types";
 
+/** A spaced dash used as a sentence break becomes a comma; ranges like
+ * "9am–1pm" keep their dash. */
+export const cleanDashes = (s: string) => s.replace(/\s+[–—]\s+/g, ", ");
+
+const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
 /** Empty cells and the sheet's yellow "UNKNOWN – ask" cells. */
 export const isUnknownCell = (v: string) => !v.trim() || /^unknown\b/i.test(v.trim());
 
@@ -25,10 +31,10 @@ export function normalizeCoi(raw: string): { coi: CoiRequired; details: string }
   const v = raw.trim();
   if (isUnknownCell(v)) return { coi: "Unknown", details: "" };
   if (/confirm/i.test(v)) return { coi: "Confirm Per Move", details: v };
-  if (/^yes\b/i.test(v)) return { coi: "Yes", details: v.replace(/^yes\b\s*[–:,-]?\s*/i, "").trim() };
+  if (/^yes\b/i.test(v)) return { coi: "Yes", details: capitalize(v.replace(/^yes\b\s*[–:,-]?\s*/i, "").trim()) };
   if (/^no\b/i.test(v)) {
     const rest = v.replace(/^no\b\s*(coi( needed)?)?\s*[–:,-]?\s*/i, "").trim();
-    return { coi: "No", details: rest };
+    return { coi: "No", details: capitalize(rest) };
   }
   return { coi: "Unknown", details: v };
 }

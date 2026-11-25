@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
   // read from disk at render time, so they must ship with these functions
   outputFileTracingIncludes: {
     "/api/tenants/[id]/reviews": ["./lib/review-collateral/assets/**"],
+    "/api/staff/communities/[id]/pdf": ["./lib/review-collateral/assets/**", "./lib/communities/assets/**"],
   },
   async redirects() {
     return [

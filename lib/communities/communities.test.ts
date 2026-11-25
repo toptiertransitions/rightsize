@@ -4,7 +4,7 @@ import { buildCommunityMergeData, renderTemplate, COMMUNITY_MERGE_TOKENS } from 
 import { bestPhone, formatPhone, parsePhones } from "./phones";
 import { EMPTY_FILTERS, filterCommunities, findLikelyDuplicates, sortCommunities } from "./search";
 import {
-  firstNamedPerson, isUnknownCell, matchCommunityName, normalizeCoi, normalizeType, parseFloorPlans, roleFromTitle, splitOperator, splitOtherRules,
+  cleanDashes, firstNamedPerson, isUnknownCell, matchCommunityName, normalizeCoi, normalizeType, parseFloorPlans, roleFromTitle, splitOperator, splitOtherRules,
 } from "./seedNormalize";
 import { emptyRules, ruleStatus, type Community, type CommunityContact, type CommunityWithContacts } from "./types";
 
@@ -45,6 +45,9 @@ describe("phones", () => {
 });
 
 describe("seed normalization", () => {
+  it("turns spaced dashes into commas but keeps ranges", () => {
+    expect(cleanDashes("Confirm in advance – they check. 9am–1pm")).toBe("Confirm in advance, they check. 9am–1pm");
+  });
   it("treats empty and UNKNOWN cells as unknown", () => {
     expect(isUnknownCell("")).toBe(true);
     expect(isUnknownCell("UNKNOWN – ask")).toBe(true);
@@ -55,7 +58,8 @@ describe("seed normalization", () => {
     expect(normalizeCoi("NO")).toEqual({ coi: "No", details: "" });
     expect(normalizeCoi("No COI needed")).toEqual({ coi: "No", details: "" });
     expect(normalizeCoi("UNKNOWN – ask")).toEqual({ coi: "Unknown", details: "" });
-    expect(normalizeCoi("YES – mover COI: General Liability")).toEqual({ coi: "Yes", details: "mover COI: General Liability" });
+    expect(normalizeCoi("YES – mover COI: General Liability")).toEqual({ coi: "Yes", details: "Mover COI: General Liability" });
+    expect(normalizeCoi(cleanDashes("YES – mover COI"))).toEqual({ coi: "Yes", details: "Mover COI" });
     const confirm = normalizeCoi("No (per Data Sheet) – but a COI came up on the Hanley move; confirm per move");
     expect(confirm.coi).toBe("Confirm Per Move");
     expect(confirm.details).toContain("Hanley");
