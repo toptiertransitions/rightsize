@@ -8445,6 +8445,17 @@ export async function getAdminStaffEmails(): Promise<string[]> {
     .filter(Boolean);
 }
 
+/** Active TTT Admins and TTT Managers (resale update emails). */
+export async function getAdminAndManagerStaffEmails(): Promise<string[]> {
+  const formula = encodeURIComponent(`AND(OR({Role} = "TTTAdmin", {Role} = "TTTManager"), {IsActive} = TRUE())`);
+  const res = await staffRolesFetch(`?filterByFormula=${formula}`);
+  if (!res.ok) throw new Error(`StaffRoles lookup failed: ${res.status}`);
+  const data = await res.json().catch(() => ({ records: [] }));
+  return (data.records as AirtableRecord[])
+    .map(r => toStr(r.fields["Email"]))
+    .filter(Boolean);
+}
+
 // ─── Vendor Outreach ─────────────────────────────────────────────────────────
 
 function vendorOutreachFetch(path: string, options?: RequestInit) {

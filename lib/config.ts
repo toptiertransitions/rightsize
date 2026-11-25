@@ -77,6 +77,7 @@ export const AIRTABLE_TABLES = {
   ITEM_PRICE_HISTORY: process.env.AIRTABLE_ITEM_PRICE_HISTORY_TABLE || "ItemPriceHistory",
   ITEM_ROUTE_HISTORY: process.env.AIRTABLE_ITEM_ROUTE_HISTORY_TABLE || "ItemRouteHistory",
   ITEM_STATUS_HISTORY: process.env.AIRTABLE_ITEM_STATUS_HISTORY_TABLE || "ItemStatusHistory",
+  RESALE_EMAIL_LOG: process.env.AIRTABLE_RESALE_EMAIL_LOG_TABLE || "ResaleEmailLog",
   OUTREACH_TEMPLATES: "OutreachTemplates",
   OUTREACH_AUDIENCES: "OutreachAudiences",
   OUTREACH_SEQUENCES: "OutreachSequences",

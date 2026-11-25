@@ -53,6 +53,14 @@
     {
       "path": "/api/cron/auto-price-drops",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/resale-update-emails",
+      "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/resale-update-emails",
+      "schedule": "30 13 * * *"
     }
   ]
 }

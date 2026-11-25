@@ -24,6 +24,7 @@ import { AIRTABLE_TABLES } from "@/lib/config";
 import { createQBOInvoice, depositQBOLine } from "@/lib/qbo";
 import { buildInvoiceEmail, buildWrappedNotificationEmail } from "@/lib/email";
 import { Resend } from "resend";
+import { onFullInvoiceEmailed } from "@/lib/resale-emails/engine";
 import type { Invoice } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -315,6 +316,13 @@ export async function POST(req: NextRequest) {
         emailError = sendError.message || "Failed to send invoice email";
       } else {
         invoice = await updateInvoice(invoice.id, { emailSent: true });
+        // Resale update emails: "Hands-on complete" draft to Admins/Managers
+        if (invoice.type === "Full" && invoice.tenantId) {
+          const sent = invoice;
+          after(async () => {
+            await onFullInvoiceEmailed(sent).catch(e => console.error("[resale-emails] hands-on hook failed:", e));
+          });
+        }
       }
     } catch (e) {
       console.error("[invoices/POST] Invoice email send threw:", e);
@@ -393,6 +401,13 @@ export async function PATCH(req: NextRequest) {
           sendWrapNotification(invoice).catch(e =>
             console.error("[wrapNotification] error:", e)
           );
+        }
+        // Resale update emails: "Hands-on complete" draft to Admins/Managers
+        if (invoice.type === "Full" && invoice.tenantId) {
+          const sent = invoice;
+          after(async () => {
+            await onFullInvoiceEmailed(sent).catch(e => console.error("[resale-emails] hands-on hook failed:", e));
+          });
         }
       }
     } catch (e) {

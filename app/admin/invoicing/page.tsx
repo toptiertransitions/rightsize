@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { isTTTAdmin } from "@/lib/config";
@@ -47,6 +48,12 @@ export default async function InvoicingSettingsPage() {
           <ActivityAnalysisForMeButton reps={salesReps} />
           <ConsignmentStatusForMeButton />
           <WeeklyWinsForMeButton />
+          <div className="mb-8 flex items-center gap-3 flex-wrap">
+            <Link href="/admin/resale-emails" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors bg-[#2d4a3e] hover:bg-[#1e3329] text-white">
+              Resale Update Emails
+            </Link>
+            <p className="text-xs text-gray-500">Hands-on complete and Day 30, 60 and 90 drafts for each consignment project: preview, pause, anchor date, send and resend.</p>
+          </div>
         </div>
         <InvoicingSettingsClient initialSettings={settings} />
 
